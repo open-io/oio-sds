@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,8 @@ class TestRdirCrawler(BaseTestCase):
         chunk = chunks[0]
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(self.conf, volume_path)
+        rdir_crawler = RdirWorker(self.conf, volume_path,
+                                  watchdog=self.watchdog)
         rdir_crawler.crawl_volume()
         nb_passes = rdir_crawler.passes
         nb_errors = rdir_crawler.errors
@@ -118,7 +119,8 @@ class TestRdirCrawler(BaseTestCase):
         old_chunks.remove(chunk)
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(self.conf, volume_path)
+        rdir_crawler = RdirWorker(self.conf, volume_path,
+                                  watchdog=self.watchdog)
         rdir_crawler.crawl_volume()
         nb_passes = rdir_crawler.passes
         nb_errors = rdir_crawler.errors

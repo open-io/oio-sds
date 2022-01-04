@@ -164,7 +164,7 @@ class ObjectStorageApi(object):
         """
         if self._watchdog is None:
             from oio.common.green import get_watchdog
-            self._watchdog = get_watchdog()
+            self._watchdog = get_watchdog(called_from_main_application=True)
         return self._watchdog
 
     @patch_kwargs
@@ -499,7 +499,7 @@ class ObjectStorageApi(object):
                 try:
                     chunks_copies = handler.link()
                 except exc.UnfinishedUploadException as ex:
-                    self.logger.warn(
+                    self.logger.warning(
                         'Failed to upload all data (%s), deleting chunks',
                         ex.exception)
                     kwargs['cid'] = obj['container_id']
@@ -1065,7 +1065,7 @@ class ObjectStorageApi(object):
         try:
             chunks_copies = handler.link()
         except exc.UnfinishedUploadException as ex:
-            self.logger.warn(
+            self.logger.warning(
                 'Failed to upload all data (%s), deleting chunks',
                 ex.exception)
             kwargs['cid'] = link_meta['container_id']
@@ -1090,7 +1090,7 @@ class ObjectStorageApi(object):
                 mime_type=link_meta['mime_type'],
                 chunk_method=link_meta['chunk_method'], **kwargs)
         except (exc.Conflict, exc.DeadlineReached) as ex:
-            self.logger.warn(
+            self.logger.warning(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             kwargs['cid'] = link_meta['container_id']
             self._delete_orphan_chunks(chunks_copies, **kwargs)
@@ -1392,7 +1392,7 @@ class ObjectStorageApi(object):
             ul_chunks, ul_bytes, obj_checksum = self._object_upload(
                 ul_handler, **kwargs)
         except exc.OioException as ex:
-            self.logger.warn(
+            self.logger.warning(
                 'Failed to upload all data (%s), deleting chunks', ex)
             kwargs['cid'] = obj_meta.get('container_id')
             self._delete_orphan_chunks(
@@ -1406,7 +1406,7 @@ class ObjectStorageApi(object):
                 raise TypeError("The trailing properties callback "
                                 "should return a dictionary")
         except Exception as err:
-            self.logger.warn(
+            self.logger.warning(
                 "Failed to commit to call the trailing properties callback "
                 "(%s), deleting chunks", err)
             kwargs['cid'] = obj_meta.get('container_id')
@@ -1450,7 +1450,7 @@ class ObjectStorageApi(object):
                 chunk_method=obj_meta['chunk_method'],
                 **kwargs)
         except (exc.Conflict, exc.DeadlineReached) as ex:
-            self.logger.warn(
+            self.logger.warning(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             kwargs['cid'] = obj_meta['container_id']
             self._delete_orphan_chunks(ul_chunks, **kwargs)
@@ -1462,13 +1462,13 @@ class ObjectStorageApi(object):
         del_resps = self.blob_client.chunk_delete_many(chunks, cid, **kwargs)
         for resp in del_resps:
             if isinstance(resp, Exception):
-                self.logger.warn('failed to delete chunk %s (%s)',
-                                 resp.chunk.get('real_url', resp.chunk['url']),
-                                 resp)
+                self.logger.warning(
+                    'failed to delete chunk %s (%s)',
+                    resp.chunk.get('real_url', resp.chunk['url']), resp)
             elif resp.status not in (204, 404):
-                self.logger.warn('failed to delete chunk %s (HTTP %s)',
-                                 resp.chunk.get('real_url', resp.chunk['url']),
-                                 resp.status)
+                self.logger.warning(
+                    'failed to delete chunk %s (HTTP %s)',
+                    resp.chunk.get('real_url', resp.chunk['url']), resp.status)
 
     @handle_container_not_found
     @patch_kwargs

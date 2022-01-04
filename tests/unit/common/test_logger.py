@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +27,7 @@ class TestLogger(unittest.TestCase):
         logger = logging.getLogger('test')
         logger.addHandler(logging.StreamHandler(sio))
         logger = get_logger(None, 'test')
-        logger.warn('msg1')
+        logger.warning('msg1')
         self.assertEqual(sio.getvalue(), 'msg1\n')
         logger.debug('msg2')
         self.assertEqual(sio.getvalue(), 'msg1\n')

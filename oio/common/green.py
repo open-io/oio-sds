@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ import eventlet
 
 import time
 import logging
+import warnings
 
 from datetime import datetime, timedelta
 
@@ -402,8 +403,21 @@ except ImportError:
 __WATCHDOG = None
 
 
-def get_watchdog():
-    """Get the global Watchdog instance."""
+def get_watchdog(called_from_main_application=False):
+    """
+    Get the global Watchdog instance.
+
+    This method should not be called from anywhere except from the main
+    method of your program. Prefer passing the Watchdog instance to the
+    constructor of any class which needs it. If you call it anyway, your
+    code won't be usable by other applications which have their own
+    Watchdog instance (e.g. swift).
+    """
+    if not called_from_main_application:
+        warnings.simplefilter('once')
+        warnings.warn("Calling get_watchdog() is a bad idea. The watchdog "
+                      "instance should be passed as parameter.",
+                      stacklevel=2)
     global __WATCHDOG
     if __WATCHDOG is None:
         __WATCHDOG = Watchdog()

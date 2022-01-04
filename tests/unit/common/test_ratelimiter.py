@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,19 +66,19 @@ class RatelimiterTest(unittest.TestCase):
         ]
 
         curr_date = datetime(2018, 1, 1, hour=0, minute=1)
-        self.assertEquals(
+        self.assertEqual(
             8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
 
         curr_date = datetime(2018, 1, 1, hour=11)
-        self.assertEquals(
+        self.assertEqual(
             5, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
 
         curr_date = datetime(2018, 1, 1, hour=6)
-        self.assertEquals(
+        self.assertEqual(
             10, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
 
         curr_date = datetime(2018, 1, 1, hour=22)
-        self.assertEquals(
+        self.assertEqual(
             8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
 
     def test_curr_rate_uniform_policy(self):
@@ -90,13 +91,13 @@ class RatelimiterTest(unittest.TestCase):
         ]
 
         curr_date = datetime(2018, 1, 1, hour=11)
-        self.assertEquals(
+        self.assertEqual(
             ratelimit_function_curr_rate(curr_date=curr_date, policy=pol),
             3
         )
 
         curr_date = datetime(2018, 1, 1, hour=0)
-        self.assertEquals(
+        self.assertEqual(
             ratelimit_function_curr_rate(curr_date=curr_date, policy=pol),
             3
         )

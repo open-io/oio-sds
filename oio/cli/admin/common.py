@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,10 +14,16 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.green import get_watchdog
 from oio.common.utils import cid_from_name
 
 
 class CommandMixin(object):
+
+    @property
+    def watchdog(self):
+        """Get a reference to the main Watchdog instance."""
+        return get_watchdog(called_from_main_application=True)
 
     def patch_parser(self, parser):
         raise NotImplementedError()

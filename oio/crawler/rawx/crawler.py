@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,8 +27,8 @@ class RawxWorker(CrawlerWorker):
 
     SERVICE_TYPE = 'rawx'
 
-    def __init__(self, conf, volume_path, logger=None, api=None):
-        super(RawxWorker, self).__init__(conf, volume_path)
+    def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
+        super(RawxWorker, self).__init__(conf, volume_path, **kwargs)
 
     def cb(self, status, msg):
         if is_success(status):
@@ -81,5 +81,6 @@ class RawxCrawler(Crawler):
 
     def _init_volume_workers(self):
         self.volume_workers = [
-            RawxWorker(self.conf, volume, logger=self.logger, api=self.api)
+            RawxWorker(self.conf, volume, logger=self.logger, api=self.api,
+                       watchdog=self.watchdog)
             for volume in self.volumes]

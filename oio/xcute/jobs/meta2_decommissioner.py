@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,9 +24,9 @@ from oio.xcute.jobs.common import XcuteRdirJob
 
 class Meta2DecommissionTask(XcuteTask):
 
-    def __init__(self, conf, job_params, logger=None):
+    def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(Meta2DecommissionTask, self).__init__(
-            conf, job_params, logger=logger)
+            conf, job_params, logger=logger, watchdog=watchdog)
 
         self.src = job_params['service_id']
         self.dst = job_params['dst']

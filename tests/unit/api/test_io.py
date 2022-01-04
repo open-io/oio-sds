@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -54,7 +54,7 @@ class FakeSource(object):
 class IOTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.watchdog = green.get_watchdog()
+        self.watchdog = green.get_watchdog(called_from_main_application=True)
 
     def test_recover(self):
         # basic without range
@@ -64,7 +64,8 @@ class IOTest(unittest.TestCase):
         self.assertEqual(reader.request_headers['Range'], 'bytes=10-')
 
         # full byte range
-        reader = ChunkReader(None, None, {'Range': 'bytes=21-40'})
+        reader = ChunkReader(None, None, {'Range': 'bytes=21-40'},
+                             watchdog=self.watchdog)
         reader.recover(10)
         self.assertEqual(reader.request_headers['Range'], 'bytes=31-40')
         # ask byte range too large
@@ -73,17 +74,20 @@ class IOTest(unittest.TestCase):
         self.assertRaises(exceptions.EmptyByteRange, reader.recover, 10)
 
         # prefix byte range
-        reader = ChunkReader(None, None, {'Range': 'bytes=11-'})
+        reader = ChunkReader(None, None, {'Range': 'bytes=11-'},
+                             watchdog=self.watchdog)
         reader.recover(10)
         self.assertEqual(reader.request_headers['Range'], 'bytes=21-')
 
         # suffix byte range
-        reader = ChunkReader(None, None, {'Range': 'bytes=-50'})
+        reader = ChunkReader(None, None, {'Range': 'bytes=-50'},
+                             watchdog=self.watchdog)
         reader.recover(10)
         self.assertEqual(reader.request_headers['Range'], 'bytes=-40')
 
         # single byte range
-        reader = ChunkReader(None, None, {'Range': 'bytes=0-0'})
+        reader = ChunkReader(None, None, {'Range': 'bytes=0-0'},
+                             watchdog=self.watchdog)
         # ask empty byte range
         self.assertRaises(exceptions.EmptyByteRange, reader.recover, 1)
 
@@ -107,7 +111,8 @@ class IOTest(unittest.TestCase):
         self.assertEqual(discard_bytes(512, 1024), 0)
 
     def test_reader_buf_size(self):
-        reader = ChunkReader(None, 8, {})
+        reader = ChunkReader(None, 8, {},
+                             watchdog=self.watchdog)
 
         chunk = {}
         source = FakeSource(
@@ -124,7 +129,8 @@ class IOTest(unittest.TestCase):
     def test_reader_buf_resume(self):
         chunk = {}
 
-        reader = ChunkReader(None, 8, {})
+        reader = ChunkReader(None, 8, {},
+                             watchdog=self.watchdog)
 
         # provide source0 with failure
         source0 = FakeSource([b'1234', b'abcd', b'123', None])

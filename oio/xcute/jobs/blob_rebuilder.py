@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,9 +26,9 @@ from oio.xcute.jobs.common import XcuteRdirJob
 
 class RawxRebuildTask(XcuteTask):
 
-    def __init__(self, conf, job_params, logger=None):
+    def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(RawxRebuildTask, self).__init__(
-            conf, job_params, logger=logger)
+            conf, job_params, logger=logger, watchdog=watchdog)
 
         self.service_id = job_params['service_id']
         self.rawx_timeout = job_params['rawx_timeout']
@@ -37,7 +37,8 @@ class RawxRebuildTask(XcuteTask):
         self.try_chunk_delete = job_params['try_chunk_delete']
         self.dry_run = job_params['dry_run']
 
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger)
+        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
+                                            watchdog=self.watchdog)
 
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload['container_id']

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,10 +40,11 @@ class XcuteJobStatus(object):
 
 class XcuteTask(object):
 
-    def __init__(self, conf, job_params, logger=None):
+    def __init__(self, conf, job_params, logger=None, watchdog=None):
         self.conf = conf
         self.job_params = job_params
         self.logger = logger or get_logger(self.conf)
+        self.watchdog = watchdog
 
     def params_have_changed(self, job_params):
         return job_params != self.job_params

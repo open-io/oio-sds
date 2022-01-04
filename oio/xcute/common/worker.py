@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,9 +28,10 @@ from oio.xcute.jobs import JOB_TYPES
 
 class XcuteWorker(object):
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, logger=None, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
+        self.watchdog = watchdog
         self.beanstalkd_replies = dict()
         self.tasks = CacheDict(size=10)
 
@@ -45,7 +46,8 @@ class XcuteWorker(object):
         if task is None:
             job_type = beanstalkd_job['job_type']
             task_class = JOB_TYPES[job_type].TASK_CLASS
-            task = task_class(self.conf, job_params, logger=self.logger)
+            task = task_class(self.conf, job_params, logger=self.logger,
+                              watchdog=self.watchdog)
             self.tasks[job_id] = task
 
         tasks_per_second = job_config['tasks_per_second']
@@ -57,7 +59,7 @@ class XcuteWorker(object):
         tasks_run_time = 0
         for task_id, task_payload in iteritems(tasks):
             tasks_run_time = ratelimit(
-                    tasks_run_time, tasks_per_second)
+                tasks_run_time, tasks_per_second)
 
             reqid = job_id + request_id('-')
             reqid = reqid[:STRLEN_REQID]
@@ -65,8 +67,8 @@ class XcuteWorker(object):
                 task_result = task.process(task_id, task_payload, reqid=reqid)
                 task_results.update(task_result)
             except Exception as exc:
-                self.logger.warn('[job_id=%s] Fail to process task %s: %s',
-                                 job_id, task_id, exc)
+                self.logger.warning('[job_id=%s] Fail to process task %s: %s',
+                                    job_id, task_id, exc)
                 task_errors[type(exc).__name__] += 1
 
         return job_id, list(tasks.keys()), task_results, task_errors, \

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -322,7 +322,7 @@ class CommonTestCase(testtools.TestCase):
     @property
     def watchdog(self):
         if self._watchdog is None:
-            self._watchdog = get_watchdog()
+            self._watchdog = get_watchdog(called_from_main_application=True)
         return self._watchdog
 
     @property

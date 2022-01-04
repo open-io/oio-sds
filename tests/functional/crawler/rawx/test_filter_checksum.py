@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -106,6 +106,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         app = FilterApp
         app.app_env['volume_path'] = volume_path
         app.app_env['volume_id'] = volume_id
+        app.app_env['watchdog'] = self.watchdog
         checksum = Checksum(app=app, conf=self.conf)
 
         # Alteration of the data
@@ -145,6 +146,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         app = FilterApp
         app.app_env['volume_path'] = volume_path
         app.app_env['volume_id'] = volume_id
+        app.app_env['watchdog'] = self.watchdog
         checksum = Checksum(app=app, conf=self.conf)
 
         # Alteration of the data

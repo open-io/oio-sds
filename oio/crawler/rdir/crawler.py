@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,8 @@ class RdirWorker(object):
     Blob indexer worker responsible for a single volume.
     """
 
-    def __init__(self, conf, volume_path, logger=None, pool_manager=None):
+    def __init__(self, conf, volume_path, logger=None, pool_manager=None,
+                 watchdog=None):
         """
         Initializes an RdirWorker.
 
@@ -84,12 +85,11 @@ class RdirWorker(object):
             pool_manager = get_pool_manager(pool_connections=10)
         self.index_client = RdirClient(conf, logger=self.logger,
                                        pool_manager=pool_manager)
-        self.watchdog = get_watchdog()
         self.conscience_client = ConscienceClient(self.conf,
                                                   logger=self.logger,
                                                   pool_manager=pool_manager)
         self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
-                                            watchdog=self.watchdog)
+                                            watchdog=watchdog)
 
     def _check_rawx_up(self):
         now = time.time()
@@ -274,9 +274,10 @@ class RdirCrawler(Daemon):
         if not conf.get("volume_list"):
             raise exc.OioException("No rawx volumes provided to index!")
         self.volumes = [x.strip() for x in conf.get('volume_list').split(',')]
+        self.watchdog = get_watchdog(called_from_main_application=True)
         self.pool = ContextPool(len(self.volumes))
-        self.volume_workers = [RdirWorker(conf, x) for x in
-                               self.volumes]
+        self.volume_workers = [RdirWorker(conf, x, watchdog=self.watchdog)
+                               for x in self.volumes]
 
     def run(self, *args, **kwargs):
         self.logger.info("started rdir crawler service")

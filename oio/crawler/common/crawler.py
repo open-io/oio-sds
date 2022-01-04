@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import ConfigurationException
-from oio.common.green import ratelimit, time, ContextPool
+from oio.common.green import get_watchdog, ratelimit, time, ContextPool
 from oio.common.logger import get_logger
 from oio.common.utils import paths_gen
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
@@ -39,7 +39,8 @@ class CrawlerWorker(object):
 
     SERVICE_TYPE = None
 
-    def __init__(self, conf, volume_path, logger=None, api=None):
+    def __init__(self, conf, volume_path, logger=None, api=None,
+                 watchdog=None):
         """
         - interval: (int) in sec time between two full scans. Default: half an
                     hour.
@@ -75,6 +76,7 @@ class CrawlerWorker(object):
             self.namespace, logger=self.logger)
         self.app_env['volume_path'] = self.volume
         self.app_env['volume_id'] = self.volume_id
+        self.app_env['watchdog'] = watchdog
 
         self.pipeline = LOAD_PIPELINES[self.SERVICE_TYPE](
             conf.get('conf_file'), global_conf=self.conf, app=self)
@@ -229,9 +231,10 @@ class Crawler(Daemon):
             raise ConfigurationException("No volumes provided to crawl!")
 
         self.pool = ContextPool(len(self.volumes))
+        self.watchdog = get_watchdog(called_from_main_application=True)
         self._init_volume_workers()
 
-    def _init_volume_workers(self):
+    def _init_volume_workers(self, **kwargs):
         self.volume_workers = []
         raise NotImplementedError('_init_volume_workers not implemented')
 

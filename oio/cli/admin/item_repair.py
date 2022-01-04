@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -81,7 +82,8 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             accounts.append(account)
 
         self.repairer = AccountRebuilder(
-            self.tool_conf, accounts=accounts, logger=self.logger)
+            self.tool_conf, accounts=accounts, logger=self.logger,
+            watchdog=self.watchdog)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -147,7 +149,7 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
 
         self.repairer = ContainerRepairer(
             self.tool_conf, containers=containers_to_repair,
-            logger=self.logger)
+            logger=self.logger, watchdog=self.watchdog)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -194,7 +196,7 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
 
         self.repairer = ContentRepairer(
             self.tool_conf, objects=objects_to_repair,
-            logger=self.logger)
+            logger=self.logger, watchdog=self.watchdog)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():

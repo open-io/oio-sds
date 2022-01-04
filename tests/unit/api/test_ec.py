@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class TestEC(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super(TestEC, cls).setUpClass()
-        cls.watchdog = get_watchdog()
+        cls.watchdog = get_watchdog(called_from_main_application=True)
 
     def setUp(self):
         self.chunk_method = 'ec/algo=liberasurecode_rs_vand,k=6,m=2'

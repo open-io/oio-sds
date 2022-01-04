@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -657,8 +657,8 @@ class EcChunkWriter(object):
             except (Exception, ChunkWriteTimeout) as exc:
                 self.failed = True
                 msg = text_type(exc)
-                self.logger.warn("Failed to write to %s (%s, reqid=%s)",
-                                 self.chunk, msg, self.reqid)
+                self.logger.warning("Failed to write to %s (%s, reqid=%s)",
+                                    self.chunk, msg, self.reqid)
                 self.chunk['error'] = 'write: %s' % msg
             # Indicate that the data is completely sent
             self.queue.task_done()
@@ -725,8 +725,8 @@ class EcChunkWriter(object):
         except (Exception, ChunkWriteTimeout) as exc:
             self.failed = True
             msg = text_type(exc)
-            self.logger.warn("Failed to finish %s (%s, reqid=%s)",
-                             self.chunk, msg, self.reqid)
+            self.logger.warning("Failed to finish %s (%s, reqid=%s)",
+                                self.chunk, msg, self.reqid)
             self.chunk['error'] = 'finish: %s' % msg
             return self.chunk
         finally:
@@ -914,15 +914,15 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return bytes_transferred
 
         except SourceReadTimeout as exc:
-            self.logger.warn('%s (reqid=%s)', exc, self.reqid)
+            self.logger.warning('%s (reqid=%s)', exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
-            self.logger.warn('Source read error (reqid=%s): %s',
-                             self.reqid, exc)
+            self.logger.warning('Source read error (reqid=%s): %s',
+                                self.reqid, exc)
             raise
         except Timeout as to:
-            self.logger.warn('Timeout writing data (reqid=%s): %s',
-                             self.reqid, to)
+            self.logger.warning('Timeout writing data (reqid=%s): %s',
+                                self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to)
         except Exception:
@@ -957,8 +957,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = text_type(exc)
-            self.logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
-                             chunk, msg, self.reqid, exc)
+            self.logger.warning("Failed to connect to %s (%s, reqid=%s): %s",
+                                chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
@@ -982,7 +982,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     success_chunks.append(writer.chunk)
             else:
-                self.logger.warn(
+                self.logger.warning(
                     "Unexpected status code from %s (reqid=%s): (%s) %s)",
                     writer.chunk, self.reqid, resp.status, resp.reason)
                 writer.chunk['error'] = 'resp: HTTP %s' % resp.status
@@ -1027,8 +1027,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             resp = None
             msg = text_type(exc)
-            self.logger.warn("Failed to read response for %s (reqid=%s): %s",
-                             writer.chunk, self.reqid, msg)
+            self.logger.warning(
+                "Failed to read response for %s (reqid=%s): %s",
+                writer.chunk, self.reqid, msg)
             writer.chunk['error'] = 'resp: %s' % msg
         # close_source() will be called in a finally block later.
         # But we do not want to wait for all writers to have finished writing

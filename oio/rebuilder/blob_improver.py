@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class BlobImprover(Rebuilder):
 
     def __init__(self, conf, logger, beanstalkd_addr, **kwargs):
         super(BlobImprover, self).__init__(conf, logger, volume=None, **kwargs)
-        self.watchdog = get_watchdog()
+        self.watchdog = get_watchdog(called_from_main_application=True)
         self.content_factory = ContentFactory(self.conf, logger=self.logger,
                                               watchdog=self.watchdog)
         beanstalkd_tube = self.conf.get('beanstalkd_tube',

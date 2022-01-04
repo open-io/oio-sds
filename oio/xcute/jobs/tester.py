@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,9 +34,9 @@ EXCEPTIONS = [exc.BadRequest,
 
 class TesterTask(XcuteTask):
 
-    def __init__(self, conf, job_params, logger=None):
+    def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(TesterTask, self).__init__(
-            conf, job_params, logger=logger)
+            conf, job_params, logger=logger, watchdog=watchdog)
 
         self.error_percentage = job_params['error_percentage']
 

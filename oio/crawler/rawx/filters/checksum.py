@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@ from oio.common import exceptions as exc
 from oio.common.constants import CHUNK_SUFFIX_CORRUPT, \
     CHUNK_QUARANTINE_FOLDER_NAME
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.green import get_watchdog, time
+from oio.common.green import time
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point, get_hasher
 from oio.conscience.client import ConscienceClient
@@ -59,9 +59,8 @@ class Checksum(Filter):
                                                  CHUNK_QUARANTINE_FOLDER_NAME,
                                                  self.volume_id)
 
-        self.watchdog = get_watchdog()
         self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
-                                            watchdog=self.watchdog)
+                                            watchdog=self.app_env['watchdog'])
         self._rawx_service = RawxService(status=False, last_time=0)
 
         self.conscience_client = ConscienceClient(

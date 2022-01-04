@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -50,7 +50,7 @@ def extend(base, inc):
 class ObjectStorageTest(unittest.TestCase):
     def setUp(self):
         self.fake_endpoint = "http://1.2.3.4:8000"
-        self.watchdog = get_watchdog()
+        self.watchdog = get_watchdog(called_from_main_application=True)
         self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint,
                                   watchdog=self.watchdog)
         self.account = "test"

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ import signal
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioException, OioTimeout, RetryLater
 from oio.common.green import ContextPool, eventlet, ratelimit, sleep, \
-    threading, time, get_watchdog
+    threading, time
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
@@ -45,12 +45,12 @@ class Tool(object):
     DEFAULT_CONCURRENCY = 1
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-process'
 
-    def __init__(self, conf, beanstalkd_addr=None, logger=None):
+    def __init__(self, conf, beanstalkd_addr=None, logger=None, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.namespace = conf['namespace']
         self.success = True
-        self.watchdog = get_watchdog()
+        self.watchdog = watchdog
 
         # exit gracefully
         self.running = True

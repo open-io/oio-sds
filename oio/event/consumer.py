@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -147,7 +147,8 @@ class EventWorker(Worker):
             pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
             cache_duration=rdir_refresh_interval,
         )
-        self.app_env['watchdog'] = get_watchdog()
+        self.app_env['watchdog'] = \
+            get_watchdog(called_from_main_application=True)
 
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")

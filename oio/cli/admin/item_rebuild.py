@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -94,7 +95,7 @@ class ChunkRebuildCommand(ItemRebuildCommand):
 
         self.rebuilder = BlobRebuilder(
             self.tool_conf, input_file=parsed_args.input_file,
-            logger=self.logger)
+            logger=self.logger, watchdog=self.watchdog)
         if self.distributed:
             self.rebuilder.prepare_distributed_dispatcher()
         else:

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import ratelimit, time, GreenPool
+from oio.common.green import get_watchdog, ratelimit, time, GreenPool
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -246,6 +246,7 @@ class BlobMover(Daemon):
         if not volume:
             raise exc.ConfigurationException('No volume specified for mover')
         self.volume = volume
+        self.watchdog = get_watchdog(called_from_main_application=True)
         global SLEEP_TIME
         if SLEEP_TIME > int(conf.get('report_interval', 3600)):
             SLEEP_TIME = int(conf.get('report_interval', 3600))
@@ -254,7 +255,8 @@ class BlobMover(Daemon):
         work = True
         while work:
             try:
-                worker = BlobMoverWorker(self.conf, self.logger, self.volume)
+                worker = BlobMoverWorker(self.conf, self.logger, self.volume,
+                                         watchdog=self.watchdog)
                 worker.mover_pass(**kwargs)
                 work = False
             except Exception as err:

@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,8 @@ class TestBlobRebuilder(BaseTestCase):
 
         conf = self.conf.copy()
         conf['allow_same_rawx'] = True
-        rebuilder = BlobRebuilder(conf, service_id=chunk_volume)
+        rebuilder = BlobRebuilder(conf, service_id=chunk_volume,
+                                  watchdog=self.watchdog)
         rebuilder_worker = rebuilder.create_worker(None, None)
         rebuilder_worker._process_item(
             (self.ns, self.cid, self.content_id, chunk_id))

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -119,16 +119,16 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         green.eventlet_yield()
 
         except green.SourceReadTimeout as err:
-            self.logger.warn('Source read timeout (reqid=%s): %s',
-                             self.reqid, err)
+            self.logger.warning('Source read timeout (reqid=%s): %s',
+                                self.reqid, err)
             raise SourceReadTimeout(err)
         except SourceReadError as err:
-            self.logger.warn('Source read error (reqid=%s): %s',
-                             self.reqid, err)
+            self.logger.warning('Source read error (reqid=%s): %s',
+                                self.reqid, err)
             raise
         except Timeout as to:
-            self.logger.warn('Timeout writing data (reqid=%s): %s',
-                             self.reqid, to)
+            self.logger.warning('Timeout writing data (reqid=%s): %s',
+                                self.reqid, to)
             raise OioTimeout(to)
         except Exception:
             self.logger.exception('Exception writing data (reqid=%s)',
@@ -189,8 +189,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             return conn, chunk
         except (SocketError, Timeout) as err:
             msg = str(err)
-            self.logger.warn("Failed to connect to %s (reqid=%s): %s",
-                             chunk, self.reqid, err)
+            self.logger.warning("Failed to connect to %s (reqid=%s): %s",
+                                chunk, self.reqid, err)
         except Exception as err:
             msg = str(err)
             self.logger.exception("Failed to connect to %s (reqid=%s)",
@@ -252,8 +252,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         upload_end - conn.upload_start
         except Timeout as err:
             resp = err
-            self.logger.warn('Failed to read response from %s (reqid=%s): %s',
-                             conn.chunk, self.reqid, err)
+            self.logger.warning(
+                'Failed to read response from %s (reqid=%s): %s',
+                conn.chunk, self.reqid, err)
         except Exception as err:
             resp = err
             self.logger.exception("Failed to read response from %s (reqid=%s)",

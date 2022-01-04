@@ -2,6 +2,7 @@
 
 # oio-blob-rebuilder.py
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.green import eventlet_monkey_patch
+from oio.common.green import eventlet_monkey_patch, get_watchdog
 eventlet_monkey_patch()
 
 import argparse
@@ -164,7 +165,8 @@ def main():
     try:
         blob_rebuilder = BlobRebuilder(
             conf, input_file=args.input_file, service_id=args.volume,
-            beanstalkd_addr=args.beanstalkd, logger=logger)
+            beanstalkd_addr=args.beanstalkd, logger=logger,
+            watchdog=get_watchdog(called_from_main_application=True))
         if args.distributed and not args.dry_run:
             blob_rebuilder.prepare_distributed_dispatcher()
         else:

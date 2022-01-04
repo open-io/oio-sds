@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -72,6 +72,7 @@ class TestBlobIndexer(BaseTestCase):
         app = FilterApp
         app.app_env['volume_path'] = self.rawx_path
         app.app_env['volume_id'] = self.rawx_id
+        app.app_env['watchdog'] = self.watchdog
         self.indexer = Indexer(app=app, conf=self.conf)
         # clear rawx/rdir
         chunk_files = paths_gen(self.rawx_path)

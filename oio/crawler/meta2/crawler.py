@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,8 +26,8 @@ class Meta2Worker(CrawlerWorker):
 
     SERVICE_TYPE = 'meta2'
 
-    def __init__(self, conf, volume_path, logger=None, api=None):
-        super(Meta2Worker, self).__init__(conf, volume_path)
+    def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
+        super(Meta2Worker, self).__init__(conf, volume_path, **kwargs)
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
@@ -79,5 +79,6 @@ class Meta2Crawler(Crawler):
 
     def _init_volume_workers(self):
         self.volume_workers = [
-            Meta2Worker(self.conf, volume, logger=self.logger, api=self.api)
+            Meta2Worker(self.conf, volume, logger=self.logger, api=self.api,
+                        watchdog=self.watchdog)
             for volume in self.volumes]

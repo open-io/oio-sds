@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,7 +31,8 @@ class XcuteFilter(Filter):
             self.conf.get('retry_delay_to_reply'),
             self.DEFAULT_RETRY_DELAY_TO_REPLY)
 
-        self.worker = XcuteWorker(self.conf, logger=self.logger)
+        self.worker = XcuteWorker(self.conf, logger=self.logger,
+                                  watchdog=self.app_env.get('watchdog'))
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
