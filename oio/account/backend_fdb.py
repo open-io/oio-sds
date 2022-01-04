@@ -377,8 +377,8 @@ class AccountBackendFdb():
         # bucket location
         bucket_location = kwargs.get('bucket_location', self.default_location)
         # dict object details per storage class
-        objects_details = kwargs.get('objects-details', {})
-        bytes_details = kwargs.get('bytes-details', {})
+        objects_details = kwargs.get('objects-details') or {}
+        bytes_details = kwargs.get('bytes-details') or {}
 
         # read mtime & dtime
         ct_space = self.ct_space[account_id]
@@ -678,7 +678,8 @@ class AccountBackendFdb():
                                 reverse=False)
         for key, value in iterator:
             _, _, region, storage_class = unpack(key)
-            metrics_field[region] = {}
+            if region not in metrics_field:
+                metrics_field[region] = {}
             metrics_field[region][storage_class] = \
                 struct.unpack('<q', value)[0]
         return metrics_field
@@ -976,6 +977,9 @@ class AccountBackendFdb():
                 if mtime != b'0':
                     tr[self.b_space.pack((bucket_name, 'mtime'))] = mtime
 
+                self._update_bucket_per_policy(tr, bucket_name,
+                                               objects_details, bytes_details)
+
                 if deleted:
                     return 'deleted'
                 # Set the bucket owner.
@@ -1020,7 +1024,6 @@ class AccountBackendFdb():
         """
         current_values = dict()
         deltas = dict()
-
         c_space = fdb.Subspace((METRICS_PREFIX, cname, region))
         for policy, value in objs_per_policy.items():
             if policy not in current_values.keys():
@@ -1072,15 +1075,43 @@ class AccountBackendFdb():
         for key, val in res:
             _, _, reg, pol, field = unpack(key)
             if pol not in objs_per_policy:
-                deltas[pol] = {}
+                if pol not in deltas:
+                    deltas[pol] = {}
                 deltas[pol][field] = - struct.unpack('<q', val)[0]
         # clear not present policies for given container
+        policies_to_clear = list()
         for key, val in res:
             _, _, reg, pol, field = unpack(key)
-            if pol not in objs_per_policy:
-                tr.clear(reg_space.pack((pol, )))
+            if pol not in objs_per_policy and pol not in policies_to_clear:
+                policies_to_clear.append(pol)
+        for pol in policies_to_clear:
+            tr.clear_range_startswith(reg_space.pack((pol,)))
 
         return deltas
+
+    @fdb.transactional
+    def _update_bucket_per_policy(self, tr, bucket_name, objs_per_policy,
+                                  bytes_per_policy):
+        """
+        Update objects/bytes per policy for given bucket
+        """
+        bucket_space = self.b_space[bucket_name, 'policy']
+        for policy, value in objs_per_policy.items():
+            if value > 0:
+                tr[bucket_space.pack((policy, 'objects'))] = \
+                    struct.pack('<q', value)
+
+        for policy, value in bytes_per_policy.items():
+            if value > 0:
+                tr[bucket_space.pack((policy, 'bytes'))] = \
+                    struct.pack('<q', value)
+        # clear not present policies for given bucket
+        policies_range = bucket_space.range()
+        res = tr.get_range(policies_range.start, policies_range.stop)
+        for key, val in res:
+            _, _, pol, field = unpack(key)
+            if pol not in objs_per_policy:
+                tr.clear_range_startswith(bucket_space.pack((pol, )))
 
     @fdb.transactional
     def _raw_listing(self, tr, ct_space, limit, prefix, marker, end_marker,

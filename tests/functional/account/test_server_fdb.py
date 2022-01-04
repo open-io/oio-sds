@@ -540,8 +540,25 @@ class TestAccountMetrics(TestAccountServerBase):
 
         resp = self.app.get('/v1.0/account/metrics?format=json')
         resp = self.json_loads(resp.data)
-        # TODO enable when PR OBTO-855 is merged
-        # self.assertEqual(resp['obsto_objects']['test_region']['class1'], 1)
-        # self.assertEqual(resp['obsto_objects']['test_region']['class2'], 2)
-        # self.assertEqual(resp['obsto_bytes']['test_region']['class1'], 30)
-        # self.assertEqual(resp['obsto_bytes']['test_region']['class2'], 10)
+        self.assertEqual(resp['obsto_objects']['test_region']['class1'], 1)
+        self.assertEqual(resp['obsto_objects']['test_region']['class2'], 2)
+        self.assertEqual(resp['obsto_bytes']['test_region']['class1'], 30)
+        self.assertEqual(resp['obsto_bytes']['test_region']['class2'], 10)
+
+        data = {'name': 'ct2', 'mtime': Timestamp().normal,
+                'objects': 6, 'bytes': 21,
+                'objects-details': {"class2": 1, "class3": 5},
+                'bytes-details': {"class2": 10, "class3": 11}
+                }
+        data = json.dumps(data)
+        self.app.put('/v1.0/account/container/update',
+                     data=data,
+                     query_string={'id': self.account_id})
+
+        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.json_loads(resp.data)
+        self.assertNotIn("class1", resp['obsto_objects']['test_region'])
+        self.assertEqual(resp['obsto_objects']['test_region']['class2'], 1)
+        self.assertEqual(resp['obsto_objects']['test_region']['class3'], 5)
+        self.assertEqual(resp['obsto_bytes']['test_region']['class2'], 10)
+        self.assertEqual(resp['obsto_bytes']['test_region']['class3'], 11)
