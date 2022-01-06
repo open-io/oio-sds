@@ -1,0 +1,50 @@
+[billing-agent]
+user = openio
+
+# Wait random time before starting
+# to avoid all the agents from working at the same time.
+wait_random_time_before_starting = False
+# In seconds, the interval between two full scans.
+interval = 1800
+# In seconds, the interval between two logs entries (for each volume).
+report_interval = 300
+
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${SRVTYPE}
+
+# FoundationDB
+fdb_file = ${CLUSTERFILE}
+
+# Billing message
+## Reseller prefix, all other accounts will be ignored
+reseller_prefix = AUTH_
+## Default S3 storage class if there are no detailed statistics for a bucket
+default_storage_class = STANDARD
+## Event type
+event_type = telemetry.polling
+## Publisher ID
+publisher_id = ceilometer.polling
+## Counter name
+counter_name = storage.bucket.objects.size
+## Number of buckets sent in a single billing message
+batch_size = 50
+
+# RabbitMQ
+## AMQP URL  amqp://username:password@host:port[/vitual_host]
+amqp_url = amqp://guest:guest@localhost:5672/
+## AMQP exchange name
+amqp_exchange = swift
+## AMQP queue name
+amqp_queue = notifications.info
+## Use AMQP durable queue
+amqp_durable = True
+## Use AMQP auto-delete queue
+amqp_auto_delete = False
+
+# Storage classes
+## The storage policies associed with their storage class
+#storage_class.GLACIER = SINGLE,TWOCOPIES
+#storage_class.STANDARD = THREECOPIES,EC

@@ -1347,6 +1347,40 @@ class AccountBackendFdb(object):
                 break
         return results, next_marker
 
+    @catch_service_errors
+    def list_all_buckets(self):
+        """
+        Get all buckets
+
+        :returns: the list of all buckets (with metadata).
+        """
+        b_space_range = self.bucket_space.range()
+        transaction = self.db.create_transaction()
+        try:
+            entries = transaction.snapshot.get_range(
+                b_space_range.start, b_space_range.stop,
+                streaming_mode=fdb.StreamingMode.want_all)
+            bucket_keys_values = None, None, None
+            for key, value in entries:
+                account, bucket, *key = self.bucket_space.unpack(key)
+                if (account, bucket) != bucket_keys_values[:2]:
+                    if bucket_keys_values[2]:
+                        bucket_info = self._unmarshal_info(
+                            bucket_keys_values[2])
+                        bucket_info['account'] = bucket_keys_values[0]
+                        bucket_info['name'] = bucket_keys_values[1]
+                        yield bucket_info
+                    bucket_keys_values = account, bucket, []
+                bucket_keys_values[2].append((key, value))
+            else:
+                if bucket_keys_values[2]:
+                    bucket_info = self._unmarshal_info(bucket_keys_values[2])
+                    bucket_info['account'] = bucket_keys_values[0]
+                    bucket_info['name'] = bucket_keys_values[1]
+                    yield bucket_info
+        finally:
+            transaction.commit()
+
     @fdb.transactional
     def _update_bucket_stats(self, tr, account_id, cname, bname, region,
                              stats_delta, mtime, container_is_deleted):
