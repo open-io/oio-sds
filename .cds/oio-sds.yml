@@ -157,6 +157,8 @@ notifications:
   - type: vcs
     settings:
       on_success: always
+      template:
+        disable_comment: true
 
 hooks:
   root:
