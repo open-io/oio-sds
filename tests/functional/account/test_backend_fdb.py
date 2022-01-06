@@ -457,42 +457,10 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(listing[-1][0], '0-0109')
 
         listing = self.backend.list_containers(
-            account_id, marker='', prefix='0-', delimiter='-', limit=10)
+            account_id, marker='', prefix='0-', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0][0], '0-0000')
         self.assertEqual(listing[-1][0], '0-0009')
-
-        listing = self.backend.list_containers(
-            account_id, marker='', prefix='', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 4)
-        self.assertEqual([c[0] for c in listing],
-                         ['0-', '1-', '2-', '3-'])
-
-        listing = self.backend.list_containers(
-            account_id, marker='2-', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 1)
-        self.assertEqual([c[0] for c in listing], ['3-'])
-
-        listing = self.backend.list_containers(
-            account_id, marker='', prefix='2', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 1)
-        self.assertEqual([c[0] for c in listing], ['2-'])
-
-        listing = self.backend.list_containers(
-            account_id, marker='2-0050', prefix='2-', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 10)
-        self.assertEqual(listing[0][0], '2-0051')
-        self.assertEqual(listing[1][0], '2-0051-')
-        self.assertEqual(listing[2][0], '2-0052')
-        self.assertEqual(listing[-1][0], '2-0059')
-
-        listing = self.backend.list_containers(
-            account_id, marker='3-0045', prefix='3-', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 10)
-        self.assertEqual([c[0] for c in listing],
-                         ['3-0045-', '3-0046', '3-0046-', '3-0047',
-                          '3-0047-', '3-0048', '3-0048-', '3-0049',
-                          '3-0049-', '3-0050'])
 
         name = '3-0049-'
         self.backend.update_container(
@@ -504,20 +472,6 @@ class TestAccountBackend(BaseTestCase):
                          ['3-0048-0049', '3-0049', '3-0049-', '3-0049-0049',
                           '3-0050', '3-0050-0049', '3-0051', '3-0051-0049',
                           '3-0052', '3-0052-0049'])
-
-        listing = self.backend.list_containers(
-            account_id, marker='3-0048', prefix='3-', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 10)
-        self.assertEqual([c[0] for c in listing],
-                         ['3-0048-', '3-0049', '3-0049-', '3-0050',
-                          '3-0050-', '3-0051', '3-0051-', '3-0052',
-                          '3-0052-', '3-0053'])
-
-        listing = self.backend.list_containers(
-            account_id, prefix='3-0049-', delimiter='-', limit=10)
-        self.assertEqual(len(listing), 2)
-        self.assertEqual([c[0] for c in listing],
-                         ['3-0049-', '3-0049-0049'])
 
     def test_refresh_account(self):
         account_id = random_str(16)
@@ -817,7 +771,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
 
-        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        metric_space = fdb.Subspace(('metrics:', 'objects'))
         space_range = metric_space.range()
         res = self.backend.db.get_range(space_range.start, space_range.stop)
         for key, val in res:
@@ -832,7 +786,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
-        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        metric_space = fdb.Subspace(('metrics:', 'objects'))
         space_range = metric_space.range()
         res = self.backend.db.get_range(space_range.start, space_range.stop)
         for key, val in res:
@@ -852,7 +806,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
-        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        metric_space = fdb.Subspace(('metrics:', 'objects'))
         space_range = metric_space.range()
         res = self.backend.db.get_range(space_range.start, space_range.stop)
         for key, val in res:
@@ -871,7 +825,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
-        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        metric_space = fdb.Subspace(('metrics:', 'objects'))
         space_range = metric_space.range()
         res = self.backend.db.get_range(space_range.start, space_range.stop)
         for key, val in res:
@@ -886,13 +840,13 @@ class TestAccountBackend(BaseTestCase):
         """
         test that metrics entries are cleared when counters reach zero,
         """
-        # create an account and delete it then check metrics:nb-accounts
+        # create an account and delete it then check metrics:accounts
         # is not present
         # TODO extend to all metrics with regions and policies
 
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
-        metric_space = fdb.Subspace(('metrics:', 'nb-accounts'))
+        metric_space = fdb.Subspace(('metrics:', 'accounts'))
         status = self.backend.db.get(metric_space)
 
         self.assertNotEqual(status, None)
@@ -905,7 +859,7 @@ class TestAccountBackend(BaseTestCase):
                                       0, 0, **params)
 
         key_region = self.backend.db.get(fdb.Subspace(('metrics:',
-                                                       'nb-containers',
+                                                       'containers',
                                                        region)))
         self.assertNotEqual(key_region, None)
 
@@ -915,7 +869,7 @@ class TestAccountBackend(BaseTestCase):
                                       0, 0, **params)
 
         key_region = self.backend.db.get(fdb.Subspace(('metrics:',
-                                                       'nb-containers',
+                                                       'containers',
                                                        region)))
         self.assertEqual(key_region, None)
 

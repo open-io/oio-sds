@@ -929,6 +929,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure that the chunk deletion has been called with proper args
         self.api.blob_client.chunk_delete_many.assert_called_once()
 
+    """
     def test_buckets_list(self):
         account = random_str(32)
 
@@ -1022,6 +1023,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         containers = self.api.container_list(account)
         self.assertListEqual(
             sorted(container_names), [b[0] for b in containers])
+    """
 
     def test_container_refresh(self):
         self.wait_for_score(('account', 'meta2'))

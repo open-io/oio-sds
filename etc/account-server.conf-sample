@@ -16,6 +16,7 @@ backend_type = fdb
 fdb_file = /etc/foundationdb/fdb.cluster
 
 default_location = RegionOne
+time_window_clear_deleted = 60
 
 # Configure Redis backend
 #redis_host = 127.0.0.1:6379

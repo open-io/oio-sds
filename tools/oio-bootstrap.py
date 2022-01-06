@@ -1357,6 +1357,7 @@ backend_type = fdb
 fdb_file = ${CLUSTERFILE}
 
 default_location = RegionOne
+time_window_clear_deleted = 60
 
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
