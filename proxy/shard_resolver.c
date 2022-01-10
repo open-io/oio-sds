@@ -1,6 +1,6 @@
 /*
 OpenIO SDS sharding resolver
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -140,6 +140,7 @@ shard_resolver_get_cached(struct shard_resolver_s *resolver,
 		GRID_DEBUG("No cached shard for the root %s", root_cid);
 	}
 	g_mutex_unlock(&resolver->lock);
+	_bean_clean(search);
 
 	return result;
 }

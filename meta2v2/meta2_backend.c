@@ -416,6 +416,7 @@ _container_state(struct sqlx_sqlite3_s *sq3, gboolean deleted)
 					g_ascii_strtoll(*(p+1), NULL, 10));
 		}
 		g_string_append_static(gs, "}");
+		g_strfreev(properties);
 	}
 	// If the container is deleted while it contained objects,
 	// send a consistent number of objects
@@ -428,6 +429,7 @@ _container_state(struct sqlx_sqlite3_s *sq3, gboolean deleted)
 					g_ascii_strtoll(*(p+1), NULL, 10));
 		}
 		g_string_append_static(gs, "}");
+		g_strfreev(properties);
 	}
 	g_string_append_static(gs, "}}");
 
@@ -2201,8 +2203,6 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct db_properties_s *db_properties, gboolean propagate_to_shards UNUSED)
 {
-	GPtrArray *tmp = g_ptr_array_new();
-
 	if (m2b->notifier_container_updated) {
 		GString *event = oio_event__create_with_id(
 				META2_EVENTS_PREFIX ".container.update", url,
@@ -2221,6 +2221,9 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
 	if (!m2db_get_shard_count(sq3)) {
 		return;
 	}
+
+	GPtrArray *tmp = g_ptr_array_new();
+
 	if (db_properties_has_system_property(db_properties, SHARED_KEYS)) {
 		// Share some properties with the shard
 		for (gchar **shared_key=SHARED_KEYS; *shared_key; shared_key+=1) {
