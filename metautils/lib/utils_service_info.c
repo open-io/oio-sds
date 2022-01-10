@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -18,9 +18,11 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <json.h>
+#include <math.h>
+
 #include "metautils.h"
 
-#include <json.h>
 
 static void
 clean_tag_value(struct service_tag_s *tag)
@@ -77,7 +79,7 @@ service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b, GError **e
 			*b = BOOL(tag->value.i);
 			return TRUE;
 		case STVT_REAL:
-			*b = (tag->value.r != 0.0);
+			*b = (fabs(tag->value.r) >= FLT_EPSILON);
 			return TRUE;
 		case STVT_BOOL:
 			*b = BOOL(tag->value.b);
@@ -494,7 +496,7 @@ service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolea
 	g_string_append_static(gstr, "}}");
 }
 
-static gchar *
+static void
 _service_tag_value_encode_str(GString *gstr, struct service_tag_s *tag,
 		gboolean numerical)
 {
