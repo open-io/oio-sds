@@ -2336,6 +2336,7 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	GSList *beans_to_delete = NULL;
 	GSList *deleted_beans = NULL;
 	guint8 *content_id = NULL;
+	GString *current_mime_type = NULL;
 
 	for (GSList *l = new_beans; l; l = l->next) {
 		if (DESCR(l->data) == &descr_struct_ALIASES) {
@@ -2420,6 +2421,7 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 		goto label_end;
 	}
 
+	current_mime_type = CONTENTS_HEADERS_get_mime_type(current_header);
 	err = _real_delete_and_save_deleted_beans(args->sq3,
 			beans_to_delete, NULL, current_header,
 			_bean_list_cb, &deleted_beans);
@@ -2432,6 +2434,8 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	_patch_beans_with_time(new_beans, current_alias, TRUE);
 	/* Ensure the beans are all linked to the content (with their content-id) */
 	_patch_beans_with_contentid(new_beans, content_id, content_idlen);
+	/* Overwrite default mime-type with current one */
+	CONTENTS_HEADERS_set_mime_type(new_header, current_mime_type);
 
 	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
 	if (!err) {
