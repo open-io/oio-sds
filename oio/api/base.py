@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,20 +14,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six import text_type, iteritems
-from six.moves.urllib_parse import urlencode
+from urllib.parse import urlencode
 
-from oio.common.easy_value import true_value
-from oio.common.json import json as jsonlib
-
-from oio.common.http_urllib3 import urllib3, get_pool_manager, \
-    oio_exception_from_httperror, URLLIB3_REQUESTS_KWARGS
-from oio.common import exceptions
-from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID, \
     HTTP_CONTENT_TYPE_JSON
+from oio.common.easy_value import true_value
+from oio.common.exceptions import OioException, from_response
+from oio.common.http_urllib3 import urllib3, get_pool_manager, \
+    oio_exception_from_httperror, URLLIB3_REQUESTS_KWARGS
+from oio.common.json import json as jsonlib
+from oio.common.logger import get_logger
+from oio.common.utils import deadline_to_timeout, monotonic_time
 
 
 class HttpApi(object):
@@ -37,7 +36,8 @@ class HttpApi(object):
     """
 
     def __init__(self, endpoint=None, pool_manager=None,
-                 connection='keep-alive', service_type='unknown', **kwargs):
+                 connection='keep-alive', service_type='unknown',
+                 service_name=None, **kwargs):
         """
         :param pool_manager: an optional pool manager that will be reused
         :type pool_manager: `urllib3.PoolManager`
@@ -64,11 +64,11 @@ class HttpApi(object):
         self.force_master = true_value(kwargs.get('force_master', False))
         self.connection = connection
         self.service_type = service_type
+        self.service_name = service_name or service_type
 
     def __logger(self):
         """Try to get a logger from a child class, or create one."""
         if not hasattr(self, 'logger'):
-            from oio.common.logger import get_logger
             setattr(self, 'logger', get_logger(None, self.__class__.__name__))
         return getattr(self, 'logger')
 
@@ -107,12 +107,12 @@ class HttpApi(object):
         code >= 400
         """
         # Filter arguments that are not recognized by Requests
-        out_kwargs = {k: v for k, v in iteritems(kwargs)
+        out_kwargs = {k: v for k, v in kwargs.items()
                       if k in URLLIB3_REQUESTS_KWARGS}
 
         # Ensure headers are all strings
         if headers:
-            out_headers = {k: text_type(v) for k, v in headers.items()}
+            out_headers = {k: str(v) for k, v in headers.items()}
         else:
             out_headers = dict()
         if self.admin_mode or admin_mode:
@@ -174,11 +174,11 @@ class HttpApi(object):
         # Add query string
         if params:
             out_param = []
-            for k, v in params.items():
-                if v is not None:
-                    if isinstance(v, text_type):
-                        v = text_type(v).encode('utf-8')
-                    out_param.append((k, v))
+            for key, value in params.items():
+                if value is not None:
+                    if isinstance(value, str):
+                        value = str(value).encode('utf-8')
+                    out_param.append((key, value))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args
 
@@ -192,7 +192,7 @@ class HttpApi(object):
             if perfdata is not None:
                 request_end = monotonic_time()
                 service_perfdata = perfdata.setdefault(
-                    self.service_type, dict())
+                    self.service_name, {})
                 duration = request_end - request_start
                 service_perfdata['overall'] = service_perfdata.get(
                     'overall', 0.0) + duration
@@ -205,13 +205,13 @@ class HttpApi(object):
                     == HTTP_CONTENT_TYPE_JSON:
                 try:
                     body = jsonlib.loads(body.decode('utf-8'))
-                except (UnicodeDecodeError, ValueError):
+                except (UnicodeDecodeError, ValueError) as exc:
                     self.__logger().warn(
                         "Response body isn't decodable JSON: %s", body)
-                    raise exceptions.OioException(
-                        "Response body isn't decodable JSON")
+                    raise OioException(
+                        "Response body isn't decodable JSON") from exc
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
-                service_perfdata = perfdata[self.service_type]
+                service_perfdata = perfdata[self.service_name]
                 for header_val in resp.headers[PERFDATA_HEADER].split(','):
                     kv = header_val.split('=', 1)
                     service_perfdata[kv[0]] = service_perfdata.get(
@@ -222,7 +222,7 @@ class HttpApi(object):
                                          url=url)
 
         if resp.status >= 400:
-            raise exceptions.from_response(resp, body)
+            raise from_response(resp, body)
         return resp, body
 
     def _request(self, method, url, endpoint=None, **kwargs):
@@ -257,8 +257,8 @@ class HttpApi(object):
         """
         if not endpoint:
             if not self.endpoint:
-                raise ValueError("endpoint not set in function call" +
-                                 " nor in class contructor")
+                raise ValueError('Endpoint not set in function call '
+                                 'nor in class contructor')
             endpoint = self.endpoint
         url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
         return self._direct_request(method, url, **kwargs)

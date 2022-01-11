@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -121,11 +121,11 @@ class TestAccountClient(BaseTestCase):
     def test_account_service_refresh(self):
         self.account_client.endpoint = "126.0.0.1:6666"
         self.account_client._last_refresh = time.time()
-        self.account_client._get_account_addr = Mock(
+        self.account_client._get_service_addr = Mock(
             return_value="126.0.0.1:6667")
         self.assertRaises(OioNetworkException,
                           self.account_client.account_list)
-        self.account_client._get_account_addr.assert_called_once()
+        self.account_client._get_service_addr.assert_called_once()
         self.assertIn("126.0.0.1:6667", self.account_client.endpoint)
 
     def test_container_reset(self):

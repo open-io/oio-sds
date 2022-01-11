@@ -92,7 +92,7 @@ class ObjectStorageTest(unittest.TestCase):
         body = {"listing": [[name, 0, 0, 0]]}
         fake_endpoint = 'fake_endpoint'
         self.api.account._direct_request = Mock(return_value=(resp, body))
-        self.api.account._get_account_addr = Mock(return_value=fake_endpoint)
+        self.api.account._get_service_addr = Mock(return_value=fake_endpoint)
         containers = self.api.container_list(
             self.account, limit=limit, marker=marker, prefix=prefix,
             delimiter=delimiter, end_marker=end_marker, **self.common_kwargs)

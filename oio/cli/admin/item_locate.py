@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,9 +50,9 @@ class ItemLocateCommand(lister.Lister):
         return self.storage.account
 
     @property
-    def cs(self):
+    def conscience(self):
         """Get an instance of ConscienceClient."""
-        return self.account.cs
+        return self.account.conscience
 
     @property
     def digits(self):
@@ -85,7 +86,7 @@ class ItemLocateCommand(lister.Lister):
         Get a dictionary of (cached) services of the specified type.
         """
         if srv_type not in self._srv_cache:
-            services = self.cs.all_services(srv_type, **kwargs)
+            services = self.conscience.all_services(srv_type, **kwargs)
             self._srv_cache[srv_type] = {s['id']: s for s in services}
         return self._srv_cache[srv_type]
 

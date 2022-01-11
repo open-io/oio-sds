@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,7 +32,6 @@ class AccountClientTest(unittest.TestCase):
                                proxy_endpoint=endpoint,
                                **kwargs)
         client._direct_request = Mock(return_value=(resp, body))
-        client._get_account_addr = Mock(return_value=endpoint)
         return client
 
     def test_keyword_args(self):

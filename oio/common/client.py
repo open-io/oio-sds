@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,14 +15,14 @@
 # License along with this library.
 
 
-from oio.common.green import sleep
-
-from oio.common.constants import HEADER_PREFIX
-from oio.common.logger import get_logger
-from oio.common.configuration import load_namespace_conf, validate_service_conf
-from oio.api.base import HttpApi
-from oio.common.exceptions import Conflict, OioException, ServiceBusy
 from random import randrange
+
+from oio.api.base import HttpApi
+from oio.common.configuration import load_namespace_conf, validate_service_conf
+from oio.common.constants import HEADER_PREFIX
+from oio.common.exceptions import Conflict, OioException, ServiceBusy
+from oio.common.green import sleep
+from oio.common.logger import get_logger
 
 
 REQUEST_ATTEMPTS = 1
@@ -72,7 +73,7 @@ class ProxyClient(HttpApi):
             self.proxy_scheme = split_endpoint[0]
         self.proxy_netloc = split_endpoint[-1]
 
-        ep_parts = list()
+        ep_parts = []
         ep_parts.append(self.proxy_scheme + ':/')
         ep_parts.append(self.proxy_netloc)
         ep_parts.append("v3.0")
@@ -91,15 +92,15 @@ class ProxyClient(HttpApi):
         if not request_attempts:
             request_attempts = self._request_attempts
         if request_attempts <= 0:
-            raise OioException("Negative request attempts: %d"
-                               % request_attempts)
+            raise OioException(
+                f"Negative request attempts: {request_attempts}")
         if kwargs.get("autocreate"):
             if not headers:
-                headers = dict()
+                headers = {}
             headers[HEADER_PREFIX + "action-mode"] = "autocreate"
             kwargs.pop("autocreate")
         if kwargs.get("tls"):
-            headers = headers or dict()
+            headers = headers or {}
             headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
 
         for i in range(request_attempts):
