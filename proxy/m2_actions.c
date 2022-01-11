@@ -93,20 +93,20 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	if (!(args->cache_control & SHARDING_NO_CACHE)) {
 		redirect_shard = shard_resolver_get_cached(shard_resolver,
 				original_url);
-	}
-	if (redirect_shard) {
-		redirect_url = oio_url_dup(args->url);
-		oio_url_unset(redirect_url, OIOURL_ACCOUNT);
-		oio_url_unset(redirect_url, OIOURL_USER);
-		gchar *redirect_cid = g_string_free(metautils_gba_to_hexgstr(NULL,
-			SHARD_RANGE_get_cid(redirect_shard)), FALSE);
-		oio_url_set(redirect_url, OIOURL_HEXID, redirect_cid);
-		g_free(redirect_cid);
-		args->url = redirect_url;
-		client_clean(&ctx);
-		client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
-				decoder, out);
-		oio_ext_set_is_shard_redirection(TRUE);
+		if (redirect_shard) {
+			redirect_url = oio_url_dup(args->url);
+			oio_url_unset(redirect_url, OIOURL_ACCOUNT);
+			oio_url_unset(redirect_url, OIOURL_USER);
+			gchar *redirect_cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+				SHARD_RANGE_get_cid(redirect_shard)), FALSE);
+			oio_url_set(redirect_url, OIOURL_HEXID, redirect_cid);
+			g_free(redirect_cid);
+			args->url = redirect_url;
+			client_clean(&ctx);
+			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
+					decoder, out);
+			oio_ext_set_is_shard_redirection(TRUE);
+		}
 	}
 
 	guint nb_redirects = 0;
@@ -127,7 +127,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 			break;
 		}
 
-		if (err->code == CODE_REDIRECT_SHARD) {
+		if (err->code == CODE_REDIRECT_SHARD) { // Redirection requested
 			if (redirect_url) {
 				g_error_free(err);
 				err = SYSERR("Shard redirect to another shard");
@@ -164,7 +164,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 			oio_ext_set_is_shard_redirection(TRUE);
 			continue;
 		}
-		if (redirect_url) {
+		if (redirect_url) { // Current request is a redirection
 			if (err->code == CODE_CONTAINER_FROZEN
 					|| err->code == CODE_CONTAINER_NOTFOUND
 					|| err->code == CODE_USER_NOTFOUND) {
@@ -175,6 +175,8 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 				args->url = original_url;
 				oio_url_clean(redirect_url);
 				redirect_url = NULL;
+				_bean_clean(redirect_shard);
+				redirect_shard = NULL;
 				client_clean(&ctx);
 				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 						decoder, out);
@@ -828,36 +830,36 @@ _reply_simplified_beans(struct req_args_s *args, GError *err, GSList *beans)
 }
 
 static GError *
-_get_hash (const char *s, GByteArray **out)
+_get_hash(const char *s, GByteArray **out)
 {
 	*out = NULL;
-	GByteArray *h = metautils_gba_from_hexstring (s);
-	if (!h)
+	GByteArray *hash = metautils_gba_from_hexstring(s);
+	if (!hash)
 		return BADREQ("JSON: invalid hash: not hexa: '%s'", s);
 
-	const gssize len = h->len;
+	const gssize len = hash->len;
 	if (len != g_checksum_type_get_length(G_CHECKSUM_MD5)
 			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
 			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
 			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
-		g_byte_array_free (h, TRUE);
+		metautils_gba_clean(hash);
 		return BADREQ("JSON: invalid hash: invalid length");
 	}
 
-	*out = h;
+	*out = hash;
 	return NULL;
 }
 
 static GError *
-_load_simplified_chunks (struct json_object *jbody, GSList **out)
+_load_simplified_chunks(struct json_object *jbody, GSList **out)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
 
 	if (!json_object_is_type(jbody, json_type_array))
-		return BADREQ ("JSON: Not an array");
+		return BADREQ("JSON: Not an array");
 
-	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 
 	// Load the beans
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
@@ -870,25 +872,25 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 			{NULL, NULL, 0, 0}
 		};
 		GRID_TRACE("JSON: parsing chunk at %i", i-1);
-		err = oio_ext_extract_json (json_object_array_get_idx (jbody, i-1), m);
+		err = oio_ext_extract_json(json_object_array_get_idx(jbody, i-1), m);
 		if (err) break;
 
-		GByteArray *h = NULL;
-		if (!(err = _get_hash (json_object_get_string(jhash), &h))) {
+		GByteArray *hash = NULL;
+		if (!(err = _get_hash(json_object_get_string(jhash), &hash))) {
 			struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
-			CHUNKS_set2_id (chunk, json_object_get_string(jurl));
-			CHUNKS_set_hash (chunk, h);
-			CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-			CHUNKS_set_ctime (chunk, now);
-			CHUNKS_set2_position (chunk, json_object_get_string(jpos));
-			CHUNKS_set2_content (chunk, (guint8*)"0", 1);
+			CHUNKS_set2_id(chunk, json_object_get_string(jurl));
+			CHUNKS_set_hash(chunk, hash);
+			CHUNKS_set_size(chunk, json_object_get_int64(jsize));
+			CHUNKS_set_ctime(chunk, now);
+			CHUNKS_set2_position(chunk, json_object_get_string(jpos));
+			CHUNKS_set2_content(chunk, (guint8*)"0", 1);
 			beans = g_slist_prepend(beans, chunk);
 		}
-		metautils_gba_clean (h);
+		metautils_gba_clean(hash);
 	}
 
 	if (err)
-		_bean_cleanl2 (beans);
+		_bean_cleanl2(beans);
 	else
 		*out = beans;
 
@@ -921,8 +923,8 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 
-	header = _bean_create (&descr_struct_CONTENTS_HEADERS);
-	beans = g_slist_prepend (beans, header);
+	header = _bean_create(&descr_struct_CONTENTS_HEADERS);
+	beans = g_slist_prepend(beans, header);
 	CONTENTS_HEADERS_set2_id(header, (guint8 *) "00", 2);
 	/* dummy (yet valid) content ID (must be hexa) */
 
@@ -937,21 +939,21 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
 								 PROXYD_HEADER_PREFIX "content-meta-id");
 		if (NULL != s) {
-			GByteArray *h = metautils_gba_from_hexstring (s);
-			if (!h)
+			GByteArray *hash = metautils_gba_from_hexstring(s);
+			if (!hash)
 				err = BADREQ("Invalid content ID (not hexa)");
 			else {
-				oio_url_set (args->url, OIOURL_CONTENTID, s);
-				CONTENTS_HEADERS_set_id (header, h);
+				oio_url_set(args->url, OIOURL_CONTENTID, s);
+				CONTENTS_HEADERS_set_id(header, hash);
 				/* JFS: this is clean to have uniform CONTENT ID among all
 				 * the beans, but it is a bit useless since this requires more
 				 * bytes on the network and can be done in the meta2 server */
 				for (GSList *l=beans; l ;l=l->next) {
 					if (DESCR(l->data) != &descr_struct_CHUNKS)
 						continue;
-					CHUNKS_set_content(l->data, h);
+					CHUNKS_set_content(l->data, hash);
 				}
-				g_byte_array_free(h, TRUE);
+				metautils_gba_clean(hash);
 			}
 		}
 	}
@@ -960,10 +962,11 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
 								 PROXYD_HEADER_PREFIX "content-meta-hash");
 		if (NULL != s) {
-			GByteArray *h = NULL;
-			if (!(err = _get_hash (s, &h)))
-				CONTENTS_HEADERS_set_hash (header, h);
-			if (h) g_byte_array_free(h, TRUE);
+			GByteArray *hash = NULL;
+			if (!(err = _get_hash(s, &hash)))
+				CONTENTS_HEADERS_set_hash(header, hash);
+			if (hash)
+				metautils_gba_clean(hash);
 		}
 	}
 
@@ -988,7 +991,7 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 			if (!oio_str_is_number(s, &s64))
 				err = BADREQ("Header: bad content size");
 			else
-				CONTENTS_HEADERS_set_size (header, s64);
+				CONTENTS_HEADERS_set_size(header, s64);
 		}
 	}
 
@@ -1000,10 +1003,10 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 	}
 
 	if (!err) { // Chunking method
-		gchar *s = g_tree_lookup (args->rq->tree_headers,
+		gchar *s = g_tree_lookup(args->rq->tree_headers,
 						   PROXYD_HEADER_PREFIX "content-meta-chunk-method");
 		if (s)
-			CONTENTS_HEADERS_set2_chunk_method (header, s);
+			CONTENTS_HEADERS_set2_chunk_method(header, s);
 	}
 
 	if (!PATH())
@@ -2730,8 +2733,7 @@ _sharding_properties_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 				g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
 				metautils_message_extract_string_copy(reply, *n));
 	}
-	if (names)
-		g_strfreev(names);
+	g_strfreev(names);
 
 	return TRUE;
 }

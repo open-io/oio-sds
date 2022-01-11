@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -207,6 +207,7 @@ _cached_json_to_urlv(const char * srvtype, GBytes *json, gchar ***result)
 	json_object_put(array);
 	g_ptr_array_add(tmp, NULL);
 	*result = (gchar**) g_ptr_array_free(tmp, FALSE);
+	g_bytes_unref(json);
 	return NULL;
 
 label_error:
@@ -214,6 +215,7 @@ label_error:
 	g_ptr_array_set_free_func(tmp, g_free);
 	g_ptr_array_free(tmp, TRUE);
 	*result = NULL;
+	g_bytes_unref(json);
 	return err;
 }
 

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils_json.h>
 
 GError*
-m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
+m2v2_json_load_single_alias(struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL;
@@ -56,7 +56,7 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 		goto exit;
 	}
 
-	alias = _bean_create (&descr_struct_ALIASES);
+	alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, json_object_get_string(jname));
 	ALIASES_set_version(alias, json_object_get_int64(jversion));
 	ALIASES_set_ctime(alias,
@@ -69,13 +69,13 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	alias = NULL;
 
 exit:
-	metautils_gba_unref (hid);
-	_bean_clean (alias);
+	metautils_gba_clean(hid);
+	_bean_clean(alias);
 	return err;
 }
 
 GError*
-m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
+m2v2_json_load_single_header(struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *id = NULL, *hash = NULL;
@@ -97,7 +97,7 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	};
 
 	*pbean = NULL;
-	if (NULL != (err = oio_ext_extract_json (j, mapping)))
+	if (NULL != (err = oio_ext_extract_json(j, mapping)))
 		return err;
 
 	id = metautils_gba_from_hexstring(json_object_get_string(jid));
@@ -132,14 +132,14 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	header = NULL;
 
 exit:
-	metautils_gba_unref (id);
-	metautils_gba_unref (hash);
-	_bean_clean (header);
+	metautils_gba_clean(id);
+	metautils_gba_clean(hash);
+	_bean_clean(header);
 	return err;
 }
 
 GError*
-m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
+m2v2_json_load_single_chunk(struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL, *hash = NULL;
@@ -156,7 +156,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	};
 
 	*pbean = NULL;
-	if (NULL != (err = oio_ext_extract_json (j, mapping)))
+	if (NULL != (err = oio_ext_extract_json(j, mapping)))
 		return err;
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jcontent));
@@ -170,21 +170,21 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 		goto exit;
 	}
 
-	chunk = _bean_create (&descr_struct_CHUNKS);
+	chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, json_object_get_string(jid));
 	CHUNKS_set_hash(chunk, hash);
 	CHUNKS_set_size(chunk, json_object_get_int64(jsize));
 	CHUNKS_set_ctime(chunk,
 			jctime ? json_object_get_int64(jctime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
 	CHUNKS_set_content(chunk, hid);
-	CHUNKS_set2_position(chunk, json_object_get_string (jpos));
+	CHUNKS_set2_position(chunk, json_object_get_string(jpos));
 	*pbean = chunk;
 	chunk = NULL;
 
 exit:
-	metautils_gba_unref (hid);
-	metautils_gba_unref (hash);
-	_bean_clean (chunk);
+	metautils_gba_clean(hid);
+	metautils_gba_clean(hash);
+	_bean_clean(chunk);
 	return err;
 }
 
@@ -226,6 +226,7 @@ m2v2_json_load_single_shard_range(struct json_object *j, gpointer *pbean)
 	shard_range = NULL;
 
 exit:
+	metautils_gba_clean(cid);
 	_bean_clean(shard_range);
 	return err;
 }
@@ -258,7 +259,7 @@ GError *
 m2v2_json_load_setof_xbean (struct json_object *jv, GSList **out)
 {
 	if (!json_object_is_type(jv, json_type_array))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON, exepecting array of beans");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON, expecting array of beans");
 
 	GSList *l = NULL;
 	int vlen = json_object_array_length (jv);

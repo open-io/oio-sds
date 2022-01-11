@@ -3777,7 +3777,11 @@ _sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
 		clause = g_string_append_static(clause, " 1");
 
 	g_string_append_static(clause, " ORDER BY alias ASC");
-	g_string_append_static(clause, " LIMIT 1");
+	// Fetch 2 aliases
+	// - the first alias will be used as upper
+	// - the second alias will be used to know
+	//   if the first alias is the last alias of the container
+	g_string_append_static(clause, " LIMIT 2");
 	g_string_append_printf(clause, " OFFSET %"G_GINT64_FORMAT, shard_size - 1);
 
 	g_ptr_array_add(params, NULL);
@@ -3912,15 +3916,19 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 
 	gboolean is_finished = FALSE;
 	for (guint i = 0; !err && !is_finished; i++) {
+		GPtrArray *aliases = g_ptr_array_new();
+
 		// Compute the shard size for the new shard
 		gint64 shard_size = 0;
 		err = get_shard_size(obj_count, i, &shard_size);
+		if (err) {
+			goto end_for;
+		}
 
 		// Find alias at the specific position
 		GString *clause = g_string_sized_new(128);
 		GVariant **params = _sharding_find_upper_to_sql_clause(
 				lower, shard_size, max_upper, clause);
-		GPtrArray *aliases = g_ptr_array_new();
 		err = ALIASES_load(sq3, clause->str, params, _bean_buffer_cb, aliases);
 		metautils_gvariant_unrefv(params);
 		g_free(params);
@@ -3931,7 +3939,11 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 
 		// Prepare upper and actual shard size
 		upper = NULL;
-		if (aliases->len <= 0) {
+		if (aliases->len < 2) {
+			// Set the upper for the last shard range for this container
+			// - if there is no alias, this is the end of the container
+			// - if there is only one alias,
+			//   it's the last alias of the container
 			is_finished = TRUE;
 			upper = g_strdup(max_upper);
 
@@ -4146,11 +4158,12 @@ m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 			return BADREQ("Invalid type: not a shard range");
 		}
 	}
-	new_shard_ranges = g_slist_sort(new_shard_ranges,
+	GSList *new_shard_ranges_sorted = g_slist_copy(new_shard_ranges);
+	new_shard_ranges_sorted = g_slist_sort(new_shard_ranges_sorted,
 			_shard_range_compare_lower);
 	gchar *first_lower = NULL;
 	gchar *last_upper = NULL;
-	for (GSList *new_shard_range = new_shard_ranges; new_shard_range;
+	for (GSList *new_shard_range = new_shard_ranges_sorted; new_shard_range;
 			new_shard_range=new_shard_range->next) {
 		gchar *lower = SHARD_RANGE_get_lower(
 				new_shard_range->data)->str;
@@ -4167,6 +4180,7 @@ m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		}
 		last_upper = upper;
 	}
+	g_slist_free(new_shard_ranges_sorted);
 	if (g_slist_length(new_shard_ranges) == 1
 			&& !(*first_lower) && !(*last_upper)) {
 		gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,

@@ -131,8 +131,7 @@ m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply)
 					g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
 					metautils_message_extract_string_copy(reply, *n));
 		}
-		if (names)
-			g_strfreev(names);
+		g_strfreev(names);
 	}
 
 	return TRUE;

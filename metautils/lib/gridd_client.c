@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -359,6 +359,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 			}
 			g_free(value);
 		}
+		g_strfreev(names);
 		oio_ext_set_shared_properties(
 				(gchar**) metautils_gpa_to_array(tmp, TRUE));
 

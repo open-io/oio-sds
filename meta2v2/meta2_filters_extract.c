@@ -437,6 +437,7 @@ meta2_filter_extract_sharding_info(struct gridd_filter_ctx_s *ctx,
 			}
 			g_free(value);
 		}
+		g_strfreev(names);
 		oio_ext_set_shared_properties(
 				(gchar**) metautils_gpa_to_array(tmp, TRUE));
 	}

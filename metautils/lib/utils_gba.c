@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -77,7 +78,7 @@ metautils_gba_from_hexstring(const gchar *str)
 	GByteArray *gba = g_byte_array_sized_new(len / 2);
 	g_byte_array_set_size(gba, len/2);
 	if (len && !oio_str_hex2bin(str, gba->data, gba->len)) {
-		g_byte_array_unref (gba);
+		g_byte_array_free(gba, TRUE);
 		return NULL;
 	}
 	return gba;
