@@ -167,7 +167,7 @@ ${DESCRIPTION}:${RANDOMSTR}@${IP}:${PORT}
 
 template_systemd_service_foundationdb = """
 [Unit]
-Description=[OpenIO] Service account
+Description=[OpenIO] Service FoundationDB
 PartOf=${PARENT}
 OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 
@@ -1461,6 +1461,7 @@ ALLOW_REDIS = 'redis'
 ALLOW_FDB = 'fdb'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
+REMOTE_ACCOUNT = 'remote_account'
 GO_RAWX = 'go_rawx'
 FSYNC_RAWX = 'rawx_fsync'
 MONITOR_PERIOD = 'monitor_period'
@@ -1585,6 +1586,7 @@ def generate(options):
 
     ports = (x for x in xrange(options['port'], 60000))
     port_proxy = next(ports)
+    port_account = next(ports)
     port_ecd = next(ports)
     port_admin = next(ports)
 
@@ -1603,6 +1605,9 @@ def generate(options):
 
     # `options` already holds the YAML values overridden by the CLI values
     hosts = options.get(SVC_HOSTS) or defaults[SVC_HOSTS]
+
+    if options.get(REMOTE_ACCOUNT):
+        options['config']['account'] = f"http://{hosts[0]}:{port_account}"
 
     ns = options.get('ns') or defaults['NS']
     want_service_id = '' if options.get('with_service_id') else '#'
@@ -1642,6 +1647,7 @@ def generate(options):
                GROUP=str(grp.getgrgid(os.getgid()).gr_name),
                VERSIONING=versioning,
                PORT_PROXYD=port_proxy,
+               PORT_ACCOUNT=port_account,
                PORT_ECD=port_ecd,
                PORT_ADMIN=port_admin,
                M1_DIGITS=meta1_digits,
@@ -2127,14 +2133,15 @@ def generate(options):
     # account
     env = subenv({
         'SRVTYPE': 'account', 'SRVNUM': 1,
-        'PORT': next(ports), 'EXE': 'oio-account-server'})
+        'PORT': port_account, 'EXE': 'oio-account-server'})
     register_service(env, template_systemd_service_account, root_target)
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
         f.write(tpl.safe_substitute(env))
-    with open(watch(env), 'w+') as f:
-        tpl = Template(template_account_watch)
-        f.write(tpl.safe_substitute(env))
+    if not options.get(REMOTE_ACCOUNT):
+        with open(watch(env), 'w+') as f:
+            tpl = Template(template_account_watch)
+            f.write(tpl.safe_substitute(env))
 
     # rdir
     nb_rdir = getint(options['rdir'].get(SVC_NB), 3)
@@ -2356,6 +2363,7 @@ def main():
     opts['config']['proxy.cache.enabled'] = False
     opts['config']['ns.chunk_size'] = 1024 * 1024
     opts[ZOOKEEPER] = False
+    opts[REMOTE_ACCOUNT] = False
     opts['conscience'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta1'] = {SVC_NB: None, SVC_HOSTS: None}
