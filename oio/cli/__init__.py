@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,6 +82,12 @@ def add_common_parser_options(parser):
         dest='proxyd_url',
         default=os.environ.get('OIO_PROXYD_URL', ''),
         help='URL of an oio-proxy service (Env: OIO_PROXYD_URL).')
+    parser.add_argument(
+        '--account-url', '--oio-account-url',
+        metavar='<account-url>',
+        dest='account_url',
+        default=os.environ.get('OIO_ACCOUNT_URL', None),
+        help='URL of an account service (Env: OIO_ACCOUNT_URL).')
     parser.add_argument(
         '--request-id', '--req-id',
         metavar='<request-id>',

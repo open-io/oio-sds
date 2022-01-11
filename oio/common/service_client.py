@@ -16,6 +16,7 @@
 import time
 
 from oio.api.base import HttpApi
+from oio.common.configuration import load_namespace_conf
 from oio.common.constants import TIMEOUT_KEYS
 from oio.common.decorators import patch_kwargs
 from oio.common.easy_value import float_value
@@ -48,6 +49,24 @@ class ServiceClient(HttpApi):
         :type refresh_delay: `float` seconds
         :param logger:
         """
+        self.netloc = None
+        # Look for an endpoint in the application configuration
+        if not endpoint:
+            endpoint = conf.get(f"{service_type}_url", None)
+        # Look for an endpoint in the namespace configuration
+        if not endpoint:
+            namespace = conf.get('namespace')
+            if namespace:
+                ns_conf = load_namespace_conf(namespace)
+                endpoint = ns_conf.get(service_type)
+        if endpoint:
+            scheme = 'http'
+            split_endpoint = endpoint.split('://', 1)
+            if len(split_endpoint) > 1:
+                scheme = split_endpoint[0]
+            self.netloc = split_endpoint[-1]
+            endpoint = '://'.join((scheme, self.netloc))
+
         super(ServiceClient, self).__init__(
             endpoint=endpoint, service_type=service_type, **kwargs)
 

@@ -102,7 +102,20 @@ class ItemLocateCommand(lister.Lister):
 
     def locate_accounts(self, accounts):
         reqid = self.app.request_id(self.reqid_prefix)
-        all_acct = self.all_services('account', reqid=reqid)
+        if self.account.netloc:
+            all_acct = {
+                self.account.netloc: {
+                    'addr': self.account.netloc,
+                    'id': self.account.netloc,
+                    'score': 'n/a',
+                    'tags': {
+                        'tag.up': True,
+                        'tag.loc': 'n/a'
+                    }
+                }
+            }
+        else:
+            all_acct = self.all_services('account', reqid=reqid)
         for acct in accounts:
             try:
                 # TODO(FVE): do something with the result?

@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,6 @@ API_NAME = 'reference'
 def make_client(instance):
     client = DirectoryClient(
         {"namespace": instance.namespace},
-        endpoint=instance.get_endpoint('directory')
+        endpoint=instance.get_endpoint()
     )
     return client

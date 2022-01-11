@@ -123,6 +123,7 @@ class ObjectStorageApi(object):
         # In AccountClient, "endpoint" is the account service, not the proxy
         acct_kwargs = kwargs.copy()
         acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
+        acct_kwargs['endpoint'] = acct_kwargs.pop('account_endpoint', None)
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
         self._proxy_client = None

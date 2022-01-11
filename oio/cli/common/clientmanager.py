@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -58,8 +59,11 @@ class ClientManager(object):
     def client_conf(self):
         """Dict to be passed as first parameter to all *Client classes."""
         if not self._client_conf:
-            self._client_conf = {'namespace': self.namespace,
-                                 'proxyd_url': self.get_endpoint()}
+            self._client_conf = {
+                'namespace': self.namespace,
+                'proxyd_url': self.get_endpoint(),
+                'account_url': self.get_service_endpoint('account')
+            }
         return self._client_conf
 
     @property
@@ -154,6 +158,7 @@ class ClientManager(object):
             self._storage = ObjectStorageApi(
                 self.namespace,
                 endpoint=self.get_endpoint(),
+                account_endpoint=self.get_service_endpoint('account'),
                 pool_manager=self.pool_manager)
         return self._storage
 
@@ -221,7 +226,7 @@ class ClientManager(object):
             self._account = account_name
         return self._account
 
-    def get_endpoint(self, service_type=None):
+    def get_endpoint(self):
         if 'proxyd_url' not in self._options:
             proxy_netloc = self.sds_conf.get('proxy', None)
             if proxy_netloc:
@@ -233,6 +238,22 @@ class ClientManager(object):
                 raise CommandError('Missing parameter(s): \n%s' % msg)
         # TODO: for the moment always return the proxyd URL
         return self._options['proxyd_url']
+
+    def get_service_endpoint(self, service_type):
+        key = f"{service_type}_url"
+        if key not in self._options:
+            service_endpoint = self.sds_conf.get(service_type, None)
+            if service_endpoint:
+                scheme = 'http'
+                split_endpoint = service_endpoint.split('://', 1)
+                if len(split_endpoint) > 1:
+                    scheme = split_endpoint[0]
+                netloc = split_endpoint[-1]
+                service_endpoint = '://'.join((scheme, netloc))
+            else:
+                service_endpoint = None
+            self._options[key] = service_endpoint
+        return self._options[key]
 
     def cli_conf(self):
         """Get a copy of the CLI configuration options."""

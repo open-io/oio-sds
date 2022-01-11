@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +18,7 @@ import unittest
 from mock import MagicMock as Mock, patch
 
 from oio.common.exceptions import Conflict, ServiceBusy
+from oio.common.green import get_watchdog
 from oio.container.client import CHUNK_SYSMETA_PREFIX, extract_chunk_qualities
 from tests.unit.api import FakeStorageApi
 from tests.utils import random_id
@@ -31,7 +33,12 @@ DUMMY_QUAL_JSON = "{\"expected_dist\":2,\"final_dist\":2," \
 class ContainerClientTest(unittest.TestCase):
     def setUp(self):
         self.fake_endpoint = "http://1.2.3.4:8000"
-        self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint)
+        self.fake_account_endpoint = "http://1.2.3.4:8080"
+        self.watchdog = get_watchdog(called_from_main_application=True)
+        self.api = FakeStorageApi(
+            "NS", endpoint=self.fake_endpoint,
+            account_endpoint=self.fake_account_endpoint,
+            watchdog=self.watchdog)
         self.account = "test_container_client"
         self.container = "fake_container"
 

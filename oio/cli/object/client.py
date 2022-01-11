@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +24,7 @@ API_NAME = 'storage'
 
 def make_client(instance):
     client = ObjectStorageApi(
-        endpoint=instance.get_endpoint('storage'),
+        endpoint=instance.get_endpoint(),
         namespace=instance.namespace,
         admin_mode=instance.admin_mode,
         perfdata=instance.cli_conf().get('perfdata')

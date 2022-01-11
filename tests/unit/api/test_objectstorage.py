@@ -50,9 +50,12 @@ def extend(base, inc):
 class ObjectStorageTest(unittest.TestCase):
     def setUp(self):
         self.fake_endpoint = "http://1.2.3.4:8000"
+        self.fake_account_endpoint = "http://1.2.3.4:8080"
         self.watchdog = get_watchdog(called_from_main_application=True)
-        self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint,
-                                  watchdog=self.watchdog)
+        self.api = FakeStorageApi(
+            "NS", endpoint=self.fake_endpoint,
+            account_endpoint=self.fake_account_endpoint,
+            watchdog=self.watchdog)
         self.account = "test"
         self.container = "fake"
         reqid = random_str(32)
@@ -92,6 +95,7 @@ class ObjectStorageTest(unittest.TestCase):
         body = {"listing": [[name, 0, 0, 0]]}
         fake_endpoint = 'fake_endpoint'
         self.api.account._direct_request = Mock(return_value=(resp, body))
+        self.api.account.endpoint = None
         self.api.account._get_service_addr = Mock(return_value=fake_endpoint)
         containers = self.api.container_list(
             self.account, limit=limit, marker=marker, prefix=prefix,
@@ -511,9 +515,10 @@ class ObjectStorageTest(unittest.TestCase):
         """
         kwargs = {x: 'test' for x in ObjectStorageApi.EXTRA_KEYWORDS}
         # Pass kwargs to class constructor
-        api = ObjectStorageApi('NS', endpoint=self.fake_endpoint,
-                               dummy_keyword='dummy_value',
-                               **kwargs)
+        api = ObjectStorageApi(
+            'NS', endpoint=self.fake_endpoint,
+            account_endpoint=self.fake_account_endpoint,
+            dummy_keyword='dummy_value', **kwargs)
         self.assertNotIn('dummy_keyword', api._global_kwargs)
         for k, v in kwargs.items():
             self.assertIn(k, api._global_kwargs)

@@ -119,6 +119,8 @@ class TestAccountClient(BaseTestCase):
 
     # TODO: move this test somewhere under tests/unit/
     def test_account_service_refresh(self):
+        if self.ns_conf.get('account'):
+            self.skipTest('Remote account: no refresh')
         self.account_client.endpoint = "126.0.0.1:6666"
         self.account_client._last_refresh = time.time()
         self.account_client._get_service_addr = Mock(
