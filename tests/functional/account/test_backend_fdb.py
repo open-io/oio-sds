@@ -38,9 +38,10 @@ from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase, random_str
 from werkzeug.exceptions import Conflict, NotFound
 from testtools.testcase import ExpectedException
+from oio.account.common_fdb import CommonFdb
 
 from fdb.tuple import unpack
-fdb.api_version(630)
+fdb.api_version(CommonFdb.FDB_VERSION)
 
 
 @attr('no_thread_patch')
@@ -50,8 +51,8 @@ class TestAccountBackend(BaseTestCase):
 
         super(TestAccountBackend, self).setUp()
 
-        if os.path.exists(AccountBackendFdb.DEFAULT_FDB):
-            fdb_file = AccountBackendFdb.DEFAULT_FDB
+        if os.path.exists(CommonFdb.DEFAULT_FDB):
+            fdb_file = CommonFdb.DEFAULT_FDB
         else:
             fdb_file = str(Path.home())+'/.oio/sds/conf/OPENIO-fdb.cluster'
         self.account_conf = {
@@ -59,6 +60,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend = AccountBackendFdb(self.account_conf, logger)
         self.backend.init_db(None)
         del (self.backend.db[:])
+        self.backend.init_db(None)
         self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
@@ -216,12 +218,12 @@ class TestAccountBackend(BaseTestCase):
 
         # initial container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
-        sub_space = fdb.Subspace(('containers:', account_id))
+        sub_space = self.backend.containers_index_space[account_id]
         range = sub_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         ct = ''
         for key, v in res:
-            space, account, ct = unpack(key)
+            ct = sub_space.unpack(key)[0]
         self.assertEqual(ct, name)
 
         # delete event
@@ -264,12 +266,12 @@ class TestAccountBackend(BaseTestCase):
 
         # create container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
-        sub_space = fdb.Subspace(('containers:', account_id))
+        sub_space = self.backend.containers_index_space[account_id]
         range = sub_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         ct = ''
         for key, v in res:
-            space, account, ct = unpack(key)
+            ct = sub_space.unpack(key)[0]
         self.assertEqual(text_type(ct), name)
 
         # ensure it appears in listing
@@ -306,15 +308,15 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
-        sub_space = fdb.Subspace(('containers:', account_id))
+        sub_space = self.backend.containers_index_space[account_id]
         range = sub_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         ct = ''
         for key, v in res:
-            space, account, ct = unpack(key)
+            ct = sub_space.unpack(key)[0]
         self.assertEqual(ct, name)
 
-        sub_space = fdb.Subspace(('container:', account_id))
+        sub_space = self.backend.container_space[account_id]
         tmtime = self.backend.db[sub_space.pack((name, 'mtime'))]
         self.assertEqual(tmtime.decode('utf-8'), mtime)
 
@@ -322,11 +324,11 @@ class TestAccountBackend(BaseTestCase):
         with ExpectedException(Conflict):
             self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
-        cts_sub_space = fdb.Subspace(('containers:', account_id))
+        cts_sub_space = self.backend.containers_index_space[account_id]
         res = self.backend.db[cts_sub_space.pack((name,))]
         self.assertEqual(res, b'1')
 
-        ct_sub_space = fdb.Subspace(('container:', account_id))
+        ct_sub_space = self.backend.container_space[account_id]
         res = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
         self.assertEqual(res.decode('utf-8'), mtime)
 
@@ -335,10 +337,11 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         range = cts_sub_space.range()
-        res = res = self.backend.db.get_range(range.start, range.stop)
+        res = self.backend.db.get_range(range.start, range.stop)
         self.assertNotEqual(res, None)
         for k, v in res:
-            space, account, ct = unpack(k)
+            ct = cts_sub_space.unpack(k)[0]
+            print('ct:', ct)
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
@@ -353,7 +356,7 @@ class TestAccountBackend(BaseTestCase):
         res = res = self.backend.db.get_range(range.start, range.stop)
         self.assertNotEqual(res, None)
         for k, v in res:
-            space, account, ct = unpack(k)
+            ct = cts_sub_space.unpack(k)[0]
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
@@ -368,7 +371,7 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.db.get_range(range.start, range.stop)
         self.assertNotEqual(res, [])
         for k, v in res:
-            space, account, ct = unpack(k)
+            ct = cts_sub_space.unpack(k)[0]
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
@@ -391,7 +394,7 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.db.get_range(range.start, range.stop)
         self.assertNotEqual(res, [])
         for k, v in res:
-            space, account, ct = unpack(k)
+            ct = cts_sub_space.unpack(k)[0]
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
@@ -493,14 +496,14 @@ class TestAccountBackend(BaseTestCase):
                 account_id, name, mtime, 0, nb_objets, nb_bytes)
 
         # change values
-        act_sub_space = fdb.Subspace(('account:',))
+        act_sub_space = self.backend.acct_space
         # set bytes & objects values
         self.backend.db[act_sub_space.pack((account_id, 'objects'))] = \
             struct.pack('<i', 1)
         self.backend.db[act_sub_space.pack((account_id, 'bytes'))] = \
             struct.pack('<i', 2)
 
-        act_sub_space = fdb.Subspace(('account:', account_id))
+        act_sub_space = act_sub_space[account_id]
         res_bytes = self.backend.db[act_sub_space.pack(('bytes',))]
         res_objects = self.backend.db[act_sub_space.pack(('objects',))]
         res_bytes = int.from_bytes(res_bytes, byteorder='little')
@@ -528,7 +531,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = "12456.0000076"
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
-        cts_sub_space = fdb.Subspace(('containers:', account_id))
+        cts_sub_space = self.backend.containers_index_space[account_id]
         res = self.backend.db[cts_sub_space.pack((name,))]
         self.assertEqual(res.decode('utf-8'), '1')
 
@@ -542,12 +545,11 @@ class TestAccountBackend(BaseTestCase):
         mtime = "0000012456.00005"
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
-        cts_sub_space = fdb.Subspace(('containers:', account_id))
-
         res = self.backend.db[cts_sub_space.pack((name,))]
+        print('res:', res)
         self.assertEqual(res.decode('utf-8'), '1')
 
-        ct_sub_space = fdb.Subspace(('container:', account_id))
+        ct_sub_space = self.backend.container_space[account_id]
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
         self.assertEqual(tmtime.decode('utf-8'), mtime)
@@ -580,7 +582,7 @@ class TestAccountBackend(BaseTestCase):
             self.backend.update_container(
                 account_id, name, mtime, 0, nb_objets, nb_bytes)
 
-        act_sub_space = fdb.Subspace(('account:', account_id))
+        act_sub_space = self.backend.acct_space[account_id]
         res_bytes = self.backend.db[act_sub_space.pack(('bytes',))]
         res_objects = self.backend.db[act_sub_space.pack(('objects',))]
         res_bytes = int.from_bytes(res_bytes, byteorder='little')
@@ -628,7 +630,7 @@ class TestAccountBackend(BaseTestCase):
                 account_id, name, mtime, 0, nb_objets, nb_bytes,
                 bucket_name=bucket)
 
-        b_space = fdb.Subspace(('bucket:', bucket))
+        b_space = self.backend.bucket_space[bucket]
 
         # change values
         self.backend.db[b_space.pack(('bytes',))] = struct.pack('<i', 1)
@@ -672,7 +674,7 @@ class TestAccountBackend(BaseTestCase):
         cname_not_in_bucket = 'ct-not-in-bucket'
         cname_not_sharded = 'ct-2'
         account_id = random_str(16)
-        bucket_space = fdb.Subspace(('bucket:', bucket))
+        bucket_space = self.backend.bucket_space[bucket]
 
         data_lenth = 7
         data = random_str(data_lenth)
@@ -729,12 +731,12 @@ class TestAccountBackend(BaseTestCase):
         # Test bucket metadata
         self.backend.update_bucket_metadata(bname, metadata)
 
-        b_space = fdb.Subspace(('bucket:', bname))
+        b_space = self.backend.bucket_space[bname]
         range = b_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         found = 0
         for key, val in res:
-            _, _, key = unpack(key)
+            key = b_space.unpack(key)[0]
             if key in metadata.keys() and val == bytes(metadata[key], 'utf-8'):
                 found += 1
 
@@ -744,12 +746,11 @@ class TestAccountBackend(BaseTestCase):
         to_delete = ['owner']
 
         self.backend.update_bucket_metadata(bname, None, to_delete)
-        b_space = fdb.Subspace(('bucket:', bname))
         range = b_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         found = 0
         for key, val in res:
-            _, _, key = unpack(key)
+            key = b_space.unpack(key)
             if key in to_delete:
                 found += 1
         self.assertEqual(found, 0)
@@ -846,8 +847,8 @@ class TestAccountBackend(BaseTestCase):
 
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
-        metric_space = fdb.Subspace(('metrics:', 'accounts'))
-        status = self.backend.db.get(metric_space)
+        metric_space = self.backend.metrics_space
+        status = self.backend.db.get(metric_space['accounts'])
 
         self.assertNotEqual(status, None)
 
@@ -858,9 +859,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0,
                                       0, 0, **params)
 
-        key_region = self.backend.db.get(fdb.Subspace(('metrics:',
-                                                       'containers',
-                                                       region)))
+        key_region = self.backend.db.get(metric_space['containers'][region])
         self.assertNotEqual(key_region, None)
 
         # delete
@@ -868,9 +867,8 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, 0, dtime,
                                       0, 0, **params)
 
-        key_region = self.backend.db.get(fdb.Subspace(('metrics:',
-                                                       'containers',
-                                                       region)))
+        key_region = self.backend.db.get(metric_space['containers'][region])
+
         self.assertEqual(key_region, None)
 
         self.backend.delete_account(account_id)

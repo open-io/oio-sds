@@ -26,9 +26,10 @@ from werkzeug.wrappers import BaseResponse
 from oio.account.server import create_app
 from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase
-from oio.account.backend_fdb import AccountBackendFdb
+from oio.account.common_fdb import CommonFdb
 import fdb
-fdb.api_version(630)
+
+fdb.api_version(CommonFdb.FDB_VERSION)
 
 
 @attr('no_thread_patch')
@@ -37,8 +38,8 @@ class TestAccountServerBase(BaseTestCase):
         super(TestAccountServerBase, self).setUp()
         iam_cnxstr = 'fdb://%s:%s/?db=1&allow_empty_policy_name=False' % (
             0, 0)
-        if os.path.exists(AccountBackendFdb.DEFAULT_FDB):
-            self.fdb_file = AccountBackendFdb.DEFAULT_FDB
+        if os.path.exists(CommonFdb.DEFAULT_FDB):
+            self.fdb_file = CommonFdb.DEFAULT_FDB
         else:
             self.fdb_file = \
                 str(Path.home())+'/.oio/sds/conf/OPENIO-fdb.cluster'
@@ -231,7 +232,7 @@ class TestIamServer(TestAccountServerBase):
 
     def tearDown(self):
         fdb.directory.remove(self.acct_app.iam.db,
-                             (self.acct_app.iam.key_prefix, ))
+                             (self.acct_app.iam.main_namespace_name))
         super(TestIamServer, self).tearDown()
 
     def test_put_user_policy(self):

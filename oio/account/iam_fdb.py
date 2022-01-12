@@ -17,14 +17,14 @@ import time
 
 import fdb
 from fdb.tuple import unpack
-
 from functools import wraps
 
 from oio.common.json import json
-from oio.common.exceptions import ServiceBusy
 from oio.account.iam_base import IamDbBase
+from oio.common.exceptions import ServiceBusy
+from oio.account.common_fdb import CommonFdb
 
-fdb.api_version(630)
+fdb.api_version(CommonFdb.FDB_VERSION)
 
 
 def catch_service_errors(func):
@@ -47,8 +47,6 @@ class FdbIamDb(IamDbBase):
     High-level API to save IAM rules in a foundationdb database.
     """
 
-    DEFAULT_FDB = '/etc/foundationdb/fdb.cluster'
-
     def __init__(self, conf=None, key_prefix='IAM:', subkey_separator='/',
                  logger=None, allow_empty_policy_name=True, **kwargs):
         super(FdbIamDb, self).__init__(
@@ -59,8 +57,10 @@ class FdbIamDb(IamDbBase):
 
         self.conf = conf
         self.db = None
-        self.iam_directory = None
+        self.namespace = None
         self.account = None
+        self.main_namespace_name = self.conf.get('main_direcory_name',
+                                                 CommonFdb.MAIN_NAMESPACE)
 
     def init_db(self, event_model='gevent'):
         """
@@ -70,9 +70,9 @@ class FdbIamDb(IamDbBase):
         This is the reason why this task is not done inside constructor.
         """
         if self.conf is None:
-            self.fdb_file = FdbIamDb.DEFAULT_FDB
+            self.fdb_file = CommonFdb.DEFAULT_FDB
         else:
-            self.fdb_file = self.conf.get('fdb_file', FdbIamDb.DEFAULT_FDB)
+            self.fdb_file = self.conf.get('fdb_file', CommonFdb.DEFAULT_FDB)
 
         try:
             if self.db is None:
@@ -81,9 +81,10 @@ class FdbIamDb(IamDbBase):
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)
             raise
-        self.iam_directory = fdb.directory.create_or_open(
-                                self.db, (self.key_prefix,))
-        self.account = self.iam_directory['account:']
+
+        self.namespace = fdb.directory.create_or_open(
+                                self.db, (self.main_namespace_name,))
+        self.account = self.namespace['iam']
 
     @catch_service_errors
     def delete_user_policy(self, account, user, policy_name=''):

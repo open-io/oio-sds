@@ -16,11 +16,9 @@
 import re
 import struct
 from functools import wraps
+import fdb
 
 from six import text_type
-
-import fdb
-from fdb.tuple import unpack
 
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.exceptions import OioException
@@ -29,24 +27,9 @@ from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, boolean_value, float_value, \
     debinarize
 from oio.common.exceptions import ServiceBusy
+from oio.account.common_fdb import CommonFdb
 
-fdb.api_version(630)
-
-ACCOUNTS_KEY_PREFIX = 'accounts:'
-ACCOUNT_KEY_PREFIX = 'account:'
-
-BUCKET_KEY_PREFIX = 'bucket:'
-BUCKET_LIST_PREFIX = 'buckets:'
-
-CONTAINERS_LIST_PREFIX = 'containers:'
-CONTAINER_LIST_PREFIX = 'container:'
-CTS_TO_DELETE_LIST_PREFIX = 'ct-to-delete:'
-
-METADATA_PREFIX = 'metadata:'
-
-BUCKET_RESERVE_PREFIX = 's3bucket:'
-
-METRICS_PREFIX = 'metrics:'
+fdb.api_version(CommonFdb.FDB_VERSION)
 
 
 def catch_service_errors(func):
@@ -98,11 +81,26 @@ class AccountBackendFdb():
         (^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)* #third
         ([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)""", re.X)
 
-    DEFAULT_FDB = '/etc/foundationdb/fdb.cluster'
-
     # Default batch size, this value could be divided by 2 if time of refresh
     # by batch is too long
     BATCH_SIZE = 10000
+
+    # Default subspaces prefixes
+
+    ACCOUNTS_KEY_PREFIX = 'accounts'
+    ACCOUNT_KEY_PREFIX = 'account'
+    BUCKET_KEY_PREFIX = 'bucket'
+    BUCKET_LIST_PREFIX = 'buckets'
+    CONTAINERS_LIST_PREFIX = 'containers'
+    CONTAINER_LIST_PREFIX = 'container'
+    # Remaining keys for deletex containers prefix
+    CTS_TO_DELETE_LIST_PREFIX = 'deleted-container'
+    # Metadata prefix
+    METADATA_PREFIX = 'metadata'
+    # Prefix for bucket db
+    BUCKET_RESERVE_PREFIX = 's3bucket'
+    # Stats & metric prefix
+    METRICS_PREFIX = 'metrics'
 
     def init_db(self, event_model='gevent'):
         """
@@ -112,7 +110,7 @@ class AccountBackendFdb():
         This is the reason why this task is not done inside constructor.
         """
         self.fdb_file = self.conf.get('fdb_file',
-                                      AccountBackendFdb.DEFAULT_FDB)
+                                      CommonFdb.DEFAULT_FDB)
         try:
             if self.db is None:
                 self.db = fdb.open(self.fdb_file, event_model=event_model)
@@ -120,6 +118,21 @@ class AccountBackendFdb():
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)
             raise
+
+        self.namespace = fdb.directory.create_or_open(
+                                self.db, (self.main_namespace_name,))
+
+        self.acct_space = self.namespace[self.account_prefix]
+        self.accts_space = self.namespace[self.accounts_prefix]
+        self.container_space = self.namespace[self.container_list_prefix]
+        self.containers_index_space = self.namespace[
+                                        self.containers_list_prefix]
+        self.ct_to_delete_space = self.namespace[self.ct_to_delete_prefix]
+        self.bucket_db_space = self.namespace[self.reserve_bucket_prefix]
+        self.bucket_space = self.namespace[self.bucket_prefix]
+        self.buckets_index_space = self.namespace[self.buckets_list_prefix]
+        self.metadata_space = self.namespace[self.METADATA_PREFIX]
+        self.metrics_space = self.namespace[self.METRICS_PREFIX]
 
     def __init__(self, conf, logger):
         self.db = None
@@ -130,32 +143,23 @@ class AccountBackendFdb():
         self.default_location = self.conf.get('default_location', '')
         self.time_window_clear_deleted = \
             float_value(self.conf.get('time_window_clear_deleted'), 60.0)
+        self.main_namespace_name = self.conf.get('main_namespace_name',
+                                                 CommonFdb.MAIN_NAMESPACE)
         self.accounts_prefix = conf.get('accounts_prefix',
-                                        ACCOUNTS_KEY_PREFIX)
-        self.account_prefix = conf.get('account_prefix', ACCOUNT_KEY_PREFIX)
-        self.bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
+                                        self.ACCOUNTS_KEY_PREFIX)
+        self.account_prefix = conf.get('account_prefix',
+                                       self.ACCOUNT_KEY_PREFIX)
+        self.bucket_prefix = conf.get('bucket_prefix', self.BUCKET_KEY_PREFIX)
         self.buckets_list_prefix = conf.get('bucket_list_prefix',
-                                            BUCKET_LIST_PREFIX)
+                                            self.BUCKET_LIST_PREFIX)
         self.container_list_prefix = conf.get('container_list_prefix',
-                                              CONTAINER_LIST_PREFIX)
+                                              self.CONTAINER_LIST_PREFIX)
         self.containers_list_prefix = conf.get('containers_list_prefix',
-                                               CONTAINERS_LIST_PREFIX)
+                                               self.CONTAINERS_LIST_PREFIX)
         self.ct_to_delete_prefix = conf.get('containers_to_delete_prefix',
-                                            CTS_TO_DELETE_LIST_PREFIX)
+                                            self.CTS_TO_DELETE_LIST_PREFIX)
         self.reserve_bucket_prefix = conf.get('reserve_bucket_prefix',
-                                              BUCKET_RESERVE_PREFIX)
-
-        self.acct_space = fdb.Subspace((self.account_prefix,))
-        self.accts_space = fdb.Subspace((self.accounts_prefix,))
-        self.container_space = fdb.Subspace((self.container_list_prefix,))
-        self.containers_index_space = fdb.Subspace(
-                                        (self.containers_list_prefix,))
-        self.ct_to_delete_space = fdb.Subspace((self.ct_to_delete_prefix,))
-        self.bucket_db_space = fdb.Subspace((self.reserve_bucket_prefix,))
-        self.bucket_space = fdb.Subspace((self.bucket_prefix,))
-        self.buckets_index_space = fdb.Subspace((self.buckets_list_prefix,))
-        self.metadata_space = fdb.Subspace((METADATA_PREFIX,))
-        self.metrics_space = fdb.Subspace((METRICS_PREFIX,))
+                                              self.BUCKET_RESERVE_PREFIX)
 
     @catch_service_errors
     def create_account(self, account_id, **kwargs):
@@ -640,7 +644,7 @@ class AccountBackendFdb():
         iterator = tr.get_range(b_metrics_range.start, b_metrics_range.stop,
                                 reverse=False)
         for key, value in iterator:
-            _, _, region = unpack(key)
+            region = bucket_metrics_space.unpack(key)[0]
             metrics_buckets[region] = struct.unpack('<q', value)[0]
         return metrics_buckets
 
@@ -653,7 +657,7 @@ class AccountBackendFdb():
         iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
                                 reverse=False)
         for key, value in iterator:
-            _, _, region = unpack(key)
+            region = ct_metrics_space.unpack(key)[0]
             metrics_containers[region] = struct.unpack('<q', value)[0]
 
         return metrics_containers
@@ -667,7 +671,7 @@ class AccountBackendFdb():
         iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
                                 reverse=False)
         for key, value in iterator:
-            _, _, region, storage_class = unpack(key)
+            region, storage_class = ct_metrics_space.unpack(key)
             if region not in metrics_field:
                 metrics_field[region] = {}
             metrics_field[region][storage_class] = \
@@ -733,11 +737,11 @@ class AccountBackendFdb():
 
     @fdb.transactional
     def _list_accounts(self, tr):
-        # iterate over the whole 'accounts:' namespace
+        # iterate over the whole 'accounts:' subspace
         iterator = tr.get_range_startswith(self.accts_space)
         res = list()
         for key, _ in iterator:
-            _, account_id = unpack(key)
+            account_id = self.accts_space.unpack(key)[0]
             res.append(account_id)
         return res
 
@@ -754,7 +758,7 @@ class AccountBackendFdb():
         sum_bytes = 0
         sum_objects = 0
         for key, val in iterator:
-            _, _, _, field = fdb.tuple.unpack(key)
+            _, field = ct_space.unpack(key)
             if field == 'bytes':
                 sum_bytes += struct.unpack('<q', val)[0]
             if field == 'objects':
@@ -1021,7 +1025,7 @@ class AccountBackendFdb():
         """
         current_values = dict()
         deltas = dict()
-        c_space = fdb.Subspace((METRICS_PREFIX, cname, region))
+        c_space = self.metrics_space[cname][region]
         for policy, value in objs_per_policy.items():
             if policy not in current_values.keys():
                 current_values[policy] = {}
@@ -1064,13 +1068,13 @@ class AccountBackendFdb():
                     struct.pack('<q', value)
 
         # empty policies that are not present in objs_per_policy
-        reg_space = fdb.Subspace((METRICS_PREFIX, cname, region))
+        reg_space = self.metrics_space[cname][region]
         reg_range = reg_space.range()
         res = tr.get_range(reg_range.start, reg_range.stop)
 
         # gather data to deduce from metrics
         for key, val in res:
-            _, _, _, pol, field = unpack(key)
+            pol, field = reg_space.unpack(key)
             if pol not in objs_per_policy:
                 if pol not in deltas:
                     deltas[pol] = {}
@@ -1078,7 +1082,7 @@ class AccountBackendFdb():
         # clear not present policies for given container
         policies_to_clear = list()
         for key, val in res:
-            _, _, _, pol, field = unpack(key)
+            pol, field = reg_space.unpack(key)
             if pol not in objs_per_policy and pol not in policies_to_clear:
                 policies_to_clear.append(pol)
         for pol in policies_to_clear:
@@ -1108,14 +1112,14 @@ class AccountBackendFdb():
         policies_obj_range = bucket_obj_space.range()
         res = tr.get_range(policies_obj_range.start, policies_obj_range.stop)
         for key, _ in res:
-            _, _, pol = unpack(key)
+            pol = bucket_obj_space.unpack(key)[0]
             if pol not in objs_per_policy:
                 tr.clear_range_startswith(bucket_obj_space.pack((pol, )))
 
         policies_byte_range = bucket_byte_space.range()
         res = tr.get_range(policies_byte_range.start, policies_byte_range.stop)
         for key, _ in res:
-            _, _, pol = unpack(key)
+            pol = bucket_byte_space.unpack(key)[0]
             if pol not in objs_per_policy:
                 tr.clear_range_startswith(bucket_byte_space.pack((pol, )))
 
@@ -1162,7 +1166,7 @@ class AccountBackendFdb():
 
             empty = True
             for key, _ in iterator:
-                _, _, ctr = fdb.tuple.unpack(key)
+                ctr = index_space.unpack(key)[0]
                 if len(results) >= limit:
                     break
                 if prefix and not ctr.startswith(prefix):
@@ -1189,7 +1193,7 @@ class AccountBackendFdb():
                 ct_it = tr.get_range(ct_range.start,
                                      ct_range.stop, reverse=False)
                 for ct_key, a_value in ct_it:
-                    _, _, ct, a_key = unpack(ct_key)
+                    a_key = ct_space.unpack(ct_key)[0]
                     if a_key == 'objects':
                         nb_objects = struct.unpack('<q', a_value)[0]
                     if a_key == 'bytes':
@@ -1247,7 +1251,7 @@ class AccountBackendFdb():
 
             empty = True
             for key, _ in iterator:
-                _, _, ctr = fdb.tuple.unpack(key)
+                ctr = key_space.unpack(key)[0]
                 if len(results) >= limit:
                     break
                 if prefix and not ctr.startswith(prefix):
@@ -1276,8 +1280,7 @@ class AccountBackendFdb():
                     bucket_it = tr.get_range(bucket_range.start,
                                              bucket_range.stop, reverse=False)
                     for bucket_key, a_value in bucket_it:
-                        bucket_space, _, a_key = unpack(bucket_key)
-
+                        a_key = bucket_space.unpack(bucket_key)[0]
                         if a_key == 'objects':
                             nb_objects = struct.unpack('<q', a_value)[0]
                         if a_key == 'bytes':
@@ -1363,7 +1366,7 @@ class AccountBackendFdb():
                 struct.pack('<q', 0)
 
         for key, val in iterator:
-            _, _, container, unpacked_key = fdb.tuple.unpack(key)
+            container, unpacked_key = ckey_prefix.unpack(key)
 
             if marker == container:
                 continue
@@ -1383,7 +1386,6 @@ class AccountBackendFdb():
                    container.find('+segments') == -1:
                     sum_objects += struct.unpack('<q', val)[0]
                     count += 1
-
             new_marker = container
 
             if count == 2 * batch_size:
@@ -1425,8 +1427,7 @@ class AccountBackendFdb():
         found = False
 
         for key, val in iterator:
-            _, _, container, unpacked_key = fdb.tuple.unpack(key)
-
+            container, unpacked_key = ckey_prefix.unpack(key)
             if unpacked_key not in ('bytes', 'objects'):
                 continue
             composed_cname = container.split('-')
@@ -1493,7 +1494,7 @@ class AccountBackendFdb():
 
         iterator = tr.snapshot.get_range(start, stop, reverse=False)
         for key, _ in iterator:
-            _, _, container, _ = fdb.tuple.unpack(key)
+            container = ct_space.unpack(key)[0]
             if bucket_name is None:
                 if container not in containers:
                     containers.append(container)
@@ -1513,5 +1514,5 @@ class AccountBackendFdb():
         iterator = tr.get_range(start, stop)
         for key, value in iterator:
             if float(value) + self.time_window_clear_deleted < float(now):
-                _, _, ct_name = fdb.tuple.unpack(key)
+                ct_name = to_delete_space.unpack(key)[0]
                 del tr[to_delete_space.pack((ct_name,))]
