@@ -118,21 +118,42 @@ class AccountBackendFdb():
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)
             raise
-
-        self.namespace = fdb.directory.create_or_open(
-                                self.db, (self.main_namespace_name,))
-
-        self.acct_space = self.namespace[self.account_prefix]
-        self.accts_space = self.namespace[self.accounts_prefix]
-        self.container_space = self.namespace[self.container_list_prefix]
-        self.containers_index_space = self.namespace[
-                                        self.containers_list_prefix]
-        self.ct_to_delete_space = self.namespace[self.ct_to_delete_prefix]
-        self.bucket_db_space = self.namespace[self.reserve_bucket_prefix]
-        self.bucket_space = self.namespace[self.bucket_prefix]
-        self.buckets_index_space = self.namespace[self.buckets_list_prefix]
-        self.metadata_space = self.namespace[self.METADATA_PREFIX]
-        self.metrics_space = self.namespace[self.METRICS_PREFIX]
+        try:
+            self.namespace = fdb.directory.create_or_open(
+                                    self.db, (self.main_namespace_name,))
+            self.acct_space = self.namespace.create_or_open(
+                                self.db,
+                                self.account_prefix)
+            self.accts_space = self.namespace.create_or_open(
+                                self.db,
+                                self.accounts_prefix)
+            self.container_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.container_list_prefix)
+            self.containers_index_space = self.namespace.create_or_open(
+                                            self.db,
+                                            self.containers_list_prefix)
+            self.ct_to_delete_space = self.namespace.create_or_open(
+                                        self.db,
+                                        self.ct_to_delete_prefix)
+            self.bucket_db_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.reserve_bucket_prefix)
+            self.bucket_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.bucket_prefix)
+            self.buckets_index_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.buckets_list_prefix)
+            self.metadata_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.metadata_prefix)
+            self.metrics_space = self.namespace.create_or_open(
+                                    self.db,
+                                    self.metrics_prefix)
+        except Exception as exc:
+            self.logger.warning("Directory create exception %s", exc)
+            raise
 
     def __init__(self, conf, logger):
         self.db = None
@@ -149,7 +170,8 @@ class AccountBackendFdb():
                                         self.ACCOUNTS_KEY_PREFIX)
         self.account_prefix = conf.get('account_prefix',
                                        self.ACCOUNT_KEY_PREFIX)
-        self.bucket_prefix = conf.get('bucket_prefix', self.BUCKET_KEY_PREFIX)
+        self.bucket_prefix = conf.get('bucket_prefix',
+                                      self.BUCKET_KEY_PREFIX)
         self.buckets_list_prefix = conf.get('bucket_list_prefix',
                                             self.BUCKET_LIST_PREFIX)
         self.container_list_prefix = conf.get('container_list_prefix',
@@ -158,6 +180,10 @@ class AccountBackendFdb():
                                                self.CONTAINERS_LIST_PREFIX)
         self.ct_to_delete_prefix = conf.get('containers_to_delete_prefix',
                                             self.CTS_TO_DELETE_LIST_PREFIX)
+        self.metadata_prefix = conf.get('metadata_prefix',
+                                        self.METADATA_PREFIX)
+        self.metrics_prefix = conf.get('metrics_prefix',
+                                       self.METRICS_PREFIX)
         self.reserve_bucket_prefix = conf.get('reserve_bucket_prefix',
                                               self.BUCKET_RESERVE_PREFIX)
 
@@ -231,12 +257,30 @@ class AccountBackendFdb():
         """
         if not bname:
             return None
-        info = self._multi_get(self.db, self.bucket_space, bname)
+        info = self._bucket_info(self.db, bname)
         if not info:
             return None
-
         self.cast_fields(info)
         self.logger.debug('get_bucket_info %s ', info)
+        return info
+
+    @fdb.transactional
+    def _bucket_info(self, tr, bname):
+        info = {}
+        b_space = self.bucket_space[bname]
+        b_range = b_space.range()
+        iterator = tr.get_range(b_range.start, b_range.stop)
+        for key, value in iterator:
+            field, *policy = b_space.unpack(key)
+            if policy:
+                info['.'.join([field, policy[0]])] = \
+                    struct.unpack('<q', value)[0]
+            elif field in ('bytes', 'objects'):
+                info[field] = struct.unpack('<q', value)[0]
+            elif field in (BUCKET_PROP_REPLI_ENABLED):
+                info[bytes(field, 'utf-8')] = value
+            else:
+                info[field] = value
         return info
 
     @catch_service_errors
@@ -420,18 +464,13 @@ class AccountBackendFdb():
             marker, end_marker)
 
         output = list()
-        i = 0
         for bucket in raw_list:
-            if not bucket[3]:
-                bdict = {
-                    'name': bucket[0],
-                    'objects': int_value(raw_list[i][1], 0),
-                    'bytes': int_value(raw_list[i][2], 0),
-                    'mtime': float_value(raw_list[i][4], 0.0),
-                }
-                i += 1
-            else:
-                bdict = {'prefix': bucket}
+            bdict = {
+                'name': bucket[0],
+                'objects': int_value(bucket[1], 0),
+                'bytes': int_value(bucket[2], 0),
+                'mtime': float_value(bucket[3], 0.0),
+            }
             output.append(bdict)
         return output, next_marker
 
@@ -629,11 +668,10 @@ class AccountBackendFdb():
 
     @fdb.transactional
     def _read_account_metrics(self, tr):
-        if tr[self.metrics_space.pack(('accounts',))].present():
-            nb_accts = tr[self.metrics_space.pack(('accounts',))]
-            nb_accts = int.from_bytes(nb_accts, byteorder='little')
-        else:
-            nb_accts = 0
+        accts_field = tr[self.metrics_space.pack(('accounts',))]
+        nb_accts = 0
+        if accts_field.present():
+            nb_accts = struct.unpack('<q', accts_field.value)[0]
         return nb_accts
 
     @fdb.transactional
@@ -791,23 +829,25 @@ class AccountBackendFdb():
             if not container_exists:
                 raise NotFound("Container %s not found" % cname)
         deleted_time = b'0'
-        if tr[to_delete_space.pack((cname,))].present():
-            deleted_time = tr[to_delete_space.pack((cname,))]
+
+        delete_cname_time = tr[to_delete_space.pack((cname,))]
+        if delete_cname_time.present():
+            deleted_time = delete_cname_time.value
         # real update
         if tr[ct_space.pack((cname, 'name'))].present():
-            dtime = tr[ct_space.pack((cname, 'dtime'))]
-            mtime = tr[ct_space.pack((cname, 'mtime'))]
-            nb_objects = tr[ct_space.pack((cname, 'objects'))]
-            nb_bytes = tr[ct_space.pack((cname, 'bytes'))]
-            nb_objects = int.from_bytes(nb_objects, byteorder='little')
-            nb_bytes = int.from_bytes(nb_bytes, byteorder='little')
+            dtime = tr[ct_space.pack((cname, 'dtime'))].value
+            mtime = tr[ct_space.pack((cname, 'mtime'))].value
+            nb_objects_field = tr[ct_space.pack((cname, 'objects'))]
+            nb_bytes_field = tr[ct_space.pack((cname, 'bytes'))]
+            nb_objects = 0
+            nb_bytes = 0
+            if nb_objects_field.present():
+                nb_objects = struct.unpack('<q', nb_objects_field.value)[0]
+            if nb_bytes_field.present():
+                nb_bytes = struct.unpack('<q', nb_bytes_field.value)[0]
         # event update interleaved with container delete
-        elif new_mtime < deleted_time:
-            # TODO clear following keys in a method like status or in
-            # separate crawler:
-            # ct-to-delete:accountid,containerid,deleted
-
-            raise NotFound("Container %s not found" % cname)
+        elif float(new_mtime) < float(deleted_time):
+            raise NotFound("Deleted container %s" % cname)
         else:  # real creation
             dtime = b'0'
             mtime = b'0'
@@ -825,16 +865,17 @@ class AccountBackendFdb():
         inc_bytes = 0
         deleted = False
 
-        if new_mtime <= mtime and new_dtime <= dtime:
+        if float(new_mtime) <= float(mtime) and \
+           float(new_dtime) <= float(dtime):
             raise Conflict("No update needed, "
                            "event older than last container update")
 
-        if new_mtime > mtime:
+        if float(new_mtime) > float(mtime):
             mtime = new_mtime
-        if new_dtime > dtime:
+        if float(new_dtime) > float(dtime):
             dtime = new_dtime
 
-        if dtime >= mtime:
+        if float(dtime) >= float(mtime):
             mtime = dtime
             # Protect against "minus zero".
             if nb_objects != 0:
@@ -857,7 +898,7 @@ class AccountBackendFdb():
 
             deleted = True
 
-        elif mtime > old_mtime:
+        elif float(mtime) > float(old_mtime):
             inc_objects = new_total_objects - int(nb_objects)
             inc_bytes = new_total_bytes - int(nb_bytes)
             tr[ct_space.pack((cname, 'objects'))] = \
@@ -948,8 +989,10 @@ class AccountBackendFdb():
             # For container holding MPU segments, we do not want to count
             # each segment as an object. But we still want to consider
             # their size.
+            is_segment = False
             if '+segments' in container_name:
                 inc_objects = 0
+                is_segment = True
 
             # Check if a refresh bucket is in progress
             # No lock is needed as add operation is atomic
@@ -978,8 +1021,7 @@ class AccountBackendFdb():
             if mtime != b'0':
                 tr[self.bucket_space.pack((bucket_name, 'mtime'))] = mtime
 
-            self._update_bucket_per_policy(tr, bucket_name, objects_details,
-                                           bytes_details)
+            self._update_bucket_per_policy(tr, bucket_name, is_segment, deltas)
 
             if deleted:
                 return 'deleted'
@@ -1034,10 +1076,9 @@ class AccountBackendFdb():
             if self._is_element(tr, c_space, policy) is not None:
                 nb_obj_ct = self._val_element(tr, c_space, policy,
                                               'objects')
-                current_values[policy]['objects'] = int.from_bytes(
-                                                        nb_obj_ct,
-                                                        byteorder='little') \
-                    if nb_obj_ct else 0
+                current_values[policy]['objects'] = 0 if nb_obj_ct is None \
+                    else struct.unpack('<q', nb_obj_ct.value)[0]
+
             else:
                 current_values[policy]['objects'] = 0
             delta = value - current_values[policy]['objects']
@@ -1054,12 +1095,9 @@ class AccountBackendFdb():
             if self._is_element(tr, c_space, policy) is not None:
                 nb_bytes_ct = self._val_element(tr, c_space, policy,
                                                 'bytes')
-                current_values[policy]['bytes'] = \
-                    int.from_bytes(nb_bytes_ct,
-                                   byteorder='little') \
-                    if nb_bytes_ct else 0
-            else:
-                current_values[policy]['bytes'] = 0
+                current_values[policy]['bytes'] = 0 if nb_bytes_ct is None \
+                    else struct.unpack('<q', nb_bytes_ct.value)[0]
+
             delta = value - current_values[policy]['bytes']
             # update values only when needed
             if value > 0 and delta != 0:
@@ -1091,37 +1129,22 @@ class AccountBackendFdb():
         return deltas
 
     @fdb.transactional
-    def _update_bucket_per_policy(self, tr, bucket_name, objs_per_policy,
-                                  bytes_per_policy):
+    def _update_bucket_per_policy(self, tr, bucket_name, is_segment, deltas):
         """
         Update objects/bytes per policy for given bucket
         """
-        bucket_obj_space = self.bucket_space[bucket_name, 'objects-details']
-        for policy, value in objs_per_policy.items():
-            if value > 0:
-                tr[bucket_obj_space.pack((policy,))] = \
-                    struct.pack('<q', value)
-
-        bucket_byte_space = self.bucket_space[bucket_name, 'bytes-details']
-        for policy, value in bytes_per_policy.items():
-            if value > 0:
-                tr[bucket_byte_space.pack((policy,))] = \
-                    struct.pack('<q', value)
-
-        # clear not present policies for given bucket
-        policies_obj_range = bucket_obj_space.range()
-        res = tr.get_range(policies_obj_range.start, policies_obj_range.stop)
-        for key, _ in res:
-            pol = bucket_obj_space.unpack(key)[0]
-            if pol not in objs_per_policy:
-                tr.clear_range_startswith(bucket_obj_space.pack((pol, )))
-
-        policies_byte_range = bucket_byte_space.range()
-        res = tr.get_range(policies_byte_range.start, policies_byte_range.stop)
-        for key, _ in res:
-            pol = bucket_byte_space.unpack(key)[0]
-            if pol not in objs_per_policy:
-                tr.clear_range_startswith(bucket_byte_space.pack((pol, )))
+        bucket_obj_space = self.bucket_space[bucket_name]
+        # incr / decr relative values
+        for policy, dict_field in deltas.items():
+            for field, value in dict_field.items():
+                if is_segment and field == 'objects':
+                    continue
+                if value > 0:
+                    self._increment(tr, bucket_obj_space.pack(
+                                    (field, policy)), value)
+                else:
+                    self._decrement(tr, bucket_obj_space.pack(
+                                    (field, policy)), value)
 
     @fdb.transactional
     def _raw_listing(self, tr, index_space, main_space, limit, prefix,
@@ -1287,7 +1310,7 @@ class AccountBackendFdb():
                             nb_bytes = struct.unpack('<q', a_value)[0]
                         if a_key == 'mtime':
                             mtime = float(a_value)
-                    results.append([ctr, nb_objects, nb_bytes, 0, mtime])
+                    results.append([ctr, nb_objects, nb_bytes, mtime])
 
                 empty = False
             if empty:

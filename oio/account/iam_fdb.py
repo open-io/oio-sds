@@ -47,20 +47,21 @@ class FdbIamDb(IamDbBase):
     High-level API to save IAM rules in a foundationdb database.
     """
 
-    def __init__(self, conf=None, key_prefix='IAM:', subkey_separator='/',
-                 logger=None, allow_empty_policy_name=True, **kwargs):
+    IAM_KEY_PREFIX = 'iam'
+
+    def __init__(self, conf=None, logger=None, allow_empty_policy_name=True,
+                 **kwargs):
         super(FdbIamDb, self).__init__(
-            key_prefix=key_prefix,
-            subkey_separator=subkey_separator,
             allow_empty_policy_name=allow_empty_policy_name,
             logger=logger)
 
         self.conf = conf
         self.db = None
         self.namespace = None
-        self.account = None
+        self.iam_space = None
         self.main_namespace_name = self.conf.get('main_direcory_name',
                                                  CommonFdb.MAIN_NAMESPACE)
+        self.iam_prefix = conf.get('iam_prefix', self.IAM_KEY_PREFIX)
 
     def init_db(self, event_model='gevent'):
         """
@@ -81,10 +82,13 @@ class FdbIamDb(IamDbBase):
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)
             raise
-
-        self.namespace = fdb.directory.create_or_open(
-                                self.db, (self.main_namespace_name,))
-        self.account = self.namespace['iam']
+        try:
+            self.namespace = fdb.directory.create_or_open(
+                                    self.db, (self.main_namespace_name,))
+            self.iam_space = self.namespace.create_or_open(self.db,
+                                                           self.iam_prefix)
+        except Exception as exc:
+            self.logger.warning("Directory create exception  %s", exc)
 
     @catch_service_errors
     def delete_user_policy(self, account, user, policy_name=''):
@@ -192,36 +196,39 @@ class FdbIamDb(IamDbBase):
     def _delete_user_policy(self, tr, account, user, policy_name):
         if policy_name:
             tr.clear_range_startswith(
-                self.account.pack((account, user, policy_name)))
+                self.iam_space.pack((account, user, policy_name)))
         else:
-            tr.clear_range_startswith(self.account.pack((account, user,)))
+            tr.clear_range_startswith(self.iam_space.pack((account, user,)))
         return True
 
     @fdb.transactional
     def _list_users(self, tr, account):
-        iterator = tr.get_range_startswith(self.account.pack((account,)))
+        iterator = tr.get_range_startswith(self.iam_space.pack((account,)))
         users = list()
         for key, _ in iterator:
-            _, _, _, user, _ = unpack(key)
+            _, _, user, _ = unpack(key)
             if user not in users:
                 users.append(user)
         return users
 
     @fdb.transactional
     def _list_user_policies(self, tr, account, user):
-        iterator = tr.get_range_startswith(self.account.pack((account, user)))
+        iterator = tr.get_range_startswith(
+                    self.iam_space.pack((account, user)))
         policies = list()
         for key, _ in iterator:
-            _, _, _, _, policy = unpack(key)
+            print('key:', key)
+            _, _, _, policy = unpack(key)
             policies.append(policy)
         return policies
 
     @fdb.transactional
     def _load_merged_user_policies(self, tr, account, user):
-        iterator = tr.get_range_startswith(self.account.pack((account, user)))
+        iterator = tr.get_range_startswith(
+                    self.iam_space.pack((account, user)))
         statements = list()
         for key, value in iterator:
-            _, _, _, _, policy = unpack(key)
+            _, _, _, policy = unpack(key)
             if value is not None:
                 if not policy:
                     if self.allow_empty_policy_name:
@@ -234,10 +241,10 @@ class FdbIamDb(IamDbBase):
 
     @fdb.transactional
     def _get_user_policy(self, tr, account, user, policy_name):
-        policy = tr[self.account.pack((account, user, policy_name))]
+        policy = tr[self.iam_space.pack((account, user, policy_name))]
         return policy if policy.present() else None
 
     @fdb.transactional
     def _put_user_policy(self, tr, acct, user, policy_name, policy):
-        tr[self.account.pack((acct, user, policy_name))] = \
+        tr[self.iam_space.pack((acct, user, policy_name))] = \
             bytes(str(policy), 'utf-8')

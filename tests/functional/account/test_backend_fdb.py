@@ -59,8 +59,7 @@ class TestAccountBackend(BaseTestCase):
                 'fdb_file': fdb_file}
         self.backend = AccountBackendFdb(self.account_conf, logger)
         self.backend.init_db(None)
-        del (self.backend.db[:])
-        self.backend.init_db(None)
+        self.backend.db.clear_range(b'\x00', b'\xfe')
         self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
@@ -874,3 +873,46 @@ class TestAccountBackend(BaseTestCase):
         self.backend.delete_account(account_id)
         status = self.backend.db.get(metric_space)
         self.assertEqual(status, None)
+
+    def test_objects_policies(self):
+        account_id = 'test-1'
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+
+        region = 'test_region'
+        params1 = {
+                'bucket_name': 'bucket_policies',
+                'bucket_location': region,
+                'bytes-details': {'pol1': 7, 'pol2': 101},
+                'objects-details': {'pol1': 3, 'pol2': 5}}
+        name = 'container1'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      8, 108, **params1)
+
+        region = 'test_region'
+        params2 = {
+                'bucket_name': 'bucket_policies',
+                'bucket_location': region,
+                'bytes-details': {'pol1': 27, 'pol2': 41},
+                'objects-details': {'pol1': 11, 'pol2': 17}}
+        name = 'container2'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      28, 68, **params2)
+        info = self.backend.get_bucket_info('bucket_policies')
+        expected = {}
+        expected['objects-details'] = {}
+        expected['bytes-details'] = {}
+        for pol, _ in params1['objects-details'].items():
+            expected['objects-details'][pol] = params1['objects-details'][pol]\
+                + params2['objects-details'][pol]
+            expected['bytes-details'][pol] = params1['bytes-details'][pol] + \
+                params2['bytes-details'][pol]
+        self.assertEqual(info['bytes.pol1'],
+                         expected['bytes-details']['pol1'])
+        self.assertEqual(info['bytes.pol2'],
+                         expected['bytes-details']['pol2'])
+        self.assertEqual(info['objects.pol1'],
+                         expected['objects-details']['pol1'])
+        self.assertEqual(info['objects.pol2'],
+                         expected['objects-details']['pol2'])

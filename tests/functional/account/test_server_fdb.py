@@ -50,8 +50,16 @@ class TestAccountServerBase(BaseTestCase):
 
         self.account_id = 'test'
         self.acct_app = create_app(conf)
+
         self.acct_app.backend.init_db(None)
         self.acct_app.iam.init_db(None)
+        self.acct_app.backend.db.clear_range(b'\x00', b'\xfe')
+        """
+        main_directory= self.acct_app.backend.namespace
+        sub_dirs = main_directory.list(self.acct_app.backend.db)
+        for el in sub_dirs:
+            self.acct_app.backend.db.clear_range_startswith(main_directory[el])
+        """
         self.app = Client(self.acct_app, BaseResponse)
 
     @classmethod
@@ -231,8 +239,6 @@ class TestIamServer(TestAccountServerBase):
         self.user2 = self.account_id + ':user2'
 
     def tearDown(self):
-        fdb.directory.remove(self.acct_app.iam.db,
-                             (self.acct_app.iam.main_namespace_name))
         super(TestIamServer, self).tearDown()
 
     def test_put_user_policy(self):
@@ -463,8 +469,6 @@ class TestAccountMetrics(TestAccountServerBase):
 
     def setUp(self):
         super(TestAccountMetrics, self).setUp()
-        # not the best way to clear
-        del(self.acct_app.backend.db[:])
 
     def test_metrics_nb_accounts(self):
         # Create and delete some accounts
