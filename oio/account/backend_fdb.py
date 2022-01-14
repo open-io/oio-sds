@@ -550,7 +550,6 @@ class AccountBackendFdb():
             raise BadRequest("Missing account")
         batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
         containers = self._list_containers(self.db, account_id, None)
-
         sharded_marker = None
         if containers is not None:
             for elem in containers:
@@ -796,7 +795,9 @@ class AccountBackendFdb():
         sum_bytes = 0
         sum_objects = 0
         for key, val in iterator:
-            _, field = ct_space.unpack(key)
+            _, field, *policy_region = ct_space.unpack(key)
+            if policy_region:
+                continue
             if field == 'bytes':
                 sum_bytes += struct.unpack('<q', val)[0]
             if field == 'objects':
@@ -1067,24 +1068,22 @@ class AccountBackendFdb():
         """
         current_values = dict()
         deltas = dict()
-        c_space = self.container_space[account_id][cname][region]
+        c_space = self.container_space[account_id][cname]
         for policy, value in objs_per_policy.items():
             if policy not in current_values.keys():
                 current_values[policy] = {}
             if policy not in deltas:
                 deltas[policy] = {}
-            if self._is_element(tr, c_space, policy) is not None:
-                nb_obj_ct = self._val_element(tr, c_space, policy,
-                                              'objects')
-                current_values[policy]['objects'] = 0 if nb_obj_ct is None \
-                    else struct.unpack('<q', nb_obj_ct.value)[0]
+            nb_obj_ct = tr[c_space.pack(('objects', policy, region))]
+            nb_obj_ct_val = 0
+            if nb_obj_ct.present():
+                nb_obj_ct_val = struct.unpack('<q', nb_obj_ct.value)[0]
+            current_values[policy]['objects'] = nb_obj_ct_val
 
-            else:
-                current_values[policy]['objects'] = 0
             delta = value - current_values[policy]['objects']
             if value > 0 and delta != 0:
                 deltas[policy]['objects'] = delta
-                tr[c_space.pack((policy, 'objects'))] = \
+                tr[c_space.pack(('objects', policy, region))] = \
                     struct.pack('<q', value)
 
         for policy, value in bytes_per_policy.items():
@@ -1092,17 +1091,17 @@ class AccountBackendFdb():
                 current_values[policy] = {}
             if policy not in deltas:
                 deltas[policy] = {}
-            if self._is_element(tr, c_space, policy) is not None:
-                nb_bytes_ct = self._val_element(tr, c_space, policy,
-                                                'bytes')
-                current_values[policy]['bytes'] = 0 if nb_bytes_ct is None \
-                    else struct.unpack('<q', nb_bytes_ct.value)[0]
+            nb_bytes_ct = tr[c_space.pack(('bytes', policy, region))]
+            nb_bytes_ct_val = 0
+            if nb_bytes_ct.present():
+                nb_bytes_ct_val = struct.unpack('<q', nb_bytes_ct.value)[0]
+            current_values[policy]['bytes'] = nb_bytes_ct_val
 
             delta = value - current_values[policy]['bytes']
             # update values only when needed
             if value > 0 and delta != 0:
                 deltas[policy]['bytes'] = delta
-                tr[c_space.pack((policy, 'bytes'))] = \
+                tr[c_space.pack(('bytes', policy, region))] = \
                     struct.pack('<q', value)
 
         # empty policies that are not present in objs_per_policy
@@ -1111,19 +1110,25 @@ class AccountBackendFdb():
 
         # gather data to deduce from metrics
         for key, val in res:
-            pol, field = c_space.unpack(key)
-            if pol not in objs_per_policy:
-                if pol not in deltas:
-                    deltas[pol] = {}
-                deltas[pol][field] = - struct.unpack('<q', val)[0]
+            field, *policy_region = c_space.unpack(key)
+            if policy_region and field in ('bytes', 'objects'):
+                pol = policy_region[0]
+                if pol and pol not in objs_per_policy:
+                    if pol not in deltas:
+                        deltas[pol] = {}
+                    deltas[pol][field] = - struct.unpack('<q', val)[0]
         # clear not present policies for given container
         policies_to_clear = list()
         for key, val in res:
-            pol, field = c_space.unpack(key)
-            if pol not in objs_per_policy and pol not in policies_to_clear:
-                policies_to_clear.append(pol)
+            field, *policy_region = c_space.unpack(key)
+            if policy_region:
+                pol = policy_region[0]
+                if pol and pol not in objs_per_policy and \
+                   pol not in policies_to_clear:
+                    policies_to_clear.append(pol)
         for pol in policies_to_clear:
-            tr.clear_range_startswith(c_space.pack((pol,)))
+            tr.clear_range_startswith(c_space.pack(('bytes', pol, region)))
+            tr.clear_range_startswith(c_space.pack(('objects', pol, region)))
 
         return deltas
 
@@ -1215,7 +1220,9 @@ class AccountBackendFdb():
                 ct_it = tr.get_range(ct_range.start,
                                      ct_range.stop, reverse=False)
                 for ct_key, a_value in ct_it:
-                    a_key = ct_space.unpack(ct_key)[0]
+                    a_key, *pol = ct_space.unpack(ct_key)
+                    if pol:
+                        continue
                     if a_key == 'objects':
                         nb_objects = struct.unpack('<q', a_value)[0]
                     if a_key == 'bytes':
@@ -1388,11 +1395,11 @@ class AccountBackendFdb():
                 struct.pack('<q', 0)
 
         for key, val in iterator:
-            container, unpacked_key = ckey_prefix.unpack(key)
-
+            container, unpacked_key, *pol = ckey_prefix.unpack(key)
             if marker == container:
                 continue
-
+            if pol:
+                continue
             if unpacked_key not in ('bytes', 'objects'):
                 continue
 
