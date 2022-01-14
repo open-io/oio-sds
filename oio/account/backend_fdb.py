@@ -930,7 +930,7 @@ class AccountBackendFdb():
                             self.acct_space.pack((account_id, 'bytes')),
                             inc_bytes)
 
-        deltas = self._update_ct_stats_policy(tr, cname, region,
+        deltas = self._update_ct_stats_policy(tr, account_id, cname, region,
                                               objects_details,
                                               bytes_details)
 
@@ -1038,9 +1038,9 @@ class AccountBackendFdb():
             # Update the buckets list if it's the root container
             if bucket_name == cname:
                 tr[self.buckets_index_space.pack((account_id, bucket_name))] =\
-                      b'0'
+                      b'1'
                 tr[self.buckets_index_space.pack((region, bucket_name))] = \
-                    b'0'
+                    b'1'
                 # increments metrics
                 if creation:
                     self._increment(tr, self.metrics_space.pack(
@@ -1059,15 +1059,15 @@ class AccountBackendFdb():
         return self.default_location
 
     @fdb.transactional
-    def _update_ct_stats_policy(self, tr, cname, region, objs_per_policy,
-                                bytes_per_policy):
+    def _update_ct_stats_policy(self, tr, account_id, cname, region,
+                                objs_per_policy, bytes_per_policy):
         """
         Read current values for given container and per region/policy
         Compute deltas, update values then return deltas
         """
         current_values = dict()
         deltas = dict()
-        c_space = self.metrics_space[cname][region]
+        c_space = self.container_space[account_id][cname][region]
         for policy, value in objs_per_policy.items():
             if policy not in current_values.keys():
                 current_values[policy] = {}
@@ -1106,13 +1106,12 @@ class AccountBackendFdb():
                     struct.pack('<q', value)
 
         # empty policies that are not present in objs_per_policy
-        reg_space = self.metrics_space[cname][region]
-        reg_range = reg_space.range()
+        reg_range = c_space.range()
         res = tr.get_range(reg_range.start, reg_range.stop)
 
         # gather data to deduce from metrics
         for key, val in res:
-            pol, field = reg_space.unpack(key)
+            pol, field = c_space.unpack(key)
             if pol not in objs_per_policy:
                 if pol not in deltas:
                     deltas[pol] = {}
@@ -1120,11 +1119,11 @@ class AccountBackendFdb():
         # clear not present policies for given container
         policies_to_clear = list()
         for key, val in res:
-            pol, field = reg_space.unpack(key)
+            pol, field = c_space.unpack(key)
             if pol not in objs_per_policy and pol not in policies_to_clear:
                 policies_to_clear.append(pol)
         for pol in policies_to_clear:
-            tr.clear_range_startswith(reg_space.pack((pol,)))
+            tr.clear_range_startswith(c_space.pack((pol,)))
 
         return deltas
 
