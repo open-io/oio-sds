@@ -272,11 +272,7 @@ class CommonTestCase(testtools.TestCase):
 
     @property
     def conscience(self):
-        if not self._conscience:
-            from oio.conscience.client import ConscienceClient
-            self._conscience = ConscienceClient(self.conf,
-                                                pool_manager=self.http_pool)
-        return self._conscience
+        return self.storage.conscience
 
     @property
     def http_pool(self):

@@ -113,20 +113,37 @@ class ObjectStorageApi(object):
             self._global_kwargs['watchdog'] = self.watchdog
         self.logger.debug("Global API parameters: %s", self._global_kwargs)
 
-        from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
-        from oio.directory.client import DirectoryClient
-        # TODO(FVE): we may want to share the PoolManager instance
-        self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
+        self._init_kwargs = kwargs
+        self._acct_kwargs = kwargs.copy()
+        if "pool_manager" not in self._init_kwargs:
+            self._init_kwargs["pool_manager"] = self.container.pool_manager
         # In AccountClient, "endpoint" is the account service, not the proxy
-        acct_kwargs = kwargs.copy()
-        acct_kwargs["proxy_endpoint"] = acct_kwargs.pop("endpoint", None)
-        acct_kwargs['endpoint'] = acct_kwargs.pop('account_endpoint', None)
-        self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
+        self._acct_kwargs["proxy_endpoint"] = \
+            self._acct_kwargs.pop("endpoint", None)
+        self._acct_kwargs['endpoint'] = \
+            self._acct_kwargs.pop('account_endpoint', None)
+        self._account_client = None
         self._blob_client = None
+        self._conscience_client = None
+        self._directory_client = None
         self._proxy_client = None
+
+    @property
+    def account(self):
+        """
+        Get an instance of AccountClient.
+
+        :rtype: `oio.account.client.AccountClient`
+        """
+        if self._account_client is None:
+            from oio.account.client import AccountClient
+            self._account_client = AccountClient({"namespace": self.namespace},
+                                                 logger=self.logger,
+                                                 **self._acct_kwargs)
+        return self._account_client
 
     @property
     def blob_client(self):
@@ -143,6 +160,39 @@ class ObjectStorageApi(object):
                 connection_pool=connection_pool, perfdata=self.perfdata,
                 watchdog=self.watchdog)
         return self._blob_client
+
+    @property
+    def conscience(self):
+        """
+        Get an instance of ConscienceClient.
+
+        :rtype: `oio.conscience.client.ConscienceClient`
+        """
+        if self._conscience_client is None:
+            from oio.conscience.client import ConscienceClient
+            self._conscience_client = ConscienceClient(
+                conf={"namespace": self.namespace},
+                logger=self.logger,
+                **self._init_kwargs
+            )
+        return self._conscience_client
+
+    @property
+    def directory(self):
+        """
+        Get an instance of DirectoryClient, mid-level client for OpenIO SDS
+        service directory (meta0, meta1).
+
+        :rtype: `oio.directory.client.DirectoryClient`
+        """
+        if self._directory_client is None:
+            from oio.directory.client import DirectoryClient
+            self._directory_client = DirectoryClient(
+                {"namespace": self.namespace},
+                logger=self.logger,
+                **self._init_kwargs
+            )
+        return self._directory_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,
