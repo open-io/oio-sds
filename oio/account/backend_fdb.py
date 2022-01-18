@@ -102,6 +102,9 @@ class AccountBackendFdb():
     # Stats & metric prefix
     METRICS_PREFIX = 'metrics'
 
+    # Timeout for bucket reservation
+    TIMEOUT = 60
+
     def init_db(self, event_model='gevent'):
         """
         This method makes connexion to fdb database. It could be called
@@ -618,19 +621,34 @@ class AccountBackendFdb():
 
     @catch_service_errors
     def reserve_bucket(self, account_id, bucket_name, **kwargs):
+        timeout = kwargs.get('timeout', self.TIMEOUT)
         if account_id is None:
-            return False
-        reserved_space = self.bucket_db_space[bucket_name]
-        reserved = self._reserve_bucket(self.db, reserved_space, account_id)
+            return {'reserved': 0}
+        reserved = self._reserve_bucket(self.db, bucket_name, account_id,
+                                        timeout)
         return {'reserved': reserved}
 
     @fdb.transactional
-    def _reserve_bucket(self, tr, space_, account_id):
+    def _reserve_bucket(self, tr, bucket_name, account_id, timeout):
+        space_ = self.bucket_db_space[bucket_name]
+        timestamp = 0
         if tr[space_.pack(('account',))].present():
             return 0
-        now = Timestamp().normal
-        tr[space_.pack(('account',))] = bytes(str(now), 'utf-8')
-        return 1
+
+        reservation_timestamp = tr[space_.pack(('timestamp',))]
+        now = Timestamp().timestamp
+        now_us = round(now * 1000000)
+        if reservation_timestamp.present():
+            timestamp = struct.unpack('<Q', reservation_timestamp.value)[0]
+            if (timestamp / 1000000) + timeout < now:
+                tr[space_.pack(('timestamp',))] = struct.pack('<Q', now_us)
+                return 1
+            else:
+                # Some other reservation is ongoing
+                return 0
+        else:
+            tr[space_.pack(('timestamp',))] = struct.pack('<Q', now_us)
+            return 1
 
     @catch_service_errors
     def release_bucket(self, bucket_name, **kwargs):
@@ -644,8 +662,13 @@ class AccountBackendFdb():
 
     @catch_service_errors
     def set_bucket_owner(self, account_id, bucket_name, **kwargs):
+        self._set_bucket_owner(self.db, account_id, bucket_name)
+
+    @fdb.transactional
+    def _set_bucket_owner(self, tr, account_id, bucket_name):
         reserved_space = self.bucket_db_space[bucket_name]
-        self.db[reserved_space.pack(('account',))] = bytes(account_id, 'utf-8')
+        tr[reserved_space.pack(('account',))] = bytes(account_id, 'utf-8')
+        del tr[reserved_space.pack(('timestamp',))]
 
     @catch_service_errors
     def get_bucket_owner(self, bucket_name, **kwargs):
