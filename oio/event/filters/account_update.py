@@ -17,10 +17,11 @@
 
 from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, \
     READ_TIMEOUT, HIDDEN_ACCOUNTS, M2_PROP_LOCATION
-from oio.common.exceptions import ClientException, OioTimeout
+from oio.common.exceptions import ClientException, OioException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
+from oio.common.configuration import load_namespace_conf
 
 
 CONTAINER_EVENTS = [
@@ -29,6 +30,7 @@ CONTAINER_EVENTS = [
     EventTypes.CONTAINER_DELETED]
 
 LOCATION_PROPERTY_KEY = 'X-Container-Sysmeta-Location'
+LOCATION_KEY = 'location'
 
 
 class AccountUpdateFilter(Filter):
@@ -44,6 +46,11 @@ class AccountUpdateFilter(Filter):
                                                       CONNECTION_TIMEOUT))
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
+        try:
+            self.location = self.conf.get('ns_conf').get(LOCATION_KEY)
+        except KeyError:
+            raise OioException("Missing location key in namespace conf" %
+                               LOCATION_KEY)
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
@@ -60,16 +67,7 @@ class AccountUpdateFilter(Filter):
                 url = event.env.get('url')
                 body = dict()
                 body['bucket'] = data.get('bucket')
-                body['location'] = None
-                if 'system' in data.keys():
-                    if M2_PROP_LOCATION in data['system'].keys():
-                        body['location'] = data['system'][M2_PROP_LOCATION]
-
-                if 'properties' in data.keys():
-                    if LOCATION_PROPERTY_KEY in data['properties'].keys():
-                        body['location'] = \
-                            data['properties'][LOCATION_PROPERTY_KEY]
-
+                body['location'] = self.location
                 for k1, k2 in (('objects', 'object-count'),
                                ('bytes', 'bytes-count')):
                     body[k1] = data.get(k2, 0)
@@ -136,6 +134,9 @@ class AccountUpdateFilter(Filter):
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
+
+    ns_conf = load_namespace_conf(conf.get('namespace'), failsafe=True)
+    conf['ns_conf'] = ns_conf
 
     def account_filter(app):
         return AccountUpdateFilter(app, conf)
