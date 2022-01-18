@@ -168,23 +168,6 @@ wait_proxy_cache() {
 	done
 }
 
-ec_tests () {
-	randomize_env
-	$OIO_RESET -N $OIO_NS $@
-
-	SIZE0=$((256*1024*1024))
-	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
-	echo $OIO_NS $OIO_ACCOUNT $OIO_USER $OIO_PATH
-	( export G_DEBUG_LEVEL=W ; ${WRKDIR}/core/tool_sdk put $SIZE0 )
-	openio object save $OIO_USER $OIO_PATH
-	SIZE=$(stat --printf='%s' $OIO_PATH)
-	/bin/rm "$OIO_PATH"
-	[ "$SIZE0" == "$SIZE" ]
-
-	$SYSTEMCTL stop oio-cluster.target
-	sleep 0.5
-}
-
 test_zookeeper_failure() {
 	openio container create test_zookeeper_failure
 	openio election debug meta2 test_zookeeper_failure
@@ -276,22 +259,25 @@ func_tests () {
 	# TODO(jfs): Move in a tests/functional/cli python test
 	${PYTHON} $(command -v oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
-	# Create a file just bigger than chunk size
-	SOURCE=$(mktemp)
-	dd if=/dev/urandom of=$SOURCE bs=128K count=100
+	if is_running_test_suite "ec" ; then
+		echo "Roundtrip test disabled for EC"
+	else
+		# Create a file just bigger than chunk size
+		SOURCE=$(mktemp)
+		dd if=/dev/urandom of=$SOURCE bs=128K count=100
 
-	# Run the test-suite of the C API
-	${WRKDIR}/core/tool_roundtrip $SOURCE
-	rm -f $SOURCE
+		# Run the test-suite of the C API
+		${WRKDIR}/core/tool_roundtrip $SOURCE
+		rm -f $SOURCE
 
-	test_oio_tool
-	test_oio_file_tool
+		test_oio_tool
+		test_oio_file_tool
 
-	# Must be final, it removes the system config
-	rm "/$HOME/.oio/sds.conf"
-	export OIO_PROXY=$(oio-test-config.py -t proxy -1)
-	export OIO_ECD=$(oio-test-config.py -t ecd -1)
-	${WRKDIR}/core/tool_sdk_noconf
+		# Must be final, it removes the system config
+		rm "/$HOME/.oio/sds.conf"
+		export OIO_PROXY=$(oio-test-config.py -t proxy -1)
+		${WRKDIR}/core/tool_sdk_noconf
+	fi
 
 	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
@@ -399,8 +385,6 @@ fi
 
 if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
-	ec_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-chunksize-512MiB.yml"
 
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
 fi

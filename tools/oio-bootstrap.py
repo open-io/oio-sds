@@ -1110,7 +1110,6 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
-ecd=${IP}:${PORT_ECD}
 ${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
@@ -1495,7 +1494,6 @@ defaults = {
     'NB_M2': 1,
     'NB_RAWX': 3,
     'NB_RAINX': 0,
-    'NB_ECD': 1,
     'REPLI_M2': 1,
     'REPLI_M1': 1,
     COMPRESSION: "off",
@@ -1588,7 +1586,6 @@ def generate(options):
     ports = (x for x in xrange(options['port'], 60000))
     port_proxy = next(ports)
     port_account = next(ports)
-    port_ecd = next(ports)
     port_admin = next(ports)
 
     versioning = 1
@@ -1649,7 +1646,6 @@ def generate(options):
                VERSIONING=versioning,
                PORT_PROXYD=port_proxy,
                PORT_ACCOUNT=port_account,
-               PORT_ECD=port_ecd,
                PORT_ADMIN=port_admin,
                M1_DIGITS=meta1_digits,
                M1_REPLICAS=meta1_replicas,
@@ -2113,23 +2109,6 @@ def generate(options):
     with open(watch(env), 'w+') as f:
         tpl = Template(template_proxy_watch)
         f.write(tpl.safe_substitute(env))
-
-    # ecd
-    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
-    register_service(env, template_systemd_service_httpd, root_target)
-    # service
-    env.update({'USER': 'nobody', 'GROUP': 'nogroup'})
-    tpl = Template(template_wsgi_service_host)
-    to_write = tpl.safe_substitute(env)
-    if options.get(OPENSUSE, False):
-        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-    with open(httpd_config(env), 'w+') as f:
-        f.write(to_write)
-    # service desc
-    tpl = Template(template_wsgi_service_descr)
-    to_write = tpl.safe_substitute(env)
-    with open(wsgi(env), 'w+') as f:
-        f.write(to_write)
 
     # account
     env = subenv({
