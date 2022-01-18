@@ -57,7 +57,7 @@ class ServiceClient(HttpApi):
         if not endpoint:
             namespace = conf.get('namespace')
             if namespace:
-                ns_conf = load_namespace_conf(namespace)
+                ns_conf = load_namespace_conf(namespace, failsafe=True)
                 endpoint = ns_conf.get(service_type)
         if endpoint:
             scheme = 'http'
