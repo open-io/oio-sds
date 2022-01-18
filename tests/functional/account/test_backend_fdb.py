@@ -20,6 +20,7 @@ import os
 import logging
 import random
 import eventlet
+import math
 
 from nose.plugins.attrib import attr
 
@@ -140,7 +141,7 @@ class TestAccountBackend(BaseTestCase):
 
         # first container
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal, 0, 1, 1)
+            account_id, 'c1', Timestamp().timestamp, 0, 1, 1)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
@@ -149,7 +150,7 @@ class TestAccountBackend(BaseTestCase):
         # second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp().normal, 0, 0, 0)
+            account_id, 'c2', Timestamp().timestamp, 0, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 1)
@@ -158,7 +159,7 @@ class TestAccountBackend(BaseTestCase):
         # update second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp().normal, 0, 1, 1)
+            account_id, 'c2', Timestamp().timestamp, 0, 1, 1)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 2)
@@ -167,7 +168,7 @@ class TestAccountBackend(BaseTestCase):
         # delete first container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c1', 0, Timestamp().normal, 0, 0)
+            account_id, 'c1', 0, Timestamp().timestamp, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
@@ -176,7 +177,7 @@ class TestAccountBackend(BaseTestCase):
         # delete second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', 0, Timestamp().normal, 0, 0)
+            account_id, 'c2', 0, Timestamp().timestamp, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
@@ -188,11 +189,11 @@ class TestAccountBackend(BaseTestCase):
 
         # Container create event, sent immediately after creation
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal, None, None, None)
+            account_id, 'c1', Timestamp().timestamp, None, None, None)
 
         # Container update event
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal, None, 3, 30)
+            account_id, 'c1', Timestamp().timestamp, None, 3, 30)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 3)
@@ -201,7 +202,7 @@ class TestAccountBackend(BaseTestCase):
         sleep(.00001)
         # Container delete event, sent immediately after deletion
         self.backend.update_container(
-            account_id, 'c1', None, Timestamp().normal, None, None)
+            account_id, 'c1', None, Timestamp().timestamp, None, None)
 
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
@@ -213,7 +214,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(self.backend.create_account(account_id), account_id)
         name = 'c'
         # old_mtime = Timestamp(time() - 1).normal
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
 
         # initial container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
@@ -227,7 +228,7 @@ class TestAccountBackend(BaseTestCase):
 
         # delete event
         sleep(.00001)
-        dtime = Timestamp().normal
+        dtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, dtime, 0, 0)
         sub_space = fdb.Subspace(('containers:', account_id))
         range = sub_space.range()
@@ -261,7 +262,7 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         name = u'La fête à la maison'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
 
         # create container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
@@ -280,7 +281,7 @@ class TestAccountBackend(BaseTestCase):
 
         # delete container
         sleep(.00001)
-        dtime = Timestamp().normal
+        dtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, 0, dtime, 0, 0)
         sub_space = fdb.Subspace(('containers:', account_id))
         range = sub_space.range()
@@ -304,7 +305,7 @@ class TestAccountBackend(BaseTestCase):
 
         # initial container
         name = '"{<container \'&\' name>}"'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         sub_space = self.backend.containers_index_space[account_id]
@@ -317,7 +318,9 @@ class TestAccountBackend(BaseTestCase):
 
         sub_space = self.backend.container_space[account_id]
         tmtime = self.backend.db[sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_value = float(struct.unpack('<Q', tmtime)[0])/1000000
+        epsilon = math.fabs(tmtime_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
         # same event
         with ExpectedException(Conflict):
@@ -329,22 +332,25 @@ class TestAccountBackend(BaseTestCase):
 
         ct_sub_space = self.backend.container_space[account_id]
         res = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(res.decode('utf-8'), mtime)
+        res_value = (struct.unpack('<Q', res)[0]) / 1000000
+        epsilon = math.fabs(res_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
         # New event
         sleep(.00001)
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         range = cts_sub_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         self.assertNotEqual(res, None)
         for k, v in res:
             ct = cts_sub_space.unpack(k)[0]
-            print('ct:', ct)
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_value = struct.unpack('<Q', tmtime)[0] / 1000000
+        epsilon = math.fabs(tmtime_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
         # Old event
         old_mtime = Timestamp(time() - 1).normal
@@ -359,7 +365,9 @@ class TestAccountBackend(BaseTestCase):
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_value = struct.unpack('<Q', tmtime)[0] / 1000000
+        epsilon = math.fabs(tmtime_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
         # Old delete event
         dtime = Timestamp(time() - 1).normal
@@ -374,11 +382,13 @@ class TestAccountBackend(BaseTestCase):
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_value = struct.unpack('<Q', tmtime)[0] / 1000000
+        epsilon = math.fabs(tmtime_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
         # New delete event
         sleep(.00001)
-        dtime = Timestamp().normal
+        dtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, 0, dtime, 0, 0)
 
         range = cts_sub_space.range()
@@ -387,7 +397,7 @@ class TestAccountBackend(BaseTestCase):
 
         # New event
         sleep(.00001)
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         range = cts_sub_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
@@ -397,7 +407,9 @@ class TestAccountBackend(BaseTestCase):
             self.assertEqual(ct, name)
 
         tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_value = struct.unpack('<Q', tmtime)[0] / 1000000
+        epsilon = math.fabs(tmtime_value - mtime)
+        self.assertLess(epsilon, pow(10, -6))
 
     def test_list_containers(self):
         account_id = 'test'
@@ -407,17 +419,17 @@ class TestAccountBackend(BaseTestCase):
             for cont2 in xrange(125):
                 name = '%d-%04d' % (cont1, cont2)
                 self.backend.update_container(
-                    account_id, name, Timestamp().normal, 0, 0, 0)
+                    account_id, name, Timestamp().timestamp, 0, 0, 0)
 
         for cont in xrange(125):
             name = '2-0051-%04d' % cont
             self.backend.update_container(
-                account_id, name, Timestamp().normal, 0, 0, 0)
+                account_id, name, Timestamp().timestamp, 0, 0, 0)
 
         for cont in xrange(125):
             name = '3-%04d-0049' % cont
             self.backend.update_container(
-                account_id, name, Timestamp().normal, 0, 0, 0)
+                account_id, name, Timestamp().timestamp, 0, 0, 0)
 
         listing = self.backend.list_containers(
             account_id, marker='', delimiter='', limit=100)
@@ -466,7 +478,7 @@ class TestAccountBackend(BaseTestCase):
 
         name = '3-0049-'
         self.backend.update_container(
-            account_id, name, Timestamp().normal, 0, 0, 0)
+            account_id, name, Timestamp().timestamp, 0, 0, 0)
         listing = self.backend.list_containers(
             account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
@@ -486,7 +498,7 @@ class TestAccountBackend(BaseTestCase):
         # 10 containers with bytes and objects
         for i in range(10):
             name = "container%d" % i
-            mtime = Timestamp().normal
+            mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
@@ -498,9 +510,9 @@ class TestAccountBackend(BaseTestCase):
         act_sub_space = self.backend.acct_space
         # set bytes & objects values
         self.backend.db[act_sub_space.pack((account_id, 'objects'))] = \
-            struct.pack('<i', 1)
+            struct.pack('<q', 1)
         self.backend.db[act_sub_space.pack((account_id, 'bytes'))] = \
-            struct.pack('<i', 2)
+            struct.pack('<q', 2)
 
         act_sub_space = act_sub_space[account_id]
         res_bytes = self.backend.db[act_sub_space.pack(('bytes',))]
@@ -541,26 +553,27 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.db[cts_sub_space.pack((name,))]
         self.assertEqual(res.decode('utf-8'), '1')
 
-        mtime = "0000012456.00005"
+        mtime = 0000012456.00005
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.db[cts_sub_space.pack((name,))]
-        print('res:', res)
         self.assertEqual(res.decode('utf-8'), '1')
 
         ct_sub_space = self.backend.container_space[account_id]
 
-        tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_field = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
+        tmtime_value = float(struct.unpack('<Q', tmtime_field)[0]) / 1000000
+        self.assertEqual(tmtime_value, mtime)
 
-        mtime = "0000012456.00035"
+        mtime = 12456.00035
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.db[cts_sub_space.pack((name,))]
         self.assertEqual(res.decode('utf-8'), '1')
 
-        tmtime = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
-        self.assertEqual(tmtime.decode('utf-8'), mtime)
+        tmtime_field = self.backend.db[ct_sub_space.pack((name, 'mtime'))]
+        tmtime_value = float(struct.unpack('<Q', tmtime_field)[0]) / 1000000
+        self.assertEqual(tmtime_value, mtime)
 
     def test_flush_account(self):
         account_id = random_str(16)
@@ -573,7 +586,7 @@ class TestAccountBackend(BaseTestCase):
         # 10 containers with bytes and objects
         for i in range(10):
             name = "container%d" % i
-            mtime = Timestamp().normal
+            mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
@@ -617,10 +630,14 @@ class TestAccountBackend(BaseTestCase):
         total_bytes = 0
         total_objects = 0
 
+        # set bucket_db reservation
+        self.backend.reserve_bucket(account_id, bucket)
+        self.backend.set_bucket_owner(account_id, bucket)
+
         # 10 containers with bytes and objects
         for i in range(10):
             name = "container%d" % i
-            mtime = Timestamp().normal
+            mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
@@ -629,14 +646,14 @@ class TestAccountBackend(BaseTestCase):
                 account_id, name, mtime, 0, nb_objets, nb_bytes,
                 bucket_name=bucket)
 
-        b_space = self.backend.bucket_space[bucket]
+        b_space = self.backend.bucket_space[account_id][bucket]
 
         # change values
-        self.backend.db[b_space.pack(('bytes',))] = struct.pack('<i', 1)
-        self.backend.db[b_space.pack(('objects',))] = struct.pack('<i', 2)
+        self.backend.db[b_space['bytes']] = struct.pack('<q', 1)
+        self.backend.db[b_space['objects']] = struct.pack('<q', 2)
 
-        res_bytes = self.backend.db[b_space.pack(('bytes',))]
-        res_objects = self.backend.db[b_space.pack(('objects',))]
+        res_bytes = self.backend.db[b_space['bytes']]
+        res_objects = self.backend.db[b_space['objects']]
 
         res_bytes = int.from_bytes(res_bytes, byteorder='little')
         res_objects = int.from_bytes(res_objects, byteorder='little')
@@ -646,11 +663,12 @@ class TestAccountBackend(BaseTestCase):
 
         # force pagination
         self.backend.refresh_bucket(bucket)
+        b_space = self.backend.bucket_space[account_id][bucket]
 
-        res_bytes = self.backend.db[b_space.pack(('bytes',))]
-        res_objects = self.backend.db[b_space.pack(('objects',))]
-        res_bytes = int.from_bytes(res_bytes, byteorder='little')
-        res_objects = int.from_bytes(res_objects, byteorder='little')
+        res_bytes = self.backend.db[b_space['bytes']]
+        res_objects = self.backend.db[b_space['objects']]
+        res_bytes = struct.unpack('<q', res_bytes)[0]
+        res_objects = struct.unpack('<q', res_objects)[0]
 
         self.assertEqual(res_bytes, total_bytes)
         self.assertEqual(res_objects, total_objects)
@@ -673,10 +691,14 @@ class TestAccountBackend(BaseTestCase):
         cname_not_in_bucket = 'ct-not-in-bucket'
         cname_not_sharded = 'ct-2'
         account_id = random_str(16)
-        bucket_space = self.backend.bucket_space[bucket]
+        bucket_space = self.backend.bucket_space[account_id][bucket]
 
         data_lenth = 7
         data = random_str(data_lenth)
+
+        # set bucket_db reservation
+        self.backend.reserve_bucket(account_id, bucket)
+        self.backend.set_bucket_owner(account_id, bucket)
 
         for ct in (cname, cname_not_in_bucket, cname_not_sharded):
             self.storage.container_create(account_id, ct)
@@ -689,26 +711,27 @@ class TestAccountBackend(BaseTestCase):
 
         ct_in_bucket = (cname, cname_not_sharded)
         for ct in ct_in_bucket:
-            self.backend.update_container(account_id, ct, Timestamp().normal,
+            self.backend.update_container(account_id, ct,
+                                          Timestamp().timestamp,
                                           0, nb_obj_to_add,
                                           data_lenth * nb_obj_to_add,
                                           bucket_name=bucket)
 
         self.backend.update_container(account_id, cname_not_in_bucket,
-                                      Timestamp().normal, 0, nb_obj_to_add,
+                                      Timestamp().timestamp, 0, nb_obj_to_add,
                                       data_lenth * nb_obj_to_add)
 
         for batch in range(1, 6):
             # change values
-            self.backend.db[bucket_space.pack(('bytes',))] = \
-                struct.pack('<i', 1)
-            self.backend.db[bucket_space.pack(('objects',))] = \
-                struct.pack('<i', 2)
+            self.backend.db[bucket_space['bytes']] = \
+                struct.pack('<q', 1)
+            self.backend.db[bucket_space['objects']] = \
+                struct.pack('<q', 2)
 
             self.backend.refresh_bucket(bucket, batch_size=batch)
 
-            res_bytes = self.backend.db[bucket_space.pack(('bytes',))]
-            res_objects = self.backend.db[bucket_space.pack(('objects',))]
+            res_bytes = self.backend.db[bucket_space['bytes']]
+            res_objects = self.backend.db[bucket_space['objects']]
             res_bytes = int.from_bytes(res_bytes, byteorder='little')
             res_objects = int.from_bytes(res_objects, byteorder='little')
 
@@ -723,14 +746,16 @@ class TestAccountBackend(BaseTestCase):
 
         # Test autocreate_account
         self.backend.update_container(
-            account_id, bname, Timestamp().normal, 0, 0, 0,
+            account_id, bname, Timestamp().timestamp, 0, 0, 0,
             bucket_name=bname,
             autocreate_account=True)
-
+        # set bucket_db reservation
+        self.backend.reserve_bucket(account_id, bname)
+        self.backend.set_bucket_owner(account_id, bname)
         # Test bucket metadata
         self.backend.update_bucket_metadata(bname, metadata)
 
-        b_space = self.backend.bucket_space[bname]
+        b_space = self.backend.bucket_space[account_id][bname]
         range = b_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         found = 0
@@ -767,7 +792,7 @@ class TestAccountBackend(BaseTestCase):
         params = {'bucket_location': 'test_region1', 'objects-details':
                   {"THREECOPIES": 2, "EC": 3}}
         name = 'container_metrics1'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
 
@@ -783,7 +808,7 @@ class TestAccountBackend(BaseTestCase):
                 self.assertEqual(val, 3)
 
         # recall with same values => no impact on stats
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
         metric_space = fdb.Subspace(('metrics:', 'objects'))
@@ -803,7 +828,7 @@ class TestAccountBackend(BaseTestCase):
         params = {'bucket_location': 'test_region1', 'objects-details':
                   {"THREECOPIES": 3, "EC": 4}}
         name = 'container_metrics2'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
         metric_space = fdb.Subspace(('metrics:', 'objects'))
@@ -822,7 +847,7 @@ class TestAccountBackend(BaseTestCase):
         params = {'bucket_location': 'test_region1', 'objects-details':
                   {"THREECOPIES": 1}}
         name = 'container_metrics1'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       nb_objets, nb_bytes, **params)
         metric_space = fdb.Subspace(('metrics:', 'objects'))
@@ -854,7 +879,7 @@ class TestAccountBackend(BaseTestCase):
         region = 'test_region'
         params = {'bucket_location': region}
         name = 'container1'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       0, 0, **params)
 
@@ -862,7 +887,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertNotEqual(key_region, None)
 
         # delete
-        dtime = Timestamp().normal
+        dtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, 0, dtime,
                                       0, 0, **params)
 
@@ -877,7 +902,9 @@ class TestAccountBackend(BaseTestCase):
     def test_objects_policies(self):
         account_id = 'test-1'
         self.assertEqual(self.backend.create_account(account_id), account_id)
-
+        # set bucket_db reservation
+        self.backend.reserve_bucket(account_id, 'bucket_policies')
+        self.backend.set_bucket_owner(account_id, 'bucket_policies')
         region = 'test_region'
         params1 = {
                 'bucket_name': 'bucket_policies',
@@ -885,7 +912,7 @@ class TestAccountBackend(BaseTestCase):
                 'bytes-details': {'pol1': 7, 'pol2': 101},
                 'objects-details': {'pol1': 3, 'pol2': 5}}
         name = 'container1'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       8, 108, **params1)
 
@@ -896,7 +923,7 @@ class TestAccountBackend(BaseTestCase):
                 'bytes-details': {'pol1': 27, 'pol2': 41},
                 'objects-details': {'pol1': 11, 'pol2': 17}}
         name = 'container2'
-        mtime = Timestamp().normal
+        mtime = Timestamp().timestamp
         self.backend.update_container(account_id, name, mtime, 0,
                                       28, 68, **params2)
         info = self.backend.get_bucket_info('bucket_policies')

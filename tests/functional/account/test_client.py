@@ -19,6 +19,7 @@ import time
 from mock import MagicMock as Mock
 
 from oio.account.client import AccountClient
+from oio.account.bucket_client import BucketClient
 from oio.common.exceptions import ClientException, OioNetworkException
 from oio.common.utils import request_id
 from oio.container.client import ContainerClient
@@ -34,6 +35,7 @@ class TestAccountClient(BaseTestCase):
 
         self.account_client = AccountClient(self.conf)
         self.container_client = ContainerClient(self.conf)
+        self.bucket_client = BucketClient(self.conf)
 
         retry = 3
         for i in range(retry+1):
@@ -169,6 +171,9 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.account_show(self.account_id)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
+        kwargs = {'owner': self.account_id}
+        self.bucket_client.bucket_reserve(bucket)
+        self.bucket_client.set_bucket_owner(bucket, **kwargs)
         resp = self.account_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)

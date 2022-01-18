@@ -195,8 +195,8 @@ class AccountBackendFdb():
         if not account_id:
             return None
         # get ctime is only used for migration
-        now = kwargs.get('ctime') or Timestamp().normal
-
+        now = kwargs.get('ctime') or Timestamp().timestamp
+        now = round(now * 1000000)
         status = self._create_account(self.db, self.accts_space,
                                       self.acct_space, account_id, now)
         if not status:
@@ -242,6 +242,11 @@ class AccountBackendFdb():
                                        0)
             except (TypeError, ValueError):
                 pass
+        for what in (b'ctime', b'mtime'):
+            try:
+                info[what] = (struct.unpack('<Q', info.get(what))[0]) / 1000000
+            except (TypeError, ValueError):
+                pass
         for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
             try:
                 val = info.get(what)
@@ -257,17 +262,25 @@ class AccountBackendFdb():
         """
         if not bname:
             return None
-        info = self._bucket_info(self.db, bname)
+        account_id = kwargs.get('account_id')
+        info = self._bucket_info(self.db, bname, account_id)
         if not info:
             return None
         self.cast_fields(info)
-        self.logger.debug('get_bucket_info %s ', info)
         return info
 
     @fdb.transactional
-    def _bucket_info(self, tr, bname):
+    def _bucket_info(self, tr, bname, account_id):
         info = {}
-        b_space = self.bucket_space[bname]
+        _acct_id = self._val_element(self.db, self.bucket_db_space,
+                                     bname, 'account')
+
+        if _acct_id is None:
+            _acct_id = account_id
+        else:
+            _acct_id = _acct_id.decode('utf-8')
+
+        b_space = self.bucket_space[_acct_id][bname]
         b_range = b_space.range()
         iterator = tr.get_range(b_range.start, b_range.stop)
         for key, value in iterator:
@@ -277,6 +290,8 @@ class AccountBackendFdb():
                     struct.unpack('<q', value)[0]
             elif field in ('bytes', 'objects'):
                 info[field] = struct.unpack('<q', value)[0]
+            elif field in ('mtime'):
+                info[field] = struct.unpack('<Q', value)[0] / 1000000
             elif field in (BUCKET_PROP_REPLI_ENABLED):
                 info[bytes(field, 'utf-8')] = value
             else:
@@ -300,7 +315,9 @@ class AccountBackendFdb():
         if bname is not None:
             bname = bname.decode("utf-8")
             self.logger.info('bname: %s', bname)
-            rep_enabled = self._val_element(self.db, self.bucket_space, bname,
+            rep_enabled = self._val_element(self.db,
+                                            self.bucket_space[account_id],
+                                            bname,
                                             BUCKET_PROP_REPLI_ENABLED)
 
             if rep_enabled is not None:
@@ -341,10 +358,15 @@ class AccountBackendFdb():
         :param metadata: dict of entries to set (or update)
         :param to_delete: iterable of keys to delete
         """
-        self._manage_metadata(self.db, self.bucket_space, bname, metadata,
-                              to_delete)
+        _acct_id = self._val_element(self.db, self.bucket_db_space,
+                                     bname, 'account')
+        if _acct_id is None:
+            return None
+        _acct_id = _acct_id.decode('utf-8')
+        self._manage_metadata(self.db, self.bucket_space[_acct_id], bname,
+                              metadata, to_delete)
 
-        info = self._multi_get(self.db, self.bucket_space, bname)
+        info = self._multi_get(self.db, self.bucket_space[_acct_id], bname)
 
         if not info:
             return None
@@ -365,11 +387,9 @@ class AccountBackendFdb():
         if not self._is_element(self.db, self.accts_space, req_account_id):
             self.logger.info('Account %s doesn\'t exist', req_account_id)
             return None
-        info = self._multi_get(self.db, self.acct_space, req_account_id)
-
+        info = self._account_info(self.db, req_account_id)
         # reformat to integers
-        info[b'bytes'] = struct.unpack('<q', info[b'bytes'])[0]
-        info[b'objects'] = struct.unpack('<q', info[b'objects'])[0]
+        info['ctime'] = float(struct.unpack('<Q', info['ctime'])[0])/1000000
 
         if not info:
             self.logger.warning('Account  %s infos not found', req_account_id)
@@ -386,6 +406,26 @@ class AccountBackendFdb():
         info[b'containers'] = len(containers)
         info[b'metadata'] = metadata
         return debinarize(info)
+
+    @fdb.transactional
+    def _account_info(self, tr, account_id):
+        info = {}
+
+        acct_space = self.acct_space[account_id]
+        a_range = acct_space.range()
+        iterator = tr.get_range(a_range.start, a_range.stop)
+        for key, value in iterator:
+            field, *policy = acct_space.unpack(key)
+            if policy:
+                info['.'.join([field, policy[0]])] = \
+                    struct.unpack('<q', value)[0]
+            elif field in ('bytes', 'objects'):
+                info[field] = struct.unpack('<q', value)[0]
+            elif field in (BUCKET_PROP_REPLI_ENABLED):
+                info[bytes(field, 'utf-8')] = value
+            else:
+                info[field] = value
+        return info
 
     @catch_service_errors
     def list_accounts(self, **kwargs):
@@ -407,13 +447,13 @@ class AccountBackendFdb():
             autocreate_account = self.autocreate
 
         if mtime is None:
-            mtime = '0'
+            mtime = 0
         else:
-            mtime = Timestamp(mtime).normal
+            mtime = Timestamp(mtime).timestamp
         if dtime is None:
-            dtime = '0'
+            dtime = 0
         else:
-            dtime = Timestamp(dtime).normal
+            dtime = Timestamp(dtime).timestamp
         if object_count is None:
             object_count = 0
         if bytes_used is None:
@@ -422,7 +462,7 @@ class AccountBackendFdb():
         # ctime = kwargs.get('ctime') or None
         # If no bucket name is provided, set it to ''
         bucket_name = bucket_name or ''
-        now = Timestamp().normal
+        now = Timestamp().timestamp
         # bucket location
         bucket_location = kwargs.get('bucket_location', self.default_location)
         # dict object details per storage class
@@ -433,8 +473,10 @@ class AccountBackendFdb():
         ct_space = self.container_space[account_id]
         cts_space = self.containers_index_space[account_id]
 
-        new_mtime = bytes(mtime, 'utf-8')
-        new_dtime = bytes(dtime, 'utf-8')
+        new_mtime = round(mtime * 1000000)
+        new_dtime = round(dtime * 1000000)
+        now = round(now * 1000000)
+
         status = self._update_container(self.db, cts_space, ct_space,
                                         account_id, cname, bucket_name,
                                         new_mtime, new_dtime, now,
@@ -460,7 +502,7 @@ class AccountBackendFdb():
         bs_space = self.buckets_index_space[account_id]
 
         raw_list, next_marker = self._raw_listing_m1(
-            self.db, bs_space, limit, prefix,
+            self.db, account_id,  bs_space, limit, prefix,
             marker, end_marker)
 
         output = list()
@@ -512,12 +554,14 @@ class AccountBackendFdb():
         """
         batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
         marker = None
-        # refresh sharded containers
-        bucket_space = self.bucket_space[bucket_name]
-        account_id = self.db[bucket_space.pack(('account',))]
+        account_id = self._val_element(self.db, self.bucket_db_space,
+                                       bucket_name, 'account')
         if account_id is None:
             return
+
         account_id = account_id.decode('utf-8')
+        bucket_space = self.bucket_space[account_id][bucket_name]
+
         containers = self._list_containers(self.db, account_id, bucket_name)
 
         sharded_marker = None
@@ -535,7 +579,7 @@ class AccountBackendFdb():
         # refresh based on non sharded or root containers
         while True:
             marker = self._refresh_bucket(self.db, bucket_space, bucket_name,
-                                          batch_size, marker)
+                                          account_id, batch_size, marker)
             if marker in (None, 'no_bucket'):
                 break
 
@@ -742,7 +786,7 @@ class AccountBackendFdb():
             bytes(account_id, 'utf-8')
         tr[acct_space.pack((account_id, 'objects'))] = struct.pack('<q', 0)
         tr[acct_space.pack((account_id, 'bytes'))] = struct.pack('<q', 0)
-        tr[acct_space.pack((account_id, 'ctime'))] = bytes(str(now), 'utf-8')
+        tr[acct_space.pack((account_id, 'ctime'))] = struct.pack('<Q', now)
 
         # metrics
         self._increment(tr, self.metrics_space.pack(('accounts',)))
@@ -829,15 +873,15 @@ class AccountBackendFdb():
             container_exists = tr[ct_space.pack((cname, 'name'))].present()
             if not container_exists:
                 raise NotFound("Container %s not found" % cname)
-        deleted_time = b'0'
-
+        deleted_time = 0
+        dtime = 0
         delete_cname_time = tr[to_delete_space.pack((cname,))]
         if delete_cname_time.present():
-            deleted_time = delete_cname_time.value
+            deleted_time = struct.unpack('<Q', delete_cname_time.value)[0]
         # real update
         if tr[ct_space.pack((cname, 'name'))].present():
-            dtime = tr[ct_space.pack((cname, 'dtime'))].value
-            mtime = tr[ct_space.pack((cname, 'mtime'))].value
+            mtime_field = tr[ct_space.pack((cname, 'mtime'))]
+            mtime = struct.unpack('<Q', mtime_field.value)[0]
             nb_objects_field = tr[ct_space.pack((cname, 'objects'))]
             nb_bytes_field = tr[ct_space.pack((cname, 'bytes'))]
             nb_objects = 0
@@ -847,11 +891,10 @@ class AccountBackendFdb():
             if nb_bytes_field.present():
                 nb_bytes = struct.unpack('<q', nb_bytes_field.value)[0]
         # event update interleaved with container delete
-        elif float(new_mtime) < float(deleted_time):
+        elif new_mtime < deleted_time:
             raise NotFound("Deleted container %s" % cname)
         else:  # real creation
-            dtime = b'0'
-            mtime = b'0'
+            mtime = 0
             nb_objects = 0
             nb_bytes = 0
             creation = True
@@ -859,24 +902,24 @@ class AccountBackendFdb():
         if not autocreate_container and dtime >= mtime:
             raise NotFound("Container %s not found" % cname)
 
-        region = self._get_region(tr, bucket_location, bucket_name, cname)
+        region = self._get_region(tr, bucket_location, bucket_name,
+                                  account_id, cname)
 
         old_mtime = mtime
         inc_objects = 0
         inc_bytes = 0
         deleted = False
-
-        if float(new_mtime) <= float(mtime) and \
-           float(new_dtime) <= float(dtime):
+        if new_mtime <= mtime and \
+           new_dtime <= dtime:
             raise Conflict("No update needed, "
                            "event older than last container update")
 
-        if float(new_mtime) > float(mtime):
+        if new_mtime > mtime:
             mtime = new_mtime
-        if float(new_dtime) > float(dtime):
+        if new_dtime > dtime:
             dtime = new_dtime
 
-        if float(dtime) >= float(mtime):
+        if dtime >= mtime:
             mtime = dtime
             # Protect against "minus zero".
             if nb_objects != 0:
@@ -889,7 +932,7 @@ class AccountBackendFdb():
             # and from containers:account
             tr.clear_range_startswith(ct_space.pack((cname,)))
             tr.clear_range_startswith(cts_space.pack((cname,)))
-            tr[to_delete_space.pack((cname,))] = dtime
+            tr[to_delete_space.pack((cname,))] = struct.pack('<Q', dtime)
 
             # metrics
             self._decrement(tr, self.metrics_space.pack(
@@ -899,7 +942,7 @@ class AccountBackendFdb():
 
             deleted = True
 
-        elif float(mtime) > float(old_mtime):
+        elif mtime > old_mtime:
             inc_objects = new_total_objects - int(nb_objects)
             inc_bytes = new_total_bytes - int(nb_bytes)
             tr[ct_space.pack((cname, 'objects'))] = \
@@ -908,8 +951,8 @@ class AccountBackendFdb():
                 struct.pack('<q', new_total_bytes)
             tr[cts_space.pack((cname,))] = b'1'
             tr[ct_space.pack((cname, 'name'))] = bytes(str(cname), 'utf-8')
-            tr[ct_space.pack((cname, 'mtime'))] = mtime
-            tr[ct_space.pack((cname, 'dtime'))] = dtime
+            tr[ct_space.pack((cname, 'mtime'))] = struct.pack('<Q', mtime)
+            tr[ct_space.pack((cname, 'location'))] = bytes(region, 'utf-8')
 
             # metrics
             if creation:
@@ -942,9 +985,15 @@ class AccountBackendFdb():
                     self._increment(tr, self.metrics_space.pack(
                                     (field, region, policy)),
                                     value)
+                    self._increment(tr, self.acct_space[account_id].pack(
+                                    (field, policy, region)),
+                                    value)
                 else:
                     self._decrement(tr, self.metrics_space.pack(
                                     (field, region, policy)),
+                                    value)
+                    self._decrement(tr, self.acct_space[account_id].pack(
+                                    (field, policy, region)),
                                     value)
 
         # define bname here
@@ -974,10 +1023,11 @@ class AccountBackendFdb():
                     tr.clear_range_startswith(self.buckets_index_space.pack(
                         (account_id, bucket_name)))
                     tr.clear_range_startswith(
-                        self.buckets_index_space.pack((region, bucket_name)))
+                        self.buckets_index_space.pack(
+                            (region, account_id, bucket_name)))
                     # Also delete the bucket
                     tr.clear_range_startswith(
-                        self.bucket_space.pack((bucket_name,)))
+                        self.bucket_space.pack((account_id, bucket_name,)))
 
                     # decrements metrics
                     self._decrement(tr, self.metrics_space.pack(
@@ -1001,36 +1051,46 @@ class AccountBackendFdb():
 
             # Increment the counters if needed.
             # if marker == false or container_name <= marker then
-            if tr[self.bucket_space.pack((bucket_name, 'objects'))].present():
-                tr.add(self.bucket_space.pack((bucket_name, 'objects')),
-                       struct.pack('<q', inc_objects))
+            if tr[self.bucket_space.pack((account_id, bucket_name,
+               'objects'))].present():
+                tr.add(self.bucket_space.pack(
+                    (account_id, bucket_name, 'objects')),
+                        struct.pack('<q', inc_objects))
             else:
-                tr[self.bucket_space.pack((bucket_name, 'objects'))] = \
-                    struct.pack('<q', inc_objects)
+                tr[self.bucket_space.pack(
+                    (account_id, bucket_name, 'objects'))] = \
+                        struct.pack('<q', inc_objects)
 
-            if tr[self.bucket_space.pack((bucket_name, 'bytes'))].present():
-                tr.add(self.bucket_space.pack((bucket_name, 'bytes')),
+            if tr[self.bucket_space.pack((account_id, bucket_name,
+               'bytes'))].present():
+                tr.add(self.bucket_space.pack(
+                    (account_id, bucket_name, 'bytes')),
                        struct.pack('<q', inc_bytes))
             else:
-                tr[self.bucket_space.pack((bucket_name, 'bytes'))] = \
-                    struct.pack('<q', inc_bytes)
+                tr[self.bucket_space.pack(
+                    (account_id, bucket_name, 'bytes'))] = \
+                        struct.pack('<q', inc_bytes)
 
-            tr[self.bucket_space.pack((bucket_name, 'region'))] = \
+            tr[self.bucket_space.pack((account_id, bucket_name, 'region'))] = \
                 bytes(str(region), 'utf-8')
 
             # Update the modification time.
-            if mtime != b'0':
-                tr[self.bucket_space.pack((bucket_name, 'mtime'))] = mtime
+            if mtime != 0:
+                tr[self.bucket_space.pack(
+                    (account_id, bucket_name, 'mtime'))] = \
+                        struct.pack('<Q', mtime)
 
-            self._update_bucket_per_policy(tr, bucket_name, is_segment, deltas)
+            self._update_bucket_per_policy(tr, bucket_name, account_id,
+                                           is_segment, deltas)
 
             if deleted:
                 return 'deleted'
             # Set the bucket owner.
             # Filter the special accounts hosting bucket shards.
             if not account_id.startswith('.shards_'):
-                tr[self.bucket_space.pack((bucket_name, 'account'))] = \
-                    bytes(str(account_id), 'utf-8')
+                tr[self.bucket_space.pack(
+                    (account_id, bucket_name, 'account'))] = \
+                        bytes(str(account_id), 'utf-8')
 
             # Update container info
             tr[ct_space.pack((cname, 'bucket'))] = \
@@ -1038,10 +1098,10 @@ class AccountBackendFdb():
 
             # Update the buckets list if it's the root container
             if bucket_name == cname:
-                tr[self.buckets_index_space.pack((account_id, bucket_name))] =\
-                      b'1'
-                tr[self.buckets_index_space.pack((region, bucket_name))] = \
-                    b'1'
+                tr[self.buckets_index_space.pack(
+                    (account_id, bucket_name))] = b'1'
+                tr[self.buckets_index_space.pack(
+                    (region, account_id, bucket_name))] = b'1'
                 # increments metrics
                 if creation:
                     self._increment(tr, self.metrics_space.pack(
@@ -1049,12 +1109,13 @@ class AccountBackendFdb():
         return 'updated'
 
     @fdb.transactional
-    def _get_region(self, tr, bucket_location, bucket_name, ct_name):
+    def _get_region(self, tr, bucket_location, bucket_name, account_id,
+                    ct_name):
         if bucket_location is not None:
             return bucket_location
         if bucket_name != '':
-            region = self._val_element(tr, self.bucket_space, bucket_name,
-                                       'region')
+            region = self._val_element(tr, self.bucket_space[account_id],
+                                       bucket_name, 'region')
             if region is not None:
                 return region.decode('utf-8')
         return self.default_location
@@ -1133,11 +1194,12 @@ class AccountBackendFdb():
         return deltas
 
     @fdb.transactional
-    def _update_bucket_per_policy(self, tr, bucket_name, is_segment, deltas):
+    def _update_bucket_per_policy(self, tr, bucket_name, account_id,
+                                  is_segment, deltas):
         """
         Update objects/bytes per policy for given bucket
         """
-        bucket_obj_space = self.bucket_space[bucket_name]
+        bucket_obj_space = self.bucket_space[account_id][bucket_name]
         # incr / decr relative values
         for policy, dict_field in deltas.items():
             for field, value in dict_field.items():
@@ -1228,7 +1290,7 @@ class AccountBackendFdb():
                     if a_key == 'bytes':
                         nb_bytes = struct.unpack('<q', a_value)[0]
                     if a_key == 'mtime':
-                        mtime = float(a_value)
+                        mtime = (struct.unpack('<Q', a_value)[0]) / 1000000
                 results.append([ctr, nb_objects, nb_bytes, 0, mtime])
 
                 empty = False
@@ -1237,7 +1299,7 @@ class AccountBackendFdb():
         return results, orig_marker
 
     @fdb.transactional
-    def _raw_listing_m1(self, tr, key_space, limit,
+    def _raw_listing_m1(self, tr, account_id, key_space, limit,
                         prefix, marker, end_marker):
 
         start = key_space.range().start
@@ -1304,7 +1366,7 @@ class AccountBackendFdb():
                     nb_bytes = 0
                     mtime = 0
                     next_marker = ctr
-                    bucket_space = self.bucket_space[ctr]
+                    bucket_space = self.bucket_space[account_id][ctr]
                     bucket_range = bucket_space.range()
                     bucket_it = tr.get_range(bucket_range.start,
                                              bucket_range.stop, reverse=False)
@@ -1315,7 +1377,7 @@ class AccountBackendFdb():
                         if a_key == 'bytes':
                             nb_bytes = struct.unpack('<q', a_value)[0]
                         if a_key == 'mtime':
-                            mtime = float(a_value)
+                            mtime = struct.unpack('<Q', a_value)[0]
                     results.append([ctr, nb_objects, nb_bytes, mtime])
 
                 empty = False
@@ -1366,7 +1428,8 @@ class AccountBackendFdb():
                     bytes(str(value), 'utf-8')
 
     @fdb.transactional
-    def _refresh_bucket(self, tr, bucket_key, bucket_name, batch_size, marker):
+    def _refresh_bucket(self, tr, bucket_key, bucket_name, account_id,
+                        batch_size, marker):
         new_marker = None
         sum_bytes = 0
         sum_objects = 0
@@ -1374,7 +1437,6 @@ class AccountBackendFdb():
         if tr[bucket_key.pack(('account',))].present() is None:
             return 'no_bucket'
 
-        account_id = tr[bucket_key.pack(('account',))].decode('utf-8')
         ckey_prefix = self.container_space[account_id]
 
         # get_range is fetching data in batchs, the default mode for
@@ -1387,12 +1449,9 @@ class AccountBackendFdb():
 
         stop = ckey_prefix.range().stop
         iterator = tr.snapshot.get_range(start, stop, reverse=False)
-
         if marker is None:
-            tr[self.bucket_space.pack((bucket_name, 'objects'))] = \
-                struct.pack('<q', 0)
-            tr[self.bucket_space.pack((bucket_name, 'bytes'))] = \
-                struct.pack('<q', 0)
+            tr[bucket_key['bytes']] = struct.pack('<q', sum_bytes)
+            tr[bucket_key['objects']] = struct.pack('<q', sum_objects)
 
         for key, val in iterator:
             container, unpacked_key, *pol = ckey_prefix.unpack(key)
@@ -1419,9 +1478,9 @@ class AccountBackendFdb():
 
             if count == 2 * batch_size:
                 break
+        tr.add(bucket_key['bytes'], struct.pack('<q', sum_bytes))
+        tr.add(bucket_key['objects'], struct.pack('<q', sum_objects))
 
-        tr.add(bucket_key.pack(('objects',)), struct.pack('<q', sum_objects))
-        tr.add(bucket_key.pack(('bytes',)), struct.pack('<q', sum_bytes))
         return new_marker
 
     @fdb.transactional
@@ -1542,6 +1601,7 @@ class AccountBackendFdb():
         stop = to_delete_space.range().stop
         iterator = tr.get_range(start, stop)
         for key, value in iterator:
-            if float(value) + self.time_window_clear_deleted < float(now):
+            val = struct.unpack('<Q', value)[0]
+            if val / 1000000 + self.time_window_clear_deleted < now / 1000000:
                 ct_name = to_delete_space.unpack(key)[0]
                 del tr[to_delete_space.pack((ct_name,))]
