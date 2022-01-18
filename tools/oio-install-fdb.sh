@@ -41,11 +41,11 @@ mkdir -p $INSTALL_DIR
 echo "Create $TMP_DIR"
 pushd $TMP_DIR > /dev/null
 
-FDB_VERSION='6.3.15'
+FDB_VERSION='6.3.23'
 
 echo 'Download archives'
-with_log wget -q https://www.foundationdb.org/downloads/${FDB_VERSION}/ubuntu/installers/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
-with_log wget -q https://www.foundationdb.org/downloads/${FDB_VERSION}/ubuntu/installers/foundationdb-server_${FDB_VERSION}-1_amd64.deb
+with_log wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
+with_log wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb
 
 echo 'Extract files'
 with_log ar xv foundationdb-clients_${FDB_VERSION}-1_amd64.deb
@@ -130,8 +130,8 @@ fi
 
 with_log systemctl --user stop foundationdb.service
 
-echo "FoundationDB ${FDB_VERSION} succesfully installed in directory: ${INSTALL_DIR}"
+echo "FoundationDB ${FDB_VERSION} successfully installed in directory: ${INSTALL_DIR}"
 echo "Next step is to add install dir in your environment. Add this in your .bashrc"
 echo -e "\t- export PATH=${INSTALL_DIR}/usr/bin:${INSTALL_DIR}/usr/sbin:${INSTALL_DIR}/usr/lib/foundationdb:${INSTALL_DIR}/usr/lib/foundationdb/backup_agent:\$PATH"
-echo -e "\t- export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:\$LD_LIBRARY_PATH"
+echo -e "\t- export LD_LIBRARY_PATH=${INSTALL_DIR}/usr/lib:\$LD_LIBRARY_PATH"
 echo -e "\t- export FDB_CLUSTER_FILE=${INSTALL_DIR}/etc/foundationdb/fdb.cluster"
