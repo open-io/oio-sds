@@ -43,9 +43,9 @@ class AccountUpdateFilter(Filter):
                                                       CONNECTION_TIMEOUT))
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
-        try:
-            self.region = self.conf.get('ns_conf').get('region')
-        except KeyError:
+        self.region = load_namespace_conf(
+            self.conf['namespace']).get('ns.region')
+        if not self.region:
             raise OioException("Missing region key in namespace conf")
 
     def process(self, env, beanstalkd, cb):
@@ -128,9 +128,6 @@ class AccountUpdateFilter(Filter):
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
-
-    ns_conf = load_namespace_conf(conf.get('namespace'), failsafe=True)
-    conf['ns_conf'] = ns_conf
 
     def account_filter(app):
         return AccountUpdateFilter(app, conf)

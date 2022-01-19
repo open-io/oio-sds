@@ -1126,7 +1126,8 @@ admin=${IP}:${PORT_ADMIN}
 #iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
 iam.connection=fdb://${IP}:0000/?allow_empty_policy_name=False
 fdb_file = ${CLUSTERFILE}
-region = RegionOne
+
+ns.region = localhost
 """
 
 template_systemd_service_event_agent = """
