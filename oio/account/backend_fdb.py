@@ -921,7 +921,8 @@ class AccountBackendFdb():
                 nb_bytes = struct.unpack('<q', nb_bytes_field.value)[0]
         # event update interleaved with container delete
         elif new_mtime < deleted_time:
-            raise NotFound("Deleted container %s" % cname)
+            raise Conflict('No update needed, '
+                           'event older than last container update')
         else:  # real creation
             mtime = 0
             nb_objects = 0

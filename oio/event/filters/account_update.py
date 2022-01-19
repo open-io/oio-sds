@@ -116,10 +116,8 @@ class AccountUpdateFilter(Filter):
             resp = EventError(event=Event(env), body=msg)
             return resp(env, beanstalkd, cb)
         except ClientException as exc:
-            if ((exc.http_status == 409
-                    and "No update needed" in exc.message) or
-                    (exc.http_status == 404 and
-                        "Deleted container" in exc.message)):
+            if (exc.http_status == 409
+                    and "No update needed" in exc.message):
                 self.logger.info(
                     "Discarding event %s (job_id=%s, reqid=%s): %s",
                     event.event_type, event.job_id,
