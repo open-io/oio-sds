@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -325,8 +325,8 @@ class TestAccountBackend(BaseTestCase):
 
         # New delete event
         sleep(.00001)
-        mtime = Timestamp().normal
-        self.backend.update_container(account_id, name, 0, mtime, 0, 0)
+        dtime = Timestamp().normal
+        self.backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)

@@ -1099,7 +1099,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_container_refresh_user_not_found(self):
         name = random_str(32)
         self.wait_for_score(('account', 'meta2'))
-        self.api.account.container_update(name, name, {"mtime": time.time()})
+        self.api.account.container_update(name, name, {"mtime": time.time(),
+                                                       'region': 'localhost'})
         self.api.container_refresh(name, name)
         containers = self.api.container_list(name)
         self.assertEqual(0, len(containers))

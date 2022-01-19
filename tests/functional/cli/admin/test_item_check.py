@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -295,6 +295,7 @@ class ItemCheckTest(CliTestCase):
 
         # Create a container only in account service
         metadata = dict()
+        metadata['region'] = 'localhost'
         metadata["mtime"] = time.time()
         metadata["bytes"] = 0
         metadata["objects"] = 0
@@ -587,6 +588,7 @@ class ItemCheckTest(CliTestCase):
 
         # Create a container only in account service
         metadata = dict()
+        metadata['region'] = 'localhost'
         metadata["mtime"] = time.time()
         metadata["bytes"] = 0
         metadata["objects"] = 0

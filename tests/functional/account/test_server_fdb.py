@@ -44,7 +44,6 @@ class TestAccountServerBase(BaseTestCase):
             self.fdb_file = \
                 str(Path.home())+'/.oio/sds/conf/OPENIO-fdb.cluster'
         conf = {'namespace': self.ns, 'iam.connection': iam_cnxstr}
-        conf['default_location'] = 'test_region'
         conf['backend_type'] = 'fdb'
         conf['fdb_file'] = self.fdb_file
 

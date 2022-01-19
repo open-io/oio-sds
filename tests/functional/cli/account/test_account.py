@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,8 @@ from testtools.matchers import Equals
 
 
 HEADERS = ['Name', 'Created']
-ACCOUNT_FIELDS = ('bytes', 'containers', 'ctime', 'account', 'metadata',
-                  'objects', 'buckets', 'replication_enabled')
+ACCOUNT_FIELDS = ('account', 'ctime', 'mtime', 'bytes', 'objects',
+                  'containers', 'buckets', 'metadata')
 
 
 class AccountTest(CliTestCase):
