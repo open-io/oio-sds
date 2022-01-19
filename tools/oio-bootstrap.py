@@ -1126,7 +1126,7 @@ admin=${IP}:${PORT_ADMIN}
 #iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
 iam.connection=fdb://${IP}:0000/?allow_empty_policy_name=False
 fdb_file = ${CLUSTERFILE}
-location = RegionOne
+region = RegionOne
 """
 
 template_systemd_service_event_agent = """
@@ -1357,7 +1357,6 @@ backend_type = fdb
 
 fdb_file = ${CLUSTERFILE}
 
-default_location = RegionOne
 time_window_clear_deleted = 60
 
 # Let this option empty to connect directly to redis_host

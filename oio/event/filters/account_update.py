@@ -16,7 +16,7 @@
 
 
 from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, \
-    READ_TIMEOUT, HIDDEN_ACCOUNTS, M2_PROP_LOCATION
+    READ_TIMEOUT, HIDDEN_ACCOUNTS
 from oio.common.exceptions import ClientException, OioException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
@@ -28,9 +28,6 @@ CONTAINER_EVENTS = [
     EventTypes.CONTAINER_STATE,
     EventTypes.CONTAINER_NEW,
     EventTypes.CONTAINER_DELETED]
-
-LOCATION_PROPERTY_KEY = 'X-Container-Sysmeta-Location'
-LOCATION_KEY = 'location'
 
 
 class AccountUpdateFilter(Filter):
@@ -47,10 +44,9 @@ class AccountUpdateFilter(Filter):
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
         try:
-            self.location = self.conf.get('ns_conf').get(LOCATION_KEY)
+            self.region = self.conf.get('ns_conf').get('region')
         except KeyError:
-            raise OioException("Missing location key in namespace conf" %
-                               LOCATION_KEY)
+            raise OioException("Missing region key in namespace conf")
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
@@ -67,7 +63,7 @@ class AccountUpdateFilter(Filter):
                 url = event.env.get('url')
                 body = dict()
                 body['bucket'] = data.get('bucket')
-                body['location'] = self.location
+                body['region'] = self.region
                 for k1, k2 in (('objects', 'object-count'),
                                ('bytes', 'bytes-count')):
                     body[k1] = data.get(k2, 0)

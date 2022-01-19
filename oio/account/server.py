@@ -579,9 +579,9 @@ class Account(WerkzeugApp):
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
         bucket_name = data.get('bucket')  # can be None
-        kwargs['bucket_location'] = data.get('location')
-        kwargs['objects-details'] = data.get('objects-details')
-        kwargs['bytes-details'] = data.get('bytes-details')
+        kwargs['region'] = data.get('region')
+        kwargs['objects_details'] = data.get('objects-details')
+        kwargs['bytes_details'] = data.get('bytes-details')
 
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
