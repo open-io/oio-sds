@@ -733,7 +733,7 @@ class Account(WerkzeugApp):
     # }}ACCT
     @force_master
     def on_account_metrics(self, req, **kwargs):
-        output_type = req.args.get('format', 'prometheus')
+        output_type = req.args.get('format')
         raw = self.backend.info_metrics(output_type, **kwargs)
         if output_type == 'prometheus':
             return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)

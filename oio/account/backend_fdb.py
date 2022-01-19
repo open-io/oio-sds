@@ -47,20 +47,6 @@ def catch_service_errors(func):
     return catch_service_errors_wrapper
 
 
-class Metric(object):
-    """
-    Constants for prometheus metrics.
-    """
-    METRIC_ACCOUNTS = "obsto_accounts"
-    METRIC_CONTAINERS = "obsto_containers"
-    METRIC_BUCKETS = "obsto_buckets"
-    METRIC_OBJECTS = "obsto_objects"
-    METRIC_BYTES = "obsto_bytes"
-
-    REGION_LABEL = "region"
-    STORAGE_LABEL = "storage_class"
-
-
 class AccountBackendFdb(object):
     """
     Foundationdb backend for account service.
@@ -688,105 +674,56 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def info_metrics(self, output_type, **kwargs):
-        metrics = dict()
         # generic metrics:
         # number of accounts
         # number of buckets per region
         # number of containers per region
         # number of objects per region /storage policy
-        metrics = self._read_all_metrics(self.db)
-        if output_type == 'json':
-            return debinarize(metrics)
-        else:
+        metrics = self._info_metrics(self.db)
+        if output_type == 'prometheus':
             return self._format_metrics(metrics)
+        else:
+            return metrics
 
     def _format_metrics(self, metrics):
-        prom_output = ""
-        for key, value in metrics.items():
-            if key == Metric.METRIC_ACCOUNTS:
-                prom_output = prom_output + key + " " + str(value) + "\n"
-            if key in (Metric.METRIC_BUCKETS, Metric.METRIC_CONTAINERS):
-                if value and isinstance(value, dict):
-                    for reg, val in value.items():
-                        prom_output = prom_output + key + "{" + \
-                            Metric.REGION_LABEL
-                        prom_output = prom_output + "=\"" + reg + "\"}" + " "
-                        prom_output = prom_output + str(val) + "\n"
-            if key in (Metric.METRIC_OBJECTS, Metric.METRIC_BYTES):
-                if value and isinstance(value, dict):
-                    for reg, val in value.items():
-                        if val and isinstance(val, dict):
-                            for storage_classe, v in val.items():
-                                prom_output = prom_output + key + \
-                                    "{" + Metric.REGION_LABEL + "=\"" + \
-                                    reg + "\""
-                                prom_output = prom_output + "," + \
-                                    Metric.STORAGE_LABEL + "=\"" + \
-                                    storage_classe + "\"}"
-                                prom_output = prom_output + " " + str(v) + "\n"
-        return prom_output
+        prom_output = []
+        prom_output.append(f"obsto_accounts {metrics['accounts']}")
+        for region, region_details in metrics['regions'].items():
+            for counter, counter_value in region_details.items():
+                if counter.endswith('-details'):
+                    counter = counter[:-8]
+                    for policy, policy_value in counter_value.items():
+                        prom_output.append(
+                            f"obsto_{counter}{{region=\"{region}\","
+                            f"policy=\"{policy}\"}} {policy_value}")
+                else:
+                    prom_output.append(
+                        f"obsto_{counter}{{region=\"{region}\"}} "
+                        f"{counter_value}")
+        return '\n'.join(prom_output)
 
     @fdb.transactional
-    def _read_all_metrics(self, tr):
-        metrics = dict()
-        metrics[Metric.METRIC_ACCOUNTS] = self._read_account_metrics(tr)
-        metrics[Metric.METRIC_BUCKETS] = self._read_buckets_metrics(tr)
-        metrics[Metric.METRIC_CONTAINERS] = self._read_containers_metrics(tr)
-        metrics[Metric.METRIC_OBJECTS] = self._read_field_metrics(
-                                                tr,
-                                                'objects')
-        metrics[Metric.METRIC_BYTES] = self._read_field_metrics(tr, 'bytes')
+    def _info_metrics(self, tr):
+        metrics_range = self.metrics_space.range()
+        iterator = tr.get_range(metrics_range.start, metrics_range.stop,
+                                streaming_mode=fdb.StreamingMode.want_all)
+        metrics = {
+            'accounts': 0,
+            'regions': {}
+        }
+        for key, value in iterator:
+            field, *region = self.metrics_space.unpack(key)
+            if not region:
+                metrics[field] = struct.unpack('<q', value)[0]
+            elif len(region) <= 2:
+                details = metrics['regions'].setdefault(region[0], {})
+                if len(region) == 2:
+                    details = details.setdefault(f"{field}-details", {})
+                    field = region[1]  # polciy
+                details[field] = struct.unpack('<q', value)[0]
+            else:
+                self.logger.warning('Unknown key: "%s"', key)
         return metrics
-
-    @fdb.transactional
-    def _read_account_metrics(self, tr):
-        accts_field = tr[self.metrics_space.pack(('accounts',))]
-        nb_accts = 0
-        if accts_field.present():
-            nb_accts = struct.unpack('<q', accts_field.value)[0]
-        return nb_accts
-
-    @fdb.transactional
-    def _read_buckets_metrics(self, tr):
-        metrics_buckets = dict()
-        bucket_metrics_space = self.metrics_space['buckets']
-        b_metrics_range = bucket_metrics_space.range()
-        iterator = tr.get_range(b_metrics_range.start, b_metrics_range.stop,
-                                reverse=False)
-        for key, value in iterator:
-            region = bucket_metrics_space.unpack(key)[0]
-            metrics_buckets[region] = struct.unpack('<q', value)[0]
-        return metrics_buckets
-
-    @fdb.transactional
-    def _read_containers_metrics(self, tr):
-        metrics_containers = dict()
-        ct_metrics_space = self.metrics_space['containers']
-        ct_metrics_range = ct_metrics_space.range()
-
-        iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
-                                reverse=False)
-        for key, value in iterator:
-            region = ct_metrics_space.unpack(key)[0]
-            metrics_containers[region] = struct.unpack('<q', value)[0]
-
-        return metrics_containers
-
-    @fdb.transactional
-    def _read_field_metrics(self, tr, field):
-        metrics_field = dict()
-        ct_metrics_space = self.metrics_space[field]
-        ct_metrics_range = ct_metrics_space.range()
-
-        iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
-                                reverse=False)
-        for key, value in iterator:
-            region, storage_class = ct_metrics_space.unpack(key)
-            if region not in metrics_field:
-                metrics_field[region] = {}
-            metrics_field[region][storage_class] = \
-                struct.unpack('<q', value)[0]
-        return metrics_field
 
     @fdb.transactional
     def _increment(self, tr, counter, incr_by=1):

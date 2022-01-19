@@ -123,7 +123,7 @@ class TestAccountServer(TestAccountServerBase):
 
     def test_account_container_update(self):
         data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 0, 'bytes': 0}
+                'objects': 0, 'bytes': 0, 'region': 'localhost'}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=data, query_string={'id': self.account_id})
@@ -144,7 +144,7 @@ class TestAccountServer(TestAccountServerBase):
 
     def test_account_container_reset(self):
         data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42}
+                'objects': 12, 'bytes': 42, 'region': 'localhost'}
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=dataj, query_string={'id': self.account_id})
@@ -172,7 +172,7 @@ class TestAccountServer(TestAccountServerBase):
 
     def test_account_refresh(self):
         data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42}
+                'objects': 12, 'bytes': 42, 'region': 'localhost'}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=data, query_string={'id': self.account_id})
@@ -189,7 +189,7 @@ class TestAccountServer(TestAccountServerBase):
 
     def test_account_flush(self):
         data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42}
+                'objects': 12, 'bytes': 42, 'region': 'localhost'}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=data, query_string={'id': self.account_id})
@@ -470,99 +470,161 @@ class TestAccountMetrics(TestAccountServerBase):
         super(TestAccountMetrics, self).setUp()
 
     def test_metrics_nb_accounts(self):
-        # Create and delete some accounts
-        for i in range(1, 3):
+        resp = self.app.get('/v1.0/account/metrics')
+        self.assertEqual(resp.status_code, 200)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({
+                'accounts': 0,
+                'regions': {}
+            }, resp)
+
+        for i in range(2):
             account_id = 'acct1-' + str(i)
             self._create_account(account_id)
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.app.get('/v1.0/account/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
-        self.assertEqual(resp['obsto_accounts'], 2)
+        self.assertDictEqual({
+                'accounts': 2,
+                'regions': {}
+            }, resp)
 
-        for key in resp.keys():
-            self.assertIn(key, ('obsto_accounts', 'obsto_buckets',
-                          'obsto_containers', 'obsto_objects', 'obsto_bytes'))
-
-        for i in range(1, 2):
-            account_id = 'acct1-' + str(i)
-            self._flush_account(account_id)
-            self._delete_account(account_id)
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        self._delete_account('acct1-0')
+        resp = self.app.get('/v1.0/account/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
-        self.assertEqual(resp['obsto_accounts'], 1)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {}
+            }, resp)
 
-        for i in range(2, 4):
-            account_id = 'acct1-' + str(i)
-            self._flush_account(account_id)
-            self._delete_account(account_id)
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        self._delete_account('acct1-1')
+        resp = self.app.get('/v1.0/account/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
-        self.assertEqual(resp['obsto_accounts'], 0)
+        self.assertDictEqual({
+                'accounts': 0,
+                'regions': {}
+            }, resp)
 
     def test_metrics_nb_containers(self):
         self._create_account(self.account_id)
+        resp = self.app.get('/v1.0/account/metrics')
+        self.assertEqual(resp.status_code, 200)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {}
+            }, resp)
+
         # create  and delete some containers
         # check to send headers for region, storage class
         data = {'name': 'ct1', 'mtime': Timestamp().normal,
-                'objects': 1, 'bytes': 20}
+                'objects': 1, 'bytes': 20, 'region': 'localhost'}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=data,
                             query_string={'id': self.account_id})
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.app.get('/v1.0/account/metrics')
         resp = self.json_loads(resp.data)
-
-        self.assertEqual(resp['obsto_containers']['test_region'], 1)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {
+                    'localhost': {
+                        'containers': 1,
+                        'objects': 1,
+                        'bytes': 20
+                    }
+                }
+            }, resp)
 
         data = {'name': 'ct1', 'dtime': Timestamp().normal}
         data = json.dumps(data)
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.app.get('/v1.0/account/metrics')
         resp = self.json_loads(resp.data)
-        self.assertNotIn('test_region', resp['obsto_containers'].keys())
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {
+                    'localhost': {
+                        'containers': 0,
+                        'objects': 0,
+                        'bytes': 0
+                    }
+                }
+            }, resp)
 
     def test_metrics_nb_objects_bytes(self):
         self._create_account(self.account_id)
+        resp = self.app.get('/v1.0/account/metrics')
+        self.assertEqual(resp.status_code, 200)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {}
+            }, resp)
+
         # add some data
-        data = {'name': 'ct2', 'mtime': Timestamp().normal,
+        data = {'name': 'ct1', 'mtime': Timestamp().normal,
                 'objects': 3, 'bytes': 40,
                 'objects-details': {"class1": 1, "class2": 2},
-                'bytes-details': {"class1": 30, "class2": 10}
-                }
+                'bytes-details': {"class1": 30, "class2": 10},
+                'region': 'localhost'}
         data = json.dumps(data)
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.app.get('/v1.0/account/metrics')
         resp = self.json_loads(resp.data)
-        self.assertEqual(resp['obsto_objects']['test_region']['class1'], 1)
-        self.assertEqual(resp['obsto_objects']['test_region']['class2'], 2)
-        self.assertEqual(resp['obsto_bytes']['test_region']['class1'], 30)
-        self.assertEqual(resp['obsto_bytes']['test_region']['class2'], 10)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {
+                    'localhost': {
+                        'containers': 1,
+                        'objects': 3,
+                        'objects-details': {
+                            'class1': 1,
+                            'class2': 2
+                        },
+                        'bytes': 40,
+                        'bytes-details': {
+                            'class1': 30,
+                            'class2': 10
+                        },
+                    }
+                }
+            }, resp)
 
         data = {'name': 'ct2', 'mtime': Timestamp().normal,
                 'objects': 6, 'bytes': 21,
                 'objects-details': {"class2": 1, "class3": 5},
-                'bytes-details': {"class2": 10, "class3": 11}
-                }
+                'bytes-details': {"class2": 10, "class3": 11},
+                'region': 'localhost'}
         data = json.dumps(data)
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-
-        resp = self.app.get('/v1.0/account/metrics?format=json')
+        resp = self.app.get('/v1.0/account/metrics')
         resp = self.json_loads(resp.data)
-        self.assertNotIn("class1", resp['obsto_objects']['test_region'])
-        self.assertEqual(resp['obsto_objects']['test_region']['class2'], 1)
-        self.assertEqual(resp['obsto_objects']['test_region']['class3'], 5)
-        self.assertEqual(resp['obsto_bytes']['test_region']['class2'], 10)
-        self.assertEqual(resp['obsto_bytes']['test_region']['class3'], 11)
+        self.assertDictEqual({
+                'accounts': 1,
+                'regions': {
+                    'localhost': {
+                        'containers': 2,
+                        'objects': 9,
+                        'objects-details': {
+                            'class1': 1,
+                            'class2': 3,
+                            'class3': 5
+                        },
+                        'bytes': 61,
+                        'bytes-details': {
+                            'class1': 30,
+                            'class2': 20,
+                            'class3': 11
+                        },
+                    }
+                }
+            }, resp)
