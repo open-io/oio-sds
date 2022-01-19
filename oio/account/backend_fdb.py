@@ -614,18 +614,6 @@ class AccountBackendFdb():
     def refresh_account(self, account_id, **kwargs):
         if not account_id:
             raise BadRequest("Missing account")
-        batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
-        containers = self._list_containers(self.db, account_id, None)
-        sharded_marker = None
-        if containers is not None:
-            for elem in containers:
-                while True:
-                    next_marker = self._refresh_sharded_ct(
-                        self.db, account_id, elem, sharded_marker, batch_size)
-                    if next_marker is None or next_marker == sharded_marker:
-                        break
-                    sharded_marker = next_marker
-        # Loop over all top level containers in account
         self._refresh_account(self.db, account_id)
 
     @catch_service_errors
@@ -811,11 +799,35 @@ class AccountBackendFdb():
 
     @fdb.transactional
     def _flush_account(self, tr, account_id):
-        tr[self.acct_space.pack((account_id, 'objects'))] = \
-           struct.pack('<q', 0)
-        tr[self.acct_space.pack((account_id, 'bytes'))] = struct.pack('<q', 0)
-        tr.clear_range_startswith(self.containers_index_space[account_id])
-        tr.clear_range_startswith(self.container_space[account_id])
+        # Reset stats
+        account_space = self.acct_space[account_id]
+        for field in ('bytes', 'objects', 'containers', 'buckets'):
+            tr[account_space.pack((field,))] = struct.pack('<q', 0)
+            details_space = account_space[field]
+            details_range = details_space.range()
+            # Update metrics
+            iterator = tr.get_range(details_range.start, details_range.stop)
+            for key, value in iterator:
+                key = account_space.unpack(key)
+                value = struct.unpack('<q', value)[0]
+                self._decrement(tr, self.metrics_space.pack(key), -value)
+            # Remove details by region
+            tr.clear_range(details_range.start, details_range.stop)
+        # Delete containers
+        containers_range = self.containers_index_space[account_id].range()
+        tr.clear_range(containers_range.start, containers_range.stop)
+        container_range = self.container_space[account_id].range()
+        tr.clear_range(container_range.start, container_range.stop)
+        # Delete deleted containers
+        deleted_containers_range = self.ct_to_delete_space[account_id].range()
+        tr.clear_range(deleted_containers_range.start,
+                       deleted_containers_range.stop)
+        # Delete buckets
+        buckets_range = self.buckets_index_space[account_id].range()
+        tr.clear_range(buckets_range.start, buckets_range.stop)
+        bucket_range = self.bucket_space[account_id].range()
+        tr.clear_range(bucket_range.start, bucket_range.stop)
+        # TODO(adu): Update mtime
 
     @fdb.transactional
     def _create_account(self, tr, accts_space, acct_space, account_id, now):
