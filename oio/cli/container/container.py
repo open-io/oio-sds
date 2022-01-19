@@ -215,10 +215,12 @@ class SetBucket(ShowOne):
 
         reqid = request_id(prefix='CLI-BUCKET-')
         acct_client = self.app.client_manager.storage.account
+        account = self.app.client_manager.account
         metadata = dict()
         if parsed_args.replicate is not None:
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
         data = acct_client.bucket_update(parsed_args.bucket,
+                                         account=account,
                                          metadata=metadata, to_delete=None,
                                          reqid=reqid)
 
@@ -441,8 +443,10 @@ class ShowBucket(ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
 
         reqid = request_id(prefix='CLI-BUCKET-')
+        account = self.app.client_manager.account
         acct_client = self.app.client_manager.storage.account
-        data = acct_client.bucket_show(parsed_args.bucket, reqid=reqid)
+        data = acct_client.bucket_show(parsed_args.bucket, account=account,
+                                       reqid=reqid)
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
 

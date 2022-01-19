@@ -217,7 +217,6 @@ class FdbIamDb(IamDbBase):
                     self.iam_space.pack((account, user)))
         policies = list()
         for key, _ in iterator:
-            print('key:', key)
             _, _, _, policy = unpack(key)
             policies.append(policy)
         return policies

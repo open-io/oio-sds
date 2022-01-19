@@ -944,7 +944,8 @@ class Account(WerkzeugApp):
         Get all available information about a bucket.
         """
         bname = self._get_item_id(req, what='bucket')
-        raw = self.backend.get_bucket_info(bname, **kwargs)
+        account = req.args.get('account')
+        raw = self.backend.get_bucket_info(bname, account=account, **kwargs)
         if raw is not None:
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Bucket not found')
@@ -1000,11 +1001,12 @@ class Account(WerkzeugApp):
         Update (or delete) bucket metadata.
         """
         bname = self._get_item_id(req, what='bucket')
+        account = req.args.get('account')
         decoded = json.loads(req.get_data())
         metadata = decoded.get('metadata')
         to_delete = decoded.get('to_delete')
         info = self.backend.update_bucket_metadata(
-            bname, metadata, to_delete, **kwargs)
+            bname, metadata, to_delete, account=account, **kwargs)
         if info is not None:
             return Response(json.dumps(info), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Bucket not found')

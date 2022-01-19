@@ -149,7 +149,8 @@ class ContainerTest(CliTestCase):
                             types=(EventTypes.CONTAINER_STATE, ))
 
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
-        output = self.openio('bucket show ' + cname + opts)
+        output = self.openio('--oio-account ' + account + ' bucket show '
+                             + cname + opts)
         self.assertEqual(account + '\n4\n1\n', output)
 
         output = self.openio('account refresh ' + account)
@@ -157,7 +158,8 @@ class ContainerTest(CliTestCase):
                             fields={'user': cname},
                             types=(EventTypes.CONTAINER_STATE, ))
 
-        output = self.openio('bucket show ' + cname + opts)
+        output = self.openio('--oio-account ' + account + ' bucket show '
+                             + cname + opts)
         self.assertEqual(account + '\n4\n1\n', output)
 
     def test_bucket_refresh(self):

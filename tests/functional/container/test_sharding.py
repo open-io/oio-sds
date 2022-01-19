@@ -99,7 +99,7 @@ class TestSharding(BaseTestCase):
                                 fields={'account': account,
                                         'user': cname},
                                 types=(EventTypes.CONTAINER_STATE,))
-            stats = self.storage.account.bucket_show(cname)
+            stats = self.storage.account.bucket_show(cname, account=account)
             self.assertEqual(len(self.created[cname_root]), stats['objects'])
 
     def _delete_objects(self, cname, nb_objects, prefix='content',
@@ -116,7 +116,8 @@ class TestSharding(BaseTestCase):
                                 fields={'account': self.account,
                                         'user': cname},
                                 types=(EventTypes.CONTAINER_STATE,))
-            stats = self.storage.account.bucket_show(cname)
+            stats = self.storage.account.bucket_show(
+                cname, account=self.account)
             self.assertEqual(len(self.created[cname]), stats['objects'])
 
     def _check_objects(self, cname):
@@ -439,7 +440,8 @@ class TestSharding(BaseTestCase):
             self.wait_for_event('oio-preserved',
                                 reqid='testingisdoubting',
                                 types=(EventTypes.CONTAINER_STATE,))
-        stats = self.storage.account.bucket_show(self.cname)
+        stats = self.storage.account.bucket_show(
+                    self.cname, account=self.account)
         self.assertEqual(stats['objects'], 10)
 
         # Split the first shard in 2
@@ -462,7 +464,8 @@ class TestSharding(BaseTestCase):
                                 fields={'account': shards_account},
                                 types=(EventTypes.CONTAINER_DELETED,
                                        EventTypes.CONTAINER_STATE))
-        stats = self.storage.account.bucket_show(self.cname)
+        stats = self.storage.account.bucket_show(self.cname,
+                                                 account=self.account)
         self.assertEqual(stats['objects'], 10)
 
     def test_listing(self):
@@ -730,7 +733,8 @@ class TestSharding(BaseTestCase):
                 self.wait_for_event('oio-preserved', reqid=reqid,
                                     types=(EventTypes.CONTAINER_DELETED,
                                            EventTypes.CONTAINER_STATE))
-            stats = self.storage.account.bucket_show(bucket)
+            stats = self.storage.account.bucket_show(
+                bucket, account=self.account)
             self.assertEqual(len(self.created[cname]), stats['objects'])
         return new_shards
 

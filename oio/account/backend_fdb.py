@@ -266,33 +266,30 @@ class AccountBackendFdb():
                 pass
 
     @catch_service_errors
-    def get_bucket_info(self, bname, **kwargs):
+    def get_bucket_info(self, bname, account=None, **kwargs):
         """
         Get all available information about a bucket.
         """
         if not bname:
             return None
-        account_id = kwargs.get('account_id')
-        info = self._bucket_info(self.db, bname, account_id)
+        info = self._bucket_info(self.db, bname, account=account)
         if not info:
             return None
         self.cast_fields(info)
         return info
 
     @fdb.transactional
-    def _bucket_info(self, tr, bname, account_id):
-        info = {}
-        _acct_id = self._val_element(self.db, self.bucket_db_space,
-                                     bname, 'account')
+    def _bucket_info(self, tr, bname, account=None):
+        if not account:
+            account = tr[self.bucket_db_space.pack((bname, 'account'))]
+            if not account.present():
+                raise BadRequest('Missing account param or an owner')
+            account = account.decode('utf-8')
 
-        if _acct_id is None:
-            _acct_id = account_id
-        else:
-            _acct_id = _acct_id.decode('utf-8')
-
-        b_space = self.bucket_space[_acct_id][bname]
+        b_space = self.bucket_space[account][bname]
         b_range = b_space.range()
         iterator = tr.get_range(b_range.start, b_range.stop)
+        info = {}
         for key, value in iterator:
             field, *policy = b_space.unpack(key)
             if policy:
@@ -362,23 +359,23 @@ class AccountBackendFdb():
 
     @catch_service_errors
     def update_bucket_metadata(self, bname, metadata, to_delete=None,
-                               **kwargs):
+                               account=None, **kwargs):
         """
         Update (or delete) bucket metadata.
 
         :param metadata: dict of entries to set (or update)
         :param to_delete: iterable of keys to delete
         """
-        _acct_id = self._val_element(self.db, self.bucket_db_space,
-                                     bname, 'account')
-        if _acct_id is None:
-            return None
-        _acct_id = _acct_id.decode('utf-8')
-        self._manage_metadata(self.db, self.bucket_space[_acct_id], bname,
+        if not account:
+            account = self.db[self.bucket_db_space.pack((bname, 'account'))]
+            if not account:
+                raise BadRequest('Missing account param or an owner')
+            account = account.decode('utf-8')
+
+        self._manage_metadata(self.db, self.bucket_space[account], bname,
                               metadata, to_delete)
 
-        info = self._multi_get(self.db, self.bucket_space[_acct_id], bname)
-
+        info = self._multi_get(self.db, self.bucket_space[account], bname)
         if not info:
             return None
 
@@ -1394,24 +1391,23 @@ class AccountBackendFdb():
                 if orig_marker == ctr:
                     continue
 
-                if self.buckets_pattern.match(ctr):
-                    nb_objects = 0
-                    nb_bytes = 0
-                    mtime = 0
-                    next_marker = ctr
-                    bucket_space = self.bucket_space[account_id][ctr]
-                    bucket_range = bucket_space.range()
-                    bucket_it = tr.get_range(bucket_range.start,
-                                             bucket_range.stop, reverse=False)
-                    for bucket_key, a_value in bucket_it:
-                        a_key = bucket_space.unpack(bucket_key)[0]
-                        if a_key == 'objects':
-                            nb_objects = struct.unpack('<q', a_value)[0]
-                        if a_key == 'bytes':
-                            nb_bytes = struct.unpack('<q', a_value)[0]
-                        if a_key == 'mtime':
-                            mtime = struct.unpack('<Q', a_value)[0]
-                    results.append([ctr, nb_objects, nb_bytes, mtime])
+                nb_objects = 0
+                nb_bytes = 0
+                mtime = 0
+                next_marker = ctr
+                bucket_space = self.bucket_space[account_id][ctr]
+                bucket_range = bucket_space.range()
+                bucket_it = tr.get_range(bucket_range.start,
+                                         bucket_range.stop, reverse=False)
+                for bucket_key, a_value in bucket_it:
+                    a_key = bucket_space.unpack(bucket_key)[0]
+                    if a_key == 'objects':
+                        nb_objects = struct.unpack('<q', a_value)[0]
+                    if a_key == 'bytes':
+                        nb_bytes = struct.unpack('<q', a_value)[0]
+                    if a_key == 'mtime':
+                        mtime = struct.unpack('<Q', a_value)[0]
+                results.append([ctr, nb_objects, nb_bytes, mtime])
 
                 empty = False
             if empty:

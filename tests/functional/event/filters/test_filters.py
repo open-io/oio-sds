@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -476,7 +476,8 @@ class TestReplicateFilter(TestNotifyFilterBase):
         now = time.time()
         # Disable replication for this bucket
         self.__class__.account_client.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None)
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
+            account=self.account)
         self.__class__.account_client.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now)})
@@ -490,7 +491,8 @@ class TestReplicateFilter(TestNotifyFilterBase):
         bname = 'repli' + random_str(4)
         now = time.time()
         self.__class__.account_client.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None)
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None,
+            account=self.account)
         self.__class__.account_client.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now)})
@@ -501,7 +503,8 @@ class TestReplicateFilter(TestNotifyFilterBase):
         bname = 'repli' + random_str(4)
         now = time.time()
         self.__class__.account_client.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None)
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
+            account=self.account)
         self.__class__.account_client.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now)})

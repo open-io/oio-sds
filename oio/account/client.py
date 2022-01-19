@@ -116,15 +116,19 @@ class AccountClient(ServiceClient):
                                            params=params, **kwargs)
         return body
 
-    def bucket_show(self, bucket, **kwargs):
+    def bucket_show(self, bucket, account=None, **kwargs):
         """
         Get information about a bucket.
         """
+        params = {}
+        if account:
+            params['account'] = account
         _resp, body = self.account_request(bucket, 'GET', 'show-bucket',
-                                           **kwargs)
+                                           params=params, **kwargs)
         return body
 
-    def bucket_update(self, bucket, metadata, to_delete, **kwargs):
+    def bucket_update(self, bucket, metadata, to_delete, account=None,
+                      **kwargs):
         """
         Update metadata of the specified bucket.
 
@@ -133,9 +137,13 @@ class AccountClient(ServiceClient):
         :param to_delete: list of property keys that must be removed.
         :type to_delete: `list`
         """
+        params = {}
+        if account:
+            params['account'] = account
         _resp, body = self.account_request(
             bucket, 'PUT', 'update-bucket',
-            json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
+            json={"metadata": metadata, "to_delete": to_delete},
+            params=params, **kwargs)
         return body
 
     def bucket_refresh(self, bucket, **kwargs):
