@@ -191,7 +191,7 @@ class AccountBackendFdb():
                                               self.BUCKET_RESERVE_PREFIX)
 
     def _seconds_to_us(self, timestamp):
-        return round(timestamp * 1000000)
+        return int(timestamp * 1000000)
 
     def _us_to_seconds(self, timestamp):
         return timestamp / 1000000
@@ -275,7 +275,6 @@ class AccountBackendFdb():
         info = self._bucket_info(self.db, bname, account=account)
         if not info:
             return None
-        self.cast_fields(info)
         return info
 
     @fdb.transactional
@@ -293,17 +292,20 @@ class AccountBackendFdb():
         for key, value in iterator:
             field, *policy = b_space.unpack(key)
             if policy:
-                info['.'.join([field, policy[0]])] = \
-                    struct.unpack('<q', value)[0]
+                if len(policy) == 1:
+                    details = info.setdefault(f"{field}-details", {})
+                    details[policy[0]] = struct.unpack('<q', value)[0]
+                else:
+                    self.logger.warning('Unknown key: "%s"', key)
             elif field in ('bytes', 'objects'):
                 info[field] = struct.unpack('<q', value)[0]
-            elif field in ('mtime'):
+            elif field in ('mtime',):
                 info[field] = self._us_to_seconds(
-                                struct.unpack('<Q', value)[0])
+                    struct.unpack('<Q', value)[0])
             elif field in (BUCKET_PROP_REPLI_ENABLED):
-                info[bytes(field, 'utf-8')] = value
+                info[field] = boolean_value(value.decode('utf-8'))
             else:
-                info[field] = value
+                info[field] = value.decode('utf-8')
         return info
 
     @catch_service_errors
@@ -314,25 +316,40 @@ class AccountBackendFdb():
         """
         if not cname:
             return None
-        ct_space = self.container_space[account_id]
-        info = self._multi_get(self.db, ct_space, cname)
+        info = self._container_info(self.db, account_id, cname)
+        if not info:
+            return None
+        replication_enabled = None
+        if info.get('bucket'):
+            replication_enabled = self._val_element(
+                self.db, self.bucket_space[account_id], info.get('bucket'),
+                BUCKET_PROP_REPLI_ENABLED)
+            if replication_enabled:
+                replication_enabled = replication_enabled.decode('utf-8')
+        info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(replication_enabled)
+        return info
 
-        replication_enabled = b'False'
-        bname = self._val_element(self.db, ct_space, cname, 'bucket')
-
-        if bname is not None:
-            bname = bname.decode("utf-8")
-            self.logger.info('bname: %s', bname)
-            rep_enabled = self._val_element(self.db,
-                                            self.bucket_space[account_id],
-                                            bname,
-                                            BUCKET_PROP_REPLI_ENABLED)
-
-            if rep_enabled is not None:
-                replication_enabled = rep_enabled
-
-        info[bytes(BUCKET_PROP_REPLI_ENABLED, 'utf-8')] = replication_enabled
-        self.cast_fields(info)
+    @fdb.transactional
+    def _container_info(self, tr, account, container):
+        container_space = self.container_space[account][container]
+        container_range = container_space.range()
+        iterator = tr.get_range(container_range.start, container_range.stop)
+        info = {}
+        for key, value in iterator:
+            field, *policy = container_space.unpack(key)
+            if policy:
+                if len(policy) == 1:
+                    details = info.setdefault(f"{field}-details", {})
+                    details[policy[0]] = struct.unpack('<q', value)[0]
+                else:
+                    self.logger.warning('Unknown key: "%s"', key)
+            elif field in ('bytes', 'objects'):
+                info[field] = struct.unpack('<q', value)[0]
+            elif field in ('mtime',):
+                info[field] = self._us_to_seconds(
+                    struct.unpack('<Q', value)[0])
+            else:
+                info[field] = value.decode('utf-8')
         return info
 
     @catch_service_errors
@@ -379,7 +396,6 @@ class AccountBackendFdb():
         if not info:
             return None
 
-        self.logger.debug('get_bucket_info %s ', info)
         self.cast_fields(info)
         return info
 
@@ -396,25 +412,14 @@ class AccountBackendFdb():
             self.logger.info('Account %s doesn\'t exist', req_account_id)
             return None
         info = self._account_info(self.db, req_account_id)
-        # reformat to integers
-        info['ctime'] = self._us_to_seconds(
-                            struct.unpack('<Q', info['ctime'])[0])
-
         if not info:
             self.logger.warning('Account  %s infos not found', req_account_id)
             return None
 
-        containers = self._multi_get(self.db, self.containers_index_space,
-                                     req_account_id)
         metadata = self._multi_get(self.db, self.metadata_space,
                                    req_account_id)
-        buckets = self._multi_get(self.db, self.buckets_index_space,
-                                  req_account_id)
-        self.cast_fields(info)
-        info[b'buckets'] = len(buckets)
-        info[b'containers'] = len(containers)
-        info[b'metadata'] = metadata
-        return debinarize(info)
+        info['metadata'] = debinarize(metadata)
+        return info
 
     @fdb.transactional
     def _account_info(self, tr, account_id):
@@ -424,16 +429,24 @@ class AccountBackendFdb():
         a_range = acct_space.range()
         iterator = tr.get_range(a_range.start, a_range.stop)
         for key, value in iterator:
-            field, *policy = acct_space.unpack(key)
-            if policy:
-                info['.'.join([field, policy[0]])] = \
-                    struct.unpack('<q', value)[0]
-            elif field in ('bytes', 'objects'):
+            field, *region = acct_space.unpack(key)
+            if region:
+                if len(region) <= 2:
+                    details = info.setdefault('regions', {}).setdefault(
+                        region[0], {})
+                    if len(region) == 2:
+                        details = details.setdefault(f"{field}-details", {})
+                        field = region[1]  # polciy
+                    details[field] = struct.unpack('<q', value)[0]
+                else:
+                    self.logger.warning('Unknown key: "%s"', key)
+            elif field in ('bytes', 'objects', 'containers', 'buckets'):
                 info[field] = struct.unpack('<q', value)[0]
-            elif field in (BUCKET_PROP_REPLI_ENABLED):
-                info[bytes(field, 'utf-8')] = value
+            elif field in ('ctime', 'mtime'):
+                info[field] = self._us_to_seconds(
+                    struct.unpack('<Q', value)[0])
             else:
-                info[field] = value
+                info[field] = value.decode('utf-8')
         return info
 
     @catch_service_errors
