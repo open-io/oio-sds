@@ -124,7 +124,7 @@ class TestAccountClient(BaseTestCase):
             if name == 'container1':
                 self.assertEqual(nb_objects, 0)
                 self.assertEqual(nb_bytes, 0)
-                self.assertGreater(float(mtime), metadata["mtime"])
+                self.assertGreater(mtime, metadata["mtime"])
                 return
         self.fail("No container container1")
 

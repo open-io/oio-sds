@@ -190,6 +190,12 @@ class AccountBackendFdb():
         self.reserve_bucket_prefix = conf.get('reserve_bucket_prefix',
                                               self.BUCKET_RESERVE_PREFIX)
 
+    def _seconds_to_us(self, timestamp):
+        return round(timestamp * 1000000)
+
+    def _us_to_seconds(self, timestamp):
+        return timestamp / 1000000
+
     @catch_service_errors
     def create_account(self, account_id, **kwargs):
         """
@@ -199,9 +205,9 @@ class AccountBackendFdb():
             return None
         # get ctime is only used for migration
         now = kwargs.get('ctime') or Timestamp().timestamp
-        now = round(now * 1000000)
+        now_us = self._seconds_to_us(now)
         status = self._create_account(self.db, self.accts_space,
-                                      self.acct_space, account_id, now)
+                                      self.acct_space, account_id, now_us)
         if not status:
             return None
 
@@ -247,7 +253,8 @@ class AccountBackendFdb():
                 pass
         for what in (b'ctime', b'mtime'):
             try:
-                info[what] = (struct.unpack('<Q', info.get(what))[0]) / 1000000
+                info[what] = self._us_to_seconds(
+                                struct.unpack('<Q', info.get(what))[0])
             except (TypeError, ValueError):
                 pass
         for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
@@ -294,7 +301,8 @@ class AccountBackendFdb():
             elif field in ('bytes', 'objects'):
                 info[field] = struct.unpack('<q', value)[0]
             elif field in ('mtime'):
-                info[field] = struct.unpack('<Q', value)[0] / 1000000
+                info[field] = self._us_to_seconds(
+                                struct.unpack('<Q', value)[0])
             elif field in (BUCKET_PROP_REPLI_ENABLED):
                 info[bytes(field, 'utf-8')] = value
             else:
@@ -392,7 +400,8 @@ class AccountBackendFdb():
             return None
         info = self._account_info(self.db, req_account_id)
         # reformat to integers
-        info['ctime'] = float(struct.unpack('<Q', info['ctime'])[0])/1000000
+        info['ctime'] = self._us_to_seconds(
+                            struct.unpack('<Q', info['ctime'])[0])
 
         if not info:
             self.logger.warning('Account  %s infos not found', req_account_id)
@@ -476,9 +485,9 @@ class AccountBackendFdb():
         ct_space = self.container_space[account_id]
         cts_space = self.containers_index_space[account_id]
 
-        new_mtime = round(mtime * 1000000)
-        new_dtime = round(dtime * 1000000)
-        now = round(now * 1000000)
+        new_mtime = self._seconds_to_us(mtime)
+        new_dtime = self._seconds_to_us(dtime)
+        now = self._seconds_to_us(now)
 
         status = self._update_container(self.db, cts_space, ct_space,
                                         account_id, cname, bucket_name,
@@ -512,9 +521,9 @@ class AccountBackendFdb():
         for bucket in raw_list:
             bdict = {
                 'name': bucket[0],
-                'objects': int_value(bucket[1], 0),
-                'bytes': int_value(bucket[2], 0),
-                'mtime': float_value(bucket[3], 0.0),
+                'objects': bucket[1],
+                'bytes': bucket[2],
+                'mtime': self._us_to_seconds(bucket[3])
             }
             output.append(bdict)
         return output, next_marker
@@ -637,10 +646,10 @@ class AccountBackendFdb():
 
         reservation_timestamp = tr[space_.pack(('timestamp',))]
         now = Timestamp().timestamp
-        now_us = round(now * 1000000)
+        now_us = self._seconds_to_us(now)
         if reservation_timestamp.present():
             timestamp = struct.unpack('<Q', reservation_timestamp.value)[0]
-            if (timestamp / 1000000) + timeout < now:
+            if self._us_to_seconds(timestamp) + timeout < now:
                 tr[space_.pack(('timestamp',))] = struct.pack('<Q', now_us)
                 return 1
             else:
@@ -1313,7 +1322,8 @@ class AccountBackendFdb():
                     if a_key == 'bytes':
                         nb_bytes = struct.unpack('<q', a_value)[0]
                     if a_key == 'mtime':
-                        mtime = (struct.unpack('<Q', a_value)[0]) / 1000000
+                        mtime = self._us_to_seconds(
+                                    struct.unpack('<Q', a_value)[0])
                 results.append([ctr, nb_objects, nb_bytes, 0, mtime])
 
                 empty = False
@@ -1625,6 +1635,6 @@ class AccountBackendFdb():
         iterator = tr.get_range(start, stop)
         for key, value in iterator:
             val = struct.unpack('<Q', value)[0]
-            if val / 1000000 + self.time_window_clear_deleted < now / 1000000:
+            if val + self._seconds_to_us(self.time_window_clear_deleted) < now:
                 ct_name = to_delete_space.unpack(key)[0]
                 del tr[to_delete_space.pack((ct_name,))]
