@@ -795,7 +795,6 @@ class AccountBackendFdb():
     @fdb.transactional
     def _decrement(self, tr, counter, decr_by=-1):
         tr.add(counter, struct.pack('<q', decr_by))
-        tr.compare_and_clear(counter, struct.pack('<q', 0))
 
     @fdb.transactional
     def _flush_account(self, tr, account_id):
