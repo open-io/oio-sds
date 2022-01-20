@@ -146,12 +146,16 @@ class AccountClient(ServiceClient):
             params=params, **kwargs)
         return body
 
-    def bucket_refresh(self, bucket, **kwargs):
+    def bucket_refresh(self, bucket, account=None, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
         """
-        self.account_request(bucket, 'POST', 'refresh-bucket', **kwargs)
+        params = {}
+        if account:
+            params['account'] = account
+        self.account_request(bucket, 'POST', 'refresh-bucket', params=params,
+                             **kwargs)
 
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,

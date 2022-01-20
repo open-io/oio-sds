@@ -1306,8 +1306,8 @@ class TestAccountBackend(BaseTestCase):
         total_objects = 0
 
         # set bucket_db reservation
-        self.backend.reserve_bucket(account_id, bucket)
-        self.backend.set_bucket_owner(account_id, bucket)
+        self.backend.reserve_bucket(bucket, account_id)
+        self.backend.set_bucket_owner(bucket, account_id)
 
         # 10 containers with bytes and objects
         for i in range(10):
@@ -1373,8 +1373,8 @@ class TestAccountBackend(BaseTestCase):
         data = random_str(data_lenth)
 
         # set bucket_db reservation
-        self.backend.reserve_bucket(account_id, bucket)
-        self.backend.set_bucket_owner(account_id, bucket)
+        self.backend.reserve_bucket(bucket, account_id)
+        self.backend.set_bucket_owner(bucket, account_id)
 
         for ct in (cname, cname_not_in_bucket, cname_not_sharded):
             self.storage.container_create(account_id, ct)
@@ -1427,8 +1427,8 @@ class TestAccountBackend(BaseTestCase):
             account_id, bname, Timestamp().timestamp, 0, 0, 0,
             bucket_name=bname, autocreate_account=True, region=region)
         # set bucket_db reservation
-        self.backend.reserve_bucket(account_id, bname)
-        self.backend.set_bucket_owner(account_id, bname)
+        self.backend.reserve_bucket(bname, account_id)
+        self.backend.set_bucket_owner(bname, account_id)
         # Test bucket metadata
         self.backend.update_bucket_metadata(bname, metadata)
 

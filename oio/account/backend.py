@@ -1005,22 +1005,22 @@ class AccountBackend(RedisConnection):
 
     @catch_service_errors
     @catch_io_errors
-    def reserve_bucket(self, account_id, bucket_name, **kwargs):
+    def reserve_bucket(self, bucket, account_id, **kwargs):
         raise BadRequest('Bucket reservation not implemented for redis')
 
     @catch_service_errors
     @catch_io_errors
-    def release_bucket(self, bucket_name, **kwargs):
+    def release_bucket(self, bucket, account_id, **kwargs):
         raise BadRequest('Bucket release not implemented for redis')
 
     @catch_service_errors
     @catch_io_errors
-    def set_bucket_owner(self, account_id, bucket_name, **kwargs):
+    def set_bucket_owner(self, bucket, account_id, **kwargs):
         raise BadRequest('Set bucket owner not implemented for redis')
 
     @catch_service_errors
     @catch_io_errors
-    def get_bucket_owner(self, bucket_name, **kwargs):
+    def get_bucket_owner(self, bucket, **kwargs):
         raise BadRequest('Get bucket owner not implemented for redis')
 
     @catch_service_errors

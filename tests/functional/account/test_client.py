@@ -171,9 +171,8 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.account_show(self.account_id)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
-        kwargs = {'owner': self.account_id}
-        self.bucket_client.bucket_reserve(bucket)
-        self.bucket_client.set_bucket_owner(bucket, **kwargs)
+        self.bucket_client.bucket_reserve(bucket, self.account_id)
+        self.bucket_client.bucket_set_owner(bucket, self.account_id)
         resp = self.account_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)

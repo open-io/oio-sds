@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.exceptions import from_response
 from oio.common.service_client import ServiceClient
 
 
@@ -40,8 +41,10 @@ class BucketClient(ServiceClient):
         params = {}
         if account:
             params['account'] = account
-        _resp, body = self.bucket_request(bucket, 'GET', 'show-bucket',
-                                          params=params, **kwargs)
+        resp, body = self.bucket_request(
+            bucket, 'GET', 'show', params=params, **kwargs)
+        if resp.status != 200:
+            raise from_response(resp, body)
         return body
 
     def bucket_update(self, bucket, metadata, to_delete, account=None,
@@ -57,47 +60,63 @@ class BucketClient(ServiceClient):
         params = {}
         if account:
             params['account'] = account
-        _resp, body = self.bucket_request(
-            bucket, 'PUT', 'update-bucket',
+        resp, body = self.bucket_request(
+            bucket, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete},
             params=params, **kwargs)
+        if resp.status != 200:
+            raise from_response(resp, body)
         return body
 
-    def bucket_refresh(self, bucket, **kwargs):
+    def bucket_refresh(self, bucket, account=None, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
         """
-        self.bucket_request(bucket, 'POST', 'refresh-bucket', **kwargs)
+        params = {}
+        if account:
+            params['account'] = account
+        resp, body = self.bucket_request(
+            bucket, 'POST', 'refresh', **kwargs)
+        if resp.status != 204:
+            raise from_response(resp, body)
 
-    def bucket_reserve(self, bucket, **kwargs):
+    def bucket_reserve(self, bucket, account, **kwargs):
         """
         Reserve the bucket name during bucket creation.
         """
-        _resp, body = self.bucket_request(
-            bucket, 'PUT', 'reserve-bucket',
-            json={'account': kwargs.get('owner')}, **kwargs)
-        return body
+        params = {'account': account}
+        resp, body = self.bucket_request(
+            bucket, 'PUT', 'reserve', params=params, **kwargs)
+        if resp.status != 201:
+            raise from_response(resp, body)
 
-    def bucket_release(self, bucket, **kwargs):
+    def bucket_release(self, bucket, account, **kwargs):
         """
         Release the bucket reservration after success.
         """
-        self.bucket_request(bucket, 'POST', 'release-bucket', **kwargs)
+        params = {'account': account}
+        resp, body = self.bucket_request(
+            bucket, 'POST', 'release', params=params, **kwargs)
+        if resp.status != 204:
+            raise from_response(resp, body)
 
-    def set_bucket_owner(self, bucket, **kwargs):
+    def bucket_set_owner(self, bucket, account, **kwargs):
         """
         Set the bucket owner during reservation.
         """
-        _resp, body = self.bucket_request(
-            bucket, 'PUT', 'set-bucket-owner',
-            json={'account': kwargs.get('owner')}, **kwargs)
-        return body
+        params = {'account': account}
+        resp, body = self.bucket_request(
+            bucket, 'PUT', 'set-owner', params=params, **kwargs)
+        if resp.status != 201:
+            raise from_response(resp, body)
 
-    def get_bucket_owner(self, bucket, **kwargs):
+    def bucket_get_owner(self, bucket, **kwargs):
         """
         Get the bucket owner.
         """
-        _resp, body = self.bucket_request(bucket, 'GET', 'get-bucket-owner',
-                                          **kwargs)
+        resp, body = self.bucket_request(
+            bucket, 'GET', 'get-owner', **kwargs)
+        if resp.status != 200:
+            raise from_response(resp, body)
         return body

@@ -15,12 +15,13 @@
 
 import re
 import struct
+import time
 from functools import wraps
 import fdb
 
 from six import text_type
 
-from werkzeug.exceptions import NotFound, Conflict, BadRequest
+from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 from oio.common.exceptions import OioException
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.timestamp import Timestamp
@@ -89,7 +90,7 @@ class AccountBackendFdb(object):
     METRICS_PREFIX = 'metrics'
 
     # Timeout for bucket reservation
-    TIMEOUT = 60
+    DEFAULT_BUCKET_RESERVATION_TIMEOUT = 30
 
     def init_db(self, event_model='gevent'):
         """
@@ -174,6 +175,10 @@ class AccountBackendFdb(object):
                                        self.METRICS_PREFIX)
         self.reserve_bucket_prefix = conf.get('reserve_bucket_prefix',
                                               self.BUCKET_RESERVE_PREFIX)
+
+        self.bucket_reservation_timeout = float_value(
+            conf.get('bucket_reservation_timeout'),
+            self.DEFAULT_BUCKET_RESERVATION_TIMEOUT)
 
     def _seconds_to_us(self, timestamp):
         return int(timestamp * 1000000)
@@ -265,10 +270,11 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _bucket_info(self, tr, bname, account=None):
         if not account:
-            account = tr[self.bucket_db_space.pack((bname, 'account'))]
-            if not account.present():
-                raise BadRequest('Missing account param or an owner')
-            account = account.decode('utf-8')
+            try:
+                account = self._get_bucket_owner(tr, bname)
+            except NotFound as exc:
+                raise BadRequest(
+                    f"Missing account param or an owner: {exc}") from exc
 
         b_space = self.bucket_space[account][bname]
         b_range = b_space.range()
@@ -369,10 +375,11 @@ class AccountBackendFdb(object):
         :param to_delete: iterable of keys to delete
         """
         if not account:
-            account = self.db[self.bucket_db_space.pack((bname, 'account'))]
-            if not account:
-                raise BadRequest('Missing account param or an owner')
-            account = account.decode('utf-8')
+            try:
+                account = self._get_bucket_owner(self.db, bname)
+            except NotFound as exc:
+                raise BadRequest(
+                    f"Missing account param or an owner: {exc}") from exc
 
         self._manage_metadata(self.db, self.bucket_space[account], bname,
                               metadata, to_delete)
@@ -554,11 +561,18 @@ class AccountBackendFdb(object):
         return status
 
     @catch_service_errors
-    def refresh_bucket(self, bucket_name, **kwargs):
+    def refresh_bucket(self, bucket_name, account=None, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
         """
+        if not account:
+            try:
+                account = self._get_bucket_owner(self.db, bucket_name)
+            except NotFound as exc:
+                raise BadRequest(
+                    f"Missing account param or an owner: {exc}") from exc
+
         batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
         marker = None
         account_id = self._val_element(self.db, self.bucket_db_space,
@@ -612,65 +626,91 @@ class AccountBackendFdb(object):
         self._flush_account(self.db, account_id)
 
     @catch_service_errors
-    def reserve_bucket(self, account_id, bucket_name, **kwargs):
-        timeout = kwargs.get('timeout', self.TIMEOUT)
-        if account_id is None:
-            return {'reserved': 0}
-        reserved = self._reserve_bucket(self.db, bucket_name, account_id,
-                                        timeout)
-        return {'reserved': reserved}
+    def reserve_bucket(self, bucket, account_id, **kwargs):
+        self._reserve_bucket(self.db, bucket, account_id)
 
     @fdb.transactional
-    def _reserve_bucket(self, tr, bucket_name, account_id, timeout):
-        space_ = self.bucket_db_space[bucket_name]
-        timestamp = 0
-        if tr[space_.pack(('account',))].present():
-            return 0
+    def _reserve_bucket(self, tr, bucket, account):
+        reserved_bucket_space = self.bucket_db_space[bucket]
 
-        reservation_timestamp = tr[space_.pack(('timestamp',))]
-        now = Timestamp().timestamp
-        now_us = self._seconds_to_us(now)
-        if reservation_timestamp.present():
-            timestamp = struct.unpack('<Q', reservation_timestamp.value)[0]
-            if self._us_to_seconds(timestamp) + timeout < now:
-                tr[space_.pack(('timestamp',))] = struct.pack('<Q', now_us)
-                return 1
-            else:
-                # Some other reservation is ongoing
-                return 0
+        rtime = tr[reserved_bucket_space.pack(('rtime',))]
+        now = time.time()
+        if rtime.present():
+            # Check if the reservation is ongoing
+            rtime = self._us_to_seconds(struct.unpack('<Q', rtime.value)[0])
+            if rtime + self.bucket_reservation_timeout > now:
+                raise Forbidden('Already reserved')
         else:
-            tr[space_.pack(('timestamp',))] = struct.pack('<Q', now_us)
-            return 1
+            current_account = tr[reserved_bucket_space.pack(('account',))]
+            if current_account.present():
+                raise Forbidden('Already associated with an owner')
+
+        tr[reserved_bucket_space.pack(('rtime',))] = struct.pack(
+            '<Q', self._seconds_to_us(now))
+        tr[reserved_bucket_space.pack(('account',))] = account.encode('utf-8')
 
     @catch_service_errors
-    def release_bucket(self, bucket_name, **kwargs):
-        reserved_space = self.bucket_db_space[bucket_name]
-        self._release_bucket(self.db, reserved_space)
-        return True
+    def release_bucket(self, bucket, account_id, **kwargs):
+        self._release_bucket(self.db, bucket, account_id)
 
     @fdb.transactional
-    def _release_bucket(self, tr, space):
-        tr.clear_range_startswith(space)
+    def _release_bucket(self, tr, bucket, account):
+        reserved_bucket_space = self.bucket_db_space[bucket]
+
+        current_account = tr[reserved_bucket_space.pack(('account',))]
+        if not current_account.present():
+            return  # Already release
+        current_account = current_account.decode('utf-8')
+        if account != current_account:
+            raise Forbidden('Bucket reserved by another owner')
+
+        reserved_bucket_range = reserved_bucket_space.range()
+        tr.clear_range(reserved_bucket_range.start, reserved_bucket_range.stop)
 
     @catch_service_errors
-    def set_bucket_owner(self, account_id, bucket_name, **kwargs):
-        self._set_bucket_owner(self.db, account_id, bucket_name)
+    def set_bucket_owner(self, bucket, account_id, **kwargs):
+        self._set_bucket_owner(self.db, bucket, account_id)
 
     @fdb.transactional
-    def _set_bucket_owner(self, tr, account_id, bucket_name):
-        reserved_space = self.bucket_db_space[bucket_name]
-        tr[reserved_space.pack(('account',))] = bytes(account_id, 'utf-8')
-        del tr[reserved_space.pack(('timestamp',))]
+    def _set_bucket_owner(self, tr, bucket, account):
+        reserved_bucket_space = self.bucket_db_space[bucket]
+
+        current_account = tr[reserved_bucket_space.pack(('account',))]
+        if not current_account.present():
+            raise Forbidden('Unreserved bucket')
+        current_account = current_account.decode('utf-8')
+        rtime = tr[reserved_bucket_space.pack(('rtime',))]
+        if not rtime.present():
+            raise Forbidden('Already associated with an owner')
+        rtime = self._us_to_seconds(struct.unpack('<Q', rtime.value)[0])
+        if account != current_account:
+            raise Forbidden('Bucket reserved by another owner')
+
+        delay = time.time() - (rtime + self.bucket_reservation_timeout)
+        if delay > 0:
+            self.logger.info(
+                'Reservation has expired (delay: %f secondes), '
+                'but since no one else has reserved the bucket %s, '
+                'the request is accepted', delay, bucket)
+        tr.clear(reserved_bucket_space.pack(('rtime',)))
 
     @catch_service_errors
-    def get_bucket_owner(self, bucket_name, **kwargs):
-        account = self._val_element(self.db, self.bucket_db_space,
-                                    bucket_name, 'account')
-        if account is None:
-            return {'account': None}
-        else:
-            account_ = account.decode('utf-8')
-            return {'account': account_}
+    def get_bucket_owner(self, bucket, **kwargs):
+        return self._get_bucket_owner(self.db, bucket)
+
+    @fdb.transactional
+    def _get_bucket_owner(self, tr, bucket):
+        reserved_bucket_space = self.bucket_db_space[bucket]
+
+        rtime = tr[reserved_bucket_space.pack(('rtime',))]
+        if rtime.present():
+            raise NotFound(
+                'Bucket is reserved, but the owner has not arrived yet')
+        current_account = tr[reserved_bucket_space.pack(('account',))]
+        if not current_account.present():
+            raise NotFound('No owner')
+
+        return current_account.decode('utf-8')
 
     @catch_service_errors
     def info_metrics(self, output_type, **kwargs):

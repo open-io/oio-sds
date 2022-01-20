@@ -21,7 +21,7 @@ from logging import getLogger
 from time import time as now
 
 from oio.cli import Command, Lister, ShowOne
-from oio.common.exceptions import NoSuchContainer
+from oio.common.exceptions import CommandError, NoSuchContainer
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import \
@@ -214,8 +214,11 @@ class SetBucket(ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
 
         reqid = request_id(prefix='CLI-BUCKET-')
+        try:
+            account = self.app.client_manager.account
+        except CommandError:
+            account = None
         acct_client = self.app.client_manager.storage.account
-        account = self.app.client_manager.account
         metadata = dict()
         if parsed_args.replicate is not None:
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
@@ -443,7 +446,10 @@ class ShowBucket(ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
 
         reqid = request_id(prefix='CLI-BUCKET-')
-        account = self.app.client_manager.account
+        try:
+            account = self.app.client_manager.account
+        except CommandError:
+            account = None
         acct_client = self.app.client_manager.storage.account
         data = acct_client.bucket_show(parsed_args.bucket, account=account,
                                        reqid=reqid)
@@ -1005,8 +1011,13 @@ class RefreshBucket(Command):
         self.log.debug('take_action(%s)', parsed_args)
 
         reqid = request_id(prefix='CLI-BUCKET-')
+        try:
+            account = self.app.client_manager.account
+        except CommandError:
+            account = None
         acct_client = self.app.client_manager.storage.account
-        acct_client.bucket_refresh(parsed_args.bucket, reqid=reqid)
+        acct_client.bucket_refresh(parsed_args.bucket, account=account,
+                                   reqid=reqid)
 
 
 class RefreshContainer(ContainerCommandMixin, Command):

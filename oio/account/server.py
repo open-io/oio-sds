@@ -102,13 +102,13 @@ class Account(WerkzeugApp):
                  methods=['PUT']),
             Rule('/v1.0/bucket/refresh', endpoint='bucket_refresh',
                  methods=['POST']),
-            Rule('/v1.0/bucket/reserve-bucket', endpoint='bucket_reserve',
+            Rule('/v1.0/bucket/reserve', endpoint='bucket_reserve',
                  methods=['PUT']),
-            Rule('/v1.0/bucket/release-bucket', endpoint='bucket_release',
+            Rule('/v1.0/bucket/release', endpoint='bucket_release',
                  methods=['POST']),
-            Rule('/v1.0/bucket/set-bucket-owner', endpoint='bucket_owner_set',
+            Rule('/v1.0/bucket/set-owner', endpoint='bucket_set_owner',
                  methods=['PUT']),
-            Rule('/v1.0/bucket/get-bucket-owner', endpoint='bucket_owner_get',
+            Rule('/v1.0/bucket/get-owner', endpoint='bucket_get_owner',
                  methods=['GET']),
 
             # IAM
@@ -778,11 +778,11 @@ class Account(WerkzeugApp):
         Reserve bucket name.
         """
         bname = self._get_item_id(req, what='bucket')
-        data = json.loads(req.get_data())
-        account_id = data.get('account')
-
-        status_ = self.backend.reserve_bucket(account_id, bname, **kwargs)
-        return Response(json.dumps(status_), mimetype=HTTP_CONTENT_TYPE_JSON)
+        account_id = req.args.get('account')
+        if account_id is None:
+            raise BadRequest('Missing account ID (owner)')
+        self.backend.reserve_bucket(bname, account_id, **kwargs)
+        return Response(status=201)
 
     # ACCT{{
     # PUT /v1.0/bucket/release-bucket?id=bucket_name
@@ -816,10 +816,13 @@ class Account(WerkzeugApp):
     @force_master
     def on_bucket_release(self, req, **kwargs):
         """
-        Release a reserved bucket name.
+        Release a bucket name.
         """
         bname = self._get_item_id(req, what='bucket')
-        self.backend.release_bucket(bname, **kwargs)
+        account_id = req.args.get('account')
+        if account_id is None:
+            raise BadRequest('Missing account ID (owner)')
+        self.backend.release_bucket(bname, account_id, **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -857,16 +860,16 @@ class Account(WerkzeugApp):
     #    Content-Length: 117
     #
     # }}ACCT
-    def on_bucket_owner_set(self, req, **kwargs):
+    def on_bucket_set_owner(self, req, **kwargs):
         """
-        Set bucket reservation owner.
+        Set bucket owner.
         """
         bname = self._get_item_id(req, what='bucket')
-        data = json.loads(req.get_data())
-        account_id = data.get('account')
-        bname = self._get_item_id(req, what='bucket')
-        self.backend.set_bucket_owner(account_id, bname, **kwargs)
-        return Response(status=204)
+        account_id = req.args.get('account')
+        if account_id is None:
+            raise BadRequest('Missing account ID (owner)')
+        self.backend.set_bucket_owner(bname, account_id, **kwargs)
+        return Response(status=201)
 
     # ACCT{{
     # GET /v1.0/bucket/get-bucket-owner?id=bucket_name
@@ -894,9 +897,9 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
-    def on_bucket_owner_get(self, req, **kwargs):
+    def on_bucket_get_owner(self, req, **kwargs):
         """
-        Get bucket_name owner.
+        Get bucket owner.
         """
         bname = self._get_item_id(req, what='bucket')
         out = self.backend.get_bucket_owner(bname, **kwargs)
@@ -1043,7 +1046,8 @@ class Account(WerkzeugApp):
         Refresh bucket counters.
         """
         bucket_name = self._get_item_id(req, what='bucket')
-        self.backend.refresh_bucket(bucket_name, **kwargs)
+        account = req.args.get('account')
+        self.backend.refresh_bucket(bucket_name, account=account, **kwargs)
         return Response(status=204)
 
     # ACCT{{
