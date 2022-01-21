@@ -301,7 +301,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertFalse("Should_not_exist" in account_list)
 
     def test_info_account(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         info = self.backend.info_account(account_id)
@@ -356,7 +356,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['bytes'], 0)
 
     def test_update_after_container_deletion(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test-%06x' % int(time())
         self.assertEqual(self.backend.create_account(account_id), account_id)
 
@@ -392,7 +392,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['bytes'], 0)
 
     def test_delete_container(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -492,7 +492,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_utf8_container(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -590,7 +590,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_update_container(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -767,7 +767,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_list_containers(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
 
         self.backend.create_account(account_id)
@@ -854,7 +854,7 @@ class TestAccountBackend(BaseTestCase):
                           '3-0052', '3-0052-0049'])
 
     def test_refresh_account(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = random_str(16)
 
         self.assertEqual(self.backend.create_account(account_id), account_id)
@@ -995,7 +995,7 @@ class TestAccountBackend(BaseTestCase):
     # TODO(adu): Reffresh account with stats by policy and buckets
 
     def test_update_container_wrong_timestamp_format(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -1122,7 +1122,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_flush_account(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = random_str(16)
 
         self.assertEqual(self.backend.create_account(account_id), account_id)
@@ -1296,7 +1296,7 @@ class TestAccountBackend(BaseTestCase):
     # TODO(adu): Flush account with stats by policy and buckets
 
     def test_refresh_bucket(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = random_str(16)
         bucket = random_str(16)
 
@@ -1359,7 +1359,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(res_objects, total_objects)
 
     def test_refresh_bucket_by_batch(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         nb_obj_to_add = 5
         account_id = random_str(16)
         bucket = 'bucket-test-refresh'
@@ -1417,7 +1417,7 @@ class TestAccountBackend(BaseTestCase):
             self.assertEqual(res_objects, len(ct_in_bucket) * nb_obj_to_add)
 
     def test_update_bucket_metada(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         bname = 'metadata_'+random_str(8)
         metadata = {'owner': 'owner1', 'user': 'user1'}
         account_id = 'acct_'+random_str(8)
@@ -1479,7 +1479,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # initial container
-        region = 'localhost'
+        region = 'LOCALHOST'
         name1 = 'container1'
         mtime = Timestamp().timestamp
         self.backend.update_container(
@@ -1768,7 +1768,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_update_containers_with_buckets(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -2148,7 +2148,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_bucket_with_several_containers(self):
-        region = 'localhost'
+        region = 'LOCALHOST'
         account_id = 'test-1'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (

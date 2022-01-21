@@ -530,7 +530,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertDictEqual({
                 'accounts': 1,
                 'regions': {
-                    'localhost': {
+                    'LOCALHOST': {
                         'containers': 1,
                         'objects': 1,
                         'bytes': 20
@@ -548,7 +548,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertDictEqual({
                 'accounts': 1,
                 'regions': {
-                    'localhost': {
+                    'LOCALHOST': {
                         'containers': 0,
                         'objects': 0,
                         'bytes': 0
@@ -581,7 +581,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertDictEqual({
                 'accounts': 1,
                 'regions': {
-                    'localhost': {
+                    'LOCALHOST': {
                         'containers': 1,
                         'objects': 3,
                         'objects-details': {
@@ -611,7 +611,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertDictEqual({
                 'accounts': 1,
                 'regions': {
-                    'localhost': {
+                    'LOCALHOST': {
                         'containers': 2,
                         'objects': 9,
                         'objects-details': {

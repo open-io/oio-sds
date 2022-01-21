@@ -1174,7 +1174,7 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _get_region(self, tr, account_id, ct_name, region):
         if region:
-            return region
+            return region.upper()
         region = self._val_element(tr, self.container_space[account_id],
                                    ct_name, 'region')
         if region is not None:
