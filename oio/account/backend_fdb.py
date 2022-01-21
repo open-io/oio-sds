@@ -803,6 +803,9 @@ class AccountBackendFdb(object):
         tr.clear_range(buckets_range.start, buckets_range.stop)
         bucket_range = self.bucket_space[account_id].range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
+        # Delete metadata
+        metadata_space = self.metadata_space[account_id].range()
+        tr.clear_range(metadata_space.start, metadata_space.stop)
         # TODO(adu): Update mtime
 
     @fdb.transactional
@@ -840,11 +843,28 @@ class AccountBackendFdb(object):
         for _, _ in iterator:
             return False
 
-        tr.clear_range_startswith(self.acct_space[account_id])
-        tr.clear_range_startswith(self.accts_space[account_id])
-        tr.clear_range_startswith(self.ct_to_delete_space[account_id])
-        tr.clear_range_startswith(self.metadata_space[account_id])
-        tr.clear_range_startswith(self.containers_index_space[account_id])
+        # Delete containers
+        containers_range = self.containers_index_space[account_id].range()
+        tr.clear_range(containers_range.start, containers_range.stop)
+        container_range = self.container_space[account_id].range()
+        tr.clear_range(container_range.start, container_range.stop)
+        # Delete deleted containers
+        deleted_containers_range = self.ct_to_delete_space[account_id].range()
+        tr.clear_range(deleted_containers_range.start,
+                       deleted_containers_range.stop)
+        # Delete buckets
+        buckets_range = self.buckets_index_space[account_id].range()
+        tr.clear_range(buckets_range.start, buckets_range.stop)
+        bucket_range = self.bucket_space[account_id].range()
+        tr.clear_range(bucket_range.start, bucket_range.stop)
+        # Delete metadata
+        metadata_space = self.metadata_space[account_id].range()
+        tr.clear_range(metadata_space.start, metadata_space.stop)
+        # Delete account info
+        account_space = self.acct_space[account_id].range()
+        tr.clear_range(account_space.start, account_space.stop)
+        tr.clear(self.accts_space[account_id])
+        # Update metrcis
         self._decrement(tr, self.metrics_space.pack(('accounts',)))
         return True
 
@@ -1249,8 +1269,8 @@ class AccountBackendFdb(object):
                    pol not in policies_to_clear:
                     policies_to_clear.append(pol)
         for pol in policies_to_clear:
-            tr.clear_range_startswith(c_space.pack(('bytes', pol)))
-            tr.clear_range_startswith(c_space.pack(('objects', pol)))
+            tr.clear(c_space.pack(('bytes', pol)))
+            tr.clear(c_space.pack(('objects', pol)))
 
         return deltas
 
@@ -1480,8 +1500,7 @@ class AccountBackendFdb(object):
     def _manage_metadata(self, tr, space, id_x, metadata, to_delete):
         if to_delete:
             for element in to_delete:
-                tr.clear_range_startswith(
-                    space.pack((id_x, element)))
+                tr.clear(space.pack((id_x, element)))
 
         if metadata:
             for key, value in metadata.items():
