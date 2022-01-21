@@ -194,7 +194,8 @@ class AccountBackendFdb(object):
         if not account_id:
             return None
         # get ctime is only used for migration
-        now = kwargs.get('ctime') or Timestamp().timestamp
+        now = float(kwargs.get('ctime')) if kwargs.get('ctime') is not None \
+            else Timestamp().timestamp
         now_us = self._seconds_to_us(now)
         status = self._create_account(self.db, self.accts_space,
                                       self.acct_space, account_id, now_us)
@@ -293,7 +294,7 @@ class AccountBackendFdb(object):
             elif field in ('mtime',):
                 info[field] = self._us_to_seconds(
                     struct.unpack('<Q', value)[0])
-            elif field in (BUCKET_PROP_REPLI_ENABLED):
+            elif field in (BUCKET_PROP_REPLI_ENABLED,):
                 info[field] = boolean_value(value.decode('utf-8'))
             else:
                 info[field] = value.decode('utf-8')
