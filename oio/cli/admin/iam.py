@@ -17,57 +17,21 @@ import json
 
 from cliff import lister, show
 
-from oio.common.utils import parse_conn_str
-
 
 class IamCommandMixinBase(object):
     """
     Add IAM-related arguments to a cliff command.
     """
 
-    default_connection = 'fdb://127.0.0.1:6379'
-
     def patch_parser(self, parser):
-        parser.add_argument('--connection',
-                            help=("Tell how to connect to the IAM database. "
-                                  "This overrides the 'iam.connection' "
-                                  "parameter defined in the namespace "
-                                  "configuration file. Defaults to '%s' if "
-                                  "neither parameter is set." %
-                                  self.default_connection))
         parser.add_argument('account',
                             help=("The account the user belongs to. "
                                   "Usually 'AUTH_' followed by either the "
                                   "Keystone project ID, or the clear account "
                                   "name when using tempauth."))
 
-    def get_db(self, parsed_args):
-        if parsed_args.connection is None:
-            parsed_args.connection = self.app.client_manager.sds_conf.get(
-                'iam.connection', self.default_connection)
-        if parsed_args.connection == self.default_connection:
-            self.logger.warn('Using the default connection (%s) is probably '
-                             'not what you want to do.',
-                             self.default_connection)
-        scheme, netloc, kwargs = parse_conn_str(parsed_args.connection)
-        if scheme == 'redis+sentinel':
-            from oio.account.iam import RedisIamDb
-            kwargs['sentinel_hosts'] = netloc
-            iam = RedisIamDb(**kwargs)
-        elif scheme == 'fdb':
-            from oio.account.iam_fdb import FdbIamDb
-            # TODO pass default fdb file location as parameter
-            parsed_args.fdb_file = self.app.client_manager.sds_conf.get(
-                'fdb_file', '/etc/foundationdb/fdb.cluster')
-            conf = {}
-            conf['fdb_file'] = parsed_args.fdb_file
-            iam = FdbIamDb(conf=conf, **kwargs)
-            iam.init_db()
-        else:
-            from oio.account.iam import RedisIamDb
-            kwargs['host'] = netloc
-            iam = RedisIamDb(**kwargs)
-        return iam
+    def get_iam_client(self, parsed_args):
+        return self.app.client_manager.storage.iam
 
     @property
     def logger(self):
@@ -112,10 +76,10 @@ class IamDeleteUserPolicy(IamCommandMixin, show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        iamdb = self.get_db(parsed_args)
-        deleted = iamdb.delete_user_policy(parsed_args.account,
-                                           parsed_args.user,
-                                           parsed_args.policy_name)
+        iam_client = self.get_iam_client(parsed_args)
+        deleted = iam_client.delete_user_policy(parsed_args.account,
+                                                parsed_args.user,
+                                                parsed_args.policy_name)
         return self.columns, [parsed_args.account,
                               parsed_args.user,
                               parsed_args.policy_name,
@@ -135,10 +99,11 @@ class IamGetUserPolicy(IamCommandMixin, show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        iamdb = self.get_db(parsed_args)
-        policy = iamdb.get_user_policy(parsed_args.account,
-                                       parsed_args.user,
-                                       parsed_args.policy_name)
+        iam_client = self.get_iam_client(parsed_args)
+        policy = iam_client.get_user_policy(parsed_args.account,
+                                            parsed_args.user,
+                                            parsed_args.policy_name)
+        policy = json.dumps(policy)
         if not policy:
             policy = 'null'
         elif parsed_args.formatter == 'table':
@@ -162,13 +127,13 @@ class IamListUsers(IamCommandMixinBase, lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        iamdb = self.get_db(parsed_args)
-        users = iamdb.list_users(parsed_args.account)
-        if not users:
+        iam_client = self.get_iam_client(parsed_args)
+        users = iam_client.list_users(parsed_args.account)
+        if not users['Users']:
             self.logger.warning("No IAM users for this account")
-            res = users
+            res = users['Users']
         else:
-            res = ((parsed_args.account, x) for x in users)
+            res = ((parsed_args.account, x) for x in users['Users'])
         return self.columns, res
 
 
@@ -188,9 +153,11 @@ class IamListUserPolicies(IamCommandMixin, lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        iamdb = self.get_db(parsed_args)
-        policies = iamdb.list_user_policies(parsed_args.account,
-                                            parsed_args.user)
+        iam_client = self.get_iam_client(parsed_args)
+        policies = iam_client.list_user_policies(parsed_args.account,
+                                                 parsed_args.user)
+        policies = policies['PolicyNames']
+
         if not policies:
             self.logger.warning("No policy for this user")
             res = policies
@@ -234,11 +201,11 @@ class IamPutUserPolicy(IamCommandMixin, show.ShowOne):
                     policy = rules_f.read()
         else:
             policy = parsed_args.policy
-        iamdb = self.get_db(parsed_args)
-        iamdb.put_user_policy(parsed_args.account,
-                              parsed_args.user,
-                              policy,
-                              parsed_args.policy_name)
+        iam_client = self.get_iam_client(parsed_args)
+        iam_client.put_user_policy(parsed_args.account,
+                                   parsed_args.user,
+                                   policy,
+                                   parsed_args.policy_name)
         if parsed_args.formatter == 'table':
             policy = self.pretty_print_policy(policy)
         return self.columns, [parsed_args.account,
