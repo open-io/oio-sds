@@ -573,7 +573,9 @@ class Account(WerkzeugApp):
     def on_account_container_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
         data = json.loads(req.get_data())
-        name = data.get('name')
+        cname = data.get('name')
+        if not cname:
+            raise BadRequest("Missing container")
         mtime = data.get('mtime')
         dtime = data.get('dtime')
         object_count = data.get('objects')
@@ -584,11 +586,10 @@ class Account(WerkzeugApp):
         kwargs['bytes_details'] = data.get('bytes-details')
 
         # Exceptions are catched by dispatch_request
-        info = self.backend.update_container(
-            account_id, name, mtime, dtime, object_count, bytes_used,
+        self.backend.update_container(
+            account_id, cname, mtime, dtime, object_count, bytes_used,
             bucket_name=bucket_name, **kwargs)
-        result = json.dumps(info)
-        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(cname), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/reset?id=<account_name>

@@ -173,6 +173,16 @@ class AccountBackendFdb(object):
     def _counter_value_to_counter(self, counter_value):
         return struct.unpack('<q', counter_value)[0]
 
+    def _counters_key_value_to_dict(self, counters_key_value, unpack=None):
+        counters = {}
+        for counter_key, counter_value in counters_key_value:
+            if unpack:
+                counter_key = unpack(counter_key)
+            if isinstance(counter_key, tuple) and len(counter_key) == 1:
+                counter_key = counter_key[0]
+            counters[counter_key] = struct.unpack('<q', counter_value)[0]
+        return counters
+
     def _get_timestamp(self, timestamp=None):
         timestamp = Timestamp(timestamp).timestamp
         # Microsecond precision
@@ -259,80 +269,111 @@ class AccountBackendFdb(object):
                         f"{counter_value}")
         return '\n'.join(prom_output)
 
+    @fdb.transactional
+    def _update_metrics_stats(self, tr, region, stats_delta):
+        """
+        [transactional] Update metrics stats for the specified region.
+        """
+        for key in ('bytes', 'objects'):
+            # Update global stats (by region)
+            value = stats_delta[key]
+            self._increment(tr, self.metrics_space.pack((key, region)), value)
+
+            for policy, value in stats_delta[f"{key}-details"].items():
+                # Update stats by policy (by policy)
+                self._increment(
+                    tr, self.metrics_space.pack((key, region, policy)), value)
+
     # Account -----------------------------------------------------------------
 
     @catch_service_errors
     def create_account(self, account_id, **kwargs):
         """
-        Create account account_id
+        Create the account if it doesn't already exist.
         """
-        if not account_id:
-            return None
         # get ctime is only used for migration
         ctime = kwargs.get('ctime')
-        if ctime is not None:
-            ctime = self._get_timestamp(ctime)
-        status = self._create_account(self.db, self.accts_space,
-                                      self.acct_space, account_id, ctime=ctime)
+        status = self._create_account(self.db, account_id, ctime=ctime)
         if not status:
             return None
-
         return account_id
 
     @fdb.transactional
-    def _create_account(self, tr, accts_space, acct_space, account_id,
-                        ctime=None):
-        if self._is_element(tr, accts_space, account_id):
+    def _create_account(self, tr, account_id, ctime=None):
+        """
+        [transactional] Create the account if it doesn't already exist.
+        """
+        account_space = self.acct_space[account_id]
+
+        if tr[account_space.pack(('ctime',))].present():
+            # Account already exists
             return False
-
-        if not ctime:
-            ctime = self._get_timestamp()
-        tr[accts_space.pack((account_id,))] = b'1'
-        tr[acct_space.pack((account_id, 'id'))] = account_id.encode('utf-8')
-        self._set_counter(tr, acct_space.pack((account_id, 'bytes')))
-        self._set_counter(tr, acct_space.pack((account_id, 'objects')))
-        self._set_counter(tr, acct_space.pack((account_id, 'containers')))
-        self._set_counter(tr, acct_space.pack((account_id, 'buckets')))
-        self._set_timestamp(tr, acct_space.pack((account_id, 'ctime')), ctime)
-        self._set_timestamp(tr, acct_space.pack((account_id, 'mtime')), ctime)
-
-        # metrics
-        self._increment(tr, self.metrics_space.pack(('accounts',)))
+        self._real_create_account(tr, account_id, ctime=ctime)
         return True
 
-    @catch_service_errors
-    def delete_account(self, req_account_id, **kwargs):
-        if not req_account_id:
-            return None
+    @fdb.transactional
+    def _real_create_account(self, tr, account_id, ctime=None):
+        """
+        [transactional] Create the account.
+        This method assumes that the account does not exist.
+        """
+        account_space = self.acct_space[account_id]
+        if ctime is None:
+            ctime = time.time()
 
-        status = self._delete_account(self.db, req_account_id)
-        if status is None:
-            self.logger.info('account to delete %s not found', req_account_id)
-        elif not status:
-            self.logger.info('account to delete %s not empty', req_account_id)
-        else:
-            self.logger.info('account deleted %s', req_account_id)
-        return status
+        # Add basic info
+        tr[account_space.pack(('id',))] = account_id.encode('utf-8')
+        self._set_counter(tr, account_space.pack(('bytes',)))
+        self._set_counter(tr, account_space.pack(('objects',)))
+        self._set_counter(tr, account_space.pack(('containers',)))
+        self._set_counter(tr, account_space.pack(('buckets',)))
+        # Set account ctime and mtime
+        self._set_timestamp(tr, account_space.pack(('ctime',)), ctime)
+        self._set_timestamp(tr, account_space.pack(('mtime',)), ctime)
+        # Add account in index
+        tr[self.accts_space.pack((account_id,))] = b'1'
+        # Increase accounts counter in metrics
+        self._increment(tr, self.metrics_space.pack(('accounts',)))
+
+    @catch_service_errors
+    def delete_account(self, account_id, **kwargs):
+        """
+        Delete the account if it already exists.
+        """
+        self._delete_account(self.db, account_id)
+        return True
 
     @fdb.transactional
-    def _delete_account(self, tr, req_account_id):
+    def _delete_account(self, tr, account_id):
+        """
+        [transactional] Delete the account if it already exists.
+        """
+        account_space = self.acct_space[account_id]
 
-        account_id = self._val_element(tr, self.acct_space,
-                                       req_account_id, 'id')
-        if account_id is None:
-            return None
-        account_id = account_id.decode('utf-8')
+        account_ctime = tr[account_space.pack(('ctime',))]
+        if not account_ctime.present():
+            raise NotFound('Account does\'nt exist')
 
-        ct_account_space = self.container_space[account_id]
-        s_range = ct_account_space.range()
-        iterator = tr.get_range(s_range.start, s_range.stop,
-                                reverse=False)
-        for _, _ in iterator:
-            return False
+        containers = tr[account_space.pack(('containers',))]
+        if containers.present():
+            containers = self._counter_value_to_counter(containers.value)
+        else:
+            containers = 0
+        if containers:
+            raise Conflict('Account not empty')
 
+        self._real_delete_account(tr, account_id)
+
+    @fdb.transactional
+    def _real_delete_account(self, tr, account_id):
+        """
+        [transactional] Delete the account.
+        This method assumes that the account exists.
+        """
         # Delete containers
         containers_range = self.containers_index_space[account_id].range()
         tr.clear_range(containers_range.start, containers_range.stop)
+        # Delete containers index
         container_range = self.container_space[account_id].range()
         tr.clear_range(container_range.start, container_range.stop)
         # Delete deleted containers
@@ -342,18 +383,22 @@ class AccountBackendFdb(object):
         # Delete buckets
         buckets_range = self.buckets_index_space[account_id].range()
         tr.clear_range(buckets_range.start, buckets_range.stop)
+        # Delete buckets index
         bucket_range = self.bucket_space[account_id].range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
+        # TODO(adu): Delete buckets index by region
         # Delete metadata
         metadata_space = self.metadata_space[account_id].range()
         tr.clear_range(metadata_space.start, metadata_space.stop)
         # Delete account info
-        account_space = self.acct_space[account_id].range()
-        tr.clear_range(account_space.start, account_space.stop)
-        tr.clear(self.accts_space[account_id])
-        # Update metrcis
-        self._increment(tr, self.metrics_space.pack(('accounts',)), -1)
-        return True
+        account_range = self.acct_space[account_id].range()
+        tr.clear_range(account_range.start, account_range.stop)
+        # Delete account in index
+        tr.clear(self.accts_space.pack((account_id,)))
+
+        # Decrease accounts counter in metrics
+        self._increment(
+            tr, self.metrics_space.pack(('accounts',)), -1)
 
     @catch_service_errors
     def info_account(self, req_account_id, **kwargs):
@@ -421,6 +466,32 @@ class AccountBackendFdb(object):
             account_id = self.accts_space.unpack(key)[0]
             res.append(account_id)
         return res
+
+    @fdb.transactional
+    def _update_account_stats(self, tr, account_id, region, stats_delta,
+                              mtime):
+        """
+        [transactional] Update account stats for the specified region.
+        This method assumes that the account exists.
+        """
+        account_space = self.acct_space[account_id]
+
+        # Update account stats
+        for key in ('bytes', 'objects'):
+            # Update global stats
+            value = stats_delta[key]
+            self._increment(tr, account_space.pack((key,)), value)
+            self._increment(tr, account_space.pack((key, region)), value)
+            # Update stats by policy (by region)
+            for policy, value in stats_delta[f"{key}-details"].items():
+                self._increment(
+                    tr, account_space.pack((key, region, policy)), value)
+
+        # Update account mtime
+        self._update_timestamp(tr, account_space.pack(('mtime',)), mtime)
+
+        # Update metrics stats with the delta
+        self._update_metrics_stats(tr, region, stats_delta)
 
     @catch_service_errors
     def get_account_metadata(self, req_account_id, **kwargs):
@@ -540,6 +611,7 @@ class AccountBackendFdb(object):
         # Delete containers
         containers_range = self.containers_index_space[account_id].range()
         tr.clear_range(containers_range.start, containers_range.stop)
+        # Delete containers index
         container_range = self.container_space[account_id].range()
         tr.clear_range(container_range.start, container_range.stop)
         # Delete deleted containers
@@ -549,14 +621,106 @@ class AccountBackendFdb(object):
         # Delete buckets
         buckets_range = self.buckets_index_space[account_id].range()
         tr.clear_range(buckets_range.start, buckets_range.stop)
+        # Delete buckets index
         bucket_range = self.bucket_space[account_id].range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
+        # TODO(adu): Delete buckets index by region
         # Delete metadata
         metadata_space = self.metadata_space[account_id].range()
         tr.clear_range(metadata_space.start, metadata_space.stop)
         # TODO(adu): Update mtime
 
     # Container ---------------------------------------------------------------
+
+    @fdb.transactional
+    def _real_create_container(self, tr, account_id, cname, region, ctime):
+        """
+        [transactional] Create the container.
+        This method assumes that the account exists.
+        This method assumes that the container does not exist.
+        """
+        container_space = self.container_space[account_id][cname]
+        deleted_container_space = self.ct_to_delete_space[account_id][cname]
+
+        if not region:
+            raise BadRequest('Missing region')
+
+        # Add basic info
+        tr[container_space.pack(('name',))] = cname.encode('utf-8')
+        tr[container_space.pack(('region',))] = region.encode('utf-8')
+        self._set_counter(tr, container_space.pack(('bytes',)))
+        self._set_counter(tr, container_space.pack(('objects',)))
+        # Set container mtime
+        self._set_timestamp(tr, container_space.pack(('mtime',)), ctime)
+        # Add container in index
+        tr[self.containers_index_space.pack((account_id, cname))] = b'1'
+        # Delete the old dtime
+        tr.clear(deleted_container_space.key())
+        # Increase containers counter in account
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('containers',)))
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('containers', region)))
+        # Increase containers counter in metrics
+        self._increment(tr, self.metrics_space.pack(('containers', region)))
+
+    @fdb.transactional
+    def _real_delete_container(self, tr, account_id, cname, region, dtime):
+        """
+        [transactional] Delete the container.
+        This method assumes that the account exists.
+        This method assumes that the container exists.
+        """
+        container_space = self.container_space[account_id][cname]
+        deleted_container_space = self.ct_to_delete_space[account_id][cname]
+
+        # Fetch the current stats to compute the others stats
+        stats_delta = {}
+        for key in ('bytes', 'objects'):
+            # Fetch the global stats
+            current_value = tr[container_space.pack((key,))]
+            if current_value.present():
+                current_value = - self._counter_value_to_counter(
+                    current_value.value)
+            else:
+                current_value = 0
+            stats_delta[key] = current_value
+
+            # Fetch the stats by policy
+            details_space = container_space[key]
+            details_range = details_space.range()
+            current_value_by_policy = self._counters_key_value_to_dict(
+                tr.get_range(details_range.start, details_range.stop,
+                             streaming_mode=fdb.StreamingMode.want_all),
+                unpack=details_space.unpack)
+            delta_by_policy = {}
+            for policy, value in current_value_by_policy.items():
+                delta_by_policy[policy] = - value
+            stats_delta[f"{key}-details"] = delta_by_policy
+
+        # Delete container info
+        container_range = container_space.range()
+        tr.clear_range(container_range.start, container_range.stop)
+        # Delete container in index
+        tr.clear(self.containers_index_space.pack((account_id, cname)))
+        # Keep the dtime in case an event is late
+        self._update_timestamp(tr, deleted_container_space.key(), dtime)
+        # Decrease containers counter in account
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('containers',)), -1)
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('containers', region)), -1)
+        # Decrease containers counter in metrics
+        self._increment(tr, self.metrics_space.pack(
+            ('containers', region)), -1)
+
+        # Forget the old deleted containers
+        self._clear_deleted_containers(tr, account_id)
+
+        # Update account stats with the delta
+        self._update_account_stats(tr, account_id, region, stats_delta, dtime)
+
+        return stats_delta
 
     @catch_service_errors
     def get_container_info(self, account_id, cname, **kwargs):
@@ -724,11 +888,15 @@ class AccountBackendFdb(object):
     @catch_service_errors
     def update_container(self, account_id, cname, mtime, dtime,
                          object_count, bytes_used,
-                         bucket_name=None, autocreate_account=None,
-                         autocreate_container=True, **kwargs):
-        if not account_id or not cname:
-            raise BadRequest("Missing account or container")
-
+                         bucket_name=None, region=None,
+                         objects_details=None, bytes_details=None,
+                         autocreate_account=None, autocreate_container=True,
+                         **kwargs):
+        """
+        Update container info and stats.
+        Create the account if it does not exist and autocreation is enabled.
+        Create the container if it does not exist and autocreation is enabled.
+        """
         if autocreate_account is None:
             autocreate_account = self.autocreate
 
@@ -740,394 +908,228 @@ class AccountBackendFdb(object):
             dtime = 0.
         else:
             dtime = self._get_timestamp(dtime)
+
         if object_count is None:
             object_count = 0
+        if objects_details is None:
+            objects_details = {}
         if bytes_used is None:
             bytes_used = 0
+        if bytes_details is None:
+            bytes_details = {}
+        new_stats = {
+            'objects': object_count,
+            'objects-details': objects_details,
+            'bytes': bytes_used,
+            'bytes-details': bytes_details
+        }
 
-        # ctime = kwargs.get('ctime') or None
-        # If no bucket name is provided, set it to ''
-        bucket_name = bucket_name or ''
-        now = self._get_timestamp()
-        # bucket region
-        region = kwargs.get('region')
-        # dict object details per storage class
-        objects_details = kwargs.get('objects_details') or {}
-        bytes_details = kwargs.get('bytes_details') or {}
-
-        # read mtime & dtime
-        ct_space = self.container_space[account_id]
-        cts_space = self.containers_index_space[account_id]
-
-        status = self._update_container(self.db, cts_space, ct_space,
-                                        account_id, cname, bucket_name,
-                                        mtime, dtime, now,
-                                        autocreate_account,
-                                        autocreate_container, object_count,
-                                        bytes_used, region,
-                                        objects_details, bytes_details)
-
-        return status
-
-    @fdb.transactional
-    def _update_container(self, tr, cts_space, ct_space, account_id, cname,
-                          bucket_name, new_mtime, new_dtime, now,
-                          autocreate_account, autocreate_container,
-                          new_total_objects, new_total_bytes, region,
-                          objects_details, bytes_details):
-        creation = False
-        to_delete_space = self.ct_to_delete_space[account_id]
-
-        account_exists = self._is_element(tr, self.accts_space, account_id)
-        if not account_exists:
-            if autocreate_account:
-                self._create_account(tr, self.accts_space, self.acct_space,
-                                     account_id, now)
-            else:
-                raise NotFound("Account %s not found" % account_id)
-        if not autocreate_container:
-            container_exists = tr[ct_space.pack((cname, 'name'))].present()
-            if not container_exists:
-                raise NotFound("Container %s not found" % cname)
-        deleted_time = 0
-        dtime = 0
-        delete_cname_time = tr[to_delete_space.pack((cname,))]
-        if delete_cname_time.present():
-            deleted_time = self._timestamp_value_to_timestamp(
-                delete_cname_time.value)
-        # real update
-        if tr[ct_space.pack((cname, 'name'))].present():
-            mtime_field = tr[ct_space.pack((cname, 'mtime'))]
-            mtime = self._timestamp_value_to_timestamp(mtime_field.value)
-            nb_objects_field = tr[ct_space.pack((cname, 'objects'))]
-            nb_bytes_field = tr[ct_space.pack((cname, 'bytes'))]
-            nb_objects = 0
-            nb_bytes = 0
-            if nb_objects_field.present():
-                nb_objects = self._counter_value_to_counter(
-                    nb_objects_field.value)
-            if nb_bytes_field.present():
-                nb_bytes = self._counter_value_to_counter(nb_bytes_field.value)
-        # event update interleaved with container delete
-        elif new_mtime < deleted_time:
-            raise Conflict('No update needed, '
-                           'event older than last container update')
-        else:  # real creation
-            mtime = 0
-            nb_objects = 0
-            nb_bytes = 0
-            creation = True
-
-        if not autocreate_container and dtime >= mtime:
-            raise NotFound("Container %s not found" % cname)
-
-        region = self._get_region(tr, account_id, cname, region)
-        current_bucket_name = self._val_element(tr, ct_space, cname, 'bucket')
-
-        old_mtime = mtime
-        inc_objects = 0
-        inc_bytes = 0
-        deltas = None
-        deleted = False
-        if new_mtime <= mtime and \
-           new_dtime <= dtime:
-            raise Conflict("No update needed, "
-                           "event older than last container update")
-
-        if new_mtime > mtime:
-            mtime = new_mtime
-        if new_dtime > dtime:
-            dtime = new_dtime
-
-        if dtime >= mtime:
-            mtime = dtime
-            # Protect against "minus zero".
-            if nb_objects != 0:
-                inc_objects -= nb_objects
-            if nb_bytes != 0:
-                inc_bytes -= nb_bytes
-            deltas = self._update_ct_stats_policy(
-                tr, account_id, cname, {}, {})
-
-            # remove container cname from container:account
-            # and from containers:account
-            container_range = ct_space[cname].range()
-            tr.clear_range(container_range.start, container_range.stop)
-            tr.clear(cts_space.pack((cname,)))
-            self._update_timestamp(tr, to_delete_space.pack((cname,)), dtime)
-
-            # decrement account and metrics
-            self._increment(tr, self.acct_space[account_id].pack(
-                ('containers',)), -1)
-            self._increment(tr, self.acct_space[account_id].pack(
-                ('containers', region)), -1)
-            self._increment(tr, self.metrics_space.pack(
-                ('containers', region)), -1)
-            # clean ct_to_delete_space
-            self._clear_deleted_containers(tr, account_id)
-
-            deleted = True
-
-        elif mtime > old_mtime:
-            inc_objects = new_total_objects - int(nb_objects)
-            inc_bytes = new_total_bytes - int(nb_bytes)
-            self._set_counter(tr, ct_space.pack((cname, 'objects')),
-                              new_total_objects)
-            self._set_counter(tr, ct_space.pack((cname, 'bytes')),
-                              new_total_bytes)
-            tr[cts_space.pack((cname,))] = b'1'
-            tr[ct_space.pack((cname, 'name'))] = cname.encode('utf-8')
-            self._set_timestamp(tr, ct_space.pack((cname, 'mtime')), mtime)
-            tr[ct_space.pack((cname, 'region'))] = region.encode('utf-8')
-
-            if creation:
-                # delete old dtime
-                tr.clear(self.ct_to_delete_space.pack((account_id, cname)))
-                # increment account and metrics
-                self._increment(tr, self.acct_space[account_id].pack(
-                    ('containers',)))
-                self._increment(tr, self.acct_space[account_id].pack(
-                    ('containers', region)))
-                self._increment(tr, self.metrics_space.pack(
-                    ('containers', region)))
-
-        else:
-            raise Conflict("No update needed, "
-                           "event older than last container update")
-
-        # increase account and metrics stats
-        if inc_objects != 0:
-            self._increment(
-                tr, self.acct_space.pack((account_id, 'objects')), inc_objects)
-            self._increment(
-                tr, self.acct_space.pack((account_id, 'objects', region)),
-                inc_objects)
-            self._increment(
-                tr, self.metrics_space.pack(('objects', region)),
-                inc_objects)
-        if inc_bytes != 0:
-            self._increment(
-                tr, self.acct_space.pack((account_id, 'bytes')), inc_bytes)
-            self._increment(
-                tr, self.acct_space.pack((account_id, 'bytes', region)),
-                inc_bytes)
-            self._increment(
-                tr, self.metrics_space.pack(('bytes', region)),
-                inc_bytes)
-        self._update_timestamp(tr, self.acct_space.pack((account_id, 'mtime')),
-                               max(mtime, dtime))
-
-        if not deleted:
-            deltas = self._update_ct_stats_policy(
-                tr, account_id, cname, objects_details, bytes_details)
-
-        # incr / decr relative values
-        for policy, dict_field in deltas.items():
-            for field, value in dict_field.items():
-                self._increment(tr, self.metrics_space.pack(
-                                (field, region, policy)),
-                                value)
-                self._increment(tr, self.acct_space[account_id].pack(
-                                (field, region, policy)),
-                                value)
-
-        if not bucket_name and current_bucket_name is not None:
-            # Use the bucket name already registered when it is not given
-            bucket_name = current_bucket_name.decode('utf-8')
-        if bucket_name:
-            bucket_account = account_id
-            if account_id.startswith('.shards_'):
-                bucket_account = account_id[8:]
-
-            bucket_already_exists = tr[self.bucket_space.pack(
-                (bucket_account, bucket_name, 'mtime'))].present()
-
-            # FIXME(FVE): this may no be needed anymore
-            # This container is not yet associated with this bucket.
-            # We must add all the totals in case the container
-            # already existed but didn't know its parent bucket.
-            if not deleted and current_bucket_name is None:
-                inc_objects = new_total_objects
-                inc_bytes = new_total_bytes
-
-            container_name = cname
-            if deleted:
-                if not bucket_already_exists:
-                    return
-                #  Delete the bucket if it's the root container
-                if bucket_account == account_id \
-                        and bucket_name == container_name:
-                    tr.clear(self.buckets_index_space.pack(
-                        (bucket_account, bucket_name)))
-                    tr.clear(self.buckets_index_space.pack(
-                        (region, bucket_account, bucket_name)))
-                    # Also delete the bucket
-                    bucket_range = self.bucket_space[bucket_account][
-                        bucket_name].range()
-                    tr.clear_range(bucket_range.start, bucket_range.stop)
-
-                    # decrements account and metrics
-                    self._increment(tr, self.acct_space[bucket_account].pack(
-                        ('buckets',)), -1)
-                    self._increment(tr, self.acct_space[bucket_account].pack(
-                        ('buckets', region)), -1)
-                    self._increment(tr, self.metrics_space.pack(
-                        ('buckets', region)), -1)
-                    return
-
-                # We used to return here. But since we delete shard before
-                # cleaning them, we need to fix counters first.
-
-            # For container holding MPU segments, we do not want to count
-            # each segment as an object. But we still want to consider
-            # their size.
-            is_segment = False
-            if '+segments' in container_name:
-                inc_objects = 0
-                is_segment = True
-
-            # Check if a refresh bucket is in progress
-            # No lock is needed as add operation is atomic
-            # local marker = redis.call("HGET", bucket_lock, "marker")
-
-            # Increment the counters if needed.
-            # if marker == false or container_name <= marker then
-            if tr[self.bucket_space.pack((bucket_account, bucket_name,
-               'objects'))].present():
-                self._increment(tr, self.bucket_space.pack(
-                    (bucket_account, bucket_name, 'objects')), inc_objects)
-            else:
-                self._set_counter(tr, self.bucket_space.pack(
-                    (bucket_account, bucket_name, 'objects')), inc_objects)
-
-            if tr[self.bucket_space.pack((bucket_account, bucket_name,
-               'bytes'))].present():
-                self._increment(tr, self.bucket_space.pack(
-                    (bucket_account, bucket_name, 'bytes')), inc_bytes)
-            else:
-                self._set_counter(tr, self.bucket_space.pack(
-                    (bucket_account, bucket_name, 'bytes')), inc_bytes)
-
-            tr[self.bucket_space.pack(
-                (bucket_account, bucket_name, 'region'))] = \
-                region.encode('utf-8')
-
-            # Update the modification time.
-            self._update_timestamp(tr, self.bucket_space.pack(
-                (bucket_account, bucket_name, 'mtime')), max(mtime, dtime))
-
-            self._update_bucket_per_policy(tr, bucket_name, bucket_account,
-                                           is_segment, deltas)
-
-            if deleted:
-                return 'deleted'
-            # Set the bucket owner.
-            tr[self.bucket_space.pack(
-                (bucket_account, bucket_name, 'account'))] = \
-                bucket_account.encode('utf-8')
-
-            # Update container info
-            tr[ct_space.pack((cname, 'bucket'))] = \
-                bytes(str(bucket_name), 'utf-8')
-
-            # Create bucket
-            if not bucket_already_exists:
-                tr[self.buckets_index_space.pack(
-                    (bucket_account, bucket_name))] = b'1'
-                tr[self.buckets_index_space.pack(
-                    (region, bucket_account, bucket_name))] = b'1'
-                # increments account and metrics
-                if creation:
-                    self._increment(tr, self.acct_space[bucket_account].pack(
-                        ('buckets',)))
-                    self._increment(tr, self.acct_space[bucket_account].pack(
-                        ('buckets', region)))
-                    self._increment(tr, self.metrics_space.pack(
-                        ('buckets', region)))
-        return 'updated'
-
-    @fdb.transactional
-    def _get_region(self, tr, account_id, ct_name, region):
         if region:
-            return region.upper()
-        region = self._val_element(tr, self.container_space[account_id],
-                                   ct_name, 'region')
-        if region is not None:
-            return region.decode('utf-8')
-        raise BadRequest('Missing region')
+            region = region.upper()
+
+        self._update_container(
+            self.db, account_id, cname, bucket_name, region, new_stats,
+            mtime, dtime, autocreate_account, autocreate_container)
 
     @fdb.transactional
-    def _update_ct_stats_policy(self, tr, account_id, cname,
-                                objs_per_policy, bytes_per_policy):
+    def _update_container(self, tr, account_id, cname, bname, region,
+                          new_stats, new_mtime, new_dtime, autocreate_account,
+                          autocreate_container):
         """
-        Read current values for given container and per policy
-        Compute deltas, update values then return deltas
+        [transactional] Update container info and stats.
+        Create the account if it does not exist and autocreation is enabled.
+        Create the container if it does not exist and autocreation is enabled.
         """
-        current_values = dict()
-        deltas = dict()
-        c_space = self.container_space[account_id][cname]
-        for policy, value in objs_per_policy.items():
-            if policy not in current_values.keys():
-                current_values[policy] = {}
-            if policy not in deltas:
-                deltas[policy] = {}
-            nb_obj_ct = tr[c_space.pack(('objects', policy))]
-            nb_obj_ct_val = 0
-            if nb_obj_ct.present():
-                nb_obj_ct_val = self._counter_value_to_counter(nb_obj_ct.value)
-            current_values[policy]['objects'] = nb_obj_ct_val
+        account_space = self.acct_space[account_id]
+        container_space = self.container_space[account_id][cname]
+        deleted_container_space = self.ct_to_delete_space[account_id][cname]
 
-            delta = value - current_values[policy]['objects']
-            if value > 0 and delta != 0:
-                deltas[policy]['objects'] = delta
-                self._set_counter(tr, c_space.pack(('objects', policy)), value)
+        # Check that the account exists and create it if necessary
+        account_ctime = tr[account_space.pack(('ctime',))]
+        if not account_ctime.present():
+            # It's a new account
+            if not autocreate_account:
+                raise NotFound('Account does\'nt exist')
+            self._real_create_account(tr, account_id)
 
-        for policy, value in bytes_per_policy.items():
-            if policy not in current_values.keys():
-                current_values[policy] = {}
-            if policy not in deltas:
-                deltas[policy] = {}
-            nb_bytes_ct = tr[c_space.pack(('bytes', policy))]
-            nb_bytes_ct_val = 0
-            if nb_bytes_ct.present():
-                nb_bytes_ct_val = self._counter_value_to_counter(
-                    nb_bytes_ct.value)
-            current_values[policy]['bytes'] = nb_bytes_ct_val
+        container_is_deleted = new_dtime >= new_mtime
 
-            delta = value - current_values[policy]['bytes']
-            # update values only when needed
-            if value > 0 and delta != 0:
-                deltas[policy]['bytes'] = delta
-                self._set_counter(tr, c_space.pack(('bytes', policy)), value)
+        # Check that the container exists and create it if necessary
+        current_mtime = tr[container_space.pack(('mtime',))]
+        if not current_mtime.present():
+            # Container doesn't exist
+            # Check that the container has not been recently deleted
+            current_dtime = tr[deleted_container_space.key()]
+            if current_dtime.present():
+                current_dtime = self._timestamp_value_to_timestamp(
+                    current_dtime.value)
+                if container_is_deleted:
+                    if current_dtime >= new_dtime:
+                        raise Conflict(
+                            'No update needed, '
+                            'event older than last container update')
+                elif current_dtime >= new_mtime:
+                    # Container no longer exists
+                    raise Conflict(
+                        'No update needed, '
+                        'event older than last container update')
+            if container_is_deleted:
+                # Container is already deleted, keep the most recent dtime
+                self._update_timestamp(
+                    tr, deleted_container_space.key(), new_dtime)
+                return
+            # It's a new container
+            if not autocreate_container:
+                raise NotFound('Container does\'nt exist')
+            self._real_create_container(tr, account_id, cname, region,
+                                        new_mtime)
+            current_mtime = new_mtime
+        else:
+            # Container exists
+            current_mtime = self._timestamp_value_to_timestamp(
+                    current_mtime.value)
+            if container_is_deleted:
+                if current_mtime >= new_dtime:
+                    raise Conflict(
+                        'No update needed, '
+                        'event older than last container update')
+            elif current_mtime >= new_mtime:
+                raise Conflict(
+                    'No update needed, '
+                    'event older than last container update')
 
-        # empty policies that are not present in objs_per_policy
-        reg_range = c_space.range()
-        res = tr.get_range(reg_range.start, reg_range.stop)
+        current_region = tr[container_space.pack(('region',))]
+        if current_region.present():
+            # Container is already associated with a region
+            current_region = current_region.decode('utf-8')
+            if region:
+                # Check that the region has not changed
+                if region != current_region:
+                    self.logger.warning(
+                        'The region has changed for the container %s '
+                        'in account %s (before: %s, after: %s)',
+                        cname, account_id, current_region, region)
+                    # Fetch the bucket associated with this container
+                    current_bname = tr[container_space.pack(('bucket',))]
+                    if current_bname.present():
+                        current_bname = current_bname.value
+                    else:
+                        current_bname = None
+                    # Delete the container from the old region
+                    self._real_delete_container(
+                        tr, account_id, cname, current_region, current_mtime)
+                    # Recreate the container in the new region
+                    # His stats will be updated later
+                    self._real_create_container(
+                        tr, account_id, cname, region, current_mtime)
+                    # Reattach the bucket to the container.
+                    if current_bname:
+                        tr[container_space.pack(('bucket',))] = current_bname
+                    current_region = region
+            else:
+                region = current_region
+        if not region:
+            raise BadRequest('Missing region')
 
-        # gather data to deduce from metrics
-        for key, val in res:
-            field, *policy = c_space.unpack(key)
-            if policy and field in ('bytes', 'objects'):
-                pol = policy[0]
-                if pol and pol not in objs_per_policy:
-                    if pol not in deltas:
-                        deltas[pol] = {}
-                    deltas[pol][field] = - self._counter_value_to_counter(
-                        val)
-        # clear not present policies for given container
-        policies_to_clear = list()
-        for key, val in res:
-            field, *policy = c_space.unpack(key)
-            if policy:
-                pol = policy[0]
-                if pol and pol not in objs_per_policy and \
-                   pol not in policies_to_clear:
-                    policies_to_clear.append(pol)
-        for pol in policies_to_clear:
-            tr.clear(c_space.pack(('bytes', pol)))
-            tr.clear(c_space.pack(('objects', pol)))
+        container_has_new_bucket = False
+        current_bname = tr[container_space.pack(('bucket',))]
+        if current_bname.present():
+            # Container is already associated with a bucket
+            current_bname = current_bname.decode('utf-8')
+            if bname:
+                # Check that the bucket has not changed
+                if bname != current_bname:
+                    self.logger.warning(
+                        'The bucket has changed for the container %s '
+                        'in account %s (before: %s, after: %s)',
+                        cname, account_id, current_bname, bname)
+                    # TODO(adu): Decrease the current container stats
+                    #            in current bucket
+                    container_has_new_bucket = True
+            else:
+                bname = current_bname
+        elif bname:
+            container_has_new_bucket = True
 
-        return deltas
+        # Update container info/stats
+        if container_is_deleted:
+            stats_delta = self._real_delete_container(
+                tr, account_id, cname, region, new_dtime)
+        else:
+            stats_delta = self._update_container_stats(
+                tr, account_id, cname, region, new_stats, new_mtime)
+
+        # Update bucket stats
+        if bname:
+            bucket_mtime = max(new_mtime, new_dtime)
+            if container_has_new_bucket:
+                # Add bucket name in container info
+                tr[container_space.pack(('bucket',))] = bname.encode('utf-8')
+                # Update bucket stats with the container stats
+                self._update_bucket_stats(
+                    tr, account_id, cname, bname, region, new_stats,
+                    bucket_mtime, container_is_deleted)
+            else:
+                # Update bucket stats with the delta
+                self._update_bucket_stats(
+                    tr, account_id, cname, bname, region, stats_delta,
+                    bucket_mtime, container_is_deleted)
+
+    @fdb.transactional
+    def _update_container_stats(self, tr, account_id, cname, region,
+                                new_stats, mtime):
+        """
+        [transactional] Update container stats.
+        This method assumes that the account exists.
+        This method assumes that the container exists.
+        """
+        container_space = self.container_space[account_id][cname]
+
+        # Update container stats
+        stats_delta = {}
+        for key in ('bytes', 'objects'):
+            # Fetch the global stats
+            new_value = new_stats[key]
+            current_value = tr[container_space.pack((key,))]
+            if current_value.present():
+                current_value = self._counter_value_to_counter(
+                    current_value.value)
+            else:
+                current_value = 0
+            # Compute the delta and set new value for global stats
+            stats_delta[key] = new_value - current_value
+            self._set_counter(tr, container_space.pack((key,)), new_value)
+
+            # Fetch the stats by policy
+            new_value_by_policy = new_stats[f"{key}-details"]
+            details_space = container_space[key]
+            details_range = details_space.range()
+            current_value_by_policy = self._counters_key_value_to_dict(
+                tr.get_range(details_range.start, details_range.stop,
+                             streaming_mode=fdb.StreamingMode.want_all),
+                unpack=details_space.unpack)
+            delta_by_policy = {}
+            all_policies = set(current_value_by_policy).union(
+                new_value_by_policy)
+            for policy in all_policies:
+                # Compute the delta and set new value for stats by policy
+                policy_key = details_space.pack((policy,))
+                new_value = new_value_by_policy.get(policy, 0)
+                current_value = current_value_by_policy.get(policy, 0)
+                delta_by_policy[policy] = new_value - current_value
+                if policy in new_value_by_policy:
+                    self._set_counter(tr, policy_key, new_value)
+                else:
+                    tr.clear(policy_key)
+            stats_delta[f"{key}-details"] = delta_by_policy
+
+        # Update container mtime
+        self._update_timestamp(tr, container_space.pack(('mtime',)), mtime)
+
+        # Update account stats with the delta
+        self._update_account_stats(tr, account_id, region, stats_delta, mtime)
+
+        return stats_delta
 
     @fdb.transactional
     def _clear_deleted_containers(self, tr, account_id):
@@ -1142,6 +1144,55 @@ class AccountBackendFdb(object):
                 tr.clear(key)
 
     # Bucket ------------------------------------------------------------------
+
+    @fdb.transactional
+    def _real_create_bucket(self, tr, account_id, bname, region):
+        """
+        [transactional] Create the bucket.
+        This method assumes that the account exists.
+        This method assumes that the bucket does not exist.
+        """
+        bucket_space = self.bucket_space[account_id][bname]
+
+        # Add basic info
+        tr[bucket_space.pack(('account',))] = account_id.encode('utf-8')
+        tr[bucket_space.pack(('region',))] = region.encode('utf-8')
+        self._set_counter(tr, bucket_space.pack(('bytes',)))
+        self._set_counter(tr, bucket_space.pack(('objects',)))
+        # No need to add the mtime,
+        # it will be added to the bucket stats update
+        # Add bucket in index
+        tr[self.buckets_index_space.pack((account_id, bname))] = b'1'
+        tr[self.buckets_index_space.pack((region, account_id, bname))] = b'1'
+        # Increase buckets counter in account
+        self._increment(tr, self.acct_space[account_id].pack(('buckets',)))
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('buckets', region)))
+        # Increase buckets counter in metrics
+        self._increment(tr, self.metrics_space.pack(('buckets', region)))
+
+    @fdb.transactional
+    def _real_delete_bucket(self, tr, account_id, bname, region):
+        """
+        [transactional] Delete the bucket.
+        This method assumes that the account exists.
+        This method assumes that the bucket exists.
+        """
+        bucket_space = self.bucket_space[account_id][bname]
+
+        # Delete bucket info
+        bucket_range = bucket_space.range()
+        tr.clear_range(bucket_range.start, bucket_range.stop)
+        # Delete bucket in index
+        tr.clear(self.buckets_index_space.pack((account_id, bname,)))
+        tr.clear(self.buckets_index_space.pack((region, account_id, bname,)))
+        # Decrease buckets counter in account
+        self._increment(tr, self.acct_space[account_id].pack(('buckets',)), -1)
+        self._increment(tr, self.acct_space[account_id].pack(
+            ('buckets', region)), -1)
+        # Decrease buckets counter in metrics
+        self._increment(tr, self.metrics_space.pack(
+            ('buckets', region)), -1)
 
     @catch_service_errors
     def get_bucket_info(self, bname, account=None, **kwargs):
@@ -1302,19 +1353,78 @@ class AccountBackendFdb(object):
         return results, next_marker
 
     @fdb.transactional
-    def _update_bucket_per_policy(self, tr, bucket_name, account_id,
-                                  is_segment, deltas):
+    def _update_bucket_stats(self, tr, account_id, cname, bname, region,
+                             stats_delta, mtime, container_is_deleted):
         """
-        Update objects/bytes per policy for given bucket
+        [transactional] Update bucket stats.
+        Create the bucket if it doesn't exist
+        and if the container is not deleted.
+        Delete the bucket if the root container is deleted.
+        This method assumes that the account exists.
         """
-        bucket_obj_space = self.bucket_space[account_id][bucket_name]
-        # incr / decr relative values
-        for policy, dict_field in deltas.items():
-            for field, value in dict_field.items():
-                if is_segment and field == 'objects':
-                    continue
-                self._increment(tr, bucket_obj_space.pack(
-                                (field, policy)), value)
+        # Filter the special accounts hosting bucket shards.
+        if account_id.startswith('.shards_'):
+            account_id = account_id[8:]
+
+        bucket_space = self.bucket_space[account_id][bname]
+
+        if container_is_deleted and bname == cname:
+            # Delete the bucket if it's the root container
+            self._real_delete_bucket(tr, account_id, bname, region)
+            # TODO(adu): We should use an associated container counter to know
+            # when to actually delete it.
+            return
+
+        current_region = tr[bucket_space.pack(('region',))]
+        if not current_region.present():
+            if container_is_deleted:
+                # Bucket is already deleted
+                return
+            # It's a new bucket
+            self._real_create_bucket(tr, account_id, bname, region)
+        else:
+            # Check that the region has not changed
+            current_region = current_region.decode('utf-8')
+            if current_region != region:
+                self.logger.warning(
+                    'The region has changed for the bucket %s in account %s',
+                    '(before: %s, after: %s), we should check that '
+                    'all containers associated with this bucket are '
+                    'in the same region',
+                    bname, account_id, current_region, region)
+                # Decrease buckets counter in account and metrics
+                # and remove index for current region
+                tr.clear(self.buckets_index_space.pack(
+                    (current_region, account_id, bname,)))
+                self._increment(tr, self.acct_space[account_id].pack(
+                    ('buckets', current_region)), -1)
+                self._increment(tr, self.metrics_space.pack(
+                    ('buckets', current_region)), -1)
+                # Increase buckets counter in account and metrics
+                # and add index for new region
+                tr[self.buckets_index_space.pack(
+                    (region, account_id, bname))] = b'1'
+                self._increment(tr, self.acct_space[account_id].pack(
+                    ('buckets', region)))
+                self._increment(tr, self.metrics_space.pack(
+                    ('buckets', region)))
+                # Update the region
+                tr[bucket_space.pack(('region',))] = region.encode('utf-8')
+
+        # Update bucket stats
+        is_segment = cname.endswith('+segments')
+        for key in ('bytes', 'objects'):
+            if is_segment and key == 'objects':
+                continue
+            # Update global stats
+            value = stats_delta[key]
+            self._increment(tr, bucket_space.pack((key,)), value)
+            for policy, value in stats_delta[f"{key}-details"].items():
+                # Update stats by policy
+                self._increment(tr, bucket_space.pack((key, policy)), value)
+
+        # Update bucket mtime
+        self._update_timestamp(tr, bucket_space.pack(('mtime',)), mtime)
 
     @catch_service_errors
     def update_bucket_metadata(self, bname, metadata, to_delete=None,
