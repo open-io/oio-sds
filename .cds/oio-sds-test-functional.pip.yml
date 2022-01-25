@@ -12,28 +12,39 @@ jobs:
         script: |+
           #!/bin/bash
           set -x
-          curl http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
-          apt-add-repository "deb http://mirror2.openio.io/pub/repo/openio/sds/20.04/ubuntu/ bionic/"
-          apt-add-repository ppa:longsleep/golang-backports
-          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
+          echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" >> /etc/apt/sources.list.d/obsto.list
+          echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/obsto.list
+          apt update
+          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) {{ .cds.env.GO_PACKAGE }} {{ .cds.env.PYTHON_PACKAGE }} {{ .cds.env.ZOOKEEPER_PACKAGE }}
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
+          # Configure environment
+          echo "export PATH=/opt/{{ .cds.env.GO_PACKAGE }}/bin:$PATH" > $HOME/oio-env.sh
+          echo "export ZOOBINDIR=/opt/{{ .cds.env.ZOOKEEPER_PACKAGE }}/bin"  >> $HOME/oio-env.sh
+          echo "export LD_LIBRARY_PATH=/opt/{{ .cds.env.GO_PACKAGE }}/lib:/opt/{{ .cds.env.ZOOKEEPER_PACKAGE }}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
+          source $HOME/oio-env.sh
           mkdir /tmp/oio
+          /opt/{{ .cds.env.PYTHON_PACKAGE }}/bin/python3 -m pip install --upgrade pip
+          /opt/{{ .cds.env.PYTHON_PACKAGE }}/bin/python3 -m venv $HOME/oiovenv
           # We need these permissions for the ECD and container backup services to work
-          virtualenv -p /usr/bin/python3 $HOME/oiovenv
           chmod a+rX $(dirname $HOME)
           chmod -R a+rX $HOME
           . $HOME/oiovenv/bin/activate
+          env
           pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
 
       - name: Run functional tests
         script:
+          - . $HOME/oio-env.sh
           - pgrep rsyslogd || rsyslogd &
           - sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
           - ulimit -c unlimited
           - ulimit -n 8192
           - . $HOME/oiovenv/bin/activate
+          - ./tools/oio-zk-cluster.sh bootstrap {{ .cds.env.ZK_CLUSTER }}
+          - ./tools/oio-zk-cluster.sh start {{ .cds.env.ZK_CLUSTER }}
           - ./tools/oio-travis-suites.sh
+          - ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
 
       - name: Save coverage information
         script:
@@ -42,5 +53,4 @@ jobs:
           - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
 
     requirements:
-        - model: Ubuntu-18.04-VM-b2-15
-          #- model: openio-debbuild-18.04
+        - model: '{{ .cds.env.MODEL}}'

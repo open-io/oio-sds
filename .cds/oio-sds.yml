@@ -67,7 +67,7 @@ workflow:
           value: "cds.scheduler"
 
   tests-fullrepli:
-    pipeline: oio-sds-test-fullrepli
+    pipeline: oio-sds-test-functional
     application: oio-sds
     environment: oio-sds-env-fullrepli
     depends_on:

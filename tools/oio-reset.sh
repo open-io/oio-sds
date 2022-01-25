@@ -26,6 +26,7 @@ else
   SYSTEMD_DIR="$HOME/.config/systemd/user"
 fi
 
+OPENIOCTL=$(command -v openioctl.sh)
 NS=OPENIO
 IP=
 PORT=
@@ -136,7 +137,7 @@ $SYSTEMCTL daemon-reload
 $SYSTEMCTL start oio-cluster.target
 
 COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t meta0 -t meta1 -t rdir)
-$cmd_openio cluster wait -vvv --debug -d 30 -u -n "$COUNT" rawx meta2 meta0 meta1 rdir
+$cmd_openio cluster wait -vvv --debug -d 60 -u -n "$COUNT" rawx meta2 meta0 meta1 rdir
 
 echo -e "\n### Init the meta0/meta1 directory"
 $cmd_openio directory bootstrap --check \
@@ -176,7 +177,7 @@ oio-flush-all.sh -n "$NS" >/dev/null
 
 echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
-$SYSTEMCTL list-dependencies oio-cluster.target
+$OPENIOCTL status2
 $cmd_openio cluster list
 
 echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"

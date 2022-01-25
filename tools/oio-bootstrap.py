@@ -1420,6 +1420,7 @@ ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} --port 9081
+Environment=PATH=${PATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
@@ -1440,7 +1441,7 @@ WATCHDIR = SDSDIR + '/conf/watch'
 TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 SRCDIR = '@CMAKE_CURRENT_SOURCE_DIR@'
-LIBDIR = CODEDIR + '/@LD_LIBDIR@'
+LIBDIR = CODEDIR + '/@LD_LIBDIR@:@ZK_LIBDIR@'
 BINDIR = CODEDIR + '/bin'
 PATH = HOME + "/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:" + os.environ['PATH']
 PYTHON_VERSION = "python" + ".".join(str(x) for x in sys.version_info[:2])

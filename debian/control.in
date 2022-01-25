@@ -17,7 +17,7 @@ Build-Depends:
   gcc,
   pkg-config,
   libcurl4-openssl-dev,
-  zlib1g-dev, 
+  zlib1g-dev,
   libglib2.0-dev,
   libjson-c-dev,
   libzmq3-dev,

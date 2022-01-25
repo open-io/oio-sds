@@ -51,7 +51,8 @@ function trap_exit {
 		$SYSTEMCTL start oio-beanstalkd.target
 		oio-dump-buried-events.py ${BEANSTALK}
 	fi
-	$SYSTEMCTL list-dependencies --no-page oio-cluster.target
+	lsof -i -P -n | grep LISTEN
+	$OPENIOCTL status2
 	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-page -l
 	#dump_syslog
 	${SRCDIR}/tools/oio-gdb.py
@@ -337,6 +338,7 @@ if [[ -n "$PYTHON_COVERAGE" ]] ; then
 	export PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
 
+OPENIOCTL="openioctl.sh"
 OIO_RESET="oio-reset.sh"
 CLI=$(command -v openio)
 ADMIN_CLI=$(command -v openio-admin)

@@ -58,5 +58,4 @@ jobs:
           path: '{{.cds.workspace}}/cmake_coverage.all'
 
     requirements:
-        - model: ubuntu-bionic
-          #- model: openio-debbuild-18.04
+        - model: ubuntu-focal
