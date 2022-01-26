@@ -55,7 +55,10 @@ class Account(WerkzeugApp):
         self.logger = logger or get_logger(conf)
 
         self.url_map = Map([
-            Rule('/status', endpoint='status'),
+            Rule('/status', endpoint='status',
+                 methods=['GET']),
+            Rule('/metrics', endpoint='metrics',
+                 methods=['GET']),
             Rule('/v1.0/account/create', endpoint='account_create',
                  methods=['PUT']),
             Rule('/v1.0/account/delete', endpoint='account_delete',
@@ -92,8 +95,6 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
-            Rule('/v1.0/account/metrics', endpoint='account_metrics',
-                 methods=['GET']),
 
             # Buckets
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
@@ -178,6 +179,60 @@ class Account(WerkzeugApp):
     def on_status(self, req, **kwargs):
         status = self.backend.status(**kwargs)
         return Response(json.dumps(status), mimetype=HTTP_CONTENT_TYPE_JSON)
+
+    # ACCT{{
+    # GET /metrics?format=json
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get all available information about global metrics.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /metrics HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn
+    #    Date: Wed, 26 Jan 2022 10:40:13 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 170
+    #
+    #    {
+    #      "accounts": 1,
+    #      "regions": {
+    #        "LOCALHOST": {
+    #          "buckets": 1,
+    #          "bytes": 111,
+    #          "bytes-details": {
+    #            "SINGLE": 111
+    #          },
+    #          "containers": 1,
+    #          "objects": 1,
+    #          "objects-details": {
+    #            "SINGLE": 1
+    #          }
+    #        }
+    #      }
+    #    }
+    #
+    # }}ACCT
+    @force_master
+    def on_metrics(self, req, **kwargs):
+        output_type = req.args.get('format')
+        raw = self.backend.info_metrics(output_type, **kwargs)
+        if output_type == 'prometheus':
+            return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
+        else:
+            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/create?id=<account_name>
@@ -695,51 +750,6 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id, **kwargs)
         return Response(status=204)
-
-    # ACCT{{
-    # GET /v1.0/account/metrics?format=json
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    #
-    # Get metrics of specified account.
-    #
-    # Sample request:
-    #
-    # .. code-block:: http
-    #
-    #    GET /v1.0/account/metrics HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
-    #    Accept: */*
-    #
-    # Sample response:
-    #
-    # .. code-block:: http
-    #
-    #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
-    #    Connection: keep-alive
-    #    Content-Type: application/json
-    #    Content-Length: 122
-    #
-    # .. code-block:: json
-    # {
-    #   "nb-accounts": 14,
-    #   "nb-buckets": {"RegionOne": 4},
-    #   "nb-containers": {"RegionOne": 15},
-    #   "nb-objects": {"RegionOne": {"highperf": 0}}
-    # }
-    # TODO format of response
-    #
-    # }}ACCT
-    @force_master
-    def on_account_metrics(self, req, **kwargs):
-        output_type = req.args.get('format')
-        raw = self.backend.info_metrics(output_type, **kwargs)
-        if output_type == 'prometheus':
-            return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
-        else:
-            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/bucket/reserve-bucket?id=bucket_name

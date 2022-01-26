@@ -23,10 +23,14 @@ from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.easy_value import boolean_value, float_value, debinarize
-from oio.common.exceptions import OioException, ServiceBusy
+from oio.common.exceptions import ServiceBusy
 from oio.common.timestamp import Timestamp
 
 fdb.api_version(CommonFdb.FDB_VERSION)
+
+
+COUNTERS_FIELDS = ('bytes', 'objects', 'containers', 'buckets', 'accounts')
+TIMESTAMP_FIELDS = ('ctime', 'mtime')
 
 
 def catch_service_errors(func):
@@ -197,32 +201,56 @@ class AccountBackendFdb(object):
     def _timestamp_value_to_timestamp(self, timestamp_value):
         return struct.unpack('<Q', timestamp_value)[0] / 1000000
 
+    def _unmarshal_info(self, keys_values, has_region=False, unpack=None):
+        info = {}
+        for key, value in keys_values:
+            if unpack:
+                key = unpack(key)
+            field, *details = key
+            if details:
+                if not has_region and len(details) == 1:
+                    policy = details[0]
+                    dict_values = info.setdefault(f"{field}-details", {})
+                    dict_values[policy] = self._counter_value_to_counter(value)
+                elif has_region and len(details) <= 2:
+                    region = details[0]
+                    dict_values = info.setdefault(
+                        'regions', {}).setdefault(region, {})
+                    if len(details) == 2:
+                        dict_values = dict_values.setdefault(
+                            f"{field}-details", {})
+                        field = details[1]  # polciy
+                    dict_values[field] = self._counter_value_to_counter(value)
+                else:
+                    self.logger.warning('Unknown key: "%s"', key)
+            elif field in COUNTERS_FIELDS:
+                info[field] = self._counter_value_to_counter(value)
+            elif field in TIMESTAMP_FIELDS:
+                info[field] = self._timestamp_value_to_timestamp(value)
+            else:
+                info[field] = value.decode('utf-8')
+        return info
+
     # Status/metrics ----------------------------------------------------------
 
     @catch_service_errors
     def status(self, **kwargs):
-        status = {'account_count': 0}
-        if self.db is not None:
-            s_range = self.accts_space.range()
-            iterator = self.db.get_range(s_range.start, s_range.stop,
-                                         reverse=False)
-            count = 0
-            for _, _ in iterator:
-                count += 1
-            status['account_count'] = count
-            self.logger.debug('status: %s', status)
+        return self._status(self.db)
+
+    @fdb.transactional
+    def _status(self, tr):
+        accounts = tr.snapshot[self.metrics_space.pack(('accounts',))]
+        if accounts.present():
+            accounts = self._counter_value_to_counter(accounts.value)
         else:
-            self.logger.error('Failed to check connect to fdb server')
-            raise OioException('Connection failed to db')
-        return status
+            accounts = 0
+        return {'account_count': accounts}
 
     @catch_service_errors
     def info_metrics(self, output_type, **kwargs):
-        # generic metrics:
-        # number of accounts
-        # number of buckets per region
-        # number of containers per region
-        # number of objects per region /storage policy
+        """
+        Get all available information about global metrics.
+        """
         metrics = self._info_metrics(self.db)
         if output_type == 'prometheus':
             return self._metrics_to_prometheus_format(metrics)
@@ -231,26 +259,18 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _info_metrics(self, tr):
+        """
+        [transactional] Get all available information about global metrics.
+        """
         metrics_range = self.metrics_space.range()
-        iterator = tr.get_range(metrics_range.start, metrics_range.stop,
-                                streaming_mode=fdb.StreamingMode.want_all)
-        metrics = {
-            'accounts': 0,
-            'regions': {}
-        }
-        for key, value in iterator:
-            field, *region = self.metrics_space.unpack(key)
-            if not region:
-                metrics[field] = self._counter_value_to_counter(value)
-            elif len(region) <= 2:
-                details = metrics['regions'].setdefault(region[0], {})
-                if len(region) == 2:
-                    details = details.setdefault(f"{field}-details", {})
-                    field = region[1]  # polciy
-                details[field] = self._counter_value_to_counter(value)
-            else:
-                self.logger.warning('Unknown key: "%s"', key)
-        return metrics
+        iterator = tr.snapshot.get_range(
+            metrics_range.start, metrics_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all)
+        info = self._unmarshal_info(
+            iterator, has_region=True, unpack=self.metrics_space.unpack)
+        info.setdefault('accounts', 0)
+        info.setdefault('regions', {})
+        return info
 
     def _metrics_to_prometheus_format(self, metrics):
         prom_output = []
@@ -401,52 +421,42 @@ class AccountBackendFdb(object):
             tr, self.metrics_space.pack(('accounts',)), -1)
 
     @catch_service_errors
-    def info_account(self, req_account_id, **kwargs):
+    def info_account(self, account_id, **kwargs):
         """
-        get account infos: containers, metadata and buckets
+        Get all available information about a account.
         """
-        if not req_account_id:
-            self.logger.info('No account id')
-            return None
-
-        if not self._is_element(self.db, self.accts_space, req_account_id):
-            self.logger.info('Account %s doesn\'t exist', req_account_id)
-            return None
-        info = self._account_info(self.db, req_account_id)
-        if not info:
-            self.logger.warning('Account  %s infos not found', req_account_id)
-            return None
-
-        metadata = self._multi_get(self.db, self.metadata_space,
-                                   req_account_id)
-        info['metadata'] = debinarize(metadata)
-        return info
+        return self._account_info(self.db, account_id, full=True)
 
     @fdb.transactional
-    def _account_info(self, tr, account_id):
-        info = {}
+    def _account_info(self, tr, account_id, full=False):
+        """
+        [transactional] Get all available information about a account.
+        """
+        account_space = self.acct_space[account_id]
+        account_range = account_space.range()
+        iterator = tr.snapshot.get_range(
+            account_range.start, account_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all)
+        info = self._unmarshal_info(
+            iterator, has_region=True, unpack=account_space.unpack)
+        if not info:
+            return None
 
-        acct_space = self.acct_space[account_id]
-        a_range = acct_space.range()
-        iterator = tr.get_range(a_range.start, a_range.stop)
-        for key, value in iterator:
-            field, *region = acct_space.unpack(key)
-            if region:
-                if len(region) <= 2:
-                    details = info.setdefault('regions', {}).setdefault(
-                        region[0], {})
-                    if len(region) == 2:
-                        details = details.setdefault(f"{field}-details", {})
-                        field = region[1]  # polciy
-                    details[field] = self._counter_value_to_counter(value)
+        if full:
+            metadata = {}
+            metadata_space = self.metadata_space[account_id]
+            metadata_range = metadata_space.range()
+            iterator = tr.snapshot.get_range(
+                metadata_range.start, metadata_range.stop,
+                streaming_mode=fdb.StreamingMode.want_all)
+            for key, value in iterator:
+                key = metadata_space.unpack(key)
+                if len(key) == 1:
+                    metadata[key[0]] = value.decode('utf-8')
                 else:
                     self.logger.warning('Unknown key: "%s"', key)
-            elif field in ('bytes', 'objects', 'containers', 'buckets'):
-                info[field] = self._counter_value_to_counter(value)
-            elif field in ('ctime', 'mtime'):
-                info[field] = self._timestamp_value_to_timestamp(value)
-            else:
-                info[field] = value.decode('utf-8')
+            info['metadata'] = metadata
+
         return info
 
     @catch_service_errors
@@ -728,41 +738,38 @@ class AccountBackendFdb(object):
         Get all available information about a container, including some
         information coming from the bucket it belongs to.
         """
-        if not cname:
-            return None
-        info = self._container_info(self.db, account_id, cname)
-        if not info:
-            return None
-        replication_enabled = None
-        if info.get('bucket'):
-            replication_enabled = self._val_element(
-                self.db, self.bucket_space[account_id], info.get('bucket'),
-                BUCKET_PROP_REPLI_ENABLED)
-            if replication_enabled:
-                replication_enabled = replication_enabled.decode('utf-8')
-        info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(replication_enabled)
-        return info
+        return self._container_info(self.db, account_id, cname, full=True)
 
     @fdb.transactional
-    def _container_info(self, tr, account, container):
-        container_space = self.container_space[account][container]
+    def _container_info(self, tr, account_id, cname, full=False):
+        """
+        [transactional] Get all available information about a container,
+        including some information coming from the bucket it belongs to.
+        """
+        container_space = self.container_space[account_id][cname]
         container_range = container_space.range()
-        iterator = tr.get_range(container_range.start, container_range.stop)
-        info = {}
-        for key, value in iterator:
-            field, *policy = container_space.unpack(key)
-            if policy:
-                if len(policy) == 1:
-                    details = info.setdefault(f"{field}-details", {})
-                    details[policy[0]] = self._counter_value_to_counter(value)
+        iterator = tr.snapshot.get_range(
+            container_range.start, container_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all)
+        info = self._unmarshal_info(iterator, unpack=container_space.unpack)
+        if not info:
+            return None
+
+        if full:
+            repli_enabled = None
+            bname = info.get('bucket')
+            if bname:
+                if account_id.startswith('.shards_'):
+                    account_id = account_id[8:]
+                buckat_space = self.bucket_space[account_id][bname]
+                repli_enabled = tr.snapshot[
+                    buckat_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
+                if repli_enabled.present():
+                    repli_enabled = repli_enabled.decode('utf-8')
                 else:
-                    self.logger.warning('Unknown key: "%s"', key)
-            elif field in ('bytes', 'objects'):
-                info[field] = self._counter_value_to_counter(value)
-            elif field in ('mtime',):
-                info[field] = self._timestamp_value_to_timestamp(value)
-            else:
-                info[field] = value.decode('utf-8')
+                    repli_enabled = None
+            info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
+
         return info
 
     @catch_service_errors
@@ -1199,15 +1206,13 @@ class AccountBackendFdb(object):
         """
         Get all available information about a bucket.
         """
-        if not bname:
-            return None
-        info = self._bucket_info(self.db, bname, account=account)
-        if not info:
-            return None
-        return info
+        return self._bucket_info(self.db, bname, account=account)
 
     @fdb.transactional
     def _bucket_info(self, tr, bname, account=None):
+        """
+        [transactional] Get all available information about a bucket.
+        """
         if not account:
             try:
                 account = self._get_bucket_owner(tr, bname)
@@ -1215,26 +1220,16 @@ class AccountBackendFdb(object):
                 raise BadRequest(
                     f"Missing account param or an owner: {exc}") from exc
 
-        b_space = self.bucket_space[account][bname]
-        b_range = b_space.range()
-        iterator = tr.get_range(b_range.start, b_range.stop)
-        info = {}
-        for key, value in iterator:
-            field, *policy = b_space.unpack(key)
-            if policy:
-                if len(policy) == 1:
-                    details = info.setdefault(f"{field}-details", {})
-                    details[policy[0]] = self._counter_value_to_counter(value)
-                else:
-                    self.logger.warning('Unknown key: "%s"', key)
-            elif field in ('bytes', 'objects'):
-                info[field] = self._counter_value_to_counter(value)
-            elif field in ('mtime',):
-                info[field] = self._timestamp_value_to_timestamp(value)
-            elif field in (BUCKET_PROP_REPLI_ENABLED,):
-                info[field] = boolean_value(value.decode('utf-8'))
-            else:
-                info[field] = value.decode('utf-8')
+        bucket_space = self.bucket_space[account][bname]
+        bucket_range = bucket_space.range()
+        iterator = tr.snapshot.get_range(
+            bucket_range.start, bucket_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all)
+        info = self._unmarshal_info(iterator, unpack=bucket_space.unpack)
+        if not info:
+            return None
+        repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
+        info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
         return info
 
     @catch_service_errors

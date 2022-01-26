@@ -470,7 +470,7 @@ class TestAccountMetrics(TestAccountServerBase):
         super(TestAccountMetrics, self).setUp()
 
     def test_metrics_nb_accounts(self):
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -481,7 +481,7 @@ class TestAccountMetrics(TestAccountServerBase):
         for i in range(2):
             account_id = 'acct1-' + str(i)
             self._create_account(account_id)
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -490,7 +490,7 @@ class TestAccountMetrics(TestAccountServerBase):
             }, resp)
 
         self._delete_account('acct1-0')
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -499,7 +499,7 @@ class TestAccountMetrics(TestAccountServerBase):
             }, resp)
 
         self._delete_account('acct1-1')
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -509,7 +509,7 @@ class TestAccountMetrics(TestAccountServerBase):
 
     def test_metrics_nb_containers(self):
         self._create_account(self.account_id)
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -525,7 +525,7 @@ class TestAccountMetrics(TestAccountServerBase):
         resp = self.app.put('/v1.0/account/container/update',
                             data=data,
                             query_string={'id': self.account_id})
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
                 'accounts': 1,
@@ -543,7 +543,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
                 'accounts': 1,
@@ -558,7 +558,7 @@ class TestAccountMetrics(TestAccountServerBase):
 
     def test_metrics_nb_objects_bytes(self):
         self._create_account(self.account_id)
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -576,7 +576,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
                 'accounts': 1,
@@ -606,7 +606,7 @@ class TestAccountMetrics(TestAccountServerBase):
         self.app.put('/v1.0/account/container/update',
                      data=data,
                      query_string={'id': self.account_id})
-        resp = self.app.get('/v1.0/account/metrics')
+        resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
                 'accounts': 1,
