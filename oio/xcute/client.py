@@ -36,12 +36,13 @@ class XcuteClient(ServiceClient):
     def job_list(self, limit=None, prefix=None, marker=None,
                  job_status=None, job_type=None, job_lock=None):
         _, data = self.xcute_request(
-            'GET', '/job/list', params={'limit': limit,
-                                        'prefix': prefix,
-                                        'marker': marker,
-                                        'status': job_status,
-                                        'type': job_type,
-                                        'lock': job_lock})
+            None, 'GET', '/job/list', params={
+                'limit': limit,
+                'prefix': prefix,
+                'marker': marker,
+                'status': job_status,
+                'type': job_type,
+                'lock': job_lock})
         return data
 
     def job_create(self, job_type, job_config=None,
