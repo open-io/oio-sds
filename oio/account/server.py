@@ -1185,3 +1185,15 @@ def create_app(conf, **kwargs):
     logger.info('Account using %s backend', backend_type)
     app = Account(conf, backend, iam_db, logger=logger)
     return app
+
+
+def post_fork(server, worker):
+    """
+    Hook to call after fork to open db.
+    """
+    if hasattr(server.app.application, 'backend'):
+        if hasattr(server.app.application.backend, 'db'):
+            server.app.application.backend.init_db()
+    if hasattr(server.app.application, 'iam'):
+        if hasattr(server.app.application.iam, 'db'):
+            server.app.application.iam.init_db()

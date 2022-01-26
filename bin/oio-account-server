@@ -18,7 +18,7 @@
 
 from optparse import OptionParser
 from oio.common.configuration import parse_options, read_conf
-from oio.account.server import create_app
+from oio.account.server import create_app, post_fork
 from oio.common.wsgi import Application, ServiceLogger
 
 
@@ -27,4 +27,5 @@ if __name__ == '__main__':
     conf_file, options = parse_options(parser)
     conf = read_conf(conf_file, 'account-server')
     app = create_app(conf)
-    Application(app, conf, logger_class=ServiceLogger).run()
+    Application(app, conf, post_fork=post_fork,
+                logger_class=ServiceLogger).run()
