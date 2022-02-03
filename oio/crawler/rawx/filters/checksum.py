@@ -29,7 +29,8 @@ from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point, get_hasher
 from oio.conscience.client import ConscienceClient
 from oio.crawler.common.base import Filter
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, \
+    RawxCrawlerNotFound
 
 RawxService = namedtuple('RawxService', ('status', 'last_time'))
 
@@ -176,9 +177,10 @@ class Checksum(Filter):
         if not chunk_checksum_algo:
             chunk_checksum_algo = \
                 'md5' if len(chunk_hash) == 32 else 'blake3'
-        file_hash = self._get_file_hash(chunk.chunk_path, chunk_checksum_algo)
-
         try:
+            file_hash = self._get_file_hash(chunk.chunk_path,
+                                            chunk_checksum_algo)
+
             self.logger.debug('chunk_hash=%s file_hash=%s algo=%s',
                               chunk_hash, file_hash, chunk_checksum_algo)
             if chunk_hash != file_hash:
@@ -188,6 +190,10 @@ class Checksum(Filter):
                 self._rebuild_chunk(chunk)
             else:
                 self.successes += 1
+        except FileNotFoundError:
+            resp = RawxCrawlerNotFound(
+                body=f'chunk_id={chunk.chunk_id} no longer exists')
+            return resp(env, cb)
         except exc.OioException as err:
             resp = RawxCrawlerError(chunk=chunk, body='while parsing '
                                     'chunk_id=%s, err=%s' % {

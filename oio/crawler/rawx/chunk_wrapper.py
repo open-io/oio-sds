@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -83,4 +83,5 @@ class StatusMap(object):
 
 status_map = StatusMap()
 RawxCrawlerOk = status_map[200]
+RawxCrawlerNotFound = status_map[404]
 RawxCrawlerError = status_map[500]

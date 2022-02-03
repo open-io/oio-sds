@@ -56,6 +56,9 @@ class RawxWorker(CrawlerWorker):
                 # A supposition is made: metadata will not change during the
                 # process of all filters
                 chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
+        except FileNotFoundError:
+            self.logger.info('chunk_id=%s no longer exists', chunk.chunk_id)
+            return False
         except (exc.MissingAttribute, exc.FaultyChunk):
             self.errors += 1
             self.logger.error('Skip not valid chunk %s', chunk.chunk_path)
