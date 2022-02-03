@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, \
     M2_PROP_CONTAINER_NAME, M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_TIMESTAMP, NEW_SHARD_STATE_APPLYING_SAVED_WRITES, \
-    NEW_SHARD_STATE_CLEANING_UP
+    NEW_SHARD_STATE_CLEANING_UP, EXISTING_SHARD_STATE_LOCKED
 from oio.common.easy_value import int_value
 from oio.common.green import time
 from oio.container.sharding import ContainerSharding
@@ -156,6 +156,12 @@ class AutomaticSharding(Filter):
             if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
                 self.logger.warning(
                     'Cleaning never started or '
+                    'container %s is a possible orphan shard', meta2db.cid)
+                self.possible_orphan_shards += 1
+                return
+            if sharding_state == EXISTING_SHARD_STATE_LOCKED:
+                self.logger.warning(
+                    'Shard remained locked or '
                     'container %s is a possible orphan shard', meta2db.cid)
                 self.possible_orphan_shards += 1
                 return

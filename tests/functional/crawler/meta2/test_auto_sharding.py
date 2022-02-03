@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,8 @@ import time
 
 from oio.common.constants import M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_TIMESTAMP, NEW_SHARD_STATE_APPLYING_SAVED_WRITES, \
-    NEW_SHARD_STATE_CLEANED_UP, NEW_SHARD_STATE_CLEANING_UP
+    NEW_SHARD_STATE_CLEANED_UP, NEW_SHARD_STATE_CLEANING_UP, \
+    EXISTING_SHARD_STATE_LOCKED
 from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.auto_sharding import AutomaticSharding
@@ -343,7 +344,7 @@ class TestAutoSharding(BaseTestCase):
         self.assertEqual(current_timestamp,
                          int(meta['system'][M2_PROP_SHARDING_TIMESTAMP]))
 
-    def test_possible_orphan_shard(self):
+    def _test_possible_orphan_shard(self, sharding_state):
         def _cb(status, _msg):
             self.assertEqual(200, status)
 
@@ -358,8 +359,7 @@ class TestAutoSharding(BaseTestCase):
         old_timestamp = current_timestamp - (900 * 1000000)
         self.storage.container_set_properties(
             None, None, cid=shard_cid, system={
-                M2_PROP_SHARDING_STATE:
-                    str(NEW_SHARD_STATE_APPLYING_SAVED_WRITES),
+                M2_PROP_SHARDING_STATE: str(sharding_state),
                 M2_PROP_SHARDING_TIMESTAMP: str(old_timestamp)
             })
 
@@ -376,10 +376,16 @@ class TestAutoSharding(BaseTestCase):
             self.account, self.cname))
         self.assertEqual(2, len(shards))
         meta = self.storage.container_get_properties(None, None, cid=shard_cid)
-        self.assertEqual(NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
+        self.assertEqual(sharding_state,
                          int(meta['system'][M2_PROP_SHARDING_STATE]))
         self.assertEqual(old_timestamp,
                          int(meta['system'][M2_PROP_SHARDING_TIMESTAMP]))
+
+    def test_possible_orphan_shard_with_new_shard_applyings_saved_writes(self):
+        self._test_possible_orphan_shard(NEW_SHARD_STATE_APPLYING_SAVED_WRITES)
+
+    def test_possible_orphan_shard_with_locked_shard(self):
+        self._test_possible_orphan_shard(EXISTING_SHARD_STATE_LOCKED)
 
     def test_not_found(self):
         def _cb(status, _msg):
