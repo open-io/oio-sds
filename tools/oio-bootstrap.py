@@ -100,7 +100,7 @@ OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=/usr/bin/redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${redis_server} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Restart=on-failure
 Environment=HOME=${HOME}
@@ -2077,8 +2077,12 @@ def generate(options):
                          crawler_target, False)
 
     # redis
-    env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
     if options.get(ALLOW_REDIS):
+        redis_server = shutil.which('redis-server')
+        env = subenv({'SRVTYPE': 'redis',
+                      'SRVNUM': 1,
+                      'PORT': 6379,
+                      'redis_server': redis_server})
         register_service(env, template_systemd_service_redis, root_target)
         with open(config(env), 'w+') as f:
             tpl = Template(template_redis)
