@@ -704,12 +704,13 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	const char *action = meta2_filter_ctx_get_param(ctx,
 			NAME_MSGKEY_SHARDING_ACTION);
+	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	gchar **properties = NULL;
 
 	if (g_strcmp0(action, "merge") == 0) {
 		err = meta2_backend_prepare_shrinking(m2b, url, &properties);
 	} else {
-		err = meta2_backend_prepare_sharding(m2b, url, &properties);
+		err = meta2_backend_prepare_sharding(m2b, url, beans, &properties);
 	}
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);

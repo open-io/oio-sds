@@ -633,7 +633,7 @@ class ContainerSharding(ProxyClient):
             root_account, root_container, **kwargs)
         return self._check_shards(formatted_shards, are_new=True, **kwargs)
 
-    def _prepare_sharding(self, shard, action=None, **kwargs):
+    def _prepare_sharding(self, shard, action=None, shard_info=None, **kwargs):
         """
         If merge:
         - Change the sharding state to indicate
@@ -646,9 +646,14 @@ class ContainerSharding(ProxyClient):
           without disturbing the container.
         """
         params = self._make_params(cid=shard['cid'], **kwargs)
+        if shard_info is not None:
+            _shard_info = shard_info.copy()
+        else:
+            _shard_info = None
         if action:
             params['action'] = action
-        resp, body = self._request('POST', '/prepare', params=params, **kwargs)
+        resp, body = self._request('POST', '/prepare', params=params,
+                                   json=_shard_info, **kwargs)
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
 
@@ -849,10 +854,14 @@ class ContainerSharding(ProxyClient):
         self.logger.info(
             'Sharding %s with %s', str(parent_shard), str(new_shards))
         parent_shard['sharding'] = None
-
+        for el in new_shards:
+            el['cid'] = ''
+            el['metadata'] = {}
+            el['metadata']['index'] = el['index']
         # Prepare the sharding for the container to shard
         # FIXME(adu): ServiceBusy or Timeout
-        sharding_info = self._prepare_sharding(parent_shard, **kwargs)
+        sharding_info = self._prepare_sharding(parent_shard, action='prepare',
+                                               shard_info=new_shards, **kwargs)
         parent_shard['sharding'] = sharding_info
 
         # Create the new shards

@@ -2766,15 +2766,25 @@ end:
 
 GError*
 meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar ***out_properties)
+		struct oio_url_s *url, GSList *beans, gchar ***out_properties)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	const gchar *master = sqlx_get_service_id();
 	gchar *queue_url = NULL;
+    //gchar *shard_lower = NULL, *shard_upper = NULL;
+    int id;
+    struct json_object *jindex = NULL;
+    json_object *json = NULL;
+
+    struct oio_ext_json_mapping_s mapping[] = {
+		{"index", &jindex, json_type_int,   0},
+		{NULL, NULL, 0, 0}
+    };
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(beans != NULL);
 
 	if (!master || !*master) {
 		return SYSERR("No service ID");
@@ -2818,15 +2828,30 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			goto rollback;
 		}
 
-		copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
-					sq3->path_inline, timestamp);
-		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
-		if (err) {
-			g_prefix_error(&err, "Failed to copy %s to %s: ", sq3->path_inline,
-					copy_path);
-			goto rollback;
-		}
+		for (GSList *l = beans; l; l = g_slist_next(l)) {
+			//shard_lower = SHARD_RANGE_get_lower(l->data)->str;
+			//shard_upper = SHARD_RANGE_get_upper(l->data)->str;
+			json = json_tokener_parse(SHARD_RANGE_get_metadata(l->data)->str);
+			err = oio_ext_extract_json(json, mapping);
+			if (err) {
+				err = BADREQ("Invalid prepare shardind params: (%d) %s",
+						err->code, err->message);
+				goto rollback;
+			}
+			id = json_object_get_int64(jindex);
+			copy_path = g_strdup_printf(
+				"%s.sharding-%"G_GINT64_FORMAT"-%d",
+				sq3->path_inline, timestamp, id);
+			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 
+			if (err) {
+					g_prefix_error(&err, "Failed to copy %s to %s: ",
+						sq3->path_inline, copy_path);
+					goto rollback;
+			}
+			g_free(copy_path);
+			copy_path = NULL;
+		}
 		err = _connect_to_sharding_queue(url, queue_url, timestamp,
 				&beanstalkd);
 		if (err) {

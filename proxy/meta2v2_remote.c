@@ -525,10 +525,11 @@ m2v2_remote_pack_FIND_SHARDS(struct oio_url_s *url, const gchar* strategy,
 
 GByteArray*
 m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, const gchar* action,
-		gint64 dl)
+		GSList *beans, gint64 dl)
 {
+	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PREPARE_SHARDING, url,
-			NULL, dl);
+			body, dl);
 	if (action && *action) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_SHARDING_ACTION,
 				action);

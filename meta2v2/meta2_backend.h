@@ -244,7 +244,7 @@ GError* meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
 
 /** Prepare container to be shard */
 GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar ***out_properties);
+		struct oio_url_s *url, GSList *beans, gchar ***out_properties);
 
 /** Prepare container to be merged */
 GError* meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,

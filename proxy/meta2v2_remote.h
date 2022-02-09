@@ -224,6 +224,7 @@ GByteArray* m2v2_remote_pack_FIND_SHARDS(
 GByteArray* m2v2_remote_pack_PREPARE_SHARDING(
 		struct oio_url_s *url,
 		const gchar* action,
+		GSList *beans,
 		gint64 dl);
 
 GByteArray* m2v2_remote_pack_MERGE_SHARDING(

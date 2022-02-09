@@ -2792,36 +2792,46 @@ _reply_shard_ranges_list_result(struct req_args_s *args, GError * err,
 
 static enum http_rc_e
 action_m2_container_sharding_prepare(struct req_args_s *args,
-		struct json_object *j UNUSED)
+		struct json_object *j)
 {
 	GError *err = NULL;
 	const gchar *action = OPT("action");
 	GTree *properties = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
-
-	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_PREPARE_SHARDING(args->url, action, DL());
-	};
-	err = _resolve_meta2(args, _prefer_master(), _pack,
-			properties, _sharding_properties_extract);
-	if (err) {
-		goto end;
-	}
-
+	GSList *beans = NULL;
 	GString *gstr = g_string_sized_new(256);
-	gboolean first = TRUE;
-	gboolean _func(gpointer k, gpointer v, gpointer i UNUSED) {
-		gboolean is_sharding_property = g_str_has_prefix((gchar*)k,
-				"sys.m2.sharding.");
-		COMA(gstr, first);
-		if (is_sharding_property)
-			k += sizeof("sys.m2.sharding.") - 1;
-		oio_str_gstring_append_json_pair(gstr, (const char *)k,
-				(const char *)v);
-		return FALSE;
+	if (g_strcmp0(action,"prepare") == 0) {
+		err = _load_simplified_shard_ranges(j, &beans);
 	}
-	g_string_append_c(gstr, '{');
-	g_tree_foreach(properties, _func, NULL);
-	g_string_append_c(gstr, '}');
+	if(!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_PREPARE_SHARDING(args->url, action, beans,
+				DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack,
+				properties, _sharding_properties_extract);
+		if (err) {
+			goto end;
+		}
+
+		gboolean first = TRUE;
+		gboolean _func(gpointer k, gpointer v, gpointer i UNUSED) {
+			gboolean is_sharding_property = g_str_has_prefix((gchar*)k,
+					"sys.m2.sharding.");
+			COMA(gstr, first);
+			if (is_sharding_property)
+				k += sizeof("sys.m2.sharding.") - 1;
+			oio_str_gstring_append_json_pair(gstr, (const char *)k,
+					(const char *)v);
+			return FALSE;
+		}
+		g_string_append_c(gstr, '{');
+		g_tree_foreach(properties, _func, NULL);
+		g_string_append_c(gstr, '}');
+	}
+	if (beans) {
+		_bean_cleanl2(beans);
+	}
+
 end:
 	g_tree_destroy(properties);
 	if (err) {
