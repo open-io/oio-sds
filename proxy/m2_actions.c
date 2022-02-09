@@ -2981,17 +2981,28 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 
 static enum http_rc_e
 action_m2_container_sharding_clean(struct req_args_s *args,
-		struct json_object *j UNUSED)
+		struct json_object *j)
 {
 	GError *err = NULL;
 	gboolean truncated = FALSE;
-	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_CLEAN_SHARDING(args->url, DL());
-	};
-	err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
-		m2v2_boolean_truncated_extract);
-	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
-			g_strdup(truncated ? "true" : "false"));
+	GSList *beans = NULL;
+	const gchar *action = OPT("clean_type");
+
+	if (g_strcmp0(action, "local") == 0) {
+		err = _load_simplified_shard_ranges(j, &beans);
+	}
+	if(!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_CLEAN_SHARDING(args->url, action, beans, DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+				m2v2_boolean_truncated_extract);
+		args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+				g_strdup(truncated ? "true" : "false"));
+	}
+	if (beans) {
+		_bean_cleanl2(beans);
+	}
 	return _reply_m2_error(args, err);
 }
 

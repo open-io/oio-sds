@@ -3367,6 +3367,51 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 }
 
 GError*
+meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList * beans , gboolean *truncated UNUSED)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	json_object *json = NULL;
+	const gchar * id;
+	const gchar * timestamp= NULL;
+
+	struct json_object *jindex = NULL, *jtimestamp = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"index", &jindex, json_type_int,   0},
+		{"timestamp", &jtimestamp, json_type_int, 1},
+		{NULL, NULL, 0, 0}
+	};
+
+	json = json_tokener_parse(SHARD_RANGE_get_metadata(beans->data)->str);
+	err = oio_ext_extract_json(json, mapping);
+	id = json_object_get_string(jindex);
+	timestamp = json_object_get_string(jtimestamp);
+
+	gchar *shard_lower = SHARD_RANGE_get_lower(beans->data)->str;
+	gchar *shard_upper = SHARD_RANGE_get_upper(beans->data)->str;
+
+	struct m2_open_args_s open_args = {M2V2_OPEN_LOCAL};
+	gchar * suffix = g_strdup_printf("sharding-%s-%s",
+											timestamp, id);
+	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
+	if (err) {
+		goto end;
+	}
+	err = m2db_clean_shard_all(sq3, shard_lower, shard_upper);
+end:
+	if (!err) {
+		m2b_close(sq3, url);
+	}
+	g_free(suffix);
+	return err;
+}
+
+GError*
 meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean *truncated)
 {

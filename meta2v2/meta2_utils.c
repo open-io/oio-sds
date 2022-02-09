@@ -4330,12 +4330,12 @@ m2db_clean_shard_all(struct sqlx_sqlite3_s *sq3,  gchar *lower, gchar *upper)
 					lower, upper, clause);
 	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
 	if (err) {
-			goto end;
+		goto end;
 	}
 	// Remove orphan properties
 	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
 	if (err) {
-			goto end;
+		goto end;
 	}
 
 	// Remove orphan contents

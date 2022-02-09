@@ -272,6 +272,12 @@ GError* meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean *truncated);
 
+/** Clean up local copies
+ * Each table of each copie is cleaned in single step */
+GError* meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
+        struct oio_url_s *url, GSList * beans, gboolean *truncated);
+
+
 /** Get shard ranges in root container */
 GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, struct list_params_s *lp, m2_onbean_cb cb,

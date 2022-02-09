@@ -569,9 +569,17 @@ m2v2_remote_pack_REPLACE_SHARDING(struct oio_url_s *url, GSList *beans,
 }
 
 GByteArray*
-m2v2_remote_pack_CLEAN_SHARDING(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_CLEAN_SHARDING(struct oio_url_s *url, const gchar *action,
+		GSList *beans, gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_CLEAN_SHARDING, url, NULL, dl);
+	GByteArray *body = bean_sequence_marshall(beans);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CLEAN_SHARDING, url,
+			body, dl);
+	if (action && *action) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_SHARDING_CLEAN,
+				action);
+	}
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
