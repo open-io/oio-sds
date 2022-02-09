@@ -2772,7 +2772,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	const gchar *master = sqlx_get_service_id();
 	gchar *queue_url = NULL;
-    //gchar *shard_lower = NULL, *shard_upper = NULL;
+    gchar *shard_lower = NULL, *shard_upper = NULL;
     int id;
     struct json_object *jindex = NULL;
     json_object *json = NULL;
@@ -2829,8 +2829,8 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		}
 
 		for (GSList *l = beans; l; l = g_slist_next(l)) {
-			//shard_lower = SHARD_RANGE_get_lower(l->data)->str;
-			//shard_upper = SHARD_RANGE_get_upper(l->data)->str;
+			shard_lower = SHARD_RANGE_get_lower(l->data)->str;
+			shard_upper = SHARD_RANGE_get_upper(l->data)->str;
 			json = json_tokener_parse(SHARD_RANGE_get_metadata(l->data)->str);
 			err = oio_ext_extract_json(json, mapping);
 			if (err) {
@@ -2851,6 +2851,31 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			}
 			g_free(copy_path);
 			copy_path = NULL;
+
+			struct sqlx_sqlite3_s *sq3_local = NULL;
+			struct m2_open_args_s open_args = {M2V2_OPEN_LOCAL};
+			gchar * suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT"-%d",
+				timestamp, id);
+			err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3_local);
+			if (err) {
+				g_prefix_error(&err, "Failed to open local db");
+				goto rollback;
+			}
+
+			struct sqlx_repctx_s *repctx_local = NULL;
+			if (!(err = _transaction_begin(sq3_local, url, &repctx_local))) {
+				sqlx_admin_set_i64(sq3_local, M2V2_ADMIN_SHARDING_TIMESTAMP,
+					timestamp);
+				sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_LOWER,
+					shard_lower);
+				sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_UPPER,
+					shard_upper);
+				m2db_increment_version(sq3_local);
+				err = sqlx_transaction_end(repctx_local, err);
+			}
+
+			m2b_close(sq3_local, url);
+			g_free(suffix);
 		}
 		err = _connect_to_sharding_queue(url, queue_url, timestamp,
 				&beanstalkd);
