@@ -2846,8 +2846,10 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 {
 	GError *err = NULL;
 	struct json_object *jroot = NULL, *jparent = NULL, *jlower = NULL,
-			*jupper = NULL, *jtimestamp = NULL, *jmaster = NULL;
+			*jupper = NULL, *jtimestamp = NULL, *jmaster = NULL,
+			*jindex = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
+		{"index",     &jindex,     json_type_int,    1},
 		{"root",      &jroot,      json_type_string, 1},
 		{"parent",    &jparent,    json_type_string, 1},
 		{"lower",     &jlower,     json_type_string, 1},
@@ -2865,7 +2867,8 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
 	gchar *timestamp = (gchar *) json_object_get_string(jtimestamp);
 	gchar *master = (gchar *) json_object_get_string(jmaster);
-	gchar *src_suffix = g_strdup_printf("sharding-%s", timestamp);
+    gchar *index = (gchar *) json_object_get_string(jindex);
+    gchar *src_suffix = g_strdup_printf("sharding-%s-%s", timestamp, index);
 	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
 	gchar *shard_properties[18] = {
