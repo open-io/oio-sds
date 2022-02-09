@@ -521,7 +521,6 @@ m2db_get_drain_marker(struct sqlx_sqlite3_s *sq3, gchar **result)
 	if (marker != NULL) {
 		*result = marker;
 	}
-	
 	return NULL;
 }
 
@@ -4294,6 +4293,68 @@ end:
 	g_free(lower);
 	g_free(upper);
 	return err;
+}
+
+static GVariant **
+_sharding_clean_shard_aliases_to_sql(const gchar *lower,
+               const gchar *upper, GString *clause)
+{
+	void lazy_or() {
+		if (clause->len > 0) g_string_append_static(clause, " OR");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lower && *lower) {
+			lazy_or();
+			g_string_append_static(clause, " alias <= ?");
+			g_ptr_array_add(params, g_variant_new_string(lower));
+	}
+
+	if (upper && *upper) {
+			lazy_or();
+			g_string_append_static(clause, " alias > ?");
+			g_ptr_array_add(params, g_variant_new_string(upper));
+	}
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+GError*
+m2db_clean_shard_all(struct sqlx_sqlite3_s *sq3,  gchar *lower, gchar *upper)
+{
+	GError *err = NULL;
+
+	// Remove aliases out of range
+	GString *clause = g_string_sized_new(128);
+	GVariant **params = _sharding_clean_shard_aliases_to_sql(
+					lower, upper, clause);
+	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
+	if (err) {
+			goto end;
+	}
+	// Remove orphan properties
+	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
+	if (err) {
+			goto end;
+	}
+
+	// Remove orphan contents
+	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3,
+			"id NOT IN (SELECT content FROM aliases)", NULL);
+	if (err) {
+		goto end;
+	}
+	// Remove orphan chunks
+	err = _db_delete(&descr_struct_CHUNKS, sq3,
+			"content NOT IN (SELECT content FROM aliases)", NULL);
+	if (err) {
+		goto end;
+	}
+end:
+	metautils_gvariant_unrefv(params);
+	g_free(params);
+	g_string_free(clause, TRUE);
+    return err;
 }
 
 GError*

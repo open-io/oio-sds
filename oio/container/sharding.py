@@ -866,6 +866,10 @@ class ContainerSharding(ProxyClient):
 
         # Create the new shards
         for new_shard in new_shards:
+            parent_shard['sharding'] = sharding_info
+            # clean local shards
+            self._safe_clean(new_shard, **kwargs)
+            # Create the new shards
             self._create_shard(root_account, root_container, parent_shard,
                                new_shard, **kwargs)
 

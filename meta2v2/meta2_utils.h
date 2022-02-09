@@ -377,6 +377,10 @@ GError* m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path);
 
 GError* m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated);
 
+GError* m2db_clean_shard_all(struct sqlx_sqlite3_s *sq3,  gchar *lower,
+        gchar *upper);
+
+
 GError* m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
 		gboolean *truncated);
 
