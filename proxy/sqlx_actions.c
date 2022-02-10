@@ -408,8 +408,16 @@ action_admin_sync (struct req_args_s *args)
 enum http_rc_e
 action_admin_vacuum(struct req_args_s *args)
 {
+    gboolean local = FALSE;
+    const gchar *suffix_str = NULL;
 	oio_ext_set_admin(TRUE);
-	PACKER_VOID(_pack) { return sqlx_pack_VACUUM(_u, FALSE, DL()); }
+    const gchar *local_str = _req_get_option(args, "local");
+    if (oio_str_is_set(local_str)) {
+        local= TRUE;
+    }
+    suffix_str = _req_get_option(args, "suffix");
+    PACKER_VOID(_pack) { return sqlx_pack_VACUUM(_u, local, suffix_str, DL()); }
+
 	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 }
 

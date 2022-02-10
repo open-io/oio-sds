@@ -111,7 +111,7 @@ GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *sour
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline);
 GByteArray* sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name, const gint check_type, gint64 deadline);
-GByteArray* sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, gint64 deadline);
+GByteArray* sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, const gchar *suffix, gint64 deadline);
 GByteArray* sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize, gint64 deadline);
 

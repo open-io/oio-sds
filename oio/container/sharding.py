@@ -744,27 +744,31 @@ class ContainerSharding(ProxyClient):
             params['clean_type'] = clean_type
 
         truncated = True
-        while truncated:
-            for i in range(attempts):
-                try:
-                    resp, body = self._request(
-                        'POST', '/clean', params=params, json=shard, **kwargs)
-                    if resp.status != 204:
-                        raise exceptions.from_response(resp, body)
-                    break
-                except BadRequest:
+        #while truncated:
+        for i in range(attempts):
+            try:
+                resp, body = self._request(
+                    'POST', '/clean', params=params, json=shard, **kwargs)
+                if resp.status != 204:
+                    raise exceptions.from_response(resp, body)
+                break
+            except BadRequest:
+                raise
+            except Exception as exc:
+                if i >= attempts - 1:
                     raise
-                except Exception as exc:
-                    if i >= attempts - 1:
-                        raise
-                    self.logger.warning(
-                        'Failed to clean the container (CID=%s), '
-                        'retrying...: %s', shard['cid'], exc)
-            truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
+                self.logger.warning(
+                    'Failed to clean the container (CID=%s), '
+                    'retrying...: %s', shard['cid'], exc)
+        # truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
 
         if not no_vacuum:
             try:
-                self.admin.vacuum_base('meta2', cid=shard['cid'], **kwargs)
+                params['type'] = 'meta2'
+                params['cid'] = cid
+                params['is_local'] = 1
+                params['suffix'] = '-'.join(['sharding', str(shard['metadata']['timestamp']), str(shard['metadata']['index'])])
+                self.admin.vacuum_base(params=params, **kwargs)
             except Exception as exc:
                 self.logger.warning('Failed to vacuum container (CID=%s): %s',
                                     shard['cid'], exc)
