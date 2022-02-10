@@ -743,8 +743,7 @@ class ContainerSharding(ProxyClient):
         if clean_type:
             params['clean_type'] = clean_type
 
-        truncated = True
-        #while truncated:
+        # truncated = True
         for i in range(attempts):
             try:
                 resp, body = self._request(
@@ -765,9 +764,12 @@ class ContainerSharding(ProxyClient):
         if not no_vacuum:
             try:
                 params['type'] = 'meta2'
-                params['cid'] = cid
-                params['is_local'] = 1
-                params['suffix'] = '-'.join(['sharding', str(shard['metadata']['timestamp']), str(shard['metadata']['index'])])
+                if clean_type:
+                    params['is_local'] = 1
+                    params['suffix'] = '-'.join(
+                                        ['sharding',
+                                         str(shard['metadata']['timestamp']),
+                                         str(shard['metadata']['index'])])
                 self.admin.vacuum_base(params=params, **kwargs)
             except Exception as exc:
                 self.logger.warning('Failed to vacuum container (CID=%s): %s',
@@ -1344,7 +1346,8 @@ class ContainerSharding(ProxyClient):
 
         # Prepare shrinking on smaller shard
         # FIXME(adu): ServiceBusy or Timeout
-        shrinking_info = self._prepare_sharding(smaller_shard, **kwargs)
+        shrinking_info = self._prepare_sharding(
+                            smaller_shard, action='prepare-merge', **kwargs)
         smaller_shard['sharding'] = shrinking_info
         # Prepare shrinking on bigger shard or root
         # FIXME(adu): ServiceBusy or Timeout

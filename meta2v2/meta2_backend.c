@@ -2784,7 +2784,6 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(beans != NULL);
 
 	if (!master || !*master) {
 		return SYSERR("No service ID");
@@ -2827,58 +2826,69 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			err = BADREQ("Sharding is already in progress");
 			goto rollback;
 		}
-
-		for (GSList *l = beans; l; l = g_slist_next(l)) {
-			shard_lower = SHARD_RANGE_get_lower(l->data)->str;
-			shard_upper = SHARD_RANGE_get_upper(l->data)->str;
-			json = json_tokener_parse(SHARD_RANGE_get_metadata(l->data)->str);
-			err = oio_ext_extract_json(json, mapping);
+		if (!beans) {
+			copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+					sq3->path_inline, timestamp);
+            err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 			if (err) {
-				err = BADREQ("Invalid prepare shardind params: (%d) %s",
-						err->code, err->message);
-				goto rollback;
-			}
-			id = json_object_get_int64(jindex);
-			if (id > max_index) {
-				max_index = id;
-			}
-			copy_path = g_strdup_printf(
-				"%s.sharding-%"G_GINT64_FORMAT"-%d",
-				sq3->path_inline, timestamp, id);
-			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
-
-			if (err) {
-					g_prefix_error(&err, "Failed to copy %s to %s: ",
+				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
-					goto rollback;
-			}
-			g_free(copy_path);
-			copy_path = NULL;
-
-			struct sqlx_sqlite3_s *sq3_local = NULL;
-			struct m2_open_args_s open_args = {M2V2_OPEN_LOCAL};
-			gchar * suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT"-%d",
-				timestamp, id);
-			err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3_local);
-			if (err) {
-				g_prefix_error(&err, "Failed to open local db");
 				goto rollback;
 			}
+		}
+		else {
+			for (GSList *l = beans; l; l = g_slist_next(l)) {
+				shard_lower = SHARD_RANGE_get_lower(l->data)->str;
+				shard_upper = SHARD_RANGE_get_upper(l->data)->str;
+				json = json_tokener_parse(SHARD_RANGE_get_metadata(l->data)->str);
+				err = oio_ext_extract_json(json, mapping);
+				if (err) {
+					err = BADREQ("Invalid prepare shardind params: (%d) %s",
+							err->code, err->message);
+					goto rollback;
+				}
+				id = json_object_get_int64(jindex);
+				if (id > max_index) {
+					max_index = id;
+				}
+				copy_path = g_strdup_printf(
+					"%s.sharding-%"G_GINT64_FORMAT"-%d",
+					sq3->path_inline, timestamp, id);
+				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 
-			struct sqlx_repctx_s *repctx_local = NULL;
-			if (!(err = _transaction_begin(sq3_local, url, &repctx_local))) {
-				sqlx_admin_set_i64(sq3_local, M2V2_ADMIN_SHARDING_TIMESTAMP,
-					timestamp);
-				sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_LOWER,
-					shard_lower);
-				sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_UPPER,
-					shard_upper);
-				m2db_increment_version(sq3_local);
-				err = sqlx_transaction_end(repctx_local, err);
+				if (err) {
+					g_prefix_error(&err, "Failed to copy %s to %s: ",
+							sq3->path_inline, copy_path);
+					goto rollback;
+				}
+				g_free(copy_path);
+				copy_path = NULL;
+
+				struct sqlx_sqlite3_s *sq3_local = NULL;
+				struct m2_open_args_s open_args = {M2V2_OPEN_LOCAL};
+				gchar * suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT"-%d",
+					timestamp, id);
+				err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3_local);
+				if (err) {
+					g_prefix_error(&err, "Failed to open local db");
+					goto rollback;
+				}
+
+				struct sqlx_repctx_s *repctx_local = NULL;
+				if (!(err = _transaction_begin(sq3_local, url, &repctx_local))) {
+					sqlx_admin_set_i64(sq3_local, M2V2_ADMIN_SHARDING_TIMESTAMP,
+						timestamp);
+					sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_LOWER,
+						shard_lower);
+					sqlx_admin_set_str(sq3_local, M2V2_ADMIN_SHARDING_UPPER,
+						shard_upper);
+					m2db_increment_version(sq3_local);
+					err = sqlx_transaction_end(repctx_local, err);
+				}
+
+				m2b_close(sq3_local, url);
+				g_free(suffix);
 			}
-
-			m2b_close(sq3_local, url);
-			g_free(suffix);
 		}
 		err = _connect_to_sharding_queue(url, queue_url, timestamp,
 				&beanstalkd);
@@ -3294,15 +3304,26 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 			if (!err) {
 				if (sharding_timestamp) {
 					gchar *copy_path = NULL;
-					for (int64_t id = 0; id <= sharding_index; id++) {
+					if (sharding_index == 0) {
 						copy_path = g_strdup_printf(
-							"%s.sharding-%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT,
-							sq3->path_inline, sharding_timestamp, id);
+							"%s.sharding-%"G_GINT64_FORMAT, sq3->path_inline,
+							sharding_timestamp);
 						if (remove(copy_path)) {
 							GRID_WARN("Failed to remove file %s: (%d) %s",
 								copy_path, errno, strerror(errno));
 						}
 						g_free(copy_path);
+					} else {
+						for (int64_t id = 0; id <= sharding_index; id++) {
+							copy_path = g_strdup_printf(
+								"%s.sharding-%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT,
+								sq3->path_inline, sharding_timestamp, id);
+							if (remove(copy_path)) {
+								GRID_WARN("Failed to remove file %s: (%d) %s",
+									copy_path, errno, strerror(errno));
+							}
+							g_free(copy_path);
+						}
 					}
 				}
 				if (sq3->sharding_queue) {
