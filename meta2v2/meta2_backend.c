@@ -2772,15 +2772,15 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	const gchar *master = sqlx_get_service_id();
 	gchar *queue_url = NULL;
-    gchar *shard_lower = NULL, *shard_upper = NULL;
-    int id;
-    struct json_object *jindex = NULL;
-    json_object *json = NULL;
+	gchar *shard_lower = NULL, *shard_upper = NULL;
+	int id = 0, max_index = 0;
+	struct json_object *jindex = NULL;
+	json_object *json = NULL;
 
-    struct oio_ext_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"index", &jindex, json_type_int,   0},
 		{NULL, NULL, 0, 0}
-    };
+	};
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2839,6 +2839,9 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 				goto rollback;
 			}
 			id = json_object_get_int64(jindex);
+			if (id > max_index) {
+				max_index = id;
+			}
 			copy_path = g_strdup_printf(
 				"%s.sharding-%"G_GINT64_FORMAT"-%d",
 				sq3->path_inline, timestamp, id);
@@ -2896,6 +2899,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					EXISTING_SHARD_STATE_SAVING_WRITES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_INDEX, max_index);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_QUEUE, queue_url);
 			m2db_increment_version(sq3);
@@ -3274,6 +3278,8 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 			gint64 timestamp = oio_ext_real_time();
 			gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
 						M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
+			gint64 sharding_index = sqlx_admin_get_i64(sq3,
+						M2V2_ADMIN_SHARDING_INDEX, 0);
 			struct sqlx_repctx_s *repctx = NULL;
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
 				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
@@ -3287,14 +3293,17 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 			}
 			if (!err) {
 				if (sharding_timestamp) {
-					gchar *copy_path = g_strdup_printf(
-							"%s.sharding-%"G_GINT64_FORMAT, sq3->path_inline,
-							sharding_timestamp);
-					if (remove(copy_path)) {
-						GRID_WARN("Failed to remove file %s: (%d) %s",
+					gchar *copy_path = NULL;
+					for (int64_t id = 0; id <= sharding_index; id++) {
+						copy_path = g_strdup_printf(
+							"%s.sharding-%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT,
+							sq3->path_inline, sharding_timestamp, id);
+						if (remove(copy_path)) {
+							GRID_WARN("Failed to remove file %s: (%d) %s",
 								copy_path, errno, strerror(errno));
+						}
+						g_free(copy_path);
 					}
-					g_free(copy_path);
 				}
 				if (sq3->sharding_queue) {
 					beanstalkd_destroy(sq3->sharding_queue);
