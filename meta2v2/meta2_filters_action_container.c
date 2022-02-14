@@ -817,9 +817,9 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
-	const char *action = meta2_filter_ctx_get_param(ctx,
-					NAME_MSGKEY_SHARDING_CLEAN);
-	if(g_strcmp0(action, "local") == 0) {
+	const char *clean_type = meta2_filter_ctx_get_param(ctx,
+							NAME_MSGKEY_SHARDING_CLEANTYPE);
+	if(g_strcmp0(clean_type, "local") == 0) {
 		beans = meta2_filter_ctx_get_input_udata(ctx);
 		err = meta2_backend_clean_once_sharding(m2b, url, beans, &truncated);
 	} else {

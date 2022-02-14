@@ -452,6 +452,6 @@ meta2_filter_extract_clean(struct gridd_filter_ctx_s *ctx,
     GError *e = NULL;
     gchar buf[1024];
     TRACE_FILTER();
-    EXTRACT_OPT(NAME_MSGKEY_SHARDING_CLEAN);
+    EXTRACT_OPT(NAME_MSGKEY_SHARDING_CLEANTYPE);
     return FILTER_OK;
 }

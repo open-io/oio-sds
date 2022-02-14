@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -742,8 +742,6 @@ class ContainerSharding(ProxyClient):
             params = self._make_params(cid=shard['cid'], **kwargs)
         if clean_type:
             params['clean_type'] = clean_type
-
-        # truncated = True
         for i in range(attempts):
             try:
                 resp, body = self._request(
@@ -759,13 +757,11 @@ class ContainerSharding(ProxyClient):
                 self.logger.warning(
                     'Failed to clean the container (CID=%s), '
                     'retrying...: %s', shard['cid'], exc)
-        # truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
-
         if not no_vacuum:
             try:
                 params['type'] = 'meta2'
                 if clean_type:
-                    params['is_local'] = 1
+                    params['local'] = 1
                     params['suffix'] = '-'.join(
                                         ['sharding',
                                          str(shard['metadata']['timestamp']),

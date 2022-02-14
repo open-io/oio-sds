@@ -2989,14 +2989,14 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 	GError *err = NULL;
 	gboolean truncated = FALSE;
 	GSList *beans = NULL;
-	const gchar *action = OPT("clean_type");
+	const gchar *clean_type = OPT("clean_type");
 
-	if (g_strcmp0(action, "local") == 0) {
+	if (g_strcmp0(clean_type, "local") == 0) {
 		err = _load_simplified_shard_ranges(j, &beans);
 	}
 	if(!err) {
 		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_CLEAN_SHARDING(args->url, action, beans, DL());
+			return m2v2_remote_pack_CLEAN_SHARDING(args->url, clean_type, beans, DL());
 		};
 		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 				m2v2_boolean_truncated_extract);
