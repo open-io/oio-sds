@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,12 +14,15 @@
 # License along with this library.
 
 
+import time
 from logging import getLogger
 
-from oio.cli import Lister
+from oio.cli import Lister, ShowOne
+from oio.common.easy_value import int_value
 from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
-from oio.common.constants import M2_PROP_OBJECTS
+from oio.common.constants import M2_PROP_OBJECTS, M2_PROP_SHARDING_STATE, \
+    M2_PROP_SHARDING_TIMESTAMP, SHARDING_STATE_NAME
 
 
 class ContainerShardingCommandMixin(object):
@@ -31,6 +34,26 @@ class ContainerShardingCommandMixin(object):
             metavar='<container>',
             help=("Name of the container to interact with.\n")
         )
+        parser.add_argument(
+            '--cid',
+            dest='is_cid',
+            default=False,
+            help="Interpret container as a CID",
+            action='store_true'
+        )
+
+    def account_and_container(self, parsed_args):
+        """
+        Get account and container from parsed args.
+
+        Resolve a CID into account and container name if required.
+        """
+        if parsed_args.is_cid:
+            acct, cont = self.app.client_manager.storage.resolve_cid(
+                parsed_args.container)
+            self.app.client_manager._account = acct
+            return acct, cont
+        return self.app.client_manager.account, parsed_args.container
 
 
 class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
@@ -404,3 +427,78 @@ class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
             columns += ('Count',)
 
         return (columns, self._take_action(parsed_args))
+
+
+class IsOrphanShard(ContainerShardingCommandMixin, ShowOne):
+    """
+    Tell if the specified container is an orphan shard.
+
+    Conditions:
+    - the container metadata has a sharding.state field
+    - the sharding.timestamp is old
+    - the container does not appear in the technical sharding account
+    """
+
+    columns = ('account', 'container',
+               M2_PROP_SHARDING_STATE[len('sys.m2.'):],
+               M2_PROP_SHARDING_TIMESTAMP[len('sys.m2.'):],
+               'is_orphan', 'action_taken')
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            '--autoremove',
+            action='store_true',
+            help='Delete the container if it is an orphan shard'
+        )
+        parser.add_argument(
+            '--grace-delay',
+            type=int,
+            default=ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT * 10,
+            help=('Delay in seconds after which we consider there is no '
+                  'sharding activity on the container')
+        )
+
+        return parser
+
+    def take_action(self, parsed_args):
+        obsto = self.app.client_manager.storage
+        cs = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger,
+            pool_manager=self.app.client_manager.pool_manager)
+        acct, cont = self.account_and_container(parsed_args)
+        cid = cid_from_name(acct, cont)
+        raw_meta = obsto.container_get_properties(acct, cont)
+        root_cid, meta = cs.meta_to_shard(raw_meta)
+        sharding_state = int_value(
+            raw_meta['system'].get(M2_PROP_SHARDING_STATE), 0)
+        sharding_timestamp = int_value(
+            raw_meta['system'].get(M2_PROP_SHARDING_TIMESTAMP), 0) / 1000000
+        recent_change = (time.time() - sharding_timestamp
+                         < parsed_args.grace_delay)
+
+        action_taken = None
+        is_orphan = False
+
+        if root_cid and sharding_state and not recent_change:
+            # First page of shards whose "upper" is higher than our "lower"
+            registered = list(cs.show_shards(None, None, root_cid=root_cid,
+                                             marker=meta["lower"],
+                                             no_paging=False))
+            is_orphan = cid not in [c['cid'] for c in registered]
+
+        if is_orphan and parsed_args.autoremove:
+            try:
+                obsto.container_delete(acct, cont, force=True)
+                action_taken = 'Deleted'
+            except Exception as exc:
+                action_taken = f'Tried to delete, but: {exc}'
+
+        return self.columns, [acct,
+                              cont,
+                              SHARDING_STATE_NAME.get(sharding_state),
+                              sharding_timestamp,
+                              is_orphan,
+                              action_taken]
