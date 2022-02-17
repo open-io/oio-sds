@@ -295,10 +295,6 @@ class AccountBackendFdb(object):
         [transactional] Update metrics stats for the specified region.
         """
         for key in ('bytes', 'objects'):
-            # Update global stats (by region)
-            value = stats_delta[key]
-            self._increment(tr, self.metrics_space.pack((key, region)), value)
-
             for policy, value in stats_delta[f"{key}-details"].items():
                 # Update stats by policy (by policy)
                 self._increment(
@@ -491,7 +487,6 @@ class AccountBackendFdb(object):
             # Update global stats
             value = stats_delta[key]
             self._increment(tr, account_space.pack((key,)), value)
-            self._increment(tr, account_space.pack((key, region)), value)
             # Update stats by policy (by region)
             for policy, value in stats_delta[f"{key}-details"].items():
                 self._increment(

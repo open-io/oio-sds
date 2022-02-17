@@ -532,8 +532,6 @@ class TestAccountMetrics(TestAccountServerBase):
                 'regions': {
                     'LOCALHOST': {
                         'containers': 1,
-                        'objects': 1,
-                        'bytes': 20
                     }
                 }
             }, resp)
@@ -550,8 +548,6 @@ class TestAccountMetrics(TestAccountServerBase):
                 'regions': {
                     'LOCALHOST': {
                         'containers': 0,
-                        'objects': 0,
-                        'bytes': 0
                     }
                 }
             }, resp)
@@ -583,12 +579,10 @@ class TestAccountMetrics(TestAccountServerBase):
                 'regions': {
                     'LOCALHOST': {
                         'containers': 1,
-                        'objects': 3,
                         'objects-details': {
                             'class1': 1,
                             'class2': 2
                         },
-                        'bytes': 40,
                         'bytes-details': {
                             'class1': 30,
                             'class2': 10
@@ -613,13 +607,11 @@ class TestAccountMetrics(TestAccountServerBase):
                 'regions': {
                     'LOCALHOST': {
                         'containers': 2,
-                        'objects': 9,
                         'objects-details': {
                             'class1': 1,
                             'class2': 3,
                             'class3': 5
                         },
-                        'bytes': 61,
                         'bytes-details': {
                             'class1': 30,
                             'class2': 20,

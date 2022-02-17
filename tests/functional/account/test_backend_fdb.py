@@ -55,6 +55,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.init_db(None)
         self.backend.db.clear_range(b'\x00', b'\xfe')
         self.beanstalkd0.drain_tube('oio-preserved')
+        self.maxDiff = None
 
     @classmethod
     def _monkey_patch(cls):
@@ -904,8 +905,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): total_bytes,
-                ('objects', region): total_objects,
                 ('containers', region): containers
             },
             {
@@ -913,9 +912,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
-                    ('bytes', region): total_bytes,
                     ('objects',): total_objects,
-                    ('objects', region): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -942,8 +939,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region): total_bytes + 42,
-                ('objects', region): total_objects + 12,
                 ('containers', region): containers + 1
             },
             {
@@ -951,9 +946,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
-                    ('bytes', region): total_bytes,
                     ('objects',): total_objects,
-                    ('objects', region): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -961,9 +954,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
-                    ('bytes', region): 42,
                     ('objects',): 12,
-                    ('objects', region): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1181,8 +1172,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): total_bytes,
-                ('objects', region): total_objects,
                 ('containers', region): containers
             },
             {
@@ -1190,9 +1179,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
-                    ('bytes', region): total_bytes,
                     ('objects',): total_objects,
-                    ('objects', region): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1219,8 +1206,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region): total_bytes + 42,
-                ('objects', region): total_objects + 12,
                 ('containers', region): containers + 1
             },
             {
@@ -1228,9 +1213,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
-                    ('bytes', region): total_bytes,
                     ('objects',): total_objects,
-                    ('objects', region): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1238,9 +1221,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
-                    ('bytes', region): 42,
                     ('objects',): 12,
-                    ('objects', region): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1256,8 +1237,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region): 42,
-                ('objects', region): 12,
                 ('containers', region): 1
             },
             {
@@ -1271,9 +1250,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
-                    ('bytes', region): 42,
                     ('objects',): 12,
-                    ('objects', region): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1497,8 +1474,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 41,
-                ('objects', region): 5,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1
@@ -1508,9 +1483,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
-                    ('bytes', region): 41,
                     ('objects',): 5,
-                    ('objects', region): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
                     ('containers',): 1,
@@ -1543,8 +1516,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 41,
-                ('objects', region): 5,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1
@@ -1554,9 +1525,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
-                    ('bytes', region): 41,
                     ('objects',): 5,
-                    ('objects', region): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
                     ('containers',): 1,
@@ -1590,8 +1559,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 74,
-                ('objects', region): 12,
                 ('objects', region, 'THREECOPIES'): 5,
                 ('objects', region, 'EC'): 3,
                 ('objects', region, 'SINGLE'): 4,
@@ -1602,9 +1569,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 74,
-                    ('bytes', region): 74,
                     ('objects',): 12,
-                    ('objects', region): 12,
                     ('objects', region, 'THREECOPIES'): 5,
                     ('objects', region, 'EC'): 3,
                     ('objects', region, 'SINGLE'): 4,
@@ -1638,8 +1603,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 53,
-                ('objects', region): 8,
                 ('objects', region, 'THREECOPIES'): 4,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -1650,9 +1613,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 53,
-                    ('bytes', region): 53,
                     ('objects',): 8,
-                    ('objects', region): 8,
                     ('objects', region, 'THREECOPIES'): 4,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 4,
@@ -1677,8 +1638,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 33,
-                ('objects', region): 7,
                 ('objects', region, 'THREECOPIES'): 3,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -1689,9 +1648,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime1,
                     ('bytes',): 33,
-                    ('bytes', region): 33,
                     ('objects',): 7,
-                    ('objects', region): 7,
                     ('objects', region, 'THREECOPIES'): 3,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 4,
@@ -1717,8 +1674,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 0,
-                ('objects', region): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -1729,9 +1684,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 0,
-                    ('bytes', region): 0,
                     ('objects',): 0,
-                    ('objects', region): 0,
                     ('objects', region, 'THREECOPIES'): 0,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 0,
@@ -1753,8 +1706,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 0,
-                ('bytes', region): 0,
-                ('objects', region): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -1820,8 +1771,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 41,
-                ('objects', region): 5,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1,
@@ -1832,9 +1781,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
-                    ('bytes', region): 41,
                     ('objects',): 5,
-                    ('objects', region): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
                     ('containers',): 1,
@@ -1880,8 +1827,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 41,
-                ('objects', region): 5,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1,
@@ -1892,9 +1837,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
-                    ('bytes', region): 41,
                     ('objects',): 5,
-                    ('objects', region): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
                     ('containers',): 1,
@@ -1943,8 +1886,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 74,
-                ('objects', region): 12,
                 ('objects', region, 'THREECOPIES'): 5,
                 ('objects', region, 'EC'): 3,
                 ('objects', region, 'SINGLE'): 4,
@@ -1956,9 +1897,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 74,
-                    ('bytes', region): 74,
                     ('objects',): 12,
-                    ('objects', region): 12,
                     ('objects', region, 'THREECOPIES'): 5,
                     ('objects', region, 'EC'): 3,
                     ('objects', region, 'SINGLE'): 4,
@@ -2006,8 +1945,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 53,
-                ('objects', region): 8,
                 ('objects', region, 'THREECOPIES'): 4,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2019,9 +1956,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 53,
-                    ('bytes', region): 53,
                     ('objects',): 8,
-                    ('objects', region): 8,
                     ('objects', region, 'THREECOPIES'): 4,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 4,
@@ -2049,8 +1984,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 33,
-                ('objects', region): 7,
                 ('objects', region, 'THREECOPIES'): 3,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2062,9 +1995,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime1,
                     ('bytes',): 33,
-                    ('bytes', region): 33,
                     ('objects',): 7,
-                    ('objects', region): 7,
                     ('objects', region, 'THREECOPIES'): 3,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 4,
@@ -2094,8 +2025,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region): 0,
-                ('objects', region): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2107,9 +2036,7 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 0,
-                    ('bytes', region): 0,
                     ('objects',): 0,
-                    ('objects', region): 0,
                     ('objects', region, 'THREECOPIES'): 0,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 0,
@@ -2132,8 +2059,6 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 0,
-                ('bytes', region): 0,
-                ('objects', region): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2194,10 +2119,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region,): 108,
                 ('bytes', region, 'pol1'): 7,
                 ('bytes', region, 'pol2'): 101,
-                ('objects', region,): 8,
                 ('objects', region, 'pol1'): 3,
                 ('objects', region, 'pol2'): 5,
                 ('containers', region): 1,
@@ -2208,11 +2131,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 108,
-                    ('bytes', region,): 108,
                     ('bytes', region, 'pol1'): 7,
                     ('bytes', region, 'pol2'): 101,
                     ('objects',): 8,
-                    ('objects', region,): 8,
                     ('objects', region, 'pol1'): 3,
                     ('objects', region, 'pol2'): 5,
                     ('containers',): 1,
@@ -2263,11 +2184,9 @@ class TestAccountBackend(BaseTestCase):
             ('id',): account_id,
             ('mtime',): mtime,
             ('bytes',): 176,
-            ('bytes', region,): 176,
             ('bytes', region, 'pol1'): 34,
             ('bytes', region, 'pol2'): 142,
             ('objects',): 36,
-            ('objects', region,): 36,
             ('objects', region, 'pol1'): 14,
             ('objects', region, 'pol2'): 22,
             ('containers',): 2,
@@ -2278,10 +2197,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('bytes', region,): 176,
                 ('bytes', region, 'pol1'): 34,
                 ('bytes', region, 'pol2'): 142,
-                ('objects', region,): 36,
                 ('objects', region, 'pol1'): 14,
                 ('objects', region, 'pol2'): 22,
                 ('containers', region): 2,
@@ -2335,10 +2252,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region,): 218,
                 ('bytes', region, 'pol1'): 64,
                 ('bytes', region, 'pol2'): 154,
-                ('objects', region,): 48,
                 ('objects', region, 'pol1'): 19,
                 ('objects', region, 'pol2'): 29,
                 ('containers', region): 3,
@@ -2349,11 +2264,9 @@ class TestAccountBackend(BaseTestCase):
                 (shards_account_id,): {
                     ('id',): shards_account_id,
                     ('bytes',): 42,
-                    ('bytes', region,): 42,
                     ('bytes', region, 'pol1'): 30,
                     ('bytes', region, 'pol2'): 12,
                     ('objects',): 12,
-                    ('objects', region,): 12,
                     ('objects', region, 'pol1'): 5,
                     ('objects', region, 'pol2'): 7,
                     ('containers',): 1,
@@ -2392,11 +2305,9 @@ class TestAccountBackend(BaseTestCase):
             ('id',): shards_account_id,
             ('mtime',): dtime3,
             ('bytes',): 0,
-            ('bytes', region,): 0,
             ('bytes', region, 'pol1'): 0,
             ('bytes', region, 'pol2'): 0,
             ('objects',): 0,
-            ('objects', region,): 0,
             ('objects', region, 'pol1'): 0,
             ('objects', region, 'pol2'): 0,
             ('containers',): 0,
@@ -2406,10 +2317,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region,): 176,
                 ('bytes', region, 'pol1'): 34,
                 ('bytes', region, 'pol2'): 142,
-                ('objects', region,): 36,
                 ('objects', region, 'pol1'): 14,
                 ('objects', region, 'pol2'): 22,
                 ('containers', region): 2,
@@ -2450,10 +2359,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region,): 108,
                 ('bytes', region, 'pol1'): 7,
                 ('bytes', region, 'pol2'): 101,
-                ('objects', region,): 8,
                 ('objects', region, 'pol1'): 3,
                 ('objects', region, 'pol2'): 5,
                 ('containers', region): 1,
@@ -2464,11 +2371,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 108,
-                    ('bytes', region,): 108,
                     ('bytes', region, 'pol1'): 7,
                     ('bytes', region, 'pol2'): 101,
                     ('objects',): 8,
-                    ('objects', region,): 8,
                     ('objects', region, 'pol1'): 3,
                     ('objects', region, 'pol2'): 5,
                     ('containers',): 1,
@@ -2497,10 +2402,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('bytes', region,): 0,
                 ('bytes', region, 'pol1'): 0,
                 ('bytes', region, 'pol2'): 0,
-                ('objects', region,): 0,
                 ('objects', region, 'pol1'): 0,
                 ('objects', region, 'pol2'): 0,
                 ('containers', region): 0,
@@ -2511,11 +2414,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime1,
                     ('bytes',): 0,
-                    ('bytes', region,): 0,
                     ('bytes', region, 'pol1'): 0,
                     ('bytes', region, 'pol2'): 0,
                     ('objects',): 0,
-                    ('objects', region,): 0,
                     ('objects', region, 'pol1'): 0,
                     ('objects', region, 'pol2'): 0,
                     ('containers',): 0,
