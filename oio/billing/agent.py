@@ -15,6 +15,7 @@
 import random
 import re
 import signal
+import ssl
 import sys
 import time
 import uuid
@@ -354,6 +355,10 @@ class BillingAgent():
         Returns an AMQP BlockingConnection and a channel for the provided URL.
         """
         url_param = pika.URLParameters(self.amqp_url)
+        if url_param.ssl_options:
+            # Force TLSv1 to support production rabbit
+            url_param.ssl_options.context = ssl.SSLContext(
+                protocol=ssl.PROTOCOL_TLSv1_1)
         self.logger.debug('Connecting to %s', url_param)
         connection = pika.BlockingConnection(url_param)
         try:
