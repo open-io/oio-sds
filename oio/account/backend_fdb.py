@@ -594,13 +594,21 @@ class AccountBackendFdb(object):
 
         if not self._is_element(self.db, self.accts_space, account_id):
             raise NotFound(account_id)
-
-        self._flush_account(self.db, account_id)
+        mtime = time.time()
+        self._flush_account(self.db, account_id, mtime)
 
     @fdb.transactional
-    def _flush_account(self, tr, account_id):
+    def _flush_account(self, tr, account_id, mtime):
         # Reset stats
         account_space = self.acct_space[account_id]
+        current_mtime = tr[account_space.pack(('mtime',))]
+        if current_mtime.present():
+            current_mtime = self._timestamp_value_to_timestamp(
+                current_mtime.value)
+            if mtime == current_mtime:
+                self.logger.info('flush account %s: transaction replay \
+                                 skipped', account_id)
+                return
         for field in ('bytes', 'objects', 'containers', 'buckets'):
             self._set_counter(tr, account_space.pack((field,)))
             details_space = account_space[field]
@@ -633,7 +641,7 @@ class AccountBackendFdb(object):
         # Delete metadata
         metadata_space = self.metadata_space[account_id].range()
         tr.clear_range(metadata_space.start, metadata_space.stop)
-        # TODO(adu): Update mtime
+        self._update_timestamp(tr, account_space.pack(('mtime',)), mtime)
 
     # Container ---------------------------------------------------------------
 
