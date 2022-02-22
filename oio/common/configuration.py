@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -69,17 +69,18 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
             # if log_format is set, extract it from the parser
             # to prevent to expand variables which can, in case of
             # log_format throw a ConfigParser.InterpolationMissingOptionError
-            log_format = None
-            if parser.has_option(section_name, 'log_format'):
-                log_format = parser.get(section_name, 'log_format', raw=True)
+            log_format = {}
+            for option in ('log_format', 'access_log_format'):
+                if not parser.has_option(section_name, option):
+                    continue
+                log_format[option] = parser.get(section_name, option, raw=True)
                 # don't use remove_options because it can fail without reason
-                parser.set(section_name, 'log_format', '')
+                parser.set(section_name, option, '')
 
             conf = dict(parser.items(section_name))
 
             # Add log_format again, after parsing
-            if log_format:
-                conf['log_format'] = log_format
+            conf.update(log_format)
 
         else:
             print('Unable to find section %s in config %s' % (section_name,
@@ -92,17 +93,18 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
             # if log_format is set, extract it from the parser
             # to prevent to expand variables which can, in case of
             # log_format throw a ConfigParser.InterpolationMissingOptionError
-            log_format = None
-            if parser.has_option(section, 'log_format'):
-                log_format = parser.get(section, 'log_format', raw=True)
+            log_format = {}
+            for option in ('log_format', 'access_log_format'):
+                if not parser.has_option(section, option):
+                    continue
+                log_format[option] = parser.get(section, option, raw=True)
                 # don't use remove_options because it can fail without reason
-                parser.set(section, 'log_format', '')
+                parser.set(section, option, '')
 
             conf.update({section: dict(parser.items(section))})
 
             # Add log_format again, after parsing
-            if log_format:
-                conf[section]['log_format'] = log_format
+            conf[section].update(log_format)
 
     return conf
 
