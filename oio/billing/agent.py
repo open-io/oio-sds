@@ -32,7 +32,7 @@ from oio.common.logger import get_logger, redirect_stdio
 from oio.common.utils import drop_privileges
 
 
-class BillingAgent():
+class BillingAgent(object):
     """
     Daemon responsible who will scan all buckets to fetch storage statistics
     and send billing messages to a RabbitMQ.
@@ -102,7 +102,7 @@ class BillingAgent():
                 storage_policy = storage_policy.strip()
                 if not storage_re.match(storage_class):
                     self.logger.warning(
-                        'Storage policy "%s"\'s storage class "%s" does not '
+                        'Storage policy "%s" of storage class "%s" does not '
                         'respect the format', storage_policy, storage_class)
                     continue
                 storage_class_ = self.storage_mapping.get(storage_policy)
@@ -111,7 +111,7 @@ class BillingAgent():
                     continue
                 if storage_class_ != storage_class:
                     self.logger.warning(
-                        'Storage policy "%s"\'s storage class "%s" already '
+                        'Storage policy "%s" of storage class "%s" already '
                         'associated with the storage class "%s"',
                         storage_policy, storage_class, storage_class_)
                     continue
@@ -196,37 +196,42 @@ class BillingAgent():
         bucket_bytes = bucket.get('bytes')
         if bucket_bytes is None:
             self.logger.warning(
-                'Missing bytes for bucket "%s"\'s account "%s"',
+                'Missing bytes for bucket "%s" of account "%s"',
                 bucket_name, account)
             raise MalformedBucket
         if bucket_bytes < 0:
             self.logger.warning(
-                'Negative bytes for bucket "%s"\'s account "%s"',
+                'Negative bytes for bucket "%s" of account "%s"',
                 bucket_name, account)
             raise MalformedBucket
         bucket_objects = bucket.get('objects')
         if bucket_objects is None:
             self.logger.warning(
-                'Missing objects for bucket "%s"\'s account "%s"',
+                'Missing objects for bucket "%s" of account "%s"',
                 bucket_name, account)
             raise MalformedBucket
         if bucket_objects < 0:
             self.logger.warning(
-                'Negative objects for bucket "%s"\'s account "%s"',
+                'Negative objects for bucket "%s" of account "%s"',
                 bucket_name, account)
             raise MalformedBucket
         if not bucket_bytes or not bucket_objects:
             if bucket_bytes:
-                self.logger.warning(
-                    'Bucket "%s"\'s account "%s" contains bytes (%d), '
-                    'but no objects, '
-                    'we should check it before sending it to billing',
+                self.logger.info(
+                    'Bucket "%s" of account "%s" contains bytes (%d), '
+                    'but no object, either there are only parts left, '
+                    'or we should check it before sending it to billing',
                     bucket_name, account, bucket_bytes)
-                raise MalformedBucket
-            self.logger.debug(
-                'Bucket "%s"\'s account "%s" contains no objects, '
-                'do not send it to billing',
-                bucket_name, account)
+            elif bucket_objects:
+                self.logger.debug(
+                    'Bucket "%s" of account "%s" contains only empty objects, '
+                    'do not send it to billing',
+                    bucket_name, account)
+            else:
+                self.logger.debug(
+                    'Bucket "%s" of account "%s" contains no object, '
+                    'do not send it to billing',
+                    bucket_name, account)
             return None, None
 
         bytes_details = bucket.get('bytes-details', {})
@@ -240,20 +245,20 @@ class BillingAgent():
             if policy_bytes < 0:
                 self.logger.warning(
                     'Negative bytes (%d) with the storage policy "%s" '
-                    'for bucket "%s"\'s account "%s"',
+                    'for bucket "%s" of account "%s"',
                     policy_bytes, policy_name, bucket_name, account)
                 raise MalformedBucket
             policy_objects = objects_details.get(policy_name, 0)
             if policy_objects < 0:
                 self.logger.warning(
                     'Negative objects (%d) with the policy "%s" '
-                    'for bucket "%s"\'s account "%s"',
+                    'for bucket "%s" of account "%s"',
                     policy_objects, policy_name, bucket_name, account)
                 raise MalformedBucket
             if not policy_bytes and not policy_objects:
-                self.logger.warning(
+                self.logger.debug(
                     'Empty statistics with the storage policy "%s" '
-                    'for bucket "%s"\'s account "%s" should be deleted',
+                    'for bucket "%s" of account "%s" could be deleted',
                     policy_name, bucket_name, account)
                 continue
 
@@ -274,19 +279,19 @@ class BillingAgent():
                 self.logger.warning(
                     'Mismatch between total bytes (%d) '
                     'and detailed bytes (%d) '
-                    'for bucket "%s"\'s account "%s"',
+                    'for bucket "%s" of account "%s"',
                     bucket_bytes, total_bytes, bucket_name, account)
                 raise MalformedBucket
             if total_objects != bucket_objects:
                 self.logger.warning(
                     'Mismatch between total objects (%d) '
                     'and detailed objects (%d) '
-                    'for bucket "%s"\'s account "%s"',
+                    'for bucket "%s" of account "%s"',
                     bucket_objects, total_objects, bucket_name, account)
                 raise MalformedBucket
         else:
             self.logger.info(
-                'Missing details for bucket "%s"\'s account "%s"',
+                'Missing details for bucket "%s" of account "%s"',
                 bucket_name, account)
             storage_class_stat[self.default_storage_class] = {
                 'storage_class': self.default_storage_class,
@@ -312,14 +317,14 @@ class BillingAgent():
             raise MalformedBucket
         if not account.startswith(self.reseller_prefix):
             self.logger.debug(
-                'Bucket "%s"\'s account "%s" does not start '
+                'Bucket "%s" of account "%s" does not start '
                 'with reseller prefix', bucket_name, account)
             return None
         project_id = account[len(self.reseller_prefix):]
         region = bucket.get('region')
         if not region:
             self.logger.warning(
-                'Missing region for bucket "%s"\'s account "%s", '
+                'Missing region for bucket "%s" of account "%s", '
                 'we should check it before sending it to billing',
                 bucket_name, account)
             raise MalformedBucket
