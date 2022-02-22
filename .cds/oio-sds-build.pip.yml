@@ -4,8 +4,13 @@ jobs:
   - job: Package for ubuntu/20.04
     steps:
 
-      - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+      - gitClone:
+          branch: '{{ .git.branch }}'
+          commit: '{{ .git.hash }}'
+          depth: "false"
+          directory: '{{ .cds.workspace }}'
+          privateKey: proj-ssh-openio
+          url: '{{ .git.url }}'
 
       - name: Clone external-packages
         script:
@@ -19,6 +24,7 @@ jobs:
           trap 'worker upload --tag=focal package-20.04.log' EXIT
           cat $0
           set -x
+          set -e
           # dev or prod release
           export VERSION=1.0-focal
           PACKAGE=oio-sds
