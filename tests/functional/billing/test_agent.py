@@ -189,8 +189,8 @@ class TestBillingAgent(BaseTestCase):
         self.assertIsNone(sample)
         empty_bucket = bucket.copy()
         empty_bucket['objects'] = 0
-        self.assertRaises(MalformedBucket, self.agent.bucket_to_sample,
-                          empty_bucket)
+        sample = self.agent.bucket_to_sample(empty_bucket)
+        self.assertIsNone(sample)
         empty_bucket = bucket.copy()
         empty_bucket['bytes'] = 0
         empty_bucket['objects'] = 0

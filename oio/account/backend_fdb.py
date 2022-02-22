@@ -632,11 +632,11 @@ class AccountBackendFdb(object):
         tr.clear_range(deleted_containers_range.start,
                        deleted_containers_range.stop)
         # Delete buckets
-        buckets_range = self.buckets_index_space[account_id].range()
-        tr.clear_range(buckets_range.start, buckets_range.stop)
-        # Delete buckets index
         bucket_range = self.bucket_space[account_id].range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
+        # Delete buckets index
+        buckets_range = self.buckets_index_space[account_id].range()
+        tr.clear_range(buckets_range.start, buckets_range.stop)
         # TODO(adu): Delete buckets index by region
         # Delete metadata
         metadata_space = self.metadata_space[account_id].range()
