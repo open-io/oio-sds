@@ -2828,7 +2828,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		if (!beans) {
 			copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
 					sq3->path_inline, timestamp);
-            err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);

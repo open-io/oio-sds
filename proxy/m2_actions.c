@@ -2867,8 +2867,8 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
 	gchar *timestamp = (gchar *) json_object_get_string(jtimestamp);
 	gchar *master = (gchar *) json_object_get_string(jmaster);
-    gchar *index = (gchar *) json_object_get_string(jindex);
-    gchar *src_suffix = g_strdup_printf("sharding-%s-%s", timestamp, index);
+	gchar *index = (gchar *) json_object_get_string(jindex);
+	gchar *src_suffix = g_strdup_printf("sharding-%s-%s", timestamp, index);
 	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
 	gchar *shard_properties[18] = {

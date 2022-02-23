@@ -4297,7 +4297,7 @@ end:
 
 static GVariant **
 _sharding_clean_shard_aliases_to_sql(const gchar *lower,
-               const gchar *upper, GString *clause)
+		const gchar *upper, GString *clause)
 {
 	void lazy_or() {
 		if (clause->len > 0) g_string_append_static(clause, " OR");
@@ -4354,7 +4354,7 @@ end:
 	metautils_gvariant_unrefv(params);
 	g_free(params);
 	g_string_free(clause, TRUE);
-    return err;
+	return err;
 }
 
 GError*
