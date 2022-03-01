@@ -420,7 +420,10 @@ class TestSharding(BaseTestCase):
             for j, shard in enumerate(shards):
                 self.assertDictEqual(shard, expected_shards[i][j])
 
-    def test_bucket_counters_after_sharding(self):
+    def test_account_counters_after_sharding(self):
+        # Clear the account stats
+        self.storage.account.account_flush(self.account)
+
         # Fill a bucket
         self._create(self.cname, bucket=self.cname)
         self._add_objects(self.cname, 10, bucket=self.cname)
@@ -442,6 +445,8 @@ class TestSharding(BaseTestCase):
                                 types=(EventTypes.CONTAINER_STATE,))
         stats = self.storage.account.bucket_show(
                     self.cname, account=self.account)
+        self.assertEqual(stats['objects'], 10)
+        stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats['objects'], 10)
 
         # Split the first shard in 2
@@ -466,6 +471,8 @@ class TestSharding(BaseTestCase):
                                        EventTypes.CONTAINER_STATE))
         stats = self.storage.account.bucket_show(self.cname,
                                                  account=self.account)
+        self.assertEqual(stats['objects'], 10)
+        stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats['objects'], 10)
 
     def test_listing(self):

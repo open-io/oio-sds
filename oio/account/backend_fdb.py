@@ -29,6 +29,7 @@ from oio.common.timestamp import Timestamp
 fdb.api_version(CommonFdb.FDB_VERSION)
 
 
+SHARDING_ACCOUNT_PREFIX = '.shards_'
 COUNTERS_FIELDS = ('bytes', 'objects', 'containers', 'buckets', 'accounts')
 TIMESTAMP_FIELDS = ('ctime', 'mtime')
 
@@ -364,6 +365,13 @@ class AccountBackendFdb(object):
         """
         [transactional] Delete the account if it already exists.
         """
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            # Delete sharding account
+            try:
+                self._delete_account(tr, SHARDING_ACCOUNT_PREFIX + account_id)
+            except NotFound:
+                pass
+
         account_space = self.acct_space[account_id]
 
         account_ctime = tr[account_space.pack(('ctime',))]
@@ -453,7 +461,42 @@ class AccountBackendFdb(object):
                     self.logger.warning('Unknown key: "%s"', key)
             info['metadata'] = metadata
 
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            self._merge_sharding_account_info(tr, account_id, info)
+
         return info
+
+    @fdb.transactional
+    def _merge_sharding_account_info(self, tr, account_id, info):
+        # Fetch sharding account
+        sharding_info = self._account_info(
+            tr, SHARDING_ACCOUNT_PREFIX + account_id, full=False)
+        if not sharding_info:
+            return
+        # Update global stats of sharding account
+        for key in ('bytes', 'objects'):
+            value = sharding_info.get(key)
+            if not value:
+                continue
+            info[key] = info.get(key, 0) + value
+        info['shards'] = sharding_info.get('containers', 0)
+        info['mtime'] = max(info.get('mtime', 0),
+                            sharding_info.get('mtime', 0))
+        # Update detailed stats of sharding account
+        regions_info = info.setdefault('regions', {})
+        for region, shards_region_info in sharding_info.get(
+                'regions', {}).items():
+            region_info = regions_info.setdefault(region, {})
+            for key in ('bytes', 'objects'):
+                shards_region_details = shards_region_info.get(
+                    f'{key}-details')
+                if shards_region_details is None:
+                    continue
+                region_details = region_info.setdefault(f'{key}-details', {})
+                for policy, value in shards_region_details.items():
+                    region_details[policy] = region_details.get(
+                        policy, 0) + value
+            region_info['shards'] = shards_region_info.get('containers', 0)
 
     @catch_service_errors
     def list_accounts(self, **kwargs):
@@ -592,8 +635,6 @@ class AccountBackendFdb(object):
         if not account_id:
             raise BadRequest("Missing account")
 
-        if not self._is_element(self.db, self.accts_space, account_id):
-            raise NotFound(account_id)
         mtime = time.time()
         self._flush_account(self.db, account_id, mtime)
 
@@ -609,6 +650,8 @@ class AccountBackendFdb(object):
                 self.logger.info('flush account %s: transaction replay \
                                  skipped', account_id)
                 return
+        else:
+            raise NotFound('Account does\'nt exist')
         for field in ('bytes', 'objects', 'containers', 'buckets'):
             self._set_counter(tr, account_space.pack((field,)))
             details_space = account_space[field]
@@ -642,6 +685,14 @@ class AccountBackendFdb(object):
         metadata_space = self.metadata_space[account_id].range()
         tr.clear_range(metadata_space.start, metadata_space.stop)
         self._update_timestamp(tr, account_space.pack(('mtime',)), mtime)
+
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            # Flush sharding account
+            try:
+                self._flush_account(
+                    tr, SHARDING_ACCOUNT_PREFIX + account_id, mtime)
+            except NotFound:
+                pass
 
     # Container ---------------------------------------------------------------
 
@@ -762,7 +813,7 @@ class AccountBackendFdb(object):
             repli_enabled = None
             bname = info.get('bucket')
             if bname:
-                if account_id.startswith('.shards_'):
+                if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
                     account_id = account_id[8:]
                 buckat_space = self.bucket_space[account_id][bname]
                 repli_enabled = tr.snapshot[
@@ -1399,7 +1450,7 @@ class AccountBackendFdb(object):
         This method assumes that the account exists.
         """
         # Filter the special accounts hosting bucket shards.
-        if account_id.startswith('.shards_'):
+        if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
             account_id = account_id[8:]
 
         bucket_space = self.bucket_space[account_id][bname]
@@ -1543,7 +1594,7 @@ class AccountBackendFdb(object):
         account_exists = self._is_element(tr, self.accts_space, account_id)
         if not account_exists:
             return None
-        sharded_account_id = '.shards_' + account_id
+        sharded_account_id = SHARDING_ACCOUNT_PREFIX + account_id
         sharded_account_exists = self._is_element(tr, self.accts_space,
                                                   sharded_account_id)
         if not sharded_account_exists:
