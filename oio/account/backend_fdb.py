@@ -351,7 +351,10 @@ class AccountBackendFdb(object):
         # Add account in index
         tr[self.accts_space.pack((account_id,))] = b'1'
         # Increase accounts counter in metrics
-        self._increment(tr, self.metrics_space.pack(('accounts',)))
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            self._increment(tr, self.metrics_space.pack(('accounts',)))
+        # else:
+        #     Do not count sharding accounts in metrics
 
     @catch_service_errors
     def delete_account(self, account_id, **kwargs):
@@ -422,8 +425,10 @@ class AccountBackendFdb(object):
         tr.clear(self.accts_space.pack((account_id,)))
 
         # Decrease accounts counter in metrics
-        self._increment(
-            tr, self.metrics_space.pack(('accounts',)), -1)
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            self._increment(tr, self.metrics_space.pack(('accounts',)), -1)
+        # else:
+        #     Do not count sharding accounts in metrics
 
     @catch_service_errors
     def info_account(self, account_id, **kwargs):

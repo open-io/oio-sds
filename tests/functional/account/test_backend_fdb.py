@@ -2251,7 +2251,7 @@ class TestAccountBackend(BaseTestCase):
         }
         backend_info = (
             {
-                ('accounts',): 2,
+                ('accounts',): 1,
                 ('bytes', region, 'pol1'): 64,
                 ('bytes', region, 'pol2'): 154,
                 ('objects', region, 'pol1'): 19,
@@ -2317,7 +2317,7 @@ class TestAccountBackend(BaseTestCase):
         }
         backend_info = (
             {
-                ('accounts',): 2,
+                ('accounts',): 1,
                 ('bytes', region, 'pol1'): 34,
                 ('bytes', region, 'pol2'): 142,
                 ('objects', region, 'pol1'): 14,
@@ -2360,7 +2360,7 @@ class TestAccountBackend(BaseTestCase):
             bucket_name=bucket_name, region=region)
         backend_info = (
             {
-                ('accounts',): 2,
+                ('accounts',): 1,
                 ('bytes', region, 'pol1'): 7,
                 ('bytes', region, 'pol2'): 101,
                 ('objects', region, 'pol1'): 3,
@@ -2404,7 +2404,7 @@ class TestAccountBackend(BaseTestCase):
             bucket_name=bucket_name, region=region)
         backend_info = (
             {
-                ('accounts',): 2,
+                ('accounts',): 1,
                 ('bytes', region, 'pol1'): 0,
                 ('bytes', region, 'pol2'): 0,
                 ('objects', region, 'pol1'): 0,
