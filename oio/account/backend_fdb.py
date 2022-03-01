@@ -30,7 +30,8 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 
 
 SHARDING_ACCOUNT_PREFIX = '.shards_'
-COUNTERS_FIELDS = ('bytes', 'objects', 'containers', 'buckets', 'accounts')
+COUNTERS_FIELDS = ('bytes', 'objects', 'shards', 'containers', 'buckets',
+                   'accounts')
 TIMESTAMP_FIELDS = ('ctime', 'mtime')
 
 
@@ -661,6 +662,10 @@ class AccountBackendFdb(object):
             for key, value in iterator:
                 key = account_space.unpack(key)
                 value = self._counter_value_to_counter(value)
+                if field == 'containers' and account_id.startswith(
+                        SHARDING_ACCOUNT_PREFIX):
+                    # Replace 'containers' with 'shards' for sharding account
+                    key[0] = 'shards'
                 self._increment(tr, self.metrics_space.pack(key), -value)
             # Remove details by region
             tr.clear_range(details_range.start, details_range.stop)
@@ -726,7 +731,10 @@ class AccountBackendFdb(object):
         self._increment(tr, self.acct_space[account_id].pack(
             ('containers', region)))
         # Increase containers counter in metrics
-        self._increment(tr, self.metrics_space.pack(('containers', region)))
+        metrics_field = 'containers'
+        if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            metrics_field = 'shards'
+        self._increment(tr, self.metrics_space.pack((metrics_field, region)))
 
     @fdb.transactional
     def _real_delete_container(self, tr, account_id, cname, region, dtime):
@@ -775,8 +783,11 @@ class AccountBackendFdb(object):
         self._increment(tr, self.acct_space[account_id].pack(
             ('containers', region)), -1)
         # Decrease containers counter in metrics
+        metrics_field = 'containers'
+        if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            metrics_field = 'shards'
         self._increment(tr, self.metrics_space.pack(
-            ('containers', region)), -1)
+            (metrics_field, region)), -1)
 
         # Forget the old deleted containers
         self._clear_deleted_containers(tr, account_id)

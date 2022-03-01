@@ -64,7 +64,7 @@ class TestAccountBackend(BaseTestCase):
     def _encode_value(self, key, value):
         if key[0] in ('ctime', 'mtime'):
             value = struct.pack('<Q', int(float(value) * 1000000))
-        elif key[0] in ('bytes', 'objects', 'containers', 'buckets',
+        elif key[0] in ('bytes', 'objects', 'shards', 'containers', 'buckets',
                         'accounts'):
             value = struct.pack('<q', int(value))
         else:
@@ -2256,7 +2256,8 @@ class TestAccountBackend(BaseTestCase):
                 ('bytes', region, 'pol2'): 154,
                 ('objects', region, 'pol1'): 19,
                 ('objects', region, 'pol2'): 29,
-                ('containers', region): 3,
+                ('shards', region): 1,
+                ('containers', region): 2,
                 ('buckets', region): 1
             },
             {
@@ -2321,6 +2322,7 @@ class TestAccountBackend(BaseTestCase):
                 ('bytes', region, 'pol2'): 142,
                 ('objects', region, 'pol1'): 14,
                 ('objects', region, 'pol2'): 22,
+                ('shards', region): 0,
                 ('containers', region): 2,
                 ('buckets', region): 1
             },
@@ -2363,6 +2365,7 @@ class TestAccountBackend(BaseTestCase):
                 ('bytes', region, 'pol2'): 101,
                 ('objects', region, 'pol1'): 3,
                 ('objects', region, 'pol2'): 5,
+                ('shards', region): 0,
                 ('containers', region): 1,
                 ('buckets', region): 0
             },
@@ -2406,6 +2409,7 @@ class TestAccountBackend(BaseTestCase):
                 ('bytes', region, 'pol2'): 0,
                 ('objects', region, 'pol1'): 0,
                 ('objects', region, 'pol2'): 0,
+                ('shards', region): 0,
                 ('containers', region): 0,
                 ('buckets', region): 0
             },
