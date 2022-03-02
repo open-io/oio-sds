@@ -82,9 +82,9 @@ class Meta2RebuildJob(XcuteRdirJob):
         containers_it = self._containers_from_rdir(job_params, marker)
 
         i = 0
-        for i, (url, _) in enumerate(containers_it, 1):
+        for i, (marker, _) in enumerate(containers_it, 1):
             if i % 1000 == 0:
-                yield url, 1000
+                yield marker, 1000
 
         remaining = i % 1000
         if remaining == 0:
