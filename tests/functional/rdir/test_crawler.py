@@ -53,6 +53,8 @@ class TestRdirCrawler(BaseTestCase):
         self.conf.update({'hash_width': 3, 'hash_depth': 1})
 
         self.rdir_client = RdirClient(self.conf)
+        self.beanstalkd0.wait_until_empty('oio')
+        self.beanstalkd0.drain_tube('oio-preserved')
 
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
@@ -64,8 +66,9 @@ class TestRdirCrawler(BaseTestCase):
         chunks, _, _ = self.api.object_create(self.account, container,
                                               obj_name=path, data=b"chunk",
                                               policy=policy, reqid=reqid)
-        self.wait_for_event('oio-preserved', reqid=reqid, timeout=5.0,
-                            types=(EventTypes.CHUNK_NEW,))
+        for _ in chunks:
+            self.wait_for_event('oio-preserved', reqid=reqid, timeout=5.0,
+                                types=(EventTypes.CHUNK_NEW,))
         return chunks
 
     def _chunk_info(self, chunk):

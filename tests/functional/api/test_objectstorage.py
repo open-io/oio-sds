@@ -1116,34 +1116,42 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # account_refresh on existing account
         self.api.account_create(account)
         self.api.account_refresh(account)
-        self.beanstalkd.wait_until_empty('oio')
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 0)
         self.assertEqual(res["objects"], 0)
         self.assertEqual(res["containers"], 0)
 
         name = 'test_account_refresh_' + random_str(6)
-        self.api.object_create(account, name, data=b'data', obj_name=name)
+        reqid = request_id()
+        self.api.object_create(account, name, data=b'data', obj_name=name,
+                               reqid=reqid)
         self.wait_for_event('oio-preserved',
                             fields={'account': account},
-                            types=[EventTypes.CONTAINER_STATE])
-        self.beanstalkd0.drain_tube('oio-preserved')
-        self.api.account_refresh(account)
+                            types=(EventTypes.CONTAINER_STATE,),
+                            reqid=reqid)
+        reqid = request_id()
+        self.api.account_refresh(account, reqid=reqid)
         self.wait_for_event('oio-preserved',
                             fields={'account': account},
-                            types=[EventTypes.CONTAINER_STATE])
+                            types=(EventTypes.CONTAINER_STATE,),
+                            reqid=reqid)
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 4)
         self.assertEqual(res["objects"], 1)
         self.assertEqual(res["containers"], 1)
 
         self.api.object_delete(account, name, name)
-        self.api.container_delete(account, name)
+        reqid = request_id()
+        self.api.container_delete(account, name, reqid=reqid)
         # Again, wait for the container event to be processed.
         self.wait_for_event('oio-preserved',
-                            types=[EventTypes.ACCOUNT_SERVICES])
+                            fields={'account': account},
+                            types=(EventTypes.ACCOUNT_SERVICES,),
+                            reqid=reqid)
         self.wait_for_event('oio-preserved',
-                            types=(EventTypes.CONTAINER_DELETED, ))
+                            fields={'account': account},
+                            types=(EventTypes.CONTAINER_DELETED,),
+                            reqid=reqid)
         self.api.account_delete(account)
         # account_refresh on deleted account
         self.assertRaises(
@@ -1151,6 +1159,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_account_refresh_all(self):
         self.wait_for_score(('account', 'meta2'))
+        self.beanstalkd0.wait_until_empty('oio')
         # clear accounts
         accounts = self.api.account_list()
         for account in accounts:

@@ -566,7 +566,6 @@ class BaseTestCase(CommonTestCase):
         :param fields: dict of fields to look for in the event's URL
         :param types: list of types of events the method should look for
         """
-        self.beanstalkd0.wait_for_ready_job(tube, timeout=timeout)
         self.beanstalkd0.watch(tube)
         now = time.time()
         deadline = now + timeout

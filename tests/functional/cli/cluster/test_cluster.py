@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -131,8 +131,9 @@ class ClusterTest(CliTestCase):
         output = self.openio('cluster lock rawx ' + nodeid + opts)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'], 'locked to 0')
-        self._reload_proxy()
         time.sleep(4)
+        self._reload_proxy()
+        time.sleep(2)
         # Ensure it is zero-scored
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)

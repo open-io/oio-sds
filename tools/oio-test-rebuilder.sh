@@ -126,7 +126,7 @@ check_and_remove_meta()
 
   echo >&2 "Restart the ${TYPE} ${META_ID_TO_REBUILD}"
   ${OPENIOCTL} restart "@${META_IP_TO_REBUILD}" > /dev/null
-  ${CLI} cluster wait -s 50 "${TYPE}" > /dev/null
+  ${CLI} cluster wait -s 30 "${TYPE}" > /dev/null
 
   echo "${META_ID_TO_REBUILD} ${META_LOC_TO_REBUILD}"
 }
@@ -375,7 +375,7 @@ remove_rawx()
 
   echo >&2 "Restart the rawx ${RAWX_ID_TO_REBUILD}"
   ${OPENIOCTL} restart "@${RAWX_IP_TO_REBUILD}" > /dev/null
-  ${CLI} cluster wait -s 50 rawx > /dev/null
+  ${CLI} cluster wait -s 30 rawx > /dev/null
 
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"
 }

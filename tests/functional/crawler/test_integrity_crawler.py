@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +19,7 @@ import fileinput
 import os
 
 from oio.common import exceptions
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.crawler.integrity import Checker, Target, \
     DEFAULT_DEPTH, IRREPARABLE_PREFIX
 from oio.event.evob import EventTypes
@@ -31,8 +32,11 @@ class TestIntegrityCrawler(BaseTestCase):
         self.container = 'ct-' + random_str(8)
         self.obj = 'obj-' + random_str(8)
         self.account = 'test-integrity-' + random_str(8)
+        self.beanstalkd0.drain_tube('oio-preserved')
+        reqid = request_id()
         self.storage.object_create(
-            self.account, self.container, obj_name=self.obj, data="chunk")
+            self.account, self.container, obj_name=self.obj, data="chunk",
+            reqid=reqid)
         _, self.rebuild_file = tempfile.mkstemp()
         self.checker = Checker(self.ns, rebuild_file=self.rebuild_file)
         self.meta, chunks = self.storage.object_locate(
@@ -40,7 +44,10 @@ class TestIntegrityCrawler(BaseTestCase):
         self.chunk = chunks[0]
         self.irreparable = len(chunks) == 1
         self.storage.blob_client.chunk_delete(self.chunk['real_url'])
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': self.account,
+                                    'user': self.container},
+                            types=[EventTypes.CONTAINER_STATE])
 
     def tearDown(self):
         super(TestIntegrityCrawler, self).tearDown()

@@ -892,11 +892,14 @@ class TestSharding(BaseTestCase):
         _, chunks_shard = self.storage.object_locate(shard_account,
                                                      shard_cname,
                                                      obj_name)
-        self.assertCountEqual(chunks, chunks_shard)
-        for i in range(len(chunks)):
-            self.assertEqual(chunks[i]['url'], chunks_shard[i]['url'])
-            self.assertEqual(chunks[i]['real_url'],
-                             chunks_shard[i]['real_url'])
+        chunks = chunks.copy()
+        chunks.sort(key=lambda c: c['url'])
+        for chunk in chunks:
+            chunk.pop('score')
+        chunks_shard.sort(key=lambda c: c['url'])
+        for chunk_shard in chunks_shard:
+            chunk_shard.pop('score')
+        self.assertListEqual(chunks, chunks_shard)
 
     def test_locate_on_shard(self):
         """

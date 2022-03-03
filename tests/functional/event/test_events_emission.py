@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +19,7 @@
 import time
 from oio.api.object_storage import ObjectStorageApi
 from oio.event.evob import EventTypes
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase
 
@@ -35,14 +36,15 @@ class TestMeta2EventsEmission(BaseTestCase):
         self.storage_api = ObjectStorageApi(self.conf['namespace'])
         self.beanstalkd0.drain_tube('oio-preserved')
 
-    def wait_for_all_events(self, types):
+    def wait_for_all_events(self, types, reqid=None):
         pulled_events = dict()
         for event_type in types:
             pulled_events[event_type] = list()
 
         while True:
-            event = self.wait_for_event('oio-preserved', types=types,
-                                        timeout=REASONABLE_EVENT_DELAY)
+            event = self.wait_for_event(
+                'oio-preserved', types=types, reqid=reqid,
+                timeout=REASONABLE_EVENT_DELAY)
             if event is None:
                 break
             pulled_events[event.event_type].append(event)
@@ -50,12 +52,14 @@ class TestMeta2EventsEmission(BaseTestCase):
 
     def test_container_create(self):
         # Fire up the event
-        self.container_client.container_create(self.account,
-                                               self.container_name)
+        reqid = request_id()
+        self.container_client.container_create(
+            self.account, self.container_name, reqid=reqid)
 
         # Grab all events and filter for the needed event type
         wanted_events = self.wait_for_all_events(
-            [EventTypes.CONTAINER_NEW, EventTypes.ACCOUNT_SERVICES])
+            [EventTypes.CONTAINER_NEW, EventTypes.ACCOUNT_SERVICES],
+            reqid=reqid)
 
         container_new_events = wanted_events[EventTypes.CONTAINER_NEW]
         account_services_events = wanted_events[EventTypes.ACCOUNT_SERVICES]
@@ -102,12 +106,14 @@ class TestMeta2EventsEmission(BaseTestCase):
 
         self.beanstalkd0.drain_tube('oio-preserved')
         # Fire up the event
-        self.container_client.container_delete(self.account,
-                                               self.container_name)
+        reqid = request_id()
+        self.container_client.container_delete(
+            self.account, self.container_name, reqid=reqid)
 
         # Grab all events and filter for the needed event type
         wanted_events = self.wait_for_all_events(
-            [EventTypes.CONTAINER_DELETED, EventTypes.META2_DELETED])
+            [EventTypes.CONTAINER_DELETED, EventTypes.META2_DELETED],
+            reqid=reqid)
         container_deleted_events = wanted_events[EventTypes.CONTAINER_DELETED]
         meta2_deleted_events = wanted_events[EventTypes.META2_DELETED]
         self.assertEqual(1, len(container_deleted_events))
