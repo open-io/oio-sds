@@ -1336,7 +1336,11 @@ class AccountBackendFdb(object):
                 bucket_it = tr.get_range(bucket_range.start,
                                          bucket_range.stop, reverse=False)
                 for bucket_key, a_value in bucket_it:
-                    a_key = bucket_space.unpack(bucket_key)[0]
+                    key = bucket_space.unpack(bucket_key)
+                    if len(key) > 1:
+                        # This is a per policy metric, skip it
+                        continue
+                    a_key = key[0]
                     if a_key == 'objects':
                         nb_objects = self._counter_value_to_counter(a_value)
                     if a_key == 'bytes':
