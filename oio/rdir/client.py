@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -496,14 +496,19 @@ class RdirClient(HttpApi):
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
-    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx',
-                  rdir_hosts=None):
+    def _get_resolved_rdir_hosts(self, volume_id, rdir_hosts=None, reqid=None):
         if not rdir_hosts:
             rdir_hosts = self._get_rdir_addr(volume_id, reqid=reqid)
         else:
             rdir_hosts = [self.cs.resolve_service_id('rdir', host)
                           for host in rdir_hosts]
-        all_uri = list()
+        return rdir_hosts
+
+    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx',
+                  rdir_hosts=None):
+        rdir_hosts = self._get_resolved_rdir_hosts(
+            volume_id, rdir_hosts=rdir_hosts, reqid=reqid)
+        all_uri = []
         for rdir_host in rdir_hosts:
             all_uri.append('http://%s/v1/%s/%s' % (
                 rdir_host,
@@ -698,8 +703,9 @@ class RdirClient(HttpApi):
             if not truncated:
                 break
 
+    @ensure_request_id
     def chunk_copy_vol(self, volume_id, sources=None, dests=None,
-                       batch_size=1000, create=True, **kwargs):
+                       batch_size=1000, create=True, reqid=None, **kwargs):
         """
         Copy all chunks records from volume_id from one rdir to another.
 
@@ -711,21 +717,35 @@ class RdirClient(HttpApi):
         :param batch_size: size of record batches
         :param create: whether to create the database on the destination
         """
-        batch = list()
+        # Make sure to NOT use a destination as a source
+        src_rdir_hosts = self._get_resolved_rdir_hosts(
+            volume_id, rdir_hosts=sources, reqid=reqid)
+        dests_rdir_hosts = self._get_resolved_rdir_hosts(
+            volume_id, rdir_hosts=dests, reqid=reqid)
+        src_rdir_hosts = [src_rdir_host for src_rdir_host in src_rdir_hosts
+                          if src_rdir_host not in dests_rdir_hosts]
+        if not src_rdir_hosts:
+            raise OioException('No source available')
+        if not dests_rdir_hosts:
+            raise OioException('No destination available')
+
+        batch = []
         for cid, chunk, rec in self.chunk_fetch(volume_id,
-                                                rdir_hosts=sources,
-                                                **kwargs):
+                                                rdir_hosts=src_rdir_hosts,
+                                                reqid=reqid, **kwargs):
             rec['container_id'] = cid
             rec['chunk_id'] = chunk
             batch.append(rec)
 
             if len(batch) >= batch_size:
                 self._rdir_request(volume_id, 'POST', 'push', create=create,
-                                   json=batch, rdir_hosts=dests)
-                batch = list()
+                                   json=batch, rdir_hosts=dests_rdir_hosts,
+                                   reqid=reqid, **kwargs)
+                batch = []
         if batch:
             self._rdir_request(volume_id, 'POST', 'push', create=create,
-                               json=batch, rdir_hosts=dests)
+                               json=batch, rdir_hosts=dests_rdir_hosts,
+                               reqid=reqid, **kwargs)
 
     def admin_incident_set(self, volume, date, **kwargs):
         body = {'date': int(float(date))}
@@ -933,8 +953,9 @@ class RdirClient(HttpApi):
             **kwargs
         )
 
+    @ensure_request_id
     def meta2_copy_vol(self, volume_id, sources=None, dests=None,
-                       batch_size=1000, create=True, **kwargs):
+                       batch_size=1000, create=True, reqid=None, **kwargs):
         """
         Copy all meta2 records from volume_id from one rdir to another.
 
@@ -946,18 +967,32 @@ class RdirClient(HttpApi):
         :param batch_size: size of record batches
         :param create: whether to create the database on the destination
         """
-        batch = list()
+        # Make sure to NOT use a destination as a source
+        src_rdir_hosts = self._get_resolved_rdir_hosts(
+            volume_id, rdir_hosts=sources, reqid=reqid)
+        dests_rdir_hosts = self._get_resolved_rdir_hosts(
+            volume_id, rdir_hosts=dests, reqid=reqid)
+        src_rdir_hosts = [src_rdir_host for src_rdir_host in src_rdir_hosts
+                          if src_rdir_host not in dests_rdir_hosts]
+        if not src_rdir_hosts:
+            raise OioException('No source available')
+        if not dests_rdir_hosts:
+            raise OioException('No destination available')
+
+        batch = []
         for rec in self.meta2_index_fetch_all(volume_id,
-                                              rdir_hosts=sources,
-                                              **kwargs):
+                                              rdir_hosts=src_rdir_hosts,
+                                              reqid=reqid, **kwargs):
             batch.append(rec)
 
             if len(batch) >= batch_size:
                 self._rdir_request(volume_id, 'POST', 'push', create=create,
                                    json=batch, service_type='meta2',
-                                   rdir_hosts=dests)
-                batch = list()
+                                   rdir_hosts=dests_rdir_hosts,
+                                   reqid=reqid, **kwargs)
+                batch = []
         if batch:
             self._rdir_request(volume_id, 'POST', 'push', create=create,
                                json=batch, service_type='meta2',
-                               rdir_hosts=dests)
+                               rdir_hosts=dests_rdir_hosts,
+                               reqid=reqid, **kwargs)

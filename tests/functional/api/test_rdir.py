@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ import math
 import random
 from mock import MagicMock as Mock
 
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import NotFound, OioException
 from oio.common.utils import cid_from_name
 from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_id
@@ -527,6 +527,13 @@ class TestRdirClient(BaseTestCase):
         all_recs.sort()
         self.assertListEqual(self.expected_entries, all_recs)
 
+    def test_chunk_db_copy_to_withs_same_source_and_destination(self):
+        my_rdir = self.rdir._get_rdir_addr(self.rawx_id)
+        candidate = my_rdir[0]
+        self.assertRaises(
+            OioException, self.rdir.chunk_copy_vol, self.rawx_id,
+            sources=(candidate,), dests=(candidate,))
+
     def test_meta2_db_copy_to(self):
         """
         Test the copy of all records from the assigned rdir service
@@ -572,3 +579,10 @@ class TestRdirClient(BaseTestCase):
                     rdir_hosts=dests)
             except Exception:
                 pass
+
+    def test_meta2_db_copy_to_withs_same_source_and_destination(self):
+        my_rdir = self.rdir._get_rdir_addr(self.meta2_id)
+        candidate = my_rdir[0]
+        self.assertRaises(
+            OioException, self.rdir.meta2_copy_vol, self.meta2_id,
+            sources=(candidate,), dests=(candidate,))
