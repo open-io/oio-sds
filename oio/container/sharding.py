@@ -742,21 +742,24 @@ class ContainerSharding(ProxyClient):
             params = self._make_params(cid=shard['cid'], **kwargs)
         if clean_type:
             params['clean_type'] = clean_type
-        for i in range(attempts):
-            try:
-                resp, body = self._request(
-                    'POST', '/clean', params=params, json=shard, **kwargs)
-                if resp.status != 204:
-                    raise exceptions.from_response(resp, body)
-                break
-            except BadRequest:
-                raise
-            except Exception as exc:
-                if i >= attempts - 1:
+        truncated = True
+        while truncated:
+            for i in range(attempts):
+                try:
+                    resp, body = self._request(
+                        'POST', '/clean', params=params, json=shard, **kwargs)
+                    if resp.status != 204:
+                        raise exceptions.from_response(resp, body)
+                    break
+                except BadRequest:
                     raise
-                self.logger.warning(
-                    'Failed to clean the container (CID=%s), '
-                    'retrying...: %s', shard['cid'], exc)
+                except Exception as exc:
+                    if i >= attempts - 1:
+                        raise
+                    self.logger.warning(
+                        'Failed to clean the container (CID=%s), '
+                        'retrying...: %s', shard['cid'], exc)
+            truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
         if not no_vacuum:
             try:
                 params['type'] = 'meta2'
