@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from collections import Counter
 import fdb
 from functools import wraps
-from six import text_type
 import struct
 import time
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
@@ -941,27 +941,6 @@ class AccountBackendFdb(object):
                 break
         return results, orig_marker
 
-    @fdb.transactional
-    def _list_containers(self, tr, account_id, bucket_name):
-        containers = list()
-        ct_space = self.container_space[account_id]
-        start = ct_space.range().start
-        stop = ct_space.range().stop
-
-        iterator = tr.snapshot.get_range(start, stop, reverse=False)
-        for key, _ in iterator:
-            container = ct_space.unpack(key)[0]
-            if bucket_name is None:
-                if container not in containers:
-                    containers.append(container)
-            else:
-                read_bucket_name = tr[ct_space.pack((container, 'bucket'))]
-                if read_bucket_name.present() and \
-                   read_bucket_name.decode('utf-8') == bucket_name:
-                    if container not in containers:
-                        containers.append(container)
-        return containers
-
     @catch_service_errors
     def update_container(self, account_id, cname, mtime, dtime,
                          object_count, bytes_used,
@@ -1576,169 +1555,131 @@ class AccountBackendFdb(object):
             return
 
         account_id = account_id.decode('utf-8')
-        bucket_space = self.bucket_space[account_id][bucket_name]
 
-        containers = self._list_containers(self.db, account_id, bucket_name)
-
-        sharded_marker = None
-        if containers is not None:
-            for el in containers:
-                while True:
-                    next_marker = self._refresh_sharded_ct(
-                        self.db, account_id, el, sharded_marker, batch_size)
-                    if next_marker is None or next_marker == sharded_marker:
-                        break
-
-                    sharded_marker = next_marker
-
-        marker = None
-        # refresh based on non sharded or root containers
+        tr = self.db.create_transaction()
+        # Loop to replay transaction in case of failure
         while True:
-            marker = self._refresh_bucket(self.db, bucket_space, bucket_name,
-                                          account_id, batch_size, marker)
-            if marker in (None, 'no_bucket'):
-                break
+            try:
+                self._reset_bucket_counters(tr, account_id, bucket_name)
+                for sharded in [False, True]:
+                    marker = None
+                    while True:
+                        marker = self._refresh_bucket(tr, account_id,
+                                                      bucket_name, sharded,
+                                                      marker, batch_size)
 
-        if text_type(marker).endswith("no_account"):
-            raise NotFound("Account not found for bucket" % bucket_name)
-        if text_type(marker).endswith("no_bucket"):
+                        if marker is None:
+                            break
+                tr.commit().wait()
+                break
+            except fdb.FDBError as e:
+                tr.on_error(e).wait()
+
+    @fdb.transactional
+    def _reset_bucket_counters(self, tr, account_id, bucket_name):
+        account_bucket = self.bucket_space[account_id][bucket_name]
+
+        keys_to_remove = []
+        found = False
+        for key, _ in tr[account_bucket.range()]:
+            found = True
+            field, *policy = account_bucket.unpack(key)
+
+            if field not in ('bytes', 'objects'):
+                continue
+            if len(policy) > 0:
+                keys_to_remove.append(key)
+
+        # Ensure bucket exists
+        if not found:
             raise NotFound("Bucket %s not found" % bucket_name)
 
+        # Reset global counters
+        self._set_counter(tr, account_bucket['bytes'])
+        self._set_counter(tr, account_bucket['objects'])
+
+        # Remove policy counters
+        for key in keys_to_remove:
+            del tr[key]
+
     @fdb.transactional
-    def _refresh_sharded_ct(self, tr, account_id, cname, marker, batch_size):
-        # detect if container is sharded without requesting state
-        account_exists = self._is_element(tr, self.accts_space, account_id)
+    def _refresh_bucket(self, tr, bucket_account_id, bucket_name,
+                        sharded, marker, batch_size):
+        new_marker = None
+        counters = {'bytes': Counter(), 'objects': Counter()}
+
+        container_account_id = bucket_account_id
+
+        if sharded:
+            container_account_id = SHARDING_ACCOUNT_PREFIX + bucket_account_id
+
+        # Ensure container account exists
+        account_exists = \
+            self._is_element(tr, self.accts_space, container_account_id)
         if not account_exists:
             return None
-        sharded_account_id = SHARDING_ACCOUNT_PREFIX + account_id
-        sharded_account_exists = self._is_element(tr, self.accts_space,
-                                                  sharded_account_id)
-        if not sharded_account_exists:
-            return None
 
-        ct_space = self.container_space[account_id]
-        ckey_prefix = self.container_space[sharded_account_id]
-
-        orig_marker = marker
-        new_marker = None
+        # Compute request range
+        account_containers = self.container_space[container_account_id]
+        containers_begin = account_containers.range().start
+        containers_end = account_containers.range().stop
+        if marker:
+            containers_begin = fdb.KeySelector.first_greater_or_equal(
+                account_containers.pack((marker,)))
         count = 0
-        stop = ckey_prefix.range().stop
-
-        start_marker = cname if marker is None else marker
-        start_ct = fdb.KeySelector.first_greater_than(
-                ckey_prefix.pack((start_marker,)))
-
-        iterator = tr.snapshot.get_range(start_ct, stop, reverse=False)
-        sum_bytes = 0
-        sum_objects = 0
-
-        ended = True
-        found = False
-
-        for key, val in iterator:
-            container, unpacked_key = ckey_prefix.unpack(key)
-            if unpacked_key not in ('bytes', 'objects'):
-                continue
-            composed_cname = container.split('-')
-            # remove last digits
-            composed_cname.pop()
-
-            timestamp = composed_cname.pop()
-            if len(timestamp) != 16:
-                self.logger.warning('malformed cname: %s %s', container,
-                                    timestamp)
-            hash_id = composed_cname.pop()
-            if len(timestamp) != 64:
-                self.logger.warning('malformed cname: %s hash_id %s',
-                                    container, hash_id)
-            truncated_cname = '-'.join(composed_cname)
-            if cname != truncated_cname:
-                continue
-
-            new_marker = container
-            if count >= 2 * batch_size:
-                ended = False
-                break
-
-            found = True
-
-            if unpacked_key == 'bytes':
-                sum_bytes += self._counter_value_to_counter(val)
-            if unpacked_key == 'objects' and \
-               container.find('+segments') == -1:
-                sum_objects += self._counter_value_to_counter(val)
-
-            count += 1
-
-        if found:
-            if orig_marker is None:
-                self._set_counter(tr, ct_space.pack((cname, 'objects')))
-                self._set_counter(tr, ct_space.pack((cname, 'bytes')))
-
-            self._increment(tr, ct_space.pack((cname, 'objects')), sum_objects)
-            self._increment(tr, ct_space.pack((cname, 'bytes')), sum_bytes)
-        else:
-            new_marker = None
-        if ended:
-            new_marker = None
-
-        return new_marker
-
-    @fdb.transactional
-    def _refresh_bucket(self, tr, bucket_key, bucket_name, account_id,
-                        batch_size, marker):
         new_marker = None
-        sum_bytes = 0
-        sum_objects = 0
-        count = 0
-        if tr[bucket_key.pack(('account',))].present() is None:
-            return 'no_bucket'
+        containers = tr.get_range(containers_begin, containers_end)
+        data = {}
 
-        ckey_prefix = self.container_space[account_id]
+        # Propagate container counters to bucket if container belongs to bucket
+        def _process_data_to_counters():
+            if 'bucket' in data and data['bucket'] == bucket_name:
+                for counter in ('bytes', 'objects'):
+                    for p, c in data[counter].items():
+                        counters[counter][p] += c
 
-        # get_range is fetching data in batchs, the default mode for
-        # streaming_mode is iterator which is efficient.
-        # fdb.StreamingMode.want_all could be used
-        start = ckey_prefix.range().start
-        if marker is not None:
-            start = fdb.KeySelector.first_greater_or_equal(
-                    ckey_prefix.pack((marker,)))
+        # Iterate over containers
+        for key, value in containers:
+            container, field, *_policy = account_containers.unpack(key)
+            # Check if we start to process a new container
+            if new_marker != container:
+                new_marker = container
+                count += 1
+                if count > batch_size:
+                    break
+                # Process data if container belongs to bucket
+                _process_data_to_counters()
+                # Reset data for next container
+                data = {}
 
-        stop = ckey_prefix.range().stop
-        iterator = tr.snapshot.get_range(start, stop, reverse=False)
-        if marker is None:
-            self._set_counter(tr, bucket_key['bytes'], sum_bytes)
-            self._set_counter(tr, bucket_key['objects'], sum_objects)
-
-        for key, val in iterator:
-            container, unpacked_key, *pol = ckey_prefix.unpack(key)
-            if marker == container:
+            if field == 'bucket':
+                data['bucket'] = value.decode('utf-8')
                 continue
-            if pol:
+            # Skip not counter values
+            if field not in ('bytes', 'objects'):
                 continue
-            if unpacked_key not in ('bytes', 'objects'):
+            # Ignore '+segments' objects counter
+            if field == 'object' and container.endsWith('+segments'):
                 continue
 
-            # check if bucket exists
-            check_bucket = tr[ckey_prefix.pack((container, 'bucket'))]
-            if check_bucket.present() and \
-               check_bucket.decode('utf-8') \
-               == bucket_name:
+            policy = '_' if len(_policy) == 0 else _policy[0]
+            values = data.setdefault(field, {})
+            values[policy] = self._counter_value_to_counter(value)
 
-                if unpacked_key == 'bytes':
-                    sum_bytes += self._counter_value_to_counter(val)
-                if unpacked_key == 'objects' and \
-                   container.find('+segments') == -1:
-                    sum_objects += self._counter_value_to_counter(val)
-                    count += 1
-            new_marker = container
+        # Process last data
+        _process_data_to_counters()
 
-            if count == 2 * batch_size:
-                break
-        self._increment(tr, bucket_key['bytes'], sum_bytes)
-        self._increment(tr, bucket_key['objects'], sum_objects)
+        # Update counters
+        bucket = self.bucket_space[bucket_account_id][bucket_name]
+        for field in ('bytes', 'objects'):
+            for policy, counter in counters[field].items():
+                key = bucket[field]
+                if policy != '_':
+                    # Not a global counter, add policy
+                    key = key[policy]
+                self._increment(tr, key, counter)
 
-        return new_marker
+        return new_marker if count > batch_size else None
 
     @catch_service_errors
     def reserve_bucket(self, bucket, account_id, **kwargs):
