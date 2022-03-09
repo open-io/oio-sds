@@ -375,13 +375,10 @@ GError* m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path,
 
 GError* m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path);
 
-GError* m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated);
-
-GError* m2db_clean_shard_all(struct sqlx_sqlite3_s *sq3,  gchar *lower,
-        gchar *upper);
-
+GError* m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
+		gchar *lower, gchar *upper, gboolean *truncated);
 
 GError* m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
-		gboolean *truncated);
+		gint64 max_entries_cleaned, gboolean *truncated);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

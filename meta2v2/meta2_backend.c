@@ -3415,56 +3415,98 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList * beans , gboolean *truncated UNUSED)
+		struct oio_url_s *url, GSList * beans, gboolean *truncated)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	json_object *json = NULL;
-	const gchar *id = NULL;
-	const gchar *timestamp= NULL;
+	struct sqlx_repctx_s *repctx = NULL;
 	gchar *suffix = NULL;
+	gchar *shard_lower = NULL, *shard_upper = NULL;
 
-	struct json_object *jindex = NULL, *jtimestamp = NULL;
-	struct oio_ext_json_mapping_s mapping[] = {
-		{"index", &jindex, json_type_int,   0},
-		{"timestamp", &jtimestamp, json_type_int, 1},
-		{NULL, NULL, 0, 0}
-	};
+	if (beans) {
+		if (g_slist_length(beans) != 1) {
+			err = BADREQ("No shard");
+			goto end;
+		}
+		if (DESCR(beans->data) != &descr_struct_SHARD_RANGE) {
+			err = BADREQ("Invalid type: not a shard range");
+			goto end;
+		}
+		err = _get_shard_url_and_suffix(oio_url_get(url, OIOURL_NS),
+				beans->data, NULL, &suffix);
+		if (err) {
+			g_prefix_error(&err, "Failed to find the copy's suffix: ");
+			goto close;
+		}
 
-	json = json_tokener_parse(SHARD_RANGE_get_metadata(beans->data)->str);
-	err = oio_ext_extract_json(json, mapping);
-	if (err) {
-		err = BADREQ("Invalid clean once parameters: (%d) %s",
-				err->code, err->message);
-		goto end;
+		shard_lower = SHARD_RANGE_get_lower(beans->data)->str;
+		shard_upper = SHARD_RANGE_get_upper(beans->data)->str;
 	}
-	id = json_object_get_string(jindex);
-	timestamp = json_object_get_string(jtimestamp);
-
-	gchar *shard_lower = SHARD_RANGE_get_lower(beans->data)->str;
-	gchar *shard_upper = SHARD_RANGE_get_upper(beans->data)->str;
 
 	struct m2_open_args_s open_args = {M2V2_OPEN_LOCAL};
-	suffix = g_strdup_printf("sharding-%s-%s", timestamp, id);
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
 	if (err) {
 		goto end;
 	}
-	err = m2db_clean_shard_all(sq3, shard_lower, shard_upper);
-end:
+
+	if (!suffix) {
+		// It's not a local shard copy
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (!sharding_state) {
+			err = BADREQ(
+					"Container has never participated in a sharding operation");
+			goto close;
+		}
+		if (SHARDING_IN_PROGRESS(sharding_state)
+				&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+				&& sharding_state != NEW_SHARD_STATE_CLEANING_UP) {
+			err = BADREQ("Container isn't ready to be cleaned "
+					"(current state: %"G_GINT64_FORMAT")", sharding_state);
+			goto close;
+		}
+	}
+
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (err) {
+		goto close;
+	}
+	gint64 timestamp = oio_ext_real_time();
+	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+		// Local shard copy or shard
+		err = m2db_clean_shard(sq3, 0, shard_lower, shard_upper, truncated);
+	} else if (m2db_get_shard_count(sq3)) {  // Root
+		err = m2db_clean_root_container(sq3, 0, truncated);
+	} else {  // Switch back to a container without shards, so recompute stats
+		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
+		*truncated = FALSE;
+	}
 	if (!err) {
-		m2b_close(sq3, url);
+		if (*truncated) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					NEW_SHARD_STATE_CLEANING_UP);
+		} else {
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_LOWER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					NEW_SHARD_STATE_CLEANED_UP);
+		}
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+		m2db_increment_version(sq3);
+		sqlx_transaction_notify_huge_changes(repctx);
 	}
-	if (json) {
-		json_object_put(json);
-	}
-	if(suffix) {
-		g_free(suffix);
-	}
+	err = sqlx_transaction_end(repctx, err);
+
+close:
+	m2b_close(sq3, url);
+end:
+	g_free(suffix);
 	return err;
 }
 
@@ -3507,9 +3549,11 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	}
 	gint64 timestamp = oio_ext_real_time();
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
-		err = m2db_clean_shard(sq3, truncated);
+		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
+				NULL, NULL, truncated);
 	} else if (m2db_get_shard_count(sq3)) {  // Root
-		err = m2db_clean_root_container(sq3, truncated);
+		err = m2db_clean_root_container(sq3, meta2_sharding_max_entries_cleaned,
+				truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
 		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;

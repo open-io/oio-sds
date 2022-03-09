@@ -3864,8 +3864,10 @@ _sharding_clean_shard_aliases_to_sql_clause(const gchar *lower,
 
 	if (clause->len == 0)
 		clause = g_string_append_static(clause, " 0");
-	g_string_append_static(clause, " LIMIT ?");
-	g_ptr_array_add(params, g_variant_new_int64(max_entries_cleaned));
+	if (max_entries_cleaned > 0) {
+		g_string_append_static(clause, " LIMIT ?");
+		g_ptr_array_add(params, g_variant_new_int64(max_entries_cleaned));
+	}
 
 	g_ptr_array_add(params, NULL);
 	return (GVariant**) g_ptr_array_free(params, FALSE);
@@ -4295,83 +4297,28 @@ end:
 	return err;
 }
 
-static GVariant **
-_sharding_clean_shard_aliases_to_sql(const gchar *lower,
-		const gchar *upper, GString *clause)
-{
-	void lazy_or() {
-		if (clause->len > 0) g_string_append_static(clause, " OR");
-	}
-	GPtrArray *params = g_ptr_array_new();
-
-	if (lower && *lower) {
-			lazy_or();
-			g_string_append_static(clause, " alias <= ?");
-			g_ptr_array_add(params, g_variant_new_string(lower));
-	}
-
-	if (upper && *upper) {
-			lazy_or();
-			g_string_append_static(clause, " alias > ?");
-			g_ptr_array_add(params, g_variant_new_string(upper));
-	}
-	g_ptr_array_add(params, NULL);
-	return (GVariant**) g_ptr_array_free(params, FALSE);
-}
-
 GError*
-m2db_clean_shard_all(struct sqlx_sqlite3_s *sq3,  gchar *lower, gchar *upper)
+m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
+		gchar *lower, gchar *upper, gboolean *truncated)
 {
 	GError *err = NULL;
+	gchar *current_lower = NULL;
+	gchar *current_upper = NULL;
+	gboolean in_one_go = max_entries_cleaned <= 0;
 
-	// Remove aliases out of range
-	GString *clause = g_string_sized_new(128);
-	GVariant **params = _sharding_clean_shard_aliases_to_sql(
-					lower, upper, clause);
-	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
-	if (err) {
-		goto end;
+	if (!lower) {
+		err = m2db_get_sharding_lower(sq3, &current_lower);
+		if (err) {
+			goto end;
+		}
+		lower = current_lower;
 	}
-	// Remove orphan properties
-	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
-	if (err) {
-		goto end;
-	}
-
-	// Remove orphan contents
-	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3,
-			"id NOT IN (SELECT content FROM aliases)", NULL);
-	if (err) {
-		goto end;
-	}
-	// Remove orphan chunks
-	err = _db_delete(&descr_struct_CHUNKS, sq3,
-			"content NOT IN (SELECT content FROM aliases)", NULL);
-	if (err) {
-		goto end;
-	}
-end:
-	metautils_gvariant_unrefv(params);
-	g_free(params);
-	g_string_free(clause, TRUE);
-	return err;
-}
-
-GError*
-m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
-{
-	GError *err = NULL;
-	gchar *lower = NULL;
-	gchar *upper = NULL;
-	gint64 max_entries_cleaned = meta2_sharding_max_entries_cleaned;
-
-	err = m2db_get_sharding_lower(sq3, &lower);
-	if (err) {
-		goto end;
-	}
-	err = m2db_get_sharding_upper(sq3, &upper);
-	if (err) {
-		goto end;
+	if (!upper) {
+		err = m2db_get_sharding_upper(sq3, &current_upper);
+		if (err) {
+			goto end;
+		}
+		upper = current_upper;
 	}
 
 	// Remove aliases out of range
@@ -4386,7 +4333,7 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
 	// Remove orphan properties
@@ -4401,26 +4348,35 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
 	// Remove orphan contents
-	gchar *clause_str = g_strdup_printf(
-			"id NOT IN (SELECT content FROM aliases) LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	gchar *tmp_clause_str = "id NOT IN (SELECT content FROM aliases)";
+	gchar *clause_str = NULL;
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
 	// Remove orphan chunks
-	clause_str = g_strdup_printf(
-			"content NOT IN (SELECT content FROM aliases) LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	tmp_clause_str = "content NOT IN (SELECT content FROM aliases)";
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_CHUNKS, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
@@ -4430,7 +4386,7 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
 
 end:
 	if (!err) {
-		if (max_entries_cleaned > 0) {
+		if (in_one_go || max_entries_cleaned > 0) {
 			sqlx_admin_del_all_user(sq3, NULL, NULL);
 			m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 			*truncated = FALSE;
@@ -4438,52 +4394,75 @@ end:
 			*truncated = TRUE;
 		}
 	}
-	g_free(lower);
-	g_free(upper);
+	g_free(current_lower);
+	g_free(current_upper);
 	return err;
 }
 
 GError*
-m2db_clean_root_container(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
+m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
+		gint64 max_entries_cleaned, gboolean *truncated)
 {
 	GError *err = NULL;
-	gint64 max_entries_cleaned = meta2_sharding_max_entries_cleaned;
+	gboolean in_one_go = max_entries_cleaned <= 0;
+	gchar *tmp_clause_str = "1";
 
-	gchar *clause_str = g_strdup_printf("1 LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	// Remove all chunks
+	gchar *clause_str = NULL;
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_CHUNKS, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
-	clause_str = g_strdup_printf("1 LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	// Remove all contents
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
-	clause_str = g_strdup_printf("1 LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	// Remove all properties
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
 		goto end;
 	}
 	max_entries_cleaned -= sqlite3_changes(sq3->db);
-	if (max_entries_cleaned <= 0) {
+	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
-	clause_str = g_strdup_printf("1 LIMIT %"G_GINT64_FORMAT,
-			max_entries_cleaned);
+	// Remove all aliases
+	if (in_one_go) {
+		clause_str = g_strdup(tmp_clause_str);
+	} else {
+		clause_str = g_strdup_printf("%s LIMIT %"G_GINT64_FORMAT,
+			tmp_clause_str, max_entries_cleaned);
+	}
 	err = _db_delete(&descr_struct_ALIASES, sq3, clause_str, NULL);
 	g_free(clause_str);
 	if (err) {
@@ -4495,7 +4474,7 @@ end:
 	if (!err) {
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
-		*truncated = max_entries_cleaned <= 0;
+		*truncated = !in_one_go && max_entries_cleaned <= 0;
 	}
 	return err;
 }
