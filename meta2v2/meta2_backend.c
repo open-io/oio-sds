@@ -3521,8 +3521,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	enum m2v2_open_type_e how = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|
-			M2V2_OPEN_URGENT;
+	enum m2v2_open_type_e how = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED;
 	err = m2b_open(m2b, url, how, &sq3);
 	if (err) {
 		return err;
@@ -3538,7 +3537,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	if (SHARDING_IN_PROGRESS(sharding_state)
 			&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
 			&& sharding_state != NEW_SHARD_STATE_CLEANING_UP) {
-		err = BADREQ("Container isn't ready to be cleaned"
+		err = BADREQ("Container isn't ready to be cleaned "
 				"(current state: %"G_GINT64_FORMAT")", sharding_state);
 		goto close;
 	}
