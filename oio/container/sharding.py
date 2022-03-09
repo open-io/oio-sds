@@ -53,7 +53,7 @@ class SavedWritesApplicator(object):
         self.beanstalk.watch(tube)
         self.new_shards = list()
         for new_shard in new_shards:
-            self.new_shards.append(new_shard.copy())
+            self.new_shards.append(copy.deepcopy(new_shard))
 
         self.main_thread = None
         self.queue_is_empty = False
@@ -435,8 +435,8 @@ class ContainerSharding(ProxyClient):
         if shard_count is not None:
             try:
                 shard_count = int(shard_count)
-            except ValueError:
-                raise ValueError('Expected a number for the "count"')
+            except ValueError as exc:
+                raise ValueError('Expected a number for the "count"') from exc
             formatted_shard['count'] = shard_count
 
         return formatted_shard
@@ -681,7 +681,7 @@ class ContainerSharding(ProxyClient):
             shard['index'])
 
         # Create shard container
-        shard_info = shard.copy()
+        shard_info = copy.deepcopy(shard)
         shard_info['root'] = cid_from_name(root_account, root_container)
         shard_info['parent'] = parent_shard['cid']
         shard_info['timestamp'] = parent_shard['sharding']['timestamp']
@@ -1077,7 +1077,7 @@ class ContainerSharding(ProxyClient):
             if len(sub_new_shards) == 1:
                 tmp_parent_shard = sub_new_shards[0]
             else:
-                tmp_parent_shard = sub_new_shards[0].copy()
+                tmp_parent_shard = copy.deepcopy(sub_new_shards[0])
                 tmp_parent_shard['upper'] = sub_new_shards[-1]['upper']
             tmp_new_shards.append(tmp_parent_shard)
 
@@ -1167,7 +1167,7 @@ class ContainerSharding(ProxyClient):
                         current_shard['upper'] > new_shard['upper']):
                 shards_for_sharding.append(new_shard)
             else:
-                tmp_new_shard = new_shard.copy()
+                tmp_new_shard = copy.deepcopy(new_shard)
                 tmp_new_shard['upper'] = current_shard['upper']
                 shards_for_sharding.append(tmp_new_shard)
                 break
