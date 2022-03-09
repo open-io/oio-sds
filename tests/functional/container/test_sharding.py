@@ -422,7 +422,10 @@ class TestSharding(BaseTestCase):
 
     def test_account_counters_after_sharding(self):
         # Clear the account stats
-        self.storage.account.account_flush(self.account)
+        try:
+            self.storage.account.account_flush(self.account)
+        except NotFound:
+            pass
 
         # Fill a bucket
         self._create(self.cname, bucket=self.cname)
