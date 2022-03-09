@@ -48,9 +48,9 @@ class TestAccountBackend(BaseTestCase):
         if os.path.exists(CommonFdb.DEFAULT_FDB):
             fdb_file = CommonFdb.DEFAULT_FDB
         else:
-            fdb_file = str(Path.home())+'/.oio/sds/conf/OPENIO-fdb.cluster'
+            fdb_file = str(Path.home()) + '/.oio/sds/conf/OPENIO-fdb.cluster'
         self.account_conf = {
-                'fdb_file': fdb_file}
+            'fdb_file': fdb_file}
         self.backend = AccountBackendFdb(self.account_conf, logger)
         self.backend.init_db(None)
         self.backend.db.clear_range(b'\x00', b'\xfe')
@@ -1424,18 +1424,21 @@ class TestAccountBackend(BaseTestCase):
     # TODO(adu): Flush account with stats by policy and buckets
 
     def test_refresh_bucket(self):
-        region = 'LOCALHOST'
+        # Create account
         account_id = random_str(16)
-        bucket = random_str(16)
-
         self.assertEqual(self.backend.create_account(account_id), account_id)
 
-        total_bytes = 0
-        total_objects = 0
+        # Create container
+        region = 'LOCALHOST'
+        bucket = random_str(16)
+        mtime = Timestamp().timestamp
 
         # set bucket_db reservation
         self.backend.reserve_bucket(bucket, account_id)
         self.backend.set_bucket_owner(bucket, account_id)
+
+        total_bytes = 0
+        total_objects = 0
 
         # 10 containers with bytes and objects
         for i in range(10):
@@ -1464,8 +1467,8 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(res_bytes, 1)
         self.assertEqual(res_objects, 2)
 
-        # force pagination
-        self.backend.refresh_bucket(bucket)
+        # default batch_size
+        self.backend.refresh_bucket(bucket, account_id)
         b_space = self.backend.bucket_space[account_id][bucket]
 
         res_bytes = self.backend.db[b_space['bytes']]
@@ -1544,11 +1547,106 @@ class TestAccountBackend(BaseTestCase):
                              len(ct_in_bucket) * data_lenth * nb_obj_to_add)
             self.assertEqual(res_objects, len(ct_in_bucket) * nb_obj_to_add)
 
+    def test_refresh_bucket_with_policies(self):
+        policies = ['SINGLE', 'EC', 'THREECOPIES']
+        # Create account
+        account_id = random_str(16)
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+
+        # Create container
+        region = 'LOCALHOST'
+        bucket = random_str(16)
+        mtime = Timestamp().timestamp
+
+        # set bucket_db reservation
+        self.backend.reserve_bucket(bucket, account_id)
+        self.backend.set_bucket_owner(bucket, account_id)
+
+        ref_counters = {'bytes': {'global': 0}, 'objects': {'global': 0}}
+
+        # 10 containers with bytes and objects
+        for i in range(10):
+            container_policies = random.sample(policies, 2)
+            name = "container%d" % i
+            mtime = Timestamp().timestamp
+            details = {'bytes': {}, 'objects': {}}
+            sum_counters = {'bytes': 0, 'objects': 0}
+            for policy in container_policies:
+                for field in ('bytes', 'objects'):
+                    counter = random.randrange(100)
+                    sum_counters[field] += counter
+                    ref_counters[field]['global'] += counter
+                    # add to details
+                    details[field][policy] = counter
+                    # add to reference
+                    if policy not in ref_counters[field]:
+                        ref_counters[field][policy] = 0
+                    ref_counters[field][policy] += counter
+
+            self.backend.update_container(
+                account_id, name, mtime, 0, sum_counters['objects'],
+                sum_counters['bytes'], objects_details=details['objects'],
+                bytes_details=details['bytes'], bucket_name=bucket,
+                region=region)
+
+        b_space = self.backend.bucket_space[account_id][bucket]
+
+        def override_counters():
+            for policy in policies + ['global', 'NON_EXISTING_POLICY']:
+                for field in ('bytes', 'objects'):
+                    bogus_value = random.randint(32000, 32100)
+                    key = b_space[field]
+                    if policy != 'global':
+                        key = key[policy]
+                    self.backend.db[key] = struct.pack('<q', bogus_value)
+                    value = struct.unpack('<q', self.backend.db[key])[0]
+                    self.assertEqual(value, bogus_value)
+
+        def validate_counter(reference, policy, field):
+            ref_value = reference[field][policy]
+            key = b_space[field]
+            if policy != 'global':
+                key = key[policy]
+            value = self.backend.db[key]
+            value = struct.unpack('<q', value)[0]
+            self.assertEqual(value, ref_value)
+
+        override_counters()
+
+        # default batch_size
+        self.backend.refresh_bucket(bucket, account_id)
+
+        policies.append('global')
+        # validate all counters
+        for p in policies:
+            for f in ('bytes', 'objects'):
+                validate_counter(ref_counters, p, f)
+        # ensure unused policies had been removed
+        self.assertIsNone(
+            self.backend.db[b_space['bytes']['NON_EXISTING_POLICY']])
+        self.assertIsNone(
+            self.backend.db[b_space['objects']['NON_EXISTING_POLICY']])
+
+        override_counters()
+
+        # force pagination
+        self.backend.refresh_bucket(bucket, batch_size=3)
+
+        # validate all counters
+        for p in policies:
+            for f in ('bytes', 'objects'):
+                validate_counter(ref_counters, p, f)
+        # ensure unused policies had been removed
+        self.assertIsNone(
+            self.backend.db[b_space['bytes']['NON_EXISTING_POLICY']])
+        self.assertIsNone(
+            self.backend.db[b_space['objects']['NON_EXISTING_POLICY']])
+
     def test_update_bucket_metada(self):
         region = 'LOCALHOST'
-        bname = 'metadata_'+random_str(8)
+        bname = 'metadata_' + random_str(8)
         metadata = {'owner': 'owner1', 'user': 'user1'}
-        account_id = 'acct_'+random_str(8)
+        account_id = 'acct_' + random_str(8)
 
         # Test autocreate_account
         self.backend.update_container(
