@@ -674,6 +674,12 @@ class ContainerSharding(ProxyClient):
 
     def _create_shard(self, root_account, root_container, parent_shard,
                       shard, **kwargs):
+        # Clean up the local shard copy before replicating it
+        # If cleanup fails here, it will be retried after sharding
+        # is complete (but may interfere with client requests).
+        self._safe_clean(shard, parent_shard=parent_shard, attempts=1,
+                         **kwargs)
+
         shard_account = '.shards_%s' % (root_account)
         shard_container = '%s-%s-%d-%d' % (
             root_container, parent_shard['cid'],
@@ -903,15 +909,20 @@ class ContainerSharding(ProxyClient):
         parent_shard['sharding'] = sharding_info
 
         # Create the new shards
+        creators = []
         for new_shard in new_shards:
-            # Clean up the local shard copy before replicating it
-            # If cleanup fails here, it will be retried after sharding
-            # is complete (but may interfere with client requests).
-            self._safe_clean(new_shard, parent_shard=parent_shard, attempts=1,
-                             **kwargs)
-            # Create the new shards
-            self._create_shard(root_account, root_container, parent_shard,
-                               new_shard, **kwargs)
+            creators.append(eventlet.spawn(
+                self._create_shard, root_account, root_container, parent_shard,
+                new_shard, **kwargs))
+        creator_exceptions = []
+        # Wait for all threads, even on failure
+        for creator in creators:
+            try:
+                creator.wait()
+            except Exception as exc:
+                creator_exceptions.append(exc)
+        if creator_exceptions:
+            raise Exception(creator_exceptions)
 
         # Apply saved writes on the new shards in the background
         saved_writes_applicator = SavedWritesApplicator(
@@ -963,7 +974,10 @@ class ContainerSharding(ProxyClient):
             cleaners.append(eventlet.spawn(
                 self._safe_clean, new_shard, **kwargs))
         for cleaner in cleaners:
-            cleaner.wait()
+            try:
+                cleaner.wait()
+            except Exception as exc:
+                self.logger.warning('Failed to clean shard: %s', exc)
 
     def _rollback_sharding(self, parent_shard, new_shards, **kwargs):
         if 'sharding' not in parent_shard:
