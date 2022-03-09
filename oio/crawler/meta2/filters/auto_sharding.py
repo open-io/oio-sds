@@ -51,7 +51,9 @@ class AutomaticSharding(Filter):
                 'The database size for sharding '
                 'must be larger than the size for shrinking')
 
-        kwargs = dict()
+        kwargs = {}
+        kwargs['preclean_new_shards'] = self.sharding_strategy_params.pop(
+            'preclean_new_shards', None)
         kwargs['create_shard_timeout'] = self.sharding_strategy_params.pop(
             'create_shard_timeout', None)
         kwargs['save_writes_timeout'] = self.sharding_strategy_params.pop(

@@ -40,6 +40,10 @@ sharding_strategy = shard-with-partition
 sharding_threshold = 100000
 ## Partition to use for cutting the container.
 sharding_partition = 50,50
+# Try to clean up the copy before creating the new shard
+# (in order to reduce the database size before replicating it and
+# in order to no longer clean up a database accessible by client requests).
+preclean_new_shards = True
 # Maximum amount of time the sharding process is allowed to create new shard
 sharding_create_shard_timeout = 60
 # Maximum amount of time the sharding process is allowed to save writes

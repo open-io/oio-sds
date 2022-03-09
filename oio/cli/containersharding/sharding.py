@@ -220,6 +220,34 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             Replace all current shards with new shards.
             """
         )
+        parser.add_argument(
+            '--no-preclean-new-shards',
+            default=True,
+            action='store_false',
+            dest='preclean_new_shards',
+            help="""
+            Disable the cleaning of the copy before creating the new shard.
+            """
+        )
+        parser.add_argument(
+            '--create-shard-timeout',
+            default=ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to create new shard (default: %f).
+            """ % ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT
+        )
+        parser.add_argument(
+            '--save-writes-timeout',
+            default=ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to save writes before applying them directly
+            to the new shards (default: %f).
+            """ % ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -234,6 +262,9 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         modified = False
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
+            preclean_new_shards=parsed_args.preclean_new_shards,
+            create_shard_timeout=parsed_args.create_shard_timeout,
+            save_writes_timeout=parsed_args.save_writes_timeout,
             logger=self.app.client_manager.logger)
         new_shards = container_sharding.format_shards(new_shards, are_new=True)
         if parsed_args.all:
@@ -275,6 +306,34 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             And replace all current shards with these found shards.
             """
         )
+        parser.add_argument(
+            '--no-preclean-new-shards',
+            default=True,
+            action='store_false',
+            dest='preclean_new_shards',
+            help="""
+            Disable the cleaning of the copy before creating the new shard.
+            """
+        )
+        parser.add_argument(
+            '--create-shard-timeout',
+            default=ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to create new shard (default: %f).
+            """ % ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT
+        )
+        parser.add_argument(
+            '--save-writes-timeout',
+            default=ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to save writes before applying them directly
+            to the new shards (default: %f).
+            """ % ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -286,6 +345,9 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         modified = False
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
+            preclean_new_shards=parsed_args.preclean_new_shards,
+            create_shard_timeout=parsed_args.create_shard_timeout,
+            save_writes_timeout=parsed_args.save_writes_timeout,
             logger=self.app.client_manager.logger)
         if parsed_args.all:
             found_shards = container_sharding.find_all_shards(

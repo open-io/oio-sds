@@ -257,6 +257,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_STRATEGY = 'shard-with-partition'
     DEFAULT_PARTITION = [50, 50]
     DEFAULT_SHARD_SIZE = 100000
+    DEFAULT_PRECLEAN_NEW_SHARDS = True
     DEFAULT_CREATE_SHARD_TIMEOUT = 60
     DEFAULT_SAVE_WRITES_TIMEOUT = 60
 
@@ -275,6 +276,9 @@ class ContainerSharding(ProxyClient):
         self.container = ContainerClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger,
             **kwargs)
+        self.preclean_new_shards = boolean_value(
+            kwargs.get('preclean_new_shards'),
+            self.DEFAULT_PRECLEAN_NEW_SHARDS)
         self.create_shard_timeout = int_value(
             kwargs.get('create_shard_timeout'),
             self.DEFAULT_CREATE_SHARD_TIMEOUT)
@@ -674,11 +678,12 @@ class ContainerSharding(ProxyClient):
 
     def _create_shard(self, root_account, root_container, parent_shard,
                       shard, **kwargs):
-        # Clean up the local shard copy before replicating it
-        # If cleanup fails here, it will be retried after sharding
-        # is complete (but may interfere with client requests).
-        self._safe_clean(shard, parent_shard=parent_shard, attempts=1,
-                         **kwargs)
+        if self.preclean_new_shards:
+            # Clean up the local shard copy before replicating it
+            # If cleanup fails here, it will be retried after sharding
+            # is complete (but may interfere with client requests).
+            self._safe_clean(shard, parent_shard=parent_shard, attempts=1,
+                             **kwargs)
 
         shard_account = '.shards_%s' % (root_account)
         shard_container = '%s-%s-%d-%d' % (
