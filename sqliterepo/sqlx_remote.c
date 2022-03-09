@@ -132,14 +132,12 @@ sqlx_pack_RESYNC(const struct sqlx_name_s *name, const gint check_type,
 
 GByteArray*
 sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local,
-       const gchar * suffix, gint64 deadline)
+		gint64 deadline)
 {
-	gint8 local2 = BOOL(local);
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_VACUUM, NULL, name, deadline);
-	if (local)
-		metautils_message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
-    if (suffix)
-		metautils_message_add_field_str(req, NAME_MSGKEY_BASESUFFIX, suffix);
+	if (local) {
+		metautils_message_add_field_strint(req, NAME_MSGKEY_LOCAL, 1);
+	}
 	return message_marshall_gba_and_clean(req);
 }
 
