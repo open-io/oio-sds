@@ -670,7 +670,7 @@ class AccountBackendFdb(object):
                 if field == 'containers' and account_id.startswith(
                         SHARDING_ACCOUNT_PREFIX):
                     # Replace 'containers' with 'shards' for sharding account
-                    key[0] = 'shards'
+                    key = ('shards',) + key[1:]
                 self._increment(tr, self.metrics_space.pack(key), -value)
             # Remove details by region
             tr.clear_range(details_range.start, details_range.stop)

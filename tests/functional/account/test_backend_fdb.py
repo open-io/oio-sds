@@ -1270,6 +1270,157 @@ class TestAccountBackend(BaseTestCase):
         )
         self._check_backend(*backend_info)
 
+    def test_flush_account_with_shards(self):
+        region = 'LOCALHOST'
+        account_id = random_str(16)
+
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {
+                ('accounts',): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
+        total_bytes = 0
+        total_objects = 0
+        containers = 0
+        containers_info = {}
+        deleted_containers_info = {}
+        sharding_total_bytes = 0
+        sharding_total_objects = 0
+        shards = 0
+
+        # 10 containers with bytes and objects
+        for i in range(10):
+            name = "container%d" % i
+            mtime = Timestamp().timestamp
+            nb_bytes = random.randrange(100)
+            nb_objets = random.randrange(100)
+            self.backend.update_container(
+                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                region=region)
+            if random.randrange(100) > 50:
+                total_bytes += nb_bytes
+                total_objects += nb_objets
+                containers += 1
+                containers_info[(account_id, name)] = {
+                    ('name',): name,
+                    ('region',): region,
+                    ('mtime',): mtime,
+                    ('bytes',): nb_bytes,
+                    ('objects',): nb_objets
+                }
+            else:
+                # with some deleted containers
+                sleep(.00001)
+                mtime = Timestamp().normal
+                self.backend.update_container(
+                    account_id, name, 0, mtime, 0, 0, region=region)
+                deleted_containers_info[(account_id, name)] = mtime
+        # 8 shards with bytes and objects
+        sharding_account_id = '.shards_' + account_id
+        for i in range(8):
+            name = "container%d" % i
+            sharding_mtime = Timestamp().timestamp
+            nb_bytes = random.randrange(100)
+            nb_objets = random.randrange(100)
+            self.backend.update_container(
+                sharding_account_id, name, sharding_mtime, 0, nb_objets,
+                nb_bytes, region=region)
+            if random.randrange(100) > 50:
+                sharding_total_bytes += nb_bytes
+                sharding_total_objects += nb_objets
+                shards += 1
+                containers_info[(sharding_account_id, name)] = {
+                    ('name',): name,
+                    ('region',): region,
+                    ('mtime',): sharding_mtime,
+                    ('bytes',): nb_bytes,
+                    ('objects',): nb_objets
+                }
+            else:
+                # with some deleted containers
+                sleep(.00001)
+                sharding_mtime = Timestamp().normal
+                self.backend.update_container(
+                    sharding_account_id, name, 0, sharding_mtime, 0, 0,
+                    region=region)
+                deleted_containers_info[(sharding_account_id, name)] = \
+                    sharding_mtime
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('containers', region): containers,
+                ('shards', region): shards
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('mtime',): mtime,
+                    ('bytes',): total_bytes,
+                    ('objects',): total_objects,
+                    ('containers',): containers,
+                    ('containers', region): containers,
+                    ('buckets',): 0
+                },
+                (sharding_account_id,): {
+                    ('id',): sharding_account_id,
+                    ('mtime',): sharding_mtime,
+                    ('bytes',): sharding_total_bytes,
+                    ('objects',): sharding_total_objects,
+                    ('containers',): shards,
+                    ('containers', region): shards,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            containers_info,
+            deleted_containers_info
+        )
+        self._check_backend(*backend_info)
+
+        self.backend.flush_account(account_id)
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('containers', region): 0,
+                ('shards', region): 0
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                },
+                (sharding_account_id,): {
+                    ('id',): sharding_account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
     # TODO(adu): Flush account with stats by policy and buckets
 
     def test_refresh_bucket(self):
