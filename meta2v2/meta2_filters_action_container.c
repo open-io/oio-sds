@@ -709,8 +709,6 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 
 	if (g_strcmp0(action, "merge") == 0) {
 		err = meta2_backend_prepare_shrinking(m2b, url, &properties);
-	} else if (g_strcmp0(action, "prepare-merge") == 0) {
-		err = meta2_backend_prepare_sharding(m2b, url, NULL, &properties);
 	} else {
 		err = meta2_backend_prepare_sharding(m2b, url, beans, &properties);
 	}

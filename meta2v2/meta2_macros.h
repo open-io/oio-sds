@@ -97,8 +97,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARDING_PREVIOUS_UPPER M2V2_ADMIN_SHARDING_UPPER ".previous"
 # endif
 
-# ifndef M2V2_ADMIN_SHARDING_INDEX
-# define M2V2_ADMIN_SHARDING_INDEX "index"
+# ifndef M2V2_ADMIN_SHARDING_COPIES
+# define M2V2_ADMIN_SHARDING_COPIES M2V2_ADMIN_PREFIX_SHARDING "copies"
 # endif
 
 # ifndef M2V2_ADMIN_PREFIX_DRAINING

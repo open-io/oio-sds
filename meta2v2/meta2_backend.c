@@ -2777,20 +2777,58 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	const gchar *master = sqlx_get_service_id();
 	gchar *queue_url = NULL;
-	int max_index = 0;
+	json_object *jbody = NULL;
 	struct json_object *jindex = NULL;
-	json_object *json = NULL;
+	GSList *indexes = NULL;
+	GString *indexes_property = g_string_sized_new(4);
 
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"index", &jindex, json_type_int,   0},
-		{NULL, NULL, 0, 0}
+		{"index", &jindex, json_type_int, 1},
+		{NULL,    NULL,    0,             0}
 	};
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
+	if (!beans) {
+		err = BADREQ("No shard");
+		goto end;
+	}
+	for (GSList *l = beans; l; l = l->next) {
+		if (DESCR(l->data) != &descr_struct_SHARD_RANGE) {
+			err = BADREQ("Invalid type: not a shard range");
+			goto end;
+		}
+		GString *metadata = SHARD_RANGE_get_metadata(l->data);
+		if (!metadata) {
+			err = BADREQ("No timestamp to find the shard's copy");
+			goto end;
+		}
+		err = JSON_parse_buffer((guint8 *) metadata->str, metadata->len, &jbody);
+		if (err) {
+			goto end;
+		}
+		err = oio_ext_extract_json(jbody, mapping);
+		if (err) {
+			err = BADREQ("Missing shard metadata: (%d) %s",
+					err->code, err->message);
+			goto end;
+		}
+		gchar *index = g_strdup(json_object_get_string(jindex));
+		indexes = g_slist_prepend(indexes, index);
+		if (indexes_property->len > 0) {
+			g_string_append_c(indexes_property, ',');
+		}
+		g_string_append(indexes_property, index);
+		if (jbody) {
+			json_object_put(jbody);
+			jbody = NULL;
+		}
+	}
+
 	if (!master || !*master) {
-		return SYSERR("No service ID");
+		err = SYSERR("No service ID");
+		goto end;
 	}
 
 	gboolean _sharding_filter(const gchar *k) {
@@ -2798,8 +2836,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	}
 
 	gchar *cfg = oio_cfg_get_eventagent(m2b->nsinfo->name);
-	if (!cfg)
-		return SYSERR("Missing queue URL");
+	if (!cfg) {
+		err = SYSERR("Missing queue URL");
+		goto end;
+	}
 	STRING_STACKIFY(cfg);
 	gchar **eventagent_urls = g_strsplit(cfg, OIO_CSV_SEP2, -1);
 	for (gchar **eventagent_url = eventagent_urls; *eventagent_url && !err;
@@ -2808,8 +2848,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			queue_url = g_strdup(*eventagent_url);
 	}
 	g_strfreev(eventagent_urls);
-	if (!queue_url)
-		return SYSERR("Missing beanstalkd URL");
+	if (!queue_url) {
+		err = SYSERR("Missing beanstalkd URL");
+		goto end;
+	}
 
 	err = m2b_open(m2b, url,
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
@@ -2830,46 +2872,20 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			err = BADREQ("Sharding is already in progress");
 			goto rollback;
 		}
-		if (!beans) {
-			copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
-					sq3->path_inline, timestamp);
+		// Create a copy for each new shards
+		for (GSList *l = indexes; l; l = l->next) {
+			gchar *index = l->data;
+			copy_path = g_strdup_printf(
+				"%s.sharding-%"G_GINT64_FORMAT"-%s",
+				sq3->path_inline, timestamp, index);
 			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
+				g_free(copy_path);
 				goto rollback;
 			}
-		}
-		else {
-			int id = 0;
-			for (GSList *l = beans; l; l = g_slist_next(l)) {
-				json = json_tokener_parse(SHARD_RANGE_get_metadata(l->data)->str);
-				err = oio_ext_extract_json(json, mapping);
-				if (err) {
-					err = BADREQ("Invalid prepare sharding params: (%d) %s",
-							err->code, err->message);
-					goto rollback;
-				}
-				id = json_object_get_int64(jindex);
-				if (id > max_index) {
-					max_index = id;
-				}
-				copy_path = g_strdup_printf(
-					"%s.sharding-%"G_GINT64_FORMAT"-%d",
-					sq3->path_inline, timestamp, id);
-				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
-
-				if (json) {
-					json_object_put(json);
-				}
-				if (err) {
-					g_prefix_error(&err, "Failed to copy %s to %s: ",
-							sq3->path_inline, copy_path);
-					goto rollback;
-				}
-				g_free(copy_path);
-				copy_path = NULL;
-			}
+			g_free(copy_path);
 		}
 		err = _connect_to_sharding_queue(url, queue_url, timestamp,
 				&beanstalkd);
@@ -2890,9 +2906,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					EXISTING_SHARD_STATE_SAVING_WRITES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
-			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_INDEX, max_index);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_QUEUE, queue_url);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_COPIES,
+					indexes_property->str);
 			m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -2903,9 +2920,17 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 
 rollback:
 		if (err) {
-			if (copy_path && remove(copy_path)) {
-				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
-						errno, strerror(errno));
+			// Try to remove each copy
+			for (GSList *l = indexes; l; l = l->next) {
+				gchar *index = l->data;
+				copy_path = g_strdup_printf(
+					"%s.sharding-%"G_GINT64_FORMAT"-%s",
+					sq3->path_inline, timestamp, index);
+				if (remove(copy_path)) {
+					GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+							errno, strerror(errno));
+				}
+				g_free(copy_path);
 			}
 
 			if (beanstalkd) {
@@ -2919,12 +2944,16 @@ rollback:
 				sq3->sharding_queue = NULL;
 			}
 		}
-		g_free(copy_path);
 
 		m2b_close(sq3, url);
 	}
-
+end:
 	g_free(queue_url);
+	if (jbody) {
+		json_object_put(jbody);
+	}
+	g_slist_free_full(indexes, g_free);
+	g_string_free(indexes_property, TRUE);
 	return err;
 }
 
@@ -3002,39 +3031,49 @@ _get_shard_url_and_suffix(const gchar *namespace,
 	GError *err = NULL;
 	struct oio_url_s *url = NULL;
 	json_object *jbody = NULL;
+	struct json_object *jindex = NULL, *jtimestamp = NULL;
 
-	url = oio_url_empty();
-	oio_url_set(url, OIOURL_NS, namespace);
-	gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,
-			SHARD_RANGE_get_cid(shard)), FALSE);
-	oio_url_set(url, OIOURL_HEXID, cid);
-	g_free(cid);
+	if (result_url) {
+		url = oio_url_empty();
+		oio_url_set(url, OIOURL_NS, namespace);
+		gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+				SHARD_RANGE_get_cid(shard)), FALSE);
+		oio_url_set(url, OIOURL_HEXID, cid);
+		g_free(cid);
+	}
 
-	GString *metadata = SHARD_RANGE_get_metadata(shard);
-	if (!metadata) {
-		err = BADREQ("No timestamp to find the shard's copy");
-		goto end;
-	}
-	err = JSON_parse_buffer((guint8 *) metadata->str, metadata->len, &jbody);
-	if (err) {
-		goto end;
-	}
-	struct json_object *jtimestamp = NULL;
-	struct oio_ext_json_mapping_s mapping[] = {
-		{"timestamp", &jtimestamp, json_type_int, 1},
-		{NULL,        NULL,        0,             0}
-	};
-	err = oio_ext_extract_json(jbody, mapping);
-	if (err) {
-		goto end;
+	if (result_suffix) {
+		GString *metadata = SHARD_RANGE_get_metadata(shard);
+		if (!metadata) {
+			err = BADREQ("No timestamp to find the shard's copy");
+			goto end;
+		}
+		err = JSON_parse_buffer((guint8 *) metadata->str, metadata->len, &jbody);
+		if (err) {
+			goto end;
+		}
+		struct oio_ext_json_mapping_s mapping[] = {
+			{"index",     &jindex,     json_type_int, 1},
+			{"timestamp", &jtimestamp, json_type_int, 1},
+			{NULL,        NULL,        0,             0}
+		};
+		err = oio_ext_extract_json(jbody, mapping);
+		if (err) {
+			goto end;
+		}
 	}
 end:
 	if (err) {
 		oio_url_clean(url);
 	} else {
-		*result_url = url;
-		*result_suffix = g_strdup_printf("sharding-%s",
-				json_object_get_string(jtimestamp));
+		if (result_url) {
+			*result_url = url;
+		}
+		if (result_suffix) {
+			*result_suffix = g_strdup_printf("sharding-%s-%s",
+					json_object_get_string(jtimestamp),
+					json_object_get_string(jindex));
+		}
 	}
 	if (jbody) {
 		json_object_put(jbody);
@@ -3269,8 +3308,14 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 			gint64 timestamp = oio_ext_real_time();
 			gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
 						M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
-			gint64 sharding_index = sqlx_admin_get_i64(sq3,
-						M2V2_ADMIN_SHARDING_INDEX, 0);
+			gchar *sharding_copies = sqlx_admin_get_str(sq3,
+					M2V2_ADMIN_SHARDING_COPIES);
+			gchar **indexes = NULL;
+			if (sharding_copies) {
+				indexes = g_strsplit(sharding_copies, ",", -1);
+				g_free(sharding_copies);
+			}
+
 			struct sqlx_repctx_s *repctx = NULL;
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
 				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
@@ -3279,32 +3324,22 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 						timestamp);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
 				m2db_increment_version(sq3);
 				err = sqlx_transaction_end(repctx, err);
 			}
 			if (!err) {
-				if (sharding_timestamp) {
+				if (sharding_timestamp && indexes) {
 					gchar *copy_path = NULL;
-					if (sharding_index == 0) {
+					for (gchar **index=indexes; *index; index++) {
 						copy_path = g_strdup_printf(
-							"%s.sharding-%"G_GINT64_FORMAT, sq3->path_inline,
-							sharding_timestamp);
+							"%s.sharding-%"G_GINT64_FORMAT"-%s",
+							sq3->path_inline, sharding_timestamp, *index);
 						if (remove(copy_path)) {
 							GRID_WARN("Failed to remove file %s: (%d) %s",
 								copy_path, errno, strerror(errno));
 						}
 						g_free(copy_path);
-					} else {
-						for (int64_t id = 0; id <= sharding_index; id++) {
-							copy_path = g_strdup_printf(
-								"%s.sharding-%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT,
-								sq3->path_inline, sharding_timestamp, id);
-							if (remove(copy_path)) {
-								GRID_WARN("Failed to remove file %s: (%d) %s",
-									copy_path, errno, strerror(errno));
-							}
-							g_free(copy_path);
-						}
 					}
 				}
 				if (sq3->sharding_queue) {
@@ -3312,6 +3347,7 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 					sq3->sharding_queue = NULL;
 				}
 			}
+			g_strfreev(indexes);
 		}
 		m2b_close(sq3, url);
 	}
@@ -3487,7 +3523,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
-			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_INDEX);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANED_UP);
 		}
@@ -3554,7 +3590,13 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 
 	gint64 current_timestamp = sqlx_admin_get_i64(
 			sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
-	gint64 max_index = sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_INDEX, 0);
+	gchar *sharding_copies = sqlx_admin_get_str(sq3,
+			M2V2_ADMIN_SHARDING_COPIES);
+	gchar **indexes = NULL;
+	if (sharding_copies) {
+		indexes = g_strsplit(sharding_copies, ",", -1);
+		g_free(sharding_copies);
+	}
 	gint64 new_timestamp = oio_ext_real_time();
 	if (!(err = _transaction_begin(sq3, url, &repctx))) {
 		if (sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES) {
@@ -3577,7 +3619,7 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
 		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
-		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_INDEX);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 				EXISTING_SHARD_STATE_ABORTED);
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, new_timestamp);
@@ -3585,36 +3627,30 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 		err = sqlx_transaction_end(repctx, err);
 	}
 	if (err) {
+		g_strfreev(indexes);
 		return err;
 	}
 
 	if (sharding_state == EXISTING_SHARD_STATE_SAVING_WRITES) {
-		gchar *copy_path = NULL;
-		if (max_index == 0) {
-			copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
-					sq3->path_inline, current_timestamp);
-			if (remove(copy_path)) {
-				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
-						errno, strerror(errno));
-			}
-			g_free(copy_path);
-		} else {
-			for (gint64 id = 0; id <= max_index; id++) {
-				copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT,
-						sq3->path_inline, current_timestamp, id);
+		if (current_timestamp && indexes) {
+			gchar *copy_path = NULL;
+			for (gchar **index=indexes; *index; index++) {
+				copy_path = g_strdup_printf(
+					"%s.sharding-%"G_GINT64_FORMAT"-%s",
+					sq3->path_inline, current_timestamp, *index);
 				if (remove(copy_path)) {
-					GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
-							errno, strerror(errno));
+					GRID_WARN("Failed to remove file %s: (%d) %s",
+						copy_path, errno, strerror(errno));
 				}
 				g_free(copy_path);
 			}
 		}
-
 		if (sq3->sharding_queue) {
 			beanstalkd_destroy(sq3->sharding_queue);
 			sq3->sharding_queue = NULL;
 		}
 	}
+	g_strfreev(indexes);
 	return err;
 }
 

@@ -634,7 +634,7 @@ class ContainerSharding(ProxyClient):
             root_account, root_container, **kwargs)
         return self._check_shards(formatted_shards, are_new=True, **kwargs)
 
-    def _prepare_sharding(self, shard, action=None, shard_info=None, **kwargs):
+    def _prepare_sharding(self, shard, action=None, new_shards=None, **kwargs):
         """
         If merge:
         - Change the sharding state to indicate
@@ -647,14 +647,21 @@ class ContainerSharding(ProxyClient):
           without disturbing the container.
         """
         params = self._make_params(cid=shard['cid'], **kwargs)
-        if shard_info is not None:
-            _shard_info = shard_info.copy()
-        else:
-            _shard_info = None
+        data = None
+        if new_shards:
+            data = []
+            for new_shard in new_shards:
+                new_shard = copy.deepcopy(new_shard)
+                if 'cid' not in new_shard:
+                    new_shard['cid'] = shard['cid']
+                if new_shard['metadata'] is None:
+                    new_shard['metadata'] = {}
+                new_shard['metadata']['index'] = new_shard['index']
+                data.append(new_shard)
         if action:
             params['action'] = action
         resp, body = self._request('POST', '/prepare', params=params,
-                                   json=_shard_info, **kwargs)
+                                   json=data, **kwargs)
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
 
@@ -696,7 +703,10 @@ class ContainerSharding(ProxyClient):
     def _merge_shards(self, smaller_shard, bigger_shard, **kwargs):
         params = self._make_params(cid=bigger_shard['cid'], **kwargs)
         formatted_smaller_shard = self._format_shard(smaller_shard, **kwargs)
-        metadata = formatted_smaller_shard.get('metadata') or dict()
+        metadata = formatted_smaller_shard.get('metadata')
+        if metadata is None:
+            metadata = {}
+        metadata['index'] = smaller_shard['index']
         metadata['timestamp'] = smaller_shard['sharding']['timestamp']
         formatted_smaller_shard['metadata'] = metadata
         truncated = True
@@ -885,14 +895,11 @@ class ContainerSharding(ProxyClient):
         self.logger.info(
             'Sharding %s with %s', str(parent_shard), str(new_shards))
         parent_shard['sharding'] = None
-        for el in new_shards:
-            el['cid'] = ''
-            el['metadata'] = {}
-            el['metadata']['index'] = el['index']
+
         # Prepare the sharding for the container to shard
         # FIXME(adu): ServiceBusy or Timeout
-        sharding_info = self._prepare_sharding(parent_shard, action='prepare',
-                                               shard_info=new_shards, **kwargs)
+        sharding_info = self._prepare_sharding(
+            parent_shard, new_shards=new_shards, **kwargs)
         parent_shard['sharding'] = sharding_info
 
         # Create the new shards
@@ -1361,7 +1368,7 @@ class ContainerSharding(ProxyClient):
         # Prepare shrinking on smaller shard
         # FIXME(adu): ServiceBusy or Timeout
         shrinking_info = self._prepare_sharding(
-                            smaller_shard, action='prepare-merge', **kwargs)
+            smaller_shard, new_shards=[smaller_shard], **kwargs)
         smaller_shard['sharding'] = shrinking_info
         # Prepare shrinking on bigger shard or root
         # FIXME(adu): ServiceBusy or Timeout
@@ -1373,12 +1380,13 @@ class ContainerSharding(ProxyClient):
         # to the master of bigger shard
         if (smaller_shard['sharding']['master']
                 != bigger_shard['sharding']['master']):
+            suffix = 'sharding-%d-%d' % (
+                smaller_shard['sharding']['timestamp'], smaller_shard['index'])
             self.admin.copy_base_from(
                 'meta2', cid=smaller_shard['cid'],
                 svc_from=smaller_shard['sharding']['master'],
                 svc_to=bigger_shard['sharding']['master'],
-                suffix='sharding-%d' % smaller_shard['sharding']['timestamp'],
-                **kwargs)
+                suffix=suffix, **kwargs)
 
         # Merge the copy in the bigger shard
         self._merge_shards(smaller_shard, bigger_shard, **kwargs)
@@ -1427,11 +1435,12 @@ class ContainerSharding(ProxyClient):
         if (smaller_shard_info['master']
                 != bigger_shard_info['master']):
             try:
+                suffix = 'sharding-%d-%d' % (
+                    smaller_shard_info['timestamp'], smaller_shard['index'])
                 self.admin.remove_base(
                     'meta2', cid=smaller_shard['cid'],
                     service_id=bigger_shard_info['master'],
-                    suffix='sharding-%d' % smaller_shard_info['timestamp'],
-                    **kwargs)
+                    suffix=suffix, **kwargs)
             except Exception as exc:
                 self.logger.warning(
                     'Failed to delete the copy (CID=%s): %s',
@@ -1470,12 +1479,13 @@ class ContainerSharding(ProxyClient):
                 and smaller_shard['sharding']['master']
                 != bigger_shard['sharding']['master']):
             try:
+                suffix = 'sharding-%d-%d' % (
+                    smaller_shard['sharding']['timestamp'],
+                    smaller_shard['index'])
                 self.admin.remove_base(
                     'meta2', cid=smaller_shard['cid'],
                     service_id=bigger_shard['sharding']['master'],
-                    suffix='sharding-%d'
-                    % smaller_shard['sharding']['timestamp'],
-                    **kwargs)
+                    suffix=suffix, **kwargs)
             except Exception as exc:
                 self.logger.warning(
                     'Failed to delete the copy (CID=%s): %s',
