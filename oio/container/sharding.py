@@ -15,6 +15,7 @@
 
 from oio.common.green import eventlet, eventlet_yield, time, Empty, LightQueue
 
+import copy
 from greenlet import GreenletExit
 from urllib.parse import unquote
 
@@ -733,21 +734,35 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
-    def _clean(self, shard, no_vacuum=False, attempts=1, cid=None,
-               clean_type=None, **kwargs):
-        params = dict()
-        if cid:
-            params['cid'] = cid
+    def _clean(self, shard, parent_shard=None, no_vacuum=False, attempts=1,
+               **kwargs):
+        data = None
+        service_id = None
+        if parent_shard:
+            # It's a local shard copy
+            cid = parent_shard['cid']
+            params = self._make_params(cid=cid, **kwargs)
+            shard = copy.deepcopy(shard)
+            if 'cid' not in shard:
+                shard['cid'] = cid
+            if shard['metadata'] is None:
+                shard['metadata'] = {}
+            shard['metadata']['index'] = shard['index']
+            shard['metadata']['timestamp'] = \
+                parent_shard['sharding']['timestamp']
+            service_id = parent_shard['sharding']['master']
+            params['service_id'] = service_id
+            params['local'] = 1
+            data = shard
         else:
-            params = self._make_params(cid=shard['cid'], **kwargs)
-        if clean_type:
-            params['clean_type'] = clean_type
+            cid = shard['cid']
+            params = self._make_params(cid=cid, **kwargs)
         truncated = True
         while truncated:
             for i in range(attempts):
                 try:
                     resp, body = self._request(
-                        'POST', '/clean', params=params, json=shard, **kwargs)
+                        'POST', '/clean', params=params, json=data, **kwargs)
                     if resp.status != 204:
                         raise exceptions.from_response(resp, body)
                     break
@@ -761,15 +776,18 @@ class ContainerSharding(ProxyClient):
                         'retrying...: %s', shard['cid'], exc)
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
         if not no_vacuum:
+            params = {}
+            suffix = None
+            if parent_shard:
+                # It's a local shard copy
+                suffix = '-'.join(
+                    ('sharding', str(parent_shard['sharding']['timestamp']),
+                     str(shard['index'])))
+                params['local'] = 1
             try:
-                params['type'] = 'meta2'
-                if clean_type:
-                    params['local'] = 1
-                    params['suffix'] = '-'.join(
-                                        ['sharding',
-                                         str(shard['metadata']['timestamp']),
-                                         str(shard['metadata']['index'])])
-                self.admin.vacuum_base(params=params, **kwargs)
+                self.admin.vacuum_base(
+                    'meta2', cid=cid, suffix=suffix, service_id=service_id,
+                    params=params, **kwargs)
             except Exception as exc:
                 self.logger.warning('Failed to vacuum container (CID=%s): %s',
                                     shard['cid'], exc)
@@ -785,14 +803,13 @@ class ContainerSharding(ProxyClient):
         }
         self._clean(fake_shard, **kwargs)
 
-    def _safe_clean(self, shard, cid=None, clean_type=None,  **kwargs):
+    def _safe_clean(self, shard, attempts=3, **kwargs):
         try:
-            self._clean(shard, attempts=3, cid=cid, clean_type=clean_type,
-                        **kwargs)
+            self._clean(shard, attempts=attempts, **kwargs)
         except Exception as exc:
             self.logger.warning(
                 'Failed to clean the container (CID=%s): %s',
-                shard['cid'], exc)
+                shard.get('cid', 'copy'), exc)
 
     def _show_shards(self, root_account, root_container, root_cid=None,
                      limit=None, marker=None, **kwargs):
@@ -880,13 +897,11 @@ class ContainerSharding(ProxyClient):
 
         # Create the new shards
         for new_shard in new_shards:
-            parent_shard['sharding'] = sharding_info
-            copy_shard = new_shard.copy()
-            copy_shard['metadata']['timestamp'] = sharding_info['timestamp']
-
-            # clean local shards
-            self._safe_clean(copy_shard, cid=parent_shard['cid'],
-                             clean_type='local', **kwargs)
+            # Clean up the local shard copy before replicating it
+            # If cleanup fails here, it will be retried after sharding
+            # is complete (but may interfere with client requests).
+            self._safe_clean(new_shard, parent_shard=parent_shard, attempts=1,
+                             **kwargs)
             # Create the new shards
             self._create_shard(root_account, root_container, parent_shard,
                                new_shard, **kwargs)

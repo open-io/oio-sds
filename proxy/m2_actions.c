@@ -2746,7 +2746,9 @@ _load_simplified_shard_ranges(struct json_object *jbody, GSList **out)
 	gpointer shard_range = NULL;
 
 	// Load the beans
-	if (json_object_is_type(jbody, json_type_array)) {
+	if (json_object_is_type(jbody, json_type_null)) {
+		// Nothing to do
+	} else if (json_object_is_type(jbody, json_type_array)) {
 		for (gint i = json_object_array_length(jbody) - 1; i >= 0; i--) {
 			shard_range = NULL;
 			err = m2v2_json_load_single_shard_range(
@@ -2989,19 +2991,22 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 	GError *err = NULL;
 	gboolean truncated = FALSE;
 	GSList *beans = NULL;
-	const gchar *clean_type = OPT("clean_type");
+	gboolean local = _request_get_flag(args, "local");
 
-	if (g_strcmp0(clean_type, "local") == 0) {
-		err = _load_simplified_shard_ranges(j, &beans);
-	}
-	if(!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_CLEAN_SHARDING(args->url, clean_type, beans, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
-				m2v2_boolean_truncated_extract);
-		args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
-				g_strdup(truncated ? "true" : "false"));
+	err = _load_simplified_shard_ranges(j, &beans);
+	if (!err) {
+		if (beans && g_slist_length(beans) != 1) {
+			err = BADREQ("Only one shard can be cleaned");
+		} else {
+			PACKER_VOID(_pack) {
+				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans,
+						local, DL());
+			};
+			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+					m2v2_boolean_truncated_extract);
+			args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+					g_strdup(truncated ? "true" : "false"));
+		}
 	}
 	if (beans) {
 		_bean_cleanl2(beans);

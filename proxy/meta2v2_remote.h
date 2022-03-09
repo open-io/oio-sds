@@ -248,8 +248,8 @@ GByteArray* m2v2_remote_pack_REPLACE_SHARDING(
 
 GByteArray* m2v2_remote_pack_CLEAN_SHARDING(
 		struct oio_url_s *url,
-		const gchar *clean_type,
 		GSList *beans,
+		gboolean local,
 		gint64 dl);
 
 GByteArray* m2v2_remote_pack_SHOW_SHARDING(

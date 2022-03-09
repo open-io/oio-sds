@@ -84,7 +84,6 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_simulate_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_find_shards_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_prepare_shard_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_sharding_info);
-M2V2_DECLARE_FILTER(meta2_filter_extract_clean);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);
