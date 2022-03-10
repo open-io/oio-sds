@@ -54,6 +54,8 @@ class AutomaticSharding(Filter):
         kwargs = {}
         kwargs['preclean_new_shards'] = self.sharding_strategy_params.pop(
             'preclean_new_shards', None)
+        kwargs['preclean_timeout'] = self.sharding_strategy_params.pop(
+            'preclean_timeout', None)
         kwargs['create_shard_timeout'] = self.sharding_strategy_params.pop(
             'create_shard_timeout', None)
         kwargs['save_writes_timeout'] = self.sharding_strategy_params.pop(

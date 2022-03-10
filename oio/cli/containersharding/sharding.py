@@ -230,6 +230,15 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             """
         )
         parser.add_argument(
+            '--preclean-timeout',
+            default=ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to pre-clean shard copie (default: %f).
+            """ % ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT
+        )
+        parser.add_argument(
             '--create-shard-timeout',
             default=ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT,
             type=float,
@@ -263,6 +272,7 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
             preclean_new_shards=parsed_args.preclean_new_shards,
+            preclean_timeout=parsed_args.preclean_timeout,
             create_shard_timeout=parsed_args.create_shard_timeout,
             save_writes_timeout=parsed_args.save_writes_timeout,
             logger=self.app.client_manager.logger)
@@ -316,6 +326,15 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             """
         )
         parser.add_argument(
+            '--preclean-timeout',
+            default=ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to pre-clean shard copie (default: %f).
+            """ % ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT
+        )
+        parser.add_argument(
             '--create-shard-timeout',
             default=ContainerSharding.DEFAULT_CREATE_SHARD_TIMEOUT,
             type=float,
@@ -346,6 +365,7 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
             preclean_new_shards=parsed_args.preclean_new_shards,
+            preclean_timeout=parsed_args.preclean_timeout,
             create_shard_timeout=parsed_args.create_shard_timeout,
             save_writes_timeout=parsed_args.save_writes_timeout,
             logger=self.app.client_manager.logger)

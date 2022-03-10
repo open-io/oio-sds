@@ -258,6 +258,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_PARTITION = [50, 50]
     DEFAULT_SHARD_SIZE = 100000
     DEFAULT_PRECLEAN_NEW_SHARDS = True
+    DEFAULT_PRECLEAN_TIMEOUT = 60
     DEFAULT_CREATE_SHARD_TIMEOUT = 60
     DEFAULT_SAVE_WRITES_TIMEOUT = 60
 
@@ -279,6 +280,9 @@ class ContainerSharding(ProxyClient):
         self.preclean_new_shards = boolean_value(
             kwargs.get('preclean_new_shards'),
             self.DEFAULT_PRECLEAN_NEW_SHARDS)
+        self.preclean_timeout = int_value(
+            kwargs.get('preclean_timeout'),
+            self.DEFAULT_PRECLEAN_TIMEOUT)
         self.create_shard_timeout = int_value(
             kwargs.get('create_shard_timeout'),
             self.DEFAULT_CREATE_SHARD_TIMEOUT)
@@ -683,7 +687,7 @@ class ContainerSharding(ProxyClient):
             # If cleanup fails here, it will be retried after sharding
             # is complete (but may interfere with client requests).
             self._safe_clean(shard, parent_shard=parent_shard, attempts=1,
-                             **kwargs)
+                             timeout=self.preclean_timeout, **kwargs)
 
         shard_account = '.shards_%s' % (root_account)
         shard_container = '%s-%s-%d-%d' % (

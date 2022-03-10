@@ -2998,12 +2998,17 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 		if (beans && g_slist_length(beans) != 1) {
 			err = BADREQ("Only one shard can be cleaned");
 		} else {
+			if (local) {
+				// The database is cleaned in one go and it may take some time
+				oio_ext_allow_long_timeout(TRUE);
+			}
 			PACKER_VOID(_pack) {
 				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans,
 						local, DL());
 			};
 			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 					m2v2_boolean_truncated_extract);
+			oio_ext_allow_long_timeout(FALSE);
 			args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
 					g_strdup(truncated ? "true" : "false"));
 		}
