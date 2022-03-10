@@ -1161,8 +1161,13 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 
 	err = m2b_open_with_args(m2, url, NULL, &open_args, &sq3);
 	EXTRA_ASSERT((sq3 != NULL) ^ (err != NULL));
-	if (err)
+	if (err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND) {
+			// The container is being deleted
+			err->code = CODE_UNAVAILABLE;
+		}
 		return err;
+	}
 
 	/* At this point the base exist and it has nt been initiated yet */
 	err = _init_container(sq3, url, params);

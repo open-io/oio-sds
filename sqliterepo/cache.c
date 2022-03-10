@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -61,7 +61,7 @@ enum sqlx_base_status_e
 						 * to be kept open, and owner tells if the lock
 						 * os currently owned by a thread. */
 	SQLX_BASE_CLOSING, // base being closed, wait for notification and retry on it
-	SQLX_BASE_CLOSING_FOR_DELETION, // base about to be deleted
+	SQLX_BASE_CLOSING_FOR_DELETION, // base being deleted
 };
 
 struct sqlx_base_s
@@ -749,8 +749,8 @@ retry:
 				goto retry;
 
 			case SQLX_BASE_CLOSING_FOR_DELETION:
-				err = NEWERROR(CODE_UNAVAILABLE,
-						"Base [%s] about to be deleted",
+				err = NEWERROR(CODE_CONTAINER_NOTFOUND,
+						"Base [%s] being deleted",
 						hashstr_str(hname));
 				break;
 		}
