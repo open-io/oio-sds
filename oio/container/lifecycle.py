@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,14 +31,23 @@ from oio.common.constants import CH_ENCODED_SEPARATOR, CH_SEPARATOR
 
 
 ALLOWED_STATUSES = ['enabled', 'disabled']
-LIFECYCLE_PROPERTY_KEY = 'X-Container-Sysmeta-Swift3-Lifecycle'
+LIFECYCLE_PROPERTY_KEY = 'X-Container-Sysmeta-S3Api-Lifecycle'
 TAGGING_KEY = 'x-object-sysmeta-swift3-tagging'
 XMLNS_S3 = 'http://s3.amazonaws.com/doc/2006-03-01/'
 
 
 def iso8601_to_int(when):
-    # FIXME: use dateutil.parser?
-    return int(time.mktime(time.strptime(when, "%Y-%m-%dT%H:%M:%S")))
+    # The documentation says that "the time is always midnight UTC".
+    fmt = '%Y-%m-%dT%H:%M:%SZ'
+    try:
+        parsed = time.strptime(when, fmt)
+    except ValueError:
+        if '+' in when:  # Any numerical timezone
+            fmt = '%Y-%m-%dT%H:%M:%S%z'
+        else:  # No timezone
+            fmt = '%Y-%m-%dT%H:%M:%S'
+        parsed = time.strptime(when, fmt)
+    return int(time.mktime(parsed))
 
 
 def int_to_iso8601(when):

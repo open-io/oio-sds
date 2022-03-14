@@ -1,5 +1,5 @@
 # Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -170,9 +170,28 @@ class TestContainerLifecycle(unittest.TestCase):
             """)
         self.assertRaises(ValueError, DateActionFilter.from_element, date_elt)
 
+        # With 'Z' timezone (as set by awscli)
+        date_elt = etree.XML(
+            """
+            <Date>2018-10-30T02:34:56Z</Date>
+            """)
+        date = DateActionFilter.from_element(date_elt)
+        self.assertIsNotNone(date)
+        self.assertEqual(1540857600, date.date)
+
+        # With no timezone (for compatibility)
         date_elt = etree.XML(
             """
             <Date>2018-10-30T02:34:56</Date>
+            """)
+        date = DateActionFilter.from_element(date_elt)
+        self.assertIsNotNone(date)
+        self.assertEqual(1540857600, date.date)
+
+        # With numerical timezone
+        date_elt = etree.XML(
+            """
+            <Date>2018-10-30T03:34:56+0100</Date>
             """)
         date = DateActionFilter.from_element(date_elt)
         self.assertIsNotNone(date)
