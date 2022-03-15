@@ -2,7 +2,7 @@
 
 # oio-check-copyright.sh
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -35,6 +35,23 @@ function find_last_modification {
 		done
 }
 
+is_staged () {
+	DIFF=$(git diff --staged "$1")
+	[ -z "$DIFF" ] && return 1 || return 0
+}
+
+check_staged_copyright () {
+	YEAR=$(date +%Y)
+	COMPANY="OVH"
+	COPYRIGHT_LINE=$(head -n 8 "$1" | grep -E "Copyright \(C\) ([[:digit:]]{4}-|)${YEAR} ${COMPANY} SAS")
+	if [ -z "${COPYRIGHT_LINE}" ]
+	then
+		echo "The Copyright section in $1 is not up to date (this file is staged for the current commit)"
+		[ -n "$VERBOSE" ] && git diff --staged "$1" | head -n 32
+		return 1
+	fi
+}
+
 check_copyright () {
 	RETCODE=0
 	while read FILE; do
@@ -54,11 +71,20 @@ check_copyright () {
 			continue
 		fi
 
+		if is_staged "${FILE}"
+		then
+			if ! check_staged_copyright "${FILE}"
+			then
+				RETCODE=1
+			fi
+			continue
+		fi
+
 		COMMIT=$(find_last_modification "${FILE}")
 		if [ -z "${COMMIT}" ]; then
 			echo "The last 8 commits of${FILE} only modify the Copyright section" 1>&2
 			RETCODE=1
-            continue
+			continue
 		fi
 		YEAR=$(git show -s --pretty="format:%cd" --date="format:%Y" "${COMMIT}")
 
@@ -76,7 +102,7 @@ check_copyright () {
 			RETCODE=1
 		fi
 	done
-    exit $RETCODE
+	exit $RETCODE
 }
 
 declare -x FILES
