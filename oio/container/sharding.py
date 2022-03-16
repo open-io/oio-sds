@@ -1419,7 +1419,8 @@ class ContainerSharding(ProxyClient):
             self, smaller_shard, [new_shard], logger=self.logger, **kwargs)
         try:
             saved_writes_applicator.apply_in_background(**kwargs)
-            saved_writes_applicator.wait_until_queue_is_almost_empty(**kwargs)
+            saved_writes_applicator.wait_until_queue_is_almost_empty(
+                timeout=self.save_writes_timeout, **kwargs)
             saved_writes_applicator.flush(**kwargs)
 
             # When the queue is empty, lock the container to shard
