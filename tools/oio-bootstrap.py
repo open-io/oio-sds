@@ -102,7 +102,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${redis_server} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
 
@@ -121,7 +120,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=/usr/bin/beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
@@ -181,7 +179,6 @@ Environment=HOME=${HOME}
 #ExecStartPre=/usr/sbin/service foundationdb stop
 ExecStart=${fdbmonitor} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 ExecStartPost=/bin/sleep 5 ; ${fdbcli} -C ${CLUSTERFILE} --exec "configure new ssd single"
 
 [Install]
@@ -200,7 +197,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
@@ -220,7 +216,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
@@ -258,7 +253,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
@@ -278,7 +272,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
@@ -916,7 +909,6 @@ ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/conscience-agent.yml
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=HOME=${HOME}
@@ -938,7 +930,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
