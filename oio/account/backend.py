@@ -172,7 +172,6 @@ class AccountBackend(RedisConnection):
         local containers = redis.call('ZRANGEBYLEX', clistkey,
                                       marker, '+', 'LIMIT', 0, batch_size);
 
-        local i;
         for i, container_name in ipairs(containers) do
           local ckey = ckey_prefix .. container_name;
 
@@ -198,7 +197,7 @@ class AccountBackend(RedisConnection):
 
         redis.call('HSET', lkey, 'marker', new_marker,
                                  'mtime', mtime);
-        if i ~= batch_size then
+        if table.getn(containers) <= tonumber(batch_size) then
             redis.call('DEL', lkey)
             return { 1 }
         end;
