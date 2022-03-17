@@ -3649,6 +3649,12 @@ _meta2_abort_sharding(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
+	// Safety check
+	const enum election_status_e election_status = sq3->election;
+	if (election_status != ELECTION_LEADER){
+		return SYSERR("Not master");
+	}
+
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
 	if (!SHARDING_IN_PROGRESS(sharding_state)) {
