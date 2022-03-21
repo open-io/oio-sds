@@ -729,7 +729,8 @@ class ContainerSharding(ProxyClient):
 
         # Create shard container
         shard_info = copy.deepcopy(shard)
-        shard_info['root'] = cid_from_name(root_account, root_container)
+        root_cid = cid_from_name(root_account, root_container)
+        shard_info['root'] = root_cid
         shard_info['parent'] = parent_shard['cid']
         shard_info['timestamp'] = parent_shard['sharding']['timestamp']
         shard_info['master'] = parent_shard['sharding']['master']
@@ -739,6 +740,7 @@ class ContainerSharding(ProxyClient):
         # the CID will be used to attempt to delete this new shard.
         shard['cid'] = cid_from_name(shard_account, shard_container)
 
+        deadline = time.time() + self.create_shard_timeout
         params = self._make_params(account=shard_account,
                                    reference=shard_container, **kwargs)
         resp, body = self._request(
@@ -746,6 +748,35 @@ class ContainerSharding(ProxyClient):
             timeout=self.create_shard_timeout, **kwargs)
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
+
+        # Wait until all peers of the new shard are up to date
+        while True:
+            has = self.admin.has_base('meta2', cid=shard['cid'], **kwargs)
+            peers_ready = True
+            for service, status in has.items():
+                if status['status']['status'] != 200:
+                    self.logger.debug(
+                        'Missing base for new shard %s '
+                        '(service=%s status=%s)',
+                        shard['cid'], service, str(status))
+                    peers_ready = False
+            if peers_ready:
+                break
+            if time.time() > deadline:
+                self.logger.warning(
+                    'Some peers are a missing base for new shard %s, '
+                    'but we can try to continue', shard['cid'])
+                break
+            time.sleep(0.1)
+
+        # Check the sharding properties of a new shard
+        # (and make sure have an established election)
+        meta = self.container.container_get_properties(
+            cid=shard['cid'], **kwargs)
+        root_cid_, shard_ = self.meta_to_shard(meta)
+        if (root_cid != root_cid_ or
+                not self._shards_equal(shard, shard_)):
+            raise OioException('New shard is malformed')
 
     def _merge_shards(self, smaller_shard, bigger_shard, **kwargs):
         params = self._make_params(cid=bigger_shard['cid'], **kwargs)
