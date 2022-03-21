@@ -30,7 +30,13 @@ License along with this library.
 #include <zookeeper.h>
 
 #define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
-#define ZOO_35 ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+// They removed these macros from Zookeeper 3.6.0
+#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+# define ZOO_35 355
+// and replaced them by this one.
+#elif defined(ZOO_VERSION)
+# define ZOO_35 360
+#endif
 
 struct sqlx_sync_s;
 

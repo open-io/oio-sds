@@ -167,7 +167,7 @@ struct election_member_s
 	GCond *cond;
 
 	/* Since when do we loop between pending states. That value is used by
-	 * client threads to decide wether to wait (or not) for a final state. */
+	 * client threads to decide whether to wait (or not) for a final state. */
 	gint64 when_unstable;
 
 	/* last time the status was changed */
@@ -933,11 +933,13 @@ static void
 member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 {
 	g_snprintf(d, ds,
-			"%d/%s "
-			"%"G_GINT32_FORMAT"/%"G_GINT32_FORMAT"/%s %u %u/%u/%u/%u [%s] [%s.%s]",
-			m->step, _step2str(m->step),
-			m->local_id, m->master_id,
-			(m->master_url ? m->master_url : "-"),
+			"%s local_id=%"G_GINT32_FORMAT
+			" master_id=%"G_GINT32_FORMAT" (%s) "
+			"refcount=%u pipefrom=%u "
+			"getvers_pending=%u getvers_error=%u getvers_concurrent=%u "
+			"zk_node=%s [%s.%s]",
+			_step2str(m->step), m->local_id,
+			m->master_id, (m->master_url ? m->master_url : "-"),
 			m->refcount, m->pending_PIPEFROM,
 			m->pending_GETVERS, m->errors_GETVERS, m->concurrent_GETVERS,
 			m->key, m->inline_name.base, m->inline_name.type);

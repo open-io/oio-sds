@@ -315,8 +315,9 @@ _replicate_now(struct sqlx_sqlite3_s *sq3, TableSequence_t *seq)
 	for (i=0; !err && i<seq->list.count ;i++) {
 		Table_t *table = seq->list.array[i];
 		if (table && (err = replicate_table(sq3, table))) {
-			GRID_WARN("Replication failed on table [%.*s] : (%d) %s",
+			GRID_WARN("Replication failed on table [%.*s] of [%s.%s]: (%d) %s",
 					table->name.size, table->name.buf,
+					sq3->name.base, sq3->name.type,
 					err->code, err->message);
 		}
 	}
