@@ -537,7 +537,7 @@ class IsOrphanShard(ContainerShardingCommandMixin, ShowOne):
         parser.add_argument(
             '--grace-delay',
             type=int,
-            default=ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT * 10,
+            default=960,
             help=('Delay in seconds after which we consider there is no '
                   'sharding activity on the container')
         )

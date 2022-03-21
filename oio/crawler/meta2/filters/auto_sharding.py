@@ -32,7 +32,7 @@ class AutomaticSharding(Filter):
     NAME = 'AutomaticSharding'
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
     DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
-    DEFAULT_STEP_TIMEOUT = 600
+    DEFAULT_STEP_TIMEOUT = 960
 
     def init(self):
         self.sharding_strategy_params = {k[9:]: v for k, v in self.conf.items()

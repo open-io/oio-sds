@@ -252,7 +252,7 @@ class TestAutoSharding(BaseTestCase):
         # Simulate an unfinished cleaning
         meta = self.storage.container_get_properties(self.account, self.cname)
         current_timestamp = int(meta['system'][M2_PROP_SHARDING_TIMESTAMP])
-        old_timestamp = current_timestamp - (900 * 1000000)
+        old_timestamp = current_timestamp - (1000 * 1000000)
         self.storage.container_set_properties(
             self.account, self.cname, system={
                 M2_PROP_SHARDING_STATE: str(NEW_SHARD_STATE_CLEANING_UP),
@@ -289,7 +289,7 @@ class TestAutoSharding(BaseTestCase):
         # Simulate an unfinished cleaning
         meta = self.storage.container_get_properties(None, None, cid=shard_cid)
         current_timestamp = int(meta['system'][M2_PROP_SHARDING_TIMESTAMP])
-        old_timestamp = current_timestamp - (900 * 1000000)
+        old_timestamp = current_timestamp - (1000 * 1000000)
         self.storage.container_set_properties(
             None, None, cid=shard_cid, system={
                 M2_PROP_SHARDING_STATE: str(NEW_SHARD_STATE_CLEANING_UP),
@@ -356,7 +356,7 @@ class TestAutoSharding(BaseTestCase):
         # Simulate an unfinished sharding
         meta = self.storage.container_get_properties(None, None, cid=shard_cid)
         current_timestamp = int(meta['system'][M2_PROP_SHARDING_TIMESTAMP])
-        old_timestamp = current_timestamp - (900 * 1000000)
+        old_timestamp = current_timestamp - (1000 * 1000000)
         self.storage.container_set_properties(
             None, None, cid=shard_cid, system={
                 M2_PROP_SHARDING_STATE: str(sharding_state),
