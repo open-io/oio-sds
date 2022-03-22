@@ -1826,6 +1826,7 @@ _find_member (struct election_manager_s *M, const char *path, guint gen)
 			return member;
 		GRID_DEBUG("watcher: [%s] obsolete w=%u gen=%u",
 				member->key, gen, member->generation_id);
+		member_unref(member);
 	} else {
 		/* That's fine, we sometimes get callbacks for members
 		 * that have already left. */
@@ -1895,6 +1896,7 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		 * and thus we cannot find any specific election member. */
 		if (member != NULL) {
 			member_reset(member);
+			member_unref(member);
 			member_log_change(member, EVT_DISCONNECTED,
 					member_set_status(member, STEP_NONE));
 		// Not under lock but it's just a read operation
@@ -2759,8 +2761,6 @@ static void
 member_action_to_SYNCING(struct election_member_s *member)
 {
 	EXTRA_ASSERT(!member_has_action(member));
-
-	member_ref(member);
 
 	const char *source = member->master_url;
 	const char *target = member_get_url(member);
