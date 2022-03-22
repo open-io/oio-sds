@@ -863,6 +863,7 @@ class ContainerSharding(ProxyClient):
                         'Failed to clean the container (CID=%s), '
                         'retrying...: %s', shard['cid'], exc)
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
+        success = True
         if not no_vacuum:
             params = {}
             suffix = None
@@ -879,6 +880,10 @@ class ContainerSharding(ProxyClient):
             except Exception as exc:
                 self.logger.warning('Failed to vacuum container (CID=%s): %s',
                                     shard['cid'], exc)
+                success = False
+        if success and parent_shard:
+            parent_shard['sharding'].setdefault(
+                'cleaning_done', set()).add(shard['index'])
 
     @ensure_request_id
     def clean_container(self, account, container, cid=None, **kwargs):
@@ -995,6 +1000,7 @@ class ContainerSharding(ProxyClient):
                 creator_exceptions.append(exc)
         if creator_exceptions:
             raise Exception(creator_exceptions)
+        cleaning_done = parent_shard['sharding'].pop('cleaning_done', set())
 
         # Apply saved writes on the new shards in the background
         saved_writes_applicator = SavedWritesApplicator(
@@ -1043,8 +1049,11 @@ class ContainerSharding(ProxyClient):
 
         # Clean up new shards
         for new_shard in new_shards:
+            # If a pre-cleaning has been performed,
+            # this cleaning should only recalculate the counters
+            no_vacuum = new_shard['index'] in cleaning_done
             cleaners.append(eventlet.spawn(
-                self._safe_clean, new_shard, **kwargs))
+                self._safe_clean, new_shard, no_vacuum=no_vacuum, **kwargs))
         for cleaner in cleaners:
             try:
                 cleaner.wait()
