@@ -3181,7 +3181,7 @@ meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
 
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			NULL
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
