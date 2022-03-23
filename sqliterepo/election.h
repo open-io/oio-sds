@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -147,7 +147,7 @@ struct election_manager_vtable_s
 			struct election_manager_s *manager,
 			const struct sqlx_name_s *n,
 			gchar **master_url,
-			gint64 deadline);
+			gint64 deadline, GError **err);
 
 	GError* (*election_trigger_RESYNC) (struct election_manager_s *m,
 			const struct sqlx_name_s *n, const gint check_type);
@@ -179,9 +179,9 @@ GError* election_get_peers (struct election_manager_s *manager,
 #define election_exit(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_exit(m,n)
 
-#define election_get_status(m,n,pmaster,deadline) \
+#define election_get_status(m,n,pmaster,deadline,err) \
 	((struct abstract_election_manager_s*)m)->vtable->election_get_status(\
-		m,n,pmaster,deadline)
+		m,n,pmaster,deadline,err)
 
 #define election_manager_trigger_RESYNC(m,n,c) \
 	((struct abstract_election_manager_s*)m)->vtable->election_trigger_RESYNC(m,n,c)

@@ -973,8 +973,9 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	} else {
 		gchar *url = NULL;
 
+		GError *get_status_err = NULL;
 		status = election_get_status(args->repo->election_manager,
-				&args->name, &url, args->deadline);
+				&args->name, &url, args->deadline, &get_status_err);
 		GRID_TRACE("Status got=%d expected=%d master=%s", status, expected, url);
 
 		switch (status) {
@@ -993,8 +994,16 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 					err = NEWERROR(CODE_BADOPFORSLAVE, "not SLAVE");
 				break;
 			case ELECTION_FAILED:
-				err = NEWERROR(CODE_UNAVAILABLE, "Election failed [%s][%s]",
-						args->name.base, args->name.type);
+				if (get_status_err->code == CODE_CONTAINER_NOTFOUND
+						|| get_status_err->code == CODE_USER_NOTFOUND) {
+					err = get_status_err;
+				} else {
+					err = NEWERROR(CODE_UNAVAILABLE,
+							"Election failed [%s][%s]: (%d) %s",
+							args->name.base, args->name.type,
+							get_status_err->code, get_status_err->message);
+					g_error_free(get_status_err);
+				}
 				break;
 		}
 
@@ -1295,8 +1304,9 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	/* Wait for a final status */
 	gchar *url = NULL;
-	enum election_status_e status =
-		election_get_status(repo->election_manager, n, &url, deadline);
+	GError *get_status_err = NULL;
+	enum election_status_e status = election_get_status(
+			repo->election_manager, n, &url, deadline, &get_status_err);
 	switch (status) {
 		case ELECTION_LOST:
 			err = NEWERROR(CODE_REDIRECT, "%s", url);
@@ -1306,7 +1316,9 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 			break;
 		case ELECTION_FAILED:
 			err = NEWERROR(CODE_INTERNAL_ERROR,
-					"Election failed for %s.%s", n->base, n->type);
+					"Election failed for %s.%s: (%d) %s", n->base, n->type,
+					get_status_err->code, get_status_err->message);
+			g_error_free(get_status_err);
 			break;
 	}
 

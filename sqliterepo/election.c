@@ -352,7 +352,8 @@ static GError * _election_exit(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static enum election_status_e _election_get_status(struct election_manager_s *m,
-		const struct sqlx_name_s *n, gchar **master_url, gint64 deadline);
+		const struct sqlx_name_s *n, gchar **master_url, gint64 deadline,
+		GError **err);
 
 static struct election_manager_vtable_s VTABLE =
 {
@@ -374,7 +375,7 @@ static void transition(struct election_member_s *member,
 		enum event_type_e evt_type, void *evt_arg);
 
 static gboolean wait_for_final_status(struct election_member_s *m,
-		gint64 deadline);
+		const gint64 deadline, GError **err);
 
 #define _thlocal_set_manager(M) do { \
 	g_private_replace (&th_local_key_manager, (M)); \
@@ -2223,9 +2224,60 @@ _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 	return _election_make(manager, n, ELOP_EXIT, NULL, NULL, NULL);
 }
 
+/* Make sure the election is not in an infinite loop where it is unable
+ * to fetch peers. This can happen if the container no longer exists. */
 static gboolean
-wait_for_final_status(struct election_member_s *m, const gint64 deadline)
+_container_no_longer_exists(struct election_member_s *m,
+		gint64 *last_getpeers_failure, guint *getpeers_failures, GError **err)
 {
+	if (m->peers == NULL) {
+		guint idx = m->log_index - 1;
+		struct logged_event_s *log = m->log + (idx % EVENTLOG_SIZE);
+		if (log->pre == STEP_FAILED && log->post == STEP_NONE) {
+			// The election was reset after a failure, look at the reason
+			struct logged_event_s *log2 = m->log + ((idx - 1) % EVENTLOG_SIZE);
+			if (log2->time <= log->time) {
+				log = log2;
+			}
+		}
+		if (log->pre == STEP_PEERING && log->post == STEP_FAILED
+				&& log->event == EVT_GETPEERS_DONE) {
+			// The election fails because the peers cannot be fetched
+			if (log->time > *last_getpeers_failure) {
+				*last_getpeers_failure = log->time;
+				(*getpeers_failures)++;
+			}
+			if (*getpeers_failures < 4) {
+				// Wait for several failures to confirm
+				// that there is an infinite loop
+				return FALSE;
+			}
+			// Check if the container exists yet
+			NAME2CONST(name, m->inline_name);
+			gchar **peers = NULL;
+			GError *err2 = election_get_peers(m->manager, &name,
+					_ELECTION_MANAGER_LOCKED, &peers);
+			if (err2 && (err2->code == CODE_CONTAINER_NOTFOUND
+					|| err2->code == CODE_USER_NOTFOUND)) {
+				*err = err2;
+				return TRUE;
+			}
+			g_error_free(err2);
+			g_strfreev(peers);
+		}
+	}
+	*getpeers_failures = 0;
+	return FALSE;
+}
+
+static gboolean
+wait_for_final_status(struct election_member_s *m, const gint64 deadline,
+		GError **err)
+{
+	EXTRA_ASSERT(err != NULL);
+
+	gint64 last_getpeers_failure = 0;
+	guint getpeers_failures = 0;
 	while (!STATUS_FINAL(m->step)) {
 
 		const gint64 now = oio_ext_monotonic_time();
@@ -2236,6 +2288,13 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 					"step=%d/%s reqid=%s",
 					m->inline_name.base, m->inline_name.type, m->step,
 					_step2str(m->step), oio_ext_get_reqid());
+			*err = NEWERROR(CODE_UNAVAILABLE,
+					"TIMEOUT! (waiting for election status)");
+			return FALSE;
+		}
+
+		if (_container_no_longer_exists(m, &last_getpeers_failure,
+				&getpeers_failures, err)) {
 			return FALSE;
 		}
 
@@ -2249,6 +2308,8 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 					"step=%d/%s reqid=%s",
 					m->inline_name.base, m->inline_name.type, m->step,
 					_step2str(m->step), oio_ext_get_reqid());
+			*err = NEWERROR(CODE_UNAVAILABLE,
+					"TIMEOUT! (election pending for too long)");
 			return FALSE;
 		}
 
@@ -2272,7 +2333,7 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 static enum election_status_e
 _election_get_status(struct election_manager_s *mgr,
 		const struct sqlx_name_s *n, gchar **master_url,
-		gint64 deadline)
+		gint64 deadline, GError **err)
 {
 	int rc;
 	gchar *url = NULL;
@@ -2290,7 +2351,7 @@ _election_get_status(struct election_manager_s *mgr,
 	_manager_lock(mgr);
 	struct election_member_s *m = _LOCKED_init_member(mgr, n, key, TRUE, NULL);
 
-	if (!wait_for_final_status(m, deadline)) {  /* TIMEOUT! */
+	if (!wait_for_final_status(m, deadline, err)) {  /* TIMEOUT! */
 		rc = STEP_FAILED;
 	} else {
 		rc = m->step;
