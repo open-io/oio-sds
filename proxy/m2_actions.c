@@ -111,7 +111,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 
 	guint nb_redirects = 0;
 	while (TRUE) {
-		if (nb_redirects >= 2) {
+		if (nb_redirects > 2) {
 			err = NEWERROR(CODE_TOOMANY_REDIRECT,
 				"Too many redirections (to shards)");
 			break;
