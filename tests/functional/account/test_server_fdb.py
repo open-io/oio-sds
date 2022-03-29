@@ -21,13 +21,14 @@ from pathlib import Path
 from nose.plugins.attrib import attr
 
 from werkzeug.test import Client
-from werkzeug.wrappers import BaseResponse
+from werkzeug.wrappers import Response
+
+import fdb
 
 from oio.account.server import create_app
 from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase
 from oio.account.common_fdb import CommonFdb
-import fdb
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 
@@ -42,7 +43,7 @@ class TestAccountServerBase(BaseTestCase):
             self.fdb_file = CommonFdb.DEFAULT_FDB
         else:
             self.fdb_file = \
-                str(Path.home())+'/.oio/sds/conf/OPENIO-fdb.cluster'
+                str(Path.home()) + '/.oio/sds/conf/OPENIO-fdb.cluster'
         conf = {'namespace': self.ns, 'iam.connection': iam_cnxstr}
         conf['backend_type'] = 'fdb'
         conf['fdb_file'] = self.fdb_file
@@ -59,7 +60,7 @@ class TestAccountServerBase(BaseTestCase):
         for el in sub_dirs:
             self.acct_app.backend.db.clear_range_startswith(main_directory[el])
         """
-        self.app = Client(self.acct_app, BaseResponse)
+        self.app = Client(self.acct_app, Response)
 
     @classmethod
     def _monkey_patch(cls):
