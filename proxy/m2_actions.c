@@ -245,9 +245,16 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 		return _reply_conflict_error (args, err);
 	if (err->code == CODE_CONTENT_DRAINED)
 		return _reply_gone_error(args, err);
-	// For NULL properties
-	if (err->code == SQLITE_CONSTRAINT)
-		return _reply_format_error(args, err);
+	if (err->code == SQLITE_CONSTRAINT) {
+		if (strstr(err->message, "locked") != NULL) {
+			// For triggers
+			return	_reply_forbidden_error(args, err);
+		}
+		else {
+			// For NULL properties
+			return _reply_format_error(args, err);
+		}
+	}
 	return _reply_common_error (args, err);
 }
 
