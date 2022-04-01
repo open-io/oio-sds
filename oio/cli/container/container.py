@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -27,7 +28,8 @@ from oio.common.constants import \
     M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DAMAGED_OBJECTS, \
     M2_PROP_DEL_EXC_VERSIONS, M2_PROP_MISSING_CHUNKS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
-    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY
+    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, CH_ENCODED_SEPARATOR, \
+    S3_MPU_CONTAINER_SUFFIX
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -857,7 +859,10 @@ class RefreshBucket(Command):
     Refresh the counters of a bucket.
 
     Reset all statistics counters and recompute them by summing
-    the counters of all shards (containers).
+    the counters of all shards (containers) known by the account service.
+
+    Optionally trigger events (from meta2 services) to update the statistics
+    known by the account service.
     """
 
     log = getLogger(__name__ + '.RefreshBucket')
@@ -865,17 +870,72 @@ class RefreshBucket(Command):
     def get_parser(self, prog_name):
         parser = super(RefreshBucket, self).get_parser(prog_name)
         parser.add_argument(
+            '--touch',
+            action='store_true',
+            help='Ask each container (in meta2) to send a status event. (Slow)'
+        )
+        parser.add_argument(
+            '--recompute',
+            action='store_true',
+            help=('Recompute the statistics of the containers (in meta2) '
+                  'before sending the event (requires --touch). (Slower)')
+        )
+        parser.add_argument(
             'bucket',
             help='Name of the bucket to refresh.'
         )
         return parser
+
+    def _touch_container(self, account, container, recompute=False):
+        try:
+            self.log.info('Triggering event for %s/%s',
+                          account, container)
+            self.app.client_manager.storage.container_touch(
+                account, container, recompute=recompute)
+        except Exception as exc:
+            self.log.error('Failed to touch %s/%s: %s',
+                           account, container, exc)
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         reqid = request_id(prefix='CLI-BUCKET-')
         acct_client = self.app.client_manager.storage.account
+
+        # 1. Reset bucket counters
         acct_client.bucket_refresh(parsed_args.bucket, reqid=reqid)
+
+        if parsed_args.touch:
+            bucket_meta = acct_client.bucket_show(parsed_args.bucket,
+                                                  reqid=reqid)
+            op_count = 0
+            for suffix in ('', S3_MPU_CONTAINER_SUFFIX):
+                # 2. Recompute (or at least transmit) container counters
+                self._touch_container(
+                    bucket_meta['account'], parsed_args.bucket + suffix,
+                    recompute=parsed_args.recompute)
+                op_count += 1
+                prefix = parsed_args.bucket + suffix + CH_ENCODED_SEPARATOR
+                # 3. Recurse on all CH shards
+                listing = depaginate(
+                    self.app.client_manager.storage.container_list,
+                    item_key=lambda x: x[0],
+                    marker_key=lambda x: x[-1][0],
+                    account=bucket_meta['account'],
+                    prefix=prefix,
+                    reqid=reqid)
+                for container in listing:
+                    self._touch_container(bucket_meta['account'], container,
+                                          recompute=parsed_args.recompute)
+                    op_count += 1
+                    # Show some progress (the whole operation can be long)
+                    if (op_count % 100) == 0:
+                        self.log.warning('%d events triggered so far',
+                                         op_count)
+            self.log.warning('%d events triggered', op_count)
+            self.log.warning('After events have been consumed, you may '
+                             'need to run "bucket refresh" again (without '
+                             '--touch).')
 
 
 class RefreshContainer(ContainerCommandMixin, Command):
