@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -249,6 +250,23 @@ sock_set_reuseaddr(int fd, gboolean enabled)
 }
 
 gboolean
+sock_set_reuseport(int fd, gboolean enabled)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	if (VTABLE.set_reuseport)
+		return VTABLE.set_reuseport(fd, enabled);
+#endif
+
+	int opt = BOOL(enabled);
+	if (!metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
+			(void*)&opt, sizeof(opt)))
+		return TRUE;
+	GRID_DEBUG("fd=%i set(SO_REUSEPORT,%d): (%d) %s",
+			fd, opt, errno, strerror(errno));
+	return FALSE;
+}
+
+gboolean
 sock_set_nodelay(int fd, gboolean enabled)
 {
 #ifdef HAVE_EXTRA_DEBUG
@@ -262,6 +280,16 @@ sock_set_nodelay(int fd, gboolean enabled)
 	GRID_DEBUG("fd=%i set(TCP_NODELAY,%d): (%d) %s",
 			fd, opt, errno, strerror(errno));
 	return FALSE;
+}
+
+gboolean
+sock_set_cloexec(int fd, gboolean enabled)
+{
+	int res = fcntl(fd, F_SETFD, enabled? FD_CLOEXEC : 0);
+
+	GRID_DEBUG("fd=%i set(FD_CLOEXEC,%d): (%d) %s",
+			fd, enabled, errno, strerror(errno));
+	return res == 0;
 }
 
 gboolean
@@ -327,6 +355,7 @@ sock_set_client_default(int fd)
 	sock_set_linger_default(fd);
 	sock_set_nodelay(fd, oio_socket_quickack);
 	sock_set_tcpquickack(fd, oio_socket_nodelay);
+	sock_set_cloexec(fd, TRUE);
 }
 
 int

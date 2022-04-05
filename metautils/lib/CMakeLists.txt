@@ -271,7 +271,10 @@ add_library(metautils STATIC
 		asn1c_ext.c
 )
 
+# NOTE(FVE): We can make systemd optional if we give up on server
+# processes seamless restart.
 target_link_libraries(metautils
 		oiocore
+		-lsystemd
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		-lm ${CMAKE_THREAD_LIBS_INIT})

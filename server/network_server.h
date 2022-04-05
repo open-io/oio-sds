@@ -2,6 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -130,6 +131,7 @@ GError * network_server_run(struct network_server_s *srv,
 void network_server_stop(struct network_server_s *srv);
 
 void network_server_clean(struct network_server_s *srv);
+void network_server_postfork_clean(struct network_server_s *srv);
 
 /* -------------------------------------------------------------------------- */
 

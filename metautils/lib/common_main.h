@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -106,6 +107,13 @@ void grid_main_stop(void);
 
 /** Tests if the processus execution has been stopped */
 gboolean grid_main_is_running(void);
+
+/** Callback that will be called after fork() and before exec()
+ * during a seamless restart. */
+typedef void (*postfork_cleanup_cb) (gpointer);
+
+/** Fork and exec the current process, potentially with a new binary. */
+gboolean grid_main_seamless_restart(postfork_cleanup_cb postfork_clean, gpointer udata);
 
 /** Calls this a the main routine for a non-deamonizable program */
 int grid_main(int argc, char ** argv, struct grid_main_callbacks *cb);

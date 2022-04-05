@@ -24,6 +24,7 @@ Build-Depends:
   asn1c,
   libattr1-dev,
   libleveldb-dev,
+  libsystemd-dev,
 Standards-Version: 3.9.5
 Homepage: https://openio.io
 

@@ -270,6 +270,8 @@ OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
+NotifyAccess=main
+ExecReload=/bin/kill -HUP $MAINPID
 ExecStart=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}

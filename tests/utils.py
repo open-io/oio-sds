@@ -504,8 +504,8 @@ class BaseTestCase(CommonTestCase):
         if 'OIO_SYSTEMD_SYSTEM' not in os.environ:
             cmd.append('--user')
 
-        if action == 'reload':
-            cmd.extend(['daemon-reload'])
+        if action == 'daemon-reload':
+            cmd.append(action)
         else:
             cmd.extend([action, name])
         check_call(cmd)

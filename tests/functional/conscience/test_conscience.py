@@ -453,3 +453,15 @@ class TestConscienceFunctional(BaseTestCase):
         self._test_list_services(
             stat_re, service_type='all', output_format='prometheus',
             expected_nb_services=nb_services)
+
+    def test_seamlessly_reload_proxy(self):
+        start = time.time()
+        self._service('oio-proxy-1.service', 'reload')
+        exc_count = 0
+        # Send requests for 2 seconds and count the number of errors we get
+        while time.time() < start + 2.0:
+            try:
+                self.conscience.info()
+            except Exception:
+                exc_count += 1
+        self.assertLess(exc_count, 5)

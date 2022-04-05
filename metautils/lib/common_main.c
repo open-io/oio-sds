@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -29,6 +30,8 @@ License along with this library.
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include <systemd/sd-daemon.h>
+
 #include <metautils/lib/common_variables.h>
 
 #include "metautils.h"
@@ -52,6 +55,9 @@ static struct grid_main_callbacks *user_callbacks;
 static volatile gboolean pidfile_written = FALSE;
 static gchar pidfile_path[1024] = {0,0,0};
 static struct stat pidfile_stat;
+
+static int _argc = 0;
+static char **_argv = NULL;
 
 static gchar errbuff[1024];
 
@@ -348,7 +354,7 @@ grid_main_usage(void)
 	g_printerr("  -h         help, displays this section\n");
 	g_printerr("  -c         dump the current live central configurable variables (requires all positional arguments)\n");
 	g_printerr("  -d         daemonizes the process (default FALSE)\n");
-	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
+	g_printerr("  -q         quiet mode, suppress output on stdout stderr\n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -p PATH    pidfile path, no pidfile if unset\n");
 	g_printerr("  -u ADDR    In conjunction with -s, target an explicit UDP syslog collector\n");
@@ -373,7 +379,7 @@ grid_main_cli_usage(void)
 	g_printerr("\nOPTIONS:\n");
 	g_printerr("  -h         help, displays this section\n");
 	g_printerr("  -c         dump the current live central configurable variables (requires all positional arguments)\n");
-	g_printerr("  -q         quiet mode, supress output on stdout stderr \n");
+	g_printerr("  -q         quiet mode, suppress output on stdout stderr\n");
 	g_printerr("  -v         verbose mode, this activates stderr traces (default FALSE)\n");
 	g_printerr("  -O XOPT    set extra options.\n");
 
@@ -534,6 +540,10 @@ grid_main_init(int argc, char **args)
 	memset(syslog_id, 0, sizeof(syslog_id));
 	memset(pidfile_path, 0, sizeof(pidfile_path));
 
+	// Keep a reference on process args so we can restart ourselves
+	_argc = argc;
+	_argv = args;
+
 	for (;;) {
 		int c = getopt(argc, args, "O:hdvcqp:s:u:");
 		if (c == -1)
@@ -561,7 +571,7 @@ grid_main_init(int argc, char **args)
 					GRID_WARN("Invalid '-p' argument: too long");
 					return 1;
 				}
-				GRID_DEBUG("Explicitely configured pidfile_path=[%s]", pidfile_path);
+				GRID_DEBUG("Explicitly configured pidfile_path=[%s]", pidfile_path);
 				break;
 			case 'q':
 				oio_log_quiet();
@@ -573,7 +583,7 @@ grid_main_init(int argc, char **args)
 					GRID_WARN("Invalid '-u' argument: too long");
 					return 1;
 				}
-				GRID_DEBUG("Explicitely configured udp_target=[%s]", udp_target);
+				GRID_DEBUG("Explicitly configured udp_target=[%s]", udp_target);
 				break;
 			case 's':
 				memset(syslog_id, 0, sizeof(syslog_id));
@@ -581,7 +591,7 @@ grid_main_init(int argc, char **args)
 					GRID_WARN("Invalid '-s' argument: too long");
 					return 1;
 				}
-				GRID_DEBUG("Explicitely configured syslog_id=[%s]", syslog_id);
+				GRID_DEBUG("Explicitly configured syslog_id=[%s]", syslog_id);
 				break;
 			case 'c':
 				flag_dump_options = TRUE;
@@ -646,6 +656,7 @@ void
 grid_main_stop(void)
 {
 	flag_running = FALSE;
+	sd_notify(0, "STATUS=stopping\nSTOPPING=1");
 	user_callbacks->specific_stop();
 }
 
@@ -653,6 +664,40 @@ gboolean
 grid_main_is_running(void)
 {
 	return flag_running;
+}
+
+gboolean
+grid_main_seamless_restart(postfork_cleanup_cb postfork_clean, gpointer udata)
+{
+	gboolean success = FALSE;
+	gchar *args_str = NULL;
+	int exec_res = 0;
+
+	int child_pid = fork();
+	switch(child_pid) {
+	case -1:
+		GRID_ERROR("Failed to fork, cannot restart seamlessly: %m");
+		break;
+	case 0:
+		args_str = g_strjoinv(" ", _argv);
+		GRID_INFO("Fork succeeded, executing: %s", args_str);
+		g_free(args_str);
+		postfork_clean(udata);
+		exec_res = execv(_argv[0], _argv);
+		if (exec_res < 0) {
+			GRID_ERROR("Failed to execute %s: %m", _argv[0]);
+		} else {
+			GRID_ERROR("BUG: we should not be there after a call to execv!");
+			g_assert_not_reached();
+		}
+		break;
+	default:
+		GRID_INFO("Service will continue in process %d, quitting.", child_pid);
+		sd_notifyf(0, "MAINPID=%d\nSTATUS=restarting", child_pid);
+		success = TRUE;
+		break;
+	}
+	return success;
 }
 
 #define CHECK_CALLBACKS(CB) do { \
@@ -705,8 +750,10 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 		}
 
 		grid_main_install_sighandlers();
-		if (flag_running)
+		if (flag_running) {
+			sd_notify(0, "STATUS=started\nREADY=1");
 			user_callbacks->action();
+		}
 	}
 
 	grid_main_fini();

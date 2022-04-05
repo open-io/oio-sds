@@ -222,7 +222,8 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		oio_ext_set_reqid(reqid);
 	} else {
 #if HAVE_EXTRA_DEBUG
-		GRID_DEBUG("Received %s request without request id", rq->cmd);
+		GRID_DEBUG("Received %s request without request id: %s",
+				rq->cmd, rq->req_uri);
 #endif
 		oio_ext_set_prefixed_random_reqid("proxy-");
 	}
@@ -554,7 +555,7 @@ _filter_good_services(GSList *src, GSList **out_garbage)
 }
 
 /* If you ever plan to factorize this code with the similar part in
- * sqlx/sqlx_service.c be carefull that a lot of context is expected on both
+ * sqlx/sqlx_service.c be careful that a lot of context is expected on both
  * sides, and that even the function used to fetch the services cannot be the
  * same (sqlx talks to the proxy, the proxy talks to the conscience). */
 gboolean
@@ -715,7 +716,7 @@ _task_reload_srvtypes (gpointer p UNUSED)
 	if (err != NULL) {
 		gchar *tmp = g_strjoinv("/", cs);
 		STRING_STACKIFY(tmp);
-		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
+		GRID_WARN("SRVTYPES reload error [%s] from [%s]: (%d) %s",
 			ns_name, tmp, err->code, err->message);
 		g_clear_error (&err);
 		return;
@@ -800,12 +801,28 @@ _reconfigure_on_SIGHUP(void)
 	_patch_and_apply_configuration();
 }
 
+static void
+_seamless_restart_on_SIGHUP(void)
+{
+	GRID_NOTICE("SIGHUP! Forking and executing the new binary.");
+	gboolean success = grid_main_seamless_restart(
+			(postfork_cleanup_cb) network_server_postfork_clean, server);
+	if (success) {
+		GRID_NOTICE("Fork succeeded, stopping in 1s.");
+		grid_main_stop();
+		sleep(1);
+	} else {
+		GRID_NOTICE("Fork failed, just reload configuration the old way");
+		_reconfigure_on_SIGHUP();
+	}
+}
+
 // MAIN callbacks --------------------------------------------------------------
 
 static void
 _main_error (GError * err)
 {
-	GRID_ERROR ("Action failure : (%d) %s", err->code, err->message);
+	GRID_ERROR("Action failure: (%d) %s", err->code, err->message);
 	g_clear_error (&err);
 	grid_main_set_status (1);
 }
@@ -815,7 +832,7 @@ grid_main_action (void)
 {
 	GError *err = NULL;
 
-	if (NULL != (err = network_server_open_servers (server))) {
+	if ((err = network_server_open_servers(server))) {
 		_main_error (err);
 		return;
 	}
@@ -842,7 +859,7 @@ grid_main_action (void)
 		return;
 	}
 
-	if (NULL != (err = network_server_run (server, _reconfigure_on_SIGHUP))) {
+	if ((err = network_server_run (server, _seamless_restart_on_SIGHUP))) {
 		_main_error (err);
 		return;
 	}
@@ -1159,7 +1176,7 @@ configure_request_handlers (void)
 	/* Ask each peer to exit the election ("DB_LEAVE"). */
 	SET("/$NS/admin/leave/#POST", action_admin_leave);
 
-	/* Ask each peer for debugging information abount an election.
+	/* Ask each peer for debugging information about an election.
 	 * Current state, zookeeper node, transition history... */
 	SET("/$NS/admin/debug/#POST", action_admin_debug);
 
@@ -1196,8 +1213,9 @@ configure_request_handlers (void)
 static gboolean
 grid_main_configure (int argc, char **argv)
 {
-	if (argc != 2) {
-		GRID_ERROR ("Invalid parameter, expected : IP:PORT NS");
+	if (argc < 2) {
+		GRID_ERROR("Invalid parameter count (%d), expected: IP:PORT NS",
+				argc);
 		return FALSE;
 	}
 

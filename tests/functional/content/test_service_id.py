@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -146,7 +146,7 @@ class BaseServiceIdTest(BaseTestCase):
         self._update_event_watch(name, port)
         self._update_apache(port)
 
-        self._service(service, "reload")
+        self._service(service, "daemon-reload")
         self._service(service, "restart")
         self._service("oio-conscience-agent-1.service", "restart")
         check_call(["openio", "cluster", "flush", "rawx"])
@@ -161,7 +161,7 @@ class TestRawxServiceId(BaseServiceIdTest):
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
-        # support mixed deployement
+        # support mixed deployment
         self.rawx = {}
         while 'service_id' not in self.rawx:
             self.rawx = random.choice(self.conf['services']['rawx'])
@@ -239,7 +239,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
-        # support mixed deployement
+        # support mixed deployment
         self.meta2 = list(self.conf['services']['meta2'])
         for entry in self.meta2:
             port = int(entry['addr'].split(':')[1])
@@ -284,7 +284,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
             self._update_systemd_service_meta(service, port)
             self._update_event_watch(name, port)
 
-            self._service(service, 'reload')
+            self._service(service, 'daemon-reload')
             self._service(service, 'start')
 
         self._service("oio-conscience-agent-1.service", "restart")

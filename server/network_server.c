@@ -2,6 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -202,7 +203,7 @@ network_server_init(void)
 	result->endpointv = g_malloc0(sizeof(struct endpoint_s*));
 	g_mutex_init(&result->lock_threads);
 	result->eventfd = efd;
-	result->epollfd = epoll_create(1024);
+	result->epollfd = epoll_create1(EPOLL_CLOEXEC);
 	result->gq_gauge_threads =      g_quark_from_static_string ("gauge thread.active");
 	result->gq_gauge_cnx_current =  g_quark_from_static_string ("gauge cnx.client");
 	result->gq_counter_cnx_accept = g_quark_from_static_string ("counter cnx.accept");
@@ -252,6 +253,18 @@ _stop_pools (struct network_server_s *srv)
 }
 
 void
+network_server_postfork_clean(struct network_server_s *srv)
+{
+	// Threads have not been cloned during fork
+	srv->pool_tcp = NULL;
+	srv->pool_udp = NULL;
+	srv->thread_tcp = NULL;
+	srv->thread_udp = NULL;
+
+	network_server_clean(srv);
+}
+
+void
 network_server_clean(struct network_server_s *srv)
 {
 	if (!srv)
@@ -272,6 +285,7 @@ network_server_clean(struct network_server_s *srv)
 	}
 
 	metautils_pclose(&(srv->eventfd));
+	metautils_pclose(&(srv->epollfd));
 
 	if (srv->queue_monitor) {
 		g_async_queue_unref(srv->queue_monitor);
@@ -308,7 +322,7 @@ _srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 	memcpy(e->url, url, len);
 
 	if (*url == '/') {
-		GRID_DEBUG("URL configured : LOCAL endpoint=%s", e->url);
+		GRID_DEBUG("URL configured: LOCAL endpoint=%s", e->url);
 	} else {
 		gchar *port;
 		if (NULL != (port = strrchr(e->url, ':'))) {
@@ -316,7 +330,7 @@ _srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 			++ port;
 			e->port_cfg = atoi(port);
 		}
-		GRID_DEBUG("URL configured : INET port=%d endpoint=%s", e->port_cfg, e->url);
+		GRID_DEBUG("URL configured: INET port=%d endpoint=%s", e->port_cfg, e->url);
 	}
 
 	_srv_append_endpoint (srv, e);
@@ -360,7 +374,7 @@ network_server_open_servers(struct network_server_s *srv)
 	for (struct endpoint_s **u = srv->endpointv; srv->endpointv && *u; u++) {
 		GError *err;
 		if (NULL != (err = _endpoint_open(*u, srv->udp_allowed))) {
-			g_prefix_error(&err, "url open error : ");
+			g_prefix_error(&err, "url open error: ");
 			network_server_close_servers(srv);
 			return err;
 		}
@@ -564,12 +578,13 @@ _thread_cb_events(gpointer d)
 	 * received the exit signal. They will be removed automatically from
 	 * the epoll pool.*/
 
-	GRID_DEBUG("Server %p waiting for its connections", srv);
+	GRID_INFO("Server %p waiting for its %u connections",
+			srv, srv->cnx_clients);
 	server_cnx_ttl_never = 5 * G_TIME_SPAN_SECOND;
 	server_cnx_ttl_persist = 5 * G_TIME_SPAN_SECOND;
 	server_cnx_ttl_idle = 1 * G_TIME_SPAN_SECOND;
 
-	for (gint64 next = 0; 0 < srv->cnx_clients ;) {
+	for (gint64 next = 0; srv->cnx_clients > 0;) {
 		_manage_events(srv);
 		gint64 now = oio_ext_monotonic_time ();
 		if (now > next) {
@@ -577,6 +592,7 @@ _thread_cb_events(gpointer d)
 			next = now + 1 * G_TIME_SPAN_SECOND;
 		}
 	}
+	GRID_INFO("Server %p stopping", srv);
 
 	return d;
 }
@@ -730,7 +746,7 @@ network_server_run(struct network_server_s *srv, void (*on_reload)(void))
 		if (u->fd < 0) {
 			_stop_pools (srv);
 			return NEWERROR(EINVAL,
-					"DESIGN ERROR : some servers are not open");
+					"DESIGN ERROR: some servers are not open");
 		}
 	}
 	if (!srv->flag_continue) {
@@ -868,7 +884,8 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 		return NEWERROR(errno, "socket(tcp) = '%s'", strerror(errno));
 
 	if (_endpoint_is_INET(u)) {
-		sock_set_reuseaddr (u->fd, TRUE);
+		sock_set_reuseaddr(u->fd, TRUE);
+		sock_set_reuseport(u->fd, TRUE);
 		if (u->fd_udp >= 0)
 			sock_set_reuseaddr (u->fd_udp, TRUE);
 	}
@@ -944,7 +961,7 @@ retry:
 		if (errno == EINTR)
 			goto retry;
 		if (errno != EAGAIN && errno != EWOULDBLOCK)
-			GRID_WARN("fd=%d ACCEPT error (%d %s)", e->fd, errno, strerror(errno));
+			GRID_WARN("fd=%d ACCEPT error ((%d) %s)", e->fd, errno, strerror(errno));
 		return NULL;
 	}
 

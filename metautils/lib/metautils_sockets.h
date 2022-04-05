@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -33,6 +34,7 @@ struct metautils_sockets_vtable_s
 	gboolean (*set_non_blocking) (int fd, gboolean enabled);
 	gboolean (*set_tcpquickack) (int fd, gboolean enabled);
 	gboolean (*set_reuseaddr) (int fd, gboolean enabled);
+	gboolean (*set_reuseport) (int fd, gboolean enabled);
 	gboolean (*set_keepalive) (int fd, gboolean enabled);
 	gboolean (*set_nodelay) (int fd, gboolean enabled);
 	gboolean (*set_cork) (int fd, gboolean enabled);
@@ -80,7 +82,13 @@ gboolean sock_set_tcpquickack(int fd, gboolean enabled);
 
 gboolean sock_set_reuseaddr(int fd, gboolean enabled);
 
+/* Enable (or disable) the SO_REUSEPORT option on the specified socket */
+gboolean sock_set_reuseport(int fd, gboolean enabled);
+
 gboolean sock_set_nodelay(int fd, gboolean enabled);
+
+/* Enable (or disable) the close-on-exec flag on the specified socket */
+gboolean sock_set_cloexec(int fd, gboolean enabled);
 
 gboolean sock_set_cork(int fd, gboolean enabled);
 

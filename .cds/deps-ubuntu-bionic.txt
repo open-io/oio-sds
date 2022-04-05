@@ -20,6 +20,7 @@ libjson-c-dev
 libleveldb-dev
 liblzo2-dev
 libsqlite3-dev
+libsystemd-dev
 libzmq3-dev
 libzookeeper-mt-dev
 locales
