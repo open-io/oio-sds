@@ -29,6 +29,7 @@ from oio.common.timestamp import Timestamp
 fdb.api_version(CommonFdb.FDB_VERSION)
 
 
+MULTIUPLOAD_SUFFIX = '+segments'
 SHARDING_ACCOUNT_PREFIX = '.shards_'
 COUNTERS_FIELDS = ('bytes', 'objects', 'shards', 'containers', 'buckets',
                    'accounts')
@@ -1445,8 +1446,10 @@ class AccountBackendFdb(object):
         This method assumes that the account exists.
         """
         # Filter the special accounts hosting bucket shards.
+        root_container = cname
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
             account_id = account_id[8:]
+            root_container = cname.rsplit('-', 3)[0]
 
         bucket_space = self.bucket_space[account_id][bname]
 
@@ -1494,7 +1497,7 @@ class AccountBackendFdb(object):
                 tr[bucket_space.pack(('region',))] = region.encode('utf-8')
 
         # Update bucket stats
-        is_segment = cname.endswith('+segments')
+        is_segment = root_container.endswith(MULTIUPLOAD_SUFFIX)
         for key in ('bytes', 'objects'):
             if is_segment and key == 'objects':
                 continue
@@ -1641,6 +1644,10 @@ class AccountBackendFdb(object):
         # Iterate over containers
         for key, value in containers:
             container, field, *_policy = account_containers.unpack(key)
+            root_container = container
+            if sharded:
+                root_container = container.rsplit('-', 3)[0]
+
             # Check if we start to process a new container
             if new_marker != container:
                 new_marker = container
@@ -1659,7 +1666,8 @@ class AccountBackendFdb(object):
             if field not in ('bytes', 'objects'):
                 continue
             # Ignore '+segments' objects counter
-            if field == 'object' and container.endsWith('+segments'):
+            if field == 'object' \
+                    and root_container.endswith(MULTIUPLOAD_SUFFIX):
                 continue
 
             policy = '_' if len(_policy) == 0 else _policy[0]

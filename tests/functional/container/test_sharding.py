@@ -80,6 +80,15 @@ class TestSharding(BaseTestCase):
         self.assertTrue(created)
         self.created[cname] = set()
 
+    def _check_bucket_stats(self, cname, bucket, account=None):
+        stats = self.storage.account.bucket_show(bucket, account=account)
+        if cname.endswith('+segments'):
+            self.assertEqual(0, stats['objects'])
+        else:
+            self.assertEqual(len(self.created[cname]), stats['objects'])
+        self.assertEqual(
+            sum((len(obj) for obj in self.created[cname])), stats['bytes'])
+
     def _add_objects(self, cname, nb_objects, prefix='content',
                      bucket=None, account=None, cname_root=None):
         reqid = None
@@ -96,11 +105,8 @@ class TestSharding(BaseTestCase):
             self.created[cname_root].add(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
-                                fields={'account': account,
-                                        'user': cname},
                                 types=(EventTypes.CONTAINER_STATE,))
-            stats = self.storage.account.bucket_show(cname, account=account)
-            self.assertEqual(len(self.created[cname_root]), stats['objects'])
+            self._check_bucket_stats(cname_root, bucket, account=account)
 
     def _delete_objects(self, cname, nb_objects, prefix='content',
                         bucket=None):
@@ -420,7 +426,10 @@ class TestSharding(BaseTestCase):
             for j, shard in enumerate(shards):
                 self.assertDictEqual(shard, expected_shards[i][j])
 
-    def test_account_counters_after_sharding(self):
+    def _test_account_counters_after_sharding(self, cname, bucket=None):
+        if not bucket:
+            bucket = cname
+
         # Clear the account stats
         try:
             self.storage.account.account_flush(self.account)
@@ -428,16 +437,18 @@ class TestSharding(BaseTestCase):
             pass
 
         # Fill a bucket
-        self._create(self.cname, bucket=self.cname)
-        self._add_objects(self.cname, 10, bucket=self.cname)
+        self._create(cname, bucket=bucket)
+        self._add_objects(cname, 10, bucket=bucket)
+        stats = self.storage.account.account_show(self.account)
+        self.assertEqual(stats['objects'], 10)
 
         # Split it in 2
         params = {"partition": "50,50", "threshold": 4}
         shards = self.container_sharding.find_shards(
-            self.account, self.cname,
+            self.account, cname,
             strategy="shard-with-partition", strategy_params=params)
         modified = self.container_sharding.replace_shard(
-            self.account, self.cname, shards, enable=True,
+            self.account, cname, shards, enable=True,
             reqid='testingisdoubting')
         self.assertTrue(modified)
 
@@ -446,16 +457,13 @@ class TestSharding(BaseTestCase):
             self.wait_for_event('oio-preserved',
                                 reqid='testingisdoubting',
                                 types=(EventTypes.CONTAINER_STATE,))
-        stats = self.storage.account.bucket_show(
-                    self.cname, account=self.account)
-        self.assertEqual(stats['objects'], 10)
+        self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats['objects'], 10)
 
         # Split the first shard in 2
         shards_account = f".shards_{self.account}"
-        res = self.storage.container_list(shards_account,
-                                          prefix=f"{self.cname}-")
+        res = self.storage.container_list(shards_account, prefix=f"{cname}-")
         first = res[0][0]
         shards = self.container_sharding.find_shards(
             shards_account, first,
@@ -472,11 +480,20 @@ class TestSharding(BaseTestCase):
                                 fields={'account': shards_account},
                                 types=(EventTypes.CONTAINER_DELETED,
                                        EventTypes.CONTAINER_STATE))
-        stats = self.storage.account.bucket_show(self.cname,
-                                                 account=self.account)
-        self.assertEqual(stats['objects'], 10)
+        self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats['objects'], 10)
+
+        self._add_objects(cname, 1, prefix='test/', bucket=bucket)
+        stats = self.storage.account.account_show(self.account)
+        self.assertEqual(stats['objects'], 11)
+
+    def test_account_counters_after_sharding(self):
+        self._test_account_counters_after_sharding(self.cname)
+
+    def test_account_counters_after_sharding_with_segments(self):
+        self._test_account_counters_after_sharding(
+            f'{self.cname}+segments', bucket=self.cname)
 
     def test_listing(self):
         self._create(self.cname)
