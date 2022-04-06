@@ -25,6 +25,7 @@ jobs:
           cat $0
           set -x
           set -e
+          . .cds/versions
           # dev or prod release
           export VERSION=1.0-focal
           PACKAGE=oio-sds

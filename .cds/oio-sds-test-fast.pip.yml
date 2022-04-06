@@ -16,20 +16,27 @@ jobs:
         script: |+
           #!/bin/bash
           set -x
+          . .cds/versions
           echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" >> /etc/apt/sources.list.d/obsto.list
           echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/obsto.list
           apt update
-          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) {{ .cds.env.GO_PACKAGE }} {{ .cds.env.PYTHON_PACKAGE }} {{ .cds.env.ZOOKEEPER_PACKAGE }}
+          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
           # Configure environment
-          echo "export PATH=/opt/{{ .cds.env.GO_PACKAGE }}/bin:/opt/{{ .cds.env.ZOOKEEPER_PACKAGE }}/bin:/opt/{{ .cds.env.PYTHON_PACKAGE }}/bin:$PATH" > $HOME/oio-env.sh
-          echo "export ZOOBINDIR=/opt/{{ .cds.env.ZOOKEEPER_PACKAGE }}/bin"  >> $HOME/oio-env.sh
-          echo "export LD_LIBRARY_PATH=/opt/{{ .cds.env.GO_PACKAGE }}/lib:/opt/{{ .cds.env.PYTHON_PACKAGE }}/lib:/opt/{{ .cds.env.ZOOKEEPER_PACKAGE }}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
-          echo "export PYTHONPATH=$(find /opt/{{ .cds.env.PYTHON_PACKAGE }}/lib/ -name 'site-packages')" >> $HOME/oio-env.sh
+          echo "export PATH=/opt/${GO_PACKAGE}/bin:/opt/${ZOOKEEPER_PACKAGE}/bin:/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
+          echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
+          echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${PYTHON_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
+          echo "export PYTHONPATH=$(find /opt/${PYTHON_PACKAGE}/lib/ -name 'site-packages')" >> $HOME/oio-env.sh
+          # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
+          echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
           source $HOME/oio-env.sh
           mkdir /tmp/oio
-          virtualenv -p /opt/{{ .cds.env.PYTHON_PACKAGE }}/bin/python3 $HOME/oiovenv
+          /opt/${PYTHON_PACKAGE}/bin/python3 -m venv $HOME/oiovenv
+          cat << EOF > $HOME/oiovenv/pip.conf
+          [global]
+          index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          EOF
           . $HOME/oiovenv/bin/activate
           pip install --upgrade pip setuptools virtualenv tox -r test-requirements.txt
           wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb

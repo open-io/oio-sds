@@ -1,0 +1,5 @@
+export FDB_VERSION="6.3.23"
+export GO_PACKAGE="go-1.17.3-ovh617"
+export PYPI_SNAPSHOT="20220227-21h42m14s"
+export PYTHON_PACKAGE="python-3.7.10-ovh127"
+export ZOOKEEPER_PACKAGE="oio-zookeeper-3.7.0-ovh514"
