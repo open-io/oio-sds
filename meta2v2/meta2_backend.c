@@ -3537,6 +3537,16 @@ meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
 	if (err) {
 		goto close;
 	}
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+			NEW_SHARD_STATE_CLEANING_UP);
+	err = sqlx_transaction_end(repctx, err);
+	if (err) {
+		goto close;
+	}
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (err) {
+		goto close;
+	}
 	gint64 timestamp = oio_ext_real_time();
 	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 		// Local shard copy or shard
@@ -3612,6 +3622,8 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	if (err) {
 		goto close;
 	}
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+			NEW_SHARD_STATE_CLEANING_UP);
 	gint64 timestamp = oio_ext_real_time();
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
 		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
