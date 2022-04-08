@@ -31,9 +31,18 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 
 MULTIUPLOAD_SUFFIX = '+segments'
 SHARDING_ACCOUNT_PREFIX = '.shards_'
-COUNTERS_FIELDS = ('bytes', 'objects', 'shards', 'containers', 'buckets',
-                   'accounts')
-TIMESTAMP_FIELDS = ('ctime', 'mtime')
+BYTES_FIELD = 'bytes'
+OBJECTS_FIELD = 'objects'
+SHARDS_FIELD = 'shards'
+CONTAINERS_FIELD = 'containers'
+BUCKETS_FIELD = 'buckets'
+ACCOUNTS_FIELD = 'accounts'
+REGIONS_FIELD = 'regions'
+CTIME_FIELD = 'ctime'
+MTIME_FIELD = 'mtime'
+COUNTERS_FIELDS = (BYTES_FIELD, OBJECTS_FIELD, SHARDS_FIELD, CONTAINERS_FIELD,
+                   BUCKETS_FIELD, ACCOUNTS_FIELD)
+TIMESTAMP_FIELDS = (CTIME_FIELD, MTIME_FIELD)
 
 
 def catch_service_errors(func):
@@ -98,37 +107,27 @@ class AccountBackendFdb(object):
             raise
         try:
             self.namespace = fdb.directory.create_or_open(
-                                    self.db, (self.main_namespace_name,))
+                self.db, (self.main_namespace_name,))
             self.acct_space = self.namespace.create_or_open(
-                                self.db,
-                                self.account_prefix)
+                self.db, self.account_prefix)
             self.accts_space = self.namespace.create_or_open(
-                                self.db,
-                                self.accounts_prefix)
+                self.db, self.accounts_prefix)
             self.container_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.container_list_prefix)
+                self.db, self.container_list_prefix)
             self.containers_index_space = self.namespace.create_or_open(
-                                            self.db,
-                                            self.containers_list_prefix)
+                self.db, self.containers_list_prefix)
             self.ct_to_delete_space = self.namespace.create_or_open(
-                                        self.db,
-                                        self.ct_to_delete_prefix)
+                self.db, self.ct_to_delete_prefix)
             self.bucket_db_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.reserve_bucket_prefix)
+                self.db, self.reserve_bucket_prefix)
             self.bucket_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.bucket_prefix)
+                self.db, self.bucket_prefix)
             self.buckets_index_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.buckets_list_prefix)
+                self.db, self.buckets_list_prefix)
             self.metadata_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.metadata_prefix)
+                self.db, self.metadata_prefix)
             self.metrics_space = self.namespace.create_or_open(
-                                    self.db,
-                                    self.metrics_prefix)
+                self.db, self.metrics_prefix)
         except Exception as exc:
             self.logger.warning("Directory create exception %s", exc)
             raise
@@ -218,7 +217,7 @@ class AccountBackendFdb(object):
                 elif has_region and len(details) <= 2:
                     region = details[0]
                     dict_values = info.setdefault(
-                        'regions', {}).setdefault(region, {})
+                        REGIONS_FIELD, {}).setdefault(region, {})
                     if len(details) == 2:
                         dict_values = dict_values.setdefault(
                             f"{field}-details", {})
@@ -242,7 +241,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _status(self, tr):
-        accounts = tr.snapshot[self.metrics_space.pack(('accounts',))]
+        accounts = tr.snapshot[self.metrics_space.pack((ACCOUNTS_FIELD,))]
         if accounts.present():
             accounts = self._counter_value_to_counter(accounts.value)
         else:
@@ -271,14 +270,14 @@ class AccountBackendFdb(object):
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(
             iterator, has_region=True, unpack=self.metrics_space.unpack)
-        info.setdefault('accounts', 0)
-        info.setdefault('regions', {})
+        info.setdefault(ACCOUNTS_FIELD, 0)
+        info.setdefault(REGIONS_FIELD, {})
         return info
 
     def _metrics_to_prometheus_format(self, metrics):
         prom_output = []
-        prom_output.append(f"obsto_accounts {metrics['accounts']}")
-        for region, region_details in metrics['regions'].items():
+        prom_output.append(f"obsto_accounts {metrics[ACCOUNTS_FIELD]}")
+        for region, region_details in metrics[REGIONS_FIELD].items():
             for counter, counter_value in region_details.items():
                 if counter.endswith('-details'):
                     counter = counter[:-8]
@@ -297,7 +296,7 @@ class AccountBackendFdb(object):
         """
         [transactional] Update metrics stats for the specified region.
         """
-        for key in ('bytes', 'objects'):
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
             for policy, value in stats_delta[f"{key}-details"].items():
                 # Update stats by policy (by policy)
                 self._increment(
@@ -311,7 +310,7 @@ class AccountBackendFdb(object):
         Create the account if it doesn't already exist.
         """
         # get ctime is only used for migration
-        ctime = kwargs.get('ctime')
+        ctime = kwargs.get(CTIME_FIELD)
         status = self._create_account(self.db, account_id, ctime=ctime)
         if not status:
             return None
@@ -324,7 +323,7 @@ class AccountBackendFdb(object):
         """
         account_space = self.acct_space[account_id]
 
-        if tr[account_space.pack(('ctime',))].present():
+        if tr[account_space.pack((CTIME_FIELD,))].present():
             # Account already exists
             return False
         self._real_create_account(tr, account_id, ctime=ctime)
@@ -342,18 +341,18 @@ class AccountBackendFdb(object):
 
         # Add basic info
         tr[account_space.pack(('id',))] = account_id.encode('utf-8')
-        self._set_counter(tr, account_space.pack(('bytes',)))
-        self._set_counter(tr, account_space.pack(('objects',)))
-        self._set_counter(tr, account_space.pack(('containers',)))
-        self._set_counter(tr, account_space.pack(('buckets',)))
+        self._set_counter(tr, account_space.pack((BYTES_FIELD,)))
+        self._set_counter(tr, account_space.pack((OBJECTS_FIELD,)))
+        self._set_counter(tr, account_space.pack((CONTAINERS_FIELD,)))
+        self._set_counter(tr, account_space.pack((BUCKETS_FIELD,)))
         # Set account ctime and mtime
-        self._set_timestamp(tr, account_space.pack(('ctime',)), ctime)
-        self._set_timestamp(tr, account_space.pack(('mtime',)), ctime)
+        self._set_timestamp(tr, account_space.pack((CTIME_FIELD,)), ctime)
+        self._set_timestamp(tr, account_space.pack((MTIME_FIELD,)), ctime)
         # Add account in index
         tr[self.accts_space.pack((account_id,))] = b'1'
         # Increase accounts counter in metrics
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-            self._increment(tr, self.metrics_space.pack(('accounts',)))
+            self._increment(tr, self.metrics_space.pack((ACCOUNTS_FIELD,)))
         # else:
         #     Do not count sharding accounts in metrics
 
@@ -379,11 +378,11 @@ class AccountBackendFdb(object):
 
         account_space = self.acct_space[account_id]
 
-        account_ctime = tr[account_space.pack(('ctime',))]
+        account_ctime = tr[account_space.pack((CTIME_FIELD,))]
         if not account_ctime.present():
             raise NotFound('Account does\'nt exist')
 
-        containers = tr[account_space.pack(('containers',))]
+        containers = tr[account_space.pack((CONTAINERS_FIELD,))]
         if containers.present():
             containers = self._counter_value_to_counter(containers.value)
         else:
@@ -427,7 +426,7 @@ class AccountBackendFdb(object):
 
         # Decrease accounts counter in metrics
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-            self._increment(tr, self.metrics_space.pack(('accounts',)), -1)
+            self._increment(tr, self.metrics_space.pack((ACCOUNTS_FIELD,)), -1)
         # else:
         #     Do not count sharding accounts in metrics
 
@@ -481,20 +480,20 @@ class AccountBackendFdb(object):
         if not sharding_info:
             return
         # Update global stats of sharding account
-        for key in ('bytes', 'objects'):
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
             value = sharding_info.get(key)
             if not value:
                 continue
             info[key] = info.get(key, 0) + value
-        info['shards'] = sharding_info.get('containers', 0)
-        info['mtime'] = max(info.get('mtime', 0),
-                            sharding_info.get('mtime', 0))
+        info[SHARDS_FIELD] = sharding_info.get(CONTAINERS_FIELD, 0)
+        info[MTIME_FIELD] = max(info.get(MTIME_FIELD, 0),
+                                sharding_info.get(MTIME_FIELD, 0))
         # Update detailed stats of sharding account
-        regions_info = info.setdefault('regions', {})
+        regions_info = info.setdefault(REGIONS_FIELD, {})
         for region, shards_region_info in sharding_info.get(
-                'regions', {}).items():
+                REGIONS_FIELD, {}).items():
             region_info = regions_info.setdefault(region, {})
-            for key in ('bytes', 'objects'):
+            for key in (BYTES_FIELD, OBJECTS_FIELD):
                 shards_region_details = shards_region_info.get(
                     f'{key}-details')
                 if shards_region_details is None:
@@ -503,7 +502,8 @@ class AccountBackendFdb(object):
                 for policy, value in shards_region_details.items():
                     region_details[policy] = region_details.get(
                         policy, 0) + value
-            region_info['shards'] = shards_region_info.get('containers', 0)
+            region_info[SHARDS_FIELD] = shards_region_info.get(
+                CONTAINERS_FIELD, 0)
 
     @catch_service_errors
     def list_accounts(self, **kwargs):
@@ -533,7 +533,7 @@ class AccountBackendFdb(object):
         account_space = self.acct_space[account_id]
 
         # Update account stats
-        for key in ('bytes', 'objects'):
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
             # Update global stats
             value = stats_delta[key]
             self._increment(tr, account_space.pack((key,)), value)
@@ -543,7 +543,7 @@ class AccountBackendFdb(object):
                     tr, account_space.pack((key, region, policy)), value)
 
         # Update account mtime
-        self._update_timestamp(tr, account_space.pack(('mtime',)), mtime)
+        self._update_timestamp(tr, account_space.pack((MTIME_FIELD,)), mtime)
 
         # Update metrics stats with the delta
         self._update_metrics_stats(tr, region, stats_delta)
@@ -627,15 +627,15 @@ class AccountBackendFdb(object):
             _, field, *policy_region = ct_space.unpack(key)
             if policy_region:
                 continue
-            if field == 'bytes':
+            if field == BYTES_FIELD:
                 sum_bytes += self._counter_value_to_counter(val)
-            if field == 'objects':
+            if field == OBJECTS_FIELD:
                 sum_objects += self._counter_value_to_counter(val)
 
-        self._set_counter(tr, self.acct_space.pack((account_id, 'bytes')),
-                          sum_bytes)
-        self._set_counter(tr, self.acct_space.pack((account_id, 'objects')),
-                          sum_objects)
+        self._set_counter(
+            tr, self.acct_space.pack((account_id, BYTES_FIELD)), sum_bytes)
+        self._set_counter(
+            tr, self.acct_space.pack((account_id, OBJECTS_FIELD)), sum_objects)
 
     @catch_service_errors
     def flush_account(self, account_id, **kwargs):
@@ -649,7 +649,7 @@ class AccountBackendFdb(object):
     def _flush_account(self, tr, account_id, mtime):
         # Reset stats
         account_space = self.acct_space[account_id]
-        current_mtime = tr[account_space.pack(('mtime',))]
+        current_mtime = tr[account_space.pack((MTIME_FIELD,))]
         if current_mtime.present():
             current_mtime = self._timestamp_value_to_timestamp(
                 current_mtime.value)
@@ -659,7 +659,8 @@ class AccountBackendFdb(object):
                 return
         else:
             raise NotFound('Account does\'nt exist')
-        for field in ('bytes', 'objects', 'containers', 'buckets'):
+        for field in (BYTES_FIELD, OBJECTS_FIELD, CONTAINERS_FIELD,
+                      BUCKETS_FIELD):
             self._set_counter(tr, account_space.pack((field,)))
             details_space = account_space[field]
             details_range = details_space.range()
@@ -668,10 +669,10 @@ class AccountBackendFdb(object):
             for key, value in iterator:
                 key = account_space.unpack(key)
                 value = self._counter_value_to_counter(value)
-                if field == 'containers' and account_id.startswith(
+                if field == CONTAINERS_FIELD and account_id.startswith(
                         SHARDING_ACCOUNT_PREFIX):
                     # Replace 'containers' with 'shards' for sharding account
-                    key = ('shards',) + key[1:]
+                    key = (SHARDS_FIELD,) + key[1:]
                 self._increment(tr, self.metrics_space.pack(key), -value)
             # Remove details by region
             tr.clear_range(details_range.start, details_range.stop)
@@ -695,7 +696,7 @@ class AccountBackendFdb(object):
         # Delete metadata
         metadata_space = self.metadata_space[account_id].range()
         tr.clear_range(metadata_space.start, metadata_space.stop)
-        self._update_timestamp(tr, account_space.pack(('mtime',)), mtime)
+        self._update_timestamp(tr, account_space.pack((MTIME_FIELD,)), mtime)
 
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
             # Flush sharding account
@@ -723,23 +724,23 @@ class AccountBackendFdb(object):
         # Add basic info
         tr[container_space.pack(('name',))] = cname.encode('utf-8')
         tr[container_space.pack(('region',))] = region.encode('utf-8')
-        self._set_counter(tr, container_space.pack(('bytes',)))
-        self._set_counter(tr, container_space.pack(('objects',)))
+        self._set_counter(tr, container_space.pack((BYTES_FIELD,)))
+        self._set_counter(tr, container_space.pack((OBJECTS_FIELD,)))
         # Set container mtime
-        self._set_timestamp(tr, container_space.pack(('mtime',)), ctime)
+        self._set_timestamp(tr, container_space.pack((MTIME_FIELD,)), ctime)
         # Add container in index
         tr[self.containers_index_space.pack((account_id, cname))] = b'1'
         # Delete the old dtime
         tr.clear(deleted_container_space.key())
         # Increase containers counter in account
         self._increment(tr, self.acct_space[account_id].pack(
-            ('containers',)))
+            (CONTAINERS_FIELD,)))
         self._increment(tr, self.acct_space[account_id].pack(
-            ('containers', region)))
+            (CONTAINERS_FIELD, region)))
         # Increase containers counter in metrics
-        metrics_field = 'containers'
+        metrics_field = CONTAINERS_FIELD
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-            metrics_field = 'shards'
+            metrics_field = SHARDS_FIELD
         self._increment(tr, self.metrics_space.pack((metrics_field, region)))
 
     @fdb.transactional
@@ -754,7 +755,7 @@ class AccountBackendFdb(object):
 
         # Fetch the current stats to compute the others stats
         stats_delta = {}
-        for key in ('bytes', 'objects'):
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
             # Fetch the global stats
             current_value = tr[container_space.pack((key,))]
             if current_value.present():
@@ -785,13 +786,13 @@ class AccountBackendFdb(object):
         self._update_timestamp(tr, deleted_container_space.key(), dtime)
         # Decrease containers counter in account
         self._increment(tr, self.acct_space[account_id].pack(
-            ('containers',)), -1)
+            (CONTAINERS_FIELD,)), -1)
         self._increment(tr, self.acct_space[account_id].pack(
-            ('containers', region)), -1)
+            (CONTAINERS_FIELD, region)), -1)
         # Decrease containers counter in metrics
-        metrics_field = 'containers'
+        metrics_field = CONTAINERS_FIELD
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-            metrics_field = 'shards'
+            metrics_field = SHARDS_FIELD
         self._increment(tr, self.metrics_space.pack(
             (metrics_field, region)), -1)
 
@@ -873,7 +874,7 @@ class AccountBackendFdb(object):
 
         if marker:
             marker = fdb.KeySelector.first_greater_or_equal(
-                        index_space.pack((marker,)))
+                index_space.pack((marker,)))
 
         while len(results) < limit and not beyond_prefix:
             min_k = start
@@ -892,7 +893,7 @@ class AccountBackendFdb(object):
             if end_marker and (not prefix
                                or end_marker <= prefix + b'\xff'):
                 max_k = fdb.KeySelector.last_less_or_equal(
-                            index_space.pack((end_marker,)))
+                    index_space.pack((end_marker,)))
 
             iterator = tr.snapshot.get_range(min_k, max_k, limit=local_limit,
                                              reverse=False)
@@ -909,10 +910,10 @@ class AccountBackendFdb(object):
                     break
                 if end_marker:
                     marker = fdb.KeySelector.first_greater_or_equal(
-                                index_space.pack((end_marker,)))
+                        index_space.pack((end_marker,)))
                 else:
                     marker = fdb.KeySelector.first_greater_than(
-                                index_space.pack((ctr,)))
+                        index_space.pack((ctr,)))
 
                 # don't include marker
                 if orig_marker == ctr:
@@ -929,11 +930,11 @@ class AccountBackendFdb(object):
                     a_key, *pol = ct_space.unpack(ct_key)
                     if pol:
                         continue
-                    if a_key == 'objects':
+                    if a_key == OBJECTS_FIELD:
                         nb_objects = self._counter_value_to_counter(a_value)
-                    if a_key == 'bytes':
+                    if a_key == BYTES_FIELD:
                         nb_bytes = self._counter_value_to_counter(a_value)
-                    if a_key == 'mtime':
+                    if a_key == MTIME_FIELD:
                         mtime = self._timestamp_value_to_timestamp(a_value)
                 results.append([ctr, nb_objects, nb_bytes, 0, mtime])
 
@@ -975,10 +976,10 @@ class AccountBackendFdb(object):
         if bytes_details is None:
             bytes_details = {}
         new_stats = {
-            'objects': object_count,
-            'objects-details': objects_details,
-            'bytes': bytes_used,
-            'bytes-details': bytes_details
+            OBJECTS_FIELD: object_count,
+            f'{OBJECTS_FIELD}-details': objects_details,
+            BYTES_FIELD: bytes_used,
+            f'{BYTES_FIELD}-details': bytes_details
         }
 
         if region:
@@ -1002,7 +1003,7 @@ class AccountBackendFdb(object):
         deleted_container_space = self.ct_to_delete_space[account_id][cname]
 
         # Check that the account exists and create it if necessary
-        account_ctime = tr[account_space.pack(('ctime',))]
+        account_ctime = tr[account_space.pack((CTIME_FIELD,))]
         if not account_ctime.present():
             # It's a new account
             if not autocreate_account:
@@ -1012,7 +1013,7 @@ class AccountBackendFdb(object):
         container_is_deleted = new_dtime >= new_mtime
 
         # Check that the container exists and create it if necessary
-        current_mtime = tr[container_space.pack(('mtime',))]
+        current_mtime = tr[container_space.pack((MTIME_FIELD,))]
         if not current_mtime.present():
             # Container doesn't exist
             # Check that the container has not been recently deleted
@@ -1044,7 +1045,7 @@ class AccountBackendFdb(object):
         else:
             # Container exists
             current_mtime = self._timestamp_value_to_timestamp(
-                    current_mtime.value)
+                current_mtime.value)
             if container_is_deleted:
                 if current_mtime >= new_dtime:
                     raise Conflict(
@@ -1144,7 +1145,7 @@ class AccountBackendFdb(object):
 
         # Update container stats
         stats_delta = {}
-        for key in ('bytes', 'objects'):
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
             # Fetch the global stats
             new_value = new_stats[key]
             current_value = tr[container_space.pack((key,))]
@@ -1181,7 +1182,7 @@ class AccountBackendFdb(object):
             stats_delta[f"{key}-details"] = delta_by_policy
 
         # Update container mtime
-        self._update_timestamp(tr, container_space.pack(('mtime',)), mtime)
+        self._update_timestamp(tr, container_space.pack((MTIME_FIELD,)), mtime)
 
         # Update account stats with the delta
         self._update_account_stats(tr, account_id, region, stats_delta, mtime)
@@ -1214,19 +1215,19 @@ class AccountBackendFdb(object):
         # Add basic info
         tr[bucket_space.pack(('account',))] = account_id.encode('utf-8')
         tr[bucket_space.pack(('region',))] = region.encode('utf-8')
-        self._set_counter(tr, bucket_space.pack(('bytes',)))
-        self._set_counter(tr, bucket_space.pack(('objects',)))
+        self._set_counter(tr, bucket_space.pack((BYTES_FIELD,)))
+        self._set_counter(tr, bucket_space.pack((OBJECTS_FIELD,)))
         # No need to add the mtime,
         # it will be added to the bucket stats update
         # Add bucket in index
         tr[self.buckets_index_space.pack((account_id, bname))] = b'1'
         tr[self.buckets_index_space.pack((region, account_id, bname))] = b'1'
         # Increase buckets counter in account
-        self._increment(tr, self.acct_space[account_id].pack(('buckets',)))
+        self._increment(tr, self.acct_space[account_id].pack((BUCKETS_FIELD,)))
         self._increment(tr, self.acct_space[account_id].pack(
-            ('buckets', region)))
+            (BUCKETS_FIELD, region)))
         # Increase buckets counter in metrics
-        self._increment(tr, self.metrics_space.pack(('buckets', region)))
+        self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)))
 
     @fdb.transactional
     def _real_delete_bucket(self, tr, account_id, bname, region):
@@ -1244,12 +1245,13 @@ class AccountBackendFdb(object):
         tr.clear(self.buckets_index_space.pack((account_id, bname,)))
         tr.clear(self.buckets_index_space.pack((region, account_id, bname,)))
         # Decrease buckets counter in account
-        self._increment(tr, self.acct_space[account_id].pack(('buckets',)), -1)
         self._increment(tr, self.acct_space[account_id].pack(
-            ('buckets', region)), -1)
+            (BUCKETS_FIELD,)), -1)
+        self._increment(tr, self.acct_space[account_id].pack(
+            (BUCKETS_FIELD, region)), -1)
         # Decrease buckets counter in metrics
         self._increment(tr, self.metrics_space.pack(
-            ('buckets', region)), -1)
+            (BUCKETS_FIELD, region)), -1)
 
     @catch_service_errors
     def get_bucket_info(self, bname, account=None, **kwargs):
@@ -1304,9 +1306,9 @@ class AccountBackendFdb(object):
         for bucket in raw_list:
             bdict = {
                 'name': bucket[0],
-                'objects': bucket[1],
-                'bytes': bucket[2],
-                'mtime': bucket[3]
+                OBJECTS_FIELD: bucket[1],
+                BYTES_FIELD: bucket[2],
+                MTIME_FIELD: bucket[3]
             }
             output.append(bdict)
         return output, next_marker
@@ -1329,7 +1331,7 @@ class AccountBackendFdb(object):
 
         if marker:
             marker = fdb.KeySelector.first_greater_or_equal(
-                        key_space.pack((marker,)))
+                key_space.pack((marker,)))
 
         while len(results) < limit and not beyond_prefix:
             min_k = start
@@ -1348,7 +1350,7 @@ class AccountBackendFdb(object):
             if end_marker and (not prefix
                                or end_marker <= prefix + b'\xff'):
                 max_k = fdb.KeySelector.last_less_or_equal(
-                            key_space.pack((end_marker,)))
+                    key_space.pack((end_marker,)))
 
             iterator = tr.snapshot.get_range(min_k, max_k, limit=local_limit,
                                              reverse=False)
@@ -1365,10 +1367,10 @@ class AccountBackendFdb(object):
                     break
                 if end_marker:
                     marker = fdb.KeySelector.first_greater_or_equal(
-                                key_space.pack((end_marker,)))
+                        key_space.pack((end_marker,)))
                 else:
                     marker = fdb.KeySelector.first_greater_than(
-                                key_space.pack((ctr,)))
+                        key_space.pack((ctr,)))
 
                 # don't include marker
                 if orig_marker == ctr:
@@ -1388,11 +1390,11 @@ class AccountBackendFdb(object):
                         # This is a per policy metric, skip it
                         continue
                     a_key = key[0]
-                    if a_key == 'objects':
+                    if a_key == OBJECTS_FIELD:
                         nb_objects = self._counter_value_to_counter(a_value)
-                    if a_key == 'bytes':
+                    if a_key == BYTES_FIELD:
                         nb_bytes = self._counter_value_to_counter(a_value)
-                    if a_key == 'mtime':
+                    if a_key == MTIME_FIELD:
                         mtime = self._timestamp_value_to_timestamp(a_value)
                 results.append([ctr, nb_objects, nb_bytes, mtime])
 
@@ -1426,12 +1428,11 @@ class AccountBackendFdb(object):
                         yield bucket_info
                     bucket_keys_values = account, bucket, []
                 bucket_keys_values[2].append((key, value))
-            else:
-                if bucket_keys_values[2]:
-                    bucket_info = self._unmarshal_info(bucket_keys_values[2])
-                    bucket_info['account'] = bucket_keys_values[0]
-                    bucket_info['name'] = bucket_keys_values[1]
-                    yield bucket_info
+            if bucket_keys_values[2]:
+                bucket_info = self._unmarshal_info(bucket_keys_values[2])
+                bucket_info['account'] = bucket_keys_values[0]
+                bucket_info['name'] = bucket_keys_values[1]
+                yield bucket_info
         finally:
             transaction.commit()
 
@@ -1482,24 +1483,24 @@ class AccountBackendFdb(object):
                 tr.clear(self.buckets_index_space.pack(
                     (current_region, account_id, bname,)))
                 self._increment(tr, self.acct_space[account_id].pack(
-                    ('buckets', current_region)), -1)
+                    (BUCKETS_FIELD, current_region)), -1)
                 self._increment(tr, self.metrics_space.pack(
-                    ('buckets', current_region)), -1)
+                    (BUCKETS_FIELD, current_region)), -1)
                 # Increase buckets counter in account and metrics
                 # and add index for new region
                 tr[self.buckets_index_space.pack(
                     (region, account_id, bname))] = b'1'
                 self._increment(tr, self.acct_space[account_id].pack(
-                    ('buckets', region)))
+                    (BUCKETS_FIELD, region)))
                 self._increment(tr, self.metrics_space.pack(
-                    ('buckets', region)))
+                    (BUCKETS_FIELD, region)))
                 # Update the region
                 tr[bucket_space.pack(('region',))] = region.encode('utf-8')
 
         # Update bucket stats
         is_segment = root_container.endswith(MULTIUPLOAD_SUFFIX)
-        for key in ('bytes', 'objects'):
-            if is_segment and key == 'objects':
+        for key in (BYTES_FIELD, OBJECTS_FIELD):
+            if is_segment and key == OBJECTS_FIELD:
                 continue
             # Update global stats
             value = stats_delta[key]
@@ -1509,7 +1510,7 @@ class AccountBackendFdb(object):
                 self._increment(tr, bucket_space.pack((key, policy)), value)
 
         # Update bucket mtime
-        self._update_timestamp(tr, bucket_space.pack(('mtime',)), mtime)
+        self._update_timestamp(tr, bucket_space.pack((MTIME_FIELD,)), mtime)
 
     @catch_service_errors
     def update_bucket_metadata(self, bname, metadata, to_delete=None,
@@ -1588,7 +1589,7 @@ class AccountBackendFdb(object):
             found = True
             field, *policy = account_bucket.unpack(key)
 
-            if field not in ('bytes', 'objects'):
+            if field not in (BYTES_FIELD, OBJECTS_FIELD):
                 continue
             if len(policy) > 0:
                 keys_to_remove.append(key)
@@ -1598,8 +1599,8 @@ class AccountBackendFdb(object):
             raise NotFound("Bucket %s not found" % bucket_name)
 
         # Reset global counters
-        self._set_counter(tr, account_bucket['bytes'])
-        self._set_counter(tr, account_bucket['objects'])
+        self._set_counter(tr, account_bucket[BYTES_FIELD])
+        self._set_counter(tr, account_bucket[OBJECTS_FIELD])
 
         # Remove policy counters
         for key in keys_to_remove:
@@ -1609,7 +1610,7 @@ class AccountBackendFdb(object):
     def _refresh_bucket(self, tr, bucket_account_id, bucket_name,
                         sharded, marker, batch_size):
         new_marker = None
-        counters = {'bytes': Counter(), 'objects': Counter()}
+        counters = {BYTES_FIELD: Counter(), OBJECTS_FIELD: Counter()}
 
         container_account_id = bucket_account_id
 
@@ -1637,8 +1638,8 @@ class AccountBackendFdb(object):
         # Propagate container counters to bucket if container belongs to bucket
         def _process_data_to_counters():
             if 'bucket' in data and data['bucket'] == bucket_name:
-                for counter in ('bytes', 'objects'):
-                    for p, c in data[counter].items():
+                for counter in (BYTES_FIELD, OBJECTS_FIELD):
+                    for p, c in data.get(counter, {}).items():
                         counters[counter][p] += c
 
         # Iterate over containers
@@ -1663,10 +1664,10 @@ class AccountBackendFdb(object):
                 data['bucket'] = value.decode('utf-8')
                 continue
             # Skip not counter values
-            if field not in ('bytes', 'objects'):
+            if field not in (BYTES_FIELD, OBJECTS_FIELD):
                 continue
             # Ignore '+segments' objects counter
-            if field == 'object' \
+            if field == OBJECTS_FIELD \
                     and root_container.endswith(MULTIUPLOAD_SUFFIX):
                 continue
 
@@ -1679,8 +1680,8 @@ class AccountBackendFdb(object):
 
         # Update counters
         bucket = self.bucket_space[bucket_account_id][bucket_name]
-        for field in ('bytes', 'objects'):
-            for policy, counter in counters[field].items():
+        for field in (BYTES_FIELD, OBJECTS_FIELD):
+            for policy, counter in counters.get(field, {}).items():
                 key = bucket[field]
                 if policy != '_':
                     # Not a global counter, add policy

@@ -1427,125 +1427,148 @@ class TestAccountBackend(BaseTestCase):
         # Create account
         account_id = random_str(16)
         self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {
+                ('accounts',): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
 
         # Create container
         region = 'LOCALHOST'
         bucket = random_str(16)
         mtime = Timestamp().timestamp
 
-        # set bucket_db reservation
+        # Set bucket_db reservation
         self.backend.reserve_bucket(bucket, account_id)
         self.backend.set_bucket_owner(bucket, account_id)
 
-        total_bytes = 0
-        total_objects = 0
-
-        # 10 containers with bytes and objects
-        for i in range(10):
-            name = "container%d" % i
+        buckets_info = {}
+        containers_info = {}
+        account_bytes = 0
+        account_objects = 0
+        # Create main container and segments containers with bytes and objects
+        # and 2 fake containers linked to the bucket
+        bucket_bytes = 0
+        bucket_objects = 0
+        for name in (bucket, f'{bucket}+segments', random_str(16),
+                     random_str(16)):
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
-            total_bytes += nb_bytes
+            account_bytes += nb_bytes
+            bucket_bytes += nb_bytes
             nb_objets = random.randrange(100)
-            total_objects += nb_objets
+            account_objects += nb_objets
+            if not name.endswith('+segments'):
+                bucket_objects += nb_objets
             self.backend.update_container(
                 account_id, name, mtime, 0, nb_objets, nb_bytes,
                 bucket_name=bucket, region=region)
+            containers_info[(account_id, name)] = {
+                ('name',): name,
+                ('bucket',): bucket,
+                ('region',): region,
+                ('mtime',): mtime,
+                ('bytes',): nb_bytes,
+                ('objects',): nb_objets
+            }
+        buckets_info[(account_id, bucket)] = {
+            ('account',): account_id,
+            ('region',): region,
+            ('mtime',): mtime,
+            ('bytes',): bucket_bytes,
+            ('objects',): bucket_objects
+        }
+        # Create 12 others containers (and buckets)
+        for _ in range(12):
+            name = random_str(16)
+            mtime = Timestamp().timestamp
+            nb_bytes = random.randrange(100)
+            account_bytes += nb_bytes
+            bucket_bytes += nb_bytes
+            nb_objets = random.randrange(100)
+            account_objects += nb_objets
+            if not name.endswith('+segments'):
+                bucket_objects += nb_objets
+            self.backend.update_container(
+                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                bucket_name=name, region=region)
+            buckets_info[(account_id, name)] = {
+                ('account',): account_id,
+                ('region',): region,
+                ('mtime',): mtime,
+                ('bytes',): nb_bytes,
+                ('objects',): nb_objets
+            }
+            containers_info[(account_id, name)] = {
+                ('name',): name,
+                ('bucket',): name,
+                ('region',): region,
+                ('mtime',): mtime,
+                ('bytes',): nb_bytes,
+                ('objects',): nb_objets
+            }
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('containers', region): len(containers_info),
+                ('buckets', region): len(buckets_info)
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('mtime',): mtime,
+                    ('bytes',): account_bytes,
+                    ('objects',): account_objects,
+                    ('containers',): len(containers_info),
+                    ('containers', region): len(containers_info),
+                    ('buckets',): len(buckets_info),
+                    ('buckets', region): len(buckets_info)
+                }
+            },
+            buckets_info,
+            containers_info,
+            {}
+        )
+        self._check_backend(*backend_info)
 
+        # Change values
         b_space = self.backend.bucket_space[account_id][bucket]
-
-        # change values
         self.backend.db[b_space['bytes']] = struct.pack('<q', 1)
         self.backend.db[b_space['objects']] = struct.pack('<q', 2)
+        self.assertEqual(
+            1, struct.unpack('<q', self.backend.db[b_space['bytes']])[0])
+        self.assertEqual(
+            2, struct.unpack('<q', self.backend.db[b_space['objects']])[0])
 
-        res_bytes = self.backend.db[b_space['bytes']]
-        res_objects = self.backend.db[b_space['objects']]
-
-        res_bytes = int.from_bytes(res_bytes, byteorder='little')
-        res_objects = int.from_bytes(res_objects, byteorder='little')
-
-        self.assertEqual(res_bytes, 1)
-        self.assertEqual(res_objects, 2)
-
-        # default batch_size
+        # Default batch_size
         self.backend.refresh_bucket(bucket, account_id)
+        self._check_backend(*backend_info)
+
+        # Change values
         b_space = self.backend.bucket_space[account_id][bucket]
+        self.backend.db[b_space['bytes']] = struct.pack('<q', 1)
+        self.backend.db[b_space['objects']] = struct.pack('<q', 2)
+        self.assertEqual(
+            1, struct.unpack('<q', self.backend.db[b_space['bytes']])[0])
+        self.assertEqual(
+            2, struct.unpack('<q', self.backend.db[b_space['objects']])[0])
 
-        res_bytes = self.backend.db[b_space['bytes']]
-        res_objects = self.backend.db[b_space['objects']]
-        res_bytes = struct.unpack('<q', res_bytes)[0]
-        res_objects = struct.unpack('<q', res_objects)[0]
-
-        self.assertEqual(res_bytes, total_bytes)
-        self.assertEqual(res_objects, total_objects)
-
-        # force pagination
+        # Force pagination
         self.backend.refresh_bucket(bucket, batch_size=3)
-        res_bytes = self.backend.db[b_space.pack(('bytes',))]
-        res_objects = self.backend.db[b_space.pack(('objects',))]
-        res_bytes = int.from_bytes(res_bytes, byteorder='little')
-        res_objects = int.from_bytes(res_objects, byteorder='little')
-
-        self.assertEqual(res_bytes, total_bytes)
-        self.assertEqual(res_objects, total_objects)
-
-    def test_refresh_bucket_by_batch(self):
-        region = 'LOCALHOST'
-        nb_obj_to_add = 5
-        account_id = random_str(16)
-        bucket = 'bucket-test-refresh'
-        cname = 'ct-1'
-        cname_not_in_bucket = 'ct-not-in-bucket'
-        cname_not_sharded = 'ct-2'
-        account_id = random_str(16)
-        bucket_space = self.backend.bucket_space[account_id][bucket]
-
-        data_lenth = 7
-        data = random_str(data_lenth)
-
-        # set bucket_db reservation
-        self.backend.reserve_bucket(bucket, account_id)
-        self.backend.set_bucket_owner(bucket, account_id)
-
-        for ct in (cname, cname_not_in_bucket, cname_not_sharded):
-            self.storage.container_create(account_id, ct)
-
-            for i in range(nb_obj_to_add):
-                file_name = str(i) + '-file'
-                self.storage.object_create(account_id, ct,
-                                           obj_name=file_name, data=data,
-                                           chunk_checksum_algo=None)
-
-        ct_in_bucket = (cname, cname_not_sharded)
-        for ct in ct_in_bucket:
-            self.backend.update_container(account_id, ct,
-                                          Timestamp().timestamp,
-                                          0, nb_obj_to_add,
-                                          data_lenth * nb_obj_to_add,
-                                          bucket_name=bucket, region=region)
-
-        self.backend.update_container(account_id, cname_not_in_bucket,
-                                      Timestamp().timestamp, 0, nb_obj_to_add,
-                                      data_lenth * nb_obj_to_add,
-                                      region=region)
-
-        for batch in range(1, 6):
-            # change values
-            self.backend.db[bucket_space['bytes']] = \
-                struct.pack('<q', 1)
-            self.backend.db[bucket_space['objects']] = \
-                struct.pack('<q', 2)
-
-            self.backend.refresh_bucket(bucket, batch_size=batch)
-
-            res_bytes = self.backend.db[bucket_space['bytes']]
-            res_objects = self.backend.db[bucket_space['objects']]
-            res_bytes = int.from_bytes(res_bytes, byteorder='little')
-            res_objects = int.from_bytes(res_objects, byteorder='little')
-
-            self.assertEqual(res_bytes,
-                             len(ct_in_bucket) * data_lenth * nb_obj_to_add)
-            self.assertEqual(res_objects, len(ct_in_bucket) * nb_obj_to_add)
+        self._check_backend(*backend_info)
 
     def test_refresh_bucket_with_policies(self):
         policies = ['SINGLE', 'EC', 'THREECOPIES']
