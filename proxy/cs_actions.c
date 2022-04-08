@@ -27,6 +27,7 @@ _loop_on_allcs_while_neterror(struct req_args_s *args, gchar **allcs,
 {
 	EXTRA_ASSERT(allcs != NULL);
 
+	GError *err = NULL;
 	const gchar *cs = NULL;
 	if (args) {
 		cs = CONSCIENCE();
@@ -35,7 +36,7 @@ _loop_on_allcs_while_neterror(struct req_args_s *args, gchar **allcs,
 		if (cs && *cs && strcmp(*pcs, cs) != 0) {
 			continue;
 		}
-		GError *err = action(*pcs);
+		err = action(*pcs);
 		if (!err)
 			return NULL;
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -43,11 +44,14 @@ _loop_on_allcs_while_neterror(struct req_args_s *args, gchar **allcs,
 			g_clear_error(&err);
 			continue;
 		}
-		g_prefix_error(&err, "request: ");
+		g_prefix_error(&err, "request to [%s]: ", *pcs);
 		return err;
 	}
 
-	return BUSY("No conscience replied");
+	gchar *allcs_joined = g_strjoinv(",", allcs);
+	err = BUSY("No conscience replied [%s]", allcs_joined);
+	g_free(allcs_joined);
+	return err;
 }
 
 GError *
