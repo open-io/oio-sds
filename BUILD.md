@@ -39,7 +39,7 @@ In addition, there some dependencies at runtime (the up-to-date list is in [requ
 * python-futures
 
 The account service will require an up and running backend:
-* redis
+* FoundationDB
 
 Generating the documentation will require:
 * epydoc: available in your python virtualenv
@@ -95,6 +95,11 @@ source oiovenv/bin/activate
 Then install the python module inside your virtualenv:
 ```
 pip install -e ${SRCDIR}
+```
+
+Then install FoundationDB with oio-install-fdb.sh
+```
+./tools/oio-install-fdb.sh
 ```
 
 A lot of variables are available, consider reading [Variables.md](./Variables.md) for more information.
