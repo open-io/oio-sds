@@ -1554,7 +1554,7 @@ class TestAccountBackend(BaseTestCase):
             2, struct.unpack('<q', self.backend.db[b_space['objects']])[0])
 
         # Default batch_size
-        self.backend.refresh_bucket(bucket, account_id)
+        self.backend.refresh_bucket(bucket, account=account_id)
         self._check_backend(*backend_info)
 
         # Change values
@@ -1637,7 +1637,7 @@ class TestAccountBackend(BaseTestCase):
         override_counters()
 
         # default batch_size
-        self.backend.refresh_bucket(bucket, account_id)
+        self.backend.refresh_bucket(bucket, account=account_id)
 
         policies.append('global')
         # validate all counters

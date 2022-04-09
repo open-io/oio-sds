@@ -34,13 +34,15 @@ class BucketClient(ServiceClient):
             params['id'] = bucket
         return self.service_request(*args, **kwargs)
 
-    def bucket_show(self, bucket, account=None, **kwargs):
+    def bucket_show(self, bucket, account=None, check_owner=None, **kwargs):
         """
         Get information about a bucket.
         """
         params = {}
         if account:
             params['account'] = account
+        if check_owner is not None:
+            params['check_owner'] = check_owner
         resp, body = self.bucket_request(
             bucket, 'GET', 'show', params=params, **kwargs)
         if resp.status != 200:
@@ -48,7 +50,7 @@ class BucketClient(ServiceClient):
         return body
 
     def bucket_update(self, bucket, metadata, to_delete, account=None,
-                      **kwargs):
+                      check_owner=False, **kwargs):
         """
         Update metadata of the specified bucket.
 
@@ -60,6 +62,8 @@ class BucketClient(ServiceClient):
         params = {}
         if account:
             params['account'] = account
+        if check_owner is not None:
+            params['check_owner'] = check_owner
         resp, body = self.bucket_request(
             bucket, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete},
@@ -68,7 +72,8 @@ class BucketClient(ServiceClient):
             raise from_response(resp, body)
         return body
 
-    def bucket_refresh(self, bucket, account=None, **kwargs):
+    def bucket_refresh(self, bucket, account=None, check_owner=False,
+                       **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
@@ -76,8 +81,10 @@ class BucketClient(ServiceClient):
         params = {}
         if account:
             params['account'] = account
+        if check_owner is not None:
+            params['check_owner'] = check_owner
         resp, body = self.bucket_request(
-            bucket, 'POST', 'refresh', **kwargs)
+            bucket, 'POST', 'refresh', params=params, **kwargs)
         if resp.status != 204:
             raise from_response(resp, body)
 

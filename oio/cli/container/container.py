@@ -203,6 +203,12 @@ class SetBucket(ShowOne):
             help='Name of the bucket to query.'
         )
         parser.add_argument(
+            '--check-owner',
+            default=False,
+            help='Check if the bucket owner is the account used',
+            action="store_true"
+        )
+        parser.add_argument(
             '--replicate', '--replication',
             metavar='yes/no',
             type=boolean_value,
@@ -218,14 +224,14 @@ class SetBucket(ShowOne):
             account = self.app.client_manager.account
         except CommandError:
             account = None
-        acct_client = self.app.client_manager.storage.account
+        bucket_client = self.app.client_manager.storage.bucket
         metadata = dict()
         if parsed_args.replicate is not None:
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
-        data = acct_client.bucket_update(parsed_args.bucket,
-                                         account=account,
-                                         metadata=metadata, to_delete=None,
-                                         reqid=reqid)
+        data = bucket_client.bucket_update(
+            parsed_args.bucket, account=account,
+            check_owner=parsed_args.check_owner,
+            metadata=metadata, to_delete=None, reqid=reqid)
 
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
@@ -440,6 +446,12 @@ class ShowBucket(ShowOne):
             'bucket',
             help='Name of the bucket to query.'
         )
+        parser.add_argument(
+            '--check-owner',
+            default=False,
+            help='Check if the bucket owner is the account used',
+            action="store_true"
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -450,9 +462,10 @@ class ShowBucket(ShowOne):
             account = self.app.client_manager.account
         except CommandError:
             account = None
-        acct_client = self.app.client_manager.storage.account
-        data = acct_client.bucket_show(parsed_args.bucket, account=account,
-                                       reqid=reqid)
+        bucket_client = self.app.client_manager.storage.bucket
+        data = bucket_client.bucket_show(
+            parsed_args.bucket, account=account,
+            check_owner=parsed_args.check_owner, reqid=reqid)
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
 
@@ -1005,6 +1018,12 @@ class RefreshBucket(Command):
             'bucket',
             help='Name of the bucket to refresh.'
         )
+        parser.add_argument(
+            '--check-owner',
+            default=False,
+            help='Check if the bucket owner is the account used',
+            action="store_true"
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -1015,9 +1034,10 @@ class RefreshBucket(Command):
             account = self.app.client_manager.account
         except CommandError:
             account = None
-        acct_client = self.app.client_manager.storage.account
-        acct_client.bucket_refresh(parsed_args.bucket, account=account,
-                                   reqid=reqid)
+        bucket_client = self.app.client_manager.storage.bucket
+        bucket_client.bucket_refresh(parsed_args.bucket, account=account,
+                                     check_owner=parsed_args.check_owner,
+                                     reqid=reqid)
 
 
 class RefreshContainer(ContainerCommandMixin, Command):

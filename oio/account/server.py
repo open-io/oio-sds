@@ -22,7 +22,7 @@ from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.common.configuration import load_namespace_conf
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import boolean_value, int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import parse_conn_str
@@ -959,6 +959,9 @@ class Account(WerkzeugApp):
         """
         bname = self._get_item_id(req, what='bucket')
         account = req.args.get('account')
+        check_owner = boolean_value(req.args.get('check_owner'), None)
+        if check_owner is not None:
+            kwargs['check_owner'] = check_owner
         raw = self.backend.get_bucket_info(bname, account=account, **kwargs)
         if raw is not None:
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
@@ -1016,6 +1019,9 @@ class Account(WerkzeugApp):
         """
         bname = self._get_item_id(req, what='bucket')
         account = req.args.get('account')
+        check_owner = boolean_value(req.args.get('check_owner'), None)
+        if check_owner is not None:
+            kwargs['check_owner'] = check_owner
         decoded = json.loads(req.get_data())
         metadata = decoded.get('metadata')
         to_delete = decoded.get('to_delete')
@@ -1058,6 +1064,9 @@ class Account(WerkzeugApp):
         """
         bucket_name = self._get_item_id(req, what='bucket')
         account = req.args.get('account')
+        check_owner = boolean_value(req.args.get('check_owner'), None)
+        if check_owner is not None:
+            kwargs['check_owner'] = check_owner
         self.backend.refresh_bucket(bucket_name, account=account, **kwargs)
         return Response(status=204)
 

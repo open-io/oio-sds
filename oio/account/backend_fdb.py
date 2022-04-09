@@ -1254,27 +1254,23 @@ class AccountBackendFdb(object):
             (BUCKETS_FIELD, region)), -1)
 
     @catch_service_errors
-    def get_bucket_info(self, bname, account=None, **kwargs):
+    def get_bucket_info(self, bname, **kwargs):
         """
         Get all available information about a bucket.
         """
-        return self._bucket_info(self.db, bname, account=account)
+        return self._bucket_info(self.db, bname, **kwargs)
 
     @fdb.transactional
-    def _bucket_info(self, tr, bname, account=None):
+    def _bucket_info(self, tr, bname, **kwargs):
         """
         [transactional] Get all available information about a bucket.
         """
-        if not account:
-            try:
-                account = self._get_bucket_owner(tr, bname)
-            except NotFound as exc:
-                raise BadRequest(
-                    f"Missing account param or an owner: {exc}") from exc
+        tr = tr.snapshot
+        account_id = self._get_bucket_account(tr, bname, **kwargs)
 
-        bucket_space = self.bucket_space[account][bname]
+        bucket_space = self.bucket_space[account_id][bname]
         bucket_range = bucket_space.range()
-        iterator = tr.snapshot.get_range(
+        iterator = tr.get_range(
             bucket_range.start, bucket_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(iterator, unpack=bucket_space.unpack)
@@ -1514,24 +1510,19 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def update_bucket_metadata(self, bname, metadata, to_delete=None,
-                               account=None, **kwargs):
+                               **kwargs):
         """
         Update (or delete) bucket metadata.
 
         :param metadata: dict of entries to set (or update)
         :param to_delete: iterable of keys to delete
         """
-        if not account:
-            try:
-                account = self._get_bucket_owner(self.db, bname)
-            except NotFound as exc:
-                raise BadRequest(
-                    f"Missing account param or an owner: {exc}") from exc
+        account_id = self._get_bucket_account(self.db, bname, **kwargs)
 
-        self._manage_metadata(self.db, self.bucket_space[account], bname,
+        self._manage_metadata(self.db, self.bucket_space[account_id], bname,
                               metadata, to_delete)
 
-        info = self._multi_get(self.db, self.bucket_space[account], bname)
+        info = self._multi_get(self.db, self.bucket_space[account_id], bname)
         if not info:
             return None
 
@@ -1539,30 +1530,17 @@ class AccountBackendFdb(object):
         return info
 
     @catch_service_errors
-    def refresh_bucket(self, bucket_name, account=None, **kwargs):
+    def refresh_bucket(self, bucket_name, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
         """
-        if not account:
-            try:
-                account = self._get_bucket_owner(self.db, bucket_name)
-            except NotFound as exc:
-                raise BadRequest(
-                    f"Missing account param or an owner: {exc}") from exc
-
         batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
         marker = None
-        account_id = self._val_element(self.db, self.bucket_db_space,
-                                       bucket_name, 'account')
-        if account_id is None:
-            return
-
-        account_id = account_id.decode('utf-8')
-
         tr = self.db.create_transaction()
         # Loop to replay transaction in case of failure
         while True:
+            account_id = self._get_bucket_account(tr, bucket_name, **kwargs)
             try:
                 self._reset_bucket_counters(tr, account_id, bucket_name)
                 for sharded in [False, True]:
@@ -1775,6 +1753,22 @@ class AccountBackendFdb(object):
             raise NotFound('No owner')
 
         return current_account.decode('utf-8')
+
+    @fdb.transactional
+    def _get_bucket_account(self, tr, bucket, account=None, check_owner=False,
+                            **kwargs):
+        if not check_owner and account:
+            return account
+        try:
+            owner = self._get_bucket_owner(tr, bucket)
+        except NotFound as exc:
+            if check_owner:
+                raise Forbidden(f'No owner found: {exc}') from exc
+            raise BadRequest(
+                f'Missing account param or an owner: {exc}') from exc
+        if account and account != owner:
+            raise Forbidden('Bucket reserved by another owner')
+        return owner
 
     @fdb.transactional
     def _is_element(self, tr, space, key):
