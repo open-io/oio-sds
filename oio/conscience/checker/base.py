@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -52,12 +53,12 @@ class BaseChecker(object):
         """Configuration handle"""
         pass
 
-    def service_status(self):
+    def service_status(self, reqid=None):
         """Do the check and set `last_result` accordingly"""
         result = False
         try:
             with Timeout(self.timeout):
-                result = self._check()
+                result = self._check(reqid=reqid)
         except Timeout as err:
             self.logger.warn('check timed out (%s)', err)
         except Exception as err:
@@ -84,6 +85,6 @@ class BaseChecker(object):
                 self.last_result = True
         return self.last_result
 
-    def _check(self):
+    def _check(self, reqid=None):
         """Actually do the service check"""
         return False

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +21,6 @@ from oio.common.easy_value import float_value
 from oio.common.green import OioTimeout, Timeout
 from oio.common.http_urllib3 import urllibexc
 from oio.common.json import json
-from oio.common.utils import request_id
 from oio.conscience.stats.base import BaseStat
 
 
@@ -76,14 +76,13 @@ class HttpStat(BaseStat):
             res['tag.uuid'] = uuid
         return res
 
-    def get_stats(self):
+    def get_stats(self, reqid=None):
         result = {}
         resp = None
         try:
             # We have troubles identifying connections that have been closed
             # on the remote side but not on the local side, thus we
-            # explicitely require the connection to be closed.
-            reqid = request_id('stat-')
+            # explicitly require the connection to be closed.
             try:
                 with OioTimeout(self.timeout):
                     resp = self.agent.pool_manager.request(

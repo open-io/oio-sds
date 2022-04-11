@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,8 +27,8 @@ class ProxyStat(HttpStat):
         self.stat_conf['path'] = '/v3.0/status'
         super(ProxyStat, self).configure()
 
-    def get_stats(self):
-        stats = super(ProxyStat, self).get_stats()
+    def get_stats(self, reqid=None):
+        stats = super(ProxyStat, self).get_stats(reqid=reqid)
         # Deal with the legacy format
         for key, val in stats.items():
             if key.endswith(' ='):

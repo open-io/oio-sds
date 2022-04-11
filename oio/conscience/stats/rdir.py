@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,8 +23,8 @@ class RdirStat(HttpStat):
         'stat.service_id': 'tag.service_id'
     }
 
-    def get_stats(self):
-        stats = super(RdirStat, self).get_stats()
+    def get_stats(self, reqid=None):
+        stats = super(RdirStat, self).get_stats(reqid=reqid)
         for old_key, new_key in self.renamed_keys.items():
             value = stats.pop(old_key, None)
             if value is not None:

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +17,6 @@
 from oio.common import exceptions as exc
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import urllibexc
-from oio.common.utils import request_id
 from oio.conscience.checker.base import BaseChecker
 
 
@@ -35,12 +35,12 @@ class HttpChecker(BaseChecker):
                                   '' if self.path.startswith('/') else '/',
                                   self.path)
 
-    def _check(self):
+    def _check(self, reqid=None):
         resp = None
         try:
             # We have clues that the connection will be reused quickly to get
-            # stats, thus we do not explicitely require its closure.
-            hdrs = {REQID_HEADER: request_id('chk-')}
+            # stats, thus we do not explicitly require its closure.
+            hdrs = {REQID_HEADER: reqid}
             resp = self.agent.pool_manager.request("GET", self.url,
                                                    headers=hdrs)
             if resp.status == 200:

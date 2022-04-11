@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,7 +49,7 @@ class VolumeStat(BaseStat):
         except OSError:
             self.logger.exception("Failed to load %s", path)
 
-    def get_stats(self):
+    def get_stats(self, reqid=None):
         if not self.__class__.oio_sys_space_idle:
             self._load_lib()
         if not self.__class__.oio_sys_space_idle:

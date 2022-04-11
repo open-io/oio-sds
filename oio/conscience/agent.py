@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,6 @@ import re
 import os
 import glob
 
-from six import iteritems
 import pkg_resources
 
 from oio.common.daemon import Daemon
@@ -32,6 +31,7 @@ from oio.common.logger import get_logger
 from oio.common.client import ProxyClient
 from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException
+from oio.common.utils import request_id
 
 
 def load_modules(group_name):
@@ -59,17 +59,19 @@ class ServiceWatcher(object):
         self.rise = int_value(self._load_item_config('rise'), 1)
         self.fall = int_value(self._load_item_config('fall'), 1)
         self.check_interval = float_value(
-                self._load_item_config('check_interval'), 1)
+            self._load_item_config('check_interval'), 1)
         self.deregister_on_exit = true_value(
-                self._load_item_config('deregister_on_exit', False))
+            self._load_item_config('deregister_on_exit', False))
 
         self.logger = get_logger(self.conf)
         self.pool_manager = get_pool_manager()
         self.cs = ConscienceClient(self.conf, pool_manager=self.pool_manager,
                                    logger=self.logger)
-        # FIXME: explain that
-        self.client = ProxyClient(self.conf, pool_manager=self.pool_manager,
-                                  no_ns_in_url=True, logger=self.logger)
+        # Pre-configured generic client to oio-proxy,
+        # to be used by specialized stats getters.
+        self.proxy_client = ProxyClient(self.conf,
+                                        pool_manager=self.pool_manager,
+                                        no_ns_in_url=True, logger=self.logger)
         self.last_status = False
         self.status = False
         self.failed = False
@@ -81,7 +83,7 @@ class ServiceWatcher(object):
             'tags': {}}
         if self.service.get('slots', None):
             self.service_definition['tags']['tag.slots'] = \
-                    ','.join(self.service['slots'])
+                ','.join(self.service['slots'])
         for name, tag in (('location', 'tag.loc'),
                           ('service_id', 'tag.service_id'),
                           ('tls', 'tag.tls')):
@@ -112,34 +114,36 @@ class ServiceWatcher(object):
                 self.last_status = False
                 self.register()
             except Exception as e:
-                self.logger.warn('Failed to register service: %s', e)
+                self.logger.warning('Failed to register service: %s', e)
         self.running = False
 
-    def check(self):
+    def check(self, reqid=None):
         """Perform the registered checks on the service until any of
         them fails of the end of the list is reached."""
         self.status = True
         for service_check in (x for x in self.service_checks if self.running):
-            if not service_check.service_status():
+            if not service_check.service_status(reqid=reqid):
                 self.status = False
                 return
 
-    def get_stats(self):
+    def get_stats(self, reqid=None):
         """Update service definition with all configured stats"""
         if not self.status:
             return
         collectors = (x for x in self.service_stats if self.running)
         try:
             for stat in collectors:
-                stats = stat.get_stats()
+                stats = stat.get_stats(reqid=reqid)
                 self.service_definition['tags'].update(stats)
         except Exception as ex:
-            self.logger.debug("get_stats error: %s, skipping %s", ex,
-                              [type(col).__name__ for col in collectors]
-                              or "<nothing>")
+            self.logger.debug(
+                "get_stats error: %s, skipping %s (reqid=%s)",
+                ex,
+                [type(col).__name__ for col in collectors] or "<nothing>",
+                reqid)
             self.status = False
 
-    def register(self):
+    def register(self, reqid=None):
         # only accept a final zero/down-registration when exiting
         if not self.running and self.status:
             return
@@ -149,28 +153,30 @@ class ServiceWatcher(object):
             if self.status:
                 self.logger.info('service "%s" is now up', self.name)
             else:
-                self.logger.warn('service "%s" is now down', self.name)
+                self.logger.warning('service "%s" is now down', self.name)
             self.last_status = self.status
 
         # Use a boolean so we can easily convert it to a number in conscience
         self.service_definition['tags']['tag.up'] = self.status
         try:
-            self.cs.register(self.service_definition, retries=False)
+            self.cs.register(self.service_definition,
+                             retries=False, reqid=reqid)
         except OioException as rqe:
-            self.logger.warn("Failed to register service %s: %s",
-                             self.service_definition["addr"], rqe)
+            self.logger.warning("Failed to register service %s: %s",
+                                self.service_definition["addr"], rqe)
 
     def watch(self):
         try:
             while self.running:
-                self.check()
-                self.get_stats()
-                self.register()
+                reqid = request_id("csagent-")
+                self.check(reqid=reqid)
+                self.get_stats(reqid=reqid)
+                self.register(reqid=reqid)
                 sleep(self.check_interval)
         except Exception as e:
-            self.logger.warn('ERROR in watcher "%s"', e)
+            self.logger.warning('ERROR in watcher "%s"', e)
             self.failed = True
-            raise e
+            raise
         finally:
             self.logger.info('watcher "%s" stopped', self.name)
 
@@ -235,22 +241,22 @@ class ConscienceAgent(Daemon):
                 for w in self.watchers:
                     if w.failed:
                         self.watchers.remove(w)
-                        self.logger.warn('restart watcher "%s"', w.name)
+                        self.logger.warning('restart watcher "%s"', w.name)
                         new_w = ServiceWatcher(self.conf, w.service)
                         self.watchers.append(new_w)
                         pool.spawn(new_w.start)
 
-        except Exception as e:
-            self.logger.error('ERROR in main loop %s', e)
-            raise e
+        except Exception as err:
+            self.logger.error('ERROR in main loop %s', err)
+            raise
         finally:
-            self.logger.warn('conscience agent: stopping')
+            self.logger.warning('conscience agent: stopping')
             self.running = False
             self.stop_watchers()
 
     def init_watchers(self, services):
         watchers = []
-        for _name, conf in iteritems(services):
+        for _name, conf in services.items():
             try:
                 watchers.append(ServiceWatcher(self.conf, conf))
             except Exception:

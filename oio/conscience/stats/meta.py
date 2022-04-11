@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,9 +34,9 @@ class MetaStat(HttpStat):
                                 self.stat_conf.get('port'))
         self.params = {'id': service_id}
 
-    def get_stats(self):
-        resp, _body = self.agent.client._request(
-            'POST', self.uri, params=self.params, retries=False)
+    def get_stats(self, reqid=None):
+        resp, _body = self.agent.proxy_client._request(
+            'POST', self.uri, params=self.params, reqid=reqid, retries=False)
         stats = self._parse_stats_lines(resp.data)
         output = dict()
         for key in stats:

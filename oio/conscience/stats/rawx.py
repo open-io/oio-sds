@@ -54,8 +54,8 @@ class RawxStat(HttpStat):
         avreqtime = delta_t_req / delta_req
         return avreqtime
 
-    def get_stats(self):
-        stats = super(RawxStat, self).get_stats()
+    def get_stats(self, reqid=None):
+        stats = super(RawxStat, self).get_stats(reqid=reqid)
         if not stats:
             return stats
         self._cur_http_stats = stats

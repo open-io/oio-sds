@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,7 +52,7 @@ class BeanstalkdStat(BaseStat):
             self._beanstalkd = Beanstalk(host, port)
         return self._beanstalkd
 
-    def get_stats(self):
+    def get_stats(self, reqid=None):
         stats = dict()
         try:
             all_stats = self.beanstalkd.stats()
