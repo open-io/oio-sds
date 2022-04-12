@@ -4495,3 +4495,81 @@ end:
 	}
 	return err;
 }
+
+void
+m2db_create_triggers(struct sqlx_sqlite3_s *sq3)
+{
+	char sql_legal_hold_delete[1500];
+	snprintf(sql_legal_hold_delete, sizeof(sql_legal_hold_delete), \
+	"create trigger if not exists \
+	trigger_object_lock_delete before delete \
+	on aliases begin select case when (not exists (select 1 from admin where \
+	k='sys.m2.sharding.state' and cast(v as integer)=%d)) and exists \
+	(select 1 from aliases where alias = old.alias and version = old.version \
+	and cast(old.content as text)!= 'DELETED' ) and \
+	(select 1 from properties pr where pr.alias = old.alias and \
+	pr.key = 'x-object-sysmeta-s3api-legal-hold-status' \
+	and cast(pr.value as TEXT) = 'ON') then raise (abort,'locked hold on \
+	object delete version') end;end;", NEW_SHARD_STATE_CLEANING_UP);
+
+
+	char sql_retain_until_delete[1500];
+	snprintf(sql_retain_until_delete, sizeof(sql_retain_until_delete), \
+	"create trigger if not exists \
+	trigger_object_retain_until_delete before delete \
+	on aliases begin select case when (not exists (select 1 from admin where \
+	k='sys.m2.sharding.state' and cast(v as integer)=%d )) and (\
+	(not exists (select 1 from properties pr where pr.version = old.version \
+	and pr.alias = old.alias \
+	and pr.key ='x-object-sysmeta-s3api-retention-bypass-governance' and \
+	cast(pr.value as TEXT)='True')) and exists \
+	(select 1 from aliases where alias = old.alias and version = old.version\
+	and cast(old.content as text)!= 'DELETED' ) and (select 1 from properties pr where pr.version = old.version and\
+	pr.alias = old.alias and \
+	pr.key ='x-object-sysmeta-s3api-retention-retainuntildate' and (\
+	(strftime('%%Y-%%m-%%dT%%H-%%M-%%SZ','now') < cast(pr.value as TEXT))) \
+	or ( not exists (select 1 from properties pr where \
+	pr.version = old.version and pr.alias = old.alias \
+	and cast(old.content as text)!= 'DELETED' and pr.key ='x-object-sysmeta-s3api-retention-retainuntildate') and \
+	exists ( select 1 from properties pr2 where \
+	pr2.key = 'x-object-sysmeta-s3api-retention-default-retainuntildate' and \
+	(cast(strftime('%%Y-%%m-%%dT%%H-%%M-%%SZ','now') as INTEGER) < \
+	( pr2.value )))) \
+	)) then raise (abort,'locked retention object on delete version') end;end;",
+	NEW_SHARD_STATE_CLEANING_UP);
+
+	int rc = SQLITE_OK;
+
+	rc = sqlx_exec(sq3->db, sql_legal_hold_delete);
+	if (rc != SQLITE_OK) {
+		GRID_WARN("Failed to setup trigger_object_lock_delete");
+		return;
+	}
+
+	rc = sqlx_exec(sq3->db, sql_retain_until_delete);
+	if (rc != SQLITE_OK) {
+		GRID_WARN("Failed to setup trigger_object_retain_until_delete");
+		return;
+	}
+}
+
+void
+m2db_drop_triggers(struct sqlx_sqlite3_s *sq3)
+{
+	int rc = SQLITE_OK;
+
+	const gchar *sql_drop_trigger = "DROP TRIGGER IF EXISTS trigger_object_lock_delete;";
+	rc = sqlx_exec(sq3->db, sql_drop_trigger);
+	if (rc != SQLITE_OK) {
+		GRID_WARN("Failed to drop trigger_object_lock_delete");
+		return;
+	}
+
+	sql_drop_trigger = "DROP TRIGGER IF EXISTS \
+		trigger_object_retain_until_delete;";
+	rc = sqlx_exec(sq3->db, sql_drop_trigger);
+	if (rc != SQLITE_OK) {
+		GRID_WARN("Failed to drop trigger_object_retain_until_delete");
+		return;
+	}
+}

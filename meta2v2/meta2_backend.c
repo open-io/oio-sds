@@ -1196,6 +1196,11 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		if (params->properties) {
 			for (gchar **p=params->properties; *p && *(p+1); p+=2) {
 				db_properties_add(db_properties, *p, *(p+1));
+				// During bucket creation
+				if (g_strcmp0(*p, "user.X-Container-Sysmeta-S3Api-Bucket-Object-Lock-Enabled") == 0)
+				{
+					m2db_create_triggers(sq3);
+				}
 			}
 		}
 		g_string_append_static(gs, ",\"data\":{");
