@@ -122,6 +122,11 @@ workflow:
     application: oio-sds
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.proj.mirror_to_github
+          operator: eq
+          value: "true"
 
   build:
     pipeline: oio-sds-build
