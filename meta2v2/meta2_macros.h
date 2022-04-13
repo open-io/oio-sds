@@ -145,6 +145,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_DELETE_EXCEEDING_VERSIONS M2V2_ADMIN_VERSIONING_POLICY ".delete_exceeding"
 # endif
 
+#ifndef M2V2_USER_OBJECT_LOCK_ENABLED
+#define M2V2_USER_OBJECT_LOCK_ENABLED M2V2_ADMIN_PREFIX_USER "X-Container-Sysmeta-S3Api-Bucket-Object-Lock-Enabled"
+#endif
+
 # ifndef META2_INIT_FLAG
 # define META2_INIT_FLAG M2V2_ADMIN_PREFIX_SYS "init"
 # endif
@@ -153,6 +157,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define META2_EVENTS_PREFIX "storage"
 # endif
 
+#define OBJ_PROP_LEGAL_HOLD_STATUS 	"x-object-sysmeta-s3api-legal-hold-status"
+#define OBJ_PROP_BYPASS_GOVERNANCE 	"x-object-sysmeta-s3api-retention-bypass-governance"
+#define OBJ_PROP_RETAIN_UNTILDATE 	"x-object-sysmeta-s3api-retention-retainuntildate"
+#define OBJ_PROP_RETENTION_MODE     "x-object-sysmeta-s3api-retention-mode"
+
+#define OBJ_LOCK_ABORT_PATTERN      "object locked:"
 /* -------------------------------------------------------------------------- */
 
 # define NAME_MSGNAME_M2V2_CREATE           "M2_CREATE"

@@ -4500,43 +4500,47 @@ void
 m2db_create_triggers(struct sqlx_sqlite3_s *sq3)
 {
 	char sql_legal_hold_delete[1500];
-	snprintf(sql_legal_hold_delete, sizeof(sql_legal_hold_delete), \
-	"create trigger if not exists \
-	trigger_object_lock_delete before delete \
-	on aliases begin select case when (not exists (select 1 from admin where \
-	k='sys.m2.sharding.state' and cast(v as integer)=%d)) and exists \
-	(select 1 from aliases where alias = old.alias and version = old.version \
-	and cast(old.content as text)!= 'DELETED' ) and \
-	(select 1 from properties pr where pr.alias = old.alias and \
-	pr.key = 'x-object-sysmeta-s3api-legal-hold-status' \
-	and cast(pr.value as TEXT) = 'ON') then raise (abort,'locked hold on \
-	object delete version') end;end;", NEW_SHARD_STATE_CLEANING_UP);
+	snprintf(sql_legal_hold_delete, sizeof(sql_legal_hold_delete),\
+	"CREATE TRIGGER IF NOT EXISTS trigger_object_lock_delete BEFORE\
+	DELETE ON aliases BEGIN\
+		SELECT CASE WHEN (\
+			NOT EXISTS (SELECT 1 FROM admin\
+				WHERE k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=%d))\
+			AND	EXISTS (SELECT 1 FROM aliases WHERE alias=old.alias AND\
+				version=old.version AND CAST(old.content AS TEXT)!='DELETED')\
+				AND (SELECT 1 FROM properties pr WHERE pr.alias=old.alias AND\
+					pr.key='" OBJ_PROP_LEGAL_HOLD_STATUS "'\
+				AND CAST(pr.value AS TEXT) = 'ON'\
+		) THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN " deletion prevented by legal hold') END;\
+	END;", NEW_SHARD_STATE_CLEANING_UP);
 
 
 	char sql_retain_until_delete[1500];
-	snprintf(sql_retain_until_delete, sizeof(sql_retain_until_delete), \
-	"create trigger if not exists \
-	trigger_object_retain_until_delete before delete \
-	on aliases begin select case when (not exists (select 1 from admin where \
-	k='sys.m2.sharding.state' and cast(v as integer)=%d )) and (\
-	(not exists (select 1 from properties pr where pr.version = old.version \
-	and pr.alias = old.alias \
-	and pr.key ='x-object-sysmeta-s3api-retention-bypass-governance' and \
-	cast(pr.value as TEXT)='True')) and exists \
-	(select 1 from aliases where alias = old.alias and version = old.version\
-	and cast(old.content as text)!= 'DELETED' ) and (select 1 from properties pr where pr.version = old.version and\
-	pr.alias = old.alias and \
-	pr.key ='x-object-sysmeta-s3api-retention-retainuntildate' and (\
-	(strftime('%%Y-%%m-%%dT%%H-%%M-%%SZ','now') < cast(pr.value as TEXT))) \
-	or ( not exists (select 1 from properties pr where \
-	pr.version = old.version and pr.alias = old.alias \
-	and cast(old.content as text)!= 'DELETED' and pr.key ='x-object-sysmeta-s3api-retention-retainuntildate') and \
-	exists ( select 1 from properties pr2 where \
-	pr2.key = 'x-object-sysmeta-s3api-retention-default-retainuntildate' and \
-	(cast(strftime('%%Y-%%m-%%dT%%H-%%M-%%SZ','now') as INTEGER) < \
-	( pr2.value )))) \
-	)) then raise (abort,'locked retention object on delete version') end;end;",
-	NEW_SHARD_STATE_CLEANING_UP);
+	snprintf(sql_retain_until_delete, sizeof(sql_retain_until_delete),\
+	"CREATE TRIGGER IF NOT EXISTS trigger_object_retain_until_delete BEFORE\
+	DELETE ON aliases BEGIN\
+		SELECT CASE WHEN (NOT EXISTS (SELECT 1 FROM admin WHERE\
+		k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=%d)) AND (\
+			(NOT EXISTS (SELECT 1 FROM properties pr WHERE\
+				pr.version=old.version AND pr.alias=old.alias\
+				AND pr.key='" OBJ_PROP_BYPASS_GOVERNANCE "'\
+				AND CAST(pr.value AS TEXT)='True' AND \
+				(SELECT 1 FROM  properties pr WHERE \
+				pr.version=old.version AND pr.alias=old.alias\
+				AND pr.key='" OBJ_PROP_RETENTION_MODE "' AND CAST(pr.value AS TEXT)='GOVERNANCE')\
+				)\
+			) AND EXISTS \
+				(SELECT 1 FROM aliases WHERE alias=old.alias AND \
+					version=old.version	AND CAST(old.content AS TEXT)!=\
+						'DELETED')\
+				AND (SELECT 1 FROM properties pr WHERE pr.version=old.version\
+					AND pr.alias=old.alias AND\
+					pr.key='" OBJ_PROP_RETAIN_UNTILDATE "'\
+					AND ((strftime('%%Y-%%m-%%dT%%H:%%M:%%SZ','now')<\
+						CAST(pr.value AS TEXT)))\
+		)\
+	) THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN " deletion prevented by retain-until-date') END;\
+	END;", NEW_SHARD_STATE_CLEANING_UP);
 
 	int rc = SQLITE_OK;
 

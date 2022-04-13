@@ -246,7 +246,7 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 	if (err->code == CODE_CONTENT_DRAINED)
 		return _reply_gone_error(args, err);
 	if (err->code == SQLITE_CONSTRAINT) {
-		if (strstr(err->message, "locked") != NULL) {
+		if (strstr(err->message, OBJ_LOCK_ABORT_PATTERN) != NULL) {
 			// For triggers
 			return	_reply_forbidden_error(args, err);
 		}
