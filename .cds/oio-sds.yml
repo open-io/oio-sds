@@ -158,6 +158,10 @@ retention_policy:
     return run_days_before < 365
   end
 
+integrations:
+  artifactory-pu-objectstorage-oio-sds:
+    type: artifact_manager
+
 notifications:
   - type: vcs
     settings:

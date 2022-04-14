@@ -30,6 +30,7 @@ jobs:
           - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
           - coverage xml --omit="/usr/lib/python3*" --ignore-errors -o coverage-py.xml
           - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report-py
+          - rm -f coverage-report-py.txt
 
       - optional: true
         coverage:
@@ -48,14 +49,24 @@ jobs:
       - name: Create coverage archive
         script:
           - cd {{.cds.workspace}}
-          - tar -czf coverage-report.tar.gz coverage-report-c coverage-report-py
+          - mkdir coverage
+          - mv coverage-report-c coverage-report-py coverage/
+          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a></body></html>' > coverage/index.html
+          - tar -czf coverage-report.tar.gz coverage
           - worker upload --tag='{{.cds.version}}' coverage-report.tar.gz
 
-      - optional: true
+      - name: Publish code coverage scores on CDS
+        optional: true
         coverage:
           format: lcov
           minimum: "70"
           path: '{{.cds.workspace}}/cmake_coverage.all'
+
+      - name: Publish code coverage reports on Artifactory
+        optional: true
+        OVH_Serve_Static_Files:
+          destination: coverage
+          source: coverage
 
     requirements:
         - model: ubuntu-focal
