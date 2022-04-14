@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import time
 from tests.utils import BaseTestCase, random_str
 from oio.common.exceptions import NoSuchObject
 from oio.common.easy_value import true_value
+from oio.common.utils import depaginate
 
 
 class TestContentVersioning(BaseTestCase):
@@ -47,14 +48,47 @@ class TestContentVersioning(BaseTestCase):
 
     def test_list_versions(self):
         self.api.object_create(self.account, self.container,
-                               obj_name="versioned", data="content0")
+                               obj_name="versioned0", data="content0")
         self.api.object_create(self.account, self.container,
-                               obj_name="versioned", data="content1")
-        listing = self.api.object_list(self.account, self.container,
-                                       versions=True)
-        objects = listing['objects']
-        self.assertEqual(2, len(objects))
-        self.assertNotEqual(objects[0]['version'], objects[1]['version'])
+                               obj_name="versioned1", data="content1")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned2", data="content2")
+        self.api.object_delete(self.account, self.container, "versioned1")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned0", data="content0")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned2", data="content2")
+        self.api.object_delete(self.account, self.container, "versioned2")
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned2", data="content2")
+        expected_objects = None
+        for page_size in (None, 7, 6, 5, 4, 3, 2, 1):
+            objects = depaginate(
+                self.api.object_list,
+                listing_key=lambda x: x['objects'],
+                marker_key=lambda x: x.get('next_marker'),
+                version_marker_key=lambda x: x.get('next_version_marker'),
+                truncated_key=lambda x: x['truncated'],
+                account=self.account,
+                container=self.container,
+                limit=page_size,
+                versions=True)
+            objects = list(objects)
+            if expected_objects is None:
+                expected_objects = objects
+                self.assertEqual(8, len(objects))
+                self.assertListEqual(
+                    [('versioned0', False, True), ('versioned0', False, False),
+                     ('versioned1', True, True), ('versioned1', False, False),
+                     ('versioned2', False, True), ('versioned2', True, False),
+                     ('versioned2', False, False), ('versioned2', False, False)
+                     ],
+                    [(obj['name'], obj['deleted'], obj['is_latest'])
+                     for obj in objects])
+                all_versions = [obj['version'] for obj in objects]
+                self.assertEqual(len(set(all_versions)), len(all_versions))
+            else:
+                self.assertListEqual(expected_objects, objects)
 
     def test_container_purge(self):
         # many contents

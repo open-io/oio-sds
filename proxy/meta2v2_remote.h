@@ -34,6 +34,7 @@ struct list_result_s
 	GSList *beans;
 	GTree *props;
 	gchar *next_marker;
+	gchar *next_version_marker;
 	gboolean truncated;
 };
 

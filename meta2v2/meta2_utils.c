@@ -1025,12 +1025,20 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 
 	if (lp->marker_start && g_strcmp0(lp->marker_start, lp->prefix) >= 0) {
 		lazy_and();
-		g_string_append_static (clause, " alias > ?");
-		g_ptr_array_add (params, g_variant_new_string (lp->marker_start));
+		if (lp->flag_allversion && lp->version_marker) {
+			g_string_append_static(clause,
+					" ((alias == ? AND version < ?) OR alias > ?)");
+			g_ptr_array_add(params, g_variant_new_string(lp->marker_start));
+			g_ptr_array_add(params, g_variant_new_string(lp->version_marker));
+			g_ptr_array_add(params, g_variant_new_string(lp->marker_start));
+		} else {
+			g_string_append_static(clause, " alias > ?");
+			g_ptr_array_add(params, g_variant_new_string (lp->marker_start));
+		}
 	} else if (lp->prefix) {
 		lazy_and();
-		g_string_append_static (clause, " alias >= ?");
-		g_ptr_array_add (params, g_variant_new_string (lp->prefix));
+		g_string_append_static(clause, " alias >= ?");
+		g_ptr_array_add(params, g_variant_new_string (lp->prefix));
 	}
 
 	if (lp->marker_end) {
@@ -1100,6 +1108,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 	gint64 count_aliases = 0;
 	// Last encountered alias, for pagination
 	gchar *last_alias_name = NULL;
+	gchar *last_alias_version = NULL;
 	struct list_params_s lp = *lp0;
 	gboolean done = FALSE;
 	GPtrArray *cur_aliases = NULL;
@@ -1125,8 +1134,12 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		if (lp.maxkeys > 0)
 			lp.maxkeys -= count_aliases;
 		count_aliases = 0;
-		if (last_alias_name)
+		if (last_alias_name) {
 			lp.marker_start = last_alias_name;
+			if (lp.flag_allversion && last_alias_version) {
+				lp.version_marker = last_alias_version;
+			}
+		}
 
 		// List the next items
 		GString *clause = g_string_sized_new(128);
@@ -1146,6 +1159,9 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			g_free(last_alias_name);
 			last_alias_name = g_strdup(
 				ALIASES_get_alias(cur_aliases->pdata[0])->str);
+			g_free(last_alias_version);
+			last_alias_version = g_strdup_printf("%"G_GINT64_FORMAT,
+					ALIASES_get_version(cur_aliases->pdata[0]));
 		}
 		for (guint i = cur_aliases->len; i > 0; i--) {
 			struct bean_ALIASES_s *alias = cur_aliases->pdata[i-1];
@@ -1187,6 +1203,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 label_end:
 	cleanup();
 	g_free(last_alias_name);
+	g_free(last_alias_version);
 	return err;
 }
 

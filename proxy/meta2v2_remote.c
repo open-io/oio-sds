@@ -90,6 +90,7 @@ m2v2_list_result_clean (struct list_result_s *p)
 	if (p->props) g_tree_destroy(p->props);
 	p->props = NULL;
 	oio_str_clean(&p->next_marker);
+	oio_str_clean(&p->next_version_marker);
 	p->truncated = FALSE;
 }
 
@@ -116,9 +117,12 @@ m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply)
 				NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
 		if (e)
 			g_clear_error(&e);
-		gchar *tok = metautils_message_extract_string_copy(reply,
+		gchar *marker = metautils_message_extract_string_copy(reply,
 				NAME_MSGKEY_NEXTMARKER);
-		oio_str_reuse(&out->next_marker, tok);
+		oio_str_reuse(&out->next_marker, marker);
+		gchar *version_marker = metautils_message_extract_string_copy(reply,
+				NAME_MSGKEY_NEXTVERSIONMARKER);
+		oio_str_reuse(&out->next_version_marker, version_marker);
 	}
 
 	if (g_tree_nnodes(out->props) == 0) {
@@ -369,6 +373,7 @@ _pack_list_params(MESSAGE msg, struct list_params_s *p)
 
 	metautils_message_add_field_str(msg, NAME_MSGKEY_PREFIX, p->prefix);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER, p->marker_start);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_VERSIONMARKER, p->version_marker);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER_END, p->marker_end);
 	if (p->maxkeys > 0)
 		metautils_message_add_field_strint64(msg, NAME_MSGKEY_MAX_KEYS, p->maxkeys);

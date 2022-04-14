@@ -564,6 +564,7 @@ class ObjectStorageApi(object):
                 self.object_list,
                 listing_key=lambda x: x['objects'],
                 marker_key=lambda x: x.get('next_marker'),
+                version_marker_key=lambda x: x.get('next_version_marker'),
                 truncated_key=lambda x: x['truncated'],
                 account=dst_account,
                 container=dst_container,
@@ -706,28 +707,27 @@ class ObjectStorageApi(object):
         elif maxvers == 0:
             maxvers = 1
 
-        truncated = True
-        marker = None
         last_object_name = None
-        versions = None
-        while truncated:
-            resp = self.object_list(account, container, versions=True,
-                                    marker=marker, **kwargs)
-            # FIXME `next_marker` is an object name.
-            # `object_list` can send twice the same version
-            # if there weren't all versions for the last object.
-            last_object_name = None
-            truncated = resp['truncated']
-            marker = resp.get('next_marker', None)
-            for obj in resp['objects']:
-                if obj['name'] != last_object_name:
-                    self._delete_exceeding_versions(
-                        account, container, last_object_name, versions,
-                        maxvers, **kwargs)
-                    last_object_name = obj['name']
-                    versions = list()
-                if not obj['deleted']:
-                    versions.append(obj['version'])
+        versions = []
+        objs = depaginate(
+            self.object_list,
+            listing_key=lambda x: x['objects'],
+            marker_key=lambda x: x.get('next_marker'),
+            version_marker_key=lambda x: x.get('next_version_marker'),
+            truncated_key=lambda x: x['truncated'],
+            account=account,
+            container=container,
+            versions=True,
+            **kwargs)
+        for obj in objs:
+            if obj['name'] != last_object_name:
+                self._delete_exceeding_versions(
+                    account, container, last_object_name, versions,
+                    maxvers, **kwargs)
+                last_object_name = obj['name']
+                versions.clear()
+            if not obj['deleted']:
+                versions.append(obj['version'])
         self._delete_exceeding_versions(
             account, container, last_object_name, versions, maxvers, **kwargs)
 
@@ -1018,9 +1018,9 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_list(self, account, container, limit=None, marker=None,
-                    delimiter=None, prefix=None, end_marker=None,
-                    properties=False, versions=False, deleted=False,
-                    **kwargs):
+                    version_marker=None, end_marker=None, prefix=None,
+                    delimiter=None, properties=False, versions=False,
+                    deleted=False, **kwargs):
         """
         Lists objects inside a container.
 
@@ -1039,9 +1039,9 @@ class ObjectStorageApi(object):
         """
         hdrs, resp_body = self.container.content_list(
             account, container, limit=limit, marker=marker,
-            end_marker=end_marker, prefix=prefix, delimiter=delimiter,
-            properties=properties, versions=versions, deleted=deleted,
-            **kwargs)
+            version_marker=version_marker, end_marker=end_marker,
+            prefix=prefix, delimiter=delimiter, properties=properties,
+            versions=versions, deleted=deleted, **kwargs)
 
         for obj in resp_body['objects']:
             try:
@@ -1056,15 +1056,26 @@ class ObjectStorageApi(object):
                 obj['mime_type'] = None
 
         if versions:
-            latest_by_name = dict()
+            previous_name = None
             for obj in resp_body['objects']:
-                ver = int(obj['version'])
-                latest = latest_by_name.get(obj['name'], {'version': '0'})
-                if ver > int(latest['version']):
-                    latest_by_name[obj['name']] = obj
-                obj['is_latest'] = False
-            for obj in latest_by_name.values():
-                obj['is_latest'] = True
+                if obj['name'] == previous_name:
+                    obj['is_latest'] = False
+                    continue
+                if (previous_name is None and marker and version_marker
+                        and marker == obj['name']):
+                    # FIXME(ADU): We could determine this in meta2 service
+                    _, sub = self.container.content_list(
+                        account, container, prefix=obj['name'], limit=1,
+                        deleted=True, **kwargs)
+                    if (sub['objects'] and
+                            sub['objects'][0]['name'] == obj['name'] and
+                            sub['objects'][0]['version'] == obj['version']):
+                        obj['is_latest'] = True
+                    else:
+                        obj['is_latest'] = False
+                else:
+                    obj['is_latest'] = True
+                previous_name = obj['name']
         else:
             for obj in resp_body['objects']:
                 obj['is_latest'] = True
@@ -1074,6 +1085,10 @@ class ObjectStorageApi(object):
         marker_header = HEADER_PREFIX + 'list-marker'
         if marker_header in hdrs:
             resp_body['next_marker'] = unquote(hdrs.get(marker_header))
+        version_marker_header = HEADER_PREFIX + 'list-version-marker'
+        if version_marker_header in hdrs:
+            resp_body['next_version_marker'] = unquote(hdrs.get(
+                version_marker_header))
         perfdata = kwargs.get('perfdata')
         if perfdata is not None:
             aggregate_cache_perfdata(perfdata)

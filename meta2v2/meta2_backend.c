@@ -1386,6 +1386,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
 		const gchar *current_marker_start = lp->marker_start;
+		const gchar *current_version_marker = lp->version_marker;
 		const gchar *current_marker_end = lp->marker_end;
 		if (oio_ext_is_shard_redirection()) {
 			gchar *shard_lower = NULL;
@@ -1404,6 +1405,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				if (*shard_lower && (!lp->marker_start
 						|| g_strcmp0(lp->marker_start, shard_lower) < 0)) {
 					lp->marker_start = g_strdup(shard_lower);
+					lp->version_marker = NULL;
 				}
 				if (*shard_upper && (!lp->marker_end
 						|| g_strcmp0(lp->marker_end, shard_upper) >= 0)) {
@@ -1441,6 +1443,10 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (lp->marker_start != current_marker_start) {
 			g_free((gchar *)lp->marker_start);
 			lp->marker_start = current_marker_start;
+		}
+		if (lp->version_marker != current_version_marker) {
+			g_free((gchar *)lp->version_marker);
+			lp->version_marker = current_version_marker;
 		}
 		if (lp->marker_end != current_marker_end) {
 			g_free((gchar *)lp->marker_end);

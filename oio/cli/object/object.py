@@ -574,11 +574,13 @@ class ListObject(ContainerCommandMixin, Lister):
             help='Number of attempts for listing requests'
         )
         parser.add_argument(
-            '--limit',
-            metavar='<limit>',
+            '--page-size', '--limit',
+            metavar='<size>',
+            dest='limit',
             type=int,
             default=1000,
-            help='Limit the number of objects returned (1000 by default)'
+            help='Limit the number of objects returned per page '
+                 '(1000 by default)'
         )
         parser.add_argument(
             '--no-paging', '--full',
@@ -624,6 +626,7 @@ class ListObject(ContainerCommandMixin, Lister):
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
                     marker_key=lambda x: x.get('next_marker'),
+                    version_marker_key=lambda x: x.get('next_version_marker'),
                     truncated_key=lambda x: x['truncated'],
                     account=account, container=container_marker,
                     marker=marker, **kwargs):
@@ -659,6 +662,7 @@ class ListObject(ContainerCommandMixin, Lister):
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
                     marker_key=lambda x: x.get('next_marker'),
+                    version_marker_key=lambda x: x.get('next_version_marker'),
                     truncated_key=lambda x: x['truncated'],
                     account=account, container=container, **kwargs):
                 object_list.append(i)
@@ -681,7 +685,7 @@ class ListObject(ContainerCommandMixin, Lister):
             kwargs['end_marker'] = parsed_args.end_marker
         if parsed_args.delimiter:
             kwargs['delimiter'] = parsed_args.delimiter
-        if parsed_args.limit and not parsed_args.full_listing:
+        if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
         if parsed_args.long_listing:
             kwargs['properties'] = True
@@ -705,6 +709,7 @@ class ListObject(ContainerCommandMixin, Lister):
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
                     marker_key=lambda x: x.get('next_marker'),
+                    version_marker_key=lambda x: x.get('next_version_marker'),
                     truncated_key=lambda x: x['truncated'],
                     account=account, container=container,
                     cid=cid, **kwargs)

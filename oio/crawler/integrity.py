@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -755,6 +755,7 @@ class Checker(object):
             errors.append('Missing from account listing')
 
         marker = None
+        version_marker = None
         results = []
         ct_meta = dict()
         extra_args = dict()
@@ -767,8 +768,8 @@ class Checker(object):
         while True:
             try:
                 resp = self.api.object_list(
-                    account, container, marker=marker, versions=True,
-                    **extra_args)
+                    account, container, marker=marker,
+                    version_marker=version_marker, versions=True, **extra_args)
             except exc.NoSuchContainer as err:
                 self.container_not_found += 1
                 errors.append('Not found: %s' % (err, ))
@@ -781,6 +782,7 @@ class Checker(object):
             truncated = resp.get('truncated', False)
             if truncated:
                 marker = resp['next_marker']
+                version_marker = resp.get('next_version_marker')
 
             if resp['objects']:
                 # safeguard, probably useless

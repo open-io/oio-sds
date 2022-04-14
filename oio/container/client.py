@@ -548,8 +548,8 @@ class ContainerClient(ProxyClient):
 
     @extract_reference_params
     def content_list(self, account=None, reference=None, limit=None,
-                     marker=None, end_marker=None, prefix=None,
-                     delimiter=None, properties=False,
+                     marker=None, version_marker=None, end_marker=None,
+                     prefix=None, delimiter=None, properties=False,
                      cid=None, versions=False, deleted=False,
                      params=None, **kwargs):
         """
@@ -565,6 +565,8 @@ class ContainerClient(ProxyClient):
         # As of 4.0.0.a3, to make it false, the 'all' parameter must be absent
         if versions:
             params['all'] = '1'
+            if marker and version_marker:
+                params['version_marker'] = version_marker
         if deleted:
             params['deleted'] = 1
         if kwargs.get('local'):

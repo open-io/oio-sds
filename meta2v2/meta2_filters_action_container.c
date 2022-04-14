@@ -257,14 +257,17 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	gboolean truncated = FALSE;
 	char *next_marker = NULL;
+	char *next_version_marker = NULL;
 	gchar **properties = NULL;
 
 	if (lp->maxkeys <= 0)
 		lp->maxkeys = meta2_batch_maxlen;
 
-	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s end:%s max:%"G_GINT64_FORMAT,
+	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s version_marker:%s end:%s"
+			" max:%"G_GINT64_FORMAT,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
-			lp->prefix, lp->marker_start, lp->marker_end, lp->maxkeys);
+			lp->prefix, lp->marker_start, lp->version_marker, lp->marker_end,
+			lp->maxkeys);
 
 	// XXX the underlying meta2_backend_list_aliases() function MUST
 	// return headers before the associated alias.
@@ -274,8 +277,13 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		if (max > 0) {
 			if (DESCR(bean) == &descr_struct_ALIASES) {
 				_bean_list_cb(&obc->l, bean);
-				if (0 == --max)
+				if (0 == --max) {
 					next_marker = g_strdup(ALIASES_get_alias(bean)->str);
+					if (lp->flag_allversion) {
+						next_version_marker = g_strdup_printf(
+								"%"G_GINT64_FORMAT, ALIASES_get_version(bean));
+					}
+				}
 			} else {
 				_bean_list_cb(&obc->l, bean);
 			}
@@ -329,6 +337,8 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		g_free(next_marker);
 		next_marker = shard_upper;
 		shard_upper = NULL;
+		g_free(next_version_marker);
+		next_version_marker = NULL;
 
 end:
 		g_free(shard_upper);
@@ -356,6 +366,7 @@ end:
 		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		_on_bean_ctx_clean(obc);
 		g_free(next_marker);
+		g_free(next_version_marker);
 		if (properties)
 			g_strfreev(properties);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -364,9 +375,11 @@ end:
 
 	S3_RESPONSE_HEADER(NAME_MSGKEY_PREFIX, lp->prefix);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER, lp->marker_start);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_VERSIONMARKER, lp->version_marker);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER_END, lp->marker_end);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
 	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTMARKER, next_marker);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTVERSIONMARKER, next_version_marker);
 
 	gchar tmp[64];
 	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
@@ -375,6 +388,7 @@ end:
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	g_free(next_marker);
+	g_free(next_version_marker);
 	if (properties)
 		g_strfreev (properties);
 	return FILTER_OK;
@@ -398,6 +412,12 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	if (lp->flag_allversion && lp->marker_start) {
+		lp->version_marker = meta2_filter_ctx_get_param(ctx,
+				NAME_MSGKEY_VERSIONMARKER);
+	} else {
+		lp->version_marker = NULL;
+	}
 	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)

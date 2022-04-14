@@ -217,6 +217,7 @@ class ContainerLifecycle(object):
                 self.api.object_list,
                 listing_key=lambda x: x['objects'],
                 marker_key=lambda x: x.get('next_marker'),
+                version_marker_key=lambda x: x.get('next_version_marker'),
                 truncated_key=lambda x: x['truncated'],
                 account=self.account,
                 container=container,

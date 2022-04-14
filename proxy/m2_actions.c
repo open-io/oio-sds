@@ -2018,9 +2018,10 @@ static GError * _list_loop (struct req_args_s *args,
 
 	char delimiter = _delimiter (args);
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s"
-			" marker=%s end=%s", oio_url_get(args->url, OIOURL_WHOLE),
-			   in0->maxkeys, delimiter, in0->prefix,
-			   in0->marker_start, in0->marker_end);
+			" marker=%s version_marker=%s end=%s",
+			oio_url_get(args->url, OIOURL_WHOLE),
+			in0->maxkeys, delimiter, in0->prefix,
+			in0->marker_start, in0->version_marker, in0->marker_end);
 
 	PACKER_VOID(_pack) { return packer(&in); }
 
@@ -2036,6 +2037,8 @@ static GError * _list_loop (struct req_args_s *args,
 		in.marker_start = _build_next_marker(
 				out0->next_marker?: in0->marker_start,
 				delimiter, in0->prefix);
+		in.version_marker = g_strdup(
+			out0->next_version_marker?: in0->version_marker);
 
 		/* update path to use sharding resolver */
 		gchar *fake_path = NULL;
@@ -2067,6 +2070,7 @@ static GError * _list_loop (struct req_args_s *args,
 			oio_url_unset(args->url, OIOURL_PATH);
 		}
 		oio_str_clean((gchar**)&(in.marker_start));
+		oio_str_clean((gchar**)&(in.version_marker));
 		if (err) {
 			if (err->code == CODE_UNAVAILABLE && count > 0) {
 				// We reached request deadline, just tell the caller the
@@ -2091,8 +2095,10 @@ static GError * _list_loop (struct req_args_s *args,
 		}
 
 		/* Manage the beans */
-		oio_str_reuse (&out0->next_marker, out.next_marker);
+		oio_str_reuse(&out0->next_marker, out.next_marker);
 		out.next_marker = NULL;
+		oio_str_reuse(&out0->next_version_marker, out.next_version_marker);
+		out.next_version_marker = NULL;
 		if (out.beans) {
 			ctx.beans = out0->beans;
 			ctx.prefixes = tree_prefixes;
@@ -2369,8 +2375,10 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 		list_in.marker_end = OPT("marker_end");  // backward compatibility
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
-	if (OPT("all"))
+	if (OPT("all")) {
+		list_in.version_marker = OPT("version_marker");
 		list_in.flag_allversion = 1;
+	}
 	if (oio_str_parse_bool(OPT("properties"), FALSE))
 		list_in.flag_properties = 1;
 	if (!err)
@@ -2399,6 +2407,11 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 		if (list_out.next_marker) {
 			args->rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
 					g_uri_escape_string(list_out.next_marker, NULL, FALSE));
+		}
+		if (list_out.next_version_marker) {
+			args->rp->add_header(PROXYD_HEADER_PREFIX "list-version-marker",
+					g_uri_escape_string(list_out.next_version_marker, NULL,
+							FALSE));
 		}
 	}
 

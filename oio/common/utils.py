@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -387,7 +387,8 @@ def group_chunk_errors(chunk_err_iter):
 
 
 def depaginate(func, item_key=None, listing_key=None, marker_key=None,
-               truncated_key=None, attempts=1, *args, **kwargs):
+               version_marker_key=None, truncated_key=None, attempts=1,
+               *args, **kwargs):
     """
     Yield items from the lists returned by the repetitive calls
     to `func(*args, **kwargs)`. For each call (except the first),
@@ -434,6 +435,8 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
 
     while truncated_key(raw_listing):
         kwargs['marker'] = marker_key(raw_listing)
+        if version_marker_key:
+            kwargs['version_marker'] = version_marker_key(raw_listing)
         for i in range(attempts):
             try:
                 raw_listing = func(*args, **kwargs)
