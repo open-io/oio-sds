@@ -2,6 +2,7 @@
 
 # OpenIO SDS functional tests
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -57,7 +58,7 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
         if qhdr is not None:
             for k, v in qhdr.items():
                 if k not in self.headers:
-                    raise Exception("missing headers: "+k)
+                    raise Exception("missing headers: " + k)
                 if self.headers[k] != v:
                     raise Exception("invalid header [%s] value got: %s" %
                                     (str(self.headers[k]), str(v)))
@@ -102,7 +103,7 @@ class Service (threading.Thread):
 def test_ok(lib):
     http, services, urls = [], [], []
     for i in range(3):
-        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000+i),
+        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000 + i),
                                               DumbHttpMock))
     for h in http:
         urls.append(('http://127.0.0.1:%d/' % h.server_port).encode('utf-8'))
@@ -118,25 +119,25 @@ def test_ok(lib):
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
 
-        (("/", {"Content-Length": "128"}, "0"*128), (200, {}, "")),
-        (("/", {"Content-Length": "128"}, "0"*128), (200, {}, "")),
-        (("/", {"Content-Length": "128"}, "0"*128), (200, {}, "")),
-        (("/", {"Content-Length": "128"}, "0"*128), (200, {}, "")),
+        (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
+        (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
+        (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
+        (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
 
-        (("/", {"Transfer-Encoding": "chunked"}, "0"*128), (200, {}, "")),
+        (("/", {"Transfer-Encoding": "chunked"}, "0" * 128), (200, {}, "")),
     ]
     for h in http:
         h.expectations = expectations
     for s in services:
         s.start()
     try:
-        lib.test_upload_ok(0, 0,   None)
+        lib.test_upload_ok(0, 0, None)
 
-        lib.test_upload_ok(0, 0,   urls[0], None)
-        lib.test_upload_ok(0, 0,   urls[0], urls[1], urls[2], None)
+        lib.test_upload_ok(0, 0, urls[0], None)
+        lib.test_upload_ok(0, 0, urls[0], urls[1], urls[2], None)
 
-        lib.test_upload_ok(0, 1,   urls[0], None)
-        lib.test_upload_ok(0, 1,   urls[0], urls[1], urls[2], None)
+        lib.test_upload_ok(0, 1, urls[0], None)
+        lib.test_upload_ok(0, 1, urls[0], urls[1], urls[2], None)
 
         lib.test_upload_ok(0, 128, urls[0], None)
         lib.test_upload_ok(0, 128, urls[0], urls[1], urls[2], None)

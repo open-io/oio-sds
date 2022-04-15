@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -73,7 +73,7 @@ class AdminClient(ProxyClient):
     @property
     def cache_client(self):
         """
-        Instanciate a client object for '/cache/*' proxy routes.
+        Instantiate a client object for '/cache/*' proxy routes.
         """
         if self._cache_client is None:
             self._cache_client = ProxyClient(
@@ -85,7 +85,7 @@ class AdminClient(ProxyClient):
     @property
     def forwarder(self):
         """
-        Instanciate a client object for '/forward/*' proxy routes.
+        Instantiate a client object for '/forward/*' proxy routes.
         """
         if self._forwarder is None:
             self._forwarder = ProxyClient(
@@ -298,7 +298,7 @@ class AdminClient(ProxyClient):
         if not proxy_netloc:
             proxy_netloc = self.proxy_netloc
         _resp, body = self._direct_request(
-                'GET', 'http://' + proxy_netloc + '/v3.0/config', **kwargs)
+            'GET', 'http://' + proxy_netloc + '/v3.0/config', **kwargs)
         return body
 
     def proxy_set_live_config(self, proxy_netloc=None, config=None, **kwargs):
@@ -310,8 +310,8 @@ class AdminClient(ProxyClient):
         if config is None:
             raise ValueError("Missing value for 'config'")
         _resp, body = self._direct_request(
-                'POST', 'http://' + proxy_netloc + '/v3.0/config',
-                json=config, **kwargs)
+            'POST', 'http://' + proxy_netloc + '/v3.0/config',
+            json=config, **kwargs)
         return body
 
     # Forwarded actions ###############################################
@@ -343,7 +343,7 @@ class AdminClient(ProxyClient):
         Set some configuration parameters on the specified service.
         Works on all services using ASN.1 protocol.
         Notice that some parameters may not be taken into account,
-        and no parameter will survice a service restart.
+        and no parameter will survive a service restart.
         """
         return self._forward_service_action(
             svc_id, '/config', json=config, **kwargs)

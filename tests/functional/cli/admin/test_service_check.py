@@ -1,4 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,7 +28,7 @@ class ServiceCheckTest(CliTestCase):
         obj = container + 'obj-' + random_str(6)
         # Upload an object (replicated or not).
         self.storage.object_create(self.account, container,
-                                   data='test data',  obj_name=obj)
+                                   data='test data', obj_name=obj)
         output = self.storage.object_locate(self.account, container, obj)
         opts = self.get_format_opts(fields=['Chunk'])
         # Iterate over all rawx services hosting one of the chunks,

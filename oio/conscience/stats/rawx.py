@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,9 +23,9 @@ class RawxStat(HttpStat):
     """Specialization of HttpStat for rawx services"""
 
     rawx_stat_keys = [
-            ("counter", "req.hits",   "stat.total_reqpersec"),
-            ("counter", "req.time",   "stat.total_avreqtime"),
-            ("config",  "service_id", "tag.service_id"),
+        ("counter", "req.hits", "stat.total_reqpersec"),
+        ("counter", "req.time", "stat.total_avreqtime"),
+        ("config", "service_id", "tag.service_id"),
     ]
 
     def configure(self):
@@ -69,10 +70,10 @@ class RawxStat(HttpStat):
                 elif stat_key[0] == 'counter':
                     if stat_key[1].startswith('req.hits'):
                         output[stat_key[2]] = \
-                                self._compute_ratepersec(stat_key, delta)
+                            self._compute_ratepersec(stat_key, delta)
                     if stat_key[1].startswith('req.time'):
                         output[stat_key[2]] = \
-                                self._compute_avreqtime(stat_key, delta)
+                            self._compute_avreqtime(stat_key, delta)
         self._prev_time = self._cur_time
         self._prev_http_stats = self._cur_http_stats
         return output

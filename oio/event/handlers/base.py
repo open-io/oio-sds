@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -39,7 +40,7 @@ class Handler(object):
             res = EventError(event=event, body='Process is stopping')
         except Exception as err:
             self.logger.exception('Job %s not handled: %s', event.job_id, err)
-            res = EventError(event=event, body='An error ocurred')
+            res = EventError(event=event, body='An error occurred')
         return res(env, beanstalkd, cb)
 
 

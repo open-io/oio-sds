@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,7 +34,7 @@ URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
                            'release_conn', 'chunked')
 URLLIB3_POOLMANAGER_KWARGS = (
-    # default values overriden by get_pool_manager
+    # default values overridden by get_pool_manager
     'pool_connections', 'pool_maxsize', 'max_retries', 'backoff_factor',
     # passed directly to SafePoolManager's init
     'socket_options', 'source_address', 'cert_reqs', 'ca_certs'

@@ -469,7 +469,7 @@ class ObjectStorageApi(object):
         :type container: `str`
         """
         resp = {}
-        hdrs, _ = self.container.container_drain(account, container,  **kwargs)
+        hdrs, _ = self.container.container_drain(account, container, **kwargs)
         resp['truncated'] = true_value(hdrs.get(HEADER_PREFIX + 'truncated'))
         return resp
 

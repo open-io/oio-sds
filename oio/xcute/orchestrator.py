@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -589,8 +589,7 @@ class XcuteOrchestrator(object):
         job_params = job_info['config']['params']
         total_marker = job_info['tasks']['total_marker']
 
-        tasks_counter = job.get_total_tasks(
-                job_params, marker=total_marker)
+        tasks_counter = job.get_total_tasks(job_params, marker=total_marker)
         for total_marker, tasks_incr in tasks_counter:
             stop, exc = self.handle_backend_errors(
                 self.backend.incr_total_tasks, job_id,

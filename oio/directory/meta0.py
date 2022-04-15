@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,8 +22,8 @@ from math import ceil
 
 from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
-from oio.common.exceptions import \
-        ConfigurationException, OioException, PreconditionFailed
+from oio.common.exceptions import ConfigurationException, OioException, \
+    PreconditionFailed
 from oio.common.json import json
 
 
@@ -58,7 +59,7 @@ def _slice_services(allsrv, level):
     Generate slices of services, where a slice is a set of services sharing
     the same level of location.
     :param allsrv: A sorted sequence of services to extract the slices of.
-    :type allsrv: a sequence of dictionnaries representing services.
+    :type allsrv: a sequence of dictionaries representing services.
     :param level: the position of the location token with the least
                  significance. Tokens below that position will be ignored.
     :type level: a positive integer
@@ -119,8 +120,8 @@ def _bootstrap(allsrv, allgroups, replicas, level, degradation=0):
     if replicas - (worst_load * degradation) < quorum:
         fmt = "Balancing not satisfiable, {0} replicas wanted on {1}" + \
               " site(s), and an acceptable degradation of {2} site(s)."
-        raise PreconditionFailed(
-                fmt.format(replicas, len(allslices), degradation))
+        raise PreconditionFailed(fmt.format(replicas, len(allslices),
+                                            degradation))
 
     # First affect to each slice a set of short prefixes
     for idx, group in enumerate(allgroups):
@@ -152,7 +153,7 @@ def _modulo_peek(tab, offset, num):
     assert(tablen > 0)
     assert(num > 0)
     assert(offset >= 0)
-    for i in range(offset, offset+num):
+    for i in range(offset, offset + num):
         result.append(tab[i % tablen])
     return tuple(result)
 
@@ -212,7 +213,7 @@ class Meta0PrefixMapping(MetaMapping):
 
         for svc_id, svc in self.services.items():
             location = self.get_loc(svc)
-            location_parts = location.rsplit('.', self.min_dist-1)
+            location_parts = location.rsplit('.', self.min_dist - 1)
             location = '.'.join(
                 [location_parts[0]] + ['*'] * len(location_parts[1:]))
             svc['location'] = location
@@ -281,8 +282,7 @@ class Meta0PrefixMapping(MetaMapping):
         try:
             self.m0.force(self.to_json(moved_ok).strip(), **kwargs)
         except OioException as exc:
-            self.logger.warn(
-                    "Failed to link services for meta0: %s", exc)
+            self.logger.warn("Failed to link services for meta0: %s", exc)
 
     def __bool__(self):
         return bool(self.services_by_base)

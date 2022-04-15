@@ -247,8 +247,8 @@ class ContainerLifecycle(object):
                     yield res
             except Exception as exc:
                 self.logger.warn(
-                        "Failed to apply lifecycle rules on %s/%s/%s: %s",
-                        self.account, self.container, obj_meta['name'], exc)
+                    "Failed to apply lifecycle rules on %s/%s/%s: %s",
+                    self.account, self.container, obj_meta['name'], exc)
                 yield obj_meta, "n/a", "n/a", exc
             if self.processed_versions is not None:
                 self.processed_versions.save_object(obj_meta, **kwargs)

@@ -675,8 +675,7 @@ class RdirClient(HttpApi):
                     # Too many attempts
                     raise
 
-            truncated = resp.headers.get(
-                    HEADER_PREFIX + 'list-truncated')
+            truncated = resp.headers.get(HEADER_PREFIX + 'list-truncated')
             if truncated is None:
                 # TODO(adu): Delete when it will no longer be used
                 if not resp_body:

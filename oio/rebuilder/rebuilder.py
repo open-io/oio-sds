@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,7 +82,7 @@ class Rebuilder(object):
             pool.spawn(self._read_retry_queue, rqueue, **kwargs)
 
             # spawn workers to rebuild
-            queue = eventlet.Queue(self.concurrency*10)
+            queue = eventlet.Queue(self.concurrency * 10)
             for i in range(self.concurrency):
                 worker = self._create_worker(**kwargs)
                 workers.append(worker)

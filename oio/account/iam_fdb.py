@@ -84,9 +84,9 @@ class FdbIamDb(IamDbBase):
             raise
         try:
             self.namespace = fdb.directory.create_or_open(
-                                    self.db, (self.main_namespace_name,))
-            self.iam_space = self.namespace.create_or_open(self.db,
-                                                           self.iam_prefix)
+                self.db, (self.main_namespace_name,))
+            self.iam_space = self.namespace.create_or_open(
+                self.db, self.iam_prefix)
         except Exception as exc:
             self.logger.warning("Directory create exception  %s", exc)
 
@@ -214,7 +214,7 @@ class FdbIamDb(IamDbBase):
     @fdb.transactional
     def _list_user_policies(self, tr, account, user):
         iterator = tr.get_range_startswith(
-                    self.iam_space.pack((account, user)))
+            self.iam_space.pack((account, user)))
         policies = list()
         for key, _ in iterator:
             _, _, _, policy = unpack(key)
@@ -224,7 +224,7 @@ class FdbIamDb(IamDbBase):
     @fdb.transactional
     def _load_merged_user_policies(self, tr, account, user):
         iterator = tr.get_range_startswith(
-                    self.iam_space.pack((account, user)))
+            self.iam_space.pack((account, user)))
         statements = list()
         for key, value in iterator:
             _, _, _, policy = unpack(key)

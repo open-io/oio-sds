@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -97,5 +97,5 @@ class MetaRebuilderWorker(RebuilderWorker):
                         time.sleep(attempts * 0.5)
                         continue
                 self.logger.error('ERROR while rebuilding %s: %s', cid, err)
-                sys.stdout.write(cid+'\n')
+                sys.stdout.write(cid + '\n')
                 break

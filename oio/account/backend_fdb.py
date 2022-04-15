@@ -1295,7 +1295,7 @@ class AccountBackendFdb(object):
         bs_space = self.buckets_index_space[account_id]
 
         raw_list, next_marker = self._raw_listing_m1(
-            self.db, account_id,  bs_space, limit, prefix,
+            self.db, account_id, bs_space, limit, prefix,
             marker, end_marker)
 
         output = list()
