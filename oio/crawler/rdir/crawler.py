@@ -162,7 +162,8 @@ class RdirWorker(object):
         try:
             self.chunk_operator.rebuild(
                 container_id, value['content_id'], chunk_id,
-                rawx_id=self.volume_id, reqid=reqid)
+                rawx_id=self.volume_id, path=value.get('path'),
+                version=value.get('version'), reqid=reqid)
             self.repaired += 1
         except exc.OioException as err:
             self.errors += 1

@@ -17,6 +17,7 @@ import os
 import random
 
 from oio.common.utils import request_id
+from oio.container.sharding import ContainerSharding
 from oio.crawler.rdir.crawler import RdirWorker
 from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
@@ -30,9 +31,11 @@ class TestRdirCrawler(BaseTestCase):
         super(TestRdirCrawler, cls).setUpClass()
         # Prevent the chunks' rebuilds by the rdir crawlers
         cls._service('oio-rdir-crawler-1.service', 'stop', wait=3)
+        cls._service('oio-meta2-crawler-1.service', 'stop', wait=3)
 
     @classmethod
     def tearDownClass(cls):
+        cls._service('oio-meta2-crawler-1.service', 'start', wait=1)
         cls._service('oio-rdir-crawler-1.service', 'start', wait=1)
         super(TestRdirCrawler, cls).tearDownClass()
 
@@ -41,7 +44,7 @@ class TestRdirCrawler(BaseTestCase):
         self.api = self.storage
 
         services = self.conscience.all_services('rawx')
-        self.rawx_volumes = dict()
+        self.rawx_volumes = {}
         for rawx in services:
             tags = rawx['tags']
             service_id = tags.get('tag.service_id', None)
@@ -109,13 +112,12 @@ class TestRdirCrawler(BaseTestCase):
         new_chunk_path, _ = self._chunk_info(new_chunks[0])
         self.assertFalse(os.path.isfile(new_chunk_path))
 
-    def test_rdir_crawler_m_chunk(self):
-        container = "rdir_crawler_m_chunk_" + random_str(6)
-        object_name = "m_chunk-" + random_str(8)
-
+    def _minimum_2_chunks_or_skip(self, container, object_name):
         chunks = self._prepare(container, object_name)
         if len(chunks) < 2:
             self.skipTest("need at least 2 chunks to run")
+
+    def _test_rdir_crawler_m_chunks(self, container, object_name):
         old_chunks = self._create(container, object_name)
 
         chunk = random.choice(old_chunks)
@@ -144,8 +146,8 @@ class TestRdirCrawler(BaseTestCase):
         self.assertEqual(len(old_chunks) + 1, len(new_chunks))
 
         # Check that all old chunks (not removed) are still present
-        old_chunks_url = list()
-        new_chunks_url = list()
+        old_chunks_url = []
+        new_chunks_url = []
         for chunk_ in old_chunks:
             old_chunks_url.append(chunk_['url'])
             chunk_ = chunk_['hash'].upper()
@@ -160,3 +162,31 @@ class TestRdirCrawler(BaseTestCase):
         # Check that the new chunk really exists (no exception raised
         # by the head)
         self.storage.blob_client.chunk_head(new_chunks[0]['url'])
+
+        try:
+            self.storage.container_flush(self.account, container)
+            self.storage.container_delete(self.account, container)
+        except Exception as exc:
+            self.logger.warning("Failed to clean: %s", exc)
+
+    def test_rdir_crawler_m_chunks(self):
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        self._minimum_2_chunks_or_skip(container, object_name)
+        return self._test_rdir_crawler_m_chunks(container, object_name)
+
+    def test_rdir_crawler_m_chunks_with_sharding(self):
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        self._minimum_2_chunks_or_skip(container, object_name)
+
+        # Shard the container before running the test. We don't really care
+        # about the shard bounds since we will upload only one object.
+        self.api.container_create(self.account, container)
+        container_sharding = ContainerSharding(self.conf)
+        container_sharding.replace_shard(
+            self.account, container,
+            [{"index": 0, "lower": "", "upper": "l"},
+             {"index": 1, "lower": "l", "upper": ""}],
+            enable=True)
+        return self._test_rdir_crawler_m_chunks(container, object_name)
