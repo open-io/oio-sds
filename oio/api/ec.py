@@ -34,7 +34,8 @@ from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
 from oio.common.logger import get_logger
-from oio.common.utils import fix_ranges, get_hasher, monotonic_time
+from oio.common.utils import fix_ranges, get_hasher, monotonic_time, \
+    request_id
 
 
 LOGGER = get_logger({}, __name__)
@@ -1108,13 +1109,14 @@ class ECWriteHandler(io.WriteHandler):
 class ECRebuildHandler(object):
     def __init__(self, meta_chunk, missing, storage_method,
                  connection_timeout=None, read_timeout=None,
-                 watchdog=None, **_kwargs):
+                 watchdog=None, reqid=None, **_kwargs):
         self.meta_chunk = meta_chunk
         self.missing = missing
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
         self.logger = _kwargs.get('logger', LOGGER)
+        self.reqid = reqid or request_id('ecrebuild-')
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -1151,14 +1153,14 @@ class ECRebuildHandler(object):
 
         nb_data = self.storage_method.ec_nb_data
 
-        headers = {}
+        headers = {REQID_HEADER: self.reqid}
         for chunk in self.meta_chunk:
             pile.spawn(self._call_GET, chunk, headers)
 
         # Sort all responses according to the chunk size
         total_resps = 0
-        resps_by_size = dict()
-        resps_without_chunk_size = list()
+        resps_by_size = {}
+        resps_without_chunk_size = []
         for resp in pile:
             if not resp:
                 continue
@@ -1169,7 +1171,7 @@ class ECRebuildHandler(object):
                 resps_without_chunk_size.append(resp)
                 continue
             total_resps += 1
-            resps_by_size.setdefault(chunk_size, list()).append(resp)
+            resps_by_size.setdefault(chunk_size, []).append(resp)
         # Select the chunk with the majority chunk size
         resps = None
         max_resps = 0
@@ -1182,7 +1184,7 @@ class ECRebuildHandler(object):
         if assumed_chunk_size is None:
             self.logger.warning(
                 'No chunk available with chunk size information')
-            resps = list()
+            resps = []
         else:
             resps = resps_by_size[assumed_chunk_size]
             if max_resps != total_resps:

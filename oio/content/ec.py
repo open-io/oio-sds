@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,7 @@ from oio.content.content import Content, Chunk
 from oio.api.ec import ECWriteHandler, ECRebuildHandler
 from oio.common.exceptions import ChunkException
 from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
-from oio.common.utils import GeneratorIO
+from oio.common.utils import GeneratorIO, request_id
 from oio.common.constants import OIO_VERSION
 from oio.common.storage_functions import _get_weighted_random_score
 
@@ -29,7 +29,9 @@ from oio.common.storage_functions import _get_weighted_random_score
 class ECContent(Content):
     def rebuild_chunk(self, chunk_id, service_id=None,
                       allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False):
+                      allow_frozen_container=False, reqid=None):
+        if reqid is None:
+            reqid = request_id('eccontent-')
         # Identify the chunk to rebuild
         candidates = self.chunks.filter(id=chunk_id)
         if service_id is not None:
@@ -62,17 +64,18 @@ class ECContent(Content):
             current_chunk.checksum = chunks[0].checksum
 
         # Find a spare chunk address
-        broken_list = list()
+        broken_list = []
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_url, _quals = self._get_spare_chunk(chunks.all(), broken_list,
-                                                  position=current_chunk.pos)
+                                                  position=current_chunk.pos,
+                                                  reqid=reqid)
         new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
 
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method,
-            watchdog=self.blob_client.watchdog)
+            watchdog=self.blob_client.watchdog, reqid=reqid)
         expected_chunk_size, stream = handler.rebuild()
 
         # Actually create the spare chunk
@@ -104,11 +107,12 @@ class ECContent(Content):
         meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
         bytes_transferred, _ = self.blob_client.chunk_put(
-            spare_url[0], meta, GeneratorIO(stream, sub_generator=PY2))
+            spare_url[0], meta, GeneratorIO(stream, sub_generator=PY2),
+            reqid=reqid)
         if expected_chunk_size is not None \
                 and bytes_transferred != expected_chunk_size:
             try:
-                self.blob_client.chunk_delete(spare_url[0])
+                self.blob_client.chunk_delete(spare_url[0], reqid=reqid)
             except Exception as exc:
                 self.logger.warning(
                     'Failed to rollback the rebuild of the chunk: %s', exc)
@@ -117,10 +121,12 @@ class ECContent(Content):
         # Register the spare chunk in object's metadata
         if chunk_id is None:
             self._add_raw_chunk(current_chunk, spare_url[0],
-                                frozen=allow_frozen_container)
+                                frozen=allow_frozen_container,
+                                reqid=reqid)
         else:
             self._update_spare_chunk(current_chunk, spare_url[0],
-                                     frozen=allow_frozen_container)
+                                     frozen=allow_frozen_container,
+                                     reqid=reqid)
         self.logger.debug('Chunk %s repaired in %s',
                           chunk_id or chunk_pos, spare_url[0])
 

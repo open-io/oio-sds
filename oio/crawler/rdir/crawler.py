@@ -26,6 +26,7 @@ from oio.common.green import get_watchdog, ratelimit, time, ContextPool
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
+from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 
@@ -140,9 +141,10 @@ class RdirWorker(object):
         self.last_report_time = now
         self.scanned_since_last_report = 0
 
-    def error(self, container_id, chunk_id, msg):
-        self.logger.error('volume_id=%s container_id=%s chunk_id=%s %s',
-                          self.volume_id, container_id, chunk_id, msg)
+    def error(self, container_id, chunk_id, msg, reqid=None):
+        self.logger.error(
+            'volume_id=%s container_id=%s chunk_id=%s request_id=%s %s',
+            self.volume_id, container_id, chunk_id, reqid, msg)
 
     def _build_chunk_path(self, chunk_id):
         chunk_path = self.volume_path
@@ -156,11 +158,11 @@ class RdirWorker(object):
 
         return chunk_path
 
-    def _rebuild_chunk(self, container_id, chunk_id, value):
+    def _rebuild_chunk(self, container_id, chunk_id, value, reqid):
         try:
             self.chunk_operator.rebuild(
                 container_id, value['content_id'], chunk_id,
-                rawx_id=self.volume_id)
+                rawx_id=self.volume_id, reqid=reqid)
             self.repaired += 1
         except exc.OioException as err:
             self.errors += 1
@@ -168,7 +170,7 @@ class RdirWorker(object):
                 self.unrecoverable_content += 1
                 if self._check_rawx_up():
                     error = '%(err)s, action required' % {'err': str(err)}
-                    self.error(container_id, chunk_id, error)
+                    self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
                 # Note for later: if it an orphan chunk, we should tag it and
                 # increment a counter for stats. Another tool could be
@@ -177,16 +179,16 @@ class RdirWorker(object):
             else:
                 error = '%(err)s, not possible to get list of rawx' \
                     % {'err': str(err)}
-                self.error(container_id, chunk_id, error)
+                self.error(container_id, chunk_id, error, reqid=reqid)
 
-    def process_entry(self, container_id, chunk_id, value):
+    def process_entry(self, container_id, chunk_id, value, reqid):
         self.logger.debug("current chunk_id=%s volume_id=%s",
                           chunk_id, self.volume_id)
 
         chunk_path = self._build_chunk_path(chunk_id)
 
         if not isfile(chunk_path):
-            self._rebuild_chunk(container_id, chunk_id, value)
+            self._rebuild_chunk(container_id, chunk_id, value, reqid)
 
         self.scanned_since_last_report += 1
 
@@ -205,14 +207,16 @@ class RdirWorker(object):
 
             for container_id, chunk_id, value in entries:
                 if not self.running:
-                    self.logger.info("stop asked for loop paths")
+                    self.logger.info("Stop asked")
                     break
 
+                reqid = request_id('rdir-crawler-')
                 try:
-                    self.process_entry(container_id, chunk_id, value)
+                    self.process_entry(container_id, chunk_id, value, reqid)
                 except exc.OioException as err:
                     self.error(container_id, chunk_id,
-                               'failed to process, err={}'.format(err))
+                               'failed to process, err={}'.format(err),
+                               reqid=reqid)
 
                 last_scan_time = ratelimit(
                     last_scan_time, self.max_chunks_per_second)
@@ -235,8 +239,8 @@ class RdirWorker(object):
                     return
                 time.sleep(1)
         else:
-            self.logger.warning('crawler duration=%.2f for volume_id=%s is '
-                                'higher', crawling_duration, self.volume_id)
+            self.logger.warning('Crawling duration=%.2f for volume_id=%s is '
+                                'high', crawling_duration, self.volume_id)
 
     def run(self, *args, **kwargs):
         """
@@ -244,7 +248,7 @@ class RdirWorker(object):
         """
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
-            self.logger.info('Wait %d secondes before starting',
+            self.logger.info('Waiting %d seconds before starting',
                              waiting_time_to_start)
             for _ in range(waiting_time_to_start):
                 if not self.running:
@@ -280,12 +284,12 @@ class RdirCrawler(Daemon):
                                for x in self.volumes]
 
     def run(self, *args, **kwargs):
-        self.logger.info("started rdir crawler service")
+        self.logger.info("Started rdir crawler service")
         for worker in self.volume_workers:
             self.pool.spawn(worker.run)
         self.pool.waitall()
 
     def stop(self):
-        self.logger.info("stop rdir crawler asked")
+        self.logger.info("Stopping rdir crawler")
         for worker in self.volume_workers:
             worker.stop()

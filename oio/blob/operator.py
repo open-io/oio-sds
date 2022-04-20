@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -47,13 +47,15 @@ class ChunkOperator(object):
 
     def rebuild(self, container_id, content_id, chunk_id_or_pos,
                 rawx_id=None, try_chunk_delete=False,
-                allow_frozen_container=True, allow_same_rawx=True):
+                allow_frozen_container=True, allow_same_rawx=True,
+                **kwargs):
         """
         Try to find the chunk in the metadata of the specified object,
         then rebuild it.
         """
         try:
-            content = self.content_factory.get(container_id, content_id)
+            content = self.content_factory.get(container_id, content_id,
+                                               **kwargs)
         except ContentNotFound:
             raise OrphanChunk('Content not found: possible orphan chunk')
 
@@ -86,11 +88,12 @@ class ChunkOperator(object):
             chunk_id, service_id=rawx_id,
             allow_frozen_container=allow_frozen_container,
             allow_same_rawx=allow_same_rawx,
-            chunk_pos=chunk_pos)
+            chunk_pos=chunk_pos,
+            reqid=kwargs.get('reqid'))
 
         if try_chunk_delete:
             try:
-                content.blob_client.chunk_delete(chunk.url)
+                content.blob_client.chunk_delete(chunk.url, **kwargs)
                 self.logger.info("Old chunk %s deleted", chunk.url)
             except Exception as exc:
                 self.logger.warn(
@@ -100,7 +103,7 @@ class ChunkOperator(object):
         if chunk_id is not None:
             try:
                 self.rdir_client.chunk_delete(
-                    chunk.host, container_id, content_id, chunk_id)
+                    chunk.host, container_id, content_id, chunk_id, **kwargs)
             except Exception as exc:
                 self.logger.warn(
                     'Failed to delete chunk entry (%s) from the rdir (%s): %s',
