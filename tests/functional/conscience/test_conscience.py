@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -218,7 +218,7 @@ class TestConscienceFunctional(BaseTestCase):
         # the service must not be polled
         resp = self.request('POST', self._url_lb('poll'),
                             params={"pool": "echo"})
-        self.assertError(resp, 500, 481)
+        self.assertError(resp, 503, 481)
 
     def test_service_lock_tag(self):
         """Ensure a 'tag.lock' tag is set on service whose score is locked."""
@@ -339,8 +339,8 @@ class TestConscienceFunctional(BaseTestCase):
                 for _ in range(8):
                     self._flush_proxy()
                     self._reload_proxy()
-                    expeted_services = self._list_srvs('rawx')
-                    for service in expeted_services:
+                    expected_services = self._list_srvs('rawx')
+                    for service in expected_services:
                         if not service['tags'].get('tag.lock'):
                             break
                     else:
@@ -351,8 +351,8 @@ class TestConscienceFunctional(BaseTestCase):
                 time.sleep(1)
             else:
                 self.fail("At least one service unlocked")
-            self.assertEqual(len(services), len(expeted_services))
-            expeted_services.sort(key=lambda x: x['addr'])
+            self.assertEqual(len(services), len(expected_services))
+            expected_services.sort(key=lambda x: x['addr'])
 
             self._service('oio-conscience-1.service', 'stop')
             self._service('oio-conscience-1.service', 'start')
@@ -362,7 +362,7 @@ class TestConscienceFunctional(BaseTestCase):
                 self._flush_proxy()
                 self._reload_proxy()
                 self.assertListEqual(
-                    expeted_services,
+                    expected_services,
                     sorted(self._list_srvs('rawx'), key=lambda x: x['addr']))
         finally:
             try:

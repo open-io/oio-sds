@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -152,6 +152,9 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_EXCESSIVE_LOAD:  // returned by sqliterepo
 		case CODE_CORRUPT_DATABASE:
 		case CODE_CONTAINER_FROZEN:
+		// There are more chances that we temporarily lack available services
+		// than there is a misconfiguration, hence the code 503.
+		case CODE_POLICY_NOT_SATISFIABLE:
 			return _reply_retry(args, err);
 		case CODE_NAMESPACE_NOTMANAGED:
 		case CODE_SRVTYPE_NOTMANAGED:
@@ -164,6 +167,8 @@ _reply_common_error (struct req_args_s *args, GError *err)
 			return _reply_forbidden_error(args, err);
 		case CODE_METHOD_NOTALLOWED:
 			return _reply_method_error(args, err, NULL);
+		case CODE_POLICY_NOT_SUPPORTED:
+			return _reply_format_error(args, err);
 	}
 
 	return _reply_system_error (args, err);

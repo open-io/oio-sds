@@ -2,6 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -206,7 +207,7 @@ _poll(struct req_args_s *args, struct json_object *body)
 		if (!sp) {
 			storage_policy_clean(sp);
 			return _reply_common_error(args, NEWERROR(
-					CODE_POLICY_NOT_SATISFIABLE,
+					CODE_POLICY_NOT_SUPPORTED,
 					"Invalid storage policy: %s", policy));
 		}
 		pool = g_strdup(storage_policy_get_service_pool(sp));

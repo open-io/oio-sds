@@ -46,6 +46,7 @@ RANDOM_CHARS_ID = 'ABCDEF' + string.digits
 CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
 CODE_POLICY_NOT_SATISFIABLE = 481
+CODE_POLICY_NOT_SUPPORTED = 480
 
 
 def ec(fnc):
@@ -454,7 +455,7 @@ class CommonTestCase(testtools.TestCase):
         try:
             return jsonlib.loads(data)
         except ValueError:
-            logging.info("Unparseable data: %s", str(data))
+            logging.info("Unparsable data: %s", str(data))
             raise
 
 

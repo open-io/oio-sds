@@ -24,7 +24,8 @@ import logging
 import random
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase, random_str, random_id, strange_paths
+from tests.utils import BaseTestCase, random_str, random_id, strange_paths, \
+    CODE_POLICY_NOT_SUPPORTED
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
     OIO_DB_FROZEN, OIO_DB_DISABLED, OBJECT_METADATA_PREFIX, \
@@ -331,9 +332,9 @@ class TestMeta2Containers(BaseTestCase):
                 '"system":{"sys.m2.policy.storage": "unknown"}}')
         resp = self.request('POST', self.url_container('create'),
                             params=params, data=data, headers=headers)
-        self.assertEqual(resp.status, 500)
+        self.assertEqual(resp.status, 400)
         data = self.json_loads(resp.data)
-        self.assertEqual(data["status"], 480)
+        self.assertEqual(data["status"], CODE_POLICY_NOT_SUPPORTED)
 
     def _test_create_with_status(self, status=None):
         def _status(_data):
@@ -1346,7 +1347,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 204)
         # SetpropShouldWork
         # If a drain is done on a snapshot we will no be able to set a
-        # propertie because the container would be frozen, but if a drain is
+        # property because the container would be frozen, but if a drain is
         # done on a content of a none frozen container it should work
         resp = self.request('POST', self.url_content('set_properties'),
                             params=params,

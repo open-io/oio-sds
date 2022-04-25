@@ -1,4 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +19,8 @@
 from __future__ import print_function
 
 from tests.utils import BaseTestCase
-from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE
+from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE, \
+    CODE_POLICY_NOT_SUPPORTED
 
 
 class BaseLbTest(BaseTestCase):
@@ -64,7 +66,7 @@ class TestLbChoose(BaseLbTest):
             self.skipTest("need less than 10000 rawx to run")
         resp = self.request('GET', self._url_lb('choose'),
                             params={'type': 'rawx', 'size': 10000})
-        self.assertError(resp, 500, CODE_POLICY_NOT_SATISFIABLE)
+        self.assertError(resp, 503, CODE_POLICY_NOT_SATISFIABLE)
 
     def test_choose_wrong_type(self):
         resp = self.request('GET', self._url_lb('choose'),
@@ -135,7 +137,7 @@ class TestLbPoll(BaseLbTest):
     def test_poll_invalid(self):
         resp = self.request('POST', self._url_lb('poll'),
                             params={'policy': 'invalid'})
-        self.assertError(resp, 500, CODE_POLICY_NOT_SATISFIABLE)
+        self.assertError(resp, 400, CODE_POLICY_NOT_SUPPORTED)
 
     def _test_poll_policy(self, pol_name, count, json=None):
         resp = self.request('POST', self._url_lb('poll'),
