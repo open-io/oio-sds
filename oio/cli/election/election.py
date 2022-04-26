@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from kazoo.client import KazooClient
+from kazoo.exceptions import KazooException
 from six import iteritems
 from logging import getLogger
 
@@ -116,6 +118,88 @@ class ElectionStatus(ElectionCmd):
         results = ((k, v["status"]["status"], v["status"]["message"]
                     ) for k, v in data)
         return columns, results
+
+
+class ElectionCheckPeers(ElectionCmd):
+    """
+    Check that the peers registered in the directory and in Zookeeper
+    are the same. Optionally try to delete rogue nodes.
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(ElectionCheckPeers, self).get_parser(prog_name)
+        parser.add_argument(
+            '--clean', action='store_true',
+            help="Try to delete rogue nodes from Zookeeper")
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        service_type, account, reference, cid = self.get_params(parsed_args)
+
+        reqid = self.app.request_id(self.reqid_prefix)
+        data = self.app.client_manager.admin.election_debug(
+            service_type=service_type, account=account, reference=reference,
+            cid=cid, timeout=parsed_args.timeout,
+            service_id=parsed_args.service_id, reqid=reqid)
+        valid_resps = [x for x in data.items()
+                       if x[1]['status']['status'] == 200]
+        zk_servers = ','.join(x[1]['body']['base']['zk_server']
+                              for x in valid_resps)
+        zk = KazooClient(hosts=zk_servers, logger=self.log)
+        real_peers = list(data.keys())
+        zk_node = valid_resps[0][1]['body']['base']['zk']
+        parent_node, node_prefix = zk_node.rsplit('/', 1)
+        zk.start()
+        try:
+            master_found = False
+            rogue_found = False
+            results = []
+            nodes = [n for n in zk.get_children(parent_node)
+                     if n.startswith(node_prefix)]
+            nodes.sort()
+            for node in nodes:
+                node_path = f'{parent_node}/{node}'
+                svc_host = zk.get(node_path)[0].decode('utf-8')
+                if svc_host not in real_peers:
+                    rogue_found = True
+                    self.log.warning(
+                        'Rogue node %s left by %s, not in peers %s',
+                        node_path, svc_host, ','.join(real_peers))
+                    if parsed_args.clean:
+                        # TODO(FVE): ask the peer to leave the election
+                        # Sometimes the peer is still alive and will
+                        # create a rogue node right after we delete it...
+                        # Note that we must start by the last rogue node
+                        # or the second will become master.
+                        try:
+                            zk.delete(node_path)
+                            results.append((node_path, svc_host, "rogue",
+                                            "deleted"))
+                            self.log.warning(
+                                'Rogue node %s deleted', node_path)
+                        except KazooException as exc:
+                            results.append((node_path, svc_host, "rogue",
+                                            str(exc)))
+                            self.log.warning(
+                                'Failed to delete %s: %s', node_path, exc)
+                    else:
+                        results.append((node_path, svc_host, "rogue", "None"))
+                else:
+                    if master_found:
+                        status = "slave"
+                    else:
+                        status = "master"
+                        master_found = True
+                    if rogue_found:
+                        status = "should be " + status
+                    results.append((node_path, svc_host, status, "None"))
+
+            columns = ('Node', 'Host', 'Status', 'Action')
+            return columns, results
+        finally:
+            zk.stop()
 
 
 class ElectionDebug(ElectionCmd):
@@ -233,7 +317,7 @@ class ElectionBalance(Lister):
         parser.add_argument(
             '--inactivity',
             type=int, default=0,
-            help="Specifiy an inactivity in seconds."
+            help="Specify an inactivity in seconds."
                  " Ignored with --average")
         parser.add_argument(
             '--max', type=int, default=100,
