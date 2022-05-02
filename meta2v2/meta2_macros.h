@@ -163,6 +163,59 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define OBJ_PROP_RETENTION_MODE     "x-object-sysmeta-s3api-retention-mode"
 
 #define OBJ_LOCK_ABORT_PATTERN      "object locked:"
+
+// trigger conditions
+#define TRIGGER_LEGAL_HOLD_NAME "trigger_objectlock_legal_hold"
+#define TRIGGER_RETAIN_UNTIL_NAME "trigger_objectlock_retain_until"
+
+#define LEGAL_HOLD_ON "SELECT 1 FROM properties pr WHERE " \
+	"pr.alias=old.alias AND pr.key='" OBJ_PROP_LEGAL_HOLD_STATUS "'" \
+	" AND CAST(pr.value AS TEXT) = 'ON'"
+
+#define DELETED_FLAG "SELECT 1 FROM aliases WHERE " \
+	"alias=old.alias AND version=old.version AND " \
+	"CAST(old.content AS TEXT)='DELETED'"
+
+#define CLEANING_STATE "SELECT 1 FROM admin WHERE " \
+	"k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=129"
+
+#define BYPASS_GOERNANCE "SELECT 1 FROM properties pr WHERE "\
+	"pr.version=old.version AND pr.alias=old.alias "\
+	"AND pr.key='" OBJ_PROP_BYPASS_GOVERNANCE "' "\
+	" AND CAST(pr.value AS TEXT)='True' AND "\
+	"(SELECT 1 FROM  properties pr WHERE "\
+	"pr.version=old.version AND pr.alias=old.alias "\
+	"AND pr.key='" OBJ_PROP_RETENTION_MODE "' AND "  \
+	" CAST(pr.value AS TEXT)='GOVERNANCE')"
+
+#define RETAIN_UNTIL_CONDITION "SELECT 1 FROM properties pr WHERE "\
+	"pr.version=old.version	AND pr.alias=old.alias AND "\
+	"pr.key='" OBJ_PROP_RETAIN_UNTILDATE "' "\
+	"AND ((strftime('%Y-%m-%dT%H:%M:%SZ','now') < CAST(pr.value AS TEXT)))"
+
+#define TRIGGER_LEGAL_HOLD "CREATE TRIGGER IF NOT EXISTS " \
+	TRIGGER_LEGAL_HOLD_NAME " BEFORE DELETE ON aliases BEGIN " \
+	" SELECT CASE WHEN ("\
+	" NOT EXISTS ( " CLEANING_STATE ")) "\
+	" AND NOT EXISTS (" DELETED_FLAG " ) "\
+	"AND (" LEGAL_HOLD_ON " ) " \
+	" THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
+	" deletion prevented by legal hold') END;END;"
+
+#define TRIGGER_RETAIN_UNTIL "CREATE TRIGGER IF NOT EXISTS " \
+	TRIGGER_RETAIN_UNTIL_NAME " BEFORE DELETE ON aliases "\
+	"BEGIN SELECT CASE WHEN ( NOT EXISTS (" CLEANING_STATE ") ) AND ( ("\
+	"NOT EXISTS (" BYPASS_GOERNANCE ") ) AND NOT EXISTS " \
+	"(" DELETED_FLAG ") "\
+	"AND (" RETAIN_UNTIL_CONDITION ") "\
+	") THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
+	"deletion prevented by retain-until-date') END; END;"
+
+
+#define DROP_TRIGGER_LEGAL_HOLD "DROP TRIGGER IF EXISTS "\
+	TRIGGER_LEGAL_HOLD_NAME ";"
+#define DROP_TRIGGER_RETAIN_UNTIL "DROP TRIGGER IF EXISTS "\
+	TRIGGER_RETAIN_UNTIL_NAME ";"
 /* -------------------------------------------------------------------------- */
 
 # define NAME_MSGNAME_M2V2_CREATE           "M2_CREATE"

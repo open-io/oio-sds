@@ -383,7 +383,7 @@ GError* m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
 		gint64 max_entries_cleaned, gboolean *truncated);
 
 /* object lock triggers */
-void m2db_create_triggers(struct sqlx_sqlite3_s *sq3);
+GError* m2db_create_triggers(struct sqlx_sqlite3_s *sq3);
 
 void m2db_drop_triggers(struct sqlx_sqlite3_s *sq3);
 

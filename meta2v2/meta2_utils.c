@@ -4496,82 +4496,37 @@ end:
 	return err;
 }
 
-void
+GError*
 m2db_create_triggers(struct sqlx_sqlite3_s *sq3)
 {
-	char sql_legal_hold_delete[1500];
-	snprintf(sql_legal_hold_delete, sizeof(sql_legal_hold_delete),\
-	"CREATE TRIGGER IF NOT EXISTS trigger_object_lock_delete BEFORE\
-	DELETE ON aliases BEGIN\
-		SELECT CASE WHEN (\
-			NOT EXISTS (SELECT 1 FROM admin\
-				WHERE k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=%d))\
-			AND	EXISTS (SELECT 1 FROM aliases WHERE alias=old.alias AND\
-				version=old.version AND CAST(old.content AS TEXT)!='DELETED')\
-				AND (SELECT 1 FROM properties pr WHERE pr.alias=old.alias AND\
-					pr.key='" OBJ_PROP_LEGAL_HOLD_STATUS "'\
-				AND CAST(pr.value AS TEXT) = 'ON'\
-		) THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN " deletion prevented by legal hold') END;\
-	END;", NEW_SHARD_STATE_CLEANING_UP);
-
-
-	char sql_retain_until_delete[1500];
-	snprintf(sql_retain_until_delete, sizeof(sql_retain_until_delete),\
-	"CREATE TRIGGER IF NOT EXISTS trigger_object_retain_until_delete BEFORE\
-	DELETE ON aliases BEGIN\
-		SELECT CASE WHEN (NOT EXISTS (SELECT 1 FROM admin WHERE\
-		k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=%d)) AND (\
-			(NOT EXISTS (SELECT 1 FROM properties pr WHERE\
-				pr.version=old.version AND pr.alias=old.alias\
-				AND pr.key='" OBJ_PROP_BYPASS_GOVERNANCE "'\
-				AND CAST(pr.value AS TEXT)='True' AND \
-				(SELECT 1 FROM  properties pr WHERE \
-				pr.version=old.version AND pr.alias=old.alias\
-				AND pr.key='" OBJ_PROP_RETENTION_MODE "' AND CAST(pr.value AS TEXT)='GOVERNANCE')\
-				)\
-			) AND EXISTS \
-				(SELECT 1 FROM aliases WHERE alias=old.alias AND \
-					version=old.version	AND CAST(old.content AS TEXT)!=\
-						'DELETED')\
-				AND (SELECT 1 FROM properties pr WHERE pr.version=old.version\
-					AND pr.alias=old.alias AND\
-					pr.key='" OBJ_PROP_RETAIN_UNTILDATE "'\
-					AND ((strftime('%%Y-%%m-%%dT%%H:%%M:%%SZ','now')<\
-						CAST(pr.value AS TEXT)))\
-		)\
-	) THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN " deletion prevented by retain-until-date') END;\
-	END;", NEW_SHARD_STATE_CLEANING_UP);
-
 	int rc = SQLITE_OK;
-
-	rc = sqlx_exec(sq3->db, sql_legal_hold_delete);
+	rc = sqlx_exec(sq3->db, TRIGGER_LEGAL_HOLD);
+	GError *err = NULL;
 	if (rc != SQLITE_OK) {
 		GRID_WARN("Failed to setup trigger_object_lock_delete");
-		return;
+		err = SQLITE_GERROR(sq3->db, rc);
+		return err;
 	}
 
-	rc = sqlx_exec(sq3->db, sql_retain_until_delete);
+	rc = sqlx_exec(sq3->db, TRIGGER_RETAIN_UNTIL);
 	if (rc != SQLITE_OK) {
 		GRID_WARN("Failed to setup trigger_object_retain_until_delete");
-		return;
+		err = SQLITE_GERROR(sq3->db, rc);
+		return err;
 	}
+	return NULL;
 }
 
 void
 m2db_drop_triggers(struct sqlx_sqlite3_s *sq3)
 {
 	int rc = SQLITE_OK;
-
-	const gchar *sql_drop_trigger = "DROP TRIGGER IF EXISTS trigger_object_lock_delete;";
-	rc = sqlx_exec(sq3->db, sql_drop_trigger);
 	if (rc != SQLITE_OK) {
 		GRID_WARN("Failed to drop trigger_object_lock_delete");
 		return;
 	}
 
-	sql_drop_trigger = "DROP TRIGGER IF EXISTS \
-		trigger_object_retain_until_delete;";
-	rc = sqlx_exec(sq3->db, sql_drop_trigger);
+	rc = sqlx_exec(sq3->db, DROP_TRIGGER_RETAIN_UNTIL);
 	if (rc != SQLITE_OK) {
 		GRID_WARN("Failed to drop trigger_object_retain_until_delete");
 		return;
