@@ -177,8 +177,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"alias=old.alias AND version=old.version AND " \
 	"CAST(old.content AS TEXT)='DELETED'"
 
-#define CLEANING_STATE "SELECT 1 FROM admin WHERE " \
-	"k='" M2V2_ADMIN_SHARDING_STATE "' AND CAST(v AS INTEGER)=129"
+#define CLEANING_ROOT "SELECT 1 FROM admin WHERE " \
+	"k='" M2V2_ADMIN_SHARD_COUNT "' AND CAST(v AS INTEGER)>0"
+
+#define SHARD_OUT_OF_RANGE "( SELECT 1 FROM admin WHERE k ='"\
+	M2V2_ADMIN_SHARDING_ROOT "' and " \
+	"( ( SELECT 1 from admin ad where ad.k = '" M2V2_ADMIN_SHARDING_LOWER \
+	"' and cast(ad.v AS TEXT) != '>' and '>'||old.alias <=cast(ad.v AS TEXT)) "\
+	"OR ( SELECT 1 from admin ad where ad.k = '" M2V2_ADMIN_SHARDING_UPPER \
+	"' and cast(ad.v AS TEXT) != '<' and '<' || old.alias >cast(ad.v AS TEXT))))"
 
 #define BYPASS_GOERNANCE "SELECT 1 FROM properties pr WHERE "\
 	"pr.version=old.version AND pr.alias=old.alias "\
@@ -197,18 +204,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TRIGGER_LEGAL_HOLD "CREATE TRIGGER IF NOT EXISTS " \
 	TRIGGER_LEGAL_HOLD_NAME " BEFORE DELETE ON aliases BEGIN " \
 	" SELECT CASE WHEN ("\
-	" NOT EXISTS ( " CLEANING_STATE ")) "\
+	" NOT EXISTS ( " CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ") ) "\
 	" AND NOT EXISTS (" DELETED_FLAG " ) "\
-	"AND (" LEGAL_HOLD_ON " ) " \
+	"AND EXISTS (" LEGAL_HOLD_ON " ) " \
 	" THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
 	" deletion prevented by legal hold') END;END;"
 
 #define TRIGGER_RETAIN_UNTIL "CREATE TRIGGER IF NOT EXISTS " \
 	TRIGGER_RETAIN_UNTIL_NAME " BEFORE DELETE ON aliases "\
-	"BEGIN SELECT CASE WHEN ( NOT EXISTS (" CLEANING_STATE ") ) AND ( ("\
+	"BEGIN SELECT CASE WHEN ( NOT EXISTS (" CLEANING_ROOT " OR " \
+	SHARD_OUT_OF_RANGE") ) AND ( ("\
 	"NOT EXISTS (" BYPASS_GOERNANCE ") ) AND NOT EXISTS " \
 	"(" DELETED_FLAG ") "\
-	"AND (" RETAIN_UNTIL_CONDITION ") "\
+	"AND EXISTS (" RETAIN_UNTIL_CONDITION ") "\
 	") THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
 	"deletion prevented by retain-until-date') END; END;"
 

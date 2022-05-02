@@ -3544,22 +3544,10 @@ meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
 			goto close;
 		}
 	}
-
 	err = sqlx_transaction_begin(sq3, &repctx);
 	if (err) {
 		goto close;
 	}
-	/* We set state to cleaning_up in order to bypass
-	  triggers and clean extra data from shards and
-	  all data from root. */
-	gint64 object_lock = sqlx_admin_get_i64(sq3,
-			M2V2_ADMIN_BUCKET_OBJECT_LOCK_ENABLED, 0);
-	if (object_lock) {
-		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-				NEW_SHARD_STATE_CLEANING_UP);
-		sqlx_admin_save_lazy (sq3);
-	}
-
 	gint64 timestamp = oio_ext_real_time();
 	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 		// Local shard copy or shard
@@ -3634,13 +3622,6 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	err = sqlx_transaction_begin(sq3, &repctx);
 	if (err) {
 		goto close;
-	}
-	gint64 object_lock = sqlx_admin_get_i64(sq3,
-			M2V2_ADMIN_BUCKET_OBJECT_LOCK_ENABLED, 0);
-	if (object_lock) {
-		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-				NEW_SHARD_STATE_CLEANING_UP);
-		sqlx_admin_save_lazy (sq3);
 	}
 	gint64 timestamp = oio_ext_real_time();
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
