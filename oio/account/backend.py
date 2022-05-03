@@ -200,7 +200,7 @@ class AccountBackend(RedisConnection):
 
         redis.call('HSET', lkey, 'marker', new_marker,
                                  'mtime', mtime);
-        if table.getn(containers) <= tonumber(batch_size) then
+        if table.getn(containers) < tonumber(batch_size) then
             redis.call('DEL', lkey)
             return { 1 }
         end;
