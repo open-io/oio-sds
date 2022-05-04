@@ -18,7 +18,7 @@ import time
 from oio.api.base import HttpApi
 from oio.common.configuration import load_namespace_conf
 from oio.common.constants import TIMEOUT_KEYS
-from oio.common.decorators import patch_kwargs
+from oio.common.decorators import ensure_headers, patch_kwargs
 from oio.common.easy_value import float_value
 from oio.common.exceptions import OioException, OioNetworkException
 from oio.common.logger import get_logger
@@ -128,9 +128,15 @@ class ServiceClient(HttpApi):
                         'Failed to refresh %s endpoint', self.service_type)
 
     @patch_kwargs
-    def service_request(self, method, action, **kwargs):
+    @ensure_headers
+    def service_request(self, method, action, use_cache=False, **kwargs):
         """Make a request to the service of specified service type."""
         self._maybe_refresh_endpoint()
+
+        if method in ['GET', 'HEAD']:
+            if not use_cache:
+                kwargs['headers']['X-No-Cache'] = '1'
+
         try:
             resp, body = self._request(
                 method, action, **kwargs)

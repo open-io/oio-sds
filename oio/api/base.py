@@ -258,7 +258,7 @@ class HttpApi(object):
         if not endpoint:
             if not self.endpoint:
                 raise ValueError('Endpoint not set in function call '
-                                 'nor in class contructor')
+                                 'nor in class constructor')
             endpoint = self.endpoint
         url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
         return self._direct_request(method, url, **kwargs)
