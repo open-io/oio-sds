@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +15,6 @@
 # License along with this library.
 
 import unittest
-from six import itervalues
 
 from mock import MagicMock as Mock
 
@@ -38,7 +38,7 @@ class TestMeta0Bootstrap(unittest.TestCase):
         sites = ['s' + str(i) for i in range(nb_sites)]
 
         def _loc(i):
-            s = list()
+            s = []
             s.append(sites[i % len(sites)])
             for _ in range(fill_token):
                 s.append('0')
@@ -115,13 +115,13 @@ class TestMeta0Bootstrap(unittest.TestCase):
 
 class FakeConscienceClient(object):
     def __init__(self, services=None):
-        self._all_services = list(services) if services else list()
+        self._all_services = list(services) if services else []
 
     def all_services(self, *_args, **_kwargs):
         return self._all_services
 
     def generate_services(self, count, locations=3):
-        self._all_services = list()
+        self._all_services = []
         for i in range(1, count+1):
             svc = {"addr": "127.0.1.1:6%03d" % i,
                    "score": 100,
@@ -151,7 +151,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping = self.make_mapping()
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        for count in itervalues(n_pfx_by_svc):
+        for count in n_pfx_by_svc.values():
             self.assertIn(count, range(mapping.num_bases() - 5000,
                                        mapping.num_bases() + 5000))
 
@@ -164,7 +164,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         ideal = mapping.num_bases() * replicas / n
         arange = range(int(ideal * 0.8), int(ideal * 1.2))
-        for count in itervalues(n_pfx_by_svc):
+        for count in n_pfx_by_svc.values():
             self.assertIn(count, arange)
 
     def _test_bootstrap_rebalanced(self, n_svc, replicas,
@@ -243,7 +243,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         self.assertTrue(mapping.check_replicas())
 
         svc = list(mapping.services.values())[0]
-        for base in [b for b in svc['bases']]:
+        for base in list(svc['bases']):
             old_peers = [x['addr'] for x in mapping.services_by_base[base]]
             self.logger.info("Decommissioning base %s from %s",
                              base, svc['addr'])
@@ -277,7 +277,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         svc = list(mapping.services.values())[0]
         self.logger.info("Decommissioning everything from %s", svc['addr'])
         self.logger.info("Bases: %s", svc['bases'])
-        moved = [b for b in svc['bases']]
+        moved = list(svc['bases'])
         for base in moved:
             old_peers = [x['addr'] for x in mapping.services_by_base[base]]
             self.logger.info("Decommissioning base %s from %s",

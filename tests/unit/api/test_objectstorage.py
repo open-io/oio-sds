@@ -19,11 +19,10 @@
 import json
 import random
 import unittest
+from io import IOBase
 from os.path import basename
 from tempfile import NamedTemporaryFile
 from mock import MagicMock as Mock, ANY
-
-from six import PY3
 
 from oio.common import exceptions
 from oio.common.constants import CONTAINER_HEADERS, OBJECT_HEADERS, \
@@ -301,9 +300,7 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertIs(call_args[0][0], self.account)
         self.assertIs(call_args[0][1], self.container)
         self.assertEqual(call_args[0][2], basename(src.name))
-        if PY3:
-            from io import IOBase
-            self.assertIsInstance(call_args[0][3], IOBase)
+        self.assertIsInstance(call_args[0][3], IOBase)
         self.assertEqual(call_args[0][3].name, src.name)
 
     def test_object_create_from_iterable(self):

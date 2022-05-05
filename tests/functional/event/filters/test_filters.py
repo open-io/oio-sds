@@ -18,7 +18,8 @@
 
 import time
 from random import choice
-from six.moves.urllib_parse import quote
+from urllib.parse import quote
+
 from oio.account.client import AccountClient
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
@@ -29,7 +30,7 @@ from tests.utils import BaseTestCase, random_str, strange_paths
 
 
 class _App(object):
-    app_env = dict()
+    app_env = {}
 
     def __init__(self, env, beanstalkd, cb):
         self.env = env

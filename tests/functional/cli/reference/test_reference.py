@@ -1,4 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +24,7 @@ class ReferenceTest(CliTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         opts = cls.get_opts(['Name'])
         output = cls.openio('reference create ' + cls.NAME + opts)
         cls.assertOutput(cls.NAME + '\n', output)
@@ -31,6 +33,7 @@ class ReferenceTest(CliTestCase):
     def tearDownClass(cls):
         output = cls.openio('reference delete ' + cls.NAME)
         cls.assertOutput('', output)
+        super().tearDownClass()
 
     def test_reference_show(self):
         opts = self.get_opts(['name'])

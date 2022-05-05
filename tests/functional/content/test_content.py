@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,8 +22,6 @@ from mock import MagicMock as Mock
 from testtools.matchers import Contains
 from testtools.matchers import Not
 from testtools.testcase import ExpectedException
-
-from six import PY2
 
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.utils import cid_from_name, get_hasher
@@ -306,10 +304,7 @@ class TestContentFactory(BaseTestCase):
 
         _, listing = self.container_client.content_list(self.account,
                                                         self.container_name)
-        if PY2:
-            obj_set = {k["name"].encode('utf-8') for k in listing["objects"]}
-        else:
-            obj_set = {k["name"] for k in listing["objects"]}
+        obj_set = {k["name"] for k in listing["objects"]}
         try:
             # Ensure the saved path is the one we gave the object
             for cname in answers:

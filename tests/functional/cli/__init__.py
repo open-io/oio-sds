@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,6 @@
 
 import os
 import shlex
-import six
 import subprocess
 from tests.utils import BaseTestCase
 
@@ -51,7 +50,7 @@ def execute(cmd, stdin=None, env=None, expected_returncode=0):
         _env.update(env)
     proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr,
                             env=_env)
-    if isinstance(stdin, six.text_type):
+    if isinstance(stdin, str):
         stdin = stdin.encode('utf-8')
     result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')

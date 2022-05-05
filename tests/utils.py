@@ -15,8 +15,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from __future__ import print_function
-
 import logging
 import sys
 import os
@@ -26,8 +24,7 @@ import string
 from subprocess import check_call
 from functools import wraps
 
-from six import text_type
-from six.moves.urllib_parse import urlencode
+from urllib.parse import urlencode
 
 import yaml
 import testtools
@@ -186,8 +183,8 @@ class CommonTestCase(testtools.TestCase):
             out_param = []
             for k, v in params.items():
                 if v is not None:
-                    if isinstance(v, text_type):
-                        v = text_type(v).encode('utf-8')
+                    if isinstance(v, str):
+                        v = v.encode('utf-8')
                     out_param.append((k, v))
             encoded_args = urlencode(out_param)
             url += '?' + encoded_args
@@ -222,15 +219,14 @@ class CommonTestCase(testtools.TestCase):
         cls._cls_account = cls._cls_conf['account']
         cls._cls_ns = cls._cls_conf['namespace']
         cls._cls_uri = 'http://' + cls._cls_conf['proxy']
-        # TODO(FVE): we should mix Apache and Go rawx services.
-        # They could be in specific slots.
-        some_rawx = cls._cls_conf['services']['rawx'][0]['addr']
-        resp = cls.static_request('GET', 'http://%s/info' % some_rawx)
-        cls._cls_conf['go_rawx'] = resp.headers.get('Server') != 'Apache'
 
     def setUp(self):
         super(CommonTestCase, self).setUp()
-        self.conf = get_config()
+        # Some test classes do not call setUpClass
+        if hasattr(self.__class__, '_cls_conf'):
+            self.conf = self.__class__._cls_conf.copy()
+        else:
+            self.conf = get_config()
         self.uri = 'http://' + self.conf['proxy']
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
@@ -252,7 +248,7 @@ class CommonTestCase(testtools.TestCase):
         # Namespace configuration as it was when the test started
         self._ns_conf_backup = None
 
-        self._deregister_at_teardown = list()
+        self._deregister_at_teardown = []
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
@@ -463,7 +459,7 @@ class BaseTestCase(CommonTestCase):
 
     def setUp(self):
         super(BaseTestCase, self).setUp()
-        self.locked_svc = list()
+        self.locked_svc = []
         self._flush_cs('echo')
 
     def tearDown(self):

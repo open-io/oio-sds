@@ -16,9 +16,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six import text_type
-from six.moves import xrange
-
 from time import sleep, time
 
 import redis
@@ -231,7 +228,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(text_type(res[0], 'utf8'), name)
+        self.assertEqual(str(res[0], 'utf-8'), name)
 
         # ensure it appears in listing
         listing = self.backend.list_containers(
@@ -351,18 +348,18 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test'
 
         self.backend.create_account(account_id)
-        for cont1 in xrange(4):
-            for cont2 in xrange(125):
+        for cont1 in range(4):
+            for cont2 in range(125):
                 name = '%d-%04d' % (cont1, cont2)
                 self.backend.update_container(
                     account_id, name, Timestamp().normal, 0, 0, 0)
 
-        for cont in xrange(125):
+        for cont in range(125):
             name = '2-0051-%04d' % cont
             self.backend.update_container(
                 account_id, name, Timestamp().normal, 0, 0, 0)
 
-        for cont in xrange(125):
+        for cont in range(125):
             name = '3-%04d-0049' % cont
             self.backend.update_container(
                 account_id, name, Timestamp().normal, 0, 0, 0)
@@ -482,10 +479,10 @@ class TestAccountBackend(BaseTestCase):
             mtime = Timestamp().normal
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
-            nb_objets = random.randrange(100)
-            total_objects += nb_objets
+            objects = random.randrange(100)
+            total_objects += objects
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes)
+                account_id, name, mtime, 0, objects, nb_bytes)
 
         # change values
         self.backend.conn.hset(account_key, 'bytes', 1)
@@ -587,10 +584,10 @@ class TestAccountBackend(BaseTestCase):
             mtime = Timestamp().normal
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
-            nb_objets = random.randrange(100)
-            total_objects += nb_objets
+            objects = random.randrange(100)
+            total_objects += objects
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes)
+                account_id, name, mtime, 0, objects, nb_bytes)
 
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
                          str(total_bytes).encode('utf-8'))
@@ -620,10 +617,10 @@ class TestAccountBackend(BaseTestCase):
             mtime = Timestamp().normal
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
-            nb_objets = random.randrange(100)
-            total_objects += nb_objets
+            objects = random.randrange(100)
+            total_objects += objects
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 bucket_name=bucket)
 
         bkey = self.backend.bkey(bucket)

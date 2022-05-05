@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,6 @@ from __future__ import print_function
 import os
 import time
 from io import BytesIO
-
-from six import text_type
 
 from oio.common.exceptions import ClientException, Conflict
 from oio.common.utils import cid_from_name
@@ -76,7 +74,7 @@ class TestFilters(BaseTestCase):
         try:
             self._new_content(data, path, False)
         except ClientException as exc:
-            self.assertIn('NS slave!', text_type(exc))
+            self.assertIn('NS slave!', str(exc))
         else:
             self.fail("New content: no exception")
         content = self._new_content(data, path, True)

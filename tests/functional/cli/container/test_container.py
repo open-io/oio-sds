@@ -32,6 +32,7 @@ class ContainerTest(CliTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         opts = cls.get_format_opts(fields=('Name', ))
         output = cls.openio('container create ' + cls.NAME + opts)
         cls.CID = cid_from_name(cls.account_from_env(), cls.NAME)
@@ -41,6 +42,7 @@ class ContainerTest(CliTestCase):
     def tearDownClass(cls):
         output = cls.openio('container delete ' + cls.NAME)
         cls.assertOutput('', output)
+        super().tearDownClass()
 
     def setUp(self):
         super(ContainerTest, self).setUp()

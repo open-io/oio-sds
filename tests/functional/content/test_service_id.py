@@ -20,7 +20,6 @@ from subprocess import check_call
 import time
 import yaml
 
-from six.moves import xrange
 import configparser
 
 from oio.common.exceptions import ServiceBusy
@@ -78,6 +77,7 @@ class BaseServiceIdTest(BaseTestCase):
 
         self._cnt = random_str(10)
         self.api = self.storage
+        self.name = None
         self.wait_for_score(('meta2', ))
 
     def tearDown(self):
@@ -89,7 +89,7 @@ class BaseServiceIdTest(BaseTestCase):
         path = HTTPD_CONF % (self.ns, self.name)
         with open(path, "r") as fp:
             data = fp.read().split('\n')
-        for idx in xrange(len(data)):
+        for idx in range(len(data)):
             if data[idx].startswith('Listen'):
                 data[idx] = data[idx].split(':')[0] + ':' + str(port)
             elif data[idx].startswith('<VirtualHost'):

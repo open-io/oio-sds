@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 import math
 import time
 from io import BytesIO
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
 from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
@@ -237,7 +237,7 @@ class TestPlainContent(BaseTestCase):
         data = random_data(self.chunk_size)
         content, broken_chunks_info = self._new_content(
             self.stgpol_twocopies, data, [(0, 0)])
-        system = dict()
+        system = {}
         system['sys.status'] = str(OIO_DB_FROZEN)
         self.container_client.container_set_properties(
             self.account, self.container_name, None, system=system)

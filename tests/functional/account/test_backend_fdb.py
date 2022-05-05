@@ -48,7 +48,8 @@ class TestAccountBackend(BaseTestCase):
         if os.path.exists(CommonFdb.DEFAULT_FDB):
             fdb_file = CommonFdb.DEFAULT_FDB
         else:
-            fdb_file = str(Path.home()) + '/.oio/sds/conf/OPENIO-fdb.cluster'
+            fdb_file = (str(Path.home())
+                        + f'/.oio/sds/conf/{self.ns}-fdb.cluster')
         self.account_conf = {
             'fdb_file': fdb_file}
         self.backend = AccountBackendFdb(self.account_conf, logger)
@@ -1097,19 +1098,19 @@ class TestAccountBackend(BaseTestCase):
             name = "container%d" % i
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
-            nb_objets = random.randrange(100)
+            objects = random.randrange(100)
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 region=region)
             total_bytes += nb_bytes
-            total_objects += nb_objets
+            total_objects += objects
             containers += 1
             containers_info[(account_id, name)] = {
                 ('name',): name,
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): nb_objets
+                ('objects',): objects
             }
         backend_info = (
             {
@@ -1430,20 +1431,20 @@ class TestAccountBackend(BaseTestCase):
             name = "container%d" % i
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
-            nb_objets = random.randrange(100)
+            objects = random.randrange(100)
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 region=region)
             if random.randrange(100) > 50:
                 total_bytes += nb_bytes
-                total_objects += nb_objets
+                total_objects += objects
                 containers += 1
                 containers_info[(account_id, name)] = {
                     ('name',): name,
                     ('region',): region,
                     ('mtime',): mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): nb_objets
+                    ('objects',): objects
                 }
             else:
                 # with some deleted containers
@@ -1591,20 +1592,20 @@ class TestAccountBackend(BaseTestCase):
             name = "container%d" % i
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
-            nb_objets = random.randrange(100)
+            objects = random.randrange(100)
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 region=region)
             if random.randrange(100) > 50:
                 total_bytes += nb_bytes
-                total_objects += nb_objets
+                total_objects += objects
                 containers += 1
                 containers_info[(account_id, name)] = {
                     ('name',): name,
                     ('region',): region,
                     ('mtime',): mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): nb_objets
+                    ('objects',): objects
                 }
             else:
                 # with some deleted containers
@@ -1619,20 +1620,20 @@ class TestAccountBackend(BaseTestCase):
             name = "container%d" % i
             sharding_mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
-            nb_objets = random.randrange(100)
+            objects = random.randrange(100)
             self.backend.update_container(
-                sharding_account_id, name, sharding_mtime, 0, nb_objets,
+                sharding_account_id, name, sharding_mtime, 0, objects,
                 nb_bytes, region=region)
             if random.randrange(100) > 50:
                 sharding_total_bytes += nb_bytes
-                sharding_total_objects += nb_objets
+                sharding_total_objects += objects
                 shards += 1
                 containers_info[(sharding_account_id, name)] = {
                     ('name',): name,
                     ('region',): region,
                     ('mtime',): sharding_mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): nb_objets
+                    ('objects',): objects
                 }
             else:
                 # with some deleted containers
@@ -1781,12 +1782,12 @@ class TestAccountBackend(BaseTestCase):
             nb_bytes = random.randrange(100)
             account_bytes += nb_bytes
             bucket_bytes += nb_bytes
-            nb_objets = random.randrange(100)
-            account_objects += nb_objets
+            objects = random.randrange(100)
+            account_objects += objects
             if not name.endswith('+segments'):
-                bucket_objects += nb_objets
+                bucket_objects += objects
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 bucket_name=bucket, region=region)
             containers_info[(account_id, name)] = {
                 ('name',): name,
@@ -1794,7 +1795,7 @@ class TestAccountBackend(BaseTestCase):
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): nb_objets
+                ('objects',): objects
             }
         buckets_info[(account_id, bucket)] = {
             ('account',): account_id,
@@ -1812,11 +1813,11 @@ class TestAccountBackend(BaseTestCase):
             nb_bytes = random.randrange(100)
             account_bytes += nb_bytes
             bucket_bytes += nb_bytes
-            nb_objets = random.randrange(100)
-            account_objects += nb_objets
-            bucket_objects += nb_objets
+            objects = random.randrange(100)
+            account_objects += objects
+            bucket_objects += objects
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
+                account_id, name, mtime, 0, objects, nb_bytes,
                 bucket_name=name, region=region)
             buckets_info[(account_id, name)] = {
                 ('account',): account_id,
@@ -1824,7 +1825,7 @@ class TestAccountBackend(BaseTestCase):
                 ('containers',): 1,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): nb_objets
+                ('objects',): objects
             }
             containers_info[(account_id, name)] = {
                 ('name',): name,
@@ -1832,7 +1833,7 @@ class TestAccountBackend(BaseTestCase):
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): nb_objets
+                ('objects',): objects
             }
         backend_info = (
             {

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,8 +20,6 @@ import time
 import math
 import random
 from io import BytesIO
-
-from six.moves import xrange
 
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk, NotFound, \
@@ -67,7 +65,7 @@ class TestECContent(BaseTestCase):
         self.m = 3
 
     def random_chunks(self, nb):
-        pos = random.sample(xrange(self.k + self.m), nb)
+        pos = random.sample(range(self.k + self.m), nb)
         return ["0.%s" % i for i in pos]
 
     def _test_create(self, data_size):
