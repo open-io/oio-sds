@@ -1461,7 +1461,9 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 				g_ptr_array_add(tmp, v ? v : g_strdup(""));
 			}
 		}
-		g_free (keys); /*< pointers reused! */
+		/* The pointer array is no longer used,
+		 * but the content (dynamically allocated) is still used. */
+		g_free(keys);
 
 		if (oio_ext_is_admin()) {
 			GPtrArray *stats = sqlx_admin_get_usage(sq3);
@@ -1469,7 +1471,9 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 				for(guint i=0; i < stats->len; i++) {
 					g_ptr_array_add(tmp, g_ptr_array_index(stats, i));
 				}
-				g_ptr_array_free(stats, FALSE); /*< pointers reused! */
+				/* The pointer array is no longer used,
+				 * but the content (dynamically allocated) is still used. */
+				g_ptr_array_free(stats, TRUE);
 			}
 		}
 		g_ptr_array_add(tmp, NULL);

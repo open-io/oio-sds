@@ -1241,7 +1241,7 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Container not found"
 				" : (%d) %s", errno, strerror(errno));
 
-	if (bddname != NULL)
+	if (!err && bddname != NULL)
 		*bddname = g_strdup(args.realpath);
 	_open_clean_args(&args);
 	return err;
