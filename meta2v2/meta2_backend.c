@@ -1074,6 +1074,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 {
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
+	gboolean object_lock_enabled = FALSE;
 
 	if (!params->local && (err = _transaction_begin(sq3, url, &repctx)))
 		return err;
@@ -1090,9 +1091,14 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		for (gchar **p=params->properties; *p && *(p+1) ;p+=2) {
 			sqlx_admin_set_str (sq3, *p, *(p+1));
 			// During bucket creation
-			if (g_strcmp0(*p, M2V2_USER_OBJECT_LOCK_ENABLED) == 0)
+			if (g_strcmp0(*p, M2V2_ADMIN_BUCKET_OBJECT_LOCK_ENABLED) == 0)
 			{
 				err = m2db_create_triggers(sq3);
+				if (err) {
+					break;
+				} else {
+					object_lock_enabled = TRUE;
+				}
 			}
 		}
 	}
@@ -1102,8 +1108,13 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		gint64 max = g_ascii_strtoll(params->version_policy, NULL, 10);
 		m2db_set_max_versions(sq3, max);
 	}
-	if (!params->local)
+	if (!params->local) {
+		if (object_lock_enabled) {
+			/* Force copy database during creation to set up triggers */
+			sqlx_transaction_notify_huge_changes(repctx);
+		}
 		err = sqlx_transaction_end(repctx, err);
+	}
 	return err;
 }
 
@@ -3538,16 +3549,17 @@ meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
 	if (err) {
 		goto close;
 	}
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-			NEW_SHARD_STATE_CLEANING_UP);
-	err = sqlx_transaction_end(repctx, err);
-	if (err) {
-		goto close;
+	/* We set state to cleaning_up in order to bypass
+	  triggers and clean extra data from shards and
+	  all data from root. */
+	gint64 object_lock = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_BUCKET_OBJECT_LOCK_ENABLED, 0);
+	if (object_lock) {
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+				NEW_SHARD_STATE_CLEANING_UP);
+		sqlx_admin_save_lazy (sq3);
 	}
-	err = sqlx_transaction_begin(sq3, &repctx);
-	if (err) {
-		goto close;
-	}
+
 	gint64 timestamp = oio_ext_real_time();
 	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 		// Local shard copy or shard
@@ -3623,8 +3635,13 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	if (err) {
 		goto close;
 	}
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-			NEW_SHARD_STATE_CLEANING_UP);
+	gint64 object_lock = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_BUCKET_OBJECT_LOCK_ENABLED, 0);
+	if (object_lock) {
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+				NEW_SHARD_STATE_CLEANING_UP);
+		sqlx_admin_save_lazy (sq3);
+	}
 	gint64 timestamp = oio_ext_real_time();
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
 		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
