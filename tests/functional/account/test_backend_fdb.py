@@ -18,7 +18,6 @@
 
 import eventlet
 import fdb
-import logging
 import os
 import random
 import struct
@@ -41,8 +40,6 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 @attr('no_thread_patch')
 class TestAccountBackend(BaseTestCase):
     def setUp(self):
-        logger = logging.getLogger('test')
-
         super(TestAccountBackend, self).setUp()
 
         if os.path.exists(CommonFdb.DEFAULT_FDB):
@@ -52,7 +49,7 @@ class TestAccountBackend(BaseTestCase):
                         + f'/.oio/sds/conf/{self.ns}-fdb.cluster')
         self.account_conf = {
             'fdb_file': fdb_file}
-        self.backend = AccountBackendFdb(self.account_conf, logger)
+        self.backend = AccountBackendFdb(self.account_conf, self.logger)
         self.backend.init_db(None)
         self.backend.db.clear_range(b'\x00', b'\xfe')
         self.beanstalkd0.drain_tube('oio-preserved')
