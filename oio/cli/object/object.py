@@ -743,7 +743,7 @@ class ListObject(ContainerCommandMixin, Lister):
                                   obj['hash'], obj['version'],
                                   obj['deleted'], obj['mime_type'],
                                   Timestamp(obj['mtime']).isoformat,
-                                  obj['policy'],
+                                  obj['policy'], obj['chunk_method'],
                                   _format_props(obj.get('properties', {})))
                         yield result
                     except KeyError as exc:
@@ -751,7 +751,8 @@ class ListObject(ContainerCommandMixin, Lister):
                         self.log.warn("Bad object entry, missing '%s': %s",
                                       exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version', 'Deleted',
-                       'Content-Type', 'Last-Modified', 'Policy', 'Properties')
+                       'Content-Type', 'Last-Modified', 'Policy',
+                       'Chunk-Method', 'Properties')
         else:
             def _gen_results(objects):
                 for obj in objects:

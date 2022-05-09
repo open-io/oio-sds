@@ -283,8 +283,8 @@ class ObjectTest(CliTestCase):
         listing = self.json_loads(output)
         self.assertEqual(obj_count, len(listing))
         for obj in listing:
-            # 9 columns
-            self.assertEqual(9, len(obj))
+            # 10 columns
+            self.assertEqual(10, len(obj))
 
         # Unpaged listing
         output = self.openio('object list --auto --no-paging --prefix ' +
