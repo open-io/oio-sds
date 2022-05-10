@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -216,6 +217,16 @@ extern "C" {
 # define EVENT_FIELD_ORIGIN     "origin"
 
 # define oio_cfg_get_eventagent(ns)     oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+
+/** Get the URL of the queue where the services of the specified type
+ * must send their events. */
+# define oio_cfg_get_eventqueue(ns,svctype) ({\
+	gchar *res = oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT "." svctype); \
+	if (!res) \
+		res = oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT); \
+	res; \
+})
+
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
 # define oio_cfg_get_ecd(ns)            oio_cfg_get_value((ns), OIO_CFG_ECD)

@@ -39,7 +39,11 @@ struct _queue_with_endpoint_s
 	GThread *worker;
 
 	gchar *endpoint;
-	gchar *tube;
+	gchar *username;
+	gchar *password;
+	gchar *tube;  // tube for Beanstalkd, routing key for RabbitMQ
+	gchar *exchange_name;  // only for RabbitMQ
+	gchar *exchange_type;  // only for RabbitMQ
 	gint64 pending_events;
 
 	volatile gboolean running;

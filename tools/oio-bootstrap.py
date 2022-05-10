@@ -1130,7 +1130,8 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
-${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
+${NOBS}event-agent=${EVENT_CNXSTRING}
+${NOBS}event-agent.meta2=${EVENT_CNXSTRING_M2}
 
 ns.meta1_digits=${M1_DIGITS}
 
@@ -1913,13 +1914,13 @@ def generate(options):
             env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
                           'PORT': port, 'PORT_HUB': hub, 'EXE': 'oio-daemon'})
             register_service(env, template_systemd_service_conscience,
-                                conscience_target)
+                             conscience_target)
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
 
     # beanstalkd
-    all_beanstalkd = list()
+    all_beanstalkd = []
     nb_beanstalkd = getint(options['beanstalkd'].get(SVC_NB), 1)
     if nb_beanstalkd:
         # prepare a list of all the beanstalkd
@@ -1933,7 +1934,7 @@ def generate(options):
                           'IP': host, 'PORT': port,
                           'EXE': 'beanstalkd'})
             register_service(env, template_systemd_service_beanstalkd,
-                beanstalkd_target)
+                             beanstalkd_target)
             # watcher
             tpl = Template(template_beanstalkd_watch)
             with open(watch(env), 'w+') as f:
@@ -1942,10 +1943,16 @@ def generate(options):
         beanstalkd_cnxstring = ';'.join(
             "beanstalk://" + str(h) + ":" + str(p)
             for _, h, p in all_beanstalkd)
-        ENV.update({'BEANSTALKD_CNXSTRING': beanstalkd_cnxstring,
+        ENV.update({'EVENT_CNXSTRING': beanstalkd_cnxstring,
                     'NOBS': ''})
     else:
-        ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS': '#'})
+        ENV.update({'EVENT_CNXSTRING': '***disabled***', 'NOBS': '#'})
+
+    # If a RabbitMQ endpoint is configured, configure it only for meta2
+    if 'endpoint' in options['rabbitmq']:
+        ENV.update({'EVENT_CNXSTRING_M2': options['rabbitmq']['endpoint']})
+    else:
+        ENV.update({'EVENT_CNXSTRING_M2': ENV['EVENT_CNXSTRING']})
 
     meta2_volumes = []
 
@@ -2439,7 +2446,7 @@ def main():
                         help="set of IP to use (repeatable option)")
 
     opts = {}
-    opts['config'] = dict()
+    opts['config'] = {}
     opts['config']['proxy.cache.enabled'] = False
     opts['config']['ns.chunk_size'] = 1024 * 1024
     opts[ZOOKEEPER] = False
@@ -2453,6 +2460,7 @@ def main():
     opts[FSYNC_RAWX] = False
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['rabbitmq'] = {}
 
     options = parser.parse_args()
 

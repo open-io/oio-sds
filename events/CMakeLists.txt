@@ -32,11 +32,14 @@ add_library(oioevents STATIC
 	oio_events_queue_internals.c
 	oio_events_queue_fanout.c
 	oio_events_queue_beanstalkd.c
+	oio_events_queue_rabbitmq.c
 	oio_events_queue_shared.c
+	rabbitmq.c
 	${CMAKE_CURRENT_BINARY_DIR}/events_variables.c)
 
 target_link_libraries(
 	oioevents
 	metautils
 	${GLIB2_LIBRARIES}
+	${RABBIMQ_LIBRARIES}
 )

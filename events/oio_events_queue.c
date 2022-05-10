@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,8 @@ License along with this library.
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_fanout.h"
 #include "oio_events_queue_beanstalkd.h"
+#include "oio_events_queue_rabbitmq.h"
+#include "rabbitmq.h"
 
 #define EVTQ_CALL(self,F) VTABLE_CALL(self,struct oio_events_queue_abstract_s*,F)
 
@@ -154,7 +156,6 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT (cfg != NULL);
-	EXTRA_ASSERT (tube != NULL);
 	EXTRA_ASSERT (out != NULL);
 	*out = NULL;
 
@@ -162,12 +163,43 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		// Sharding over several endpoints
 		return _parse_and_create_multi(cfg, tube, out);
 	} else {
-		const char *tmp;
+		GError *err = NULL;
+		const char *final_tube = tube;
+		const char *netloc;
+		const char *param_value = NULL;
+		const char *exchange_name = NULL, *exchange_type = NULL;
+		struct oio_requri_s queue_uri = {0};
 
-		if ((tmp = _has_prefix(cfg, BEANSTALKD_PREFIX)) != NULL)
-			return oio_events_queue_factory__create_beanstalkd(tmp, tube, out);
+		// Look for a tube name in the optional query string
+		oio_requri_parse(cfg, &queue_uri);
+		for (gchar **tok = queue_uri.query_tokens;
+				queue_uri.query_tokens && *tok;
+				tok++) {
+			if ((param_value = _has_prefix(*tok, "tube=")))
+				final_tube = param_value;
+			else if ((param_value = _has_prefix(*tok, "exchange=")))
+				exchange_name = param_value;
+			else if ((param_value = _has_prefix(*tok, "exchange_type=")))
+				exchange_type = param_value;
+		}
 
-		return BADREQ("implementation not recognized");
+		if (!oio_str_is_set(final_tube)) {
+			err = BADREQ("missing 'tube' parameter: %s", cfg);
+		} else {
+			// Choose the right queue connector
+			if ((netloc = _has_prefix(queue_uri.path, BEANSTALKD_PREFIX))) {
+				err = oio_events_queue_factory__create_beanstalkd(
+						netloc, final_tube, out);
+			} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
+				err = oio_events_queue_factory__create_rabbitmq(
+						netloc, final_tube, exchange_name, exchange_type, out);
+			} else {
+				err = BADREQ("implementation not recognized: %s", cfg);
+			}
+		}
+
+		oio_requri_clear(&queue_uri);
+		return err;
 	}
 }
 

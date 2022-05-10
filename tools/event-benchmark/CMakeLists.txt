@@ -17,7 +17,7 @@ target_link_libraries(event_benchmark
 		oioevents
 		server gridcluster
 		metautils
-		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES})
+		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${RABBITMQ_LIBRARIES} ${CURL_LIBRARIES})
 
 install(TARGETS
 			event_benchmark

@@ -75,7 +75,7 @@ target_link_libraries(meta2v2
 		meta1remote meta0remote meta0utils
 		meta2v2utils
 		oioevents
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES} ${RABBITMQ_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
 add_executable(meta2_server

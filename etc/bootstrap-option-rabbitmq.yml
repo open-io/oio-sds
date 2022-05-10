@@ -1,0 +1,4 @@
+rabbitmq:
+  endpoint: "amqp://127.0.0.1:5672?tube=oio&exchange=oio&exchange_type=topic"
+config:
+  events.beanstalkd.check_period: "5s"

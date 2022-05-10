@@ -19,6 +19,7 @@ libglib2.0-dev
 libjson-c-dev
 libleveldb-dev
 liblzo2-dev
+librabbitmq-dev
 libsqlite3-dev
 libsystemd-dev
 libzmq3-dev

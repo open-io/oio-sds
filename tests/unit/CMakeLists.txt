@@ -4,7 +4,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 set(COMMON oiocore oiosds ${GLIB2_LIBRARIES})
 
 if (NOT SDK_ONLY)
-set(ENLARGED ${COMMON} metautils)
+set(ENLARGED ${COMMON} metautils ${RABBITMQ_LIBRARIES})
 
 include_directories(BEFORE
 		${CMAKE_BINARY_DIR}/metautils/lib
@@ -79,7 +79,7 @@ target_link_libraries(test_gba ${ENLARGED})
 add_test(NAME metautils/gba COMMAND test_gba)
 
 add_executable(test_meta2_backend test_meta2_backend.c)
-target_link_libraries(test_meta2_backend meta2v2 ${ENLARGED} gridcluster hcresolve sqlxsrv)
+target_link_libraries(test_meta2_backend meta2v2 oioevents ${ENLARGED} gridcluster hcresolve sqlxsrv)
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
 
 add_executable(test_meta1_backend test_meta1_backend.c)
@@ -119,7 +119,7 @@ target_link_libraries(test_events_queue sqlxsrv oioevents ${ENLARGED})
 add_test(NAME events/abstract COMMAND test_events_queue)
 
 add_executable(test_events_beanstalkd test_events_beanstalkd.c)
-target_link_libraries(test_events_beanstalkd ${ENLARGED} oioevents server)
+target_link_libraries(test_events_beanstalkd oioevents ${ENLARGED} server)
 add_test(NAME events/beanstalkd COMMAND test_events_beanstalkd)
 
 endif (NOT SDK_ONLY)

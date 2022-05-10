@@ -90,58 +90,69 @@
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_new",
 				"key": "meta2.tube.container_new",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.container.new' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_deleted",
 				"key": "meta2.tube.container_deleted",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.container.deleted' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_state",
 				"key": "meta2.tube.container_state",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.container.state' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_updated",
 				"key": "meta2.tube.container_updated",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.container.update' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_created",
 				"key": "meta2.tube.content_created",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.new' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_appended",
 				"key": "meta2.tube.content_appended",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.append' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_deleted",
 				"key": "meta2.tube.content_deleted",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.deleted' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_updated",
 				"key": "meta2.tube.content_updated",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.update' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_drained",
 				"key": "meta2.tube.content_drained",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.drained' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_broken",
 				"key": "meta2.tube.content_broken",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.content.broken' events."
+			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_meta2_deleted",
 				"key": "meta2.tube.meta2_deleted",
-				"limit": 64, "def": "oio", "descr": "" },
-
+				"limit": 64, "def": "oio",
+				"descr": "Tube name or full URI where to send 'storage.meta2.deleted' events."
+			},
 			{ "type": "string",
 				"name": "oio_rawx_tube_chunk_created",
 				"key": "rawx.tube.chunk_created",

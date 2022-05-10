@@ -53,7 +53,11 @@ _q_destroy(struct oio_events_queue_s *self)
 
 	g_async_queue_unref(q->queue);
 	oio_str_clean(&q->endpoint);
+	oio_str_clean(&q->username);
+	oio_str_clean(&q->password);
 	oio_str_clean(&q->tube);
+	oio_str_clean(&q->exchange_name);
+	oio_str_clean(&q->exchange_type);
 	oio_events_queue_buffer_clean(&(q->buffer));
 
 	q->vtable = NULL;

@@ -592,7 +592,7 @@ Used by `gcc`
 
 ### meta2.tube.container_deleted
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.container.deleted' events.
 
  * default: **oio**
  * type: string
@@ -600,7 +600,7 @@ Used by `gcc`
 
 ### meta2.tube.container_new
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.container.new' events.
 
  * default: **oio**
  * type: string
@@ -608,7 +608,7 @@ Used by `gcc`
 
 ### meta2.tube.container_state
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.container.state' events.
 
  * default: **oio**
  * type: string
@@ -616,7 +616,7 @@ Used by `gcc`
 
 ### meta2.tube.container_updated
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.container.update' events.
 
  * default: **oio**
  * type: string
@@ -624,7 +624,7 @@ Used by `gcc`
 
 ### meta2.tube.content_appended
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.append' events.
 
  * default: **oio**
  * type: string
@@ -632,7 +632,7 @@ Used by `gcc`
 
 ### meta2.tube.content_broken
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.broken' events.
 
  * default: **oio**
  * type: string
@@ -640,7 +640,7 @@ Used by `gcc`
 
 ### meta2.tube.content_created
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.new' events.
 
  * default: **oio**
  * type: string
@@ -648,7 +648,7 @@ Used by `gcc`
 
 ### meta2.tube.content_deleted
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.deleted' events.
 
  * default: **oio**
  * type: string
@@ -656,7 +656,7 @@ Used by `gcc`
 
 ### meta2.tube.content_drained
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.drained' events.
 
  * default: **oio**
  * type: string
@@ -664,7 +664,7 @@ Used by `gcc`
 
 ### meta2.tube.content_updated
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.content.update' events.
 
  * default: **oio**
  * type: string
@@ -672,7 +672,7 @@ Used by `gcc`
 
 ### meta2.tube.meta2_deleted
 
-> TODO: to be documented
+> Tube name or full URI where to send 'storage.meta2.deleted' events.
 
  * default: **oio**
  * type: string

@@ -176,12 +176,15 @@ static GError *
 _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 {
 #define INIT(Out,Tube) if (!err) { \
-	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	if (strstr(Tube, "://")) \
+		err = oio_events_queue_factory__create((Tube), NULL, &(Out)); \
+	else \
+		err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
 	if (!err) \
 		err = oio_events_queue__start((Out)); \
 }
-	gchar *url = oio_cfg_get_eventagent(ns);
+	gchar *url = oio_cfg_get_eventqueue(ns, "meta2");
 	if (!url)
 		return NULL;
 	STRING_STACKIFY(url);
@@ -202,6 +205,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted);
 
 	return err;
+#undef INIT
 }
 
 GError *
@@ -2304,7 +2308,7 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
 		}
 	}
 
-	/* If <propagate_to_shards> is True, user explicitely wants to propagate
+	/* If <propagate_to_shards> is True, user explicitly wants to propagate
 	 * the properties to the shards */
 	if (propagate_to_shards) {
 		tmp = db_properties_system_to_gpa(db_properties, tmp);
