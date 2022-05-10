@@ -1,6 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -47,7 +48,7 @@ License along with this library.
 #define PORT_USED 4269
 
 static gboolean
-_intercept_running_hook(struct _queue_BEANSTALKD_s *q)
+_intercept_running_hook(struct _queue_with_endpoint_s *q)
 {
 	return q->running || !_q_is_empty(q);
 }
@@ -88,7 +89,7 @@ _wrap_with_beanstalkd (gchar ** requests, gchar ** replies,
 		++ next_request;
 	}
 
-	/* Each time a buffer is received, find \n and manage the preceeding
+	/* Each time a buffer is received, find \n and manage the preceding
 	 * characters as a request */
 	int _on_input (struct network_client_s *clt) {
 		GByteArray *gba = (GByteArray*) clt->transport.client_context;

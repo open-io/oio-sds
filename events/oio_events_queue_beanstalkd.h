@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,7 +22,7 @@ License along with this library.
 struct oio_events_queue_s;
 
 /* Creates an event queue based on beanstalkd, with the default maximum number
-   of events "not yet acknowledged". */
+ * of events "not yet acknowledged". */
 GError * oio_events_queue_factory__create_beanstalkd (
 		const char *endpoint, const char *tube,
 		struct oio_events_queue_s **out);
