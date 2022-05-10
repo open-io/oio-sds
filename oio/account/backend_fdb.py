@@ -308,6 +308,88 @@ class AccountBackendFdb(object):
                 self._increment(
                     tr, self.metrics_space.pack((key, region, policy)), value)
 
+    @catch_service_errors
+    def refresh_metrics(self, **kwargs):
+        """
+        Recompute the global metrics
+        """
+
+        self._refresh_metrics(self.db)
+
+    @fdb.transactional
+    def _refresh_metrics(self, tr):
+
+        self._reset_metrics(tr)
+
+        counters = {
+            ACCOUNTS_FIELD: 0,
+        }
+        marker = None
+
+        acc_range = self.acct_space.range()
+
+        for key, value in tr.get_range(acc_range.start, acc_range.stop):
+
+            account_id, field, *parts = self.acct_space.unpack(key)
+            is_shard = account_id.startswith(SHARDING_ACCOUNT_PREFIX)
+
+            if marker != account_id:
+                marker = account_id
+
+                if not is_shard:
+                    counters[ACCOUNTS_FIELD] += 1
+
+            # Only treat counters with region
+            if len(parts) == 0:
+                continue
+            region = parts[0]
+            details = parts[1] if len(parts) > 1 else None
+            value = self._counter_value_to_counter(value)
+
+            if field not in COUNTERS_FIELDS:
+                continue
+            if is_shard:
+                if field == CONTAINERS_FIELD:
+                    field = SHARDS_FIELD
+            if details and field in (BYTES_FIELD, OBJECTS_FIELD):
+                field_counters = counters.setdefault(field, {})
+                region_counters = field_counters.setdefault(region, Counter())
+                region_counters[details] += value
+            else:
+                counter = counters.setdefault(field, Counter())
+                counter[region] += value
+
+        # Update data with counters
+        self._update_metrics(tr, counters)
+
+    @fdb.transactional
+    def _reset_metrics(self, tr):
+        # Delete every keys in 'metrics' subspace
+        metrics_range = self.metrics_space.range()
+        tr.clear_range(metrics_range.start, metrics_range.stop)
+
+    @fdb.transactional
+    def _update_metrics(self, tr, counters):
+        for key, value in counters.items():
+            if key is ACCOUNTS_FIELD:
+                self._set_counter(tr,
+                                  self.metrics_space.pack((ACCOUNTS_FIELD,)),
+                                  value)
+            else:
+                for counter_key, counter_value in value.items():
+                    if isinstance(counter_value, Counter):
+                        for detail_key, detail_value in counter_value.items():
+                            entry_key = (key, counter_key, detail_key)
+                            self._set_counter(
+                                tr,
+                                self.metrics_space.pack(entry_key),
+                                detail_value)
+                    else:
+                        self._set_counter(
+                            tr,
+                            self.metrics_space.pack((key, counter_key)),
+                            counter_value)
+
     # Account -----------------------------------------------------------------
 
     @catch_service_errors
@@ -439,14 +521,14 @@ class AccountBackendFdb(object):
     @catch_service_errors
     def info_account(self, account_id, **kwargs):
         """
-        Get all available information about a account.
+        Get all available information about an account.
         """
         return self._account_info(self.db, account_id, full=True)
 
     @fdb.transactional
     def _account_info(self, tr, account_id, full=False):
         """
-        [transactional] Get all available information about a account.
+        [transactional] Get all available information about an account.
         """
         account_space = self.acct_space[account_id]
         account_range = account_space.range()
@@ -664,7 +746,7 @@ class AccountBackendFdb(object):
                                  skipped', account_id)
                 return
         else:
-            raise NotFound('Account does\'nt exist')
+            raise NotFound('Account doesn\'t exist')
         for field in (BYTES_FIELD, OBJECTS_FIELD, CONTAINERS_FIELD,
                       BUCKETS_FIELD):
             self._set_counter(tr, account_space.pack((field,)))
@@ -1747,7 +1829,6 @@ class AccountBackendFdb(object):
             containers_begin = fdb.KeySelector.first_greater_or_equal(
                 account_containers.pack((marker,)))
         count = 0
-        new_marker = None
         containers = tr.get_range(containers_begin, containers_end)
         data = {}
 

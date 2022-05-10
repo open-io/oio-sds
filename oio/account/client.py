@@ -81,13 +81,6 @@ class AccountClient(ServiceClient):
             account, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
 
-    def account_metrics(self, **kwargs):
-        """
-        Metrics of an account.
-        """
-        _resp, body = self.account_request(None, 'GET', 'metrics', **kwargs)
-        return body
-
     def bucket_list(self, account, limit=None, marker=None,
                     prefix=None, **kwargs):
         """
@@ -252,3 +245,24 @@ class AccountClient(ServiceClient):
         :type account: `str`
         """
         self.account_request(account, 'POST', 'flush', **kwargs)
+
+
+class MetricsClient(ServiceClient):
+    """Simple client API for metrics from the account service."""
+    def __init__(self, conf, **kwargs):
+        super(MetricsClient, self).__init__(
+            'account', conf, service_name='account-service',
+            request_prefix='', **kwargs)
+
+    def account_metrics(self, **kwargs):
+        """
+        Metrics of an account.
+        """
+        _, body = self.service_request('GET', 'metrics', **kwargs)
+        return body
+
+    def metrics_recompute(self, **kwargs):
+        """
+        Recompute all metrics.
+        """
+        self.service_request('POST', 'metrics/recompute', **kwargs)

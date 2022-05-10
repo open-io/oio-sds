@@ -475,9 +475,9 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 0,
-                'regions': {}
-            }, resp)
+            'accounts': 0,
+            'regions': {}
+        }, resp)
 
         for i in range(2):
             account_id = 'acct1-' + str(i)
@@ -486,27 +486,27 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 2,
-                'regions': {}
-            }, resp)
+            'accounts': 2,
+            'regions': {}
+        }, resp)
 
         self._delete_account('acct1-0')
         resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {}
-            }, resp)
+            'accounts': 1,
+            'regions': {}
+        }, resp)
 
         self._delete_account('acct1-1')
         resp = self.app.get('/metrics')
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 0,
-                'regions': {}
-            }, resp)
+            'accounts': 0,
+            'regions': {}
+        }, resp)
 
     def test_metrics_nb_containers(self):
         self._create_account(self.account_id)
@@ -514,9 +514,9 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {}
-            }, resp)
+            'accounts': 1,
+            'regions': {}
+        }, resp)
 
         # create  and delete some containers
         # check to send headers for region, storage class
@@ -529,13 +529,13 @@ class TestAccountMetrics(TestAccountServerBase):
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {
-                    'LOCALHOST': {
-                        'containers': 1,
-                    }
+            'accounts': 1,
+            'regions': {
+                'LOCALHOST': {
+                    'containers': 1,
                 }
-            }, resp)
+            }
+        }, resp)
 
         data = {'name': 'ct1', 'dtime': Timestamp().normal}
         data = json.dumps(data)
@@ -545,13 +545,13 @@ class TestAccountMetrics(TestAccountServerBase):
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {
-                    'LOCALHOST': {
-                        'containers': 0,
-                    }
+            'accounts': 1,
+            'regions': {
+                'LOCALHOST': {
+                    'containers': 0,
                 }
-            }, resp)
+            }
+        }, resp)
 
     def test_metrics_nb_objects_bytes(self):
         self._create_account(self.account_id)
@@ -559,9 +559,9 @@ class TestAccountMetrics(TestAccountServerBase):
         self.assertEqual(resp.status_code, 200)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {}
-            }, resp)
+            'accounts': 1,
+            'regions': {}
+        }, resp)
 
         # add some data
         data = {'name': 'ct1', 'mtime': Timestamp().normal,
@@ -576,21 +576,21 @@ class TestAccountMetrics(TestAccountServerBase):
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {
-                    'LOCALHOST': {
-                        'containers': 1,
-                        'objects-details': {
-                            'class1': 1,
-                            'class2': 2
-                        },
-                        'bytes-details': {
-                            'class1': 30,
-                            'class2': 10
-                        },
-                    }
+            'accounts': 1,
+            'regions': {
+                'LOCALHOST': {
+                    'containers': 1,
+                    'objects-details': {
+                        'class1': 1,
+                        'class2': 2
+                    },
+                    'bytes-details': {
+                        'class1': 30,
+                        'class2': 10
+                    },
                 }
-            }, resp)
+            }
+        }, resp)
 
         data = {'name': 'ct2', 'mtime': Timestamp().normal,
                 'objects': 6, 'bytes': 21,
@@ -604,20 +604,66 @@ class TestAccountMetrics(TestAccountServerBase):
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
-                'accounts': 1,
-                'regions': {
-                    'LOCALHOST': {
-                        'containers': 2,
-                        'objects-details': {
-                            'class1': 1,
-                            'class2': 3,
-                            'class3': 5
-                        },
-                        'bytes-details': {
-                            'class1': 30,
-                            'class2': 20,
-                            'class3': 11
-                        },
-                    }
+            'accounts': 1,
+            'regions': {
+                'LOCALHOST': {
+                    'containers': 2,
+                    'objects-details': {
+                        'class1': 1,
+                        'class2': 3,
+                        'class3': 5
+                    },
+                    'bytes-details': {
+                        'class1': 30,
+                        'class2': 20,
+                        'class3': 11
+                    },
                 }
-            }, resp)
+            }
+        }, resp)
+
+    def test_recompute(self):
+        self._create_account(self.account_id)
+        resp = self.app.get('/metrics')
+        self.assertEqual(resp.status_code, 200)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({
+            'accounts': 1,
+            'regions': {}
+        }, resp)
+
+        data = {
+            'name': 'foo', 'mtime': Timestamp().normal,
+            'objects': 6, 'bytes': 21, 'region': 'localhost',
+            'objects-details': {"class2": 1, "class3": 5},
+            'bytes-details': {"class2": 10, "class3": 11}
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string={'id': self.account_id})
+        resp = self.app.get('/metrics',
+                            query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+
+        resp = self.app.post('/metrics/recompute')
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.app.get('/metrics',
+                            query_string={'id': self.account_id})
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({
+            'accounts': 1,
+            'regions': {
+                'LOCALHOST': {
+                    'containers': 1,
+                    'objects-details': {
+                        'class2': 1,
+                        'class3': 5
+                    },
+                    'bytes-details': {
+                        'class2': 10,
+                        'class3': 11
+                    },
+                }
+            }
+        }, resp)

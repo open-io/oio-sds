@@ -126,6 +126,7 @@ class ObjectStorageApi(object):
         self._acct_kwargs['endpoint'] = \
             self._acct_kwargs.pop('account_endpoint', None)
         self._account_client = None
+        self._account_metrics_client = None
         self._bucket_client = None
         self._iam_client = None
         self._blob_client = None
@@ -149,6 +150,19 @@ class ObjectStorageApi(object):
             self._acct_kwargs['pool_manager'] = \
                 self._account_client.pool_manager
         return self._account_client
+
+    @property
+    def account_metrics(self):
+        if self._account_metrics_client is None:
+            from oio.account.client import MetricsClient
+            self._account_metrics_client = MetricsClient(
+                {"namespace": self.namespace},
+                logger=self.logger,
+                **self._acct_kwargs)
+            # Share the connection pool
+            self._acct_kwargs['pool_manager'] = \
+                self._account_metrics_client.pool_manager
+        return self._account_metrics_client
 
     @property
     def bucket(self):

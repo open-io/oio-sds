@@ -30,7 +30,7 @@ from testtools.testcase import ExpectedException
 from time import sleep, time
 from werkzeug.exceptions import Conflict
 
-from oio.account.backend_fdb import AccountBackendFdb
+from oio.account.backend_fdb import SHARDING_ACCOUNT_PREFIX, AccountBackendFdb
 from oio.account.common_fdb import CommonFdb
 from oio.common.timestamp import Timestamp
 
@@ -250,6 +250,136 @@ class TestAccountBackend(BaseTestCase):
             key = self.backend.metrics_space.unpack(key)
             current_metrics_info[key] = value
         self.assertDictEqual(metrics_info, current_metrics_info)
+
+    def _create_scenario(self, scenario):
+        mtime = Timestamp().timestamp
+        accounts_info = {}
+        buckets_info = {}
+        containers_info = {}
+        metrics_info = {
+            ('accounts',): len([k for k in scenario.keys()
+                                if not k.startswith(SHARDING_ACCOUNT_PREFIX)]),
+        }
+
+        def _base_account(account_id):
+            return account_id.replace(SHARDING_ACCOUNT_PREFIX, '')
+
+        def _increment_info(info, field, region, policy, value):
+            key = (field,)
+            if region:
+                key += (region,)
+            if policy:
+                key += (policy,)
+            if key not in info:
+                info[key] = 0
+            info[key] += value
+
+        for account, buckets in scenario.items():
+            self.assertEqual(self.backend.create_account(account, ctime=mtime),
+                             account)
+
+            account_info = accounts_info.setdefault((account,), {})
+            account_info[('id',)] = account
+            account_info[('mtime',)] = mtime
+            shard_account = account.startswith(SHARDING_ACCOUNT_PREFIX)
+
+            for bucket in buckets:
+                self.assertIn('region', bucket)
+                region = bucket['region']
+                self.assertIn('name', bucket)
+                if shard_account:
+                    bucket_info = buckets_info.setdefault(
+                        (_base_account(account), bucket['name']), {})
+                    _increment_info(account_info, 'buckets', None, None, 0)
+                    # Ensure bucket exists
+                    self.assertIsNotNone(
+                        self.backend.get_bucket_info(bucket['name']))
+                else:
+                    bucket_info = buckets_info.setdefault((account,
+                                                           bucket['name']), {})
+                    # Only create bucket for non shard account
+                    self.backend.create_bucket(
+                        bucket['name'], account, region, ctime=mtime)
+                    bucket_info[('account',)] = account
+                    bucket_info[('region',)] = region
+                    bucket_info[('mtime',)] = mtime
+                    _increment_info(account_info, 'buckets', None, None, 1)
+                    _increment_info(account_info, 'buckets', region, None, 1)
+                    _increment_info(metrics_info, 'buckets', region, None, 1)
+
+                self.assertIn('containers', bucket)
+                for container in bucket['containers']:
+                    _increment_info(account_info, 'containers', None, None, 1)
+                    _increment_info(bucket_info, 'containers', None, None, 1)
+                    if shard_account:
+                        _increment_info(metrics_info, 'shards',
+                                        region, None, 1)
+                    else:
+                        _increment_info(
+                            metrics_info, 'containers', region, None, 1)
+
+                    _increment_info(
+                        account_info, 'containers', region, None, 1)
+                    self.assertIn('name', container)
+                    self.assertIn('objects', container)
+                    self.assertIn('bytes', container)
+                    container_info = {
+                        ('bucket',): bucket['name'],
+                        ('name',): container['name'],
+                        ('region',): region,
+                        ('mtime',): mtime,
+                    }
+                    details = {
+                        'bytes': None,
+                        'objects': None,
+                    }
+                    for field in ('bytes', 'objects'):
+                        if isinstance(container[field], dict):
+                            policies = container[field]
+                        else:
+                            policies = {'': container[field]}
+
+                        for policy, value in policies.items():
+                            _increment_info(
+                                container_info, field, None, None, value)
+                            _increment_info(
+                                bucket_info, field, None, None, value)
+                            _increment_info(
+                                account_info, field, None, None, value)
+                            if not policy:
+                                continue
+                            if not details[field]:
+                                details[field] = {}
+                            details[field][policy] = value
+                            _increment_info(
+                                container_info, field, None, policy, value)
+                            _increment_info(
+                                bucket_info, field, None, policy, value)
+                            _increment_info(
+                                account_info, field, region, policy, value)
+                            _increment_info(
+                                metrics_info, field, region, policy, value)
+
+                    containers_info[(account, container['name'])] = \
+                        container_info
+
+                    self.backend.update_container(
+                        account, container['name'],
+                        mtime, 0, container_info[('objects',)],
+                        container_info[('bytes',)], region=region,
+                        objects_details=details['objects'],
+                        bytes_details=details['bytes'],
+                        bucket_name=bucket['name'])
+
+        backend_info = (
+            metrics_info,
+            accounts_info,
+            buckets_info,
+            containers_info,
+            {},
+        )
+        self._check_backend(*backend_info)
+        return backend_info
 
     def test_create_account(self):
         account_id = 'a'
@@ -862,6 +992,76 @@ class TestAccountBackend(BaseTestCase):
                          ['3-0048-0049', '3-0049', '3-0049-', '3-0049-0049',
                           '3-0050', '3-0050-0049', '3-0051', '3-0051-0049',
                           '3-0052', '3-0052-0049'])
+
+    def test_refresh_metrics(self):
+        account_id = random_str(16)
+
+        scenario = {
+            account_id: [
+                {
+                    'name': 'BUCKET_1',
+                    'region': 'REGION_1',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_1',
+                            'objects': {'POL_1': 5, 'POL_2': 10},
+                            'bytes': {'POL_1': 50, 'POL_2': 100},
+                        },
+                        {
+                            'name': 'CONTAINER_2',
+                            'objects': {'POL_1': 6},
+                            'bytes': {'POL_1': 60},
+                        }
+                    ]
+                },
+                {
+                    'name': 'BUCKET_2',
+                    'region': 'REGION_2',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_3',
+                            'objects': 0,
+                            'bytes': 0,
+                        },
+                    ]
+                }
+            ],
+            SHARDING_ACCOUNT_PREFIX + account_id: [
+                {
+                    'name': 'BUCKET_2',
+                    'region': 'REGION_2',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_3-1',
+                            'objects': {'POL_1': 5, 'POL_2': 10},
+                            'bytes': {'POL_1': 50, 'POL_2': 100},
+                        },
+                        {
+                            'name': 'CONTAINER_3-2',
+                            'objects': {'POL_1': 6},
+                            'bytes': {'POL_1': 60},
+                        }
+                    ]
+                }
+            ]
+        }
+
+        backend_info = self._create_scenario(scenario)
+        _, *infos = backend_info
+
+        # Wipe metrics value
+        range = self.backend.metrics_space.range()
+        self.backend.db.clear_range(range.start, range.stop)
+
+        # Ensure everything had been wiped
+        backend_no_metrics_info = ({},) + tuple(infos)
+
+        self._check_backend(*backend_no_metrics_info)
+
+        # Refresh metrics
+        self.backend.refresh_metrics()
+
+        self._check_backend(*backend_info)
 
     def test_refresh_account(self):
         region = 'LOCALHOST'

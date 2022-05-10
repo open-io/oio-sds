@@ -59,6 +59,9 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/metrics', endpoint='metrics',
                  methods=['GET']),
+            Rule('/metrics/recompute',
+                 endpoint='metrics_recompute',
+                 methods=['POST']),
             Rule('/v1.0/account/create', endpoint='account_create',
                  methods=['PUT']),
             Rule('/v1.0/account/delete', endpoint='account_delete',
@@ -235,6 +238,37 @@ class Account(WerkzeugApp):
             return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
         else:
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
+
+    # ACCT{{
+    # POST /v1.0/account/metrics/recompute
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Recompute all global metrics.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    POST /metrics/recompute HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 No Content
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
+    @force_master
+    def on_metrics_recompute(self, req, **kwargs):
+        self.backend.refresh_metrics(**kwargs)
+        return Response(status=204)
 
     # ACCT{{
     # PUT /v1.0/account/create?id=<account_name>

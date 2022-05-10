@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -264,6 +264,17 @@ class RefreshAccount(Command):
             from argparse import ArgumentError
             raise ArgumentError(parsed_args.account,
                                 "Missing value for account or --all")
+
+
+class RecomputeAccount(Command):
+    """ Recompute all account service metrics """
+
+    log = getLogger(__name__ + '.RecomputeAccount')
+
+    def take_action(self, parsed_args):
+        self.log.debug('take action(%s)', parsed_args)
+
+        self.app.client_manager.storage.account_metrics.metrics_recompute()
 
 
 class FlushAccount(Command):
