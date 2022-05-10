@@ -2,7 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -498,7 +498,7 @@ test_content_delete_not_found(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		(void) maxver;
-		GError *err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		GError *err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 	}
@@ -1009,7 +1009,7 @@ test_content_put_prop_get(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 		if (VERSIONS_ENABLED(maxver)) {
 			CHECK_ALIAS_VERSION(m2,u,1+CLOCK_START);
@@ -1067,7 +1067,7 @@ test_content_put_get_delete(void)
 		check_list_count(m2,u,1);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
 		if (VERSIONS_ENABLED(maxver)) {
@@ -1115,7 +1115,7 @@ test_content_put_get_delete(void)
 		/* Check we can force the delete by deleting deleted version */
 		if (VERSIONS_ENABLED(maxver)) {
 			tmp = g_ptr_array_new();
-			err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+			err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanv2(tmp);
 
@@ -1250,7 +1250,7 @@ test_content_append(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the alias */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 		if (VERSIONS_ENABLED(maxver)) {
 			g_assert_no_error(err);
 			CHECK_ALIAS_VERSION(m2,u,1+_get_real());
@@ -1347,7 +1347,7 @@ test_content_append_not_found(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, NULL, NULL);
 		CLOCK ++;
 		g_assert_no_error(err);
 		if (VERSIONS_ENABLED(maxver)) {

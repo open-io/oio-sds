@@ -411,6 +411,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url,
+		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
 		_bean_list_cb, &obc->l);
 	if (NULL != e) {

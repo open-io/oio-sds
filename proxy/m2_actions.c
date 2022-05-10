@@ -4274,13 +4274,15 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 enum http_rc_e action_content_delete (struct req_args_s *args) {
 	const gboolean create_delete_marker =
 			_request_get_flag(args, "delete_marker");
+	gboolean bypass_governance = _request_get_flag(args, "bypass_governance");
+
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
 	oio_ext_set_force_versioning(force_versioning);
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			create_delete_marker, DL()); }
+			bypass_governance, create_delete_marker, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
@@ -4289,6 +4291,8 @@ static enum http_rc_e
 _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	const gboolean create_delete_marker =
 			_request_get_flag(args, "delete_marker");
+	const gboolean bypass_governance =
+			_request_get_flag(args, "bypass_governance");
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
@@ -4296,7 +4300,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			create_delete_marker, DL()); }
+			bypass_governance, create_delete_marker, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,

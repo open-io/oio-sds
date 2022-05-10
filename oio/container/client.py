@@ -135,7 +135,8 @@ class ContainerClient(ProxyClient):
         return uri
 
     def _make_params(self, account=None, reference=None, path=None, cid=None,
-                     content=None, version=None, **kwargs):
+                     content=None, version=None,
+                     bypass_governance=None, **kwargs):
         if cid:
             params = {'cid': cid}
         else:
@@ -146,6 +147,8 @@ class ContainerClient(ProxyClient):
             params.update({'content': content})
         if version:
             params.update({'version': version})
+        if bypass_governance:
+            params.update({'bypass_governance': bypass_governance})
         return params
 
     def _get_rawx_scores(self):
@@ -666,7 +669,7 @@ class ContainerClient(ProxyClient):
         return resp.status == 204
 
     def content_delete(self, account=None, reference=None, path=None, cid=None,
-                       version=None, **kwargs):
+                       version=None, bypass_governance=None, **kwargs):
         """
         Delete one object.
 
@@ -674,8 +677,8 @@ class ContainerClient(ProxyClient):
         """
         uri = self._make_uri('content/delete')
         params = self._make_params(account, reference, path, cid=cid,
-                                   version=version)
-
+                                   version=version,
+                                   bypass_governance=bypass_governance)
         del_cached_object_metadata(
             account=account, reference=reference, path=path, cid=cid,
             version=version, **kwargs)

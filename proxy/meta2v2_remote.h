@@ -136,6 +136,7 @@ GByteArray* m2v2_remote_pack_content_DRAIN(
 
 GByteArray* m2v2_remote_pack_DEL(
 		struct oio_url_s *url,
+		gboolean bypass_governance,
 		gboolean create_delete_marker,
 		gint64 deadline);
 

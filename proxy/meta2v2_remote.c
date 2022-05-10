@@ -295,10 +295,14 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean create_delete_marker,
-		gint64 dl)
+m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
+		gboolean create_delete_marker, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
+	if (bypass_governance) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_BYPASS_GOVERNANCE,
+			"1");
+	}
 	if (create_delete_marker) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_DELETE_MARKER, "1");
 	}

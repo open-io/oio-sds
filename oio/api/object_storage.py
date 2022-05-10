@@ -946,7 +946,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_delete(self, account, container, obj,
-                      version=None, **kwargs):
+                      version=None, bypass_governance=None, **kwargs):
         """
         Delete an object from a container. If versioning is enabled and no
         version is specified, the object will be marked as deleted but not
@@ -960,8 +960,9 @@ class ObjectStorageApi(object):
         :param version: version of the object to delete
         :returns: True on success
         """
-        return self.container.content_delete(account, container, obj,
-                                             version=version, **kwargs)
+        return self.container.content_delete(
+            account, container, obj, version=version,
+            bypass_governance=bypass_governance, **kwargs)
 
     @patch_kwargs
     @ensure_headers

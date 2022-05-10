@@ -1569,8 +1569,8 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gboolean create_delete_marker, struct oio_url_s *url,
-		m2_onbean_cb cb, gpointer u0)
+		gboolean bypass_governance, gboolean create_delete_marker,
+	 struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
@@ -1601,6 +1601,26 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	if (!alias || !beans) {
 		_bean_cleanl2(beans);
 		return NEWERROR(CODE_CONTENT_NOTFOUND, "No content to delete");
+	}
+	if (bypass_governance) {
+		struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
+		gchar *prop_key = g_alloca(sizeof(OBJ_PROP_BYPASS_GOVERNANCE));
+		sprintf(prop_key, OBJ_PROP_BYPASS_GOVERNANCE);
+		gchar *prop_val = g_alloca(sizeof("True"));
+		sprintf(prop_val, "True");
+		PROPERTIES_set2_key(prop, prop_key);
+		PROPERTIES_set2_value(prop, (guint8*)prop_val, sizeof(prop_val));
+		if (url && oio_url_has(url, OIOURL_PATH))
+			PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_PATH));
+		if (url && oio_url_has(url, OIOURL_VERSION))
+			PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_VERSION));
+
+		err = _db_save_bean(sq3, prop);
+		beans = g_slist_prepend(beans, prop);
+
+		if (NULL != err) {
+			return err;
+		}
 	}
 
 	GRID_TRACE("CONTENT %s beans=%u maxvers=%"G_GINT64_FORMAT

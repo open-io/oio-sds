@@ -48,6 +48,7 @@ License along with this library.
 #define NAME_MSGKEY_BASENAME           "BNAME"
 #define NAME_MSGKEY_BASETYPE           "BTYPE"
 #define NAME_MSGKEY_BASESUFFIX         "BSUFFIX"
+#define NAME_MSGKEY_BYPASS_GOVERNANCE  "BYPASS_GOVERNANCE"
 #define NAME_MSGKEY_CHANGE_POLICY      "CHANGE_POLICY"
 #define NAME_MSGKEY_CHECK_TYPE         "CHECK_TYPE"
 #define NAME_MSGKEY_CHUNKED            "CHUNKED"
