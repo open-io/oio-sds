@@ -862,6 +862,12 @@ class LocateObject(ObjectCommandMixin, Lister):
             help='Display chunk size and hash as they are on persistent \
             storage. It sends request per chunk so it is likely to be slow.'
         )
+        parser.add_argument(
+            '--resolve',
+            action='store_true',
+            default=False,
+            help='Display resolved services IDs to addresses and ports.'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -881,16 +887,23 @@ class LocateObject(ObjectCommandMixin, Lister):
             version=parsed_args.object_version,
             chunk_info=parsed_args.chunk_info)
 
+        # Build columns
+        columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash')
         if parsed_args.chunk_info:
-            columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash',
-                       'Chunk size', 'Chunk hash')
-            chunks = ((c['pos'], c['url'], c['size'], c['hash'],
-                       c.get('chunk_size', 'n/a'), c.get('chunk_hash', 'n/a'))
-                      for c in data[1])
-        else:
-            columns = ('Pos', 'Id', 'Metachunk size', 'Metachunk hash')
-            chunks = ((c['pos'], c['url'], c['size'], c['hash'])
-                      for c in data[1])
+            columns += ('Chunk size', 'Chunk hash')
+        if parsed_args.resolve:
+            columns += ('Real-Url',)
+
+        # Build chunks with data
+        chunks = []
+        for c in data[1]:
+            chunk = (c['pos'], c['url'], c['size'], c['hash'])
+            if parsed_args.chunk_info:
+                chunk += (c.get('chunk_size', 'n/a'),
+                          c.get('chunk_hash', 'n/a'))
+            if parsed_args.resolve:
+                chunk += (c['real_url'],)
+            chunks.append(chunk)
 
         return columns, chunks
 
