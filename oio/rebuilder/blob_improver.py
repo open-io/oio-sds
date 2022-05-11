@@ -191,8 +191,8 @@ class BlobImproverWorker(RebuilderWorker):
                     if chunk.imperfections]
         moveable.sort(key=lambda x: x.imperfections)
 
-        moves = list()
-        errors = list()
+        moves = []
+        errors = []
 
         if not moveable:
             self.logger.info('Nothing to do for %s', descr)
@@ -210,6 +210,7 @@ class BlobImproverWorker(RebuilderWorker):
                 dst = content.move_chunk(chunk, check_quality=True,
                                          dry_run=dry_run, reqid=reqid,
                                          max_attempts=max_attempts,
+                                         service_id=chunk.host,
                                          **kwargs)
                 self.logger.debug("%s replaced by %s", src, dst['url'])
                 moves.append((raw_src, dst))

@@ -104,6 +104,7 @@ class RawxDecommissionTask(XcuteTask):
                 container_id, content_id, reqid=reqid)
             content.move_chunk(
                 chunk_id, fake_excluded_chunks=self.fake_excluded_chunks,
+                service_id=self.service_id,
                 reqid=reqid)
         except (ContentNotFound, OrphanChunk):
             return {'orphan_chunks': 1}
