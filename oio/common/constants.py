@@ -224,8 +224,6 @@ M2_PROP_VERSIONING_POLICY = 'sys.m2.policy.version'
 M2_PROP_DRAINING_STATE = 'sys.m2.draining.state'
 # Draining timestamp for the container and its shards.
 M2_PROP_DRAINING_TIMESTAMP = 'sys.m2.draining.timestamp'
-# Region where bucket is stored.
-M2_PROP_LOCATION = 'sys.m2.location'
 
 # HTTP Content-Type
 HTTP_CONTENT_TYPE_BINARY = 'application/octet-stream'
