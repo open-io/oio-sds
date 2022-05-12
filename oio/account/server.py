@@ -861,6 +861,9 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, what='bucket')
         account_id = self._get_item_id(req, key='account', what='account')
         region = self._get_item_id(req, key='region', what='region')
+        force = boolean_value(req.args.get('force'), None)
+        if force is not None:
+            kwargs['force'] = force
         self.backend.delete_bucket(bname, account_id, region, **kwargs)
         return Response(status=204)
 

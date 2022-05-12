@@ -41,7 +41,7 @@ class TestAccountServiceCleaner(BaseTestCase):
                             types=(EventTypes.CONTAINER_NEW,))
         self.cleaner.run()
         self.assertEqual(0, self.cleaner.deleted_containers)
-        self.assertEqual(0, self.cleaner.released_buckets)
+        self.assertEqual(0, self.cleaner.deleted_buckets)
         # Check if the container still exists
         _ = self.storage.account.container_show(self.account, self.container)
 
@@ -57,7 +57,7 @@ class TestAccountServiceCleaner(BaseTestCase):
                             types=(EventTypes.CONTAINER_NEW,))
         self.cleaner.run()
         self.assertEqual(0, self.cleaner.deleted_containers)
-        self.assertEqual(0, self.cleaner.released_buckets)
+        self.assertEqual(0, self.cleaner.deleted_buckets)
         # Check if the bucket still exists
         _ = self.storage.account.container_show(self.account, self.container)
         _ = self.storage.bucket.bucket_show(
@@ -74,7 +74,7 @@ class TestAccountServiceCleaner(BaseTestCase):
         _ = self.storage.account.container_show(self.account, self.container)
         self.cleaner.run()
         self.assertEqual(1, self.cleaner.deleted_containers)
-        self.assertEqual(0, self.cleaner.released_buckets)
+        self.assertEqual(0, self.cleaner.deleted_buckets)
         # Check if the container no longer exists
         self.assertRaises(NotFound, self.storage.account.container_show,
                           self.account, self.container)
@@ -95,11 +95,11 @@ class TestAccountServiceCleaner(BaseTestCase):
         self.assertEqual(self.account, owner)
         self.cleaner.run()
         self.assertEqual(1, self.cleaner.deleted_containers)
-        # self.assertEqual(1, self.cleaner.released_buckets)
+        self.assertEqual(1, self.cleaner.deleted_buckets)
         # Check if the bucket no longer exists
         self.assertRaises(NotFound, self.storage.account.container_show,
                           self.account, self.container)
-        # self.assertRaises(NotFound, self.storage.bucket.bucket_show,
-        #                   self.container, account=self.account)
-        # self.assertRaises(NotFound, self.storage.bucket.bucket_get_owner,
-        #                   self.container)
+        self.assertRaises(NotFound, self.storage.bucket.bucket_show,
+                          self.container, account=self.account)
+        self.assertRaises(NotFound, self.storage.bucket.bucket_get_owner,
+                          self.container)

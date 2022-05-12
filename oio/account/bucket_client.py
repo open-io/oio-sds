@@ -46,12 +46,14 @@ class BucketClient(ServiceClient):
             raise from_response(resp, body)
         return resp.status == 201
 
-    def bucket_delete(self, bucket, account, region, **kwargs):
+    def bucket_delete(self, bucket, account, region, force=None, **kwargs):
         """
         Delete the specified bucket in the account service.
         No container linked to this bucket is deleted.
         """
         params = {'account': account, 'region': region}
+        if force is not None:
+            params['force'] = force
         resp, body = self.bucket_request(
             bucket, 'POST', 'delete', params=params, **kwargs)
         if resp.status != 204:
@@ -73,7 +75,7 @@ class BucketClient(ServiceClient):
         return body
 
     def bucket_update(self, bucket, metadata, to_delete, account=None,
-                      check_owner=False, **kwargs):
+                      check_owner=None, **kwargs):
         """
         Update metadata of the specified bucket.
 
@@ -95,8 +97,7 @@ class BucketClient(ServiceClient):
             raise from_response(resp, body)
         return body
 
-    def bucket_refresh(self, bucket, account=None, check_owner=False,
-                       **kwargs):
+    def bucket_refresh(self, bucket, account=None, check_owner=None, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).

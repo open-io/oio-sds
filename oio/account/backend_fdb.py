@@ -387,7 +387,7 @@ class AccountBackendFdb(object):
             containers = self._counter_value_to_counter(containers.value)
         else:
             containers = 0
-        if containers:
+        if containers > 0:
             raise Conflict('Account not empty')
 
         self._real_delete_account(tr, account_id)
@@ -1272,17 +1272,17 @@ class AccountBackendFdb(object):
         self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)))
 
     @catch_service_errors
-    def delete_bucket(self, bname, account, region, **kwargs):
+    def delete_bucket(self, bname, account, region, force=False, **kwargs):
         """
         Delete the account if it already exists.
         """
         if region:
             region = region.upper()
-        self._delete_bucket(self.db, bname, account, region)
+        self._delete_bucket(self.db, bname, account, region, force)
         return True
 
     @fdb.transactional
-    def _delete_bucket(self, tr, bucket, account, region):
+    def _delete_bucket(self, tr, bucket, account, region, force):
         """
         [transactional] Delete the account if it already exists.
         """
@@ -1298,8 +1298,18 @@ class AccountBackendFdb(object):
                     'Deletion is not allowed in any region other '
                     'than the bucket region')
 
-            # Since the bucket is deleted synchronously,
-            # there is no need to check for asynchronously updated counters
+            if not force:
+                containers = tr[bucket_space.pack((CONTAINERS_FIELD,))]
+                if containers.present():
+                    containers = self._counter_value_to_counter(
+                        containers.value)
+                else:
+                    containers = 0
+                if containers > 0:
+                    raise Conflict('Bucket not empty')
+            # else:
+            #     Since the bucket is deleted synchronously,
+            #     there is no need to check for asynchronously updated counters
         except NotFound:
             # The bucket might not exist, but the account owns it
             try:

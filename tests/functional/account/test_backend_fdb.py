@@ -2892,7 +2892,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # Delete bucket
-        self.backend.delete_bucket(bucket_name, account_id, region)
+        self.backend.delete_bucket(bucket_name, account_id, region, force=True)
         backend_info = (
             {
                 ('accounts',): 1,
