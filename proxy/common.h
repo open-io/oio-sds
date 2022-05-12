@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -130,7 +130,7 @@ enum proxy_preference_e {
 extern gchar *ns_name;
 
 /* The ugliest quirk on the world, because there is a fundamental flaw in the
- * LB algorithm that fails to compares distances we dupplicate the set of rawx
+ * LB algorithm that fails to compares distances we duplicate the set of rawx
  * used by the meta2 logic */
 extern struct oio_lb_world_s *lb_world_rawx;
 extern struct oio_lb_s *lb_rawx;
@@ -261,6 +261,8 @@ struct client_ctx_s {
 	gint64 resolve_duration;
 	gint64 request_duration;
 };
+
+void sort_services(struct client_ctx_s *ctx, gchar **m1uv);
 
 /**
  * Flushes  the resolver cache (all levels) and the cache of known MASTER

@@ -1300,7 +1300,8 @@ action_m2_container_destroy (struct req_args_s *args)
 	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO FIXME manage container subtype */
-	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
+	CLIENT_CTX2(ctx, args, NAME_SRVTYPE_META2, 1, NULL, CLIENT_PREFER_MASTER,
+			NULL, NULL);
 	NAME2CONST(n, ctx.name);
 
 	/* 0. Pre-loads the locations of the container. We will need this at the
@@ -1356,6 +1357,9 @@ action_m2_container_destroy (struct req_args_s *args)
 		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
 
 		meta1_urlv_shift_addr(urlv);
+		/* Execute the first destroy on the master
+		 * so that the delete event is sent from the master. */
+		sort_services(&ctx, urlv);
 		err = m2v2_remote_execute_DESTROY(urlv[0], args->url,
 				M2V2_DESTROY_EVENT|flag_force);
 		if (err != NULL) {
