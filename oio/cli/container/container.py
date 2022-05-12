@@ -18,10 +18,11 @@
 
 from six import iteritems
 from logging import getLogger
-from time import time as now
+from time import sleep, time as now
 
 from oio.cli import Command, Lister, ShowOne
-from oio.common.exceptions import CommandError, NoSuchContainer
+from oio.common.exceptions import CommandError, Conflict, NoSuchContainer, \
+    NotFound, OioException
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import \
@@ -126,6 +127,94 @@ class ContainersCommandMixin(object):
         )
 
 
+class CreateBucket(Lister):
+    """Create a bucket."""
+
+    log = getLogger(__name__ + '.CreateBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(CreateBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'buckets',
+            metavar='<bucket-name>',
+            nargs='+',
+            help='New bucket name(s)'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        results = []
+        account = self.app.client_manager.account
+        region = self.app.client_manager.sds_conf.get('ns.region')
+        for bucket in parsed_args.buckets:
+            success = True
+            # We are about to create a root container, reserve its name.
+            try:
+                self.app.client_manager.storage.bucket.bucket_reserve(
+                    bucket, account)
+            except Exception as exc:
+                self.log.error('Failed to reserve bucket name %s: %s',
+                               bucket, exc)
+                success = False
+            if success:
+                # Create the root container
+                try:
+                    system = {M2_PROP_BUCKET_NAME: bucket}
+                    created = self.app.client_manager.storage.container_create(
+                        account, bucket, system=system)
+                    if not created:
+                        self.app.client_manager.storage.\
+                            container_set_properties(
+                                account, bucket, system=system)
+                except Exception as exc:
+                    self.log.error('Failed to create root container %s: %s',
+                                   bucket, exc)
+                    success = False
+                    # Container creation failed, remove reservation
+                    try:
+                        self.app.client_manager.storage.bucket.bucket_release(
+                            bucket, account)
+                    except Exception as exc2:
+                        self.log.error('Failed to release bucket %s: %s',
+                                       bucket, exc2)
+            if success:
+                # Container creation succeeded,
+                # confirm reservation by creating the bucket.
+                try:
+                    self.app.client_manager.storage.bucket.bucket_create(
+                        bucket, account, region)
+                except Exception as exc:
+                    self.log.error('Failed to create bucket %s: %s',
+                                   bucket, exc)
+                    success = False
+                    # Try to rollback by deleting the new container
+                    try:
+                        if created:
+                            self.app.client_manager.storage.container_delete(
+                                account, bucket)
+                        self.app.client_manager.storage.bucket.bucket_release(
+                            bucket, account)
+                    except Exception as exc2:
+                        self.log.error('Failed to release bucket %s: %s',
+                                       bucket, exc2)
+            if success:
+                if created:
+                    self.log.warning(
+                        'The root container %s was created, but it lacks some '
+                        'properties (like ACLs) to be compatible with S3',
+                        bucket)
+                else:
+                    self.log.warning(
+                        'The root container %s linked to the bucket, '
+                        'but it lacks some properties (like ACLs) '
+                        'to be compatible with S3', bucket)
+            results.append((bucket, success))
+
+        return ('Name', 'Created'), (r for r in results)
+
+
 class CreateContainer(SetPropertyCommandMixin, Lister):
     """Create an object container."""
 
@@ -154,7 +243,7 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
         self.log.debug('take_action(%s)', parsed_args)
 
         properties = parsed_args.property
-        system = dict()
+        system = {}
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.quota is not None:
@@ -337,6 +426,73 @@ class TouchContainer(ContainersCommandMixin, Command):
                 )
 
 
+class DeleteBucket(Lister):
+    """Delete a bucket (and only the root container)."""
+
+    log = getLogger(__name__ + '.DeleteBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(DeleteBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'buckets',
+            metavar='<bucket-name>',
+            nargs='+',
+            help='New bucket name(s)'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        results = []
+        account = self.app.client_manager.account
+        region = self.app.client_manager.sds_conf.get('ns.region')
+        for bucket in parsed_args.buckets:
+            success = True
+            try:
+                meta = self.app.client_manager.storage.bucket.bucket_show(
+                    bucket, account)
+                if meta['containers'] > 1:
+                    raise OioException('Too many containers in bucket')
+            except NotFound:
+                # The bucket no longer exists, but try deleting anyway
+                # to really clean everything up
+                pass
+            except Exception as exc:
+                self.log.error('Failed to fetch bucket information for %s: %s',
+                               bucket, exc)
+                success = False
+            if success:
+                try:
+                    self.app.client_manager.storage.container_delete(
+                        account, bucket)
+                except NoSuchContainer:
+                    self.log.info('Root container %s does not exist', bucket)
+                except Exception as exc:
+                    self.log.error('Failed to delete root container %s: %s',
+                                   bucket, exc)
+                    success = False
+            if success:
+                try:
+                    for i in range(1, 11):
+                        try:
+                            self.app.client_manager.storage.\
+                                bucket.bucket_delete(bucket, account, region)
+                            break
+                        except Conflict:
+                            if i == 10:
+                                raise
+                            # Wait for the container delete event to process
+                            sleep(1)
+                except Exception as exc:
+                    self.log.error('Failed to delete bucket %s: %s',
+                                   bucket, exc)
+                    success = False
+            results.append((bucket, success))
+
+        return ('Name', 'Deleted'), (r for r in results)
+
+
 class DeleteContainer(ContainersCommandMixin, Command):
     """Delete an object container."""
 
@@ -467,6 +623,8 @@ class ShowBucket(ShowOne):
             from oio.common.easy_value import convert_size
 
             data['bytes'] = convert_size(data['bytes'])
+            if 'ctime' in data:
+                data['ctime'] = Timestamp(data.get('ctime', 0.0)).isoformat
             data['mtime'] = Timestamp(data.get('mtime', 0.0)).isoformat
         return zip(*sorted(data.items()))
 

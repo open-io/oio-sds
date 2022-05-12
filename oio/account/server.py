@@ -97,6 +97,10 @@ class Account(WerkzeugApp):
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
 
             # Buckets
+            Rule('/v1.0/bucket/create', endpoint='bucket_create',
+                 methods=['PUT']),
+            Rule('/v1.0/bucket/delete', endpoint='bucket_delete',
+                 methods=['POST']),
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
             Rule('/v1.0/bucket/update', endpoint='bucket_update',
@@ -107,8 +111,6 @@ class Account(WerkzeugApp):
                  methods=['PUT']),
             Rule('/v1.0/bucket/release', endpoint='bucket_release',
                  methods=['POST']),
-            Rule('/v1.0/bucket/set-owner', endpoint='bucket_set_owner',
-                 methods=['PUT']),
             Rule('/v1.0/bucket/get-owner', endpoint='bucket_get_owner',
                  methods=['GET']),
 
@@ -752,7 +754,7 @@ class Account(WerkzeugApp):
         return Response(status=204)
 
     # ACCT{{
-    # PUT /v1.0/bucket/reserve-bucket?id=bucket_name
+    # PUT /v1.0/bucket/reserve?id=<bucket_name>&account=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Reserve bucket name.
@@ -761,26 +763,21 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/bucket/reserve-bucket?id=bucket_name HTTP/1.1
+    #    PUT /v1.0/bucket/reserve?id=mybucket&account=myaccount HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
-    #    Content-Length: 84
-    #    Content-Type: application/x-www-form-urlencoded
     #
-    # .. code-block:: json
+    # Sample response:
     #
-    #    {
-    #      "account": "owner"
-    #    }
+    # .. code-block:: http
     #
-    # Response example:
-    #
-    # .. code-block:: json
-    #
-    #    {
-    #      "reserved": "1"
-    #    }
+    #    HTTP/1.1 201 CREATED
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 0
     #
     # }}ACCT
     @force_master
@@ -789,14 +786,86 @@ class Account(WerkzeugApp):
         Reserve bucket name.
         """
         bname = self._get_item_id(req, what='bucket')
-        account_id = req.args.get('account')
-        if account_id is None:
-            raise BadRequest('Missing account ID (owner)')
+        account_id = self._get_item_id(req, key='account', what='account')
         self.backend.reserve_bucket(bname, account_id, **kwargs)
         return Response(status=201)
 
     # ACCT{{
-    # PUT /v1.0/bucket/release-bucket?id=bucket_name
+    # PUT /v1.0/bucket/create?id=<bucket_name>&account=<account_name>
+    #        &region=<region_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Create a new bucket with the specified name.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/create?id=mybucket&account=myaccount
+    #        &region=localhost HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 201 CREATED
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 9
+    #
+    #    mybucket
+    #
+    # }}ACCT
+    @force_master
+    def on_bucket_create(self, req, **kwargs):
+        bname = self._get_item_id(req, what='bucket')
+        account_id = self._get_item_id(req, key='account', what='account')
+        region = self._get_item_id(req, key='region', what='region')
+        if self.backend.create_bucket(bname, account_id, region, **kwargs):
+            return Response(bname, status=201)
+        return Response(status=202)
+
+    # ACCT{{
+    # PUT /v1.0/bucket/delete?id=<bucket_name>&account=<account_name>
+    #        &region=<region_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Delete the specified bucket.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/delete?id=mybucket&account=myaccount
+    #        &region=localhost HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 No Content
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
+    @force_master
+    def on_bucket_delete(self, req, **kwargs):
+        bname = self._get_item_id(req, what='bucket')
+        account_id = self._get_item_id(req, key='account', what='account')
+        region = self._get_item_id(req, key='region', what='region')
+        self.backend.delete_bucket(bname, account_id, region, **kwargs)
+        return Response(status=204)
+
+    # ACCT{{
+    # POST /v1.0/bucket/release?id=<bucket_name>&account=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Release reserved bucket name.
@@ -805,23 +874,20 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/bucket/release-bucket?id=bucket_name HTTP/1.1
+    #    PUT /v1.0/bucket/release?id=mybucket&account=myaccount HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
-    #    Content-Length: 84
-    #    Content-Type: application/x-www-form-urlencoded
     #
-    # Response example:
+    # Sample response:
     #
     # .. code-block:: http
     #
-    #    HTTP/1.1 200 OK
+    #    HTTP/1.1 204 No Content
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: application/json
-    #    Content-Length: 117
+    #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
     @force_master
@@ -830,60 +896,12 @@ class Account(WerkzeugApp):
         Release a bucket name.
         """
         bname = self._get_item_id(req, what='bucket')
-        account_id = req.args.get('account')
-        if account_id is None:
-            raise BadRequest('Missing account ID (owner)')
+        account_id = self._get_item_id(req, key='account', what='account')
         self.backend.release_bucket(bname, account_id, **kwargs)
         return Response(status=204)
 
     # ACCT{{
-    # PUT /v1.0/bucket/set-bucket-owner?id=bucket_name
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    #
-    # Set owner on reserved bucket name.
-    #
-    # Request example:
-    #
-    # .. code-block:: http
-    #
-    #    PUT /v1.0/bucket/set-bucket-owner?id=bucket_name HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
-    #    Accept: */*
-    #    Content-Length: 84
-    #    Content-Type: application/x-www-form-urlencoded
-    #
-    # .. code-block:: json
-    #
-    #    {
-    #      "account": "owner"
-    #    }
-    #
-    # Response example:
-    #
-    # .. code-block:: http
-    #
-    #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
-    #    Connection: keep-alive
-    #    Content-Type: application/json
-    #    Content-Length: 117
-    #
-    # }}ACCT
-    def on_bucket_set_owner(self, req, **kwargs):
-        """
-        Set bucket owner.
-        """
-        bname = self._get_item_id(req, what='bucket')
-        account_id = req.args.get('account')
-        if account_id is None:
-            raise BadRequest('Missing account ID (owner)')
-        self.backend.set_bucket_owner(bname, account_id, **kwargs)
-        return Response(status=201)
-
-    # ACCT{{
-    # GET /v1.0/bucket/get-bucket-owner?id=bucket_name
+    # GET /v1.0/bucket/get-owner?id=<bucket_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Get owner of bucket name.
@@ -892,12 +910,10 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/bucket/get-bucket-owner?id=bucket_name HTTP/1.1
+    #    PUT /v1.0/bucket/get-owner?id=mybucket HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
-    #    Content-Length: 84
-    #    Content-Type: application/x-www-form-urlencoded
     #
     # Response example:
     #

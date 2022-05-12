@@ -159,6 +159,15 @@ class TestAccountBackend(BaseTestCase):
             info = current_buckets_info.setdefault((account, bucket), {})
             info[tuple(key)] = value
         for (account, bucket), info in buckets_info.items():
+            current_ctime = current_buckets_info[
+                (account, bucket,)].pop(('ctime',))
+            ctime = info.pop(('ctime',), None)
+            if ctime is not None:
+                self.assertEqual(ctime, current_ctime)
+            else:
+                current_ctime = struct.unpack('<q', current_ctime)[0]
+                self.assertGreater(current_ctime, 0)
+
             current_mtime = current_buckets_info[
                 (account, bucket,)].pop(('mtime',))
             mtime = info.pop(('mtime',), None)
@@ -1451,20 +1460,49 @@ class TestAccountBackend(BaseTestCase):
         bucket = random_str(16)
         mtime = Timestamp().timestamp
 
-        # Set bucket_db reservation
-        self.backend.reserve_bucket(bucket, account_id)
-        self.backend.set_bucket_owner(bucket, account_id)
-
         buckets_info = {}
         containers_info = {}
         account_bytes = 0
         account_objects = 0
-        # Create main container and segments containers with bytes and objects
-        # and 2 fake containers linked to the bucket
+        bucket_containers = 0
         bucket_bytes = 0
         bucket_objects = 0
+
+        # Create bucket
+        self.backend.create_bucket(bucket, account_id, region)
+        buckets_info[(account_id, bucket)] = {
+            ('account',): account_id,
+            ('region',): region,
+            ('containers',): 0,
+            ('bytes',): 0,
+            ('objects',): 0
+        }
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('buckets', region): len(buckets_info)
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): account_bytes,
+                    ('objects',): account_objects,
+                    ('containers',): 0,
+                    ('buckets',): len(buckets_info),
+                    ('buckets', region): len(buckets_info)
+                }
+            },
+            buckets_info,
+            containers_info,
+            {}
+        )
+        self._check_backend(*backend_info)
+
+        # Create main container and segments containers with bytes and objects
+        # and 2 fake containers linked to the bucket
         for name in (bucket, f'{bucket}+segments', random_str(16),
                      random_str(16)):
+            bucket_containers += 1
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
             account_bytes += nb_bytes
@@ -1487,6 +1525,7 @@ class TestAccountBackend(BaseTestCase):
         buckets_info[(account_id, bucket)] = {
             ('account',): account_id,
             ('region',): region,
+            ('containers',): bucket_containers,
             ('mtime',): mtime,
             ('bytes',): bucket_bytes,
             ('objects',): bucket_objects
@@ -1494,20 +1533,21 @@ class TestAccountBackend(BaseTestCase):
         # Create 12 others containers (and buckets)
         for _ in range(12):
             name = random_str(16)
+            self.backend.create_bucket(name, account_id, region)
             mtime = Timestamp().timestamp
             nb_bytes = random.randrange(100)
             account_bytes += nb_bytes
             bucket_bytes += nb_bytes
             nb_objets = random.randrange(100)
             account_objects += nb_objets
-            if not name.endswith('+segments'):
-                bucket_objects += nb_objets
+            bucket_objects += nb_objets
             self.backend.update_container(
                 account_id, name, mtime, 0, nb_objets, nb_bytes,
                 bucket_name=name, region=region)
             buckets_info[(account_id, name)] = {
                 ('account',): account_id,
                 ('region',): region,
+                ('containers',): 1,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
                 ('objects',): nb_objets
@@ -1576,14 +1616,11 @@ class TestAccountBackend(BaseTestCase):
         account_id = random_str(16)
         self.assertEqual(self.backend.create_account(account_id), account_id)
 
-        # Create container
         region = 'LOCALHOST'
         bucket = random_str(16)
-        mtime = Timestamp().timestamp
 
-        # set bucket_db reservation
-        self.backend.reserve_bucket(bucket, account_id)
-        self.backend.set_bucket_owner(bucket, account_id)
+        # Create bucket
+        self.backend.create_bucket(bucket, account_id, region)
 
         ref_counters = {'bytes': {'global': 0}, 'objects': {'global': 0}}
 
@@ -1667,21 +1704,20 @@ class TestAccountBackend(BaseTestCase):
 
     def test_update_bucket_metada(self):
         region = 'LOCALHOST'
-        bname = 'metadata_' + random_str(8)
+        bucket = 'metadata_' + random_str(8)
         metadata = {'owner': 'owner1', 'user': 'user1'}
         account_id = 'acct_' + random_str(8)
 
         # Test autocreate_account
         self.backend.update_container(
-            account_id, bname, Timestamp().timestamp, 0, 0, 0,
-            bucket_name=bname, autocreate_account=True, region=region)
-        # set bucket_db reservation
-        self.backend.reserve_bucket(bname, account_id)
-        self.backend.set_bucket_owner(bname, account_id)
+            account_id, bucket, Timestamp().timestamp, 0, 0, 0,
+            bucket_name=bucket, autocreate_account=True, region=region)
+        # Create bucket
+        self.backend.create_bucket(bucket, account_id, region)
         # Test bucket metadata
-        self.backend.update_bucket_metadata(bname, metadata)
+        self.backend.update_bucket_metadata(bucket, metadata)
 
-        b_space = self.backend.bucket_space[account_id][bname]
+        b_space = self.backend.bucket_space[account_id][bucket]
         range = b_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         found = 0
@@ -1695,7 +1731,7 @@ class TestAccountBackend(BaseTestCase):
         # test bucket to_delete
         to_delete = ['owner']
 
-        self.backend.update_bucket_metadata(bname, None, to_delete)
+        self.backend.update_bucket_metadata(bucket, None, to_delete)
         range = b_space.range()
         res = self.backend.db.get_range(range.start, range.stop)
         found = 0
@@ -2013,9 +2049,41 @@ class TestAccountBackend(BaseTestCase):
         )
         self._check_backend(*backend_info)
 
+        # Create bucket
+        bucket_name1 = 'bucket1'
+        self.backend.create_bucket(bucket_name1, account_id, region)
+        bucket_info1 = {
+            ('account',): account_id,
+            ('region',): region,
+            ('containers',): 0,
+            ('bytes',): 0,
+            ('objects',): 0
+        }
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('buckets', region): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 1,
+                    ('buckets', region): 1
+                }
+            },
+            {
+                (account_id, bucket_name1): bucket_info1
+            },
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
         # initial container
         name1 = 'bucket1'
-        bucket_name1 = 'bucket1'
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 5, 41,
@@ -2034,6 +2102,7 @@ class TestAccountBackend(BaseTestCase):
         bucket_info1 = {
             ('account',): account_id,
             ('region',): region,
+            ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 41,
             ('objects',): 5,
@@ -2090,6 +2159,7 @@ class TestAccountBackend(BaseTestCase):
         bucket_info1 = {
             ('account',): account_id,
             ('region',): region,
+            ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 41,
             ('objects',): 5,
@@ -2128,9 +2198,51 @@ class TestAccountBackend(BaseTestCase):
         )
         self._check_backend(*backend_info)
 
+        # Create a second bucket
+        bucket_name2 = 'bucket2'
+        self.backend.create_bucket(bucket_name2, account_id, region)
+        bucket_info2 = {
+            ('account',): account_id,
+            ('region',): region,
+            ('containers',): 0,
+            ('bytes',): 0,
+            ('objects',): 0
+        }
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('objects', region, 'THREECOPIES'): 2,
+                ('objects', region, 'EC'): 3,
+                ('containers', region): 1,
+                ('buckets', region): 2
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('mtime',): mtime,
+                    ('bytes',): 41,
+                    ('objects',): 5,
+                    ('objects', region, 'THREECOPIES'): 2,
+                    ('objects', region, 'EC'): 3,
+                    ('containers',): 1,
+                    ('containers', region): 1,
+                    ('buckets',): 2,
+                    ('buckets', region): 2
+                }
+            },
+            {
+                (account_id, bucket_name1): bucket_info1,
+                (account_id, bucket_name2): bucket_info2
+            },
+            {
+                (account_id, name1): container_info1
+            },
+            {}
+        )
+        self._check_backend(*backend_info)
+
         # update another container
         name2 = 'bucket2'
-        bucket_name2 = 'bucket2'
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name2, mtime, 0, 7, 33,
@@ -2149,6 +2261,7 @@ class TestAccountBackend(BaseTestCase):
         bucket_info2 = {
             ('account',): account_id,
             ('region',): region,
+            ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 33,
             ('objects',): 7,
@@ -2208,6 +2321,7 @@ class TestAccountBackend(BaseTestCase):
         bucket_info1 = {
             ('account',): account_id,
             ('region',): region,
+            ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 20,
             ('objects',): 1,
@@ -2253,6 +2367,16 @@ class TestAccountBackend(BaseTestCase):
         # delete first container
         dtime1 = Timestamp().timestamp
         self.backend.update_container(account_id, name1, 0, dtime1, 0, 0)
+        bucket_info1 = {
+            ('account',): account_id,
+            ('region',): region,
+            ('containers',): 0,
+            ('mtime',): dtime1,
+            ('bytes',): 0,
+            ('objects',): 0,
+            ('objects', 'THREECOPIES'): 0,
+            ('objects', 'EC'): 0
+        }
         backend_info = (
             {
                 ('accounts',): 1,
@@ -2260,7 +2384,7 @@ class TestAccountBackend(BaseTestCase):
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
                 ('containers', region): 1,
-                ('buckets', region): 1
+                ('buckets', region): 2
             },
             {
                 (account_id,): {
@@ -2273,11 +2397,12 @@ class TestAccountBackend(BaseTestCase):
                     ('objects', region, 'SINGLE'): 4,
                     ('containers',): 1,
                     ('containers', region): 1,
-                    ('buckets',): 1,
-                    ('buckets', region): 1
+                    ('buckets',): 2,
+                    ('buckets', region): 2
                 }
             },
             {
+                (account_id, bucket_name1): bucket_info1,
                 (account_id, bucket_name2): bucket_info2
             },
             {
@@ -2294,6 +2419,55 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(
             account_id, name2, 0, dtime2, 0, 0,
             bucket_name=bucket_name2, region=region)
+        bucket_info2 = {
+            ('account',): account_id,
+            ('region',): region,
+            ('containers',): 0,
+            ('mtime',): dtime2,
+            ('bytes',): 0,
+            ('objects',): 0,
+            ('objects', 'THREECOPIES'): 0,
+            ('objects', 'SINGLE'): 0
+        }
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('objects', region, 'THREECOPIES'): 0,
+                ('objects', region, 'EC'): 0,
+                ('objects', region, 'SINGLE'): 0,
+                ('containers', region): 0,
+                ('buckets', region): 2
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('mtime',): dtime2,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('objects', region, 'THREECOPIES'): 0,
+                    ('objects', region, 'EC'): 0,
+                    ('objects', region, 'SINGLE'): 0,
+                    ('containers',): 0,
+                    ('containers', region): 0,
+                    ('buckets',): 2,
+                    ('buckets', region): 2
+                }
+            },
+            {
+                (account_id, bucket_name1): bucket_info1,
+                (account_id, bucket_name2): bucket_info2
+            },
+            {},
+            {
+                (account_id, name1): dtime1,
+                (account_id, name2): dtime2
+            }
+        )
+        self._check_backend(*backend_info)
+
+        # Delete the 2 buckets
+        self.backend.delete_bucket(bucket_name1, account_id, region)
+        self.backend.delete_bucket(bucket_name2, account_id, region)
         backend_info = (
             {
                 ('accounts',): 1,
@@ -2367,9 +2541,40 @@ class TestAccountBackend(BaseTestCase):
         )
         self._check_backend(*backend_info)
 
+        # Create bucket
+        bucket_name = 'bucket'
+        self.backend.create_bucket(bucket_name, account_id, region)
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('buckets', region): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 1,
+                    ('buckets', region): 1
+                }
+            },
+            {
+                (account_id, bucket_name): {
+                    ('account',): account_id,
+                    ('region',): region,
+                    ('containers',): 0,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                }
+            },
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
         # First, create +segments
         name1 = 'bucket+segments'
-        bucket_name = 'bucket'
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 8, 108,
@@ -2418,6 +2623,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id, bucket_name): {
                     ('account',): account_id,
                     ('region',): region,
+                    ('containers',): 1,
                     ('mtime',): mtime,
                     ('bytes',): 108,
                     ('bytes', 'pol1'): 7,
@@ -2483,6 +2689,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id, bucket_name): {
                     ('account',): account_id,
                     ('region',): region,
+                    ('containers',): 2,
                     ('mtime',): mtime,
                     ('bytes',): 176,
                     ('bytes', 'pol1'): 34,
@@ -2551,6 +2758,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id, bucket_name): {
                     ('account',): account_id,
                     ('region',): region,
+                    ('containers',): 3,
                     ('mtime',): mtime,
                     ('bytes',): 218,
                     ('bytes', 'pol1'): 64,
@@ -2606,6 +2814,7 @@ class TestAccountBackend(BaseTestCase):
                 (account_id, bucket_name): {
                     ('account',): account_id,
                     ('region',): region,
+                    ('containers',): 2,
                     ('mtime',): dtime3,
                     ('bytes',): 176,
                     ('bytes', 'pol1'): 34,
@@ -2630,6 +2839,60 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(
             account_id, name2, 0, dtime2, 0, 0,
             bucket_name=bucket_name, region=region)
+        backend_info = (
+            {
+                ('accounts',): 1,
+                ('bytes', region, 'pol1'): 7,
+                ('bytes', region, 'pol2'): 101,
+                ('objects', region, 'pol1'): 3,
+                ('objects', region, 'pol2'): 5,
+                ('shards', region): 0,
+                ('containers', region): 1,
+                ('buckets', region): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('mtime',): dtime2,
+                    ('bytes',): 108,
+                    ('bytes', region, 'pol1'): 7,
+                    ('bytes', region, 'pol2'): 101,
+                    ('objects',): 8,
+                    ('objects', region, 'pol1'): 3,
+                    ('objects', region, 'pol2'): 5,
+                    ('containers',): 1,
+                    ('containers', region): 1,
+                    ('buckets',): 1,
+                    ('buckets', region): 1
+                },
+                (shards_account_id,): shard_account_info
+            },
+            {
+                (account_id, bucket_name): {
+                    ('account',): account_id,
+                    ('region',): region,
+                    ('containers',): 1,
+                    ('mtime',): dtime2,
+                    ('bytes',): 108,
+                    ('bytes', 'pol1'): 7,
+                    ('bytes', 'pol2'): 101,
+                    ('objects',): 0,
+                    ('objects', 'pol1'): 0,
+                    ('objects', 'pol2'): 0
+                }
+            },
+            {
+                (account_id, name1): container_info1
+            },
+            {
+                (account_id, name2): dtime2,
+                (shards_account_id, name3): dtime3
+            }
+        )
+        self._check_backend(*backend_info)
+
+        # Delete bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
         backend_info = (
             {
                 ('accounts',): 1,

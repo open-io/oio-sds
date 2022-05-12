@@ -76,7 +76,7 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.container_list(self.account_id,
                                                   marker="container1",
                                                   limit=1)
-        self.assertEquals(2, resp["containers"])
+        self.assertEqual(2, resp["containers"])
         self.assertEqual([["container2", 0, 0, 0]],
                          [x[:4] for x in resp["listing"]])
 
@@ -161,6 +161,7 @@ class TestAccountClient(BaseTestCase):
 
     def test_account_delete_missing_container(self):
         bucket = 'bucket-%f' % time.time()
+        self.bucket_client.bucket_create(bucket, self.account_id, 'localhost')
         metadata = dict()
         metadata['mtime'] = time.time()
         metadata['bytes'] = 42
@@ -171,11 +172,10 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.account_show(self.account_id)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
-        self.bucket_client.bucket_reserve(bucket, self.account_id)
-        self.bucket_client.bucket_set_owner(bucket, self.account_id)
         resp = self.account_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
+        self.assertEqual(resp['containers'], 1)
 
         metadata = dict()
         metadata['region'] = 'localhost'
@@ -197,6 +197,7 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
+        self.assertEqual(resp['containers'], 1)
 
         metadata = dict()
         metadata['region'] = 'localhost'
@@ -213,3 +214,4 @@ class TestAccountClient(BaseTestCase):
         resp = self.account_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
+        self.assertEqual(resp['containers'], 1)

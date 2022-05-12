@@ -74,6 +74,8 @@ class TestSharding(BaseTestCase):
     def _create(self, cname, properties=None, bucket=None):
         system = None
         if bucket:
+            self.storage.bucket.bucket_create(bucket, self.account,
+                                              self.ns_conf.get('ns.region'))
             system = {M2_PROP_BUCKET_NAME: bucket}
         created = self.storage.container_create(
             self.account, cname, properties=properties, system=system)

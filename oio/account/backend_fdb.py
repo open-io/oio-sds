@@ -337,7 +337,7 @@ class AccountBackendFdb(object):
         """
         account_space = self.acct_space[account_id]
         if ctime is None:
-            ctime = time.time()
+            ctime = self._get_timestamp()
 
         # Add basic info
         tr[account_space.pack(('id',))] = account_id.encode('utf-8')
@@ -1121,19 +1121,13 @@ class AccountBackendFdb(object):
 
         # Update bucket stats
         if bname:
-            bucket_mtime = max(new_mtime, new_dtime)
             if container_has_new_bucket:
-                # Add bucket name in container info
-                tr[container_space.pack(('bucket',))] = bname.encode('utf-8')
                 # Update bucket stats with the container stats
-                self._update_bucket_stats(
-                    tr, account_id, cname, bname, region, new_stats,
-                    bucket_mtime, container_is_deleted)
-            else:
-                # Update bucket stats with the delta
-                self._update_bucket_stats(
-                    tr, account_id, cname, bname, region, stats_delta,
-                    bucket_mtime, container_is_deleted)
+                stats_delta = new_stats
+            bucket_mtime = max(new_mtime, new_dtime)
+            self._update_bucket_stats(
+                tr, account_id, cname, bname, region, stats_delta,
+                bucket_mtime, container_is_deleted, container_has_new_bucket)
 
     @fdb.transactional
     def _update_container_stats(self, tr, account_id, cname, region,
@@ -1205,51 +1199,146 @@ class AccountBackendFdb(object):
 
     # Bucket ------------------------------------------------------------------
 
+    @catch_service_errors
+    def create_bucket(self, bname, account_id, region, ctime=None,
+                      autocreate_account=None, **kwargs):
+        """
+        Create the bucket if it doesn't already exist.
+        """
+        region = region.upper()
+        if ctime is None:
+            ctime = self._get_timestamp()
+        if autocreate_account is None:
+            autocreate_account = self.autocreate
+        return self._create_bucket(self.db, bname, account_id, region,
+                                   ctime, autocreate_account)
+
     @fdb.transactional
-    def _real_create_bucket(self, tr, account_id, bname, region):
+    def _create_bucket(self, tr, bname, account, region, ctime,
+                       autocreate_account):
+        """
+        [transactional] Create the bucket if it doesn't already exist.
+        """
+        account_space = self.acct_space[account]
+        bucket_space = self.bucket_space[account][bname]
+
+        # Check that the account exists and create it if necessary
+        account_ctime = tr[account_space.pack((CTIME_FIELD,))]
+        if not account_ctime.present():
+            # It's a new account
+            if not autocreate_account:
+                raise NotFound('Account does\'nt exist')
+            self._real_create_account(tr, account)
+
+        self._set_bucket_owner(tr, bname, account)
+
+        # Do not use the ctime, it is not present for old buckets
+        current_region = tr[bucket_space.pack(('region',))]
+        if current_region.present():
+            # Bucket already exists
+            current_region = current_region.decode('utf-8')
+            if region != current_region:
+                raise Conflict('Created in another region')
+            return False
+        self._real_create_bucket(tr, bname, account, region, ctime=ctime)
+        return True
+
+    @fdb.transactional
+    def _real_create_bucket(self, tr, bname, account, region, ctime):
         """
         [transactional] Create the bucket.
         This method assumes that the account exists.
         This method assumes that the bucket does not exist.
         """
-        bucket_space = self.bucket_space[account_id][bname]
+        bucket_space = self.bucket_space[account][bname]
 
         # Add basic info
-        tr[bucket_space.pack(('account',))] = account_id.encode('utf-8')
+        tr[bucket_space.pack(('account',))] = account.encode('utf-8')
         tr[bucket_space.pack(('region',))] = region.encode('utf-8')
+        self._set_counter(tr, bucket_space.pack((CONTAINERS_FIELD,)))
         self._set_counter(tr, bucket_space.pack((BYTES_FIELD,)))
         self._set_counter(tr, bucket_space.pack((OBJECTS_FIELD,)))
-        # No need to add the mtime,
-        # it will be added to the bucket stats update
+        # Set bucket ctime and mtime
+        self._set_timestamp(tr, bucket_space.pack((CTIME_FIELD,)), ctime)
+        self._set_timestamp(tr, bucket_space.pack((MTIME_FIELD,)), ctime)
         # Add bucket in index
-        tr[self.buckets_index_space.pack((account_id, bname))] = b'1'
-        tr[self.buckets_index_space.pack((region, account_id, bname))] = b'1'
+        tr[self.buckets_index_space.pack((account, bname))] = b'1'
+        tr[self.buckets_index_space.pack((region, account, bname))] = b'1'
         # Increase buckets counter in account
-        self._increment(tr, self.acct_space[account_id].pack((BUCKETS_FIELD,)))
-        self._increment(tr, self.acct_space[account_id].pack(
+        self._increment(tr, self.acct_space[account].pack((BUCKETS_FIELD,)))
+        self._increment(tr, self.acct_space[account].pack(
             (BUCKETS_FIELD, region)))
         # Increase buckets counter in metrics
         self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)))
 
+    @catch_service_errors
+    def delete_bucket(self, bname, account, region, **kwargs):
+        """
+        Delete the account if it already exists.
+        """
+        if region:
+            region = region.upper()
+        self._delete_bucket(self.db, bname, account, region)
+        return True
+
     @fdb.transactional
-    def _real_delete_bucket(self, tr, account_id, bname, region):
+    def _delete_bucket(self, tr, bucket, account, region):
+        """
+        [transactional] Delete the account if it already exists.
+        """
+        bucket_space = self.bucket_space[account][bucket]
+        try:
+            # Do not use the ctime, it is not present for old buckets
+            current_region = tr[bucket_space.pack(('region',))]
+            if not current_region.present():
+                raise NotFound('Bucket does not exist')
+            current_region = current_region.decode('utf-8')
+            if current_region != region:
+                raise Forbidden(
+                    'Deletion is not allowed in any region other '
+                    'than the bucket region')
+
+            # Since the bucket is deleted synchronously,
+            # there is no need to check for asynchronously updated counters
+        except NotFound:
+            # The bucket might not exist, but the account owns it
+            try:
+                self._release_bucket(tr, bucket, account,
+                                     check_reservation=False)
+                return
+            except Forbidden:
+                pass
+            raise
+
+        try:
+            self._release_bucket(tr, bucket, account,
+                                 check_reservation=False)
+        except Forbidden:
+            # It may happen that a bucket is still present,
+            # but that there is no longer an owner or that it has changed
+            pass
+
+        self._real_delete_bucket(tr, bucket, account, region)
+
+    @fdb.transactional
+    def _real_delete_bucket(self, tr, bucket, account, region):
         """
         [transactional] Delete the bucket.
         This method assumes that the account exists.
         This method assumes that the bucket exists.
         """
-        bucket_space = self.bucket_space[account_id][bname]
+        bucket_space = self.bucket_space[account][bucket]
 
         # Delete bucket info
         bucket_range = bucket_space.range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
         # Delete bucket in index
-        tr.clear(self.buckets_index_space.pack((account_id, bname,)))
-        tr.clear(self.buckets_index_space.pack((region, account_id, bname,)))
+        tr.clear(self.buckets_index_space.pack((account, bucket,)))
+        tr.clear(self.buckets_index_space.pack((region, account, bucket,)))
         # Decrease buckets counter in account
-        self._increment(tr, self.acct_space[account_id].pack(
+        self._increment(tr, self.acct_space[account].pack(
             (BUCKETS_FIELD,)), -1)
-        self._increment(tr, self.acct_space[account_id].pack(
+        self._increment(tr, self.acct_space[account].pack(
             (BUCKETS_FIELD, region)), -1)
         # Decrease buckets counter in metrics
         self._increment(tr, self.metrics_space.pack(
@@ -1436,7 +1525,8 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _update_bucket_stats(self, tr, account_id, cname, bname, region,
-                             stats_delta, mtime, container_is_deleted):
+                             stats_delta, mtime, container_is_deleted,
+                             container_has_new_bucket):
         """
         [transactional] Update bucket stats.
         Create the bucket if it doesn't exist
@@ -1444,6 +1534,8 @@ class AccountBackendFdb(object):
         Delete the bucket if the root container is deleted.
         This method assumes that the account exists.
         """
+        container_space = self.container_space[account_id][cname]
+
         # Filter the special accounts hosting bucket shards.
         root_container = cname
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
@@ -1452,48 +1544,39 @@ class AccountBackendFdb(object):
 
         bucket_space = self.bucket_space[account_id][bname]
 
-        if container_is_deleted and bname == cname:
-            # Delete the bucket if it's the root container
-            self._real_delete_bucket(tr, account_id, bname, region)
-            # TODO(adu): We should use an associated container counter to know
-            # when to actually delete it.
-            return
-
         current_region = tr[bucket_space.pack(('region',))]
-        if not current_region.present():
+        if not current_region.present():  # Bucket doesn't exist
             if container_is_deleted:
                 # Bucket is already deleted
                 return
-            # It's a new bucket
-            self._real_create_bucket(tr, account_id, bname, region)
-        else:
+            self.logger.warning(
+                'Bucket %s/%s must be created explicitly, '
+                'it is no longer automatically created asynchronously',
+                account_id, bname)
+            if not container_has_new_bucket:
+                # If the bucket is recreated, all of the container statistics
+                # will be added to the bucket, not just the delta
+                tr.clear(container_space.pack(('bucket',)))
+            return
+        else:  # Bucket exists
             # Check that the region has not changed
             current_region = current_region.decode('utf-8')
             if current_region != region:
-                self.logger.warning(
-                    'The region has changed for the bucket %s in account %s',
-                    '(before: %s, after: %s), we should check that '
-                    'all containers associated with this bucket are '
-                    'in the same region',
-                    bname, account_id, current_region, region)
-                # Decrease buckets counter in account and metrics
-                # and remove index for current region
-                tr.clear(self.buckets_index_space.pack(
-                    (current_region, account_id, bname,)))
-                self._increment(tr, self.acct_space[account_id].pack(
-                    (BUCKETS_FIELD, current_region)), -1)
-                self._increment(tr, self.metrics_space.pack(
-                    (BUCKETS_FIELD, current_region)), -1)
-                # Increase buckets counter in account and metrics
-                # and add index for new region
-                tr[self.buckets_index_space.pack(
-                    (region, account_id, bname))] = b'1'
-                self._increment(tr, self.acct_space[account_id].pack(
-                    (BUCKETS_FIELD, region)))
-                self._increment(tr, self.metrics_space.pack(
-                    (BUCKETS_FIELD, region)))
-                # Update the region
-                tr[bucket_space.pack(('region',))] = region.encode('utf-8')
+                raise Conflict(
+                    'The container must be in the same region as the bucket '
+                    'to belong to it')
+
+            # Update containers counter
+            if container_is_deleted:
+                if not container_has_new_bucket:
+                    # If the container already belonged to the bucket,
+                    # decrease the containers counter
+                    self._increment(
+                        tr, bucket_space.pack((CONTAINERS_FIELD,)), -1)
+            elif container_has_new_bucket:
+                # Next time, only the delta will be added
+                tr[container_space.pack(('bucket',))] = bname.encode('utf-8')
+                self._increment(tr, bucket_space.pack((CONTAINERS_FIELD,)))
 
         # Update bucket stats
         is_segment = root_container.endswith(MULTIUPLOAD_SUFFIX)
@@ -1578,6 +1661,9 @@ class AccountBackendFdb(object):
         if not found:
             raise NotFound("Bucket %s not found" % bucket_name)
 
+        # Reset the containers counter
+        self._set_counter(tr, account_bucket[CONTAINERS_FIELD])
+
         # Reset global counters
         self._set_counter(tr, account_bucket[BYTES_FIELD])
         self._set_counter(tr, account_bucket[OBJECTS_FIELD])
@@ -1590,7 +1676,11 @@ class AccountBackendFdb(object):
     def _refresh_bucket(self, tr, bucket_account_id, bucket_name,
                         sharded, marker, batch_size):
         new_marker = None
-        counters = {BYTES_FIELD: Counter(), OBJECTS_FIELD: Counter()}
+        counters = {
+            CONTAINERS_FIELD: 0,
+            BYTES_FIELD: Counter(),
+            OBJECTS_FIELD: Counter()
+        }
 
         container_account_id = bucket_account_id
 
@@ -1618,9 +1708,9 @@ class AccountBackendFdb(object):
         # Propagate container counters to bucket if container belongs to bucket
         def _process_data_to_counters():
             if 'bucket' in data and data['bucket'] == bucket_name:
-                for counter in (BYTES_FIELD, OBJECTS_FIELD):
-                    for p, c in data.get(counter, {}).items():
-                        counters[counter][p] += c
+                counters[CONTAINERS_FIELD] += 1
+                for field in (BYTES_FIELD, OBJECTS_FIELD):
+                    counters[field] += data.get(field, {})
 
         # Iterate over containers
         for key, value in containers:
@@ -1660,6 +1750,8 @@ class AccountBackendFdb(object):
 
         # Update counters
         bucket = self.bucket_space[bucket_account_id][bucket_name]
+        self._increment(tr, bucket.pack((CONTAINERS_FIELD,)),
+                        counters[CONTAINERS_FIELD])
         for field in (BYTES_FIELD, OBJECTS_FIELD):
             for policy, counter in counters.get(field, {}).items():
                 key = bucket[field]
@@ -1698,7 +1790,7 @@ class AccountBackendFdb(object):
         self._release_bucket(self.db, bucket, account_id)
 
     @fdb.transactional
-    def _release_bucket(self, tr, bucket, account):
+    def _release_bucket(self, tr, bucket, account, check_reservation=True):
         reserved_bucket_space = self.bucket_db_space[bucket]
 
         current_account = tr[reserved_bucket_space.pack(('account',))]
@@ -1708,12 +1800,14 @@ class AccountBackendFdb(object):
         if account != current_account:
             raise Forbidden('Bucket reserved by another owner')
 
+        rtime = tr[reserved_bucket_space.pack(('rtime',))]
+        if check_reservation and not rtime.present():
+            raise Forbidden(
+                'The owner has already arrived, '
+                'the reservation can no longer be cancelled')
+
         reserved_bucket_range = reserved_bucket_space.range()
         tr.clear_range(reserved_bucket_range.start, reserved_bucket_range.stop)
-
-    @catch_service_errors
-    def set_bucket_owner(self, bucket, account_id, **kwargs):
-        self._set_bucket_owner(self.db, bucket, account_id)
 
     @fdb.transactional
     def _set_bucket_owner(self, tr, bucket, account):

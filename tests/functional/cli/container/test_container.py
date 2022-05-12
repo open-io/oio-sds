@@ -58,17 +58,15 @@ class ContainerTest(CliTestCase):
 
     def test_bucket_enable_replication(self):
         cname = 'mybucket-' + random_str(4).lower()
-        opts = self.get_format_opts(fields=(BUCKET_PROP_REPLI_ENABLED, ))
+        # Create bucket (and root container)
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('bucket create ' + cname + opts)
+        self.assertEqual('True\n', output)
         # Enable bucket replication before creating the first container
+        opts = self.get_format_opts(fields=(BUCKET_PROP_REPLI_ENABLED,))
         output = self.openio('bucket set --replication yes ' +
                              cname + opts)
         self.assertEqual('True\n', output)
-
-        opts = self.get_format_opts(fields=('Name', ))
-        # Create a container attached to the previously declared bucket
-        output = self.openio('container create --bucket-name %s %s %s' %
-                             (cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
 
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects',
                                             BUCKET_PROP_REPLI_ENABLED))
@@ -80,64 +78,69 @@ class ContainerTest(CliTestCase):
         # As of now there is no CLI to check that.
 
     def test_bucket_list(self):
-        opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
-        output = self.openio('container create --bucket-name %s %s %s' %
-                             (cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
-
+        # Create bucket
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('bucket create ' + cname + opts)
+        self.assertEqual('True\n', output)
+        # List buckets
+        opts = self.get_format_opts(fields=('Name',))
         output = self.openio('bucket list ' + opts)
         self.assertIn(cname, output)
 
     def test_bucket_list_with_versioning(self):
-        opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
+        # Create bucket
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('bucket create ' + cname + opts)
+        self.assertEqual('True\n', output)
+        # Create the root container
+        opts = self.get_format_opts(fields=('Name', ))
         output = self.openio('container create --bucket-name %s %s %s' %
                              (cname, cname, opts))
         self.assertOutput(cname + '\n', output)
-
+        # List buckets
         opts = self.get_format_opts(fields=('Name', 'Versioning'))
         opts += " --prefix %s --versioning" % cname
-
         output = self.openio('bucket list ' + opts)
         self.assertIn("Suspended", output)
-
+        # Enable versioning on the root container
         self.openio('container set --versioning -1 %s' % cname)
+        # List buckets
         output = self.openio('bucket list ' + opts)
         self.assertIn("Enabled", output)
 
     def test_bucket_show(self):
-        opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
-        output = self.openio('container create --bucket-name %s %s %s' %
-                             (cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_NEW, ))
+        # Create bucket
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('bucket create ' + cname + opts)
+        self.assertEqual('True\n', output)
+        # Show bucket
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
         output = self.openio('bucket show ' + cname + opts)
         self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
-
-        output = self.openio('container delete %s' % cname)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_DELETED, ))
+        # Delete bucket
+        opts = self.get_format_opts(fields=('Deleted',))
+        output = self.openio('bucket delete ' + cname + opts)
+        self.assertEqual('True\n', output)
         # Bucket not found (HTTP 404)
         self.assertRaises(CommandFailed, self.openio, 'bucket show ' + cname)
 
     def test_bucket_show_with_account_refresh(self):
         account = 'myaccount-' + random_str(4).lower()
-        opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
-        output = self.openio(
-            '--oio-account %s container create --bucket-name %s %s %s' %
-            (account, cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_NEW, ))
-
+        # Create bucket (and root container)
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('--oio-account ' + account + ' bucket create '
+                             + cname + opts)
+        self.assertEqual('True\n', output)
+        # Show bucket
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        output = self.openio('--oio-account ' + account + ' bucket show '
+                             + cname + opts)
+        self.assertEqual(account + '\n0\n0\n', output)
+        # Put object
         with tempfile.NamedTemporaryFile() as file_:
             file_.write(b'test')
             file_.flush()
@@ -147,31 +150,29 @@ class ContainerTest(CliTestCase):
         self.wait_for_event('oio-preserved',
                             fields={'user': cname},
                             types=(EventTypes.CONTAINER_STATE, ))
-
-        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        # Show bucket
+        opts = self.get_format_opts(fields=('account', 'bytes', 'containers',
+                                            'objects'))
         output = self.openio('--oio-account ' + account + ' bucket show '
                              + cname + opts)
-        self.assertEqual(account + '\n4\n1\n', output)
-
+        self.assertEqual(account + '\n4\n1\n1\n', output)
+        # Refresh account
         output = self.openio('account refresh ' + account)
         self.wait_for_event('oio-preserved',
                             fields={'user': cname},
                             types=(EventTypes.CONTAINER_STATE, ))
-
+        # show bucket
         output = self.openio('--oio-account ' + account + ' bucket show '
                              + cname + opts)
-        self.assertEqual(account + '\n4\n1\n', output)
+        self.assertEqual(account + '\n4\n1\n1\n', output)
 
     def test_bucket_refresh(self):
-        opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
-        output = self.openio('container create --bucket-name %s %s %s' %
-                             (cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_NEW, ))
-
+        # Create bucket (and root container)
+        opts = self.get_format_opts(fields=('Created',))
+        output = self.openio('bucket create ' + cname + opts)
+        self.assertEqual('True\n', output)
+        # Put object
         with tempfile.NamedTemporaryFile() as file_:
             file_.write(b'test')
             file_.flush()
@@ -180,15 +181,16 @@ class ContainerTest(CliTestCase):
         self.wait_for_event('oio-preserved',
                             fields={'user': cname},
                             types=(EventTypes.CONTAINER_STATE, ))
-
-        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        # Show bucket
+        opts = self.get_format_opts(fields=('account', 'bytes', 'containers',
+                                            'objects'))
         output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n4\n1\n', output)
-
+        self.assertEqual(self.account_from_env() + '\n4\n1\n1\n', output)
+        # Refresh bucket
         output = self.openio('bucket refresh ' + cname)
-
+        # Show bucket
         output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n4\n1\n', output)
+        self.assertEqual(self.account_from_env() + '\n4\n1\n1\n', output)
 
     def test_container_show(self):
         self._test_container_show()

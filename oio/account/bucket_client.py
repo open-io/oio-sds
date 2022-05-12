@@ -34,6 +34,29 @@ class BucketClient(ServiceClient):
             params['id'] = bucket
         return self.service_request(*args, **kwargs)
 
+    def bucket_create(self, bucket, account, region, **kwargs):
+        """
+        Create a new bucket with the specified name in the account service.
+        No container linked to this bucket is created.
+        """
+        params = {'account': account, 'region': region}
+        resp, body = self.bucket_request(
+            bucket, 'PUT', 'create', params=params, **kwargs)
+        if resp.status not in (201, 202):
+            raise from_response(resp, body)
+        return resp.status == 201
+
+    def bucket_delete(self, bucket, account, region, **kwargs):
+        """
+        Delete the specified bucket in the account service.
+        No container linked to this bucket is deleted.
+        """
+        params = {'account': account, 'region': region}
+        resp, body = self.bucket_request(
+            bucket, 'POST', 'delete', params=params, **kwargs)
+        if resp.status != 204:
+            raise from_response(resp, body)
+
     def bucket_show(self, bucket, account=None, check_owner=None, **kwargs):
         """
         Get information about a bucket.
@@ -106,16 +129,6 @@ class BucketClient(ServiceClient):
         resp, body = self.bucket_request(
             bucket, 'POST', 'release', params=params, **kwargs)
         if resp.status != 204:
-            raise from_response(resp, body)
-
-    def bucket_set_owner(self, bucket, account, **kwargs):
-        """
-        Set the bucket owner during reservation.
-        """
-        params = {'account': account}
-        resp, body = self.bucket_request(
-            bucket, 'PUT', 'set-owner', params=params, **kwargs)
-        if resp.status != 201:
             raise from_response(resp, body)
 
     def bucket_get_owner(self, bucket, **kwargs):

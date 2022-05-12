@@ -473,12 +473,13 @@ class TestReplicateFilter(TestNotifyFilterBase):
         # Disable the account check
         self.notify_filter.check_account = False
         bname = 'repli' + random_str(4)
+        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
         now = time.time()
         # Disable replication for this bucket
-        self.__class__.account_client.bucket_update(
+        self.storage.bucket.bucket_update(
             bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
             account=self.account)
-        self.__class__.account_client.container_update(
+        self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
                                   'region': 'localhost'})
@@ -490,11 +491,12 @@ class TestReplicateFilter(TestNotifyFilterBase):
 
     def test_replication_enabled(self):
         bname = 'repli' + random_str(4)
+        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
         now = time.time()
-        self.__class__.account_client.bucket_update(
+        self.storage.bucket.bucket_update(
             bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None,
             account=self.account)
-        self.__class__.account_client.container_update(
+        self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
                                   'region': 'localhost'})
@@ -503,11 +505,12 @@ class TestReplicateFilter(TestNotifyFilterBase):
 
     def test_replication_disabled(self):
         bname = 'repli' + random_str(4)
+        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
         now = time.time()
-        self.__class__.account_client.bucket_update(
+        self.storage.bucket.bucket_update(
             bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
             account=self.account)
-        self.__class__.account_client.container_update(
+        self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
                                   'region': 'localhost'})
