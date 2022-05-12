@@ -1720,11 +1720,17 @@ class AccountBackendFdb(object):
         reserved_bucket_space = self.bucket_db_space[bucket]
 
         current_account = tr[reserved_bucket_space.pack(('account',))]
-        if not current_account.present():
-            raise Forbidden('Unreserved bucket')
-        current_account = current_account.decode('utf-8')
+        if current_account.present():
+            current_account = current_account.decode('utf-8')
+        else:
+            # Last minute reservations are accepted
+            # if the bucket is not already reserved
+            self._reserve_bucket(tr, bucket, account)
+            current_account = account
         rtime = tr[reserved_bucket_space.pack(('rtime',))]
         if not rtime.present():
+            if account == current_account:
+                return
             raise Forbidden('Already associated with an owner')
         rtime = self._timestamp_value_to_timestamp(rtime.value)
         if account != current_account:
