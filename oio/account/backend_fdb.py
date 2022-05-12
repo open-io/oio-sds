@@ -1047,7 +1047,9 @@ class AccountBackendFdb(object):
             current_mtime = self._timestamp_value_to_timestamp(
                 current_mtime.value)
             if container_is_deleted:
-                if current_mtime >= new_dtime:
+                # If the deletion timestamp equals the last modification,
+                # allow the deletion.
+                if current_mtime > new_dtime:
                     raise Conflict(
                         'No update needed, '
                         'event older than last container update')
