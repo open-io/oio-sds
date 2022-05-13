@@ -138,7 +138,7 @@ class RdirDispatcher(object):
         :type min_dist: `int`
         :param service_id: Assign only this service ID.
         :type service_id: `str`
-        :param reassign: ID of an rdir service to be decommissionned.
+        :param reassign: ID of an rdir service to be decommissioned.
         :type reassign: `str`
         :param dry_run: Display actions but do nothing.
         :type dry_run: `bool`
@@ -194,7 +194,7 @@ class RdirDispatcher(object):
                                                   reassign=reassign,
                                                   known_hosts=rdir_hosts,
                                                   **kwargs)
-                except OioException as exc:
+                except (OioException, ValueError) as exc:
                     self.logger.warning("Failed to link an rdir to %s %s: %s",
                                         service_type, provider_id, exc)
                     errors.append((provider_id, exc))
@@ -278,7 +278,7 @@ class RdirDispatcher(object):
                 retry = (406, 450, 503, 504)
                 if ex.status >= 400 and ex.status not in retry:
                     raise
-                # Monotonic backoff (retriable and net erorrs)
+                # Monotonic backoff (retriable and net errors)
                 if i < max_attempts - 1:
                     sleep(i * 1.0)
                     continue
@@ -404,9 +404,10 @@ class RdirDispatcher(object):
         """
         if not known or len(known) > replicas:
             raise ValueError(
-                'There should be at most %d "known" services' % replicas)
+                'There should be at most %d "known" services, but known=%s'
+                % (replicas, known))
 
-        options = dict()
+        options = {}
         if min_dist is not None:
             options['min_dist'] = min_dist
         if options != self._pool_options:
@@ -425,14 +426,17 @@ class RdirDispatcher(object):
                                       replicas=replicas, **kwargs)
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
                                 **kwargs)
+        expected = (replicas - len(known) + 1)
         rdir_count = 0
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
             if 'rdir' in svc['id']:
                 rdir_count += 1
-        if rdir_count == (replicas - len(known) + 1):
+        if rdir_count == expected:
             return svcs
-        raise ServerException("LB returned incoherent result: %s" % svcs)
+        raise ServerException(
+            "LB returned incoherent result (expected %d rdir, got %d): %s"
+            % (expected, rdir_count, svcs))
 
 
 class RdirClient(HttpApi):
