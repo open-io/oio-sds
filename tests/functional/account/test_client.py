@@ -161,7 +161,7 @@ class TestAccountClient(BaseTestCase):
 
     def test_account_delete_missing_container(self):
         bucket = 'bucket-%f' % time.time()
-        self.bucket_client.bucket_create(bucket, self.account_id, 'localhost')
+        self.bucket_client.bucket_create(bucket, self.account_id)
         metadata = dict()
         metadata['mtime'] = time.time()
         metadata['bytes'] = 42
@@ -178,7 +178,7 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['containers'], 1)
 
         metadata = dict()
-        metadata['region'] = 'localhost'
+        metadata['region'] = self.storage.bucket.region
         metadata['dtime'] = time.time()
         # The counters are voluntarily positive to verify
         # that they are indeed ignored.
@@ -200,7 +200,7 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['containers'], 1)
 
         metadata = dict()
-        metadata['region'] = 'localhost'
+        metadata['region'] = self.storage.bucket.region
         metadata['dtime'] = time.time()
         # To be sure, let's try with 0 counters (as with current requests).
         metadata['bytes'] = 0

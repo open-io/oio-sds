@@ -13,7 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.exceptions import from_response
+from oio.common.configuration import load_namespace_conf
+from oio.common.exceptions import OioException, from_response
 from oio.common.service_client import ServiceClient
 
 
@@ -24,6 +25,9 @@ class BucketClient(ServiceClient):
         super(BucketClient, self).__init__(
             'account', conf, service_name='bucket-service',
             request_prefix='v1.0/bucket', **kwargs)
+        self.region = load_namespace_conf(conf['namespace']).get('ns.region')
+        if not self.region:
+            raise OioException("Missing region key in namespace conf")
 
     def bucket_request(self, bucket, *args, **kwargs):
         params = kwargs.setdefault('params')
@@ -32,26 +36,27 @@ class BucketClient(ServiceClient):
             kwargs['params'] = params
         if bucket:
             params['id'] = bucket
+        params['region'] = self.region
         return self.service_request(*args, **kwargs)
 
-    def bucket_create(self, bucket, account, region, **kwargs):
+    def bucket_create(self, bucket, account, **kwargs):
         """
         Create a new bucket with the specified name in the account service.
         No container linked to this bucket is created.
         """
-        params = {'account': account, 'region': region}
+        params = {'account': account}
         resp, body = self.bucket_request(
             bucket, 'PUT', 'create', params=params, **kwargs)
         if resp.status not in (201, 202):
             raise from_response(resp, body)
         return resp.status == 201
 
-    def bucket_delete(self, bucket, account, region, force=None, **kwargs):
+    def bucket_delete(self, bucket, account, force=None, **kwargs):
         """
         Delete the specified bucket in the account service.
         No container linked to this bucket is deleted.
         """
-        params = {'account': account, 'region': region}
+        params = {'account': account}
         if force is not None:
             params['force'] = force
         resp, body = self.bucket_request(

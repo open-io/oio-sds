@@ -46,13 +46,12 @@ class TestAccountServiceCleaner(BaseTestCase):
         _ = self.storage.account.container_show(self.account, self.container)
 
     def test_bucket_still_exists(self):
-        region = self.ns_conf['ns.region']
         system = {M2_PROP_BUCKET_NAME: self.container}
         self.storage.bucket.bucket_reserve(self.container, self.account)
         reqid = request_id()
         self.storage.container_create(self.account, self.container,
                                       system=system, reqid=reqid)
-        self.storage.bucket.bucket_create(self.container, self.account, region)
+        self.storage.bucket.bucket_create(self.container, self.account)
         self.wait_for_event('oio-preserved', reqid=reqid,
                             types=(EventTypes.CONTAINER_NEW,))
         self.cleaner.run()
@@ -68,7 +67,7 @@ class TestAccountServiceCleaner(BaseTestCase):
     def test_container_no_longer_exists(self):
         self.storage.account.container_update(
             self.account, self.container,
-            {'region': self.ns_conf['ns.region'], 'objects': 0, 'bytes': 0,
+            {'region': self.storage.bucket.region, 'objects': 0, 'bytes': 0,
              'mtime': time()})
         # Check if the container exists
         _ = self.storage.account.container_show(self.account, self.container)
@@ -80,13 +79,12 @@ class TestAccountServiceCleaner(BaseTestCase):
                           self.account, self.container)
 
     def test_bucket_no_longer_exists(self):
-        region = self.ns_conf['ns.region']
         self.storage.bucket.bucket_reserve(self.container, self.account)
         self.storage.account.container_update(
             self.account, self.container,
-            {'region': region, 'objects': 0, 'bytes': 0,
+            {'region': self.storage.bucket.region, 'objects': 0, 'bytes': 0,
              'mtime': time(), 'bucket': self.container})
-        self.storage.bucket.bucket_create(self.container, self.account, region)
+        self.storage.bucket.bucket_create(self.container, self.account)
         # Check if the bucket exists
         _ = self.storage.account.container_show(self.account, self.container)
         _ = self.storage.bucket.bucket_show(

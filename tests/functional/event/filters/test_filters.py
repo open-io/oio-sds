@@ -473,7 +473,7 @@ class TestReplicateFilter(TestNotifyFilterBase):
         # Disable the account check
         self.notify_filter.check_account = False
         bname = 'repli' + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
+        self.storage.bucket.bucket_create(bname, self.account)
         now = time.time()
         # Disable replication for this bucket
         self.storage.bucket.bucket_update(
@@ -482,7 +482,7 @@ class TestReplicateFilter(TestNotifyFilterBase):
         self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
-                                  'region': 'localhost'})
+                                  'region': self.storage.bucket.region})
         # Replication is disabled for this bucket,
         # but the filter won't do the check,
         # and forward the event anyway.
@@ -491,7 +491,7 @@ class TestReplicateFilter(TestNotifyFilterBase):
 
     def test_replication_enabled(self):
         bname = 'repli' + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
+        self.storage.bucket.bucket_create(bname, self.account)
         now = time.time()
         self.storage.bucket.bucket_update(
             bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None,
@@ -499,13 +499,13 @@ class TestReplicateFilter(TestNotifyFilterBase):
         self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
-                                  'region': 'localhost'})
+                                  'region': self.storage.bucket.region})
         self.assertTrue(self.notify_filter._should_notify(
             self.account, bname))
 
     def test_replication_disabled(self):
         bname = 'repli' + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account, 'localhost')
+        self.storage.bucket.bucket_create(bname, self.account)
         now = time.time()
         self.storage.bucket.bucket_update(
             bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
@@ -513,6 +513,6 @@ class TestReplicateFilter(TestNotifyFilterBase):
         self.storage.account.container_update(
             self.account, bname, {'bucket': bname,
                                   'mtime': str(now),
-                                  'region': 'localhost'})
+                                  'region': self.storage.bucket.region})
         self.assertFalse(self.notify_filter._should_notify(
             self.account, bname))

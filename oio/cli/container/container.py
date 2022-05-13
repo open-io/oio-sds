@@ -147,7 +147,6 @@ class CreateBucket(Lister):
 
         results = []
         account = self.app.client_manager.account
-        region = self.app.client_manager.sds_conf.get('ns.region')
         for bucket in parsed_args.buckets:
             success = True
             # We are about to create a root container, reserve its name.
@@ -184,7 +183,7 @@ class CreateBucket(Lister):
                 # confirm reservation by creating the bucket.
                 try:
                     self.app.client_manager.storage.bucket.bucket_create(
-                        bucket, account, region)
+                        bucket, account)
                 except Exception as exc:
                     self.log.error('Failed to create bucket %s: %s',
                                    bucket, exc)
@@ -446,7 +445,6 @@ class DeleteBucket(Lister):
 
         results = []
         account = self.app.client_manager.account
-        region = self.app.client_manager.sds_conf.get('ns.region')
         for bucket in parsed_args.buckets:
             success = True
             try:
@@ -477,7 +475,7 @@ class DeleteBucket(Lister):
                     for i in range(1, 11):
                         try:
                             self.app.client_manager.storage.\
-                                bucket.bucket_delete(bucket, account, region)
+                                bucket.bucket_delete(bucket, account)
                             break
                         except Conflict:
                             if i == 10:

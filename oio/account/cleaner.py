@@ -17,7 +17,7 @@ from time import time
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import load_namespace_conf
-from oio.common.exceptions import OioException, NotFound
+from oio.common.exceptions import NotFound
 from oio.common.logger import get_logger
 from oio.common.utils import depaginate
 
@@ -34,11 +34,8 @@ class AccountServiceCleaner(object):
         ns_conf = load_namespace_conf(namespace)
         self.dry_run = dry_run
         self.logger = logger or get_logger(ns_conf)
-        self.region = ns_conf.get('ns.region')
-        if not self.region:
-            raise OioException("Missing region key in namespace conf")
-        self.region = self.region.upper()
         self.api = ObjectStorageApi(namespace, logger=logger)
+        self.region = self.api.bucket.region.upper()
         self.success = True
         self.deleted_containers = 0
         self.deleted_buckets = 0
@@ -206,7 +203,7 @@ class AccountServiceCleaner(object):
         """
         try:
             if not self.dry_run:
-                self.api.bucket.bucket_delete(bucket, account, self.region)
+                self.api.bucket.bucket_delete(bucket, account)
             self.logger.info('Delete bucket %s/%s', account, bucket)
             self.deleted_buckets += 1
         except Exception as exc:

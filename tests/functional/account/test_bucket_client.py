@@ -36,8 +36,7 @@ class TestBucketClient(BaseTestCase):
             except Exception:
                 pass
             try:
-                self.bucket_client.bucket_delete(self.bucket_name, account,
-                                                 'localhost')
+                self.bucket_client.bucket_delete(self.bucket_name, account)
             except Exception:
                 pass
         self.assertRaises(NotFound, self.bucket_client.bucket_get_owner,
@@ -50,13 +49,11 @@ class TestBucketClient(BaseTestCase):
         self.assertRaises(NotFound, self.bucket_client.bucket_get_owner,
                           self.bucket_name)
         # Go to reservation
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
         # Release the bucket
-        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
         self.assertRaises(NotFound, self.bucket_client.bucket_get_owner,
                           self.bucket_name)
 
@@ -71,17 +68,14 @@ class TestBucketClient(BaseTestCase):
     def test_reserve_after_delete(self):
         # Reserve, use the bucket and release
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
-        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
+        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
         # Reserve the bucket with another owner
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id2)
         self.assertRaises(NotFound, self.bucket_client.bucket_get_owner,
                           self.bucket_name)
         # Go to reservation with the second owner
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id2,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id2)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id2, owner)
 
@@ -94,16 +88,14 @@ class TestBucketClient(BaseTestCase):
         self.assertRaises(Forbidden, self.bucket_client.bucket_reserve,
                           self.bucket_name, self.account_id2)
         # Go to reservation
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
 
     def test_reserve_bucket_with_owner(self):
         # Set owner to a bucket
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
         # Try to reserve the same bucket
@@ -121,10 +113,9 @@ class TestBucketClient(BaseTestCase):
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
         # Go to reservation with another owner
         self.assertRaises(Forbidden, self.bucket_client.bucket_create,
-                          self.bucket_name, self.account_id2, 'localhost')
+                          self.bucket_name, self.account_id2)
         # Go to reservation with the owner
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
 
@@ -134,8 +125,7 @@ class TestBucketClient(BaseTestCase):
         self.assertRaises(Forbidden, self.bucket_client.bucket_release,
                           self.bucket_name, self.account_id2)
         # Go to reservation with the owner
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
         # Release with another owner
@@ -149,8 +139,7 @@ class TestBucketClient(BaseTestCase):
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
         # Go to late reservation (no other reservation)
         time.sleep(31)
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id1,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id1, owner)
 
@@ -162,10 +151,9 @@ class TestBucketClient(BaseTestCase):
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id2)
         # Go to reservation with first owner
         self.assertRaises(Forbidden, self.bucket_client.bucket_create,
-                          self.bucket_name, self.account_id1, 'localhost')
+                          self.bucket_name, self.account_id1)
         # Go to reservation with second owner
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id2,
-                                         'localhost')
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id2)
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id2, owner)
         # The first owner is not happy and cancels his reservation
