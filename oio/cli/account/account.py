@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -121,15 +122,28 @@ class SetAccount(Command):
             action=KeyValueAction,
             help='Property to add/update to this account'
         )
+        parser.add_argument(
+            '--max-buckets',
+            metavar='<n>',
+            type=int,
+            help='Set the maximum number of buckets per account.'
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        if parsed_args.property is None:
+            properties = {}
+        else:
+            properties = parsed_args.property.copy()
+        if parsed_args.max_buckets is not None:
+            properties['max-buckets'] = str(parsed_args.max_buckets)
+        if not properties:
+            ValueError('No property')
+
         self.app.client_manager.storage.account_set_properties(
-            account=parsed_args.account,
-            properties=parsed_args.property
-        )
+            account=parsed_args.account, properties=properties)
 
 
 class UnsetAccount(Command):
@@ -149,18 +163,29 @@ class UnsetAccount(Command):
             metavar='<key>',
             action='append',
             default=[],
-            help='Property to delete from account',
-            required=True
+            help='Property to delete from account'
+        )
+        parser.add_argument(
+            '--max-buckets',
+            action='store_true',
+            help='Reset the maximum number of buckets per account.'
         )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        if parsed_args.property is None:
+            properties = []
+        else:
+            properties = parsed_args.property.copy()
+        if parsed_args.max_buckets:
+            properties.append('max-buckets')
+        if not properties:
+            ValueError('No property')
+
         self.app.client_manager.storage.account_del_properties(
-            account=parsed_args.account,
-            properties=parsed_args.property
-        )
+            account=parsed_args.account, properties=properties)
 
 
 class ListAccounts(Lister):
@@ -205,7 +230,7 @@ class ListAccounts(Lister):
 
 
 class RefreshAccount(Command):
-    """ Refresh counters of an account and all its containers """
+    """Refresh counters of an account and all its containers."""
 
     log = getLogger(__name__ + '.RefreshAccount')
 
@@ -242,7 +267,7 @@ class RefreshAccount(Command):
 
 
 class FlushAccount(Command):
-    """ Flush account by emptying the list of its containers """
+    """Flush account by emptying the list of its containers."""
 
     log = getLogger(__name__ + '.FlushAccount')
 

@@ -22,7 +22,8 @@ from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
-from oio.common.easy_value import boolean_value, float_value, debinarize
+from oio.common.easy_value import boolean_value, float_value, debinarize, \
+    int_value
 from oio.common.exceptions import ServiceBusy
 from oio.common.timestamp import Timestamp
 
@@ -55,7 +56,7 @@ def catch_service_errors(func):
         try:
             return func(*args, **kwargs)
         except (fdb.FDBError, ValueError) as err:
-            raise ServiceBusy(message=str(err))
+            raise ServiceBusy(message=str(err)) from err
 
     return catch_service_errors_wrapper
 
@@ -88,6 +89,8 @@ class AccountBackendFdb(object):
 
     # Timeout for bucket reservation
     DEFAULT_BUCKET_RESERVATION_TIMEOUT = 30
+    # Maximum number of buckets per account
+    MAX_BUCKETS_PER_ACCOUNT = 100
 
     def init_db(self, event_model='gevent'):
         """
@@ -166,6 +169,9 @@ class AccountBackendFdb(object):
         self.bucket_reservation_timeout = float_value(
             conf.get('bucket_reservation_timeout'),
             self.DEFAULT_BUCKET_RESERVATION_TIMEOUT)
+        self.max_buckets_per_account = int_value(
+            conf.get('max_buckets_per_account'),
+            self.MAX_BUCKETS_PER_ACCOUNT)
 
     # Helpers -----------------------------------------------------------------
 
@@ -706,6 +712,34 @@ class AccountBackendFdb(object):
             except NotFound:
                 pass
 
+    @fdb.transactional
+    def _check_max_buckets(self, tr, account):
+        account_space = self.acct_space[account]
+        metadata_space = self.metadata_space[account]
+
+        buckets = tr[account_space.pack((BUCKETS_FIELD,))]
+        if buckets.present():
+            buckets = self._counter_value_to_counter(buckets.value)
+        else:  # Account does not yet exist
+            buckets = 0
+        max_buckets = tr[metadata_space.pack(('max-buckets',))]
+        if not max_buckets.present():
+            # Stay compatible with old (swift) property
+            max_buckets = tr[metadata_space.pack(
+                ('X-Account-Meta-Max-Buckets',))]
+        if max_buckets.present():
+            try:
+                max_buckets = int(max_buckets.decode('utf-8'))
+            except ValueError:
+                self.logger.warning(
+                    'Property "max-buckets" should be a number '
+                    '(account=%s)', account)
+                max_buckets = self.max_buckets_per_account
+        else:
+            max_buckets = self.max_buckets_per_account
+        if buckets >= max_buckets:
+            raise BadRequest('Too many buckets')
+
     # Container ---------------------------------------------------------------
 
     @fdb.transactional
@@ -1219,6 +1253,8 @@ class AccountBackendFdb(object):
         """
         [transactional] Create the bucket if it doesn't already exist.
         """
+        self._check_max_buckets(tr, account)
+
         account_space = self.acct_space[account]
         bucket_space = self.bucket_space[account][bname]
 
@@ -1778,6 +1814,8 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _reserve_bucket(self, tr, bucket, account):
+        self._check_max_buckets(tr, account)
+
         reserved_bucket_space = self.bucket_db_space[bucket]
 
         rtime = tr[reserved_bucket_space.pack(('rtime',))]

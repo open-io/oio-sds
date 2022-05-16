@@ -37,3 +37,10 @@ time_window_clear_deleted = 60
 #redis_sentinel_socket_keepalive=False
 #redis_sentinel_retry_on_timeout=False
 #redis_sentinel_max_connections=2**31
+
+bucket_reservation_timeout = 30
+# Trying to create a bucket when the account already has at least
+# this maximum buckets will result in a 400 Bad Request.
+# This limit can be changed for each account by setting the "max-buckets"
+# property.
+max_buckets_per_account = 100

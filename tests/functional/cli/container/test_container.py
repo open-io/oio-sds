@@ -192,6 +192,33 @@ class ContainerTest(CliTestCase):
         output = self.openio('bucket show ' + cname + opts)
         self.assertEqual(self.account_from_env() + '\n4\n1\n1\n', output)
 
+    def test_max_buckets(self):
+        account = 'myacocunt-' + random_str(4).lower()
+        # Create bucket
+        opts = self.get_format_opts(fields=('Created',))
+        bname1 = 'mybucket-' + random_str(4).lower()
+        output = self.openio('--account ' + account + ' bucket create '
+                             + bname1 + opts)
+        self.assertEqual('True\n', output)
+        # Set max-buckets to 2
+        self.openio('account set ' + account + ' --max-buckets 2')
+        # Create second bucket
+        bname2 = 'mybucket-' + random_str(4).lower()
+        output = self.openio('--account ' + account + ' bucket create '
+                             + bname2 + opts)
+        self.assertEqual('True\n', output)
+        # Try to create third bucket
+        bname3 = 'mybucket-' + random_str(4).lower()
+        output = self.openio('--account ' + account + ' bucket create '
+                             + bname3 + opts)
+        self.assertEqual('False\n', output)
+        # Reset max-buckets
+        self.openio('account unset ' + account + ' --max-buckets')
+        # Try to create third bucket
+        output = self.openio('--account ' + account + ' bucket create '
+                             + bname3 + opts)
+        self.assertEqual('True\n', output)
+
     def test_container_show(self):
         self._test_container_show()
 
