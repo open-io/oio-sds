@@ -939,8 +939,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         container_names = list()
         container_names += bucket_names
-        container_names.append(  # path (CH)
-            "%2F".join([random_str(32).lower(), random_str(32).lower()]))
         container_names.append(  # segments (MPU)
             random_str(32).lower() + "+segments")
 
@@ -969,8 +967,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         container_names = list()
         container_names += bucket_names_with_prefix
         container_names.append(random_str(32).lower())  # No prefix
-        container_names.append(  # path (CH) with prefix
-            "%2F".join([prefix, random_str(32).lower()]))
         container_names.append(  # segments (MPU) with prefix
             prefix + "+segments")
 
@@ -1371,7 +1367,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             link_content_id=link_content_id)
 
     def test_object_link_same_name_same_container(self):
-        """ Considered as a rename"""
+        """Considered as a rename"""
         container = random_str(16)
         obj = random_str(16)
         self.api.object_create(self.account, container, data="1" * 128,
@@ -1445,8 +1441,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_truncate(self.account, name, name, size=128)
 
     def test_object_create_then_invalid_truncate(self):
-        """Create an object, append data then try to truncate outside object
-           range"""
+        """
+        Create an object, append data then try to truncate outside object range
+        """
         name = random_str(16)
         self.api.object_create(self.account, name,
                                data=b'1' * 128, obj_name=name)

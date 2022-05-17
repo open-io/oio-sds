@@ -606,7 +606,7 @@ class Account(WerkzeugApp):
     #    {
     #      "mtime": "123456789",
     #      "dtime": "1223456789",
-    #      "name": "user1bucket%2Ffiles",
+    #      "name": "user1bucket",
     #      "objects": 0,
     #      "bytes": 0,
     #      "bucket": "user1bucket"

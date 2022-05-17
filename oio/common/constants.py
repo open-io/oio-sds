@@ -177,10 +177,6 @@ CHUNK_QUARANTINE_FOLDER_NAME = 'quarantined'
 # Accounts that are used internally by oio-sds and should stay hidden
 HIDDEN_ACCOUNTS = ("_RDIR",)
 
-# Default separator used by swift's "container hierarchy" middleware
-CH_ENCODED_SEPARATOR = '%2F'
-CH_SEPARATOR = '/'
-
 BUCKET_PROP_REPLI_ENABLED = 'replication_enabled'
 
 # Account name

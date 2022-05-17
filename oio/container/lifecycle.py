@@ -27,7 +27,6 @@ from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
 from oio.common.utils import depaginate
 from oio.common.easy_value import true_value
-from oio.common.constants import CH_ENCODED_SEPARATOR, CH_SEPARATOR
 
 
 ALLOWED_STATUSES = ['enabled', 'disabled']
@@ -101,13 +100,11 @@ class ProcessedVersions(object):
 
 class ContainerLifecycle(object):
 
-    def __init__(self, api, account, container, logger=None,
-                 recursive=False):
+    def __init__(self, api, account, container, logger=None):
         self.api = api
         self.account = account
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
-        self.recursive = recursive
         self.rules = list()
         self.processed_versions = None
 
@@ -225,17 +222,6 @@ class ContainerLifecycle(object):
                 versions=True,
                 **kwargs):
             try:
-                # Save the name of the object as it is in the container,
-                # for later use.
-                obj_meta['orig_name'] = obj_meta['name']
-                # And reconstruct the name of the object as it is
-                # when shown to the final user.
-                if self.recursive and CH_ENCODED_SEPARATOR in container:
-                    obj_meta['name'] = container.split(CH_ENCODED_SEPARATOR,
-                                                       1)[1]
-                    obj_meta['name'].replace(CH_ENCODED_SEPARATOR,
-                                             CH_SEPARATOR)
-                    obj_meta['name'] += CH_SEPARATOR + obj_meta['orig_name']
                 obj_meta['container'] = container
 
                 if self.processed_versions is not None \
@@ -270,18 +256,6 @@ class ContainerLifecycle(object):
         for res in results:
             yield res
 
-        if self.recursive:
-            for container in depaginate(
-                    self.api.container_list,
-                    item_key=lambda x: x[0],
-                    marker_key=lambda x: x[-1][0],
-                    account=self.account,
-                    prefix=self.container + CH_ENCODED_SEPARATOR):
-
-                results = self.process_container(container, **kwargs)
-                for res in results:
-                    yield res
-
         self.processed_versions = None
 
     def is_current_version(self, obj_meta, **kwargs):
@@ -290,7 +264,7 @@ class ContainerLifecycle(object):
         """
         if self.processed_versions is None:
             current_obj = self.api.object_get_properties(
-                self.account, obj_meta['container'], obj_meta['orig_name'])
+                self.account, obj_meta['container'], obj_meta['name'])
             return current_obj['version'] == obj_meta['version']
         else:
             return self.processed_versions.is_current(obj_meta, **kwargs)
@@ -826,7 +800,7 @@ class Expiration(LifecycleAction):
         if self.match(obj_meta, **kwargs):
             res = self.lifecycle.api.object_delete(
                 self.lifecycle.account, obj_meta['container'],
-                obj_meta['orig_name'], version=version)
+                obj_meta['name'], version=version)
             return "Deleted" if res else "Kept"
         return "Kept"
 
@@ -897,7 +871,7 @@ class Transition(LifecycleAction):
                 return "Policy already changed to %s" % self.policy
             self.lifecycle.api.object_change_policy(
                 self.lifecycle.account, obj_meta['container'],
-                obj_meta['orig_name'], self.policy,
+                obj_meta['name'], self.policy,
                 version=obj_meta['version'])
             return "Policy changed to %s" % self.policy
         return "Kept"

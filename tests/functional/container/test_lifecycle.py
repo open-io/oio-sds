@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@ from oio.container.lifecycle import ContainerLifecycle, \
     LIFECYCLE_PROPERTY_KEY, TAGGING_KEY, \
     Expiration, Transition, \
     NoncurrentVersionExpiration, NoncurrentVersionTransition
-from oio.common.constants import FORCEVERSIONING_HEADER
 from oio.common.exceptions import NoSuchObject
 from tests.utils import BaseTestCase, random_str
 
@@ -38,13 +37,13 @@ class TestContainerLifecycle(BaseTestCase):
 
     CONTAINERS = set()
 
-    def setUp(self, recursive=False):
+    def setUp(self):
         super(TestContainerLifecycle, self).setUp()
         self.api = ObjectStorageApi(self.ns)
         self.account = "test_lifecycle"
         self.container = "lifecycle-" + random_str(4)
         self.lifecycle = ContainerLifecycle(
-            self.api, self.account, self.container, recursive=recursive)
+            self.api, self.account, self.container)
 
     @staticmethod
     def _time_to_date(timestamp=None):
@@ -1135,31 +1134,3 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_delete(
             self.account, obj_meta3['container'], obj_meta3['orig_name'],
             version=obj_meta3['version'])
-
-
-class TestContainerHierarchyLifecycle(TestContainerLifecycle):
-
-    def setUp(self):
-        super(TestContainerHierarchyLifecycle, self).setUp(recursive=True)
-
-    def _upload_something(self, prefix="", path=None, system=None, **kwargs):
-        path = path or (prefix + random_str(8))
-        container = self.container
-        if '/' in path:
-            container += '%2F' + '%2F'.join(path.split('/')[0:-1])
-            name = path.split('/')[-1]
-            if system and "sys.m2.policy.version" in system:
-                kwargs.setdefault("headers", {})
-                kwargs['headers'][FORCEVERSIONING_HEADER] = \
-                    system["sys.m2.policy.version"]
-        else:
-            name = path
-        self.api.object_create(self.account, container,
-                               obj_name=name, data=path, **kwargs)
-        self.__class__.CONTAINERS.add(container)
-        obj_meta = self.api.object_show(self.account, container, name)
-        # add fields like LifeCycle do in execute to support CH
-        obj_meta['orig_name'] = name
-        obj_meta['container'] = container
-        obj_meta['name'] = path
-        return obj_meta
