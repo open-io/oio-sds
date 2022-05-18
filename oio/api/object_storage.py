@@ -24,6 +24,7 @@ import os
 import warnings
 import time
 import random
+from oio.account.backend_fdb import SHARDING_ACCOUNT_PREFIX
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -1636,7 +1637,7 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def account_refresh(self, account=None, **kwargs):
+    def account_refresh(self, account=None, container_refresh=False, **kwargs):
         """
         Refresh counters of an account.
 
@@ -1653,18 +1654,23 @@ class ObjectStorageApi(object):
             try:
                 self.account.account_refresh(account, **kwargs)
 
-                containers = depaginate(
-                    self.container_list,
-                    item_key=lambda x: x[0],
-                    marker_key=lambda x: x[-1][0],
-                    account=account,
-                    **kwargs)
-                for container in containers:
-                    try:
-                        self.container_refresh(account, container, **kwargs)
-                    except exc.NoSuchContainer:
-                        # container remove in the meantime
-                        pass
+                if container_refresh:
+                    accounts_to_refresh = (
+                        account, SHARDING_ACCOUNT_PREFIX + account)
+                    for sub_account in accounts_to_refresh:
+                        containers = depaginate(
+                            self.container_list,
+                            item_key=lambda x: x[0],
+                            marker_key=lambda x: x[-1][0],
+                            account=sub_account,
+                            **kwargs)
+                        for container in containers:
+                            try:
+                                self.container_refresh(
+                                    sub_account, container, **kwargs)
+                            except exc.NoSuchContainer:
+                                # container remove in the meantime
+                                pass
             except exc.NoSuchAccount:
                 # account remove in the meantime
                 pass

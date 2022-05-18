@@ -37,7 +37,9 @@ OBJECTS_FIELD = 'objects'
 SHARDS_FIELD = 'shards'
 CONTAINERS_FIELD = 'containers'
 BUCKETS_FIELD = 'buckets'
+BUCKET_FIELD = 'bucket'
 ACCOUNTS_FIELD = 'accounts'
+REGION_FIELD = 'region'
 REGIONS_FIELD = 'regions'
 CTIME_FIELD = 'ctime'
 MTIME_FIELD = 'mtime'
@@ -700,30 +702,149 @@ class AccountBackendFdb(object):
             raise BadRequest("Missing account")
         self._refresh_account(self.db, account_id)
 
+        shards_account_id = SHARDING_ACCOUNT_PREFIX + account_id
+        if self._is_element(self.db, self.accts_space, shards_account_id):
+            self._refresh_account(self.db, shards_account_id)
+
     @fdb.transactional
     def _refresh_account(self, tr, account_id):
         if not self._is_element(tr, self.accts_space, account_id):
             raise NotFound(account_id)
 
+        is_sharding = account_id.startswith(SHARDING_ACCOUNT_PREFIX)
+
+        # Reset statistics
+        for field in (
+            BYTES_FIELD, CONTAINERS_FIELD, OBJECTS_FIELD, BUCKETS_FIELD
+        ):
+            stats_range = self.acct_space[account_id][field].range()
+            # Propagate to metrics
+            for key, value in tr[stats_range.start:stats_range.stop]:
+                region, *details = \
+                    self.acct_space[account_id][field].unpack(key)
+                value = self._counter_value_to_counter(value)
+                metric_key = (region,)
+                if len(details) > 0:
+                    metric_key += (details[0],)
+                self._increment(
+                    tr, self.metrics_space[field].pack(metric_key), -value)
+
+            del tr[stats_range.start:stats_range.stop]
+
         ct_space = self.container_space[account_id]
         s_range = ct_space.range()
 
-        iterator = tr.get_range(s_range.start, s_range.stop, reverse=False)
-        sum_bytes = 0
-        sum_objects = 0
-        for key, val in iterator:
-            _, field, *policy_region = ct_space.unpack(key)
-            if policy_region:
-                continue
-            if field == BYTES_FIELD:
-                sum_bytes += self._counter_value_to_counter(val)
-            if field == OBJECTS_FIELD:
-                sum_objects += self._counter_value_to_counter(val)
+        def _add_to_global_counters(region, local_counters):
+            if region is None:
+                return
+            # Increment containers counters
+            counters[CONTAINERS_FIELD][region] += 1
+            counters[CONTAINERS_FIELD][''] += 1
 
-        self._set_counter(
-            tr, self.acct_space.pack((account_id, BYTES_FIELD)), sum_bytes)
-        self._set_counter(
-            tr, self.acct_space.pack((account_id, OBJECTS_FIELD)), sum_objects)
+            for field in (BYTES_FIELD, OBJECTS_FIELD):
+                for policy, value in local_counters[field].items():
+                    if not policy:
+                        global_counter = \
+                            counters[field].setdefault('', Counter())
+                        global_counter[''] += value
+                    counter = counters[field].setdefault(region, Counter())
+                    counter[policy] += value
+        # Meta counters for containers
+        counters = {
+            BYTES_FIELD: {},
+            BUCKETS_FIELD: Counter(),
+            CONTAINERS_FIELD: Counter(),
+            OBJECTS_FIELD: {},
+        }
+
+        # Counters for one container
+        local_counters = {
+            BYTES_FIELD: Counter(),
+            OBJECTS_FIELD: Counter(),
+        }
+
+        marker = None
+        region = None
+        iterator = tr.get_range(s_range.start, s_range.stop, reverse=False)
+        for key, value in iterator:
+            container, field, *details = ct_space.unpack(key)
+            if field not in (BYTES_FIELD, OBJECTS_FIELD, REGION_FIELD):
+                continue
+
+            policy = ''
+            if len(details) == 1:
+                policy = details[0]
+
+            if container != marker:
+                _add_to_global_counters(region, local_counters)
+
+                # Reset local info
+                region = None
+                local_counters = {
+                    BYTES_FIELD: Counter(),
+                    OBJECTS_FIELD: Counter(),
+                }
+                # Next container
+                marker = container
+
+            if field in (BYTES_FIELD, OBJECTS_FIELD):
+                local_counters[field][policy] += \
+                    self._counter_value_to_counter(value)
+            elif field == REGION_FIELD:
+                region = value.decode('utf-8')
+
+        # Add eventual last container
+        _add_to_global_counters(region, local_counters)
+
+        if not is_sharding:
+            # List buckets
+            account_buckets = self.bucket_space[account_id]
+            buckets_range = account_buckets.range()
+
+            iterator = tr.get_range(buckets_range.start, buckets_range.stop)
+            for key, value in iterator:
+                _, *details = account_buckets.unpack(key)
+
+                if details[0] != REGION_FIELD:
+                    continue
+
+                region = value.decode('utf-8')
+                counters[BUCKETS_FIELD][region] += 1
+                counters[BUCKETS_FIELD][''] += 1
+
+        # Persist counters
+        for field, counter in counters.items():
+            field_key = (account_id, field,)
+            if field in (BUCKETS_FIELD, CONTAINERS_FIELD):
+                for region, value in counter.items():
+                    key = field_key
+                    if region:
+                        key += (region,)
+                        metric_key = (field, region,)
+                        self._increment(
+                            tr, self.metrics_space.pack(metric_key), value)
+                    self._set_counter(tr, self.acct_space.pack(key), value)
+            else:
+                for region, policy_counter in counter.items():
+                    key = field_key
+                    if region:
+                        key += (region,)
+                    for policy, value in policy_counter.items():
+                        if (region and not policy) or \
+                                (region and policy and value == 0):
+                            continue
+                        p_key = key
+                        if policy:
+                            p_key += (policy,)
+                            if region:
+                                metric_key = (field, region, policy,)
+                                self._increment(
+                                    tr,
+                                    self.metrics_space.pack(metric_key),
+                                    value
+                                )
+                        self._set_counter(tr, self.acct_space.pack(p_key),
+                                          value)
 
     @catch_service_errors
     def flush_account(self, account_id, **kwargs):

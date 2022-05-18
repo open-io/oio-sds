@@ -250,16 +250,34 @@ class RefreshAccount(Command):
             help='Refresh all accounts (<account> is ignored)',
             action=ValueFormatStoreTrueAction
         )
+        parser.add_argument(
+            '--recompute',
+            dest='recompute',
+            help='Recompute statistics of every account containers',
+            default=False,
+            action=ValueFormatStoreTrueAction
+        )
+        parser.add_argument(
+            '--touch',
+            dest='touch',
+            help='Refresh all account containers',
+            default=False,
+            action=ValueFormatStoreTrueAction
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         if parsed_args.all_accounts:
-            self.app.client_manager.storage.account_refresh()
+            self.app.client_manager.storage.account_refresh(
+                recompute=parsed_args.recompute,
+                container_refresh=parsed_args.touch or parsed_args.recompute)
         elif parsed_args.account is not None:
             self.app.client_manager.storage.account_refresh(
-                account=parsed_args.account)
+                account=parsed_args.account,
+                recompute=parsed_args.recompute,
+                container_refresh=parsed_args.touch or parsed_args.recompute)
         else:
             from argparse import ArgumentError
             raise ArgumentError(parsed_args.account,

@@ -1192,7 +1192,81 @@ class TestAccountBackend(BaseTestCase):
         self.backend.refresh_account(account_id)
         self._check_backend(*backend_info)
 
-    # TODO(adu): Reffresh account with stats by policy and buckets
+    def test_refresh_account_multiregions(self):
+        account_id = random_str(16)
+
+        scenario = {
+            account_id: [
+                {
+                    'name': 'BUCKET_1',
+                    'region': 'REGION_1',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_1',
+                            'objects': {'POL_1': 5, 'POL_2': 10},
+                            'bytes': {'POL_1': 50, 'POL_2': 100},
+                        },
+                        {
+                            'name': 'CONTAINER_2',
+                            'objects': {'POL_1': 6},
+                            'bytes': {'POL_1': 60},
+                        }
+                    ]
+                },
+                {
+                    'name': 'BUCKET_2',
+                    'region': 'REGION_2',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_3',
+                            'objects': 0,
+                            'bytes': 0,
+                        },
+                    ]
+                }
+            ],
+            SHARDING_ACCOUNT_PREFIX + account_id: [
+                {
+                    'name': 'BUCKET_2',
+                    'region': 'REGION_2',
+                    'containers': [
+                        {
+                            'name': 'CONTAINER_3-1',
+                            'objects': {'POL_1': 5, 'POL_2': 10},
+                            'bytes': {'POL_1': 50, 'POL_2': 100},
+                        },
+                        {
+                            'name': 'CONTAINER_3-2',
+                            'objects': {'POL_1': 6},
+                            'bytes': {'POL_1': 60},
+                        }
+                    ]
+                }
+            ]
+        }
+
+        backend_info = self._create_scenario(scenario)
+        _, accounts_info, *_ = backend_info
+
+        # Mess up with account values
+        account_space = self.backend.acct_space[account_id]
+        account_info = accounts_info[(account_id,)]
+        self.assertEqual(struct.pack('<q', account_info[('bytes',)]),
+                         self.backend.db[account_space.pack(('bytes',))])
+        self.assertEqual(struct.pack('<q', account_info[('objects',)]),
+                         self.backend.db[account_space.pack(('objects',))])
+        self.backend.db[account_space.pack(('bytes',))] = struct.pack('<q', 1)
+        self.backend.db[account_space.pack(('objects',))] = \
+            struct.pack('<q', 2)
+        self.assertEqual(self.backend.db[account_space.pack(('bytes',))],
+                         struct.pack('<q', 1))
+        self.assertEqual(self.backend.db[account_space.pack(('objects',))],
+                         struct.pack('<q', 2))
+
+        # Refresh metrics
+        self.backend.refresh_account(account_id)
+
+        self._check_backend(*backend_info)
 
     def test_update_container_wrong_timestamp_format(self):
         region = 'LOCALHOST'
