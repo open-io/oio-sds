@@ -17,6 +17,7 @@
 
 import random
 import time
+from datetime import datetime, timedelta, timezone
 
 from oio.common.constants import M2_PROP_BUCKET_NAME, \
     M2_PROP_DRAINING_TIMESTAMP, M2_PROP_OBJECTS, \
@@ -50,6 +51,9 @@ class TestSharding(BaseTestCase):
         self.created = dict()
         self.container_sharding = ContainerSharding(self.conf)
         self.beanstalkd0.drain_tube('oio-preserved')
+        self.system = {}
+        self.objects_properties = {}
+        self.object_lock = False
 
     def tearDown(self):
         for cname, created in self.created.items():
@@ -72,12 +76,11 @@ class TestSharding(BaseTestCase):
         super(TestSharding, self).tearDown()
 
     def _create(self, cname, properties=None, bucket=None):
-        system = None
         if bucket:
             self.storage.bucket.bucket_create(bucket, self.account)
-            system = {M2_PROP_BUCKET_NAME: bucket}
+            self.system[M2_PROP_BUCKET_NAME] = bucket
         created = self.storage.container_create(
-            self.account, cname, properties=properties, system=system)
+            self.account, cname, properties=properties, system=self.system)
         self.assertTrue(created)
         self.created[cname] = set()
 
@@ -91,7 +94,8 @@ class TestSharding(BaseTestCase):
             sum((len(obj) for obj in self.created[cname])), stats['bytes'])
 
     def _add_objects(self, cname, nb_objects, prefix='content',
-                     bucket=None, account=None, cname_root=None):
+                     bucket=None, account=None, cname_root=None,
+                     properties=None):
         reqid = None
         if not account:
             account = self.account
@@ -102,7 +106,8 @@ class TestSharding(BaseTestCase):
             reqid = request_id()
             self.storage.object_create(
                 account, cname, obj_name=obj_name,
-                data=obj_name.encode('utf-8'), reqid=reqid)
+                data=obj_name.encode('utf-8'), reqid=reqid,
+                properties=properties)
             self.created[cname_root].add(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
@@ -110,14 +115,19 @@ class TestSharding(BaseTestCase):
             self._check_bucket_stats(cname_root, bucket, account=account)
 
     def _delete_objects(self, cname, nb_objects, prefix='content',
-                        bucket=None):
+                        bucket=None, object_lock=False):
         reqid = None
         for i in range(nb_objects):
             obj_name = "%s_%d" % (prefix, i)
             reqid = request_id()
-            self.storage.object_delete(
-                self.account, cname, obj_name, reqid=reqid)
-            self.created[cname].remove(obj_name)
+            if object_lock:
+                self.assertRaises(
+                    Forbidden, self.storage.object_delete,
+                    self.account, cname, obj_name, reqid=reqid)
+            else:
+                self.storage.object_delete(
+                    self.account, cname, obj_name, reqid=reqid)
+                self.created[cname].remove(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
                                 fields={'account': self.account,
@@ -137,6 +147,9 @@ class TestSharding(BaseTestCase):
             _, data = self.storage.object_fetch(self.account, cname, obj_name)
             self.assertEqual(obj_name.encode('utf-8'), b''.join(data))
 
+    def _check_shards_objectlock_properties(self, resp):
+        pass
+
     def _check_shards(self, new_shards, test_shards, shards_content):
         # check shards
         for index, shard in enumerate(new_shards):
@@ -151,6 +164,8 @@ class TestSharding(BaseTestCase):
             # lower & upper contain < & > chars, remove them
             self.assertEqual(lower[1:], test_shards[index]['lower'])
             self.assertEqual(upper[1:], test_shards[index]['upper'])
+
+            self._check_shards_objectlock_properties(resp)
 
             # check object names in each shard
             _, listing = self.storage.container.content_list(cid=shard['cid'])
@@ -251,21 +266,21 @@ class TestSharding(BaseTestCase):
         for chunk in chunks:
             chunk_urls.append(chunk['url'])
         # remove this object
-        self.storage.object_delete(self.account, self.cname, obj_name,
-                                   reqid='delete-from-shards')
-        self.created[self.cname].remove(obj_name)
+        self._delete_object(self.account, self.cname, obj_name,
+                            reqid='delete-from-shards')
 
         self._check_objects(self.cname)
 
-        # check that all chunk urls are matching expected ones
-        event = self.wait_for_event('oio-preserved',
-                                    reqid='delete-from-shards',
-                                    types=(EventTypes.CONTENT_DELETED,))
-        self.assertIsNotNone(event)
-        for event_data in event.data:
-            if event_data.get('type') == 'chunks':
-                chunk_urls.remove(event_data.get('id'))
-        self.assertEqual(0, len(chunk_urls))
+        if self.wait_event:
+            # check that all chunk urls are matching expected ones
+            event = self.wait_for_event('oio-preserved',
+                                        reqid='delete-from-shards',
+                                        types=(EventTypes.CONTENT_DELETED,))
+            self.assertIsNotNone(event)
+            for event_data in event.data:
+                if event_data.get('type') == 'chunks':
+                    chunk_urls.remove(event_data.get('id'))
+            self.assertEqual(0, len(chunk_urls))
 
     # test shards with empty container
     def test_shard_with_empty_container(self):
@@ -351,8 +366,10 @@ class TestSharding(BaseTestCase):
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
 
-        pool.spawn(self._add_objects, self.cname, 50, prefix='thread_add')
-        pool.spawn(self._delete_objects, self.cname, 30)
+        pool.spawn(self._add_objects, self.cname, 50, prefix='thread_add',
+                   properties=self.objects_properties)
+        pool.spawn(self._delete_objects, self.cname, 30,
+                   object_lock=self.object_lock)
 
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True)
@@ -988,6 +1005,11 @@ class TestSharding(BaseTestCase):
                           cname_root=self.cname)
         self._check_objects(self.cname)
 
+    def _delete_object(self, account, container, obj_name, reqid=None):
+        self.storage.object_delete(account, container, obj_name, reqid=reqid)
+        self.created[self.cname].remove(obj_name)
+        self.wait_event = True
+
     def test_delete_on_shard(self):
         """
         Check the delete command directly on the shard (with account and cname
@@ -1011,9 +1033,7 @@ class TestSharding(BaseTestCase):
         # Delete 1 object directly in this shard
         file_id = random.randrange(nb_obj_to_add // 2)
         obj_name = 'content_%s' % file_id
-        self.storage.object_delete(shard_account, shard_cname, obj_name)
-        self.created[self.cname].remove(obj_name)
-
+        self._delete_object(shard_account, shard_cname, obj_name)
         self._check_objects(self.cname)
 
         # Get cname and account of the second shard
@@ -1021,8 +1041,7 @@ class TestSharding(BaseTestCase):
         # Delete 1 object directly in this shard
         file_id = random.randrange(nb_obj_to_add // 2, nb_obj_to_add)
         obj_name = 'content_%s' % file_id
-        self.storage.object_delete(shard_account, shard_cname, obj_name)
-        self.created[self.cname].remove(obj_name)
+        self._delete_object(shard_account, shard_cname, obj_name)
 
         self._check_objects(self.cname)
 
@@ -1093,3 +1112,47 @@ class TestSharding(BaseTestCase):
         value_3 = str(0)
         self._set_property(M2_PROP_DRAINING_TIMESTAMP, value_3, value_3,
                            flag_propagate_to_shards=True)
+
+
+class TestShardingObjectLockRetention(TestSharding):
+    def setUp(self):
+        super(TestShardingObjectLockRetention, self).setUp()
+        self.cname = 'test_sharding_retention_%f' % time.time()
+        self.object_lock = True
+        self.system = {
+            M2_PROP_BUCKET_NAME: self.cname,
+            'sys.m2.bucket.objectlock.enabled': '1'}
+        now = datetime.now(timezone.utc) + timedelta(minutes=20)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + 'Z'
+        self.objects_properties = {
+            'x-object-sysmeta-s3api-retention-retainuntildate': now_str,
+            'x-object-sysmeta-s3api-retention-mode': 'GOVERNANCE'}
+
+    def _add_objects(self, cname, nb_objects, prefix='content',
+                     bucket=None, account=None, cname_root=None,
+                     properties=None):
+        super(TestShardingObjectLockRetention, self)._add_objects(
+            cname, nb_objects, prefix=prefix, bucket=bucket,
+            account=account, cname_root=cname_root,
+            properties=self.objects_properties)
+
+    def _delete_object(self, account, container, obj_name, reqid=None):
+        self.wait_event = False
+        self.assertRaises(Forbidden, self.storage.object_delete,
+                          account, container, obj_name, reqid=reqid)
+
+    def _check_shards_objectlock_properties(self, resp):
+        # check obejctlock sysmeta
+        objlock_enabled = resp['system']['sys.m2.bucket.objectlock.enabled']
+        self.assertEqual(objlock_enabled, '1')
+
+
+class TestShardingObjectLockLegalHold(TestShardingObjectLockRetention):
+    def setUp(self):
+        super(TestShardingObjectLockLegalHold, self).setUp()
+        self.cname = 'test_sharding_legalhold_%f' % time.time()
+        self.system = {
+            M2_PROP_BUCKET_NAME: self.cname,
+            'sys.m2.bucket.objectlock.enabled': '1'}
+        self.objects_properties = {'x-object-sysmeta-s3api-legal-hold-status':
+                                   'ON'}
