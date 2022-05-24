@@ -17,7 +17,7 @@
 import os
 import tempfile
 import uuid
-from hashlib import md5
+from oio.common.utils import get_hasher
 from tests.functional.cli import CliTestCase, CommandFailed
 from testtools.matchers import Equals
 from tests.utils import random_str
@@ -47,17 +47,18 @@ class ObjectTest(CliTestCase):
 
     @classmethod
     def _get_cid_from_name(self, name):
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container show ' + name + opts)
         data = self.json_loads(output)
         return data['base_name']
 
-    def __test_obj(self, name, with_cid=False):
+    def __test_obj(self, name, with_cid=False, oca='md5'):
         with tempfile.NamedTemporaryFile() as f:
             test_content = b'test content'
             f.write(test_content)
             f.flush()
-            self._test_obj(f.name, test_content, name, with_cid=with_cid)
+            self._test_obj(f.name, test_content, name,
+                           with_cid=with_cid, oca=oca)
         self._test_many_obj(with_cid=with_cid)
 
     def test_obj(self):
@@ -65,6 +66,12 @@ class ObjectTest(CliTestCase):
 
     def test_obj_with_cid(self):
         self.__test_obj(uuid.uuid4().hex, with_cid=True)
+
+    def test_obj_oca_blake3(self):
+        self.__test_obj(uuid.uuid4().hex, oca='blake3')
+
+    def test_obj_oca_blake3_with_cid(self):
+        self.__test_obj(uuid.uuid4().hex, with_cid=True, oca='blake3')
 
     def test_obj_without_autocreate(self):
         with tempfile.NamedTemporaryFile() as f:
@@ -84,7 +91,7 @@ class ObjectTest(CliTestCase):
         if with_cid:
             cname = self._get_cid_from_name(self.CONTAINER_NAME)
             cid_opt = '--cid '
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         obj_name_exists = ''
         obj_name_also_exists = ''
 
@@ -138,10 +145,12 @@ class ObjectTest(CliTestCase):
         self._test_obj('/etc/fstab', test_content, '06EE0', auto='--auto')
 
     def _test_obj(self, obj_file, test_content,
-                  cname, auto='', with_cid=False, with_tls=False):
+                  cname, auto='', with_cid=False, with_tls=False, oca='md5'):
         cid_opt = ''
-        checksum = md5(test_content).hexdigest().upper()
-        opts = self.get_opts([], 'json')
+        hasher = get_hasher(oca)
+        hasher.update(test_content)
+        checksum = hasher.hexdigest().upper()
+        opts = self.get_format_opts('json')
         output = self.openio('container create ' + cname + opts)
         data = self.json_loads(output)
         self.assertThat(len(data), Equals(1))
@@ -156,14 +165,14 @@ class ObjectTest(CliTestCase):
         if not auto:
             self.assertThat(data[0]['Created'], Equals(True))
 
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container list' + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, CONTAINER_LIST_HEADERS)
         self.assertGreaterEqual(len(listing), 1)
         # TODO verify CONTAINER_NAME in list
 
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container show ' + cname + opts)
         data = self.json_loads(output)
         self.assert_show_fields(data, CONTAINER_FIELDS)
@@ -172,9 +181,12 @@ class ObjectTest(CliTestCase):
         if auto:
             fake_cname = '_'
         obj_name = os.path.basename(obj_file)
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         if with_tls:
             opts += " --tls"
+        # If object checksum algo is not the default
+        if oca != 'md5':
+            opts += " --checksum-algo " + oca
         output = self.openio('object create ' + auto + ' ' + fake_cname +
                              ' ' + obj_file + ' ' + obj_file + ' ' + opts)
         data = self.json_loads(output)
@@ -185,7 +197,7 @@ class ObjectTest(CliTestCase):
         self.assertThat(item['Size'], Equals(len(test_content)))
         self.assertThat(item['Hash'], Equals(checksum))
 
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('object list ' + cid_opt + cname_or_cid + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
@@ -207,7 +219,7 @@ class ObjectTest(CliTestCase):
         self.addCleanup(os.remove, tmp_file)
         self.assertOutput('', output)
 
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('object show ' + cid_opt + cname_or_cid +
                              ' ' + obj_name + opts)
         data = self.json_loads(output)
@@ -304,7 +316,7 @@ class ObjectTest(CliTestCase):
         env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
         self._test_autocontainer_object_listing(
             '--flat-bits 8', env=env)
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container list ' + opts, env=env)
         for entry in self.json_loads(output):
             self.assertEqual(len(entry['Name']), 2)

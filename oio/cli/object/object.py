@@ -169,6 +169,12 @@ class CreateObject(ContainerCommandMixin, Lister):
             help='Restore a drained object (keeping its metadata)',
             default=False
         )
+        parser.add_argument(
+            '--checksum-algo',
+            metavar='<checksum_algo>',
+            help='Object Checksum Algorithm',
+            default=None
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -201,18 +207,26 @@ class CreateObject(ContainerCommandMixin, Lister):
                     name = names.pop(0) if names else os.path.basename(f.name)
                     if parsed_args.auto:
                         container = self.flatns_manager(name)
+                    kwargs = {
+                        "account": self.app.client_manager.account,
+                        "autocreate": autocreate,
+                        "container": container,
+                        "file_or_path": f,
+                        "key_file": key_file,
+                        "mime_type": parsed_args.mime_type,
+                        "obj_name": name,
+                        "object_checksum_algo": parsed_args.checksum_algo,
+                        "policy": policy,
+                        "properties": properties,
+                        "restore_drained": parsed_args.restore_drained,
+                        "tls": parsed_args.tls
+                    }
+                    # Send all arguments from kwargs that are not None.
+                    # For example, object_checksum_algo is not supposed to be
+                    # propagated if it is None.
                     data = self.app.client_manager.storage.object_create(
-                        self.app.client_manager.account,
-                        container,
-                        file_or_path=f,
-                        obj_name=name,
-                        policy=policy,
-                        properties=properties,
-                        key_file=key_file,
-                        mime_type=parsed_args.mime_type,
-                        autocreate=autocreate,
-                        tls=parsed_args.tls,
-                        restore_drained=parsed_args.restore_drained)
+                        **{k: v for k, v in kwargs.items() if v is not None}
+                    )
 
                     res = (name, data[1], data[2].upper(), 'Ok')
                     if parsed_args.perfdata_column:
