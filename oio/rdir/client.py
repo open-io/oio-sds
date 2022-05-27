@@ -187,6 +187,16 @@ class RdirDispatcher(object):
                     raise NotFound('Trick to avoid code duplication')
             except NotFound:
                 try:
+                    # Check if all known rdir hosts (except the reassign)
+                    # are not locked
+                    for el in all_rdir:
+                        if rdir_hosts and el['addr'] in rdir_hosts and \
+                           el['addr'] != reassign and el['score'] == 0:
+                            # TODO (LAA) raise exception ?
+                            self.logger.warning(
+                                "The service %s is supposed "
+                                "to be kept but has score to 0", el['addr'])
+
                     rdirs = self._smart_link_rdir(provider_id, all_rdir,
                                                   service_type=service_type,
                                                   max_per_rdir=max_per_rdir,
@@ -580,9 +590,10 @@ class RdirClient(HttpApi):
                     len(errors),
                     len(all_uri),
                     '\n'.join(errorsStr)))
+            # clear cache if at least one error
+            self._clear_cache(volume)
 
             if len(errors) == len(all_uri):  # all requests failed
-                self._clear_cache(volume)
                 class_type = type(errors[0][1])
                 same_error = all(
                     isinstance(x, class_type) for (uri, x) in errors)
