@@ -64,6 +64,24 @@ class ObjectTest(CliTestCase):
     def test_obj(self):
         self.__test_obj(uuid.uuid4().hex)
 
+    def test_obj_stdin(self):
+        container_name = uuid.uuid4().hex
+        object_name = uuid.uuid4().hex
+        self._test_obj(container_name, b'test content', object_name,
+                       use_stdin=True)
+
+    def test_obj_stdin_blake3(self):
+        container_name = uuid.uuid4().hex
+        object_name = uuid.uuid4().hex
+        self._test_obj(container_name, b'test content', object_name,
+                       use_stdin=True, oca='blake3')
+
+    def test_obj_stdin_with_cid(self):
+        container_name = uuid.uuid4().hex
+        object_name = uuid.uuid4().hex
+        self._test_obj(container_name, b'test content', object_name,
+                       with_cid=True, use_stdin=True)
+
     def test_obj_with_cid(self):
         self.__test_obj(uuid.uuid4().hex, with_cid=True)
 
@@ -144,8 +162,8 @@ class ObjectTest(CliTestCase):
     def _test_auto_container(self, test_content):
         self._test_obj('/etc/fstab', test_content, '06EE0', auto='--auto')
 
-    def _test_obj(self, obj_file, test_content,
-                  cname, auto='', with_cid=False, with_tls=False, oca='md5'):
+    def _test_obj(self, obj_file, test_content, cname, auto='', with_cid=False,
+                  with_tls=False, oca='md5', use_stdin=False):
         cid_opt = ''
         hasher = get_hasher(oca)
         hasher.update(test_content)
@@ -183,15 +201,27 @@ class ObjectTest(CliTestCase):
         obj_name = os.path.basename(obj_file)
         opts = self.get_format_opts('json')
         if with_tls:
-            opts += " --tls"
+            opts += ' --tls'
         # If object checksum algo is not the default
         if oca != 'md5':
-            opts += " --checksum-algo " + oca
-        output = self.openio('object create ' + auto + ' ' + fake_cname +
-                             ' ' + obj_file + ' ' + obj_file + ' ' + opts)
+            opts += ' --checksum-algo ' + oca
+        expected_created_objects = 2
+        if not use_stdin:
+            command = f"object create {auto} {fake_cname} {obj_file} " \
+                      f"{obj_file} {opts}"
+            output = self.openio(command)
+        else:
+            command = f"object create {auto} {fake_cname} - {opts}"
+            # Check stdin without specifying object name is forbidden
+            self.assertRaises(CommandFailed, self.openio, command,
+                              stdin=test_content)
+            command = command + " --name " + obj_name
+            output = self.openio(command, stdin=test_content)
+            expected_created_objects = 1
+
         data = self.json_loads(output)
         self.assert_list_fields(data, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(2))
+        self.assertThat(len(data), Equals(expected_created_objects))
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))
@@ -201,7 +231,7 @@ class ObjectTest(CliTestCase):
         output = self.openio('object list ' + cid_opt + cname_or_cid + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(2))
+        self.assertThat(len(listing), Equals(1))  # 1 object stored
         item = data[0]
         self.assertThat(item['Name'], Equals(obj_name))
         self.assertThat(item['Size'], Equals(len(test_content)))

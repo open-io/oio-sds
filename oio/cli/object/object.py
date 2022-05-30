@@ -19,9 +19,11 @@ from oio.common.green import GreenPool
 from six import iteritems
 import os
 from logging import getLogger
+from sys import stdin
 
 from oio.common.json import json
 from oio.cli import Command, Lister, ShowOne
+from oio.common.exceptions import CommandError
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
 from oio.common.json import json as jsonlib
@@ -110,7 +112,7 @@ class CreateObject(ContainerCommandMixin, Lister):
         # TODO(mb): manage --opt and --no-opt
         parser.add_argument(
             '--no-autocreate',
-            help=("Forbid autocreation of container if nonexistent"),
+            help="Forbid autocreation of container if nonexistent",
             action="store_false",
             dest="autocreate",
             default=True
@@ -119,7 +121,7 @@ class CreateObject(ContainerCommandMixin, Lister):
             'objects',
             metavar='<filename>',
             nargs='+',
-            help='Local filename(s) to upload.'
+            help="Local filename(s) to upload.\nUse '-' to read from stdin."
         )
         parser.add_argument(
             '--name',
@@ -195,23 +197,29 @@ class CreateObject(ContainerCommandMixin, Lister):
         if key_file and key_file[0] != '/':
             key_file = os.getcwd() + '/' + key_file
 
-        import io
         any_error = False
         properties = parsed_args.property
         results = []
         perfdata = self.app.client_manager.storage.perfdata
+        if names and len(objs) != len(names):
+            raise CommandError("Mismatch between number of objects and names")
         for obj in objs:
-            name = obj
+            use_stdin = False if obj != "-" else True
             try:
-                with io.open(obj, 'rb') as f:
-                    name = names.pop(0) if names else os.path.basename(f.name)
+                with open(obj, 'rb') if not use_stdin else stdin as f:
+                    name = None
+                    if names:
+                        name = names.pop(0)
+                    elif not use_stdin:
+                        name = os.path.basename(f.name)
+                    else:
+                        raise CommandError("Missing value for names")
                     if parsed_args.auto:
                         container = self.flatns_manager(name)
                     kwargs = {
                         "account": self.app.client_manager.account,
                         "autocreate": autocreate,
                         "container": container,
-                        "file_or_path": f,
                         "key_file": key_file,
                         "mime_type": parsed_args.mime_type,
                         "obj_name": name,
@@ -221,6 +229,7 @@ class CreateObject(ContainerCommandMixin, Lister):
                         "restore_drained": parsed_args.restore_drained,
                         "tls": parsed_args.tls
                     }
+                    kwargs["file_or_path"] = f if not use_stdin else f.buffer
                     # Send all arguments from kwargs that are not None.
                     # For example, object_checksum_algo is not supposed to be
                     # propagated if it is None.
@@ -461,7 +470,6 @@ class SetObject(ObjectCommandMixin, Command):
                 if not isinstance(tags, dict):
                     raise ValueError()
             except ValueError:
-                from oio.common.exceptions import CommandError
                 raise CommandError('--tags: Not a JSON object')
             tags_xml = '<Tagging><TagSet>'
             for k, v in tags.items():
