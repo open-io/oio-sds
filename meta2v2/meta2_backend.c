@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -336,7 +336,7 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 
 	/* workaround for a known bug, when the container has no flag because
 	 * of some failed replication (yet to be determined) but it is used
-	 * because of a (now-fixed) inexistant check on the flag. */
+	 * because of a (now-fixed) inexistent check on the flag. */
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_OBJ_COUNT)
 			|| sqlx_admin_has(sq3, M2V2_ADMIN_SIZE)) {
 		GRID_DEBUG("DB partially initiated: [%s][%.s]",
@@ -366,9 +366,10 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 		g_free(v);
 	}
 
-	struct oio_url_s *u = sqlx_admin_get_url (sq3);
+	struct oio_url_s *url = sqlx_admin_get_url(sq3);
 	GString *gs = oio_event__create_with_id(
-			META2_EVENTS_PREFIX ".container.state", u, oio_ext_get_reqid());
+			META2_EVENTS_PREFIX ".container.state", url, oio_ext_get_reqid());
+	oio_url_clean(url);
 	g_string_append_static (gs, ",\"data\":{");
 	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
@@ -379,7 +380,6 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_int64(gs, "missing-chunks", m2db_get_missing_chunks(sq3));
 	g_string_append_static (gs, "}}");
 
-	oio_url_clean (u);
 	return g_string_free(gs, FALSE);
 }
 
@@ -1880,14 +1880,15 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 }
 
 void
-meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
-		struct meta2_backend_s *m2b, struct oio_url_s *url,
-		struct db_properties_s *db_properties)
+meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b, struct db_properties_s *db_properties)
 {
 	if (m2b->notifier_container_updated) {
+		struct oio_url_s *url = sqlx_admin_get_url(sq3);
 		GString *event = oio_event__create_with_id(
 				META2_EVENTS_PREFIX ".container.update", url,
 				oio_ext_get_reqid());
+		oio_url_clean(url);
 		g_string_append_static(event, ",\"data\":{");
 		db_properties_to_json(db_properties, event);
 		gchar *bucket = sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME);

@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -50,8 +50,7 @@ typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
 
 typedef void (*sqlx_repo_db_properties_change_hook)(struct sqlx_sqlite3_s *sq3,
-		gpointer cb_data, struct oio_url_s *url,
-		struct db_properties_s *db_properties);
+		gpointer cb_data, struct db_properties_s *db_properties);
 
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
 		const struct sqlx_name_s *n, GString *file_name);
@@ -225,8 +224,7 @@ void sqlx_repository_configure_db_properties_change_callback(
 		sqlx_repo_db_properties_change_hook cb, gpointer cb_data);
 
 void sqlx_repository_call_db_properties_change_callback(
-		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		struct db_properties_s *db_properties);
+		struct sqlx_sqlite3_s *sq3, struct db_properties_s *db_properties);
 
 /* Bases operations -------------------------------------------------------- */
 
