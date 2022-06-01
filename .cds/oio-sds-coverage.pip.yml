@@ -28,8 +28,8 @@ jobs:
           - coverage combine .coverage.*
           - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report-py.txt
           - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
-          - coverage xml --omit="/usr/lib/python3*" --ignore-errors -o coverage-py.xml
-          - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report-py
+          - coverage xml --omit="/usr/lib/python3*" --skip-empty --ignore-errors -o coverage-py.xml
+          - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors -d coverage-report-py
           - rm -f coverage-report-py.txt
 
       - optional: true
@@ -65,7 +65,7 @@ jobs:
       - name: Publish code coverage reports on Artifactory
         optional: true
         OVH_Serve_Static_Files:
-          destination: coverage
+          destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}'
           source: coverage
 
     requirements:
