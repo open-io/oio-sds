@@ -1,0 +1,19 @@
+version: v1.0
+name: oio-sds-clean-artifacts
+jobs:
+- job: Clean coverage artifacts
+  steps:
+  - name: Checkout application
+    checkout: '{{ .cds.workspace }}'
+  - name: Download JFrog CLI
+    script:
+    - curl -fL https://install-cli.jfrog.io | sh
+  - name: Clean old coverage artifacts
+    script:
+    - set -x
+    - export KEEP_DAYS=15
+    - export KEEP_DATE=$(date -Iseconds -d @$(expr "$(date +%s)" - "$KEEP_DAYS" \* 24 \* 3600))
+    - jf rt del --user {{ .cds.proj.artifactory_user }} --access-token {{ .cds.proj.artifactory_token }} --url https://artifactory.ovhcloud.tools/artifactory --spec=.cds/old-coverage-artifacts.aql.json --spec-vars="date=$KEEP_DATE"
+
+  requirements:
+  - model: ubuntu-focal

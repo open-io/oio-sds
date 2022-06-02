@@ -139,6 +139,18 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
+  clean-artifacts:
+    pipeline: oio-sds-clean-artifacts
+    application: oio-sds
+    depends_on:
+      - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          # TODO(FVE): set to "eq" when proven to work
+          operator: ne
+          value: "cds.scheduler"
+
 metadata:
   default_tags: git.branch,git.author,git.tag
 
