@@ -1502,11 +1502,12 @@ class ObjectStorageApi(object):
             obj_meta = self.object_get_properties(account, container, obj_name,
                                                   **kwargs)
             kwargs['version'] = obj_meta['version']
-            # Check that object is drained. Otherwise chunks could be deleted
-            # during upload to come because of the same version.
+            # Check that object is drained. If it is not drained, do nothing,
+            # otherwise chunks could be deleted during upload to come because
+            # of the same version.
             if obj_meta['chunk_method'] != 'drained':
-                raise exc.Forbidden(message='Restoring is only allowed on '
-                                    'drained objects.')
+                obj_meta['status'] = "Skipped"
+                return None, obj_meta['size'], obj_meta['hash'], obj_meta
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account, container, obj_name, source, sysmeta,
@@ -1585,6 +1586,7 @@ class ObjectStorageApi(object):
             kwargs['cid'] = obj_meta['container_id']
             self._delete_orphan_chunks(ul_chunks, **kwargs)
             raise
+        obj_meta['status'] = 'Ok'
         return ul_chunks, ul_bytes, obj_checksum, obj_meta
 
     def _delete_orphan_chunks(self, chunks, cid, **kwargs):

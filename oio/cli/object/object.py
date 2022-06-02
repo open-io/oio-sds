@@ -233,11 +233,11 @@ class CreateObject(ContainerCommandMixin, Lister):
                     # Send all arguments from kwargs that are not None.
                     # For example, object_checksum_algo is not supposed to be
                     # propagated if it is None.
-                    data = self.app.client_manager.storage.object_create(
+                    data = self.app.client_manager.storage.object_create_ext(
                         **{k: v for k, v in kwargs.items() if v is not None}
                     )
 
-                    res = (name, data[1], data[2].upper(), 'Ok')
+                    res = (name, data[1], data[2].upper(), data[3]['status'])
                     if parsed_args.perfdata_column:
                         res += (json.dumps(perfdata, sort_keys=True,
                                 indent=4),)

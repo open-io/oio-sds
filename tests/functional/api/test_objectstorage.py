@@ -674,6 +674,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         props = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(metadata['version'], props['version'])
         self.assertEqual(int(props['length']), size)
+        self.assertEqual('Ok', metadata['status'])
         self.assertIn('trailing_prop', props['properties'])
         self.assertEqual('yes', props['properties']['trailing_prop'])
 
@@ -2073,9 +2074,10 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
 
         # Create the object
         data = random_data(data_size)
-        chunks, _, _ = self.api.object_create(
+        chunks, _, _, obj_meta = self.api.object_create_ext(
             self.account, name, obj_name=name,
             data=data, properties={'test': 'it works'})
+        self.assertEqual('Ok', obj_meta['status'])
         obj1, chunks1 = self.api.object_locate(self.account, name, name)
         expected_count += 1
         expected_size += data_size
@@ -2164,21 +2166,43 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         self.api.object_create(self.account, name, obj_name=name,
                                data=data, properties={'test': 'it works'})
 
-        self.assertRaises(exc.Forbidden, self.api.object_create, self.account,
-                          name, obj_name=name, data=data, restore_drained=True)
+        obj1, chunks1 = self.api.object_locate(self.account, name, name)
+        _, _, _, obj_meta = self.api.object_create_ext(
+            self.account, name, obj_name=name, data=data, restore_drained=True)
+        self.assertEqual("Skipped", obj_meta['status'])
+        obj2, chunks2 = self.api.object_locate(self.account, name, name)
 
-    def test_restore_drained_wrong_flag(self):
+        # The object should be exactly the same (including its version)
+        self.assertDictEqual(obj1, obj2)
+        self.assertListEqual(chunks1, chunks2)
+
+    def test_restore_drained_wrong_container_flag(self):
+        # Check object cannot be restored if container draining process is
+        # in progress
         name = 'restore-drained-' + random_str(6)
         self._create(name)
 
         data = random_data(self.chunk_size)
-        self.api.object_create(self.account, name, obj_name=name,
-                               data=data, properties={'test': 'it works'})
+        chunks, _, _ = self.api.object_create(
+            self.account, name, obj_name=name,
+            data=data, properties={'test': 'it works'})
 
-        system = {M2_PROP_DRAINING_STATE: str(DRAINING_STATE_IN_PROGRESS + 1)}
+        system = {M2_PROP_DRAINING_STATE: str(DRAINING_STATE_IN_PROGRESS)}
         output = self.storage.container_set_properties(self.account, name,
                                                        system=system)
         self.assertEqual(b'', output)
+
+        # Drain the object
+        reqid = request_id()
+        self.api.object_drain(self.account, name, name, reqid=reqid)
+        evt = self.wait_for_event('oio-preserved',
+                                  types=(EventTypes.CONTENT_DRAINED),
+                                  reqid=reqid,
+                                  timeout=5.0)
+
+        self.assertIsNotNone(evt)
+        self.assertEqual(len(chunks),
+                         sum(data['type'] == "chunks" for data in evt.data))
 
         self.assertRaises(exc.Forbidden, self.api.object_create, self.account,
                           name, obj_name=name, data=data, restore_drained=True)
