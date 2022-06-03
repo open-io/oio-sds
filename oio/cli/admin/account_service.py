@@ -53,6 +53,6 @@ class AccountServiceClean(ShowOne):
             self.app.client_manager.namespace, dry_run=parsed_args.dry_run,
             logger=self.logger)
         self.success = cleaner.run()
-        return (('success', 'deleted-containers', 'released-buckets'),
+        return (('success', 'deleted-containers', 'deleted-buckets'),
                 (self.success, cleaner.deleted_containers,
-                 cleaner.released_buckets))
+                 cleaner.deleted_buckets))

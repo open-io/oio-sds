@@ -77,8 +77,7 @@ class AccountServiceCleaner(object):
         List all container belonging to this cluster (using the region).
         """
         # FIXME(ADU): When available, we should use paging
-        real_accounts = (acct for acct in self.api.account_list()
-                         if not acct.startswith('.shards_'))
+        real_accounts = (acct for acct in self.api.account_list())
         for account in real_accounts:
             for container, mtime, bucket \
                     in self.all_containers_from_account(account):
@@ -153,7 +152,7 @@ class AccountServiceCleaner(object):
         Check if the bucket still exists (in account service).
         """
         try:
-            _ = self.api.bucket.bucket_show(bucket)
+            _ = self.api.bucket.bucket_show(bucket, account=account)
             self.logger.debug(
                 'Bucket %s/%s still exists (account service)',
                 account, bucket)
@@ -224,7 +223,7 @@ class AccountServiceCleaner(object):
                     account, container,
                     {'region': self.region, 'objects': 0, 'bytes': 0,
                      'dtime': dtime})
-            self.logger.debug(
+            self.logger.info(
                 'Delete container %s/%s (account service)',
                 account, container)
             self.deleted_containers += 1
