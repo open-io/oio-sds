@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -87,7 +88,7 @@ class TestStorageTierer(BaseTestCase):
             # account events have not yet propagated
             time.sleep(3.0)
             actual = [x[0] for x in self.api.container_list(
-                      self.test_account)[0]]
+                      self.test_account)]
         gen = worker._list_containers()
         self.assertListEqual(list(gen), actual)
 
