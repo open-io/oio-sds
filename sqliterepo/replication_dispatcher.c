@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1452,11 +1452,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (!err && db_properties) {
-		struct oio_url_s *url = metautils_message_extract_url(
-				reply->request);
-		sqlx_repository_call_db_properties_change_callback(
-				sq3, url, db_properties);
-		oio_url_clean(url);
+		sqlx_repository_call_db_properties_change_callback(sq3, db_properties);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
@@ -1606,11 +1602,7 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (!err && db_properties) {
-		struct oio_url_s *url = metautils_message_extract_url(
-				reply->request);
-		sqlx_repository_call_db_properties_change_callback(
-				sq3, url, db_properties);
-		oio_url_clean(url);
+		sqlx_repository_call_db_properties_change_callback(sq3, db_properties);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);

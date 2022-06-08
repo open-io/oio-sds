@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -290,7 +290,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	if (cfg->flags & SQLX_REPO_NOCACHE) {
 		/* if there are several connections on the same base, we will use a
-		   shared cache that wil prevent us of too many I/O operations. */
+		   shared cache that will prevent too many I/O operations. */
 		if (SQLITE_OK != sqlite3_enable_shared_cache(1))
 			GRID_NOTICE("SQLite3 not in SHAREDCACHE mode");
 	}
@@ -551,15 +551,14 @@ sqlx_repository_configure_db_properties_change_callback(
 
 void
 sqlx_repository_call_db_properties_change_callback(
-		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		struct db_properties_s *db_properties)
+		struct sqlx_sqlite3_s *sq3, struct db_properties_s *db_properties)
 {
 	if (!sq3 || !sq3->repo || !sq3->repo->running
 			|| !sq3->repo->db_properties_change_callback)
 		return;
 	return sq3->repo->db_properties_change_callback(sq3,
 			sq3->repo->db_properties_change_callback_data,
-			url, db_properties);
+			db_properties);
 }
 
 void
@@ -1181,7 +1180,7 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	}
 
 	if (!err) {
-		/* XXX(jfs): patching the db handle so it has the lastest election_manager
+		/* XXX(jfs): patching the db handle so it has the latest election_manager
 		   allows reusing a handle from the cache, and that was initiated during
 		   the _post_config hook (when the election_manager was not associated yet
 		   to the repository. */
@@ -1191,7 +1190,7 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		// This MIGHT happen if a cache is present (and this is the
 		// common case for m2v2), because the deletion will happen
 		// when the base exit the cache.
-		// In facts this SHOULD NOT happend because a base being deleted
+		// In facts this SHOULD NOT happen because a base being deleted
 		// is closed with an instruction to exit the cache immediately.
 		// TODO FIXME this is maybe a good place for an assert().
 		if ((*result)->deleted)
@@ -1418,7 +1417,7 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	if (!(err = election_init(repo->election_manager, n, peers,
 					&status, replicated))) {
 
-		/* Interleave a DB creation (out of the lock) if explicitely
+		/* Interleave a DB creation (out of the lock) if explicitly
 		 * allowed by both the request type AND the application */
 		if (allow_autocreate && sqliterepo_election_lazy_recover) {
 			err = _base_lazy_recover(repo, n, status);

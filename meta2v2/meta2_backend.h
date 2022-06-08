@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -67,8 +67,7 @@ void meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b);
 
 void meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
-		struct meta2_backend_s *m2b, struct oio_url_s *url,
-		struct db_properties_s *db_properties);
+		struct meta2_backend_s *m2b,  struct db_properties_s *db_properties);
 
 /* -------------------------------------------------------------------------- */
 

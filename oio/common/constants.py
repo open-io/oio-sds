@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -152,6 +152,8 @@ HIDDEN_ACCOUNTS = ("_RDIR",)
 # Default separator used by swift's "container hierarchy" middleware
 CH_ENCODED_SEPARATOR = '%2F'
 CH_SEPARATOR = '/'
+# Suffix for containers hosting S3 multipart-upload parts
+S3_MPU_CONTAINER_SUFFIX = '+segments'
 
 BUCKET_PROP_REPLI_ENABLED = 'replication_enabled'
 
