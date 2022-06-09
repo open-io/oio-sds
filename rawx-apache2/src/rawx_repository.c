@@ -2,6 +2,7 @@
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -477,6 +478,14 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 					apr_strerror(status, buff, sizeof(buff)), NULL));
 	}
 
+	if (resource->exists && r->header_only) {
+		/* This is a HEAD request, check the file size. */
+		e = chunk_verify_size(resource, r);
+		if (e != NULL) {
+			return e;
+		}
+	}
+
 	if (resource->exists && (flags & RESOURCE_STAT_CHUNK_CHECK_HASH)) {
 		EXTRA_ASSERT(!(flags & RESOURCE_STAT_CHUNK_PENDING));
 
@@ -853,6 +862,13 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 
 		if (!ctx->compression){
 			apr_file_t *fd = NULL;
+			apr_int64_t chunk_size = apr_strtoi64(ctx->chunk.chunk_size, NULL, 10);
+
+			if (resource->info->finfo.size != chunk_size) {
+				e = chunk_verify_size(resource, ctx->request);
+				if (e != NULL)
+					goto end_deliver;
+			}
 
 			/* Try to open the file but forbids a creation */
 			status = apr_file_open(&fd, resource_get_pathname(resource),

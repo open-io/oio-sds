@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -276,6 +276,15 @@ func (rr *rawxRequest) copyChunk() {
 	}
 }
 
+func (rr *rawxRequest) checkChunkSize(chunkIn fileReader) (error) {
+	if rr.chunk.size != chunkIn.size() && rr.chunk.compression == "off" {
+		return errors.New(fmt.Sprintf(
+			"File size (%d) different from recorded chunk size (%d)",
+			chunkIn.size(), rr.chunk.size))
+	}
+	return nil
+}
+
 func (rr *rawxRequest) checkChunk() {
 	chunkIn, err := rr.rawx.repo.get(rr.chunkID)
 	if err != nil {
@@ -294,6 +303,12 @@ func (rr *rawxRequest) checkChunk() {
 	// FIXME(jfs): generalize the check of chunkInfo
 	if rr.chunk.ChunkHash == "" {
 		rr.replyError(errMissingXattr(AttrNameChunkChecksum, nil))
+		return
+	}
+
+	err = rr.checkChunkSize(chunkIn)
+	if err != nil {
+		rr.replyCode(http.StatusPreconditionFailed)
 		return
 	}
 
@@ -376,6 +391,13 @@ func (rr *rawxRequest) downloadChunk() {
 
 	if rr.chunk, err = loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
 		rr.replyError(err)
+		return
+	}
+
+	err = rr.checkChunkSize(inChunk)
+	if err != nil {
+		LogWarning("Won't serve chunk %s: %v", rr.chunkID, err)
+		rr.replyCode(http.StatusPreconditionFailed)
 		return
 	}
 

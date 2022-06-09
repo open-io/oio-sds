@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -898,11 +899,11 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(
             chunkurl, 'HEAD', '',
             {'x-oio-check-hash': True,
-             'x-oio-chunk-meta-chunk-hash': 'A'*32})
+             'x-oio-chunk-meta-chunk-hash': 'A' * 32})
         self.assertEqual(412, resp.status)
 
         # Corrupt the chunk
-        corrupted_data = 'chunk is dead'
+        corrupted_data = 'x' * length
         with open(self._chunk_path(chunkid), "wb") as fp:
             fp.write(corrupted_data)
 

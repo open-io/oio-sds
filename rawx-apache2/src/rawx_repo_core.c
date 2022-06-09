@@ -2,6 +2,7 @@
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -454,7 +455,7 @@ chunk_verify_checksum(dav_resource *resource, request_rec *r)
 		APR_FOPEN_BINARY,
 		0, resource->pool);
 	if (status != APR_SUCCESS) {
-		/* It should be already catched by resource_stat_chunk */
+		/* It should be already caught by resource_stat_chunk */
 		return status;
 	}
 
@@ -492,6 +493,34 @@ chunk_verify_checksum(dav_resource *resource, request_rec *r)
 	apr_status_t code = g_ascii_strcasecmp(h, hash_to_verify) ? APR_EMISMATCH : APR_SUCCESS;
 	g_checksum_free(md5);
 	return code;
+}
+
+dav_error*
+chunk_verify_size(const dav_resource *resource, request_rec *req)
+{
+	if (!resource->info->chunk.chunk_size) {
+		DAV_ERROR_RES(resource, 0,
+				"No chunk_size attr on %s, cannot compare to actual size",
+				resource->info->fullpath);
+		return NULL;
+	} else if (resource->info->compression) {
+		DAV_DEBUG_RES(resource, 0,
+				"Chunk %s is compressed, won't compare attr and actual size",
+				resource->info->fullpath);
+		return NULL;
+	}
+
+	apr_int64_t chunk_size = apr_strtoi64(resource->info->chunk.chunk_size, NULL, 10);
+
+	if (resource->info->finfo.size != chunk_size) {
+		char *err_msg = apr_psprintf(req->pool,
+				"File size (%ld) different from expected chunk size (%ld)",
+				resource->info->finfo.size, chunk_size);
+		return server_create_and_stat_error(
+				request_get_server_config(req), req->pool,
+				HTTP_PRECONDITION_FAILED, 0, err_msg);
+	}
+	return NULL;
 }
 
 apr_status_t

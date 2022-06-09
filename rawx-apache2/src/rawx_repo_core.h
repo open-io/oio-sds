@@ -2,6 +2,7 @@
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -105,6 +106,10 @@ const char * check_chunk_info_with_trailers(apr_pool_t *pool,
 		struct chunk_textinfo_s * chunk);
 
 apr_status_t chunk_verify_checksum(dav_resource *resource, request_rec *r);
+
+/* Verify the file size matches the expected chunk size.
+ * Returns NULL if there is no problem. */
+dav_error* chunk_verify_size(const dav_resource *resource, request_rec *req);
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
