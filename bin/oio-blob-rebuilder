@@ -2,6 +2,7 @@
 
 # oio-blob-rebuilder.py
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -104,6 +105,11 @@ tube for broken chunks events.
              'rebuilding are not actually missing but are corrupted. '
              '(default=%s)' % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE)
     parser.add_argument(
+        '--read-all-available-sources', action='store_true',
+        help='For objects using erasure-coding, connect to all apparently '
+             'available chunks, to have backups in case one of them is '
+             'silently corrupt.')
+    parser.add_argument(
         '--allow-frozen-container', action='store_true',
         help="Allow rebuilding a chunk in a frozen container.")
     parser.add_argument(
@@ -153,6 +159,7 @@ def main():
     # local
     conf['concurrency'] = args.concurrency
     conf['items_per_second'] = args.chunks_per_second
+    conf['read_all_available_sources'] = args.read_all_available_sources
     conf['try_chunk_delete'] = args.delete_faulty_chunks
     # distributed
     conf['distributed_beanstalkd_worker_tube'] = args.distributed_tube

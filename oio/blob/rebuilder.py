@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -37,6 +38,7 @@ class BlobRebuilder(Tool):
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_ALLOW_SAME_RAWX = True
+    DEFAULT_READ_ALL_AVAILABLE_SOURCES = False
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
 
@@ -253,6 +255,9 @@ class BlobRebuilderWorker(ToolWorker):
             'allow_frozen_container', self.tool.DEFAULT_ALLOW_FROZEN_CT))
         self.allow_same_rawx = true_value(self.tool.conf.get(
             'allow_same_rawx', self.tool.DEFAULT_ALLOW_SAME_RAWX))
+        self.read_all_available_sources = true_value(self.tool.conf.get(
+            'read_all_available_sources',
+            self.tool.DEFAULT_READ_ALL_AVAILABLE_SOURCES))
         self.try_chunk_delete = true_value(self.tool.conf.get(
             'try_chunk_delete', self.tool.DEFAULT_TRY_CHUNK_DELETE))
         self.dry_run = true_value(self.tool.conf.get(
@@ -278,7 +283,8 @@ class BlobRebuilderWorker(ToolWorker):
                 rawx_id=self.tool.rawx_id,
                 try_chunk_delete=self.try_chunk_delete,
                 allow_frozen_container=self.allow_frozen_container,
-                allow_same_rawx=self.allow_same_rawx)
+                allow_same_rawx=self.allow_same_rawx,
+                read_all_available_sources=self.read_all_available_sources)
         except OioException as exc:
             if not isinstance(exc, OrphanChunk):
                 raise RetryLater(exc)

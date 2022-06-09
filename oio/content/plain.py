@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,7 +51,7 @@ class PlainContent(Content):
         return final_chunks, bytes_transferred, content_checksum
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False):
+                      allow_frozen_container=False, **_kwargs):
         # Identify the chunk to rebuild
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None and chunk_pos is None:

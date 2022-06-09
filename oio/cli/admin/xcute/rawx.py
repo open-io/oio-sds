@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -52,6 +52,11 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
                  'you are rebuilding are not actually missing but are '
                  'corrupted.')
         parser.add_argument(
+            '--read-all-available-sources', action='store_true',
+            help='For objects using erasure-coding, connect to all apparently '
+                 'available chunks, to have backups in case one of them is '
+                 'silently corrupt.')
+        parser.add_argument(
             '--allow-frozen-container', action='store_true',
             help='Allow rebuilding a chunk in a frozen container.')
         parser.add_argument(
@@ -74,6 +79,8 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,
             'dry_run': parsed_args.dry_run,
+            'read_all_available_sources':
+                parsed_args.read_all_available_sources,
             'try_chunk_delete': parsed_args.delete_faulty_chunks,
             'allow_frozen_container': parsed_args.allow_frozen_container,
             'set_incident_date': parsed_args.set_incident_date,
