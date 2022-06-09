@@ -24,6 +24,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -333,6 +334,15 @@ func (rr *rawxRequest) copyChunk() {
 	}
 }
 
+func (rr *rawxRequest) checkChunkSize(chunkIn fileReader) error {
+	if rr.chunk.size != chunkIn.size() && rr.chunk.compression == "off" {
+		return errors.New(fmt.Sprintf(
+			"File size (%d) different from recorded chunk size (%d)",
+			chunkIn.size(), rr.chunk.size))
+	}
+	return nil
+}
+
 func (rr *rawxRequest) checkChunk() {
 	chunkIn, err := rr.rawx.repo.get(rr.chunkID)
 	if err != nil {
@@ -351,6 +361,12 @@ func (rr *rawxRequest) checkChunk() {
 	// FIXME(jfs): generalize the check of chunkInfo
 	if rr.chunk.ChunkHash == "" {
 		rr.replyError("checkChunk()", errMissingXattr(AttrNameChunkChecksum, nil))
+		return
+	}
+
+	err = rr.checkChunkSize(chunkIn)
+	if err != nil {
+		rr.replyCode(http.StatusPreconditionFailed)
 		return
 	}
 
@@ -472,6 +488,13 @@ func (rr *rawxRequest) downloadChunk() {
 
 	if rr.chunk, err = loadAttr(rr, inChunk, rr.chunkID); err != nil {
 		rr.replyError("downloadChunk()", err)
+		return
+	}
+
+	err = rr.checkChunkSize(inChunk)
+	if err != nil {
+		LogWarning("Won't serve chunk %s: %v", rr.chunkID, err)
+		rr.replyCode(http.StatusPreconditionFailed)
 		return
 	}
 

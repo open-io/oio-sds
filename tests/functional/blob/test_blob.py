@@ -914,7 +914,7 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(412, resp.status)
 
         # Corrupt the chunk
-        corrupted_data = b"chunk is dead"
+        corrupted_data = b"x" * length
         local_path = self._chunk_path(chunkid)
         with open(local_path, "wb") as fp:
             fp.write(corrupted_data)

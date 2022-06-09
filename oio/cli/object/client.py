@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,5 +28,6 @@ def make_client(instance):
         namespace=instance.namespace,
         admin_mode=instance.admin_mode,
         perfdata=instance.cli_conf().get("perfdata"),
+        logger=instance.logger,
     )
     return client
