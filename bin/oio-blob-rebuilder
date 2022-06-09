@@ -133,6 +133,13 @@ tube for broken chunks events.
         "(default=%s)" % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE,
     )
     parser.add_argument(
+        "--read-all-available-sources",
+        action="store_true",
+        help="For objects using erasure-coding, connect to all apparently "
+        "available chunks, to have backups in case one of them is "
+        "silently corrupt.",
+    )
+    parser.add_argument(
         "--allow-frozen-container",
         action="store_true",
         help="DEPRECATED Allow rebuilding a chunk in a frozen container.",
@@ -187,6 +194,7 @@ def main():
     # local
     conf["concurrency"] = args.concurrency
     conf["items_per_second"] = args.chunks_per_second
+    conf["read_all_available_sources"] = args.read_all_available_sources
     conf["try_chunk_delete"] = args.delete_faulty_chunks
     # distributed
     conf["distributed_beanstalkd_worker_tube"] = args.distributed_tube

@@ -33,6 +33,7 @@ class ECContent(Content):
         allow_frozen_container=True,
         reqid=None,
         cur_items=None,
+        read_all_available_sources=False,
     ):
         if reqid is None:
             reqid = request_id("eccontent-")
@@ -85,8 +86,10 @@ class ECContent(Content):
             chunks.raw(),
             current_chunk.subpos,
             self.storage_method,
+            read_all_available_sources=read_all_available_sources,
             watchdog=self.blob_client.watchdog,
             reqid=reqid,
+            logger=self.logger,
         )
         expected_chunk_size, stream = handler.rebuild()
 

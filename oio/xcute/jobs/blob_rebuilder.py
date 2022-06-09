@@ -33,6 +33,7 @@ class RawxRebuildTask(XcuteTask):
         self.service_id = job_params["service_id"]
         self.rawx_timeout = job_params["rawx_timeout"]
         self.allow_same_rawx = job_params["allow_same_rawx"]
+        self.read_all_available_sources = job_params["read_all_available_sources"]
         self.try_chunk_delete = job_params["try_chunk_delete"]
         self.dry_run = job_params["dry_run"]
 
@@ -63,6 +64,7 @@ class RawxRebuildTask(XcuteTask):
                 version=version,
                 try_chunk_delete=self.try_chunk_delete,
                 allow_same_rawx=self.allow_same_rawx,
+                read_all_available_sources=self.read_all_available_sources,
                 reqid=reqid,
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
@@ -81,6 +83,7 @@ class RawxRebuildJob(XcuteRdirJob):
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_DECLARE_INCIDENT_DATE = False
+    DEFAULT_READ_ALL_AVAILABLE_SOURCES = False
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -102,6 +105,10 @@ class RawxRebuildJob(XcuteRdirJob):
 
         sanitized_job_params["allow_same_rawx"] = boolean_value(
             job_params.get("allow_same_rawx"), cls.DEFAULT_ALLOW_SAME_RAWX
+        )
+        sanitized_job_params["read_all_available_sources"] = boolean_value(
+            job_params.get("read_all_available_sources"),
+            cls.DEFAULT_READ_ALL_AVAILABLE_SOURCES,
         )
 
         sanitized_job_params["try_chunk_delete"] = boolean_value(

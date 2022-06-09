@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
 
 from oio.common.exceptions import ContentDrained, ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
@@ -59,6 +59,7 @@ class ChunkOperator(object):
         try_chunk_delete=False,
         allow_frozen_container=True,
         allow_same_rawx=True,
+        read_all_available_sources=False,
         **kwargs,
     ):
         """
@@ -129,6 +130,7 @@ class ChunkOperator(object):
             allow_frozen_container=allow_frozen_container,
             allow_same_rawx=allow_same_rawx,
             chunk_pos=chunk_pos,
+            read_all_available_sources=read_all_available_sources,
             reqid=kwargs.get("reqid"),
             cur_items=cur_items,
         )

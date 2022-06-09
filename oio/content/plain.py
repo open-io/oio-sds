@@ -66,6 +66,7 @@ class PlainContent(Content):
         allow_frozen_container=True,
         reqid=None,
         cur_items=None,
+        **_kwargs,
     ):
         if reqid is None:
             reqid = request_id("plaincontent-")

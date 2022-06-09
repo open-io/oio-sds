@@ -65,6 +65,13 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             help="Deprecated",
         )
         parser.add_argument(
+            "--read-all-available-sources",
+            action="store_true",
+            help="For objects using erasure-coding, connect to all apparently "
+            "available chunks, to have backups in case one of them is "
+            "silently corrupt.",
+        )
+        parser.add_argument(
             "--set-incident-date",
             action="store_true",
             help=(
@@ -92,6 +99,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "rdir_timeout": parsed_args.rdir_timeout,
             "rawx_timeout": parsed_args.rawx_timeout,
             "dry_run": parsed_args.dry_run,
+            "read_all_available_sources": parsed_args.read_all_available_sources,
             "try_chunk_delete": parsed_args.delete_faulty_chunks,
             "set_incident_date": parsed_args.set_incident_date,
             "set_specific_incident_date": parsed_args.set_specific_incident_date,

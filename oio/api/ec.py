@@ -47,6 +47,7 @@ from oio.common.http import (
     headers_from_object_metadata,
 )
 from oio.common.logger import get_logger
+from oio.common.storage_method import ECDriverError
 from oio.common.utils import fix_ranges, get_hasher, monotonic_time, request_id
 
 
@@ -421,7 +422,7 @@ class ECStream(object):
                     ec_start = monotonic_time()
                 try:
                     segment = self.storage_method.driver.decode(data)
-                except exceptions.ECError:
+                except ECDriverError:
                     # something terrible happened
                     self.logger.exception(
                         "ERROR decoding fragments (reqid=%s)", self.reqid
@@ -1282,6 +1283,7 @@ class ECRebuildHandler(object):
         read_timeout=None,
         watchdog=None,
         reqid=None,
+        read_all_available_sources=False,
         **_kwargs,
     ):
         self.meta_chunk = meta_chunk
@@ -1290,6 +1292,7 @@ class ECRebuildHandler(object):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
         self.logger = _kwargs.get("logger", LOGGER)
+        self.read_all_available_sources = read_all_available_sources
         self.reqid = reqid or request_id("ecrebuild-")
         self.watchdog = watchdog
         if not watchdog:
@@ -1388,7 +1391,10 @@ class ECRebuildHandler(object):
                 self.reqid,
             )
 
-        rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
+        if self.read_all_available_sources:
+            rebuild_iter = self._make_rebuild_iter(resps)
+        else:
+            rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return assumed_chunk_size, rebuild_iter
 
     def _make_rebuild_iter(self, resps):
@@ -1410,18 +1416,38 @@ class ECRebuildHandler(object):
                     pile.spawn(_get_frag, resp)
                 try:
                     with WatchdogTimeout(self.watchdog, self.read_timeout, Timeout):
-                        frag = list(pile)
+                        in_frags = list(pile)
                 except Timeout as to:
                     self.logger.error("ERROR while rebuilding: %s", to)
                 except Exception:
                     self.logger.exception("ERROR while rebuilding")
                     break
-                if not all(frag):
+                if not all(in_frags):
                     break
-                rebuilt_frag = self._reconstruct(frag)
+                ok_frags = self._filter_broken_fragments(in_frags)
+                rebuilt_frag = self._reconstruct(ok_frags)
                 yield rebuilt_frag
 
         return frag_iter()
 
-    def _reconstruct(self, frag):
-        return self.storage_method.driver.reconstruct(frag, [self.missing])[0]
+    def _filter_broken_fragments(self, frags):
+        """
+        Try to read and check each fragment's EC metadata.
+
+        :returns: the list of fragments whose metadata is ok
+        """
+        frag_md_list = []
+        ok_frags = []
+        for i, frag in enumerate(frags):
+            try:
+                frag_md = self.storage_method.driver.get_metadata(frag)
+                frag_md_list.append(frag_md)
+                ok_frags.append(frag)
+            except ECDriverError as err:
+                self.logger.error("Fragment %d in error, discarding it: %s", i, err)
+        # FIXME(FVE): here we should call verify_stripe_metadata(frag_md_list)
+        # but it does not work and I don't know why.
+        return ok_frags
+
+    def _reconstruct(self, frags):
+        return self.storage_method.driver.reconstruct(frags, [self.missing])[0]

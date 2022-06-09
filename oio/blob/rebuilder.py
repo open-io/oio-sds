@@ -37,6 +37,7 @@ class BlobRebuilder(Tool):
     DEFAULT_RDIR_FETCH_LIMIT = 100
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_ALLOW_SAME_RAWX = True
+    DEFAULT_READ_ALL_AVAILABLE_SOURCES = False
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
 
@@ -305,6 +306,12 @@ class BlobRebuilderWorker(ToolWorker):
         self.allow_same_rawx = true_value(
             self.tool.conf.get("allow_same_rawx", self.tool.DEFAULT_ALLOW_SAME_RAWX)
         )
+        self.read_all_available_sources = true_value(
+            self.tool.conf.get(
+                "read_all_available_sources",
+                self.tool.DEFAULT_READ_ALL_AVAILABLE_SOURCES,
+            )
+        )
         self.try_chunk_delete = true_value(
             self.tool.conf.get("try_chunk_delete", self.tool.DEFAULT_TRY_CHUNK_DELETE)
         )
@@ -340,6 +347,7 @@ class BlobRebuilderWorker(ToolWorker):
                 version=version,
                 try_chunk_delete=self.try_chunk_delete,
                 allow_same_rawx=self.allow_same_rawx,
+                read_all_available_sources=self.read_all_available_sources,
             )
         except OioException as exc:
             if not isinstance(exc, OrphanChunk):
