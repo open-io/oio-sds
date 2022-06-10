@@ -1112,13 +1112,80 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 	struct list_params_s lp = *lp0;
 	gboolean done = FALSE;
 	GPtrArray *cur_aliases = NULL;
+	guint prefix_len = 0;
+
+	if (lp.prefix) {
+		prefix_len = strlen(lp.prefix);
+	}
+	if (lp.marker_start && *(lp.marker_start) && lp.delimiter) {
+		const gchar *suffix = strchr(lp.marker_start + prefix_len,
+				lp.delimiter);
+		if (suffix) {
+			/* If the marker contains a sub-prefix, no alias of that sub-prefix
+			 * should be returned.
+			 *
+			 * Notice that the version marker will be ignored. */
+			last_alias_name = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
+					(int)(suffix - lp.marker_start) + 1, lp.marker_start);
+		}
+	}
 
 	void _load_header_and_send(struct bean_ALIASES_s *alias) {
-		if (lp.flag_headers)
-			_load_fk_by_name(sq3, alias, "image", cb, u);
-		if (lp.flag_properties)
-			_load_fk_by_name(sq3, alias, "properties", cb, u);
+		const gchar *name = ALIASES_get_alias(alias)->str;
+		const gchar *suffix = NULL;
+		if (lp.delimiter) {
+			suffix = strchr(name + prefix_len, lp.delimiter);
+		}
+		if (suffix) {  // It's a sub-prefix
+			if (last_alias_name &&
+					strncmp(last_alias_name, name, (suffix - name) + 1) == 0) {
+				/* Same sub-prefix as the previous alias,
+				 * only one alias is enough. */
+				return;
+			}
+			// The alias (name) is enough.
+			// Content and properties will not be used.
+
+			/* HACK: we have found a "sub-prefix" which will be returned to the
+			 * client. Objects containing this prefix won't be returned (because
+			 * the request has a delimiter), and thus we can skip them.
+			 *
+			 * There are very few chances that an object has it in its name,
+			 * and even if it has, it won't be listed
+			 * (because it would be behind the delimiter).
+			 * With such a marker, we will force the next SQL request to skip
+			 * objects that won't be listed, and won't even be used to generate
+			 * new prefixes (they all share the current prefix).
+			 *
+			 * Here is a trivial example:
+			 * - a/b/0
+			 * - a/b/1
+			 * - a/b/2
+			 * - a/c/3
+			 * - d/e/4
+			 * With a page size of 3, and '/' as a delimiter:
+			 * - the first request will return "a/b/0", "a/b/1", "a/b/2",
+			 *   generating the prefix "a/";
+			 * - the marker for the next iteration will be "a/\xf4\x8f\xbf\xbd";
+			 * - the second request will skip "a/c/3", and return "d/e/4",
+			 *   generating the prefix "d/".
+			 *
+			 * Notice that there is the same mechanism in the oioproxy service.
+			 * It is used to directly access the correct shard. */
+			g_free(last_alias_name);
+			last_alias_name = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
+					(int)((suffix - name) + 1), name);
+		} else {
+			if (lp.flag_headers)
+				_load_fk_by_name(sq3, alias, "image", cb, u);
+			if (lp.flag_properties)
+				_load_fk_by_name(sq3, alias, "properties", cb, u);
+
+			g_free(last_alias_name);
+			last_alias_name = g_strdup(name);
+		}
 		cb(u, alias);
+		count_aliases++;
 	}
 	void cleanup (void) {
 		if (cur_aliases) {
@@ -1138,6 +1205,8 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			lp.marker_start = last_alias_name;
 			if (lp.flag_allversion && last_alias_version) {
 				lp.version_marker = last_alias_version;
+			} else {
+				lp.version_marker = NULL;
 			}
 		}
 
@@ -1156,9 +1225,6 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		metautils_gpa_reverse(cur_aliases);
 
 		if (lp.flag_allversion) {
-			g_free(last_alias_name);
-			last_alias_name = g_strdup(
-				ALIASES_get_alias(cur_aliases->pdata[0])->str);
 			g_free(last_alias_version);
 			last_alias_version = g_strdup_printf("%"G_GINT64_FORMAT,
 					ALIASES_get_version(cur_aliases->pdata[0]));
@@ -1166,7 +1232,6 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		for (guint i = cur_aliases->len; i > 0; i--) {
 			struct bean_ALIASES_s *alias = cur_aliases->pdata[i-1];
 			const gchar *name = ALIASES_get_alias(alias)->str;
-
 			if (lp.prefix && !g_str_has_prefix(name, lp.prefix))
 				goto label_end;
 
@@ -1174,23 +1239,26 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 
 			if (lp.flag_allversion) {
 				_load_header_and_send(alias);
-				count_aliases++;
 				if (lp.maxkeys > 0 && count_aliases >= lp.maxkeys) {
 					goto label_end;
 				}
 			} else {
-				if (last_alias_name && !strcmp(last_alias_name, name)) {
+				if (last_alias_name && strcmp(last_alias_name, name) >= 0) {
+					/* The last_alias_name variable can be greater than the
+					 * current name, if it is a sub-prefix.
+					 * And if the 2 are equal, it's an old alias version. */
 					_bean_clean(alias);
 				} else {
-					g_free(last_alias_name);
-					last_alias_name = g_strdup(name);
 					if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias)) {
 						_load_header_and_send(alias);
-						count_aliases++;
 						if (lp.maxkeys > 0 && count_aliases >= lp.maxkeys) {
 							goto label_end;
 						}
 					} else {
+						/* The latest version of the alias is a deletion marker,
+						 * so do not list any version of this alias. */
+						g_free(last_alias_name);
+						last_alias_name = g_strdup(name);
 						_bean_clean(alias);
 					}
 				}

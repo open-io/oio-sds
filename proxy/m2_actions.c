@@ -1991,7 +1991,6 @@ _build_next_marker(const char *marker, const char delimiter,
 	 * client. Objects containing this prefix won't be returned (because
 	 * the request has a delimiter), and thus we can skip them.
 	 *
-	 * "\xf4\x8f\xbf\xbd" is the last valid Unicode character.
 	 * There are very few chances that an object has it in its name,
 	 * and even if it has, it won't be listed
 	 * (because it would be behind the delimiter).
@@ -2012,10 +2011,12 @@ _build_next_marker(const char *marker, const char delimiter,
 	 * - the second request will skip "a/c/3", and return "d/e/4",
 	 *   generating the prefix "d/".
 	 *
-	 * Notice that we must not return a prefix equal to the marker. */
-	gchar *sub_prefix = g_strndup(marker, (suffix - marker) + 1);
-	gchar *next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", sub_prefix);
-	g_free(sub_prefix);
+	 * Notice that we must not return a prefix equal to the marker.
+	 *
+	 * Notice that there is the same mechanism in the meta2 service.
+	 * It is used to return a single alias per sub-prefix. */
+	gchar *next_marker = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
+			(int)((suffix - marker) + 1), marker);
 	return next_marker;
 }
 
@@ -2027,11 +2028,10 @@ static GError * _list_loop (struct req_args_s *args,
 	guint count = 0;
 	struct list_params_s in = *in0;
 
-	char delimiter = _delimiter (args);
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s"
 			" marker=%s version_marker=%s end=%s",
 			oio_url_get(args->url, OIOURL_WHOLE),
-			in0->maxkeys, delimiter, in0->prefix,
+			in0->maxkeys, in0->delimiter ? in0->delimiter : ' ', in0->prefix,
 			in0->marker_start, in0->version_marker, in0->marker_end);
 
 	PACKER_VOID(_pack) { return packer(&in); }
@@ -2047,7 +2047,7 @@ static GError * _list_loop (struct req_args_s *args,
 			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
 		in.marker_start = _build_next_marker(
 				out0->next_marker?: in0->marker_start,
-				delimiter, in0->prefix);
+				in0->delimiter, in0->prefix);
 		in.version_marker = g_strdup(
 			out0->next_version_marker?: in0->version_marker);
 
@@ -2116,7 +2116,7 @@ static GError * _list_loop (struct req_args_s *args,
 			ctx.count = count;
 			ctx.prefix = in0->prefix;
 			ctx.marker = in0->marker_start;
-			ctx.delimiter = delimiter;
+			ctx.delimiter = in0->delimiter;
 			_filter_list_result(&ctx, out.beans);
 			out.beans = NULL;
 			count = ctx.count;
@@ -2380,6 +2380,7 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.flag_headers = 1;
 	list_in.flag_nodeleted = 1;
 	list_in.prefix = OPT("prefix");
+	list_in.delimiter = _delimiter(args);
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("end_marker");
 	if (!list_in.marker_end)

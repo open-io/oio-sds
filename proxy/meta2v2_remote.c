@@ -376,6 +376,12 @@ _pack_list_params(MESSAGE msg, struct list_params_s *p)
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 
 	metautils_message_add_field_str(msg, NAME_MSGKEY_PREFIX, p->prefix);
+	if (p->delimiter) {
+		gchar delimiter_str[2] = "\0";
+		delimiter_str[0] = p->delimiter;
+		metautils_message_add_field_str(msg, NAME_MSGKEY_DELIMITER,
+				delimiter_str);
+	}
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER, p->marker_start);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_VERSIONMARKER, p->version_marker);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER_END, p->marker_end);

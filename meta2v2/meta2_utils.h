@@ -35,6 +35,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define CHUNK_METHOD_DRAINED "drained"
 
+#define LAST_UNICODE_CHAR "\xf4\x8f\xbf\xbd"
+
 struct storage_policy_s;
 struct oio_url_s;
 struct sqlx_sqlite3_s;
@@ -43,6 +45,7 @@ struct list_params_s
 {
 	gint64 maxkeys;
 	const char *prefix;
+	char delimiter;
 	const char *marker_start;
 	const char *version_marker;
 	const char *marker_end;

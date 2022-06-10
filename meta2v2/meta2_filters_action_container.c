@@ -263,11 +263,11 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	if (lp->maxkeys <= 0)
 		lp->maxkeys = meta2_batch_maxlen;
 
-	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s version_marker:%s end:%s"
-			" max:%"G_GINT64_FORMAT,
+	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s delimiter:%c marker:%s "
+			"version_marker:%s end:%s max:%"G_GINT64_FORMAT,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
-			lp->prefix, lp->marker_start, lp->version_marker, lp->marker_end,
-			lp->maxkeys);
+			lp->prefix, lp->delimiter ? lp->delimiter : ' ', lp->marker_start,
+			lp->version_marker, lp->marker_end, lp->maxkeys);
 
 	// XXX the underlying meta2_backend_list_aliases() function MUST
 	// return headers before the associated alias.
@@ -374,6 +374,11 @@ end:
 	}
 
 	S3_RESPONSE_HEADER(NAME_MSGKEY_PREFIX, lp->prefix);
+	if (lp->delimiter) {
+		gchar delimiter_str[2] = "\0";
+		delimiter_str[0] = lp->delimiter;
+		S3_RESPONSE_HEADER(NAME_MSGKEY_DELIMITER, delimiter_str);
+	}
 	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER, lp->marker_start);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_VERSIONMARKER, lp->version_marker);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER_END, lp->marker_end);
@@ -411,6 +416,9 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 	}
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
+	const gchar *delimiter_str = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_DELIMITER);
+	lp->delimiter = delimiter_str ? *delimiter_str : 0;
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
 	if (lp->flag_allversion && lp->marker_start) {
 		lp->version_marker = meta2_filter_ctx_get_param(ctx,
@@ -422,8 +430,10 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
 		lp->maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
-	reply->subject("max=%"G_GINT64_FORMAT", marker=%s, prefix=%s",
-			lp->maxkeys, lp->marker_start, lp->prefix);
+	reply->subject("max=%"G_GINT64_FORMAT", marker=%s, version_marker=%s, "
+			"end=%s, prefix=%s, delimiter=%c", lp->maxkeys, lp->marker_start,
+			lp->version_marker, lp->marker_end, lp->prefix,
+			lp->delimiter ? lp->delimiter : ' ');
 }
 
 int
