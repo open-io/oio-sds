@@ -18,10 +18,11 @@ import os
 import random
 import time
 
-from oio.common.utils import cid_from_name
-from oio.common.exceptions import OrphanChunk
 from oio.blob.rebuilder import BlobRebuilder
-from tests.utils import BaseTestCase, random_str
+from oio.common.exceptions import OrphanChunk
+from oio.common.storage_method import ECDriverError
+from oio.common.utils import cid_from_name
+from tests.utils import BaseTestCase, random_data, random_str
 
 
 class TestBlobRebuilder(BaseTestCase):
@@ -52,7 +53,10 @@ class TestBlobRebuilder(BaseTestCase):
             self.rawx_volumes[service_id] = volume
 
         self.api.object_create(
-            self.account, self.container, obj_name=self.path, data="chunk"
+            self.account,
+            self.container,
+            obj_name=self.path,
+            data=random_data(50 * 1024),
         )
         meta, self.chunks = self.api.object_locate(
             self.account, self.container, self.path
@@ -73,6 +77,73 @@ class TestBlobRebuilder(BaseTestCase):
         chunk_id = url.split("/", 3)[3]
         volume = self.rawx_volumes[volume_id]
         return volume + "/" + chunk_id[:3] + "/" + chunk_id
+
+    def _corrupt_chunk(self, chunk, offset=7):
+        chunk_path = self._chunk_path(chunk)
+        self.logger.debug("Corrupting chunk %s", chunk_path)
+        with open(chunk_path, "rb+") as chunk_fd:
+            chunk_fd.seek(offset, os.SEEK_SET)
+            last_byte = chunk_fd.read(1)[0]
+            last_byte = (last_byte + 255) % 256
+            chunk_fd.seek(offset, os.SEEK_SET)
+            chunk_fd.write(bytes([last_byte]))
+            chunk_fd.flush()
+
+    def test_rebuild_with_corrupt_input(self):
+        """
+        Test the rebuild of a missing chunk while 2 other chunks are corrupt.
+        Notice that we corrupt the chunk's EC preamble, not the chunk's data
+        segment.
+        """
+        if (
+            self.conf["storage_policy"] != "EC"
+            or len(self.conf["services"]["rawx"]) < 9
+        ):
+            self.skipTest(
+                "Will run only with 'EC' storage policy "
+                + "and at least 9 rawx services"
+            )
+
+        # pick one chunk, remove it
+        removed_chunk = random.choice(self.chunks)
+        chunk_headers = self.blob_client.chunk_head(removed_chunk["url"])
+        removed_chunk_size = int(chunk_headers["chunk_size"])
+        os.remove(self._chunk_path(removed_chunk))
+        chunks_kept = list(self.chunks)
+        chunks_kept.remove(removed_chunk)
+
+        # pick two chunks, corrupt them
+        for _ in range(2):
+            corrupt_chunk = random.choice(chunks_kept)
+            chunks_kept.remove(corrupt_chunk)
+            self._corrupt_chunk(corrupt_chunk)
+
+        # run the rebuilder, check failure
+        chunk_id = removed_chunk["url"].split("/")[3]
+        chunk_volume = removed_chunk["url"].split("/")[2]
+        conf = self.conf.copy()
+        conf["allow_same_rawx"] = True
+        rebuilder = BlobRebuilder(
+            conf, service_id=chunk_volume, logger=self.logger, watchdog=self.watchdog
+        )
+        rebuilder_worker = rebuilder.create_worker(None, None)
+        self.assertRaises(
+            ECDriverError,
+            rebuilder_worker._process_item,
+            (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id),
+        )
+
+        # run the rebuilder with options, check success
+        conf["allow_same_rawx"] = True
+        conf["read_all_available_sources"] = True
+        rebuilder = BlobRebuilder(
+            conf, service_id=chunk_volume, logger=self.logger, watchdog=self.watchdog
+        )
+        rebuilder_worker = rebuilder.create_worker(None, None)
+        rebuilt_bytes = rebuilder_worker._process_item(
+            (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id)
+        )
+        self.assertEqual(removed_chunk_size, rebuilt_bytes)
 
     def test_rebuild_chunk_with_another_chunk_on_zero_scored_rawx(self):
         chunk = random.choice(self.chunks)
@@ -102,7 +173,9 @@ class TestBlobRebuilder(BaseTestCase):
             # Rebuild the chunk
             conf = self.conf.copy()
             conf["allow_same_rawx"] = True
-            rebuilder = BlobRebuilder(conf, service_id=rawx_id, watchdog=self.watchdog)
+            rebuilder = BlobRebuilder(
+                conf, service_id=rawx_id, logger=self.logger, watchdog=self.watchdog
+            )
             rebuilder_worker = rebuilder.create_worker(None, None)
             rebuilder_worker._process_item(
                 (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id)
@@ -138,7 +211,9 @@ class TestBlobRebuilder(BaseTestCase):
         self.api.object_drain(self.account, self.container, self.path)
         conf = self.conf.copy()
         conf["allow_same_rawx"] = True
-        rebuilder = BlobRebuilder(conf, service_id=rawx_id, watchdog=self.watchdog)
+        rebuilder = BlobRebuilder(
+            conf, service_id=rawx_id, logger=self.logger, watchdog=self.watchdog
+        )
         rebuilder_worker = rebuilder.create_worker(None, None)
         # Once an object is "drained", all chunks are removed, and we are not
         # supposed to rebuild them. If we happen to find one, we can consider
