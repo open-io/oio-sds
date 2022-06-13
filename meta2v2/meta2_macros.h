@@ -187,14 +187,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"OR ( SELECT 1 from admin ad where ad.k = '" M2V2_ADMIN_SHARDING_UPPER \
 	"' and cast(ad.v AS TEXT) != '<' and '<' || old.alias >cast(ad.v AS TEXT))))"
 
-#define BYPASS_GOERNANCE "SELECT 1 FROM properties pr WHERE "\
+#define BYPASS_GOVERNANCE "SELECT 1 FROM properties pr WHERE "\
 	"pr.version=old.version AND pr.alias=old.alias "\
 	"AND pr.key='" OBJ_PROP_BYPASS_GOVERNANCE "' "\
-	" AND CAST(pr.value AS TEXT)='True' AND "\
+	"AND CAST(pr.value AS TEXT)='True' AND "\
 	"(SELECT 1 FROM  properties pr WHERE "\
 	"pr.version=old.version AND pr.alias=old.alias "\
 	"AND pr.key='" OBJ_PROP_RETENTION_MODE "' AND "  \
-	" CAST(pr.value AS TEXT)='GOVERNANCE')"
+	"CAST(pr.value AS TEXT)='GOVERNANCE')"
 
 #define RETAIN_UNTIL_CONDITION "SELECT 1 FROM properties pr WHERE "\
 	"pr.version=old.version	AND pr.alias=old.alias AND "\
@@ -214,7 +214,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	TRIGGER_RETAIN_UNTIL_NAME " BEFORE DELETE ON aliases "\
 	"BEGIN SELECT CASE WHEN ( NOT EXISTS (" CLEANING_ROOT " OR " \
 	SHARD_OUT_OF_RANGE") ) AND ( ("\
-	"NOT EXISTS (" BYPASS_GOERNANCE ") ) AND NOT EXISTS " \
+	"NOT EXISTS (" BYPASS_GOVERNANCE ") ) AND NOT EXISTS " \
 	"(" DELETED_FLAG ") "\
 	"AND EXISTS (" RETAIN_UNTIL_CONDITION ") "\
 	") THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \

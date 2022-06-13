@@ -46,7 +46,8 @@ class TestObjectLock(BaseTestCase):
             reqid = request_id()
             self.storage.object_delete(
                 self.account, self.cname, el['name'], reqid=reqid,
-                version=el['version'], bucket=self.cname)
+                version=el['version'], bucket=self.cname,
+                bypass_governance=True)
         super(TestObjectLock, self).tearDown()
 
     def _create(self, cname, properties=None, bucket=None, system=None):
@@ -97,15 +98,6 @@ class TestObjectLock(BaseTestCase):
                 Forbidden, self.storage.object_delete,
                 self.account, self.cname, el['name'], reqid=reqid,
                 version=el['version'], bucket=self.cname)
-        # Set bypass governance for teardown cleaning
-        for el in object_list.get('objects', {}):
-            reqid = request_id()
-            self.storage.object_set_properties(
-                    self.account, self.cname, el['name'], reqid=reqid,
-                    version=el['version'], bucket=self.cname,
-                    properties={
-                        'x-object-sysmeta-s3api-retention-bypass-governance':
-                        'True'})
 
     def test_object_retain_until_delete(self):
         """

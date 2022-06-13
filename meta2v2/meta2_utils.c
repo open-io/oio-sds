@@ -1593,34 +1593,15 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS,
 			_search_alias_and_size, NULL);
-
-	if (NULL != err) {
+	if (err) {
+		_bean_clean(alias);
 		_bean_cleanl2(beans);
 		return err;
 	}
 	if (!alias || !beans) {
+		_bean_clean(alias);
 		_bean_cleanl2(beans);
 		return NEWERROR(CODE_CONTENT_NOTFOUND, "No content to delete");
-	}
-	if (bypass_governance) {
-		struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
-		gchar *prop_key = g_alloca(sizeof(OBJ_PROP_BYPASS_GOVERNANCE));
-		sprintf(prop_key, OBJ_PROP_BYPASS_GOVERNANCE);
-		gchar *prop_val = g_alloca(sizeof("True"));
-		sprintf(prop_val, "True");
-		PROPERTIES_set2_key(prop, prop_key);
-		PROPERTIES_set2_value(prop, (guint8*)prop_val, sizeof(prop_val));
-		if (url && oio_url_has(url, OIOURL_PATH))
-			PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_PATH));
-		if (url && oio_url_has(url, OIOURL_VERSION))
-			PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_VERSION));
-
-		err = _db_save_bean(sq3, prop);
-		beans = g_slist_prepend(beans, prop);
-
-		if (NULL != err) {
-			return err;
-		}
 	}
 
 	GRID_TRACE("CONTENT %s beans=%u maxvers=%"G_GINT64_FORMAT
@@ -1639,8 +1620,22 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 				err = BADREQ("Alias is a delete marker and delete marker specified");
 			}
 		} else {
-			err = _real_delete_and_save_deleted_beans(sq3, beans,
-					alias, header, cb, u0);
+			if (bypass_governance && !ALIASES_get_deleted(alias)) {
+				// Allow to delete object (with data) despite retention
+				struct bean_PROPERTIES_s *prop = _bean_create(
+						&descr_struct_PROPERTIES);
+				PROPERTIES_set_alias(prop, ALIASES_get_alias(alias));
+				PROPERTIES_set_version(prop, ALIASES_get_version(alias));
+				PROPERTIES_set2_key(prop, OBJ_PROP_BYPASS_GOVERNANCE);
+				PROPERTIES_set2_value(prop, (guint8*)"True", 4);
+				err = _db_save_bean(sq3, prop);
+				_bean_clean(prop);
+			}
+
+			if (!err) {
+				err = _real_delete_and_save_deleted_beans(sq3, beans,
+						alias, header, cb, u0);
+			}
 		}
 	} else {
 		create_delete_marker = TRUE;
