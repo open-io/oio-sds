@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -76,6 +76,7 @@ var loadedOpts = map[string]string{
 	"log_access_put":    "log_access_put",
 	"log_access_delete": "log_access_delete",
 	"log_access_format": "log_access_format",
+	"log_request_format": "log_request_format",
 	"log_format":        "log_format",
 	// TODO(jfs): also implement a cachedir
 }

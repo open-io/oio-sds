@@ -40,11 +40,11 @@ var accessLogPut = configAccessLogDefaultPut
 var accessLogDel = configAccessLogDefaultDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
-var logRequestFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
-var logAccessFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
+var requestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
+var accessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
 var logTemplate *template.Template = nil
-var logRequestTemplate *template.Template = nil
-var logAccessTemplate *template.Template = nil
+var requestLogTemplate *template.Template = nil
+var accessLogTemplate *template.Template = nil
 
 // Activate the extreme verbosity on the RAWX. This is has to be set at the
 // startup of the service.
@@ -108,11 +108,11 @@ func InitLogTemplates() error {
 	if err != nil {
 		return err
 	}
-	logRequestTemplate, err = template.New("logRequestTemplate").Parse(logRequestFormat)
+	requestLogTemplate, err = template.New("requestLogTemplate").Parse(requestLogFormat)
 	if err != nil {
 		return err
 	}
-	logAccessTemplate, err = template.New("logAccessTemplate").Parse(logAccessFormat)
+	accessLogTemplate, err = template.New("accessLogTemplate").Parse(accessLogFormat)
 	return err
 }
 
@@ -209,14 +209,17 @@ func LogDebug(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_DEBUG, format, v...)
 }
 
-func writeLogRequestFmt(rr *rawxRequest, pri syslog.Priority, format string, v ...interface{}) {
+// writeFormattedRequestLog formats a request-linked message
+// according to the format specified by the requestLogFormat configuration
+// parameter and sends it to the system logger.
+func writeFormattedRequestLog(rr *rawxRequest, pri syslog.Priority, format string, v ...interface{}) {
 	if !severityAllowed(pri) {
 		return
 	}
 	erroneous, severityName := getSeverity(pri)
 
 	var output bytes.Buffer
-	if logRequestTemplate != nil {
+	if requestLogTemplate != nil {
 		var local string
 		var peer string
 		var method string
@@ -238,7 +241,7 @@ func writeLogRequestFmt(rr *rawxRequest, pri syslog.Priority, format string, v .
 			path = ""
 			TLS = false
 		}
-		err := logRequestTemplate.Execute(&output, LogRequestTemplateInventory{
+		err := requestLogTemplate.Execute(&output, LogRequestTemplateInventory{
 			Pid:      pid,
 			Severity: severityName,
 			Local:    local,
@@ -251,7 +254,7 @@ func writeLogRequestFmt(rr *rawxRequest, pri syslog.Priority, format string, v .
 		})
 
 		if err != nil {
-			log.Printf("Error while executing logRequestTemplate: %v", err)
+			log.Printf("Error while executing requestLogTemplate: %v", err)
 			return
 		}
 	} else {
@@ -267,33 +270,33 @@ func writeLogRequestFmt(rr *rawxRequest, pri syslog.Priority, format string, v .
 }
 
 func LogRequestFatal(rr *rawxRequest, format string, v ...interface{}) {
-	writeLogRequestFmt(rr, syslog.LOG_ERR, format, v...)
+	writeFormattedRequestLog(rr, syslog.LOG_ERR, format, v...)
 	log.Fatalf(format, v...)
 }
 
 func LogRequestError(rr *rawxRequest, format string, v ...interface{}) {
-	writeLogRequestFmt(rr, syslog.LOG_ERR, format, v...)
+	writeFormattedRequestLog(rr, syslog.LOG_ERR, format, v...)
 }
 
 func LogRequestWarning(rr *rawxRequest, format string, v ...interface{}) {
-	writeLogRequestFmt(rr, syslog.LOG_WARNING, format, v...)
+	writeFormattedRequestLog(rr, syslog.LOG_WARNING, format, v...)
 }
 
 func LogRequestInfo(rr *rawxRequest, format string, v ...interface{}) {
-	writeLogRequestFmt(rr, syslog.LOG_INFO, format, v...)
+	writeFormattedRequestLog(rr, syslog.LOG_INFO, format, v...)
 }
 
 func LogRequestDebug(rr *rawxRequest, format string, v ...interface{}) {
-	writeLogRequestFmt(rr, syslog.LOG_DEBUG, format, v...)
+	writeFormattedRequestLog(rr, syslog.LOG_DEBUG, format, v...)
 }
 
 func (evt AccessLogEvent) String() string {
 	evt.Pid = pid
 	var output bytes.Buffer
-	err := logAccessTemplate.Execute(&output, evt)
+	err := accessLogTemplate.Execute(&output, evt)
 
 	if err != nil {
-		log.Printf("Error while executing logAccessTemplate: %v", err)
+		log.Printf("Error while executing accessLogTemplate: %v", err)
 		return ""
 	}
 	return output.String()
