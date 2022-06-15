@@ -42,6 +42,7 @@ class TestRdirCrawler(BaseTestCase):
     def setUp(self):
         super(TestRdirCrawler, self).setUp()
         self.api = self.storage
+        self._containers_to_clean = set()
 
         services = self.conscience.all_services('rawx')
         self.rawx_volumes = {}
@@ -59,6 +60,15 @@ class TestRdirCrawler(BaseTestCase):
         self.beanstalkd0.wait_until_empty('oio')
         self.beanstalkd0.drain_tube('oio-preserved')
 
+    def tearDown(self):
+        for ct in self._containers_to_clean:
+            try:
+                self.storage.container_flush(self.account, ct)
+                self.storage.container_delete(self.account, ct)
+            except Exception as exc:
+                self.logger.info("Failed to clean container %s", exc)
+        super(TestRdirCrawler, self).tearDown()
+
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
             self.account, container, path, size=1)
@@ -72,6 +82,7 @@ class TestRdirCrawler(BaseTestCase):
         for _ in chunks:
             self.wait_for_event('oio-preserved', reqid=reqid, timeout=5.0,
                                 types=(EventTypes.CHUNK_NEW,))
+        self._containers_to_clean.add(container)
         return chunks
 
     def _chunk_info(self, chunk):
@@ -162,12 +173,6 @@ class TestRdirCrawler(BaseTestCase):
         # Check that the new chunk really exists (no exception raised
         # by the head)
         self.storage.blob_client.chunk_head(new_chunks[0]['url'])
-
-        try:
-            self.storage.container_flush(self.account, container)
-            self.storage.container_delete(self.account, container)
-        except Exception as exc:
-            self.logger.warning("Failed to clean: %s", exc)
 
     def test_rdir_crawler_m_chunks(self):
         container = "rdir_crawler_m_chunks_" + random_str(6)
