@@ -66,10 +66,10 @@ def _filter_rdir_hosts(allsrv):
 
 
 class RdirDispatcher(object):
-    def __init__(self, conf, rdir_client=None, **kwargs):
+    def __init__(self, conf, rdir_client=None, logger=None, **kwargs):
         self.conf = conf
         self.ns = conf['namespace']
-        self.logger = get_logger(conf)
+        self.logger = logger or get_logger(conf)
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         if rdir_client:
             self.rdir = rdir_client
@@ -113,7 +113,7 @@ class RdirDispatcher(object):
                                             down",
                                             el, service_type,
                                             service['addr'])
-                        down_svc = {"addr": el, "score": 0, "tags": dict()}
+                        down_svc = {"addr": el, "score": 0, "tags": {}}
                         service['rdir'].append(down_svc)
                         by_id[_make_id(self.ns, 'rdir', el)] = down_svc
 
@@ -124,6 +124,29 @@ class RdirDispatcher(object):
                 self.logger.warning('Failed to get rdir linked to %s: %s',
                                     service['addr'], exc)
         return all_services, all_rdir
+
+    def get_aggregated_assignments(self, service_type, **kwargs):
+        """
+        Get a dictionary of all rdir services, the values being the list of
+        all services of the specified type whom they host a database.
+        """
+        all_services, all_rdir = self.get_assignments(service_type, **kwargs)
+        dummy_rdirs = [{"addr": {"n/a"}, "tags": {}}]
+        managed_svc = {}
+
+        for svc in all_services:
+            rdirs = svc.get('rdir', dummy_rdirs)
+            for rdir in rdirs:
+                rdir_id = rdir['tags'].get('tag.service_id') or \
+                          rdir['addr']
+                svc_id = svc['tags'].get('tag.service_id') or svc['addr']
+                managed_svc.setdefault(rdir_id, []).append(svc_id)
+        # Include rdir services which do not host any database
+        for rdir in all_rdir:
+            rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+            if rdir_id not in managed_svc:
+                managed_svc[rdir_id] = []
+        return managed_svc
 
     def assign_services(self, service_type, max_per_rdir=None, min_dist=None,
                         service_id=None, reassign=None, **kwargs):

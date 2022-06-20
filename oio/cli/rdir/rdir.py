@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -114,7 +114,7 @@ class RdirAssignments(Lister):
         parser = super(RdirAssignments, self).get_parser(prog_name)
         parser.add_argument(
             'service_type',
-            help="Which service type to diplay rdir assignments")
+            help="Which service type to display rdir assignments")
         parser.add_argument(
             '--aggregated',
             action="store_true",
@@ -124,40 +124,24 @@ class RdirAssignments(Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        all_services, all_rdir = \
-            self.app.client_manager.rdir_dispatcher.get_assignments(
-                parsed_args.service_type,
-                connection_timeout=30.0, read_timeout=90.0)
-
-        results = list()
+        dispatcher = self.app.client_manager.rdir_dispatcher
+        results = []
         if not parsed_args.aggregated:
+            all_services, _all_rdir = \
+                dispatcher.get_assignments(
+                    parsed_args.service_type,
+                    connection_timeout=30.0, read_timeout=90.0)
+
             columns, results = _format_assignments(
                 all_services, parsed_args.service_type.capitalize())
         else:
-            dummy_rdirs = [{"addr": {"n/a"}, "tags": {}}]
-            rdir_by_id = dict()
-            managed_svc = dict()
-
-            for svc in all_services:
-                rdirs = svc.get('rdir', dummy_rdirs)
-                for rdir in rdirs:
-                    rdir_id = rdir['tags'].get('tag.service_id') or \
-                              rdir['addr']
-                    rdir_by_id[rdir_id] = rdir
-                    svc_id = svc['tags'].get('tag.service_id') or svc['addr']
-                    try:
-                        managed_svc[rdir_id].append(svc_id)
-                    except KeyError:
-                        managed_svc[rdir_id] = [svc_id]
-            for rdir in all_rdir:
-                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
-                if rdir_id not in rdir_by_id:
-                    managed_svc[rdir_id] = list()
-                    rdir_by_id[rdir_id] = rdir
-            for addr, rdir in iteritems(rdir_by_id):
-                results.append((addr,
-                                len(managed_svc[addr]),
-                                ' '.join(managed_svc[addr])))
+            managed_svc = dispatcher.get_aggregated_assignments(
+                parsed_args.service_type,
+                connection_timeout=30.0, read_timeout=90.0)
+            for rdir, managed in iteritems(managed_svc):
+                results.append((rdir,
+                                len(managed),
+                                ' '.join(managed)))
             results.sort()
             columns = ('Rdir', 'Number of bases', 'Bases')
         return columns, results
