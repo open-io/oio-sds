@@ -343,7 +343,7 @@ fi
 
 if is_running_test_suite "repli" ; then
 	echo -e "\n### Replication tests"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
@@ -438,14 +438,11 @@ if is_running_test_suite "rebuilder" ; then
 	export REBUILDER=1
 
 	func_tests_rebuilder_mover \
-		-f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
-
-	func_tests_rebuilder_mover \
-		-f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
 
 	func_tests_rebuilder_mover \
 		-f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
