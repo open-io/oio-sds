@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -434,25 +434,30 @@ class TestDirectoryAPI(BaseTestCase):
         self._reload_proxy()
         all_rawx = client.assign_all_rawx(
             replicas=self.conf.get('directory_replicas', 1))
+        all_m2 = client.assign_all_meta2(
+            replicas=self.conf.get('directory_replicas', 1))
         self.assertGreater(len(all_rawx), 0)
-        by_rdir = dict()
+        self.assertGreater(len(all_m2), 0)
+        by_rdir = {}
         total = 0
 
-        for rawx in all_rawx:
-            for rdir in rawx['rdir']:
+        for svc in all_rawx + all_m2:
+            for rdir in svc['rdir']:
                 count = by_rdir.get(rdir['addr'], 0)
                 total += 1
                 by_rdir[rdir['addr']] = count + 1
-        # round average ot integer value
+        # round average to integer value
         avg = round(total / float(len(by_rdir)))
         print("Ideal number of bases per rdir: ", avg)
         print("Current repartition: ", by_rdir)
 
-        # define an acceptable variance for rdir assignement around average
-        epsilon = 2
+        # Define an acceptable variance for rdir assignment around average.
+        # 50% may seem huge, but rdir doesn't seem to suffer from performance
+        # issues, and we don't want this test to be flaky.
+        epsilon = int(avg / 2)
         for count in by_rdir.values():
             # Assert upper bounded values
             self.assertLessEqual(count, avg + epsilon)
-            # Assert lowr bounded values
+            # Assert lower bounded values
             if avg - epsilon > 0:
                 self.assertGreaterEqual(count, avg - epsilon)
