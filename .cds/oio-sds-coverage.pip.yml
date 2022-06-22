@@ -10,11 +10,17 @@ jobs:
 
       - name: Install dependencies
         script:
+          - . .cds/versions
+          - export DEBIAN_FRONTEND=noninteractive
+          - echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" >> /etc/apt/sources.list.d/obsto.list
           - apt update
-          - apt install -y jq lcov python3-virtualenv virtualenv
+          - apt install -y ${GO_PACKAGE} jq lcov python3-virtualenv virtualenv
+          - echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
+          - . $HOME/oio-env.sh
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
           - pip install --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
+          - go install github.com/axw/gocov/gocov@latest
 
       - name: Download test result artifacts
         artifactDownload:
@@ -45,7 +51,7 @@ jobs:
           shopt -u nullglob
           echo "{\"tests\": {\"Python\": {\"functional\": $TEST_FUNC, \"total\": $TEST_COUNT, \"unit\": $TEST_UNIT}}}" > test-report-py.json
 
-      - name: Download code coverage artifacts
+      - name: Download code coverage artifacts (Python)
         artifactDownload:
           path: '{{.cds.workspace}}'
           pattern: '.coverage.*'
@@ -73,6 +79,18 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
 
+      - name: Download code coverage artifacts (Golang)
+        artifactDownload:
+          path: '{{.cds.workspace}}'
+          pattern: 'go_coverage.*'
+          tag: '{{.cds.version}}'
+
+      - name: Aggregate Golang coverage statistics
+        script:
+          - . $HOME/oio-env.sh
+          - cd {{.cds.workspace}}/rawx
+          - $HOME/go/bin/gocov report ../go_coverage.* > ../go_coverage.txt
+
       - name: Create code coverage directory
         script:
           - cd {{.cds.workspace}}
@@ -82,10 +100,11 @@ jobs:
           - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_percent)"' coverage-report-c.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"functional\"} \(.tests.Python.functional)"' test-report-py.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"unit\"} \(.tests.Python.unit)"' test-report-py.json >>coverage-summary.openmetrics
+          - tail -n 1 go_coverage.txt | sed -E -e 's/[^[:digit:]]+([[:digit:]]+\.[[:digit:]]+)%.*/obsto_kpi_dev_coverage_line_percentage{language="go",repository="oio-sds"} \1/g' >>coverage-summary.openmetrics
           - worker upload coverage-summary.openmetrics
           - mkdir coverage
-          - mv coverage-report-c coverage-report-py coverage-summary.openmetrics coverage/
-          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
+          - mv coverage-report-c coverage-report-py coverage-summary.openmetrics go_coverage.txt coverage/
+          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./go_coverage.txt">Golang coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
 
       - name: Publish code coverage reports on S3 public cloud
         script: |+
@@ -122,7 +141,7 @@ jobs:
       - name: Publish code coverage reports on Artifactory
         optional: true
         OVH_Serve_Static_Files:
-          destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}'
+          destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
           source: coverage
 
       - name: Publish test reports on CDS

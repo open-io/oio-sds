@@ -11,3 +11,6 @@ tests =
 tools =
 	tools/
 	/tmp/*/run/tools
+
+[run]
+parallel = True

@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -63,29 +63,29 @@ class CliTestCase(BaseTestCase):
         return os.getenv("OIO_ACCOUNT", "myaccount")
 
     @classmethod
-    def openio(cls, cmd, **kwargs):
+    def openio(cls, cmd, coverage="--coverage ", **kwargs):
         """Executes openio CLI command."""
-        return execute("openio " + cmd, **kwargs)
+        return execute("openio " + coverage + cmd, **kwargs)
 
     @classmethod
-    def openio_batch(cls, commands, **kwargs):
+    def openio_batch(cls, commands, coverage="--coverage", **kwargs):
         """Execute several commands in the same openio CLI process."""
         script = "\n".join(commands)
         try:
-            return execute("openio", stdin=script, **kwargs)
+            return execute("openio " + coverage, stdin=script, **kwargs)
         except CommandFailed:
             print("Stdin was:\n\n%s" % (script,))
             raise
 
     @classmethod
-    def openio_admin(cls, cmd, **kwargs):
+    def openio_admin(cls, cmd, coverage="--coverage ", **kwargs):
         """Executes openio-admin CLI command."""
-        return execute("openio-admin " + cmd, **kwargs)
+        return execute("openio-admin " + coverage + cmd, **kwargs)
 
     @classmethod
-    def openio_admin_batch(cls, commands, **kwargs):
+    def openio_admin_batch(cls, commands, coverage="--coverage", **kwargs):
         """Execute several commands in the same openio-admin CLI process."""
-        return execute("openio-admin", stdin="\n".join(commands), **kwargs)
+        return execute("openio-admin " + coverage, stdin="\n".join(commands), **kwargs)
 
     # FIXME(FVE): deprecate this
     @classmethod

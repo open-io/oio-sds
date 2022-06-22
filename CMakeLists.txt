@@ -92,7 +92,7 @@ if ( ENABLE_CODECOVERAGE )
 						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
 						   COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
 						   COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
-						   COMMAND coverage combine
+						   COMMAND coverage combine -a .coverage.*
 						   COMMAND coverage html)
 
 	endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )

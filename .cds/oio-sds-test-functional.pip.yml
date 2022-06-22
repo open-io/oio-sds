@@ -20,7 +20,8 @@ jobs:
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
           # Configure environment
-          echo "export PATH=/opt/${GO_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
+          echo "export COVERAGE_PROCESS_START=.coveragerc" > $HOME/oio-env.sh
+          echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
           echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
           echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
@@ -39,6 +40,7 @@ jobs:
           env
           # FIXME(adu): Fix tox configuration file to support the new versions
           pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          go install github.com/axw/gocov/gocov@latest
 
           fdbtag="fdb-${FDB_VERSION}"
           worker cache pull $fdbtag
@@ -69,10 +71,13 @@ jobs:
 
       - name: Save coverage and test information
         script:
+          - . $HOME/oio-env.sh
           - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
           - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
+          - '[ -n "$(echo $HOME/go_coverage.output.*)" ] && (cd rawx; gocov convert $HOME/go_coverage.output.* > {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json) || true'
           - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
+          - '[ ! -f {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json'
 
     requirements:
         - model: '{{ .cds.env.MODEL}}'

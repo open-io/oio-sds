@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -128,6 +128,14 @@ def add_common_parser_options(parser):
         "--profile-early",
         action="store_true",
         help="Start profiling early, before subcommand loading.",
+    )
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help=(
+            "Import code coverage lib, and measure coverage "
+            "if COVERAGE_PROCESS_START is also set."
+        ),
     )
 
 

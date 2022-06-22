@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -136,6 +136,10 @@ class CommonShell(App):
         super(CommonShell, self).initialize_app(argv)
         if self.options.profile and self.options.profile_early:
             self.start_profiling()
+        if self.options.coverage:
+            import coverage
+
+            coverage.process_startup()
 
     def prepare_to_run_command(self, cmd):
         LOG.debug(
