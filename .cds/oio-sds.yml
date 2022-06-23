@@ -147,8 +147,7 @@ workflow:
     conditions:
       check:
         - variable: cds.triggered_by.username
-          # TODO(FVE): set to "eq" when proven to work
-          operator: ne
+          operator: eq
           value: "cds.scheduler"
 
 metadata:
