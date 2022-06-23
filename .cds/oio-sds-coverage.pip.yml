@@ -11,7 +11,7 @@ jobs:
       - name: Install dependencies
         script:
           - apt update
-          - apt install -y python3-virtualenv virtualenv lcov
+          - apt install -y jq lcov python3-virtualenv virtualenv
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
           - pip install --upgrade pip virtualenv coverage
@@ -30,6 +30,8 @@ jobs:
           - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
           - coverage xml --omit="/usr/lib/python3*" --skip-empty --ignore-errors -o coverage-py.xml
           - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors -d coverage-report-py
+          - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
+          - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
           - rm -f coverage-report-py.txt
 
       - optional: true
@@ -45,13 +47,16 @@ jobs:
           - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
           - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
           - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
+          - . $HOME/oiovenv/bin/activate
+          - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
 
       - name: Create coverage archive
         script:
           - cd {{.cds.workspace}}
+          - jq -s '.[0] * .[1]' coverage-report-py.json coverage-report-c.json > coverage-summary.json
           - mkdir coverage
-          - mv coverage-report-c coverage-report-py coverage/
-          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a></body></html>' > coverage/index.html
+          - mv coverage-report-c coverage-report-py coverage-summary.json coverage/
+          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.json">Coverage summary by language</a></body></html>' > coverage/index.html
           - tar -czf coverage-report.tar.gz coverage
           - worker upload --tag='{{.cds.version}}' coverage-report.tar.gz
 
