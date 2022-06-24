@@ -210,6 +210,7 @@ openioadmin_meta_rebuild()
       FAIL=true
     else
       while true; do
+        sleep 1
         JOB_STATUS=$($ADMIN_CLI xcute job show "${JOB_ID}" -c job.status -f value)
         if [ $? -ne 0 ]; then
           echo >&2 "openio-admin xcute job show \"${JOB_ID}\" FAILED"
@@ -222,7 +223,6 @@ openioadmin_meta_rebuild()
         else
           break
         fi
-        sleep 1
       done
       if [ "${FAIL}" != true ]; then
         if [ "$JOB_STATUS" != "FINISHED" ]; then
@@ -429,6 +429,7 @@ openioadmin_rawx_rebuild()
       FAIL=true
     else
       while true; do
+        sleep 1
         JOB_STATUS=$($ADMIN_CLI xcute job show "${JOB_ID}" -c job.status -f value)
         if [ $? -ne 0 ]; then
           echo >&2 "openio-admin xcute job show \"${JOB_ID}\" FAILED"
@@ -441,7 +442,6 @@ openioadmin_rawx_rebuild()
         else
           break
         fi
-        sleep 1
       done
       if [ "${FAIL}" != true ]; then
         if [ "$JOB_STATUS" != "FINISHED" ]; then

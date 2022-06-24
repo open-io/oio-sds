@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,14 +40,17 @@ class Meta1Rebuilder(MetaRebuilder):
 
         prefixes = set()
 
-        rawx_services = self.conscience.all_services('rawx')
-        for rawx in rawx_services:
-            cid = cid_from_name('_RDIR', rawx['addr'])
+        # Build the list of meta1 databases hosting technical references
+        hosted_services = (self.conscience.all_services('rawx')
+                           + self.conscience.all_services('meta2'))
+        for svc in hosted_services:
+            cid = cid_from_name('_RDIR', svc['addr'])
             prefix = cid[:self.meta1_digits]
             if prefix not in prefixes:
                 queue.put(prefix.ljust(64, '0'))
                 prefixes.add(prefix)
 
+        # Build the list of meta1 databases hosting container references
         accounts = self.api.account_list()
         for account in accounts:
             containers = self._full_container_list(account)
