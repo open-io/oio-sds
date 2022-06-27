@@ -55,11 +55,12 @@ jobs:
           - ./tools/oio-travis-suites.sh
           - ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
 
-      - name: Save coverage information
+      - name: Save coverage and test information
         script:
           - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
           - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
+          - '[ ! -f nosetests-*.xml ] || worker upload --tag="{{.cds.version}}" nosetests-*.xml'
 
     requirements:
         - model: '{{ .cds.env.MODEL}}'

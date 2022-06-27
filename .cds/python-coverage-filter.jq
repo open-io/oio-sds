@@ -1,1 +1,1 @@
-{Python: {line_total: .totals.num_statements, line_percent: .totals.percent_covered}}
+{coverage: {Python: {line_total: .totals.num_statements, line_percent: .totals.percent_covered}}}

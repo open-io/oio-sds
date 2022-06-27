@@ -2,7 +2,7 @@ version: v1.0
 name: oio-sds-coverage
 environment: oio-sds-env
 jobs:
-  - job: Collect code coverage statistics
+  - job: Collect code coverage and tests statistics
     steps:
 
       - name: Checkout application
@@ -14,9 +14,30 @@ jobs:
           - apt install -y jq lcov python3-virtualenv virtualenv
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
-          - pip install --upgrade pip virtualenv coverage
+          - pip install --upgrade coverage pip virtualenv git+https://github.com/boyska/xq.git
 
-      - artifactDownload:
+      - name: Download test result artifacts
+        artifactDownload:
+          path: '{{.cds.workspace}}'
+          pattern: 'nosetests-.*.xml'
+          tag: '{{.cds.version}}'
+
+      - name: Aggregate test results
+        optional: true
+        script: |+
+          #!/bin/bash
+          . $HOME/oiovenv/bin/activate
+          export TEST_COUNT=0
+          shopt -s nullglob
+          for TEST_RESULT in nosetests-*.xml
+          do
+            ((TEST_COUNT+=$(xq -r "/testsuite/@tests" $TEST_RESULT)))
+          done
+          shopt -u nullglob
+          echo "{\"tests\": {\"Python\": {\"total\": $TEST_COUNT}}}" > test-report-py.json
+
+      - name: Download code coverage artifacts
+        artifactDownload:
           path: '{{.cds.workspace}}'
           pattern: '.coverage.*'
           tag: '{{.cds.version}}'
@@ -27,18 +48,11 @@ jobs:
           - cd {{.cds.workspace}}
           - coverage combine .coverage.*
           - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report-py.txt
-          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
           - coverage xml --omit="/usr/lib/python3*" --skip-empty --ignore-errors -o coverage-py.xml
           - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors -d coverage-report-py
           - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
           - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
           - rm -f coverage-report-py.txt
-
-      - optional: true
-        coverage:
-          format: cobertura
-          minimum: "70"
-          path: '{{.cds.workspace}}/coverage-py.xml'
 
       - name: Aggregate C coverage statistics
         script:
@@ -50,28 +64,39 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
 
-      - name: Create coverage archive
+      - name: Create code coverage directory
         script:
           - cd {{.cds.workspace}}
-          - jq -s '.[0] * .[1]' coverage-report-py.json coverage-report-c.json > coverage-summary.json
+          - jq -s '.[0] * .[1] * .[2]' coverage-report-py.json coverage-report-c.json test-report-py.json > coverage-summary.json
+          - worker upload --tag='{{.cds.version}}' coverage-summary.json
           - mkdir coverage
           - mv coverage-report-c coverage-report-py coverage-summary.json coverage/
           - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.json">Coverage summary by language</a></body></html>' > coverage/index.html
-          - tar -czf coverage-report.tar.gz coverage
-          - worker upload --tag='{{.cds.version}}' coverage-report.tar.gz
-
-      - name: Publish code coverage scores on CDS
-        optional: true
-        coverage:
-          format: lcov
-          minimum: "70"
-          path: '{{.cds.workspace}}/cmake_coverage.all'
 
       - name: Publish code coverage reports on Artifactory
         optional: true
         OVH_Serve_Static_Files:
           destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}'
           source: coverage
+
+      - name: Publish test reports on CDS
+        optional: true
+        always_executed: true
+        jUnitReport: '{{.cds.workspace}}/nosetests-*.xml'
+
+      - name: Publish C code coverage scores on CDS
+        optional: true
+        coverage:
+          format: lcov
+          minimum: "70"
+          path: '{{.cds.workspace}}/cmake_coverage.all'
+
+      - name: Publish Python code coverage scores on CDS
+        optional: true
+        coverage:
+          format: cobertura
+          minimum: "70"
+          path: '{{.cds.workspace}}/coverage-py.xml'
 
     requirements:
         - model: ubuntu-focal
