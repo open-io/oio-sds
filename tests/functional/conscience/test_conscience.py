@@ -189,7 +189,8 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request('POST', self._url_cs("lock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
         # Ensure the proxy reloads its LB pool
-        self._reload()
+        self._flush_proxy()
+        self._reload_proxy()
         # check it appears
         resp = self.request('GET', self._url_cs('list'),
                             params={"type": "echo"})
@@ -208,7 +209,8 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request('POST', self._url_cs("lock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
         # Ensure the proxy reloads its LB pool
-        self._reload()
+        self._flush_proxy()
+        self._reload_proxy()
         # check it appears
         resp = self.request('GET', self._url_cs('list'),
                             params={"type": "echo"})
