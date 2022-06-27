@@ -313,15 +313,15 @@ class ItemCheckTest(CliTestCase):
             self.account, self.container, self.obj_name)
         cid = cid_from_name(self.account, self.container)
 
-        mising_account = "item_check_missing_account_" + random_str(4)
+        missing_account = "item_check_missing_account_" + random_str(4)
 
         expected_items = list()
-        expected_items.append('account account=%s error' % mising_account)
+        expected_items.append('account account=%s error' % missing_account)
 
         # Check with missing account
         output = self.openio_admin(
             'account check %s %s'
-            % (mising_account, self.check_opts), expected_returncode=1)
+            % (missing_account, self.check_opts), expected_returncode=1)
         self.assert_list_output(expected_items, output)
 
         expected_items.append('account account=%s OK' % self.account)
@@ -339,7 +339,7 @@ class ItemCheckTest(CliTestCase):
 
         output = self.openio_admin(
             'account check %s %s %s'
-            % (self.account, mising_account, self.check_opts),
+            % (self.account, missing_account, self.check_opts),
             expected_returncode=1)
         self.assert_list_output(expected_items, output)
 
@@ -1227,7 +1227,7 @@ class ItemCheckTest(CliTestCase):
         expected_items.append('chunk chunk=%s error' % missing_chunk['url'])
 
         # Prevent the events
-        self._service('oio-event.target', 'stop', wait=10)
+        self._service('oio-event.target', 'stop', wait=8)
 
         try:
             # Delete chunk
@@ -1240,7 +1240,7 @@ class ItemCheckTest(CliTestCase):
                 expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('oio-event.target', 'start', wait=10)
+            self._service('oio-event.target', 'start', wait=5)
 
     def test_chunk_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1262,7 +1262,7 @@ class ItemCheckTest(CliTestCase):
         expected_items.append('chunk chunk=%s error' % (chunk['url']))
 
         # Prevent the deletion of chunks
-        self._service('oio-event.target', 'stop', wait=10)
+        self._service('oio-event.target', 'stop', wait=8)
 
         try:
             # Delete object
@@ -1274,7 +1274,7 @@ class ItemCheckTest(CliTestCase):
                 % (chunk['url'], self.check_opts), expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('oio-event.target', 'start', wait=10)
+            self._service('oio-event.target', 'start', wait=5)
 
     def test_chunk_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
