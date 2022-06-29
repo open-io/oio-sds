@@ -65,6 +65,21 @@ def catch_service_errors(func):
     return catch_service_errors_wrapper
 
 
+def use_snapshot_reads(func):
+    """
+    Use snapshot reads when read-only is required.
+    """
+
+    @wraps(func)
+    def use_snapshot_reads_wrapper(self, tr, *args, readonly=False, **kwargs):
+        if readonly:
+            # Intentionally drop the parameter to do it only once
+            tr = tr.snapshot
+        return func(self, tr, *args, **kwargs)
+
+    return use_snapshot_reads_wrapper
+
+
 class AccountBackendFdb(object):
     """
     Foundationdb backend for account service.
@@ -259,6 +274,7 @@ class AccountBackendFdb(object):
         return start, stop
 
     @fdb.transactional
+    @use_snapshot_reads
     def _list_items(self, tr, start, stop, limit, unpack, format_item,
                     **kwargs):
         items = []
@@ -286,11 +302,12 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def status(self, **kwargs):
-        return self._status(self.db)
+        return self._status(self.db, readonly=True)
 
     @fdb.transactional
+    @use_snapshot_reads
     def _status(self, tr):
-        accounts = tr.snapshot[self.metrics_space.pack((ACCOUNTS_FIELD,))]
+        accounts = tr[self.metrics_space.pack((ACCOUNTS_FIELD,))]
         if accounts.present():
             accounts = self._counter_value_to_counter(accounts.value)
         else:
@@ -302,19 +319,20 @@ class AccountBackendFdb(object):
         """
         Get all available information about global metrics.
         """
-        metrics = self._info_metrics(self.db)
+        metrics = self._info_metrics(self.db, readonly=True)
         if output_type == 'prometheus':
             return self._metrics_to_prometheus_format(metrics)
         else:
             return metrics
 
     @fdb.transactional
+    @use_snapshot_reads
     def _info_metrics(self, tr):
         """
         [transactional] Get all available information about global metrics.
         """
         metrics_range = self.metrics_space.range()
-        iterator = tr.snapshot.get_range(
+        iterator = tr.get_range(
             metrics_range.start, metrics_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(
@@ -566,16 +584,18 @@ class AccountBackendFdb(object):
         """
         Get all available information about an account.
         """
-        return self._account_info(self.db, account_id, full=True)
+        return self._account_info(self.db, account_id, full=True,
+                                  readonly=True)
 
     @fdb.transactional
+    @use_snapshot_reads
     def _account_info(self, tr, account_id, full=False):
         """
         [transactional] Get all available information about an account.
         """
         account_space = self.acct_space[account_id]
         account_range = account_space.range()
-        iterator = tr.snapshot.get_range(
+        iterator = tr.get_range(
             account_range.start, account_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(
@@ -591,11 +611,13 @@ class AccountBackendFdb(object):
 
         return info
 
+    @fdb.transactional
+    @use_snapshot_reads
     def _get_account_metadata(self, tr, account_id):
         metadata = {}
         metadata_space = self.metadata_space[account_id]
         metadata_range = metadata_space.range()
-        iterator = tr.snapshot.get_range(
+        iterator = tr.get_range(
             metadata_range.start, metadata_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         for key, value in iterator:
@@ -607,6 +629,7 @@ class AccountBackendFdb(object):
         return metadata
 
     @fdb.transactional
+    @use_snapshot_reads
     def _merge_sharding_account_info(self, tr, account_id, info):
         # Fetch sharding account
         sharding_info = self._account_info(
@@ -679,7 +702,7 @@ class AccountBackendFdb(object):
                 end_marker=end_marker)
             accounts_sublist = self._list_accounts(
                 self.db, start, stop, remaining, accounts_space.unpack,
-                format_account)
+                format_account, readonly=True)
             new_accounts = 0
             for account in accounts_sublist:
                 if (not sharding_accounts
@@ -704,22 +727,25 @@ class AccountBackendFdb(object):
         return accounts, next_marker
 
     @fdb.transactional
+    @use_snapshot_reads
     def _list_accounts(self, tr, start, stop, limit, unpack, format_account):
         if limit > 0:
             accounts = self._list_items(
-                tr.snapshot, start, stop, limit, unpack, format_account,
+                tr, start, stop, limit, unpack, format_account,
                 has_region=True)
         else:
             accounts = []
         return accounts
 
     @fdb.transactional
+    @use_snapshot_reads
     def _format_account_for_listing(self, tr, account_id, account_info):
         formatted = {}
         formatted['id'] = account_id
         return formatted
 
     @fdb.transactional
+    @use_snapshot_reads
     def _format_account_for_listing2(self, tr, account_id, account_info):
         account_info = deepcopy(account_info)
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
@@ -1022,6 +1048,7 @@ class AccountBackendFdb(object):
                 pass
 
     @fdb.transactional
+    @use_snapshot_reads
     def _check_max_buckets(self, tr, account):
         account_space = self.acct_space[account]
         metadata_space = self.metadata_space[account]
@@ -1153,9 +1180,11 @@ class AccountBackendFdb(object):
         Get all available information about a container, including some
         information coming from the bucket it belongs to.
         """
-        return self._container_info(self.db, account_id, cname, full=True)
+        return self._container_info(self.db, account_id, cname, full=True,
+                                    readonly=True)
 
     @fdb.transactional
+    @use_snapshot_reads
     def _container_info(self, tr, account_id, cname, full=False):
         """
         [transactional] Get all available information about a container,
@@ -1163,7 +1192,7 @@ class AccountBackendFdb(object):
         """
         container_space = self.container_space[account_id][cname]
         container_range = container_space.range()
-        iterator = tr.snapshot.get_range(
+        iterator = tr.get_range(
             container_range.start, container_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(iterator, unpack=container_space.unpack)
@@ -1177,7 +1206,7 @@ class AccountBackendFdb(object):
                 if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
                     account_id = account_id[8:]
                 buckat_space = self.bucket_space[account_id][bname]
-                repli_enabled = tr.snapshot[
+                repli_enabled = tr[
                     buckat_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
                 if repli_enabled.present():
                     repli_enabled = repli_enabled.decode('utf-8')
@@ -1214,7 +1243,8 @@ class AccountBackendFdb(object):
             end_marker=end_marker)
         account_info, containers = self._list_containers(
             self.db, account_id, start, stop, limit + 1,
-            containers_space.unpack, self._format_container_for_listing)
+            containers_space.unpack, self._format_container_for_listing,
+            readonly=True)
         if not account_info:
             return None, None, None
 
@@ -1225,6 +1255,7 @@ class AccountBackendFdb(object):
         return account_info, containers, next_marker
 
     @fdb.transactional
+    @use_snapshot_reads
     def _list_containers(self, tr, account, start, stop, limit, unpack,
                          format_container):
         account_info = self._account_info(tr, account, full=True)
@@ -1232,11 +1263,13 @@ class AccountBackendFdb(object):
             return None, None
         if limit > 0:
             containers = self._list_items(
-                tr.snapshot, start, stop, limit, unpack, format_container)
+                tr, start, stop, limit, unpack, format_container)
         else:
             containers = []
         return account_info, containers
 
+    @fdb.transactional
+    @use_snapshot_reads
     def _format_container_for_listing(self, tr, cname, container_info):
         return [
             cname,
@@ -1664,14 +1697,14 @@ class AccountBackendFdb(object):
         """
         Get all available information about a bucket.
         """
-        return self._bucket_info(self.db, bname, **kwargs)
+        return self._bucket_info(self.db, bname, readonly=True, **kwargs)
 
     @fdb.transactional
+    @use_snapshot_reads
     def _bucket_info(self, tr, bname, **kwargs):
         """
         [transactional] Get all available information about a bucket.
         """
-        tr = tr.snapshot
         account_id = self._get_bucket_account(tr, bname, **kwargs)
 
         bucket_space = self.bucket_space[account_id][bname]
@@ -1712,7 +1745,8 @@ class AccountBackendFdb(object):
             buckets_space, prefix=prefix, marker=marker, end_marker=end_marker)
         account_info, buckets = self._list_buckets(
             self.db, account_id, start, stop, limit + 1,
-            buckets_space.unpack, self._format_bucket_for_listing)
+            buckets_space.unpack, self._format_bucket_for_listing,
+            readonly=True)
         if not account_info:
             return None, None, None
 
@@ -1723,6 +1757,7 @@ class AccountBackendFdb(object):
         return account_info, buckets, next_marker
 
     @fdb.transactional
+    @use_snapshot_reads
     def _list_buckets(self, tr, account, start, stop, limit, unpack,
                       format_bucket):
         account_info = self._account_info(tr, account, full=True)
@@ -1730,11 +1765,13 @@ class AccountBackendFdb(object):
             return None, None
         if limit > 0:
             buckets = self._list_items(
-                tr.snapshot, start, stop, limit, unpack, format_bucket)
+                tr, start, stop, limit, unpack, format_bucket)
         else:
             buckets = []
         return account_info, buckets
 
+    @fdb.transactional
+    @use_snapshot_reads
     def _format_bucket_for_listing(self, tr, bname, bucket_info):
         formatted = {}
         kept_keys = TIMESTAMP_FIELDS + COUNTERS_FIELDS + ('region',)
@@ -2092,9 +2129,10 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def get_bucket_owner(self, bucket, **kwargs):
-        return self._get_bucket_owner(self.db, bucket)
+        return self._get_bucket_owner(self.db, bucket, readonly=True)
 
     @fdb.transactional
+    @use_snapshot_reads
     def _get_bucket_owner(self, tr, bucket):
         reserved_bucket_space = self.bucket_db_space[bucket]
 
@@ -2109,6 +2147,7 @@ class AccountBackendFdb(object):
         return current_account.decode('utf-8')
 
     @fdb.transactional
+    @use_snapshot_reads
     def _get_bucket_account(self, tr, bucket, account=None, check_owner=False,
                             **kwargs):
         if not check_owner and account:
