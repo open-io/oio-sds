@@ -788,6 +788,11 @@ class ListBuckets(Lister):
             help='Filter list using <prefix>'
         )
         parser.add_argument(
+            '--region',
+            metavar='<region>',
+            help='Filter list by selecting buckets belonging to the <region>'
+        )
+        parser.add_argument(
             '--marker',
             metavar='<marker>',
             help='Marker for paging'
@@ -824,6 +829,8 @@ class ListBuckets(Lister):
         kwargs = {'reqid': request_id(prefix='CLI-BUCKET-')}
         if parsed_args.prefix:
             kwargs['prefix'] = parsed_args.prefix
+        if parsed_args.region:
+            kwargs['region'] = parsed_args.region
         if parsed_args.marker:
             kwargs['marker'] = parsed_args.marker
         if parsed_args.end_marker:
@@ -892,6 +899,20 @@ class ListContainer(Lister):
             help='Filter list using <prefix>'
         )
         parser.add_argument(
+            '--region',
+            metavar='<region>',
+            help="""
+                Filter list by selecting containers belonging to the <region>
+                """
+        )
+        parser.add_argument(
+            '--bucket',
+            metavar='<bucket>',
+            help="""
+                Filter list by selecting containers belonging to the <bucket>
+                """
+        )
+        parser.add_argument(
             '--marker',
             metavar='<marker>',
             help='Marker for paging'
@@ -923,6 +944,10 @@ class ListContainer(Lister):
         kwargs = {'reqid': request_id(prefix='CLI-CONTAINER-')}
         if parsed_args.prefix:
             kwargs['prefix'] = parsed_args.prefix
+        if parsed_args.region:
+            kwargs['region'] = parsed_args.region
+        if parsed_args.bucket:
+            kwargs['bucket'] = parsed_args.bucket
         if parsed_args.marker:
             kwargs['marker'] = parsed_args.marker
         if parsed_args.end_marker:

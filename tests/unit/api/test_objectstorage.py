@@ -90,6 +90,7 @@ class ObjectStorageTest(unittest.TestCase):
         end_marker = random_str(32)
         prefix = random_str(32)
         limit = random.randint(1, 1000)
+        region = 'localhost'
         body = {"listing": [[name, 0, 0, 0]]}
         fake_endpoint = 'fake_endpoint'
         self.api.account._direct_request = Mock(return_value=(resp, body))
@@ -97,9 +98,10 @@ class ObjectStorageTest(unittest.TestCase):
         self.api.account._get_service_addr = Mock(return_value=fake_endpoint)
         containers = self.api.container_list(
             self.account, limit=limit, marker=marker, prefix=prefix,
-            end_marker=end_marker, **self.common_kwargs)
+            end_marker=end_marker, region=region, **self.common_kwargs)
         params = {"id": self.account, "prefix": prefix, "marker": marker,
-                  "end_marker": end_marker, "limit": limit}
+                  "end_marker": end_marker, "limit": limit, 'region': region,
+                  'bucket': None}
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
             'GET', uri, params=params,

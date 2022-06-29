@@ -116,7 +116,7 @@ class AccountClient(ServiceClient):
             json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
 
     def bucket_list(self, account, limit=None, marker=None, end_marker=None,
-                    prefix=None, **kwargs):
+                    prefix=None, region=None, **kwargs):
         """
         Get the list of buckets of an account.
 
@@ -132,6 +132,8 @@ class AccountClient(ServiceClient):
         :type end_marker: `str`
         :keyword prefix: list only the buckets starting with the prefix
         :type prefix: `str`
+        :keyword region: list only the buckets belonging to the region
+        :type region: `str`
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'buckets' (`int`),
             'id' (`str`), 'metadata' (`dict`) and 'listing' (`list`).
@@ -142,7 +144,8 @@ class AccountClient(ServiceClient):
             'limit': limit,
             'marker': marker,
             'end_marker': end_marker,
-            'prefix': prefix
+            'prefix': prefix,
+            'region': region,
         }
         _resp, body = self.account_request(account, 'GET', 'buckets',
                                            params=params, **kwargs)
@@ -190,7 +193,8 @@ class AccountClient(ServiceClient):
                              **kwargs)
 
     def container_list(self, account, limit=None, marker=None,
-                       end_marker=None, prefix=None, **kwargs):
+                       end_marker=None, prefix=None, region=None, bucket=None,
+                       **kwargs):
         """
         Get the list of containers of an account.
 
@@ -205,6 +209,10 @@ class AccountClient(ServiceClient):
         :type end_marker: `str`
         :keyword prefix: list only the containers starting with the prefix
         :type prefix: `str`
+        :keyword region: list only the containers belonging to the region
+        :type region: `str`
+        :keyword bucket: list only the containers belonging to the bucket
+        :type bucket: `str`
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'id' (`str`),
             'metadata' (`dict`) and 'listing' (`list`).
@@ -217,6 +225,8 @@ class AccountClient(ServiceClient):
             'marker': marker,
             'end_marker': end_marker,
             'prefix': prefix,
+            'region': region,
+            'bucket': bucket,
         }
         _resp, body = self.account_request(account, 'GET', 'containers',
                                            params=params, **kwargs)

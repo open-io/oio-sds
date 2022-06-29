@@ -534,6 +534,10 @@ class ObjectStorageApi(object):
         :type end_marker: `str`
         :keyword prefix: list only the containers starting with the prefix
         :type prefix: `str`
+        :keyword region: list only the containers belonging to the region
+        :type region: `str`
+        :keyword bucket: list only the containers belonging to the bucket
+        :type bucket: `str`
         :return: the list of containers of an account
         :rtype: `list` of items (`list`) with 5 fields:
             name, number of objects, number of bytes, 1 if the item

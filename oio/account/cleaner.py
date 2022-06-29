@@ -51,23 +51,19 @@ class AccountServiceCleaner(object):
             item_key=lambda x: x[0],
             marker_key=lambda x: x['next_marker'],
             truncated_key=lambda x: x['truncated'],
-            account=account)
+            account=account,
+            region=self.region)
         for container in containers:
             try:
                 meta = self.api.account.container_show(account, container)
-                if meta['region'] == self.region:
-                    mtime = float(meta['mtime'])
-                    now = time()
-                    if now - self.SAFETY_DELAY > mtime:
-                        yield container, meta['mtime'], meta.get('bucket')
-                    else:
-                        self.logger.debug(
-                            'Ignore container %s/%s: Modified %f seconds ago',
-                            account, container, now - mtime)
+                mtime = float(meta['mtime'])
+                now = time()
+                if now - self.SAFETY_DELAY > mtime:
+                    yield container, meta['mtime'], meta.get('bucket')
                 else:
                     self.logger.debug(
-                        'Ignore container %s/%s: In region %s',
-                        account, container, meta['region'])
+                        'Ignore container %s/%s: Modified %f seconds ago',
+                        account, container, now - mtime)
             except Exception as exc:
                 self.success = False
                 self.logger.error(
@@ -123,22 +119,18 @@ class AccountServiceCleaner(object):
             listing_key=lambda x: x['listing'],
             marker_key=lambda x: x['next_marker'],
             truncated_key=lambda x: x['truncated'],
-            account=account)
+            account=account,
+            region=self.region)
         for bucket in buckets:
             try:
-                if bucket['region'] == self.region:
-                    mtime = float(bucket['mtime'])
-                    now = time()
-                    if now - self.SAFETY_DELAY > mtime:
-                        yield bucket['name'], bucket['containers']
-                    else:
-                        self.logger.debug(
-                            'Ignore bucket %s/%s: Modified %f seconds ago',
-                            account, bucket['name'], now - mtime)
+                mtime = float(bucket['mtime'])
+                now = time()
+                if now - self.SAFETY_DELAY > mtime:
+                    yield bucket['name'], bucket['containers']
                 else:
                     self.logger.debug(
-                        'Ignore bucket %s/%s: In region %s',
-                        account, bucket['name'], bucket['region'])
+                        'Ignore bucket %s/%s: Modified %f seconds ago',
+                        account, bucket['name'], now - mtime)
             except Exception as exc:
                 self.success = False
                 self.logger.error(

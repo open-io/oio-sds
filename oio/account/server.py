@@ -567,10 +567,11 @@ class Account(WerkzeugApp):
         prefix = req.args.get('prefix')
         marker = req.args.get('marker')
         end_marker = req.args.get('end_marker')
+        region = req.args.get('region')
 
         account_info, buckets, next_marker = self.backend.list_buckets(
             account_id, limit=limit, prefix=prefix, marker=marker,
-            end_marker=end_marker, **kwargs)
+            end_marker=end_marker, region=region, **kwargs)
         if not account_info:
             return NotFound('Account not found')
 
@@ -655,10 +656,12 @@ class Account(WerkzeugApp):
         prefix = req.args.get('prefix')
         marker = req.args.get('marker')
         end_marker = req.args.get('end_marker')
+        region = req.args.get('region')
+        bucket = req.args.get('bucket')
 
         account_info, containers, next_marker = self.backend.list_containers(
             account_id, limit=limit, prefix=prefix, marker=marker,
-            end_marker=end_marker, **kwargs)
+            end_marker=end_marker, region=region, bucket=bucket, **kwargs)
         if not account_info:
             return NotFound('Account not found')
 

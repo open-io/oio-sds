@@ -275,15 +275,19 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _list_items(self, tr, start, stop, limit, unpack, format_item,
-                    **kwargs):
+    def _list_items(self, tr, start, stop, limit, filters,
+                    unpack, format_item, **kwargs):
         items = []
 
         def _append_item(name, keys_values):
             if not keys_values:
                 return
             info = self._unmarshal_info(keys_values, **kwargs)
-            items.append(format_item(tr, name, info))
+            for fltr in filters:
+                if not fltr(name, info):
+                    break
+            else:
+                items.append(format_item(tr, name, info))
 
         iterator = tr.get_range(start, stop)
         item_keys_values = None, None
@@ -701,7 +705,7 @@ class AccountBackendFdb(object):
                 accounts_space, prefix=prefix, marker=marker,
                 end_marker=end_marker)
             accounts_sublist = self._list_accounts(
-                self.db, start, stop, remaining, accounts_space.unpack,
+                self.db, start, stop, remaining, [], accounts_space.unpack,
                 format_account, readonly=True)
             new_accounts = 0
             for account in accounts_sublist:
@@ -728,10 +732,11 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _list_accounts(self, tr, start, stop, limit, unpack, format_account):
+    def _list_accounts(self, tr, start, stop, limit, filters,
+                       unpack, format_account):
         if limit > 0:
             accounts = self._list_items(
-                tr, start, stop, limit, unpack, format_account,
+                tr, start, stop, limit, filters, unpack, format_account,
                 has_region=True)
         else:
             accounts = []
@@ -1218,7 +1223,7 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def list_containers(self, account_id, limit=1000, prefix=None, marker=None,
-                        end_marker=None, **kwargs):
+                        end_marker=None, region=None, bucket=None, **kwargs):
         """
         Get the list of containers of the specified account.
 
@@ -1233,16 +1238,27 @@ class AccountBackendFdb(object):
         :type end_marker: `str`
         :keyword prefix: list only the containers starting with the prefix
         :type prefix: `str`
+        :keyword region: list only the containers belonging to the region
+        :type region: `str`
+        :keyword bucket: list only the containers belonging to the bucket
+        :type bucket: `str`
         :returns: account information, the list of containers (with account
             metadata), and the next marker (in case the list is truncated).
         """
         containers_space = self.container_space[account_id]
 
+        filters = []
+        if region:
+            region = region.upper()
+            filters.append(lambda name, info: info['region'] == region)
+        if bucket:
+            filters.append(lambda name, info: info['bucket'] == bucket)
+
         start, stop = self._get_start_and_stop(
             containers_space, prefix=prefix, marker=marker,
             end_marker=end_marker)
         account_info, containers = self._list_containers(
-            self.db, account_id, start, stop, limit + 1,
+            self.db, account_id, start, stop, limit + 1, filters,
             containers_space.unpack, self._format_container_for_listing,
             readonly=True)
         if not account_info:
@@ -1256,14 +1272,14 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _list_containers(self, tr, account, start, stop, limit, unpack,
-                         format_container):
+    def _list_containers(self, tr, account, start, stop, limit, filters,
+                         unpack, format_container):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
             return None, None
         if limit > 0:
             containers = self._list_items(
-                tr, start, stop, limit, unpack, format_container)
+                tr, start, stop, limit, filters, unpack, format_container)
         else:
             containers = []
         return account_info, containers
@@ -1721,7 +1737,7 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def list_buckets(self, account_id, limit=1000, marker=None,
-                     end_marker=None, prefix=None, **kwargs):
+                     end_marker=None, prefix=None, region=None, **kwargs):
         """
         Get the list of buckets of the specified account.
 
@@ -1736,15 +1752,22 @@ class AccountBackendFdb(object):
         :type end_marker: `str`
         :keyword prefix: list only the buckets starting with the prefix
         :type prefix: `str`
+        :keyword region: list only the buckets belonging to the region
+        :type region: `str`
         :returns: account information, the list of accounts (with account
             metadata), and the next marker (in case the list is truncated).
         """
         buckets_space = self.bucket_space[account_id]
 
+        filters = []
+        if region:
+            region = region.upper()
+            filters.append(lambda name, info: info['region'] == region)
+
         start, stop = self._get_start_and_stop(
             buckets_space, prefix=prefix, marker=marker, end_marker=end_marker)
         account_info, buckets = self._list_buckets(
-            self.db, account_id, start, stop, limit + 1,
+            self.db, account_id, start, stop, limit + 1, filters,
             buckets_space.unpack, self._format_bucket_for_listing,
             readonly=True)
         if not account_info:
@@ -1758,14 +1781,14 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _list_buckets(self, tr, account, start, stop, limit, unpack,
-                      format_bucket):
+    def _list_buckets(self, tr, account, start, stop, limit, filters,
+                      unpack, format_bucket):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
             return None, None
         if limit > 0:
             buckets = self._list_items(
-                tr, start, stop, limit, unpack, format_bucket)
+                tr, start, stop, limit, filters, unpack, format_bucket)
         else:
             buckets = []
         return account_info, buckets
