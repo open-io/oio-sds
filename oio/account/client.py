@@ -54,11 +54,45 @@ class AccountClient(ServiceClient):
         """
         self.account_request(account, 'POST', 'delete', **kwargs)
 
-    def account_list(self, **kwargs):
+    def account_list(self, limit=None, marker=None, end_marker=None,
+                     prefix=None, stats=None, sharding_accounts=None,
+                     **kwargs):
         """
-        List accounts.
+        List known accounts (except if requested, the sharding accounts
+        are excluded).
+
+        Notice that account creation is asynchronous, and an autocreated
+        account may appear in the listing only after several seconds.
+
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: ID of the account from where to start the listing
+            (excluded)
+        :type marker: `str`
+        :keyword end_marker: ID of the account where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the accounts starting with the prefix
+        :type prefix: `str`
+        :keyword stats: Fetch all stats and metadata for each account
+        :type stats: `bool`
+        :keyword sharding_accounts: Add sharding accounts in the listing
+        :type sharding_accounts: `bool`
+        :rtype: `dict` with 'listing' (`list`).
+            'listing' contains list of `dict` containing the account ID and,
+            if requested, account metadata (number of objects, number of bytes,
+            creation time and modification time, etc.).
         """
-        _resp, body = self.account_request(None, 'GET', 'list', **kwargs)
+        params = {
+            'limit': limit,
+            'marker': marker,
+            'end_marker': end_marker,
+            'prefix': prefix,
+            'stats': stats,
+            'sharding_accounts': sharding_accounts,
+        }
+        _resp, body = self.account_request(
+            None, 'GET', 'list', params=params, **kwargs)
         return body
 
     def account_show(self, account, **kwargs):

@@ -17,7 +17,7 @@
 from datetime import datetime
 
 from oio.common.configuration import load_namespace_conf
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, depaginate
 from oio.conscience.client import ConscienceClient
 from oio.rebuilder.meta_rebuilder import MetaRebuilder, MetaRebuilderWorker
 
@@ -51,7 +51,12 @@ class Meta1Rebuilder(MetaRebuilder):
                 prefixes.add(prefix)
 
         # Build the list of meta1 databases hosting container references
-        accounts = self.api.account_list()
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x['id'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'])
         for account in accounts:
             containers = self._full_container_list(account)
             for container in containers:

@@ -17,6 +17,7 @@
 from logging import getLogger
 
 from oio.cli import Command, Lister, ShowOne
+from oio.common.utils import depaginate, request_id
 
 
 class ShowAccount(ShowOne):
@@ -198,35 +199,86 @@ class ListAccounts(Lister):
 
         parser = super(ListAccounts, self).get_parser(prog_name)
         parser.add_argument(
-            '--stats', '--long',
-            dest='long_listing',
+            '--prefix',
+            metavar='<prefix>',
+            help='Filter list using <prefix>'
+        )
+        parser.add_argument(
+            '--marker',
+            metavar='<marker>',
+            help='Marker for paging'
+        )
+        parser.add_argument(
+            '--end-marker',
+            metavar='<end-marker>',
+            help='End marker for paging'
+        )
+        parser.add_argument(
+            '--limit',
+            metavar='<limit>',
+            help='Limit the number of accounts returned'
+        )
+        parser.add_argument(
+            '--no-paging', '--full',
+            dest='full_listing',
             default=False,
-            help=("Display account statistics "
+            help=("List all accounts without paging "
                   "(and set output format to 'value')"),
             action=ValueFormatStoreTrueAction
+        )
+        parser.add_argument(
+            '--stats', '--long',
+            dest='long_listing',
+            help=("Display account statistics"),
+            action='store_true'
+        )
+        parser.add_argument(
+            '--sharding-accounts',
+            help=("Display sharding accounts (hidden by default)"),
+            action='store_true'
         )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        account_list = self.app.client_manager.storage.account_list()
+        kwargs = {'reqid': request_id(prefix='CLI-ACCOUNT-')}
+        if parsed_args.prefix:
+            kwargs['prefix'] = parsed_args.prefix
+        if parsed_args.marker:
+            kwargs['marker'] = parsed_args.marker
+        if parsed_args.end_marker:
+            kwargs['end_marker'] = parsed_args.end_marker
+        if parsed_args.limit:
+            kwargs['limit'] = parsed_args.limit
+        if parsed_args.long_listing:
+            kwargs['stats'] = parsed_args.long_listing
+        if parsed_args.sharding_accounts:
+            kwargs['sharding_accounts'] = parsed_args.sharding_accounts
+
+        acct_client = self.app.client_manager.storage.account
+
+        if parsed_args.full_listing:
+            listing = depaginate(
+                acct_client.account_list,
+                listing_key=lambda x: x['listing'],
+                marker_key=lambda x: x['next_marker'],
+                truncated_key=lambda x: x['truncated'],
+                **kwargs)
+        else:
+            meta = acct_client.account_list(**kwargs)
+            listing = meta['listing']
 
         if parsed_args.long_listing:
-            def _get_account_stats(accounts):
-                for account in accounts:
-                    data = self.app.client_manager.storage.account_show(
-                        account=account
-                    )
-                    yield (data['id'], data['bytes'], data['containers'],
-                           data['objects'], data['ctime'], data['metadata'])
-
-            columns = ('Name', 'bytes', 'containers', 'objects', 'ctime',
-                       'metadata')
-            return columns, _get_account_stats(account_list)
-
-        column = ('Name',)
-        return column, ((e,) for e in account_list)
+            columns = ('Name', 'Buckets', 'Containers', 'Shards', 'Objects',
+                       'Bytes', 'Ctime', 'Mtime', 'Metadata')
+            res = ((v['id'], v['buckets'], v['containers'], v.get('shards', 0),
+                    v['objects'], v['bytes'], v['ctime'], v['mtime'],
+                    v['metadata']) for v in listing)
+        else:
+            columns = ('Name',)
+            res = ((v['id'],) for v in listing)
+        return columns, res
 
 
 class RefreshAccount(Command):
@@ -285,7 +337,7 @@ class RefreshAccount(Command):
 
 
 class RecomputeAccount(Command):
-    """ Recompute all account service metrics """
+    """Recompute all account service metrics."""
 
     log = getLogger(__name__ + '.RecomputeAccount')
 

@@ -34,7 +34,7 @@ from oio.common.fullpath import decode_fullpath
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.utils import cid_from_name, CacheDict
+from oio.common.utils import cid_from_name, CacheDict, depaginate
 from oio.event.beanstalk import BeanstalkdSender
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
@@ -885,8 +885,13 @@ class Checker(object):
             self._spawn_n(self.check_account, target, recurse)
 
     def check_all_accounts(self, recurse=0):
-        all_accounts = self.api.account_list()
-        for acct in all_accounts:
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x['id'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'])
+        for acct in accounts:
             self.check(Target(acct), recurse=recurse)
 
     def fetch_results(self, rate_limiter=None):

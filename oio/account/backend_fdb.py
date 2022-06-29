@@ -14,6 +14,7 @@
 # License along with this library.
 
 from collections import Counter
+from copy import deepcopy
 import fdb
 from functools import wraps
 import struct
@@ -22,7 +23,7 @@ from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
-from oio.common.easy_value import boolean_value, float_value, debinarize, \
+from oio.common.easy_value import boolean_value, float_value, \
     int_value
 from oio.common.exceptions import ServiceBusy
 from oio.common.timestamp import Timestamp
@@ -583,24 +584,27 @@ class AccountBackendFdb(object):
             return None
 
         if full:
-            metadata = {}
-            metadata_space = self.metadata_space[account_id]
-            metadata_range = metadata_space.range()
-            iterator = tr.snapshot.get_range(
-                metadata_range.start, metadata_range.stop,
-                streaming_mode=fdb.StreamingMode.want_all)
-            for key, value in iterator:
-                key = metadata_space.unpack(key)
-                if len(key) == 1:
-                    metadata[key[0]] = value.decode('utf-8')
-                else:
-                    self.logger.warning('Unknown key: "%s"', key)
-            info['metadata'] = metadata
+            info['metadata'] = self._get_account_metadata(tr, account_id)
 
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
             self._merge_sharding_account_info(tr, account_id, info)
 
         return info
+
+    def _get_account_metadata(self, tr, account_id):
+        metadata = {}
+        metadata_space = self.metadata_space[account_id]
+        metadata_range = metadata_space.range()
+        iterator = tr.snapshot.get_range(
+            metadata_range.start, metadata_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all)
+        for key, value in iterator:
+            key = metadata_space.unpack(key)
+            if len(key) == 1:
+                metadata[key[0]] = value.decode('utf-8')
+            else:
+                self.logger.warning('Unknown key: "%s"', key)
+        return metadata
 
     @fdb.transactional
     def _merge_sharding_account_info(self, tr, account_id, info):
@@ -636,22 +640,98 @@ class AccountBackendFdb(object):
                 CONTAINERS_FIELD, 0)
 
     @catch_service_errors
-    def list_accounts(self, **kwargs):
+    def list_accounts(self, limit=1000, marker=None, end_marker=None,
+                      prefix=None, stats=False, sharding_accounts=False,
+                      **kwargs):
         """
-        Get the list of all accounts.
+        Get the list of accounts (except if requested, the sharding accounts
+        are excluded).
+
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: ID of the account from where to start the listing
+            (excluded)
+        :type marker: `str`
+        :keyword end_marker: ID of the account where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the accounts starting with the prefix
+        :type prefix: `str`
+        :keyword stats: Fetch all stats and metadata for each account
+        :type stats: `bool`
+        :keyword sharding_accounts: Add sharding accounts in the listing
+        :type sharding_accounts: `bool`
+        :returns: the list of accounts (with account metadata if requested),
+            and the next marker (in case the list is truncated).
         """
-        accounts = self._list_accounts(self.db)
-        return debinarize(accounts)
+        accounts_space = self.acct_space
+
+        if stats:
+            format_account = self._format_account_for_listing2
+        else:
+            format_account = self._format_account_for_listing
+
+        remaining = limit + 1
+        accounts = []
+        while remaining > 0:
+            start, stop = self._get_start_and_stop(
+                accounts_space, prefix=prefix, marker=marker,
+                end_marker=end_marker)
+            accounts_sublist = self._list_accounts(
+                self.db, start, stop, remaining, accounts_space.unpack,
+                format_account)
+            new_accounts = 0
+            for account in accounts_sublist:
+                if (not sharding_accounts
+                        and account['id'].startswith(SHARDING_ACCOUNT_PREFIX)):
+                    continue
+                accounts.append(account)
+                new_accounts += 1
+            if not accounts_sublist or len(accounts_sublist) < remaining:
+                break
+            remaining -= new_accounts
+            last_account_id = accounts_sublist[-1]['id']
+            if (not sharding_accounts
+                    and last_account_id.startswith(SHARDING_ACCOUNT_PREFIX)):
+                marker = SHARDING_ACCOUNT_PREFIX + LAST_UNICODE_CHAR
+            else:
+                marker = last_account_id
+
+        next_marker = None
+        if len(accounts) > limit:
+            accounts.pop()
+            next_marker = accounts[-1]['id']
+        return accounts, next_marker
 
     @fdb.transactional
-    def _list_accounts(self, tr):
-        # iterate over the whole 'accounts:' subspace
-        iterator = tr.get_range_startswith(self.accts_space)
-        res = list()
-        for key, _ in iterator:
-            account_id = self.accts_space.unpack(key)[0]
-            res.append(account_id)
-        return res
+    def _list_accounts(self, tr, start, stop, limit, unpack, format_account):
+        if limit > 0:
+            accounts = self._list_items(
+                tr.snapshot, start, stop, limit, unpack, format_account,
+                has_region=True)
+        else:
+            accounts = []
+        return accounts
+
+    @fdb.transactional
+    def _format_account_for_listing(self, tr, account_id, account_info):
+        formatted = {}
+        formatted['id'] = account_id
+        return formatted
+
+    @fdb.transactional
+    def _format_account_for_listing2(self, tr, account_id, account_info):
+        account_info = deepcopy(account_info)
+        if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            self._merge_sharding_account_info(tr, account_id, account_info)
+        formatted = {}
+        kept_keys = TIMESTAMP_FIELDS + COUNTERS_FIELDS
+        for key, value in account_info.items():
+            if key in kept_keys:
+                formatted[key] = value
+        formatted['metadata'] = self._get_account_metadata(tr, account_id)
+        formatted['id'] = account_id
+        return formatted
 
     @fdb.transactional
     def _update_account_stats(self, tr, account_id, region, stats_delta,
@@ -677,20 +757,6 @@ class AccountBackendFdb(object):
 
         # Update metrics stats with the delta
         self._update_metrics_stats(tr, region, stats_delta)
-
-    @catch_service_errors
-    def get_account_metadata(self, req_account_id, **kwargs):
-        if not req_account_id:
-            return None
-        account_id = self._val_element(self.db, self.acct_space,
-                                       req_account_id, 'id')
-        if account_id is None:
-            self.logger.info('metadata account %s not found', account_id)
-            return None
-
-        account_id = account_id.decode('utf-8')
-        meta = self._get_metada(self.db, account_id)
-        return debinarize(meta)
 
     @catch_service_errors
     def update_account_metadata(self, account_id, metadata, to_delete=None,

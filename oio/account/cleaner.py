@@ -78,9 +78,14 @@ class AccountServiceCleaner(object):
         """
         List all container belonging to this cluster (using the region).
         """
-        # FIXME(ADU): When available, we should use paging
-        real_accounts = (acct for acct in self.api.account_list())
-        for account in real_accounts:
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x['id'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'],
+            sharding_accounts=True)
+        for account in accounts:
             for container, mtime, bucket \
                     in self.all_containers_from_account(account):
                 yield account, container, mtime, bucket
@@ -144,10 +149,13 @@ class AccountServiceCleaner(object):
         """
         List all buckets belonging to this cluster (using the region).
         """
-        # FIXME(ADU): When available, we should use paging
-        real_accounts = (acct for acct in self.api.account_list()
-                         if not acct.startswith('.shards_'))
-        for account in real_accounts:
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x['id'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'])
+        for account in accounts:
             for bucket, containers in self.all_buckets_from_account(account):
                 yield account, bucket, containers
 

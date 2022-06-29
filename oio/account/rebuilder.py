@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +20,7 @@ from oio import ObjectStorageApi
 from oio.account.client import AccountClient
 from oio.common.green import eventlet
 from oio.common.tool import Tool, ToolWorker
+from oio.common.utils import depaginate
 
 
 class AccountRebuilder(Tool):
@@ -52,7 +54,12 @@ class AccountRebuilder(Tool):
 
     def _fetch_items_from_all_accounts(self):
         try:
-            accounts = self.account_client.account_list()
+            accounts = depaginate(
+                self.account_client.account_list,
+                listing_key=lambda x: x['listing'],
+                item_key=lambda x: x['id'],
+                marker_key=lambda x: x['next_marker'],
+                truncated_key=lambda x: x['truncated'])
             for account in accounts:
                 item = self.namespace, account, None
                 yield item

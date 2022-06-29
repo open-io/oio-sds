@@ -313,8 +313,8 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    GET /v1.0/account/list HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -322,21 +322,48 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:26:29 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 13
+    #    Content-Length: 54
     #
-    #    ["myaccount"]
+    #    {
+    #      "listing": [
+    #        {
+    #          "id": "myaccount"
+    #        }
+    #      ],
+    #      "truncated": false
+    #    }
     #
     # }}ACCT
     @force_master
     def on_account_list(self, req, **kwargs):
-        accounts = self.backend.list_accounts(**kwargs)
-        if accounts is None:
-            return NotFound('No account found')
-        return Response(json.dumps(accounts), mimetype=HTTP_CONTENT_TYPE_JSON)
+        limit = max(0, min(ACCOUNT_LISTING_MAX_LIMIT, int_value(
+            req.args.get('limit'), 0)))
+        if limit <= 0:
+            limit = ACCOUNT_LISTING_DEFAULT_LIMIT
+        prefix = req.args.get('prefix')
+        marker = req.args.get('marker')
+        end_marker = req.args.get('end_marker')
+        stats = boolean_value(req.args.get('stats'), False)
+        sharding_accounts = boolean_value(
+            req.args.get('sharding_accounts'), False)
+
+        accounts, next_marker = self.backend.list_accounts(
+            limit=limit, prefix=prefix, marker=marker,
+            end_marker=end_marker, stats=stats,
+            sharding_accounts=sharding_accounts, **kwargs)
+
+        info = {}
+        info['listing'] = accounts
+        if next_marker is not None:
+            info['next_marker'] = next_marker
+            info['truncated'] = True
+        else:
+            info['truncated'] = False
+        return Response(json.dumps(info), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # POST /v1.0/account/delete?id=<account_name>

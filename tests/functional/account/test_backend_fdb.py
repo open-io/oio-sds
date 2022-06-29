@@ -391,7 +391,7 @@ class TestAccountBackend(BaseTestCase):
         # this will create the account
 
         self.backend.update_account_metadata(account_id, {'x': '1'})
-        metadata = self.backend.get_account_metadata(account_id)
+        metadata = self.backend.info_account(account_id)['metadata']
         self.assertIn('x', metadata)
         self.assertEqual(metadata['x'], '1')
 
@@ -400,13 +400,13 @@ class TestAccountBackend(BaseTestCase):
 
         # first meta
         self.backend.update_account_metadata(account_id, {'a': '1'})
-        metadata = self.backend.get_account_metadata(account_id)
+        metadata = self.backend.info_account(account_id)['metadata']
         self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1')
 
         # second meta
         self.backend.update_account_metadata(account_id, {'b': '2'})
-        metadata = self.backend.get_account_metadata(account_id)
+        metadata = self.backend.info_account(account_id)['metadata']
         self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1')
         self.assertIn('b', metadata)
@@ -414,7 +414,7 @@ class TestAccountBackend(BaseTestCase):
 
         # update first meta
         self.backend.update_account_metadata(account_id, {'a': '1b'})
-        metadata = self.backend.get_account_metadata(account_id)
+        metadata = self.backend.info_account(account_id)['metadata']
         self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1b')
         self.assertIn('b', metadata)
@@ -422,21 +422,22 @@ class TestAccountBackend(BaseTestCase):
 
         # delete second meta
         self.backend.update_account_metadata(account_id, None, ['b'])
-        metadata = self.backend.get_account_metadata(account_id)
+        metadata = self.backend.info_account(account_id)['metadata']
         self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1b')
         self.assertNotIn('b', metadata)
 
     def test_list_account(self):
-
         # Create and check if in list
         account_id = 'test_list'
         self.backend.create_account(account_id)
-        account_list = self.backend.list_accounts()
-        self.assertIn(account_id, account_list)
+        accounts, next_marker = self.backend.list_accounts()
+        self.assertIn(account_id, [account['id'] for account in accounts])
+        self.assertIsNone(next_marker)
 
         # Check the result of a nonexistent account
-        self.assertFalse("Should_not_exist" in account_list)
+        self.assertFalse("Should_not_exist" in [account['id']
+                                                for account in accounts])
 
     def test_info_account(self):
         region = 'LOCALHOST'

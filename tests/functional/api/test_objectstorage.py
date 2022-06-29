@@ -1158,7 +1158,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.wait_for_score(('account', 'meta2'))
         self.beanstalkd0.wait_until_empty('oio')
         # clear accounts
-        accounts = self.api.account_list()
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x['id'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'])
         for account in accounts:
             try:
                 self.api.account_flush(account)

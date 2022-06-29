@@ -311,14 +311,39 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def account_list(self, **kwargs):
+    def account_list(self, limit=None, marker=None, end_marker=None,
+                     prefix=None, stats=None, sharding_accounts=None,
+                     **kwargs):
         """
-        List known accounts.
+        List known accounts (except if requested, the sharding accounts
+        are excluded).
 
         Notice that account creation is asynchronous, and an autocreated
         account may appear in the listing only after several seconds.
+
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: ID of the account from where to start the listing
+            (excluded)
+        :type marker: `str`
+        :keyword end_marker: ID of the account where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the accounts starting with the prefix
+        :type prefix: `str`
+        :keyword stats: Fetch all stats and metadata for each account
+        :type stats: `bool`
+        :keyword sharding_accounts: Add sharding accounts in the listing
+        :type sharding_accounts: `bool`
+        :return: the list of accounts
+        :rtype: list of `dict` containing the account ID and, if requested,
+            account metadata (number of objects, number of bytes,
+            creation time and modification time, etc.).
         """
-        return self.account.account_list(**kwargs)
+        resp = self.account.account_list(
+            limit=limit, marker=marker, end_marker=end_marker, prefix=prefix,
+            stats=stats, sharding_accounts=sharding_accounts, **kwargs)
+        return resp['listing']
 
     @handle_account_not_found
     @patch_kwargs
@@ -1643,7 +1668,13 @@ class ObjectStorageApi(object):
         :type account: `str`
         """
         if account is None:
-            accounts = self.account_list(**kwargs)
+            accounts = depaginate(
+                self.account.account_list,
+                listing_key=lambda x: x['listing'],
+                item_key=lambda x: x['id'],
+                marker_key=lambda x: x['next_marker'],
+                truncated_key=lambda x: x['truncated'],
+                **kwargs)
         else:
             accounts = [account]
 
