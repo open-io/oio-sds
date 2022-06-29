@@ -180,7 +180,8 @@ class HttpApi(object):
                         value = str(value).encode('utf-8')
                     out_param.append((key, value))
             encoded_args = urlencode(out_param)
-            url += '?' + encoded_args
+            if encoded_args:
+                url += '?' + encoded_args
 
         if not pool_manager:
             pool_manager = self.pool_manager
