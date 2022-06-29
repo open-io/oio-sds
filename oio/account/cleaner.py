@@ -45,11 +45,13 @@ class AccountServiceCleaner(object):
         List containers of the account belonging to this cluster
         (using the region).
         """
-        containers = depaginate(self.api.account.container_list,
-                                listing_key=lambda x: x['listing'],
-                                item_key=lambda x: x[0],
-                                marker_key=lambda x: x['listing'][-1][0],
-                                account=account)
+        containers = depaginate(
+            self.api.account.container_list,
+            listing_key=lambda x: x['listing'],
+            item_key=lambda x: x[0],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'],
+            account=account)
         for container in containers:
             try:
                 meta = self.api.account.container_show(account, container)

@@ -128,12 +128,16 @@ class TestAccountServer(TestAccountServerBase):
                             query_string=args)
         self.assertEqual(resp.status_code, 200)
         data = self.json_loads(resp.data.decode('utf-8'))
-        for field in ("ctime", "objects", "bytes", "listing", "containers",
-                      "metadata"):
+        for field in ("ctime", "mtime", "bytes", "objects", "containers",
+                      "buckets", "metadata", "listing", "truncated"):
             self.assertIn(field, data)
-        self.assertGreaterEqual(data['objects'], 0)
-        self.assertGreaterEqual(data['containers'], 0)
-        self.assertGreaterEqual(data['bytes'], 0)
+        self.assertEqual(data['bytes'], 0)
+        self.assertEqual(data['objects'], 0)
+        self.assertEqual(data['containers'], 0)
+        self.assertEqual(data['buckets'], 0)
+        self.assertDictEqual(data['metadata'], {})
+        self.assertListEqual(data['listing'], [])
+        self.assertFalse(data['truncated'])
 
     def test_account_container_reset(self):
         data = {'name': 'foo', 'mtime': Timestamp().normal,

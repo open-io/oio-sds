@@ -156,8 +156,7 @@ class AccountClient(ServiceClient):
                              **kwargs)
 
     def container_list(self, account, limit=None, marker=None,
-                       end_marker=None, prefix=None, delimiter=None,
-                       s3_buckets_only=False, **kwargs):
+                       end_marker=None, prefix=None, **kwargs):
         """
         Get the list of containers of an account.
 
@@ -167,11 +166,11 @@ class AccountClient(ServiceClient):
         :type limit: `int`
         :keyword marker: name of the container from where to start the listing
         :type marker: `str`
-        :keyword end_marker:
-        :keyword prefix:
-        :keyword delimiter:
-        :keyword s3_buckets_only: list only S3 buckets.
-        :type s3_buckets_only: `bool`
+        :keyword end_marker: name of the container where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the containers starting with the prefix
+        :type prefix: `str`
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'id' (`str`),
             'metadata' (`dict`) and 'listing' (`list`).
@@ -184,8 +183,6 @@ class AccountClient(ServiceClient):
             'marker': marker,
             'end_marker': end_marker,
             'prefix': prefix,
-            'delimiter': delimiter,
-            's3_buckets_only': s3_buckets_only
         }
         _resp, body = self.account_request(account, 'GET', 'containers',
                                            params=params, **kwargs)

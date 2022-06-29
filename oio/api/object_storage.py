@@ -493,8 +493,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_list(self, account, limit=None, marker=None,
-                       end_marker=None, prefix=None, delimiter=None,
-                       s3_buckets_only=False, **kwargs):
+                       end_marker=None, prefix=None, **kwargs):
         """
         Get the list of containers of an account.
 
@@ -503,13 +502,13 @@ class ObjectStorageApi(object):
         :keyword limit: maximum number of results to return
         :type limit: `int`
         :keyword marker: name of the container from where to start the listing
+            (excluded)
         :type marker: `str`
-        :keyword end_marker:
-        :keyword prefix:
-        :keyword delimiter:
-        :keyword s3_buckets_only: list only S3 buckets.
-        :type s3_buckets_only: `bool`
-        :type marker: `bool`
+        :keyword end_marker: name of the container where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the containers starting with the prefix
+        :type prefix: `str`
         :return: the list of containers of an account
         :rtype: `list` of items (`list`) with 5 fields:
             name, number of objects, number of bytes, 1 if the item
@@ -520,8 +519,6 @@ class ObjectStorageApi(object):
                                            marker=marker,
                                            end_marker=end_marker,
                                            prefix=prefix,
-                                           delimiter=delimiter,
-                                           s3_buckets_only=s3_buckets_only,
                                            **kwargs)
         return resp["listing"]
 
@@ -1659,9 +1656,11 @@ class ObjectStorageApi(object):
                         account, SHARDING_ACCOUNT_PREFIX + account)
                     for sub_account in accounts_to_refresh:
                         containers = depaginate(
-                            self.container_list,
+                            self.account.container_list,
+                            listing_key=lambda x: x['listing'],
                             item_key=lambda x: x[0],
-                            marker_key=lambda x: x[-1][0],
+                            marker_key=lambda x: x['next_marker'],
+                            truncated_key=lambda x: x['truncated'],
                             account=sub_account,
                             **kwargs)
                         for container in containers:

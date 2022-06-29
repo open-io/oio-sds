@@ -892,11 +892,6 @@ class ListContainer(Lister):
             help='Filter list using <prefix>'
         )
         parser.add_argument(
-            '--delimiter',
-            metavar='<delimiter>',
-            help='Delimiter'
-        )
-        parser.add_argument(
             '--marker',
             metavar='<marker>',
             help='Marker for paging'
@@ -925,42 +920,34 @@ class ListContainer(Lister):
         self.log.debug('take_action(%s)', parsed_args)
         from oio.common.utils import cid_from_name
 
-        kwargs = {}
+        kwargs = {'reqid': request_id(prefix='CLI-CONTAINER-')}
         if parsed_args.prefix:
             kwargs['prefix'] = parsed_args.prefix
         if parsed_args.marker:
             kwargs['marker'] = parsed_args.marker
         if parsed_args.end_marker:
             kwargs['end_marker'] = parsed_args.end_marker
-        if parsed_args.delimiter:
-            kwargs['delimiter'] = parsed_args.delimiter
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
 
         account = self.app.client_manager.account
+        acct_client = self.app.client_manager.storage.account
 
         if parsed_args.full_listing:
-            def full_list():
-                listing = self.app.client_manager.storage.container_list(
-                    account, **kwargs)
-                for element in listing:
-                    yield element
-
-                while listing:
-                    kwargs['marker'] = listing[-1][0]
-                    listing = self.app.client_manager.storage.container_list(
-                        account, **kwargs)
-                    if listing:
-                        for element in listing:
-                            yield element
-
-            listing = full_list()
+            listing = depaginate(
+                acct_client.container_list,
+                listing_key=lambda x: x['listing'],
+                item_key=lambda x: x,
+                marker_key=lambda x: x['next_marker'],
+                truncated_key=lambda x: x['truncated'],
+                account=account)
         else:
-            listing = self.app.client_manager.storage.container_list(
+            acct_meta = acct_client.container_list(
                 account, **kwargs)
+            listing = acct_meta['listing']
 
-        columns = ('Name', 'Bytes', 'Count', 'Mtime', 'CID')
-        return columns, ((v[0], v[2], v[1], v[4], cid_from_name(account, v[0]))
+        columns = ('Name', 'Count', 'Bytes', 'Mtime', 'CID')
+        return columns, ((v[0], v[1], v[2], v[4], cid_from_name(account, v[0]))
                          for v in listing)
 
 

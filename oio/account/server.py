@@ -567,8 +567,8 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    GET /v1.0/account/containers?id=myaccount HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -576,53 +576,73 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Wed, 29 Jun 2022 20:58:52 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 122
+    #    Content-Length: 357
     #
     # .. code-block:: json
     #
     #    {
-    #      "ctime": "1533127401.08165",
-    #      "bytes": 0,
-    #      "objects": 0,
-    #      "listing": [],
-    #      "id": "account",
-    #      "containers": 0,
-    #      "metadata": {}
-    #     }
+    #      "buckets": 0,
+    #      "bytes": 111,
+    #      "containers": 1,
+    #      "ctime": 1656536282.058846,
+    #      "id": "myaccount",
+    #      "listing": [
+    #        [
+    #          "mycontainer",
+    #          1,
+    #          111,
+    #          0,
+    #          1656536306.638677
+    #        ]
+    #      ],
+    #      "metadata": {},
+    #      "mtime": 1656536306.638677,
+    #      "objects": 1,
+    #      "regions": {
+    #        "LOCALHOST": {
+    #          "buckets": 0,
+    #          "bytes-details": {
+    #            "SINGLE": 111
+    #          },
+    #          "containers": 1,
+    #          "objects-details": {
+    #            "SINGLE": 1
+    #          }
+    #        }
+    #      },
+    #      "truncated": false
+    #    }
     #
     # }}ACCT
     @force_master
     def on_account_containers(self, req, **kwargs):
         account_id = self._get_account_id(req)
-
-        info = self.backend.info_account(account_id, **kwargs)
-        if not info:
-            return NotFound('Account not found')
-
-        marker = req.args.get('marker', '')
-        end_marker = req.args.get('end_marker', '')
-        prefix = req.args.get('prefix', '')
-        limit = int(req.args.get('limit', '1000'))
         limit = max(0, min(ACCOUNT_LISTING_MAX_LIMIT, int_value(
             req.args.get('limit'), 0)))
         if limit <= 0:
             limit = ACCOUNT_LISTING_DEFAULT_LIMIT
-        delimiter = req.args.get('delimiter', '')
-        s3_buckets_only = true_value(req.args.get('s3_buckets_only', False))
+        prefix = req.args.get('prefix')
+        marker = req.args.get('marker')
+        end_marker = req.args.get('end_marker')
 
-        user_list = self.backend.list_containers(
-            account_id, limit=limit, marker=marker, end_marker=end_marker,
-            prefix=prefix, delimiter=delimiter,
-            s3_buckets_only=s3_buckets_only, **kwargs)
+        account_info, containers, next_marker = self.backend.list_containers(
+            account_id, limit=limit, prefix=prefix, marker=marker,
+            end_marker=end_marker, **kwargs)
+        if not account_info:
+            return NotFound('Account not found')
 
-        info['listing'] = user_list
-        # TODO(FVE): add "truncated" entry telling if the listing is truncated
-        result = json.dumps(info)
-        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
+        account_info['listing'] = containers
+        if next_marker is not None:
+            account_info['next_marker'] = next_marker
+            account_info['truncated'] = True
+        else:
+            account_info['truncated'] = False
+        return Response(json.dumps(account_info),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/update?id=<account_name>

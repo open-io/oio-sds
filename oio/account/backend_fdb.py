@@ -1122,103 +1122,63 @@ class AccountBackendFdb(object):
         return info
 
     @catch_service_errors
-    def list_containers(self, account_id, limit=1000, marker=None,
-                        end_marker=None, prefix=None, **kwargs):
-        if prefix is None:
-            prefix = ''
-        ct_index_space = self.containers_index_space[account_id]
-        ct_space = self.container_space[account_id]
-        raw_list, _ = self._raw_listing(
-            self.db, ct_index_space, ct_space, limit, prefix,
-            marker, end_marker)
+    def list_containers(self, account_id, limit=1000, prefix=None, marker=None,
+                        end_marker=None, **kwargs):
+        """
+        Get the list of containers of the specified account.
 
-        return raw_list
+        :param account_id: account from which to get the container list
+        :type account: `str`
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: name of the container from where to start the listing
+        :type marker: `str`
+        :keyword end_marker: name of the container where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the containers starting with the prefix
+        :type prefix: `str`
+        :returns: account information, the list of containers (with account
+            metadata), and the next marker (in case the list is truncated).
+        """
+        containers_space = self.container_space[account_id]
+
+        start, stop = self._get_start_and_stop(
+            containers_space, prefix=prefix, marker=marker,
+            end_marker=end_marker)
+        account_info, containers = self._list_containers(
+            self.db, account_id, start, stop, limit + 1,
+            containers_space.unpack, self._format_container_for_listing)
+        if not account_info:
+            return None, None, None
+
+        next_marker = None
+        if len(containers) > limit:
+            containers.pop()
+            next_marker = containers[-1][0]
+        return account_info, containers, next_marker
 
     @fdb.transactional
-    def _raw_listing(self, tr, index_space, main_space, limit, prefix,
-                     marker, end_marker):
-        start = index_space.range().start
-        stop = index_space.range().stop
+    def _list_containers(self, tr, account, start, stop, limit, unpack,
+                         format_container):
+        account_info = self._account_info(tr, account, full=True)
+        if not account_info:
+            return None, None
+        if limit > 0:
+            containers = self._list_items(
+                tr.snapshot, start, stop, limit, unpack, format_container)
+        else:
+            containers = []
+        return account_info, containers
 
-        min_k = None
-        max_k = stop
-
-        orig_marker = marker
-        results = list()
-        beyond_prefix = False
-        if prefix is None:
-            prefix = ''
-
-        if marker:
-            marker = fdb.KeySelector.first_greater_or_equal(
-                index_space.pack((marker,)))
-
-        while len(results) < limit and not beyond_prefix:
-            min_k = start
-            max_k = stop
-            local_limit = (limit - len(results) + 1)
-
-            if prefix:
-                max_k = stop
-                min_k = fdb.KeySelector.first_greater_or_equal(
-                    index_space.pack((prefix,)))
-
-            if marker and (not prefix or
-                           tr.get_key(marker) >= tr.get_key(min_k)):
-                min_k = marker
-
-            if end_marker and (not prefix
-                               or end_marker <= prefix + b'\xff'):
-                max_k = fdb.KeySelector.last_less_or_equal(
-                    index_space.pack((end_marker,)))
-
-            iterator = tr.snapshot.get_range(min_k, max_k, limit=local_limit,
-                                             reverse=False)
-
-            empty = True
-            for key, _ in iterator:
-                ctr = index_space.unpack(key)[0]
-                if len(results) >= limit:
-                    break
-                if prefix and not ctr.startswith(prefix):
-                    beyond_prefix = True
-                    # No more items
-                    marker = None
-                    break
-                if end_marker:
-                    marker = fdb.KeySelector.first_greater_or_equal(
-                        index_space.pack((end_marker,)))
-                else:
-                    marker = fdb.KeySelector.first_greater_than(
-                        index_space.pack((ctr,)))
-
-                # don't include marker
-                if orig_marker == ctr:
-                    continue
-
-                nb_objects = 0
-                nb_bytes = 0
-                mtime = 0
-                ct_space = main_space[ctr]
-                ct_range = ct_space.range()
-                ct_it = tr.get_range(ct_range.start,
-                                     ct_range.stop, reverse=False)
-                for ct_key, a_value in ct_it:
-                    a_key, *pol = ct_space.unpack(ct_key)
-                    if pol:
-                        continue
-                    if a_key == OBJECTS_FIELD:
-                        nb_objects = self._counter_value_to_counter(a_value)
-                    if a_key == BYTES_FIELD:
-                        nb_bytes = self._counter_value_to_counter(a_value)
-                    if a_key == MTIME_FIELD:
-                        mtime = self._timestamp_value_to_timestamp(a_value)
-                results.append([ctr, nb_objects, nb_bytes, 0, mtime])
-
-                empty = False
-            if empty:
-                break
-        return results, orig_marker
+    def _format_container_for_listing(self, tr, cname, container_info):
+        return [
+            cname,
+            container_info.get(OBJECTS_FIELD, 0),
+            container_info.get(BYTES_FIELD, 0),
+            0,
+            container_info.get(MTIME_FIELD, 0.0),
+        ]
 
     @catch_service_errors
     def update_container(self, account_id, cname, mtime, dtime,

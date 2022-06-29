@@ -87,7 +87,6 @@ class ObjectStorageTest(unittest.TestCase):
         resp = FakeApiResponse()
         name = random_str(32)
         marker = random_str(32)
-        delimiter = random_str(32)
         end_marker = random_str(32)
         prefix = random_str(32)
         limit = random.randint(1, 1000)
@@ -98,10 +97,9 @@ class ObjectStorageTest(unittest.TestCase):
         self.api.account._get_service_addr = Mock(return_value=fake_endpoint)
         containers = self.api.container_list(
             self.account, limit=limit, marker=marker, prefix=prefix,
-            delimiter=delimiter, end_marker=end_marker, **self.common_kwargs)
-        params = {"id": self.account, "prefix": prefix, "delimiter": delimiter,
-                  "marker": marker, "end_marker": end_marker, "limit": limit,
-                  "s3_buckets_only": False}
+            end_marker=end_marker, **self.common_kwargs)
+        params = {"id": self.account, "prefix": prefix, "marker": marker,
+                  "end_marker": end_marker, "limit": limit}
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
             'GET', uri, params=params,

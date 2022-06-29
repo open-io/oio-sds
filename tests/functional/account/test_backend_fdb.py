@@ -688,7 +688,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # ensure it appears in listing
-        listing = self.backend.list_containers(
+        _, listing, _ = self.backend.list_containers(
             account_id, marker='', prefix='', limit=100)
         self.assertIn(name, [entry[0] for entry in listing])
 
@@ -928,68 +928,78 @@ class TestAccountBackend(BaseTestCase):
                 account_id, name, Timestamp().timestamp, 0, 0, 0,
                 region=region)
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='', limit=100)
         self.assertEqual(len(listing), 100)
         self.assertEqual(listing[0][0], '0-0000')
         self.assertEqual(listing[-1][0], '0-0099')
+        self.assertEqual(next_marker, '0-0099')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='', end_marker='0-0050', limit=100)
         self.assertEqual(len(listing), 50)
         self.assertEqual(listing[0][0], '0-0000')
         self.assertEqual(listing[-1][0], '0-0049')
+        self.assertIsNone(next_marker)
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='0-0099', limit=100)
         self.assertEqual(len(listing), 100)
         self.assertEqual(listing[0][0], '0-0100')
         self.assertEqual(listing[-1][0], '1-0074')
+        self.assertEqual(next_marker, '1-0074')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='1-0074', limit=55)
         self.assertEqual(len(listing), 55)
         self.assertEqual(listing[0][0], '1-0075')
         self.assertEqual(listing[-1][0], '2-0004')
+        self.assertEqual(next_marker, '2-0004')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='', prefix='0-01', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0][0], '0-0100')
         self.assertEqual(listing[-1][0], '0-0109')
+        self.assertEqual(next_marker, '0-0109')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='', prefix='0-', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0][0], '0-0000')
         self.assertEqual(listing[-1][0], '0-0009')
+        self.assertEqual(next_marker, '0-0009')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='2-0051-0000', prefix='2-0051-001', limit=16)
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0][0], '2-0051-0010')
         self.assertEqual(listing[-1][0], '2-0051-0019')
+        self.assertIsNone(next_marker)
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='2-0050', prefix='2-', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0][0], '2-0051')
         self.assertEqual(listing[-1][0], '2-0051-0008')
+        self.assertEqual(next_marker, '2-0051-0008')
 
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='3-0045', prefix='2-', limit=10)
         self.assertEqual(len(listing), 0)
+        self.assertIsNone(next_marker)
 
         name = '3-0049-'
         self.backend.update_container(
             account_id, name, Timestamp().timestamp, 0, 0, 0, region=region)
-        listing = self.backend.list_containers(
+        _, listing, next_marker = self.backend.list_containers(
             account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual([c[0] for c in listing],
                          ['3-0048-0049', '3-0049', '3-0049-', '3-0049-0049',
                           '3-0050', '3-0050-0049', '3-0051', '3-0051-0049',
                           '3-0052', '3-0052-0049'])
+        self.assertEqual(next_marker, '3-0052-0049')
 
     def test_refresh_metrics(self):
         account_id = random_str(16)
