@@ -476,9 +476,9 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    GET /v1.0/account/buckets?id=AUTH_demo HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    GET /v1.0/account/buckets?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -486,68 +486,75 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Wed, 29 Jun 2022 21:02:11 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 122
+    #    Content-Length: 456
     #
     # .. code-block:: json
     #
     #    {
-    #      "buckets": 3,
-    #      "bytes": 132573,
-    #      "ctime": "1582628089.30237",
-    #      "objects": 3,
+    #      "buckets": 1,
+    #      "bytes": 111,
+    #      "containers": 1,
+    #      "ctime": 1656536282.058846,
+    #      "id": "myaccount",
     #      "listing": [
     #        {
-    #            "bytes": 132573,
-    #            "mtime": 1582641887.75408,
-    #            "name": "bucket0",
-    #            "objects": 3
-    #        },
-    #        {
-    #            "bytes": 0,
-    #            "mtime": 1582641712.44969,
-    #            "name": "bucket1",
-    #            "objects": 0
-    #        },
-    #        {
-    #            "bytes": 0,
-    #            "mtime": 1582641715.19412,
-    #            "name": "bucket2",
-    #            "objects": 0
+    #          "bytes": 111,
+    #          "containers": 1,
+    #          "ctime": 1656536295.673779,
+    #          "mtime": 1656536306.638677,
+    #          "name": "mybucket",
+    #          "objects": 1,
+    #          "region": "LOCALHOST"
     #        }
     #      ],
-    #      "id": "AUTH_demo",
-    #      "containers": 5,
-    #      "metadata": {}
+    #      "metadata": {},
+    #      "mtime": 1656536306.638677,
+    #      "objects": 1,
+    #      "regions": {
+    #        "LOCALHOST": {
+    #          "buckets": 1,
+    #          "bytes-details": {
+    #            "SINGLE": 111
+    #          },
+    #          "containers": 1,
+    #          "objects-details": {
+    #            "SINGLE": 1
+    #          }
+    #        }
+    #      },
+    #      "truncated": false
     #    }
     #
     # }}ACCT
     @force_master
     def on_account_buckets(self, req, **kwargs):
         account_id = self._get_account_id(req)
+        limit = max(0, min(ACCOUNT_LISTING_MAX_LIMIT, int_value(
+            req.args.get('limit'), 0)))
+        if limit <= 0:
+            limit = ACCOUNT_LISTING_DEFAULT_LIMIT
+        prefix = req.args.get('prefix')
+        marker = req.args.get('marker')
+        end_marker = req.args.get('end_marker')
 
-        info = self.backend.info_account(account_id, **kwargs)
-        if not info:
+        account_info, buckets, next_marker = self.backend.list_buckets(
+            account_id, limit=limit, prefix=prefix, marker=marker,
+            end_marker=end_marker, **kwargs)
+        if not account_info:
             return NotFound('Account not found')
 
-        marker = req.args.get('marker', '')
-        end_marker = req.args.get('end_marker', '')
-        prefix = req.args.get('prefix', '')
-        limit = int(req.args.get('limit', '1000'))
-
-        bucket_list, next_marker = self.backend.list_buckets(
-            account_id, limit=limit, marker=marker, end_marker=end_marker,
-            prefix=prefix, **kwargs)
-
-        info['listing'] = bucket_list
-        info['truncated'] = next_marker is not None
+        account_info['listing'] = buckets
         if next_marker is not None:
-            info['next_marker'] = next_marker
-        result = json.dumps(info)
-        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
+            account_info['next_marker'] = next_marker
+            account_info['truncated'] = True
+        else:
+            account_info['truncated'] = False
+        return Response(json.dumps(account_info),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # GET /v1.0/account/containers?id=<account_name>

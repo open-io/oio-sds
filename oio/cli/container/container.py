@@ -785,12 +785,17 @@ class ListBuckets(Lister):
         parser.add_argument(
             '--prefix',
             metavar='<prefix>',
-            help='Filter the list using <prefix>'
+            help='Filter list using <prefix>'
         )
         parser.add_argument(
             '--marker',
             metavar='<marker>',
             help='Marker for paging'
+        )
+        parser.add_argument(
+            '--end-marker',
+            metavar='<end-marker>',
+            help='End marker for paging'
         )
         parser.add_argument(
             '--limit',
@@ -821,6 +826,8 @@ class ListBuckets(Lister):
             kwargs['prefix'] = parsed_args.prefix
         if parsed_args.marker:
             kwargs['marker'] = parsed_args.marker
+        if parsed_args.end_marker:
+            kwargs['end_marker'] = parsed_args.end_marker
         if parsed_args.limit:
             kwargs['limit'] = parsed_args.limit
 
@@ -840,7 +847,7 @@ class ListBuckets(Lister):
             acct_meta = acct_client.bucket_list(account, **kwargs)
             listing = acct_meta['listing']
 
-        columns = ('Name', 'Bytes', 'Objects', 'Mtime', )
+        columns = ('Name', 'Objects', 'Bytes', 'Mtime', 'Region')
 
         def versioning(bucket):
             try:

@@ -29,6 +29,7 @@ from oio.common.timestamp import Timestamp
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 
+LAST_UNICODE_CHAR = u"\U0010fffd"
 
 MULTIUPLOAD_SUFFIX = '+segments'
 SHARDING_ACCOUNT_PREFIX = '.shards_'
@@ -240,6 +241,45 @@ class AccountBackendFdb(object):
             else:
                 info[field] = value.decode('utf-8')
         return info
+
+    def _get_start_and_stop(self, space, prefix=None, marker=None,
+                            end_marker=None):
+        space_range = space.range()
+        start = space_range.start
+        stop = space_range.stop
+        if prefix:
+            start = space[prefix].range().start
+            stop = space[prefix + LAST_UNICODE_CHAR].range().stop
+        if marker and (not prefix or marker >= prefix):
+            start = space[marker].range().stop
+        if end_marker and (not prefix
+                           or end_marker <= prefix + LAST_UNICODE_CHAR):
+            stop = space[end_marker].range().start
+        return start, stop
+
+    @fdb.transactional
+    def _list_items(self, tr, start, stop, limit, unpack, format_item,
+                    **kwargs):
+        items = []
+
+        def _append_item(name, keys_values):
+            if not keys_values:
+                return
+            info = self._unmarshal_info(keys_values, **kwargs)
+            items.append(format_item(tr, name, info))
+
+        iterator = tr.get_range(start, stop)
+        item_keys_values = None, None
+        for key, value in iterator:
+            item_name, *key = unpack(key)
+            if item_name != item_keys_values[0]:
+                _append_item(*item_keys_values)
+                if len(items) >= limit:
+                    return items
+                item_keys_values = item_name, []
+            item_keys_values[1].append((key, value))
+        _append_item(*item_keys_values)
+        return items
 
     # Status/metrics ----------------------------------------------------------
 
@@ -1626,118 +1666,57 @@ class AccountBackendFdb(object):
         """
         Get the list of buckets of the specified account.
 
-        :returns: the list of buckets (with metadata), and the next
-            marker (in case the list is truncated).
+        :param account_id: account from which to get the bucket list
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: name of the bucket from where to start the listing
+            (excluded)
+        :type marker: `str`
+        :keyword end_marker: name of the bucket where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the buckets starting with the prefix
+        :type prefix: `str`
+        :returns: account information, the list of accounts (with account
+            metadata), and the next marker (in case the list is truncated).
         """
-        if prefix is None:
-            prefix = ''
+        buckets_space = self.bucket_space[account_id]
 
-        bs_space = self.buckets_index_space[account_id]
+        start, stop = self._get_start_and_stop(
+            buckets_space, prefix=prefix, marker=marker, end_marker=end_marker)
+        account_info, buckets = self._list_buckets(
+            self.db, account_id, start, stop, limit + 1,
+            buckets_space.unpack, self._format_bucket_for_listing)
+        if not account_info:
+            return None, None, None
 
-        raw_list, next_marker = self._raw_listing_m1(
-            self.db, account_id, bs_space, limit, prefix,
-            marker, end_marker)
-
-        output = list()
-        for bucket in raw_list:
-            bdict = {
-                'name': bucket[0],
-                OBJECTS_FIELD: bucket[1],
-                BYTES_FIELD: bucket[2],
-                MTIME_FIELD: bucket[3]
-            }
-            output.append(bdict)
-        return output, next_marker
+        next_marker = None
+        if len(buckets) > limit:
+            buckets.pop()
+            next_marker = buckets[-1]['name']
+        return account_info, buckets, next_marker
 
     @fdb.transactional
-    def _raw_listing_m1(self, tr, account_id, key_space, limit,
-                        prefix, marker, end_marker):
+    def _list_buckets(self, tr, account, start, stop, limit, unpack,
+                      format_bucket):
+        account_info = self._account_info(tr, account, full=True)
+        if not account_info:
+            return None, None
+        if limit > 0:
+            buckets = self._list_items(
+                tr.snapshot, start, stop, limit, unpack, format_bucket)
+        else:
+            buckets = []
+        return account_info, buckets
 
-        start = key_space.range().start
-        stop = key_space.range().stop
-
-        min_k = None
-        max_k = stop
-
-        orig_marker = next_marker = marker
-        results = list()
-        beyond_prefix = False
-        if prefix is None:
-            prefix = ''
-
-        if marker:
-            marker = fdb.KeySelector.first_greater_or_equal(
-                key_space.pack((marker,)))
-
-        while len(results) < limit and not beyond_prefix:
-            min_k = start
-            max_k = stop
-            local_limit = (limit - len(results) + 1)
-
-            if prefix:
-                max_k = stop
-                min_k = fdb.KeySelector.first_greater_or_equal(
-                    key_space.pack((prefix,)))
-
-            if marker and (not prefix or
-                           tr.get_key(marker) >= tr.get_key(min_k)):
-                min_k = marker
-
-            if end_marker and (not prefix
-                               or end_marker <= prefix + b'\xff'):
-                max_k = fdb.KeySelector.last_less_or_equal(
-                    key_space.pack((end_marker,)))
-
-            iterator = tr.snapshot.get_range(min_k, max_k, limit=local_limit,
-                                             reverse=False)
-
-            empty = True
-            for key, _ in iterator:
-                ctr = key_space.unpack(key)[0]
-                if len(results) >= limit:
-                    break
-                if prefix and not ctr.startswith(prefix):
-                    beyond_prefix = True
-                    # No more items
-                    marker = None
-                    break
-                if end_marker:
-                    marker = fdb.KeySelector.first_greater_or_equal(
-                        key_space.pack((end_marker,)))
-                else:
-                    marker = fdb.KeySelector.first_greater_than(
-                        key_space.pack((ctr,)))
-
-                # don't include marker
-                if orig_marker == ctr:
-                    continue
-
-                nb_objects = 0
-                nb_bytes = 0
-                mtime = 0
-                next_marker = ctr
-                bucket_space = self.bucket_space[account_id][ctr]
-                bucket_range = bucket_space.range()
-                bucket_it = tr.get_range(bucket_range.start,
-                                         bucket_range.stop, reverse=False)
-                for bucket_key, a_value in bucket_it:
-                    key = bucket_space.unpack(bucket_key)
-                    if len(key) > 1:
-                        # This is a per policy metric, skip it
-                        continue
-                    a_key = key[0]
-                    if a_key == OBJECTS_FIELD:
-                        nb_objects = self._counter_value_to_counter(a_value)
-                    if a_key == BYTES_FIELD:
-                        nb_bytes = self._counter_value_to_counter(a_value)
-                    if a_key == MTIME_FIELD:
-                        mtime = self._timestamp_value_to_timestamp(a_value)
-                results.append([ctr, nb_objects, nb_bytes, mtime])
-
-                empty = False
-            if empty:
-                break
-        return results, next_marker
+    def _format_bucket_for_listing(self, tr, bname, bucket_info):
+        formatted = {}
+        kept_keys = TIMESTAMP_FIELDS + COUNTERS_FIELDS + ('region',)
+        for key, value in bucket_info.items():
+            if key in kept_keys:
+                formatted[key] = value
+        formatted['name'] = bname
+        return formatted
 
     @catch_service_errors
     def list_all_buckets(self):
@@ -1944,13 +1923,10 @@ class AccountBackendFdb(object):
 
         # Compute request range
         account_containers = self.container_space[container_account_id]
-        containers_begin = account_containers.range().start
-        containers_end = account_containers.range().stop
-        if marker:
-            containers_begin = fdb.KeySelector.first_greater_or_equal(
-                account_containers.pack((marker,)))
+        start, stop = self._get_start_and_stop(
+            account_containers, marker=marker)
         count = 0
-        containers = tr.get_range(containers_begin, containers_end)
+        containers = tr.get_range(start, stop)
         data = {}
 
         # Propagate container counters to bucket if container belongs to bucket
@@ -1969,10 +1945,10 @@ class AccountBackendFdb(object):
 
             # Check if we start to process a new container
             if new_marker != container:
-                new_marker = container
                 count += 1
                 if count > batch_size:
                     break
+                new_marker = container
                 # Process data if container belongs to bucket
                 _process_data_to_counters()
                 # Reset data for next container

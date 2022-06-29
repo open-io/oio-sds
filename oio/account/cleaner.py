@@ -111,30 +111,32 @@ class AccountServiceCleaner(object):
         List buckets of the account belonging to this cluster
         (using the region).
         """
-        # FIXME(ADU): When it works, we should use paging
-        buckets = self.api.account.bucket_list(account, limit=10000)
-        for bucket in buckets['listing']:
-            bucket = bucket['name']
+        buckets = depaginate(
+            self.api.account.bucket_list,
+            listing_key=lambda x: x['listing'],
+            marker_key=lambda x: x['next_marker'],
+            truncated_key=lambda x: x['truncated'],
+            account=account)
+        for bucket in buckets:
             try:
-                meta = self.api.account.bucket_show(bucket, account=account)
-                if meta['region'] == self.region:
-                    mtime = float(meta['mtime'])
+                if bucket['region'] == self.region:
+                    mtime = float(bucket['mtime'])
                     now = time()
                     if now - self.SAFETY_DELAY > mtime:
-                        yield bucket, meta['containers']
+                        yield bucket['name'], bucket['containers']
                     else:
                         self.logger.debug(
                             'Ignore bucket %s/%s: Modified %f seconds ago',
-                            account, bucket, now - mtime)
+                            account, bucket['name'], now - mtime)
                 else:
                     self.logger.debug(
                         'Ignore bucket %s/%s: In region %s',
-                        account, bucket, meta['region'])
+                        account, bucket['name'], bucket['region'])
             except Exception as exc:
                 self.success = False
                 self.logger.error(
                     'Failed to get information about bucket %s/%s '
-                    '(account service): %s', account, bucket, exc)
+                    '(account service): %s', account, bucket['name'], exc)
 
     def all_buckets_from_region(self):
         """

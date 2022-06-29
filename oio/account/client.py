@@ -81,7 +81,7 @@ class AccountClient(ServiceClient):
             account, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
 
-    def bucket_list(self, account, limit=None, marker=None,
+    def bucket_list(self, account, limit=None, marker=None, end_marker=None,
                     prefix=None, **kwargs):
         """
         Get the list of buckets of an account.
@@ -91,18 +91,23 @@ class AccountClient(ServiceClient):
         :keyword limit: maximum number of results to return
         :type limit: `int`
         :keyword marker: name of the bucket from where to start the listing
+            (excluded)
         :type marker: `str`
-        :keyword prefix:
-        :rtype: `dict` with 'ctime' (`float`), 'buckets' (`int`),
-            'bytes' (`int`), 'objects' (`int`), 'containers' (`int`),
-            'id' (`str`), 'metadata' (`dict`), 'listing' (`list`),
-            'truncated' and 'next_marker'.
-            'listing' contains dicts of container metadata (name,
-            number of objects, number of bytes and modification time).
-         """
+        :keyword end_marker: name of the bucket where to stop the listing
+            (excluded)
+        :type end_marker: `str`
+        :keyword prefix: list only the buckets starting with the prefix
+        :type prefix: `str`
+        :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
+            'objects' (`int`), 'containers' (`int`), 'buckets' (`int`),
+            'id' (`str`), 'metadata' (`dict`) and 'listing' (`list`).
+            'listing' contains lists of bucket metadata (name,
+            number of objects, number of bytes, modification time, etc.).
+        """
         params = {
             'limit': limit,
             'marker': marker,
+            'end_marker': end_marker,
             'prefix': prefix
         }
         _resp, body = self.account_request(account, 'GET', 'buckets',
