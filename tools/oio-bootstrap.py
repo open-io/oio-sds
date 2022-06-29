@@ -1136,9 +1136,6 @@ meta2.sharding.max_entries_cleaned=10
 sqliterepo.repo.hard_max=1024
 
 admin=${IP}:${PORT_ADMIN}
-#iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
-iam.connection=fdb://${IP}:0000/?allow_empty_policy_name=False
-fdb_file = ${CLUSTERFILE}
 
 ns.region = localhost
 """
@@ -1402,19 +1399,10 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
-backend_type = fdb
-# default fdb file /etc/foundationdb/fdb.cluster will be used if fdb_file
-# is not defined
-
 fdb_file = ${CLUSTERFILE}
 
 time_window_clear_deleted = 60
-
-# Let this option empty to connect directly to redis_host
-#sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
-sentinel_master_name = oio
-
-redis_host = ${IP}
+allow_empty_policy_name = False
 """
 
 template_xcute = """

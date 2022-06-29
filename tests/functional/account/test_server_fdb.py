@@ -37,29 +37,21 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 class TestAccountServerBase(BaseTestCase):
     def setUp(self):
         super(TestAccountServerBase, self).setUp()
-        iam_cnxstr = 'fdb://%s:%s/?db=1&allow_empty_policy_name=False' % (
-            0, 0)
         if os.path.exists(CommonFdb.DEFAULT_FDB):
             self.fdb_file = CommonFdb.DEFAULT_FDB
         else:
             self.fdb_file = \
                 str(Path.home()) + f'/.oio/sds/conf/{self.ns}-fdb.cluster'
-        conf = {'namespace': self.ns, 'iam.connection': iam_cnxstr}
-        conf['backend_type'] = 'fdb'
-        conf['fdb_file'] = self.fdb_file
+        conf = {
+            'fdb_file': self.fdb_file,
+            'allow_empty_policy_name': 'False'
+        }
 
         self.account_id = 'test'
         self.acct_app = create_app(conf)
-
-        self.acct_app.backend.init_db(None)
-        self.acct_app.iam.init_db(None)
+        self.acct_app.backend.init_db()
+        self.acct_app.iam.init_db()
         self.acct_app.backend.db.clear_range(b'\x00', b'\xfe')
-        """
-        main_directory= self.acct_app.backend.namespace
-        sub_dirs = main_directory.list(self.acct_app.backend.db)
-        for el in sub_dirs:
-            self.acct_app.backend.db.clear_range_startswith(main_directory[el])
-        """
         self.app = Client(self.acct_app, Response)
 
     @classmethod

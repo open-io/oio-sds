@@ -13,16 +13,18 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import re
 import time
 
 import fdb
 from fdb.tuple import unpack
 from functools import wraps
+from oio.common.easy_value import boolean_value
 
 from oio.common.json import json
-from oio.account.iam_base import IamDbBase
 from oio.common.exceptions import ServiceBusy
 from oio.account.common_fdb import CommonFdb
+from oio.common.logger import get_logger
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 
@@ -42,26 +44,29 @@ def catch_service_errors(func):
     return catch_service_errors_wrapper
 
 
-class FdbIamDb(IamDbBase):
+class FdbIamDb(object):
     """
     High-level API to save IAM rules in a foundationdb database.
     """
 
     IAM_KEY_PREFIX = 'iam'
+    DEFAULT_ALLOW_EMPTY_POLICY_NAME = True
 
-    def __init__(self, conf=None, logger=None, allow_empty_policy_name=True,
-                 **kwargs):
-        super(FdbIamDb, self).__init__(
-            allow_empty_policy_name=allow_empty_policy_name,
-            logger=logger)
-
+    def __init__(self, conf=None, logger=None, **kwargs):
         self.conf = conf
+        self.logger = logger or get_logger(conf, 'IAM')
+
+        self.main_namespace_name = conf.get(
+            'main_namespace_name', CommonFdb.MAIN_NAMESPACE)
+        self.iam_prefix = conf.get('iam_prefix', self.IAM_KEY_PREFIX)
+        self.allow_empty_policy_name = boolean_value(
+            conf.get('allow_empty_policy_name'),
+            self.DEFAULT_ALLOW_EMPTY_POLICY_NAME)
+
+        self.name_regex = re.compile(r'[\w+=,.@-]+')
         self.db = None
         self.namespace = None
         self.iam_space = None
-        self.main_namespace_name = self.conf.get('main_direcory_name',
-                                                 CommonFdb.MAIN_NAMESPACE)
-        self.iam_prefix = conf.get('iam_prefix', self.IAM_KEY_PREFIX)
 
     def init_db(self, event_model='gevent'):
         """

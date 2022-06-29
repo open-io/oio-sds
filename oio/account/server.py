@@ -20,18 +20,15 @@ from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
-from oio.common.configuration import load_namespace_conf
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
 from oio.common.easy_value import boolean_value, int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import parse_conn_str
 from oio.common.wsgi import WerkzeugApp
 
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
-DEFAULT_IAM_CONNECTION = 'redis://127.0.0.1:6379'
 
 
 def force_master(func):
@@ -1219,32 +1216,13 @@ class Account(WerkzeugApp):
 
 def create_app(conf, **kwargs):
     logger = get_logger(conf)
-    iam_conn = conf.get('iam.connection')
-    if not iam_conn:
-        ns_conf = load_namespace_conf(conf['namespace'], failsafe=True)
-        iam_conn = ns_conf.get('iam.connection', DEFAULT_IAM_CONNECTION)
-    if iam_conn == DEFAULT_IAM_CONNECTION:
-        logger.warning('Using the default connection (%s) is probably '
-                       'not what you want to do.', DEFAULT_IAM_CONNECTION)
-    scheme, netloc, iam_kwargs = parse_conn_str(iam_conn)
-    if scheme == 'redis+sentinel':
-        iam_kwargs['sentinel_hosts'] = netloc
-    else:
-        iam_kwargs['host'] = netloc
 
-    backend_type = conf.get('backend_type', 'redis')
-    if backend_type == 'fdb':
-        from oio.account.backend_fdb import AccountBackendFdb
-        from oio.account.iam_fdb import FdbIamDb
-        backend = AccountBackendFdb(conf, logger)
-        iam_db = FdbIamDb(conf, logger=logger, **iam_kwargs)
-    else:
-        from oio.account.backend import AccountBackend
-        from oio.account.iam import RedisIamDb
-        backend = AccountBackend(conf)
-        iam_db = RedisIamDb(logger=logger, **iam_kwargs)
+    from oio.account.backend_fdb import AccountBackendFdb
+    from oio.account.iam_fdb import FdbIamDb
+    backend = AccountBackendFdb(conf, logger)
+    iam_db = FdbIamDb(conf, logger=logger)
 
-    logger.info('Account using %s backend', backend_type)
+    logger.info('Account using FBD backend')
     app = Account(conf, backend, iam_db, logger=logger)
     return app
 

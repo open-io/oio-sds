@@ -12,31 +12,9 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,account,1
 proc_name = oio-account-server
 
-backend_type = fdb
 fdb_file = /etc/foundationdb/fdb.cluster
 
 time_window_clear_deleted = 60
-
-# Configure Redis backend
-#redis_host = 127.0.0.1:6379
-# or
-#redis_sentinel_hosts = 10.0.1.24:6012,10.0.1.27:6012,10.0.1.25:6012
-#redis_sentinel_name = SENTINEL-master-1
-#
-# Redis parameters (see redis.connection module)
-#redis_socket_timeout=None
-#redis_socket_connect_timeout=None
-#redis_socket_keepalive=False
-#redis_retry_on_timeout=False
-#redis_max_connections=2**31
-
-# Redis sentinel parameters, override Redis parameters
-# for connections to the sentinels.
-#redis_sentinel_socket_timeout=None
-#redis_sentinel_socket_connect_timeout=None
-#redis_sentinel_socket_keepalive=False
-#redis_sentinel_retry_on_timeout=False
-#redis_sentinel_max_connections=2**31
 
 bucket_reservation_timeout = 30
 # Trying to create a bucket when the account already has at least
@@ -44,3 +22,5 @@ bucket_reservation_timeout = 30
 # This limit can be changed for each account by setting the "max-buckets"
 # property.
 max_buckets_per_account = 100
+
+allow_empty_policy_name = True
