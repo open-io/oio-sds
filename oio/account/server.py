@@ -183,7 +183,7 @@ class Account(WerkzeugApp):
         return Response(json.dumps(status), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
-    # GET /metrics?format=json
+    # GET /metrics
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Get all available information about global metrics.
@@ -203,22 +203,20 @@ class Account(WerkzeugApp):
     #
     #    HTTP/1.1 200 OK
     #    Server: gunicorn
-    #    Date: Wed, 26 Jan 2022 10:40:13 GMT
+    #    Date: Thu, 30 Jun 2022 08:23:08 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 170
+    #    Content-Length: 142
     #
     #    {
     #      "accounts": 1,
     #      "regions": {
     #        "LOCALHOST": {
     #          "buckets": 1,
-    #          "bytes": 111,
     #          "bytes-details": {
     #            "SINGLE": 111
     #          },
     #          "containers": 1,
-    #          "objects": 1,
     #          "objects-details": {
     #            "SINGLE": 1
     #          }
@@ -458,8 +456,8 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    GET /v1.0/account/show?id=myaccount HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -467,22 +465,38 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:27:54 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 107
+    #    Content-Length: 303
     #
     # .. code-block:: json
     #
     #    {
-    #      "ctime": "1533127401.08165",
-    #      "bytes": 0,
-    #      "objects": 0,
+    #      "buckets": 1,
+    #      "bytes": 111,
+    #      "containers": 1,
+    #      "ctime": 1656577366.586362,
     #      "id": "myaccount",
-    #      "containers": 0,
-    #      "metadata": {}
-    #     }
+    #      "metadata": {},
+    #      "mtime": 1656577370.438831,
+    #      "objects": 1,
+    #      "regions": {
+    #        "LOCALHOST": {
+    #          "buckets": 1,
+    #          "bytes-details": {
+    #            "SINGLE": 111
+    #          },
+    #          "containers": 1,
+    #          "objects-details": {
+    #            "SINGLE": 1
+    #          },
+    #          "shards": 0
+    #        }
+    #      },
+    #      "shards": 0
+    #    }
     #
     # }}ACCT
     @force_master
@@ -514,10 +528,10 @@ class Account(WerkzeugApp):
     #
     #    HTTP/1.1 200 OK
     #    Server: gunicorn
-    #    Date: Wed, 29 Jun 2022 21:02:11 GMT
+    #    Date: Thu, 30 Jun 2022 08:29:45 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 456
+    #    Content-Length: 482
     #
     # .. code-block:: json
     #
@@ -525,21 +539,21 @@ class Account(WerkzeugApp):
     #      "buckets": 1,
     #      "bytes": 111,
     #      "containers": 1,
-    #      "ctime": 1656536282.058846,
+    #      "ctime": 1656577366.586362,
     #      "id": "myaccount",
     #      "listing": [
     #        {
     #          "bytes": 111,
     #          "containers": 1,
-    #          "ctime": 1656536295.673779,
-    #          "mtime": 1656536306.638677,
+    #          "ctime": 1656577366.584494,
+    #          "mtime": 1656577370.438831,
     #          "name": "mybucket",
     #          "objects": 1,
     #          "region": "LOCALHOST"
     #        }
     #      ],
     #      "metadata": {},
-    #      "mtime": 1656536306.638677,
+    #      "mtime": 1656577370.438831,
     #      "objects": 1,
     #      "regions": {
     #        "LOCALHOST": {
@@ -550,9 +564,11 @@ class Account(WerkzeugApp):
     #          "containers": 1,
     #          "objects-details": {
     #            "SINGLE": 1
-    #          }
+    #          },
+    #          "shards": 0
     #        }
     #      },
+    #      "shards": 0,
     #      "truncated": false
     #    }
     #
@@ -605,10 +621,10 @@ class Account(WerkzeugApp):
     #
     #    HTTP/1.1 200 OK
     #    Server: gunicorn
-    #    Date: Wed, 29 Jun 2022 20:58:52 GMT
+    #    Date: Thu, 30 Jun 2022 08:31:35 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 357
+    #    Content-Length: 383
     #
     # .. code-block:: json
     #
@@ -616,7 +632,7 @@ class Account(WerkzeugApp):
     #      "buckets": 0,
     #      "bytes": 111,
     #      "containers": 1,
-    #      "ctime": 1656536282.058846,
+    #      "ctime": 1656577366.586362,
     #      "id": "myaccount",
     #      "listing": [
     #        [
@@ -624,11 +640,11 @@ class Account(WerkzeugApp):
     #          1,
     #          111,
     #          0,
-    #          1656536306.638677
+    #          1656577370.438831
     #        ]
     #      ],
     #      "metadata": {},
-    #      "mtime": 1656536306.638677,
+    #      "mtime": 1656577370.438831,
     #      "objects": 1,
     #      "regions": {
     #        "LOCALHOST": {
@@ -639,9 +655,11 @@ class Account(WerkzeugApp):
     #          "containers": 1,
     #          "objects-details": {
     #            "SINGLE": 1
-    #          }
+    #          },
+    #          "shards": 0
     #        }
     #      },
+    #      "shards": 0,
     #      "truncated": false
     #    }
     #
@@ -1033,8 +1051,8 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    GET /v1.0/bucket/show?id=mybucket HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -1042,19 +1060,28 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:44:10 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 128
+    #    Content-Length: 246
     #
     # .. code-block:: json
     #
     #    {
     #      "account": "myaccount",
-    #      "bytes": 11300,
-    #      "mtime": "1533127401.08165",
-    #      "objects": 100,
+    #      "bytes": 111,
+    #      "bytes-details": {
+    #        "SINGLE": 111
+    #      },
+    #      "containers": 1,
+    #      "ctime": 1656577366.584494,
+    #      "mtime": 1656577370.438831,
+    #      "objects": 1,
+    #      "objects-details": {
+    #        "SINGLE": 1
+    #      },
+    #      "region": "LOCALHOST",
     #      "replication_enabled": false
     #    }
     #
@@ -1186,9 +1213,9 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    GET /v1.0/account/show-container?id=AUTH_demo&container=buck0 HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    GET /v1.0/account/container/show?id=myaccount&container=mycnt HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
     #
     # Sample response:
@@ -1196,21 +1223,26 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:46:35 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 128
+    #    Content-Length: 194
     #
     # .. code-block:: json
     #
     #    {
-    #      "bucket": "buck0",
-    #      "bytes": 2052,
-    #      "dtime": "0",
-    #      "mtime": "1583772880.48631",
-    #      "name": "buck0",
-    #      "objects": 2,
+    #      "bytes": 111,
+    #      "bytes-details": {
+    #        "SINGLE": 111
+    #      },
+    #      "mtime": 1656577370.438831,
+    #      "name": "mycnt",
+    #      "objects": 1,
+    #      "objects-details": {
+    #        "SINGLE": 1
+    #      },
+    #      "region": "LOCALHOST",
     #      "replication_enabled": false
     #    }
     #

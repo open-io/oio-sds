@@ -228,18 +228,18 @@ class AccountBackendFdb(object):
     def _timestamp_value_to_timestamp(self, timestamp_value):
         return struct.unpack('<Q', timestamp_value)[0] / 1000000
 
-    def _unmarshal_info(self, keys_values, has_region=False, unpack=None):
+    def _unmarshal_info(self, keys_values, has_regions=False, unpack=None):
         info = {}
         for key, value in keys_values:
             if unpack:
                 key = unpack(key)
             field, *details = key
             if details:
-                if not has_region and len(details) == 1:
+                if not has_regions and len(details) == 1:
                     policy = details[0]
                     dict_values = info.setdefault(f"{field}-details", {})
                     dict_values[policy] = self._counter_value_to_counter(value)
-                elif has_region and len(details) <= 2:
+                elif has_regions and len(details) <= 2:
                     region = details[0]
                     dict_values = info.setdefault(
                         REGIONS_FIELD, {}).setdefault(region, {})
@@ -256,6 +256,19 @@ class AccountBackendFdb(object):
                 info[field] = self._timestamp_value_to_timestamp(value)
             else:
                 info[field] = value.decode('utf-8')
+        if info:
+            # Make sure all keys are still visible,
+            # even if there is no associated information
+            if has_regions:
+                info.setdefault(REGIONS_FIELD, {})
+                for region_info in info[REGIONS_FIELD].values():
+                    for fields in (CONTAINERS_FIELD, BUCKETS_FIELD):
+                        region_info.setdefault(fields, 0)
+                    for fields in (BYTES_FIELD, OBJECTS_FIELD):
+                        region_info.setdefault(f"{fields}-details", {})
+            else:
+                for fields in (BYTES_FIELD, OBJECTS_FIELD):
+                    info.setdefault(f"{fields}-details", {})
         return info
 
     def _get_start_and_stop(self, space, prefix=None, marker=None,
@@ -340,7 +353,7 @@ class AccountBackendFdb(object):
             metrics_range.start, metrics_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(
-            iterator, has_region=True, unpack=self.metrics_space.unpack)
+            iterator, has_regions=True, unpack=self.metrics_space.unpack)
         info.setdefault(ACCOUNTS_FIELD, 0)
         info.setdefault(REGIONS_FIELD, {})
         return info
@@ -603,7 +616,7 @@ class AccountBackendFdb(object):
             account_range.start, account_range.stop,
             streaming_mode=fdb.StreamingMode.want_all)
         info = self._unmarshal_info(
-            iterator, has_region=True, unpack=account_space.unpack)
+            iterator, has_regions=True, unpack=account_space.unpack)
         if not info:
             return None
 
@@ -635,6 +648,10 @@ class AccountBackendFdb(object):
     @fdb.transactional
     @use_snapshot_reads
     def _merge_sharding_account_info(self, tr, account_id, info):
+        info[SHARDS_FIELD] = 0
+        regions_info = info[REGIONS_FIELD]
+        for region_info in regions_info.values():
+            region_info[SHARDS_FIELD] = 0
         # Fetch sharding account
         sharding_info = self._account_info(
             tr, SHARDING_ACCOUNT_PREFIX + account_id, full=False)
@@ -650,7 +667,6 @@ class AccountBackendFdb(object):
         info[MTIME_FIELD] = max(info.get(MTIME_FIELD, 0),
                                 sharding_info.get(MTIME_FIELD, 0))
         # Update detailed stats of sharding account
-        regions_info = info.setdefault(REGIONS_FIELD, {})
         for region, shards_region_info in sharding_info.get(
                 REGIONS_FIELD, {}).items():
             region_info = regions_info.setdefault(region, {})
@@ -737,7 +753,7 @@ class AccountBackendFdb(object):
         if limit > 0:
             accounts = self._list_items(
                 tr, start, stop, limit, filters, unpack, format_account,
-                has_region=True)
+                has_regions=True)
         else:
             accounts = []
         return accounts
