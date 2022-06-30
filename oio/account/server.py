@@ -180,7 +180,8 @@ class Account(WerkzeugApp):
     @force_master
     def on_status(self, req, **kwargs):
         status = self.backend.status(**kwargs)
-        return Response(json.dumps(status), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(status, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # GET /metrics
@@ -232,7 +233,8 @@ class Account(WerkzeugApp):
         if output_type == 'prometheus':
             return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
         else:
-            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
+            return Response(json.dumps(raw, separators=(',', ':')),
+                            mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # POST /v1.0/account/metrics/recompute
@@ -361,7 +363,8 @@ class Account(WerkzeugApp):
             info['truncated'] = True
         else:
             info['truncated'] = False
-        return Response(json.dumps(info), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(info, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # POST /v1.0/account/delete?id=<account_name>
@@ -504,7 +507,8 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         raw = self.backend.info_account(account_id, **kwargs)
         if raw is not None:
-            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
+            return Response(json.dumps(raw, separators=(',', ':')),
+                            mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Account not found')
 
     # ACCT{{
@@ -597,7 +601,7 @@ class Account(WerkzeugApp):
             account_info['truncated'] = True
         else:
             account_info['truncated'] = False
-        return Response(json.dumps(account_info),
+        return Response(json.dumps(account_info, separators=(',', ':')),
                         mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
@@ -689,7 +693,7 @@ class Account(WerkzeugApp):
             account_info['truncated'] = True
         else:
             account_info['truncated'] = False
-        return Response(json.dumps(account_info),
+        return Response(json.dumps(account_info, separators=(',', ':')),
                         mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
@@ -752,7 +756,8 @@ class Account(WerkzeugApp):
         self.backend.update_container(
             account_id, cname, mtime, dtime, object_count, bytes_used,
             bucket_name=bucket_name, **kwargs)
-        return Response(json.dumps(cname), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(cname, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/reset?id=<account_name>
@@ -1039,7 +1044,8 @@ class Account(WerkzeugApp):
         """
         bname = self._get_item_id(req, what='bucket')
         out = self.backend.get_bucket_owner(bname, **kwargs)
-        return Response(json.dumps(out), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(out, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # GET /v1.0/bucket/show?id=<bucket_name>
@@ -1096,10 +1102,11 @@ class Account(WerkzeugApp):
         check_owner = boolean_value(req.args.get('check_owner'), None)
         if check_owner is not None:
             kwargs['check_owner'] = check_owner
-        raw = self.backend.get_bucket_info(bname, account=account, **kwargs)
-        if raw is not None:
-            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
-        return NotFound('Bucket not found')
+        info = self.backend.get_bucket_info(bname, account=account, **kwargs)
+        if not info:
+            return NotFound('Bucket not found')
+        return Response(json.dumps(info, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/bucket/update?id=<bucket_name>
@@ -1161,9 +1168,10 @@ class Account(WerkzeugApp):
         to_delete = decoded.get('to_delete')
         info = self.backend.update_bucket_metadata(
             bname, metadata, to_delete, account=account, **kwargs)
-        if info is not None:
-            return Response(json.dumps(info), mimetype=HTTP_CONTENT_TYPE_JSON)
-        return NotFound('Bucket not found')
+        if not info:
+            return NotFound('Bucket not found')
+        return Response(json.dumps(info, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # POST /v1.0/bucket/refresh?id=<bucket_name>
@@ -1251,10 +1259,11 @@ class Account(WerkzeugApp):
     def on_account_container_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
         cname = self._get_item_id(req, key='container', what='container')
-        raw = self.backend.get_container_info(account_id, cname, **kwargs)
-        if raw is not None:
-            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
-        return NotFound('Container not found')
+        info = self.backend.get_container_info(account_id, cname, **kwargs)
+        if not info:
+            return NotFound('Container not found')
+        return Response(json.dumps(info, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     def on_iam_delete_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
@@ -1276,14 +1285,16 @@ class Account(WerkzeugApp):
         account = self._get_item_id(req, key='account', what='account')
         users = self.iam.list_users(account)
         res = {'Users': users}
-        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(res, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     def on_iam_list_user_policies(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
         policies = self.iam.list_user_policies(account, user)
         res = {'PolicyNames': policies}
-        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(res, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     def on_iam_put_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
@@ -1300,7 +1311,8 @@ class Account(WerkzeugApp):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
         res = self.iam.load_merged_user_policies(account, user)
-        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(json.dumps(res, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
 
 def create_app(conf, **kwargs):
