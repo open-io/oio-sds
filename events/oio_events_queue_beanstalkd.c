@@ -43,6 +43,8 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	.send = _q_send,
 	.send_overwritable = _q_send_overwritable,
 	.is_stalled = _q_is_stalled,
+	.get_total_send_time = _q_get_total_send_time,
+	.get_total_sent_events = _q_get_total_sent_events,
 	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
 	.start = _q_start,
@@ -76,6 +78,10 @@ oio_events_queue_factory__create_beanstalkd (
 	self->running = FALSE;
 
 	oio_events_queue_buffer_init(&(self->buffer));
+	self->event_send_count = grid_single_rrd_create(
+			oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
+	self->event_send_time = grid_single_rrd_create(
+			oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
 
 	*out = (struct oio_events_queue_s*) self;
 	return NULL;
@@ -133,7 +139,13 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 
 	/* forward the event as a beanstalkd job */
 	const size_t msglen = strlen(msg);
+	gint64 start = oio_ext_monotonic_time();
 	GError *err = beanstalkd_put_job(ctx->beanstalkd, msg, msglen);
+	gint64 end = oio_ext_monotonic_time();
+	time_t end_seconds = end / G_TIME_SPAN_SECOND;
+	/* count the operation whether it's a success or a failure */
+	grid_single_rrd_add(q->event_send_count, end_seconds, 1);
+	grid_single_rrd_add(q->event_send_time, end_seconds, end - start);
 #ifdef HAVE_EXTRA_DEBUG
 	if (intercept_errors)
 		(*intercept_errors) (err);

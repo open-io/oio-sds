@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -107,6 +108,13 @@ grid_single_rrd_add(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 	_gsr_manage_timeshift(gsr, now);
 	guint64 v0 = _rrd_current(gsr);
 	_rrd_set(gsr, v + v0);
+}
+
+guint64
+grid_single_rrd_get(struct grid_single_rrd_s *gsr, time_t now)
+{
+	_gsr_manage_timeshift(gsr, now);
+	return _rrd_current(gsr);
 }
 
 guint64

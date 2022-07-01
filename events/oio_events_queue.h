@@ -41,6 +41,12 @@ void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
  * the queue won't deny events. */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
+/** Get the total time spent sending events. */
+guint64 oio_events_queue__get_total_send_time(struct oio_events_queue_s *self);
+
+/** Get the total number of events sent through this queue. */
+guint64 oio_events_queue__get_total_sent_events(struct oio_events_queue_s *self);
+
 /* Get a health metric for the events queue, from 0 (bad) to 100 (good). */
 gint64 oio_events_queue__get_health(struct oio_events_queue_s *self);
 
@@ -71,5 +77,22 @@ GString* oio_event__create_with_id(const char *type, struct oio_url_s *url,
  */
 GError * oio_events_queue_factory__create (const char *cfg, const char *tube,
 		struct oio_events_queue_s **out);
+
+/* -------------------------------------------------------------------------- */
+
+#define OIO_EVENTS_STATS_HISTORY_SECONDS 60
+
+/** Register a queue whose metrics must be reported by
+ * oio_events_stats_to_prometheus(). */
+void oio_events_stats_register(const gchar *key,
+		struct oio_events_queue_s *queue);
+
+/** Unregister a queue whose metrics are reported by
+ * oio_events_stats_to_prometheus(). */
+void oio_events_stats_unregister(const gchar *key);
+
+/** Get a report of registered queue metric, in Prometheus format. */
+void oio_events_stats_to_prometheus(const gchar *service_id,
+		const gchar *namespace, GString *out);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_h*/

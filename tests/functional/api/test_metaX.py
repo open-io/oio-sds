@@ -68,7 +68,7 @@ class TestMetaX(BaseTestCase):
         self._test_get_stats_prometheus('meta2')
 
     def _test_get_info_prometheus(self, service_type):
-        stat_re = re.compile(r'^(\w+){(.+)} (\w+)$')
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w.]+)$')
         services = self.conscience.all_services(service_type)
         service = random.choice(services)
         service_id = service['tags'].get('tag.service_id', service['addr'])

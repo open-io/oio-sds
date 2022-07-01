@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,8 @@ struct oio_events_queue_vtable_s
 	void (*send_overwritable)(struct oio_events_queue_s *self,
 			gchar *key, gchar *msg);
 	gboolean (*is_stalled) (struct oio_events_queue_s *self);
+	guint64 (*get_total_sent_events) (struct oio_events_queue_s *self);
+	guint64 (*get_total_send_time) (struct oio_events_queue_s *self);
 	gint64 (*get_health) (struct oio_events_queue_s *self);
 	void (*set_buffering) (struct oio_events_queue_s *self, gint64 v);
 	GError * (*start) (struct oio_events_queue_s *self);

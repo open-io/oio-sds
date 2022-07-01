@@ -59,7 +59,10 @@ _q_destroy(struct oio_events_queue_s *self)
 	oio_str_clean(&q->exchange_name);
 	oio_str_clean(&q->exchange_type);
 	oio_events_queue_buffer_clean(&(q->buffer));
-
+	grid_single_rrd_destroy(q->event_send_count);
+	grid_single_rrd_destroy(q->event_send_time);
+	q->event_send_count = NULL;
+	q->event_send_time = NULL;
 	q->vtable = NULL;
 	g_free(q);
 }
@@ -162,6 +165,49 @@ _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), key);
+}
+
+guint64
+_q_get_total_send_time(struct oio_events_queue_s *self)
+{
+	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
+	gint64 now = oio_ext_monotonic_seconds();
+	return grid_single_rrd_get(q->event_send_time, now);
+}
+
+guint64
+_q_get_total_sent_events(struct oio_events_queue_s *self)
+{
+	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
+	gint64 now = oio_ext_monotonic_seconds();
+	return grid_single_rrd_get(q->event_send_count, now);
+}
+
+guint64
+_q_get_avg_send_rate(struct oio_events_queue_s *self, gint64 duration)
+{
+	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
+	EXTRA_ASSERT(duration > 0);
+	time_t period = MIN(duration, OIO_EVENTS_STATS_HISTORY_SECONDS);
+	gint64 now = oio_ext_monotonic_seconds();
+	guint64 count = grid_single_rrd_get_delta(q->event_send_count, now, period);
+	return count / period;
+}
+
+guint64
+_q_get_avg_send_time(struct oio_events_queue_s *self, gint64 duration)
+{
+	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
+	time_t period = MIN(duration, OIO_EVENTS_STATS_HISTORY_SECONDS);
+	gint64 now = oio_ext_monotonic_seconds();
+	guint64 tot_time = grid_single_rrd_get_delta(q->event_send_time, now, period);
+	guint64 count = grid_single_rrd_get_delta(q->event_send_count, now, period);
+	guint64 avg_send_time = tot_time / MAX(count, 1);
+	return avg_send_time;
 }
 
 gint64

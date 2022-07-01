@@ -49,6 +49,8 @@ struct _queue_with_endpoint_s
 	volatile gboolean running;
 
 	struct oio_events_queue_buffer_s buffer;
+	struct grid_single_rrd_s *event_send_count;
+	struct grid_single_rrd_s *event_send_time;
 };
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -68,7 +70,13 @@ void _q_destroy (struct oio_events_queue_s *self);
 void _q_flush_buffered(struct _queue_with_endpoint_s *q, gboolean total);
 void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
 void _q_flush_pending(struct _queue_with_endpoint_s *q);
+/** Get the average send rate over the specified duration. */
+guint64 _q_get_avg_send_rate(struct oio_events_queue_s *self, gint64 duration);
+/** Get the average send time over the specified duration. */
+guint64 _q_get_avg_send_time(struct oio_events_queue_s *self, gint64 duration);
 gint64 _q_get_health(struct oio_events_queue_s *self);
+guint64 _q_get_total_send_time(struct oio_events_queue_s *self);
+guint64 _q_get_total_sent_events(struct oio_events_queue_s *self);
 gboolean _q_is_empty(struct _queue_with_endpoint_s *q);
 gboolean _q_is_running(struct _queue_with_endpoint_s *q);
 gboolean _q_is_stalled(struct oio_events_queue_s *self);

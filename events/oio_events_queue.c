@@ -82,6 +82,24 @@ oio_events_queue__is_stalled (struct oio_events_queue_s *self)
 	EVTQ_CALL(self,is_stalled)(self);
 }
 
+guint64
+oio_events_queue__get_total_send_time(struct oio_events_queue_s *self)
+{
+	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,get_total_send_time)) {
+		EVTQ_CALL(self,get_total_send_time)(self);
+	}
+	return 0;
+}
+
+guint64
+oio_events_queue__get_total_sent_events(struct oio_events_queue_s *self)
+{
+	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,get_total_sent_events)) {
+		EVTQ_CALL(self,get_total_sent_events)(self);
+	}
+	return 0;
+}
+
 gint64
 oio_events_queue__get_health(struct oio_events_queue_s *self)
 {
@@ -240,4 +258,83 @@ oio_event__create_with_id(const char *type, struct oio_url_s *url,
 		oio_str_gstring_append_json_pair(gs, EVENT_FIELD_ORIGIN, user_agent);
 	}
 	return gs;
+}
+
+
+static GHashTable *_registered_events_queues = NULL;
+static GMutex _registered_events_queues_lock = {0};
+
+void
+oio_events_stats_register(const gchar *key, struct oio_events_queue_s *queue)
+{
+	g_mutex_lock(&_registered_events_queues_lock);
+	if (!_registered_events_queues) {
+		_registered_events_queues = g_hash_table_new(g_str_hash, g_str_equal);
+	} else {
+		g_hash_table_ref(_registered_events_queues);
+	}
+	g_hash_table_replace(_registered_events_queues, (gpointer)key, queue);
+	g_mutex_unlock(&_registered_events_queues_lock);
+}
+
+void
+oio_events_stats_unregister(const gchar *key)
+{
+	g_mutex_lock(&_registered_events_queues_lock);
+	g_hash_table_remove(_registered_events_queues, key);
+	// Will free when ref count is zero.
+	g_hash_table_unref(_registered_events_queues);
+	g_mutex_unlock(&_registered_events_queues_lock);
+}
+
+struct _prom_stat_in_out {
+	const gchar *namespace;
+	const gchar *service_id;
+	GString *out;
+};
+
+static void
+_stat_append_to_str(const gchar *key,
+		struct oio_events_queue_s *queue, struct _prom_stat_in_out *in_out)
+{
+	g_string_append_static(in_out->out,
+			"meta_event_sent_total{service_id=\"");
+	g_string_append(in_out->out, in_out->service_id);
+	g_string_append_static(in_out->out, "\",event_type=\"");
+	g_string_append(in_out->out, key);
+	g_string_append_static(in_out->out, "\",namespace=\"");
+	g_string_append(in_out->out, in_out->namespace);
+	g_string_append_static(in_out->out, "\"} ");
+	guint64 events = oio_events_queue__get_total_sent_events(queue);
+	g_string_append_printf(in_out->out, "%"G_GUINT64_FORMAT"\n", events);
+
+	g_string_append_static(in_out->out,
+			"meta_event_send_time_seconds_total{service_id=\"");
+	g_string_append(in_out->out, in_out->service_id);
+	g_string_append_static(in_out->out, "\",event_type=\"");
+	g_string_append(in_out->out, key);
+	g_string_append_static(in_out->out, "\",namespace=\"");
+	g_string_append(in_out->out, in_out->namespace);
+	g_string_append_static(in_out->out, "\"} ");
+	guint64 time_us = oio_events_queue__get_total_send_time(queue);
+	double time_s = (double)time_us / (double)G_TIME_SPAN_SECOND;
+	g_string_append_printf(in_out->out, "%.6f\n", time_s);
+}
+
+void
+oio_events_stats_to_prometheus(const gchar *service_id, const gchar *namespace,
+		GString *out)
+{
+	struct _prom_stat_in_out in_out = {
+		.namespace = namespace,
+		.service_id = service_id,
+		.out = out
+	};
+	g_mutex_lock(&_registered_events_queues_lock);
+	// We may have an issue here, if we create it an then empty it completely.
+	if (_registered_events_queues) {
+		g_hash_table_foreach(_registered_events_queues,
+				(GHFunc)_stat_append_to_str, &in_out);
+	}
+	g_mutex_unlock(&_registered_events_queues_lock);
 }

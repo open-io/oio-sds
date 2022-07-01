@@ -24,6 +24,8 @@ License along with this library.
 #include <glib.h>
 #include <sqlite3.h>
 
+#include <events/oio_events_queue.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/codec.h>
 
@@ -1946,6 +1948,8 @@ _handler_INFO(struct gridd_reply_ctx_s *reply,
 	if (g_strcmp0(format, "prometheus") == 0) {
 		_info_elections(repo, gstr, TRUE);
 		_info_cache(repo, gstr, TRUE);
+		oio_events_stats_to_prometheus(
+				oio_server_service_id, oio_server_namespace, gstr);
 		body = metautils_gba_from_string(gstr->str);
 		_append_request_stats(body);
 	} else {

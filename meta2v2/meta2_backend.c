@@ -181,8 +181,10 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	else \
 		err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
-	if (!err) \
+	if (!err) {\
 		err = oio_events_queue__start((Out)); \
+		oio_events_stats_register(#Out + sizeof("m2->notifier"), Out); \
+	} \
 }
 	gchar *url = oio_cfg_get_eventqueue(ns, "meta2");
 	if (!url)
@@ -257,7 +259,11 @@ exit:
 	return err;
 }
 
-#define CLEAN(N) if (N) { oio_events_queue__destroy(N); N = NULL; }
+#define CLEAN(N) if (N) { \
+	oio_events_stats_unregister(#N + sizeof("m2->notifier")); \
+	oio_events_queue__destroy(N); \
+	N = NULL; \
+}
 
 void
 meta2_backend_clean(struct meta2_backend_s *m2)
