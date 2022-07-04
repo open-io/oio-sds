@@ -204,8 +204,10 @@ network_client_log_access(struct log_item_s *item)
 	if (!r->tv_end)
 		r->tv_end = oio_ext_monotonic_time ();
 
-	gint64 diff_total = r->tv_end - r->tv_start;
-	gint64 diff_handler = r->tv_end - r->tv_parsed;
+	double diff_total = (double)(r->tv_end - r->tv_start)
+			/ (double)G_TIME_SPAN_SECOND;
+	double diff_handler = (double)(r->tv_end - r->tv_parsed)
+			/ (double)G_TIME_SPAN_SECOND;
 
 	GString *gstr = g_string_sized_new(256);
 
@@ -218,19 +220,21 @@ network_client_log_access(struct log_item_s *item)
 	g_string_append_len(gstr, ensure(hashstr_str(r->reqname)),
 			hashstr_len(r->reqname)?:1);
 	g_string_append_printf(gstr, "\tstatus_int:%d", item->code);
-	g_string_append_printf(gstr, "\trequest_time_int:%"G_GINT64_FORMAT, diff_total);
+	g_string_append_printf(gstr, "\trequest_time_float:%.6lf", diff_total);
 	g_string_append_printf(gstr, "\tbytes_sent_int:%"G_GSIZE_FORMAT, item->out_len);
 	g_string_append_static(gstr, "\trequest_id:");
 	g_string_append(gstr, ensure(r->reqid));
 
 	/* arbitrary */
-	g_string_append_printf(gstr, "\ttime_spent_handler_int:%"G_GINT64_FORMAT, diff_handler);
+	g_string_append_printf(gstr, "\ttime_spent_handler_float:%.6lf", diff_handler);
 	GHashTable *perfdata = oio_ext_get_perfdata();
 	if (perfdata) {
 		void __log_perfdata(gpointer key, gpointer val, gpointer udata UNUSED)
 		{
-			g_string_append_printf(gstr, "\tperfdata_%s:%"G_GINT64_FORMAT,
-				(char*)key, (gint64)GPOINTER_TO_INT(val));
+			double val_seconds = (double)GPOINTER_TO_INT(val)
+					/ (double)G_TIME_SPAN_SECOND;
+			g_string_append_printf(gstr, "\tperfdata_%s_float:%.6lf",
+				(char*)key, val_seconds);
 		}
 		g_hash_table_foreach(perfdata, __log_perfdata, NULL);
 	}
