@@ -452,12 +452,10 @@ class TestDirectoryAPI(BaseTestCase):
         print("Current repartition: ", by_rdir)
 
         # Define an acceptable variance for rdir assignment around average.
-        # 50% may seem huge, but rdir doesn't seem to suffer from performance
-        # issues, and we don't want this test to be flaky.
-        epsilon = int(avg / 2)
+        epsilon = 2
         for count in by_rdir.values():
             # Assert upper bounded values
             self.assertLessEqual(count, avg + epsilon)
-            # Assert lower bounded values
-            if avg - epsilon > 0:
-                self.assertGreaterEqual(count, avg - epsilon)
+            # We want to ensure all rdir services are used. However we don't
+            # care if they are underused.
+            self.assertGreaterEqual(count, 1)
