@@ -197,6 +197,27 @@ class FdbIamDb(object):
         """
         return self.put_user_policy(account, user, policy=rules)
 
+    def _append_policy_statements(self, account, user, policy_name, policy,
+                                  all_statements):
+        """
+        Decode the provide policy (JSON bytes) and append all of its
+        statements to the list. Does nothing but logging if the policy
+        cannot be decoded.
+        """
+        try:
+            policy_obj = json.loads(policy.decode('utf-8'))
+            statements = policy_obj.get('Statement')
+            if not statements:
+                self.logger.warning(
+                    'policy %r for %s/%s has no Statement',
+                    policy_name, account, user)
+            else:
+                all_statements.extend(statements)
+        except ValueError as err:
+            self.logger.warning(
+                'policy %r for %s/%s is not JSON-formatted: %s',
+                policy_name, account, user, err)
+
     @fdb.transactional
     def _delete_user_policy(self, tr, account, user, policy_name):
         if policy_name:
@@ -236,11 +257,11 @@ class FdbIamDb(object):
             if value is not None:
                 if not policy:
                     if self.allow_empty_policy_name:
-                        self.append_policy_statements(account, user, '', value,
-                                                      statements)
+                        self._append_policy_statements(account, user, '',
+                                                       value, statements)
                 else:
-                    self.append_policy_statements(account, user, policy, value,
-                                                  statements)
+                    self._append_policy_statements(account, user, policy,
+                                                   value, statements)
         return statements
 
     @fdb.transactional
