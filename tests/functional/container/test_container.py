@@ -66,12 +66,13 @@ def gen_chunks(n):
                "content": hexid}
 
 
-def gen_names():
+def gen_names(width=8, depth=1):
     index = 0
-    for c0 in "01234567":
-        for c1 in "01234567":
-            i, index = index, index + 1
-            yield i, '{0}/{1}/plop'.format(c0, c1)
+    for c0 in range(width):
+        for c1 in range(width):
+            for x in range(depth):
+                i, index = index, index + 1
+                yield i, '{0}/{1}/{2}plop'.format(c0, c1, x)
 
 
 class TestMeta2Containers(BaseTestCase):
@@ -205,12 +206,9 @@ class TestMeta2Containers(BaseTestCase):
                             data=data, headers=headers)
         self.assertEqual(resp.status, 400)
 
-    def test_list(self):
-        params = self.param_ref(self.ref)
-        self._create(params, 201)
-
+    def _fill_content(self, width, depth):
         # Fill some contents
-        for i, name in gen_names():
+        for i, name in gen_names(width, depth):
             hexid = binascii.hexlify(struct.pack("q", i)).decode('utf-8')
             logging.debug("id=%s name=%s", hexid, name)
             chunk = {"url": "http://127.0.0.1:6008/"+hexid,
@@ -231,6 +229,13 @@ class TestMeta2Containers(BaseTestCase):
                                 params=p, headers=headers, data=body)
             self.assertEqual(resp.status, 204)
 
+    def test_list(self):
+        params = self.param_ref(self.ref)
+        self._create(params, 201)
+
+        # Fill some contents
+        self._fill_content(8, 1)
+
         params = self.param_ref(self.ref)
         # List everything
         resp = self.request('GET', self.url_container('list'), params=params)
@@ -249,6 +254,17 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.request('GET', self.url_container('list'), params=params)
         self.assertEqual(resp.status, 200)
         self.check_list_output(self.json_loads(resp.data), 0, 8)
+        del params['delimiter']
+
+        # List with a string delimiter
+        params['delimiter'] = '0/'
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 49, 8)
+        self.assertEqual(data['prefixes'],
+                         ['0/', '1/0/', '2/0/', '3/0/', '4/0/',
+                         '5/0/', '6/0/', '7/0/'])
         del params['delimiter']
 
         # List with a prefix
@@ -271,6 +287,70 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(resp.status, 200)
         self.check_list_output(self.json_loads(resp.data), 8, 0)
         del params['end_marker']
+
+    def test_list_extend_delimiter(self):
+        params = self.param_ref(self.ref)
+        self._create(params, 201)
+
+        # Fill some contents
+        self._fill_content(4, 3)
+
+        params = self.param_ref(self.ref)
+        # List everything
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(self.json_loads(resp.data), 48, 0)
+
+        # Empty delimiter
+        params['delimiter'] = ''
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 48, 0)
+        del params['delimiter']
+
+        # List with a string delimiter
+        params['delimiter'] = '0/1'
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 41, 5)
+        self.assertEqual(data['prefixes'],
+                         ['0/0/1', '0/1', '1/0/1', '2/0/1', '3/0/1'])
+        del params['delimiter']
+
+        # List with a prefix and string delimiter
+        params['prefix'] = '1/'
+        params['delimiter'] = '3/'
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 9, 1)
+        self.assertEqual(data['prefixes'],
+                         ['1/3/'])
+        del params['prefix']
+        del params['delimiter']
+
+        # List with a marker and delimiter
+        params['marker'] = '2/'
+        params['delimiter'] = '0/'
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 18, 2)
+        self.assertEqual(data['prefixes'], ['2/0/', '3/0/'])
+        del params['marker']
+        del params['delimiter']
+
+        # Prefix is equal to delimiter
+        params['prefix'] = '2/0/'
+        params['delimiter'] = '2/0/'
+        resp = self.request('GET', self.url_container('list'), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 3, 0)
+        del params['prefix']
+        del params['delimiter']
 
     def test_touch(self):
         params = self.param_ref(self.ref)
