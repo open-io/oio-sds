@@ -1118,7 +1118,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		prefix_len = strlen(lp.prefix);
 	}
 	if (lp.marker_start && *(lp.marker_start) && lp.delimiter) {
-		const gchar *suffix = strchr(lp.marker_start + prefix_len,
+		const gchar *suffix = strstr(lp.marker_start + prefix_len,
 				lp.delimiter);
 		if (suffix) {
 			/* If the marker contains a sub-prefix, no alias of that sub-prefix
@@ -1133,12 +1133,13 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 	void _load_header_and_send(struct bean_ALIASES_s *alias) {
 		const gchar *name = ALIASES_get_alias(alias)->str;
 		const gchar *suffix = NULL;
-		if (lp.delimiter) {
-			suffix = strchr(name + prefix_len, lp.delimiter);
+		if (lp.delimiter && *(lp.delimiter)) {
+			suffix = strstr(name + prefix_len, lp.delimiter);
 		}
 		if (suffix) {  // It's a sub-prefix
+			int len_delimiter = strlen(lp.delimiter);
 			if (last_alias_name &&
-					strncmp(last_alias_name, name, (suffix - name) + 1) == 0) {
+					strncmp(last_alias_name, name, (suffix - name) + len_delimiter) == 0) {
 				/* Same sub-prefix as the previous alias,
 				 * only one alias is enough. */
 				return;
@@ -1174,7 +1175,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			 * It is used to directly access the correct shard. */
 			g_free(last_alias_name);
 			last_alias_name = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
-					(int)((suffix - name) + 1), name);
+					(int)(suffix - name + len_delimiter), name);
 		} else {
 			if (lp.flag_headers)
 				_load_fk_by_name(sq3, alias, "image", cb, u);

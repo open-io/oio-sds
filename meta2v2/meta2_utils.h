@@ -45,7 +45,7 @@ struct list_params_s
 {
 	gint64 maxkeys;
 	const char *prefix;
-	char delimiter;
+	const char *delimiter;
 	const char *marker_start;
 	const char *version_marker;
 	const char *marker_end;

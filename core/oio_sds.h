@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -450,7 +451,7 @@ struct oio_sds_list_param_s
 	size_t max_items;
 
 	/* 0 means no set */
-	char delimiter;
+	const char * delimiter;
 
 	unsigned char flag_nodeleted : 1;
 	unsigned char flag_allversions : 1;

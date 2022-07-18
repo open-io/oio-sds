@@ -1128,11 +1128,11 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 
 /* CONTAINER resources ------------------------------------------------------ */
 
-static char
+static const char *
 _delimiter (struct req_args_s *args)
 {
 	const char *s = OPT("delimiter");
-	return s ? *s : 0;
+	return s;
 }
 
 static GError *
@@ -1160,7 +1160,7 @@ struct filter_ctx_s
 	guint count; // aliases in <beans>
 	const char *prefix;
 	const char *marker;
-	char delimiter;
+	const char *delimiter;
 };
 
 static void
@@ -1196,13 +1196,14 @@ _filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 		}
 
 		const char *name = ALIASES_get_alias(l->data)->str;
-		if (ctx->delimiter) {
-			const char *p = strchr(name + prefix_len, ctx->delimiter);
+		if (ctx->delimiter && *(ctx->delimiter)) {
+			const char *p = strstr(name + prefix_len, ctx->delimiter);
 			if (p) {
+				int len_delimiter = strlen(ctx->delimiter);
 				// We must not respond a prefix equal to the marker.
 				if (!ctx->marker ||
-						strncmp(name, ctx->marker, (p - name) + 1)) {
-					gchar *prefix = g_strndup(name, (p - name) + 1);
+						strncmp(name, ctx->marker, (p - name + len_delimiter))) {
+					gchar *prefix = g_strndup(name, (p - name + len_delimiter));
 					// Use replace (vs insert) to be sure prefix stays valid
 					g_tree_replace(ctx->prefixes, prefix, GINT_TO_POINTER(1));
 				}
@@ -1956,7 +1957,7 @@ typedef GByteArray* (*list_packer_f) (struct list_params_s *);
  * - delimiter: the delimiter specified in the request.
  * - req_prefix: the prefix specified in the request. */
 static gchar *
-_build_next_marker(const char *marker, const char delimiter,
+_build_next_marker(const char *marker, const char *delimiter,
 		const char *req_prefix)
 {
 	/* There is no input marker, or the marker is before the request's prefix.
@@ -1976,13 +1977,13 @@ _build_next_marker(const char *marker, const char delimiter,
 
 	/* Nothing special to do. Use the marker as specified by the customer
 	 * or as returned by the last iteration. */
-	if (!delimiter) {
+	if (!delimiter || !*delimiter) {
 		return g_strdup(marker);
 	}
 
 	/* Look for a "sub-prefix" in the candidate marker. */
 	gsize prefix_len = req_prefix ? strlen(req_prefix) : 0;
-	const char *suffix = strchr(marker + prefix_len, delimiter);
+	const char *suffix = strstr(marker + prefix_len, delimiter);
 	if (!suffix) {
 		return g_strdup(marker);
 	}
@@ -2015,8 +2016,9 @@ _build_next_marker(const char *marker, const char delimiter,
 	 *
 	 * Notice that there is the same mechanism in the meta2 service.
 	 * It is used to return a single alias per sub-prefix. */
+	int len_delimiter = strlen(delimiter);
 	gchar *next_marker = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
-			(int)((suffix - marker) + 1), marker);
+			(int)(suffix + len_delimiter - marker), marker);
 	return next_marker;
 }
 
@@ -2028,10 +2030,10 @@ static GError * _list_loop (struct req_args_s *args,
 	guint count = 0;
 	struct list_params_s in = *in0;
 
-	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s"
+	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%s prefix=%s"
 			" marker=%s version_marker=%s end=%s",
 			oio_url_get(args->url, OIOURL_WHOLE),
-			in0->maxkeys, in0->delimiter ? in0->delimiter : ' ', in0->prefix,
+			in0->maxkeys, in0->delimiter, in0->prefix,
 			in0->marker_start, in0->version_marker, in0->marker_end);
 
 	PACKER_VOID(_pack) { return packer(&in); }

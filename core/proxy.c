@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -784,7 +784,7 @@ oio_proxy_call_content_list(CURL *h, struct oio_sds_list_param_s *params,
 	if (params->max_items)
 		g_string_append_printf(http_url, "&max=%zu", params->max_items);
 	if (params->delimiter)
-		g_string_append_printf(http_url, "&delimiter=%c", params->delimiter);
+		g_string_append_printf(http_url, "&delimiter=%s", params->delimiter);
 	if (params->flag_properties)
 		g_string_append_printf(http_url, "&properties=1");
 
