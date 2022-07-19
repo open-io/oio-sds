@@ -24,7 +24,6 @@ import os
 import warnings
 import time
 import random
-from oio.account.backend_fdb import SHARDING_ACCOUNT_PREFIX
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -37,7 +36,8 @@ from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id, \
     ensure_request_id2
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION, HEADER_PREFIX, TIMEOUT_KEYS
+from oio.common.constants import OIO_VERSION, HEADER_PREFIX, TIMEOUT_KEYS, \
+    SHARDING_ACCOUNT_PREFIX
 from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found, patch_kwargs
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \

@@ -22,7 +22,8 @@ import time
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, \
+    SHARDING_ACCOUNT_PREFIX
 from oio.common.easy_value import boolean_value, float_value, \
     int_value
 from oio.common.exceptions import ServiceBusy
@@ -33,7 +34,6 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 LAST_UNICODE_CHAR = u"\U0010fffd"
 
 MULTIUPLOAD_SUFFIX = '+segments'
-SHARDING_ACCOUNT_PREFIX = '.shards_'
 BYTES_FIELD = 'bytes'
 OBJECTS_FIELD = 'objects'
 SHARDS_FIELD = 'shards'

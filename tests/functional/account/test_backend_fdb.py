@@ -29,7 +29,8 @@ from testtools.testcase import ExpectedException
 from time import sleep, time
 from werkzeug.exceptions import Conflict
 
-from oio.account.backend_fdb import SHARDING_ACCOUNT_PREFIX, AccountBackendFdb
+from oio.common.constants import SHARDING_ACCOUNT_PREFIX
+from oio.account.backend_fdb import AccountBackendFdb
 from oio.account.common_fdb import CommonFdb
 from oio.common.timestamp import Timestamp
 
