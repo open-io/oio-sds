@@ -1225,7 +1225,7 @@ class AccountBackendFdb(object):
             bname = info.get('bucket')
             if bname:
                 if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-                    account_id = account_id[8:]
+                    account_id = account_id[len(SHARDING_ACCOUNT_PREFIX):]
                 buckat_space = self.bucket_space[account_id][bname]
                 repli_enabled = tr[
                     buckat_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
@@ -1869,7 +1869,7 @@ class AccountBackendFdb(object):
         # Filter the special accounts hosting bucket shards.
         root_container = cname
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-            account_id = account_id[8:]
+            account_id = account_id[len(SHARDING_ACCOUNT_PREFIX):]
             root_container = cname.rsplit('-', 3)[0]
 
         bucket_space = self.bucket_space[account_id][bname]

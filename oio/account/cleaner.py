@@ -17,6 +17,7 @@ from time import time
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import load_namespace_conf
+from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.exceptions import NotFound
 from oio.common.logger import get_logger
 from oio.common.utils import depaginate
@@ -240,6 +241,8 @@ class AccountServiceCleaner(object):
 
         if not bucket:
             return
+        if account.startswith(SHARDING_ACCOUNT_PREFIX):
+            account = account[len(SHARDING_ACCOUNT_PREFIX):]
         if self.bucket_exists(account, bucket):
             return
         if not self.is_owner(account, bucket):
