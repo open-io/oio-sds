@@ -239,7 +239,7 @@ class ContainerLifecycle(object):
             if self.processed_versions is not None:
                 self.processed_versions.save_object(obj_meta, **kwargs)
 
-    def execute(self, use_precessed_versions=True, **kwargs):
+    def execute(self, use_processed_versions=True, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
         on all objects of the container (and its relatives, if recursive
@@ -249,7 +249,7 @@ class ContainerLifecycle(object):
         :rtype: generator of 4-tuples
         :notice: the results must be consumed or the rules won't be applied.
         """
-        if use_precessed_versions:
+        if use_processed_versions:
             self.processed_versions = ProcessedVersions()
 
         results = self.process_container(self.container, **kwargs)
@@ -298,7 +298,16 @@ class LifecycleRule(object):
             filter_ = LifecycleRuleFilter.from_element(
                 rule_elt.findall(tag('Filter'), nsmap)[-1])
         except IndexError:
-            raise ValueError("Missing 'Filter' element")
+            try:
+                # Find Prefix if no Filter exists
+                rule_elt.findall(tag('Prefix'), nsmap)[-1].text
+            except IndexError:
+                raise ValueError("Missing 'Prefix' element outside Filter")
+            try:
+                filter_ = LifecycleRuleFilter.from_element(
+                    rule_elt)
+            except IndexError:
+                raise ValueError("Missing 'Filter or Prefix' element")
 
         try:
             status = rule_elt.findall(tag('Status'), nsmap)[-1].text
@@ -464,7 +473,7 @@ class LifecycleRule(object):
 class LifecycleRuleFilter(object):
     """Filter to determine on which objects to apply a lifecycle rule."""
 
-    def __init__(self, prefix, tags):
+    def __init__(self, prefix, lesser, greater, tags):
         """
         :param prefix: prefix that objects must have to pass this filter
         :type prefix: `basestring`
@@ -473,6 +482,8 @@ class LifecycleRuleFilter(object):
         """
         self.prefix = prefix
         self.tags = tags
+        self.lesser = lesser
+        self.greater = greater
 
     @classmethod
     def from_element(cls, filter_elt, **kwargs):
@@ -481,33 +492,54 @@ class LifecycleRuleFilter(object):
 
         :type filter_elt: `lxml.etree.Element`
         """
+
+        def find_tag(element, tag_name):
+            try:
+                tag_value = int(element.findall(
+                            tag(tag_name), nsmap)[-1].text)
+                if tag_value < 0:
+                    raise ValueError(
+                        "The %s size must be "
+                        "a positive integer", tag_name)
+            except IndexError:
+                tag_value = None
+            return tag_value
+
         nsmap = filter_elt.nsmap
         try:
             and_elt = filter_elt.findall(tag('And'), nsmap)[-1]
             try:
                 prefix = and_elt.findall(tag('Prefix'), nsmap)[-1].text
-                if prefix is None:
-                    raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
                 prefix = None
+
+            lesser = find_tag(and_elt, 'ObjectSizeLessThan')
+            greater = find_tag(and_elt, 'ObjectSizeGreaterThan')
+
             tags = cls._tags_from_element(and_elt)
+            filter_elements = (prefix, greater, lesser)
+            if sum(x is not None for x in filter_elements) + len(tags) < 2:
+                raise ValueError("Missing at least one condition in And")
+
         except IndexError:
             try:
                 prefix = filter_elt.findall(tag('Prefix'), nsmap)[-1].text
-                if prefix is None:
-                    raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
                 prefix = None
+
+            lesser = find_tag(filter_elt, 'ObjectSizeLessThan')
+            greater = find_tag(filter_elt, 'ObjectSizeGreaterThan')
+
             try:
                 k, v = cls._tag_from_element(
                     filter_elt.findall(tag('Tag'), nsmap)[-1])
                 tags = {k: v}
             except IndexError:
                 tags = {}
-            if prefix and tags:
-                raise ValueError("Too many filters, use <And>")
-
-        return cls(prefix, tags, **kwargs)
+            filter_elements = (prefix, greater, lesser)
+            if sum(x is not None for x in filter_elements) + len(tags) >= 2:
+                raise ValueError("Too many conditions, use <And>")
+        return cls(prefix, lesser, greater, tags, **kwargs)
 
     def _to_element_tree(self, **kwargs):
         filter_elt = _filter_elt = etree.Element('Filter')
@@ -572,6 +604,17 @@ class LifecycleRuleFilter(object):
             for tagk in self.tags.keys():
                 if tags.get(tagk) != self.tags[tagk]:
                     return False
+
+        real_size = int(obj_meta.get('properties', {}).get(
+            'x-object-sysmeta-slo-size', obj_meta['size']))
+        # self.greater is allowed to be zero, hence the test against None
+        if self.greater is not None:
+            if real_size < self.greater:
+                return False
+
+        if self.lesser is not None:
+            if real_size > self.lesser:
+                return False
 
         return True
 
