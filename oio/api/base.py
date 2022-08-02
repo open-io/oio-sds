@@ -157,7 +157,7 @@ class HttpApi(object):
         # Convert json and add Content-Type
         if json:
             out_headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
-            data = jsonlib.dumps(json)
+            data = jsonlib.dumps(json, separators=(',', ':'))
 
         # Trigger performance measurments
         perfdata = kwargs.get('perfdata', None)
