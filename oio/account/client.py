@@ -166,6 +166,8 @@ class AccountClient(ServiceClient):
     def bucket_show(self, bucket, account=None, **kwargs):
         """
         Get information about a bucket.
+
+        :deprecated: prefer using `BucketClient.bucket_show`
         """
         params = {}
         if account:
@@ -183,6 +185,8 @@ class AccountClient(ServiceClient):
         :type metadata: `dict`
         :param to_delete: list of property keys that must be removed.
         :type to_delete: `list`
+
+        :deprecated: prefer using `BucketClient.bucket_update`
         """
         params = {}
         if account:
@@ -197,6 +201,8 @@ class AccountClient(ServiceClient):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
+
+        :deprecated: prefer using `BucketClient.bucket_refresh`
         """
         params = {}
         if account:

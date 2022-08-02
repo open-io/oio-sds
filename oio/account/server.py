@@ -67,12 +67,15 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/account/update', endpoint='account_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            # Deprecated, prefer using '/v1.0/bucket/update'
             Rule('/v1.0/account/update-bucket', endpoint='bucket_update',
                  methods=['PUT']),
             Rule('/v1.0/account/show', endpoint='account_show',
                  methods=['GET']),
+            # Deprecated, prefer using '/v1.0/bucket/show'
             Rule('/v1.0/account/show-bucket', endpoint='bucket_show',
                  methods=['GET']),
+            # Deprecated, prefer using '/v1.0/account/container/show'
             Rule('/v1.0/account/show-container',
                  endpoint='account_container_show',
                  methods=['GET']),
@@ -80,6 +83,7 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
                  methods=['GET']),
+            # Deprecated, prefer using '/v1.0/bucket/refresh'
             Rule('/v1.0/account/refresh-bucket', endpoint='bucket_refresh',
                  methods=['POST']),
             Rule('/v1.0/account/refresh', endpoint='account_refresh',

@@ -85,7 +85,7 @@ class TestSharding(BaseTestCase):
         self.created[cname] = set()
 
     def _check_bucket_stats(self, cname, bucket, account=None):
-        stats = self.storage.account.bucket_show(bucket, account=account)
+        stats = self.storage.bucket.bucket_show(bucket, account=account)
         if cname.endswith('+segments'):
             self.assertEqual(0, stats['objects'])
         else:
@@ -133,7 +133,7 @@ class TestSharding(BaseTestCase):
                                 fields={'account': self.account,
                                         'user': cname},
                                 types=(EventTypes.CONTAINER_STATE,))
-            stats = self.storage.account.bucket_show(
+            stats = self.storage.bucket.bucket_show(
                 cname, account=self.account)
             self.assertEqual(len(self.created[cname]), stats['objects'])
 
@@ -778,7 +778,7 @@ class TestSharding(BaseTestCase):
                 self.wait_for_event('oio-preserved', reqid=reqid,
                                     types=(EventTypes.CONTAINER_DELETED,
                                            EventTypes.CONTAINER_STATE))
-            stats = self.storage.account.bucket_show(
+            stats = self.storage.bucket.bucket_show(
                 bucket, account=self.account)
             self.assertEqual(len(self.created[cname]), stats['objects'])
         return new_shards
