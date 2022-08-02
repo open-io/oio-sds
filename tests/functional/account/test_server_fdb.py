@@ -15,6 +15,7 @@
 # License along with this library.
 
 import os
+import time
 import simplejson as json
 from pathlib import Path
 
@@ -516,12 +517,18 @@ class TestAccountMetrics(TestAccountServerBase):
 
         # create  and delete some containers
         # check to send headers for region, storage class
-        data = {'name': 'ct1', 'mtime': Timestamp().normal,
-                'objects': 1, 'bytes': 20, 'region': 'localhost'}
+        data = {
+            'mtime': time.time(),
+            'objects': 1,
+            'bytes': 20
+        }
         data = json.dumps(data)
-        resp = self.app.put('/v1.0/account/container/update',
-                            data=data,
-                            query_string={'id': self.account_id})
+        resp = self.app.put(
+            '/v1.0/account/container/update', data=data, query_string={
+                'id': self.account_id,
+                'container': 'ct1',
+                'region': 'localhost'
+            })
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -536,11 +543,15 @@ class TestAccountMetrics(TestAccountServerBase):
             }
         }, resp)
 
-        data = {'name': 'ct1', 'dtime': Timestamp().normal}
+        data = {
+            'dtime': time.time()
+        }
         data = json.dumps(data)
-        self.app.put('/v1.0/account/container/update',
-                     data=data,
-                     query_string={'id': self.account_id})
+        self.app.post(
+            '/v1.0/account/container/delete', data=data, query_string={
+                'id': self.account_id,
+                'container': 'ct1'
+            })
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({

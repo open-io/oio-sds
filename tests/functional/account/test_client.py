@@ -72,9 +72,7 @@ class TestAccountClient(BaseTestCase):
         self.containers.add((account, container))
 
     def _delete_container(self, account, container):
-        self.account_client.container_update(account, container, {
-            'dtime': time.time()
-        })
+        self.account_client.container_delete(account, container, time.time())
         self.containers.remove((account, container))
 
     def _create_bucket(self, account, bucket, region=None):

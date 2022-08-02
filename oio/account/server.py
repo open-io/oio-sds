@@ -95,6 +95,9 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/account/container/delete',
+                 endpoint='account_container_delete',
+                 methods=['POST']),
 
             # Buckets
             Rule('/v1.0/bucket/create', endpoint='bucket_create',
@@ -697,8 +700,63 @@ class Account(WerkzeugApp):
                         mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
+    # GET /v1.0/account/container/show?id=<account_name>
+    #        &container=<container_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about the specified container.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/container/show?id=myaccount&container=mycnt HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:46:35 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 194
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "bytes": 111,
+    #      "bytes-details": {
+    #        "SINGLE": 111
+    #      },
+    #      "mtime": 1656577370.438831,
+    #      "name": "mycnt",
+    #      "objects": 1,
+    #      "objects-details": {
+    #        "SINGLE": 1
+    #      },
+    #      "region": "LOCALHOST",
+    #      "replication_enabled": false
+    #    }
+    #
+    # }}ACCT
+    @force_master
+    def on_account_container_show(self, req, **kwargs):
+        account_id = self._get_account_id(req)
+        cname = self._get_item_id(req, key='container', what='container')
+        info = self.backend.get_container_info(account_id, cname, **kwargs)
+        if not info:
+            return NotFound('Container not found')
+        return Response(json.dumps(info, separators=(',', ':')),
+                        mimetype=HTTP_CONTENT_TYPE_JSON)
+
+    # ACCT{{
     # PUT /v1.0/account/container/update?id=<account_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #        &container=<container_name>&region=<region_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Update account with container-related metadata.
     #
@@ -706,22 +764,21 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/account/container/update?id=myaccount HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    PUT /v1.0/account/container/update?id=myaccount&container=mycnt
+    #        &region=localhost HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
-    #    Content-Length: 84
-    #    Content-Type: application/x-www-form-urlencoded
+    #    Content-Type: application/json
+    #    Content-Length: 59
     #
     # .. code-block:: json
     #
     #    {
-    #      "mtime": "123456789",
-    #      "dtime": "1223456789",
-    #      "name": "user1bucket",
+    #      "mtime": 1659440930,
     #      "objects": 0,
     #      "bytes": 0,
-    #      "bucket": "user1bucket"
+    #      "bucket": "mycnt"
     #    }
     #
     # Response example:
@@ -729,38 +786,53 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 200 OK
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Tue, 02 Aug 2022 11:49:05 GMT
     #    Connection: keep-alive
     #    Content-Type: application/json
-    #    Content-Length: 117
+    #    Content-Length: 7
     #
     # }}ACCT
     @force_master
     def on_account_container_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        data = json.loads(req.get_data())
-        cname = data.get('name')
-        if not cname:
-            raise BadRequest("Missing container")
+        data = req.get_data()
+        if not data:
+            raise BadRequest('Missing body')
+        try:
+            data = json.loads(data)
+        except ValueError as exc:
+            raise BadRequest('Expected JSON format') from exc
+        try:
+            cname = self._get_item_id(req, key='container', what='container')
+        except BadRequest:
+            # Continue to accept the old format
+            cname = data.get('name')
+            if not cname:
+                raise
+        try:
+            region = self._get_item_id(req, key='region', what='region')
+        except BadRequest:
+            # Continue to accept the old format
+            region = data.get('region')
         mtime = data.get('mtime')
         dtime = data.get('dtime')
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
         bucket_name = data.get('bucket')  # can be None
-        kwargs['region'] = data.get('region')
         kwargs['objects_details'] = data.get('objects-details')
         kwargs['bytes_details'] = data.get('bytes-details')
 
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
             account_id, cname, mtime, dtime, object_count, bytes_used,
-            bucket_name=bucket_name, **kwargs)
+            bucket_name=bucket_name, region=region, **kwargs)
         return Response(json.dumps(cname, separators=(',', ':')),
                         mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/reset?id=<account_name>
+    #        &container=<container_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Reset statistics of the specified container.
@@ -770,18 +842,18 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/account/container/reset?id=myaccount HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
+    #    PUT /v1.0/account/container/reset?id=myaccount
+    #        &container=mycnt HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
     #    Accept: */*
-    #    Content-Length: 45
-    #    Content-Type: application/x-www-form-urlencoded
+    #    Content-Type: application/json
+    #    Content-Length: 20
     #
     # .. code-block:: json
     #
     #    {
-    #      "name": "container name",
-    #      "mtime": 1234567891011
+    #      "mtime": 1659440940
     #    }
     #
     # Response example:
@@ -789,8 +861,8 @@ class Account(WerkzeugApp):
     # .. code-block:: http
     #
     #    HTTP/1.1 204 NO CONTENT
-    #    Server: gunicorn/19.9.0
-    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Server: gunicorn
+    #    Date: Tue, 02 Aug 2022 11:59:07 GMT
     #    Connection: keep-alive
     #    Content-Type: text/plain; charset=utf-8
     #
@@ -798,16 +870,91 @@ class Account(WerkzeugApp):
     @force_master
     def on_account_container_reset(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        data = json.loads(req.get_data())
-        name = data.get('name')
+        data = req.get_data()
+        if not data:
+            raise BadRequest('Missing body')
+        try:
+            data = json.loads(data)
+        except ValueError as exc:
+            raise BadRequest('Expected JSON format') from exc
+        try:
+            cname = self._get_item_id(req, key='container', what='container')
+        except BadRequest:
+            # Continue to accept the old format
+            cname = data.get('name')
+            if not cname:
+                raise
         mtime = data.get('mtime')
+        if mtime is None:
+            raise BadRequest("Missing modification time")
         dtime = None
         object_count = 0
         bytes_used = 0
+
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
-            account_id, name, mtime, dtime, object_count, bytes_used,
+            account_id, cname, mtime, dtime, object_count, bytes_used,
             autocreate_container=False, **kwargs)
+        return Response(status=204)
+
+    # ACCT{{
+    # POST /v1.0/account/container/delete?id=<account_name>
+    #        &container=<container_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Delete container of an account.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/account/container/delete?id=myaccount
+    #         &container=mycnt HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #    Content-Type: application/json
+    #    Content-Length: 20
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "dtime": 1659440950,
+    #    }
+    #
+    # Response example:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn
+    #    Date: Tue, 02 Aug 2022 12:13:16 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
+    @force_master
+    def on_account_container_delete(self, req, **kwargs):
+        account_id = self._get_account_id(req)
+        cname = self._get_item_id(req, key='container', what='container')
+        data = req.get_data()
+        if not data:
+            raise BadRequest('Missing body')
+        try:
+            data = json.loads(data)
+        except ValueError as exc:
+            raise BadRequest('Expected JSON format') from exc
+        mtime = None
+        dtime = data.get('dtime')
+        if dtime is None:
+            raise BadRequest("Missing deletion time")
+        object_count = 0
+        bytes_used = 0
+
+        # Exceptions are catched by dispatch_request
+        self.backend.update_container(
+            account_id, cname, mtime, dtime, object_count, bytes_used,
+            **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -1211,59 +1358,6 @@ class Account(WerkzeugApp):
             kwargs['check_owner'] = check_owner
         self.backend.refresh_bucket(bucket_name, account=account, **kwargs)
         return Response(status=204)
-
-    # ACCT{{
-    # GET /v1.0/account/container/show?id=<account_name>&container=<container>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Get information about the specified container.
-    #
-    # Sample request:
-    #
-    # .. code-block:: http
-    #
-    #    GET /v1.0/account/container/show?id=myaccount&container=mycnt HTTP/1.1
-    #    Host: 127.0.0.1:6001
-    #    User-Agent: curl/7.58.0
-    #    Accept: */*
-    #
-    # Sample response:
-    #
-    # .. code-block:: http
-    #
-    #    HTTP/1.1 200 OK
-    #    Server: gunicorn
-    #    Date: Thu, 30 Jun 2022 08:46:35 GMT
-    #    Connection: keep-alive
-    #    Content-Type: application/json
-    #    Content-Length: 194
-    #
-    # .. code-block:: json
-    #
-    #    {
-    #      "bytes": 111,
-    #      "bytes-details": {
-    #        "SINGLE": 111
-    #      },
-    #      "mtime": 1656577370.438831,
-    #      "name": "mycnt",
-    #      "objects": 1,
-    #      "objects-details": {
-    #        "SINGLE": 1
-    #      },
-    #      "region": "LOCALHOST",
-    #      "replication_enabled": false
-    #    }
-    #
-    # }}ACCT
-    @force_master
-    def on_account_container_show(self, req, **kwargs):
-        account_id = self._get_account_id(req)
-        cname = self._get_item_id(req, key='container', what='container')
-        info = self.backend.get_container_info(account_id, cname, **kwargs)
-        if not info:
-            return NotFound('Container not found')
-        return Response(json.dumps(info, separators=(',', ':')),
-                        mimetype=HTTP_CONTENT_TYPE_JSON)
 
     def on_iam_delete_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')

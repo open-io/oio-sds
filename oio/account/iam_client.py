@@ -25,10 +25,7 @@ class IamClient(ServiceClient):
             request_prefix='v1.0/iam', **kwargs)
 
     def iam_request(self, account, *args, **kwargs):
-        params = kwargs.setdefault('params')
-        if params is None:
-            params = {}
-            kwargs['params'] = params
+        params = kwargs.setdefault('params', {})
         if account:
             params['account'] = account
         return self.service_request(*args, **kwargs)

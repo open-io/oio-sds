@@ -14,7 +14,7 @@
 # License along with this library.
 
 from oio.common.configuration import load_namespace_conf
-from oio.common.exceptions import OioException, from_response
+from oio.common.exceptions import from_response
 from oio.common.service_client import ServiceClient
 
 
@@ -25,18 +25,18 @@ class BucketClient(ServiceClient):
         super(BucketClient, self).__init__(
             'account', conf, service_name='bucket-service',
             request_prefix='v1.0/bucket', **kwargs)
-        self.region = load_namespace_conf(conf['namespace']).get('ns.region')
-        if not self.region:
-            raise OioException("Missing region key in namespace conf")
+        # Some requests don't need the region,
+        # let the requests fail if the region is needed
+        self.region = load_namespace_conf(
+            conf['namespace'], failsafe=True).get('ns.region')
 
-    def bucket_request(self, bucket, *args, **kwargs):
-        params = kwargs.setdefault('params')
-        if params is None:
-            params = {}
-            kwargs['params'] = params
+    def bucket_request(self, bucket, *args, region=None, **kwargs):
+        params = kwargs.setdefault('params', {})
         if bucket:
             params['id'] = bucket
-        params['region'] = self.region
+        region = region or self.region
+        if region:
+            params['region'] = region
         return self.service_request(*args, **kwargs)
 
     def bucket_create(self, bucket, account, **kwargs):

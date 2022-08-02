@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.configuration import load_namespace_conf
 from oio.common.service_client import ServiceClient
 
 
@@ -24,15 +25,26 @@ class AccountClient(ServiceClient):
         super(AccountClient, self).__init__(
             'account', conf, service_name='account-service',
             request_prefix='v1.0/account', **kwargs)
+        # Some requests don't need the region,
+        # let the requests fail if the region is needed
+        self.region = load_namespace_conf(
+            conf['namespace'], failsafe=True).get('ns.region')
 
     def account_request(self, account, *args, **kwargs):
-        params = kwargs.setdefault('params')
-        if params is None:
-            params = {}
-            kwargs['params'] = params
+        params = kwargs.setdefault('params', {})
         if account:
             params['id'] = account
         return self.service_request(*args, **kwargs)
+
+    def container_request(self, account, container, *args, region=None,
+                          **kwargs):
+        params = kwargs.setdefault('params', {})
+        if container:
+            params['container'] = container
+        region = region or self.region
+        if region:
+            params['region'] = region
+        return self.account_request(account, *args, **kwargs)
 
     def account_create(self, account, **kwargs):
         """
@@ -236,12 +248,12 @@ class AccountClient(ServiceClient):
         """
         Get information about a container.
         """
-        _resp, body = self.account_request(account, 'GET', 'show-container',
-                                           params={'container': container},
-                                           **kwargs)
+        _resp, body = self.container_request(
+            account, container, 'GET', 'container/show', **kwargs)
         return body
 
-    def container_update(self, account, container, metadata=None, **kwargs):
+    def container_update(self, account, container, metadata=None, region=None,
+                         **kwargs):
         """
         Update account with container-related metadata.
 
@@ -254,25 +266,48 @@ class AccountClient(ServiceClient):
         :type metadata: `dict`
         """
         metadata['name'] = container
-        _resp, body = self.account_request(account, 'PUT', 'container/update',
-                                           json=metadata, **kwargs)
+        region = region or metadata.get('region')
+        _resp, body = self.container_request(
+            account, container, 'PUT', 'container/update', json=metadata,
+            region=region, **kwargs)
         return body
 
     def container_reset(self, account, container, mtime, **kwargs):
         """
-        Reset container of an account
+        Reset container of an account.
 
         :param account: name of the account
         :type account: `str`
         :param container: name of the container to reset
         :type container: `str`
-        :param mtime: time of the modification
+        :param mtime: modification time
+        :type mtime: `float` or `str`
         """
-        metadata = dict()
-        metadata["name"] = container
-        metadata["mtime"] = mtime
-        self.account_request(account, 'PUT', 'container/reset',
-                             json=metadata, **kwargs)
+        data = {
+            'name': container,
+            'mtime': mtime
+        }
+        self.container_request(
+            account, container, 'PUT', 'container/reset', json=data,
+            **kwargs)
+
+    def container_delete(self, account, container, dtime, **kwargs):
+        """
+        Delete container of an account.
+
+        :param account: name of the account
+        :type account: `str`
+        :param container: name of the container to delete
+        :type container: `str`
+        :param dtime: deletion time (in second)
+        :type dtime: `float` or `str`
+        """
+        data = {
+            'dtime': dtime
+        }
+        self.container_request(
+            account, container, 'POST', 'container/delete', json=data,
+            **kwargs)
 
     def account_refresh(self, account, **kwargs):
         """
