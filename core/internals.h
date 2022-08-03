@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -51,7 +51,9 @@ extern "C" {
 #define CODE_IS_NETWORK_ERROR(C) ((C) > ERRCODE_PARAM && (C) <= CODE_NETWORK_ERROR)
 /* Tell if the error is a network error and appears after
  * the connection has been established. */
-#define CODE_IS_ERR_AFTER_START(C) ((C) >= ERRCODE_CONN_RESET && (C) <= ERRCODE_CONN_TIMEOUT)
+#define CODE_IS_ERR_AFTER_START(C) ( \
+		   (C) == ERRCODE_READ_TIMEOUT \
+		|| ((C) >= ERRCODE_CONN_RESET && (C) <= ERRCODE_CONN_CLOSED))
 
 #define CODE_IS_OK(C)       (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)     (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))
