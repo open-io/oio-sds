@@ -1236,7 +1236,9 @@ class ObjectStorageApi(object):
                 checksum=link_meta['hash'], stgpol=link_meta['policy'],
                 mime_type=link_meta['mime_type'],
                 chunk_method=link_meta['chunk_method'], **kwargs)
-        except (exc.Conflict, exc.DeadlineReached) as ex:
+        except (exc.BadRequest, exc.Forbidden) as ex:
+            # Only delete chunk if the request really failed.
+            # If the request was successful in the background, keep the chunks.
             self.logger.warning(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             kwargs['cid'] = link_meta['container_id']
@@ -1607,8 +1609,9 @@ class ObjectStorageApi(object):
                 stgpol=obj_meta['policy'], mime_type=obj_meta['mime_type'],
                 chunk_method=obj_meta['chunk_method'],
                 **kwargs)
-        except (exc.Conflict, exc.DeadlineReached, exc.BadRequest,
-                exc.Forbidden) as ex:
+        except (exc.BadRequest, exc.Forbidden) as ex:
+            # Only delete chunk if the request really failed.
+            # If the request was successful in the background, keep the chunks.
             self.logger.warning(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             kwargs['cid'] = obj_meta['container_id']

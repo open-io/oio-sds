@@ -852,7 +852,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         meta = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(meta.get('hash', "").lower(), checksum.lower())
 
-    def test_object_create_conflict_delete_chunks(self):
+    def test_object_create_conflict_keep_chunks(self):
         # pylint: disable=no-member
         name = random_str(16)
         # Simulate a conflict error
@@ -866,16 +866,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure that the chunk deletion has been called with proper args
         create_kwargs = self.api.container.content_create.call_args[1]
         chunks = create_kwargs['data']['chunks']
-        self.api.blob_client.chunk_delete_many.assert_called_once()
-        self.assertEqual(
-            chunks, self.api.blob_client.chunk_delete_many.call_args[0][0])
-        # Ensure the chunks have actually been deleted
+        self.api.blob_client.chunk_delete_many.assert_not_called()
+        # Ensure the chunks have actually been kept
         for chunk in chunks:
-            self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head,
-                chunk.get('real_url', chunk['url']))
+            self.assertIsNotNone(self.api.blob_client.chunk_head(
+                chunk.get('real_url', chunk['url'])))
 
-    def test_object_create_commit_deadline_delete_chunks(self):
+    def test_object_create_commit_deadline_keep_chunks(self):
         # pylint: disable=no-member
         name = random_str(16)
         # Simulate a deadline during commit
@@ -890,14 +887,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure that the chunk deletion has been called with proper args
         create_kwargs = self.api.container.content_create.call_args[1]
         chunks = create_kwargs['data']['chunks']
-        self.api.blob_client.chunk_delete_many.assert_called_once()
-        self.assertEqual(
-            chunks, self.api.blob_client.chunk_delete_many.call_args[0][0])
-        # Ensure the chunks have actually been deleted
+        self.api.blob_client.chunk_delete_many.assert_not_called()
+        # Ensure the chunks have actually been kept
         for chunk in chunks:
-            self.assertRaises(
-                exc.NotFound, self.api.blob_client.chunk_head,
-                chunk.get('real_url', chunk['url']))
+            self.assertIsNotNone(self.api.blob_client.chunk_head(
+                chunk.get('real_url', chunk['url'])))
 
     def test_object_create_prepare_deadline_delete_chunks(self):
         # pylint: disable=no-member
@@ -2209,8 +2203,14 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         self.assertEqual(len(chunks),
                          sum(data['type'] == "chunks" for data in evt.data))
 
-        self.assertRaises(exc.Forbidden, self.api.object_create, self.account,
-                          name, obj_name=name, data=data, restore_drained=True)
+        # pylint: disable=protected-access
+        with patch('oio.api.object_storage.ObjectStorageApi.'
+                   '_delete_orphan_chunks',
+                   wraps=self.api._delete_orphan_chunks) as patched:
+            self.assertRaises(exc.Forbidden, self.api.object_create,
+                              self.account, name, obj_name=name, data=data,
+                              restore_drained=True)
+            self.assertEqual(1, patched.call_count)
 
     def test_restore_drained_different_data(self):
         name = 'restore-drained-' + random_str(6)
