@@ -21,7 +21,6 @@ from oio.common.exceptions import ClientException, OioException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
-from oio.common.configuration import load_namespace_conf
 
 
 CONTAINER_EVENTS = [
@@ -43,9 +42,7 @@ class AccountUpdateFilter(Filter):
                                                       CONNECTION_TIMEOUT))
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
-        self.region = load_namespace_conf(
-            self.conf['namespace']).get('ns.region')
-        if not self.region:
+        if not self.account.region:
             raise OioException("Missing region key in namespace conf")
 
     def process(self, env, beanstalkd, cb):
@@ -55,33 +52,34 @@ class AccountUpdateFilter(Filter):
         }
 
         try:
-            if event.env.get('url').get('account') in HIDDEN_ACCOUNTS:
+            url = event.env.get('url', {})
+            account = url.get('account')
+            if account in HIDDEN_ACCOUNTS:
                 pass
             elif event.event_type in CONTAINER_EVENTS:
+                container = url.get('user')
                 mtime = event.when / 1000000.0  # convert to seconds
-                data = event.data
-                url = event.env.get('url')
-                body = dict()
-                body['bucket'] = data.get('bucket')
-                body['region'] = self.region
-                for k1, k2 in (('objects', 'object-count'),
-                               ('bytes', 'bytes-count')):
-                    body[k1] = data.get(k2, 0)
-                for key in ('bytes-details', 'objects-details'):
-                    value = data.get(key)
-                    if value:
-                        body[key] = value
                 if event.event_type in (EventTypes.CONTAINER_STATE,
                                         EventTypes.CONTAINER_NEW):
-                    body['mtime'] = mtime
+                    update_kwargs = {}
+                    data = event.data
+                    for k1, k2 in (('objects', 'object-count'),
+                                   ('bytes_used', 'bytes-count')):
+                        update_kwargs[k1] = data.get(k2, 0)
+                    for k1, k2 in (('objects_details', 'objects-details'),
+                                   ('bytes_details', 'bytes-details')):
+                        update_kwargs[k1] = data.get(k2)
+                    update_kwargs['bucket'] = data.get('bucket')
+                    self.account.container_update(
+                        account, container, mtime, **update_kwargs,
+                        connection_timeout=self.connection_timeout,
+                        read_timeout=self.read_timeout, headers=headers)
                 elif event.event_type == EventTypes.CONTAINER_DELETED:
-                    body['dtime'] = mtime
-                self.account.container_update(
-                    url.get('account'), url.get('user'), body,
-                    connection_timeout=self.connection_timeout,
-                    read_timeout=self.read_timeout, headers=headers)
+                    self.account.container_delete(
+                        account, container, mtime,
+                        connection_timeout=self.connection_timeout,
+                        read_timeout=self.read_timeout, headers=headers)
             elif event.event_type == EventTypes.ACCOUNT_SERVICES:
-                url = event.env.get('url')
                 if isinstance(event.data, list):
                     # Legacy format: list of services
                     new_services = event.data
@@ -98,7 +96,7 @@ class AccountUpdateFilter(Filter):
                 else:
                     try:
                         self.account.account_create(
-                            url.get('account'),
+                            account,
                             connection_timeout=self.connection_timeout,
                             read_timeout=self.read_timeout, headers=headers)
                     except OioTimeout as exc:
@@ -106,7 +104,7 @@ class AccountUpdateFilter(Filter):
                         # just warn and continue.
                         self.logger.warning(
                             'Failed to create account %s (reqid=%s): %s',
-                            url.get('account'), headers[REQID_HEADER], exc)
+                            account, headers[REQID_HEADER], exc)
         except OioTimeout as exc:
             msg = 'account update failure: %s' % str(exc)
             resp = EventError(event=Event(env), body=msg)

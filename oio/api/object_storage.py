@@ -1658,9 +1658,7 @@ class ObjectStorageApi(object):
             if err.status != 406 and err.status != 431:
                 raise
             # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
-            metadata = dict()
-            metadata["dtime"] = time.time()
-            self.account.container_update(account, container, metadata,
+            self.account.container_delete(account, container, time.time(),
                                           **kwargs)
 
     @handle_account_not_found

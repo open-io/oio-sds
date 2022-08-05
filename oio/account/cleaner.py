@@ -224,10 +224,7 @@ class AccountServiceCleaner(object):
         """
         try:
             if not self.dry_run:
-                self.api.account.container_update(
-                    account, container,
-                    {'region': self.region, 'objects': 0, 'bytes': 0,
-                     'dtime': dtime})
+                self.api.account.container_delete(account, container, dtime)
             self.logger.info(
                 'Delete container %s/%s (account service)',
                 account, container)

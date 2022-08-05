@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -48,15 +48,9 @@ SHARDS = 1000
 
 def create_loop(api, prefix, results):
     iteration = 0
-    up_req = {
-        'bucket': prefix,
-        'objects': 0,
-        'bytes': 0,
-        'mtime': time.time()
-    }
     # Create the "main" shard
     try:
-        api.container_update(ACCOUNT, prefix, up_req)
+        api.container_update(ACCOUNT, prefix, time.time(), 0, 0, bucket=prefix)
         results.put(prefix)
     except Exception as err:
         print(err)
@@ -67,11 +61,11 @@ def create_loop(api, prefix, results):
         mtime = time.time()
         iteration += 1
         # Poor man's random
-        up_req['objects'] = int(mtime) % iteration
-        up_req['bytes'] = up_req['objects'] * 42
-        up_req['mtime'] = mtime
+        objects = int(mtime) % iteration
+        bytes_used = objects * 42
         try:
-            api.container_update(ACCOUNT, name, up_req)
+            api.container_update(ACCOUNT, name, mtime, objects, bytes_used,
+                                 bucket=prefix)
             results.put(name)
             sleep(0)
         except Exception as err:
@@ -111,11 +105,11 @@ def main(myid, queue, concurrency, delay=5.0, duration=DURATION):
           myid, len(created), end - start, rate))
     time.sleep(2)
     print("Proc %d: cleaning..." % myid)
-    del_req = {'dtime': time.time()}
+    dtime = time.time()
     # Do not delete twice (or an exception is raised)
     uniq_ct = set(created)
-    for _ in pool.starmap(api.container_update,
-                          [(ACCOUNT, n, del_req) for n in uniq_ct]):
+    for _ in pool.starmap(api.container_delete,
+                          [(ACCOUNT, n, dtime) for n in uniq_ct]):
         pass
     pool.waitall()
     queue.put(rate)

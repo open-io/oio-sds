@@ -312,13 +312,8 @@ class ItemCheckTest(CliTestCase):
             % (self.account, missing_container, cid))
 
         # Create a container only in account service
-        metadata = dict()
-        metadata['region'] = 'localhost'
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 0
-        metadata["objects"] = 0
         self.api.account.container_update(
-            self.account, missing_container, metadata=metadata)
+            self.account, missing_container, time.time(), 0, 0)
 
         # Check with missing container
         output = self.openio_admin(
@@ -605,13 +600,8 @@ class ItemCheckTest(CliTestCase):
         self.assert_list_output(expected_items, output)
 
         # Create a container only in account service
-        metadata = dict()
-        metadata['region'] = 'localhost'
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 0
-        metadata["objects"] = 0
         self.api.account.container_update(
-            self.account, missing_container, metadata=metadata)
+            self.account, missing_container, time.time(), 0, 0)
 
         # Check with missing container
         output = self.openio_admin(

@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -54,12 +55,8 @@ class ServiceRebuildTest(CliTestCase):
         self.create_object(account, container, obj_name)
 
         # Create a container only in account service
-        metadata = dict()
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 0
-        metadata["objects"] = 0
         self.api.account.container_update(
-            account, container, metadata=metadata)
+            account, container, time.time(), 0, 0)
 
         account_info = self.api.account_show(account)
         self.assertEqual(0, account_info['bytes'])

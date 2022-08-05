@@ -125,11 +125,19 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(resp.status_code, 204)
 
     def test_account_container_update(self):
-        data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 0, 'bytes': 0, 'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 0,
+            'bytes': 0
+        }
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
-                            data=data, query_string={'id': self.account_id})
+                            data=data, query_string=params)
         self.assertEqual(resp.status_code, 200)
 
     def test_account_containers(self):
@@ -150,16 +158,26 @@ class TestAccountServer(TestAccountServerBase):
         self.assertFalse(data['truncated'])
 
     def test_account_container_reset(self):
-        data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42, 'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'bytes': 42
+        }
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
-                            data=dataj, query_string={'id': self.account_id})
+                            data=dataj, query_string=params)
 
-        data = {'name': 'foo', 'mtime': Timestamp().normal}
+        data = {
+            'mtime': Timestamp().normal
+        }
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/reset',
-                            data=dataj, query_string={'id': self.account_id})
+                            data=dataj, query_string=params)
         self.assertEqual(resp.status_code, 204)
 
         resp = self.app.get('/v1.0/account/containers',
@@ -178,11 +196,19 @@ class TestAccountServer(TestAccountServerBase):
         self.fail("No container foo")
 
     def test_account_refresh(self):
-        data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42, 'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'bytes': 42
+        }
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
-                            data=data, query_string={'id': self.account_id})
+                            data=data, query_string=params)
 
         resp = self.app.post('/v1.0/account/refresh',
                              query_string={'id': self.account_id})
@@ -195,11 +221,19 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(resp["objects"], 12)
 
     def test_account_flush(self):
-        data = {'name': 'foo', 'mtime': Timestamp().normal,
-                'objects': 12, 'bytes': 42, 'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'bytes': 42
+        }
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
-                            data=data, query_string={'id': self.account_id})
+                            data=data, query_string=params)
 
         resp = self.app.post('/v1.0/account/flush',
                              query_string={'id': self.account_id})
@@ -886,6 +920,11 @@ class TestAccountMetrics(TestAccountServerBase):
 
         # create  and delete some containers
         # check to send headers for region, storage class
+        params = {
+            'id': self.account_id,
+            'container': 'ct1',
+            'region': 'localhost'
+        }
         data = {
             'mtime': time.time(),
             'objects': 1,
@@ -893,11 +932,7 @@ class TestAccountMetrics(TestAccountServerBase):
         }
         data = json.dumps(data)
         resp = self.app.put(
-            '/v1.0/account/container/update', data=data, query_string={
-                'id': self.account_id,
-                'container': 'ct1',
-                'region': 'localhost'
-            })
+            '/v1.0/account/container/update', data=data, query_string=params)
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -948,15 +983,21 @@ class TestAccountMetrics(TestAccountServerBase):
         }, resp)
 
         # add some data
-        data = {'name': 'ct1', 'mtime': Timestamp().normal,
-                'objects': 3, 'bytes': 40,
-                'objects-details': {"class1": 1, "class2": 2},
-                'bytes-details': {"class1": 30, "class2": 10},
-                'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'ct1',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 3,
+            'bytes': 40,
+            'objects-details': {"class1": 1, "class2": 2},
+            'bytes-details': {"class1": 30, "class2": 10}
+        }
         data = json.dumps(data)
         self.app.put('/v1.0/account/container/update',
-                     data=data,
-                     query_string={'id': self.account_id})
+                     data=data, query_string=params)
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -978,15 +1019,20 @@ class TestAccountMetrics(TestAccountServerBase):
             }
         }, resp)
 
-        data = {'name': 'ct2', 'mtime': Timestamp().normal,
-                'objects': 6, 'bytes': 21,
-                'objects-details': {"class2": 1, "class3": 5},
-                'bytes-details': {"class2": 10, "class3": 11},
-                'region': 'localhost'}
+        params = {
+            'id': self.account_id,
+            'container': 'ct2',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 6, 'bytes': 21,
+            'objects-details': {"class2": 1, "class3": 5},
+            'bytes-details': {"class2": 10, "class3": 11}
+        }
         data = json.dumps(data)
         self.app.put('/v1.0/account/container/update',
-                     data=data,
-                     query_string={'id': self.account_id})
+                     data=data, query_string=params)
         resp = self.app.get('/metrics')
         resp = self.json_loads(resp.data)
         self.assertDictEqual({
@@ -1020,15 +1066,21 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {}
         }, resp)
 
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
         data = {
-            'name': 'foo', 'mtime': Timestamp().normal,
-            'objects': 6, 'bytes': 21, 'region': 'localhost',
+            'mtime': Timestamp().normal,
+            'objects': 6,
+            'bytes': 21,
             'objects-details': {"class2": 1, "class3": 5},
             'bytes-details': {"class2": 10, "class3": 11}
         }
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
-                            data=data, query_string={'id': self.account_id})
+                            data=data, query_string=params)
         resp = self.app.get('/metrics',
                             query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)

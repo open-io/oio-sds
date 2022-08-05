@@ -79,10 +79,9 @@ class TestAccountClient(BaseTestCase):
     def _create_container(self, account, container, region=None):
         if (account, container) in self.containers:
             return
-        self.account_client.container_update(account, container, {
-            'mtime': time.time(),
-            'region': region or self.region
-        })
+        self.account_client.container_update(
+            account, container, time.time(), 0, 0,
+            region=region or self.region)
         self.accounts.add(account)
         self.containers.add((account, container))
 
@@ -1338,33 +1337,26 @@ class TestAccountClient(BaseTestCase):
             self.account_client._get_service_addr = get_service_addr
 
     def test_container_reset(self):
-        metadata = {}
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 42
-        metadata["objects"] = 12
-        self.account_client.container_update(self.account_id, "container",
-                                             metadata=metadata)
+        mtime = time.time()
+        self.account_client.container_update(
+            self.account_id, "container", mtime, 12, 42)
 
         self.account_client.container_reset(self.account_id, "container",
                                             time.time())
         resp = self.account_client.container_list(self.account_id,
                                                   prefix="container")
         for container in resp["listing"]:
-            name, nb_objects, nb_bytes, _, mtime = container
+            name, nb_objects, nb_bytes, _, new_mtime = container
             if name == 'container':
                 self.assertEqual(nb_objects, 0)
                 self.assertEqual(nb_bytes, 0)
-                self.assertGreater(mtime, metadata["mtime"])
+                self.assertGreater(new_mtime, mtime)
                 return
         self.fail("No container container")
 
     def test_account_refresh(self):
-        metadata = {}
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 42
-        metadata["objects"] = 12
-        self.account_client.container_update(self.account_id, "container",
-                                             metadata=metadata)
+        self.account_client.container_update(
+            self.account_id, "container", time.time(), 12, 42)
 
         self.account_client.account_refresh(self.account_id)
 
@@ -1373,12 +1365,8 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp["objects"], 12)
 
     def test_account_flush(self):
-        metadata = {}
-        metadata["mtime"] = time.time()
-        metadata["bytes"] = 42
-        metadata["objects"] = 12
-        self.account_client.container_update(self.account_id, "container",
-                                             metadata=metadata)
+        self.account_client.container_update(
+            self.account_id, "container", time.time(), 12, 42)
 
         self.account_client.account_flush(self.account_id)
 
@@ -1392,13 +1380,8 @@ class TestAccountClient(BaseTestCase):
     def test_account_delete_missing_container(self):
         bucket = 'bucket-%f' % time.time()
         self.bucket_client.bucket_create(bucket, self.account_id)
-        metadata = {}
-        metadata['mtime'] = time.time()
-        metadata['bytes'] = 42
-        metadata['objects'] = 12
-        metadata['bucket'] = bucket
         self.account_client.container_update(
-            self.account_id, 'container', metadata=metadata)
+            self.account_id, "container", time.time(), 12, 42, bucket=bucket)
         resp = self.account_client.account_show(self.account_id)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
@@ -1407,41 +1390,11 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)
 
-        metadata = {}
-        metadata['region'] = self.storage.bucket.region
-        metadata['dtime'] = time.time()
-        # The counters are voluntarily positive to verify
-        # that they are indeed ignored.
-        # But should no longer occur,
-        # now that the delete event still has the counters set to 0.
-        metadata['bytes'] = 12
-        metadata['objects'] = 4
-        metadata['bucket'] = bucket
-        self.account_client.container_update(
-            self.account_id, 'container_1', metadata=metadata)
+        self.account_client.container_delete(
+            self.account_id, 'container_1', time.time())
         # As the container didn't exist in the account service,
         # the statistics should not be changed.
         resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp['bytes'], 42)
-        self.assertEqual(resp['objects'], 12)
-        resp = self.bucket_client.bucket_show(bucket)
-        self.assertEqual(resp['bytes'], 42)
-        self.assertEqual(resp['objects'], 12)
-        self.assertEqual(resp['containers'], 1)
-
-        metadata = {}
-        metadata['region'] = self.storage.bucket.region
-        metadata['dtime'] = time.time()
-        # To be sure, let's try with 0 counters (as with current requests).
-        metadata['bytes'] = 0
-        metadata['objects'] = 0
-        metadata['bucket'] = bucket
-        self.account_client.container_update(
-            self.account_id, 'container_2', metadata=metadata)
-        resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp['bytes'], 42)
-        self.assertEqual(resp['objects'], 12)
-        resp = self.bucket_client.bucket_show(bucket)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)

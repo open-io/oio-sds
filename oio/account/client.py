@@ -163,53 +163,6 @@ class AccountClient(ServiceClient):
                                            params=params, **kwargs)
         return body
 
-    def bucket_show(self, bucket, account=None, **kwargs):
-        """
-        Get information about a bucket.
-
-        :deprecated: prefer using `BucketClient.bucket_show`
-        """
-        params = {}
-        if account:
-            params['account'] = account
-        _resp, body = self.account_request(bucket, 'GET', 'show-bucket',
-                                           params=params, **kwargs)
-        return body
-
-    def bucket_update(self, bucket, metadata, to_delete, account=None,
-                      **kwargs):
-        """
-        Update metadata of the specified bucket.
-
-        :param metadata: dictionary of properties that must be set or updated.
-        :type metadata: `dict`
-        :param to_delete: list of property keys that must be removed.
-        :type to_delete: `list`
-
-        :deprecated: prefer using `BucketClient.bucket_update`
-        """
-        params = {}
-        if account:
-            params['account'] = account
-        _resp, body = self.account_request(
-            bucket, 'PUT', 'update-bucket',
-            json={"metadata": metadata, "to_delete": to_delete},
-            params=params, **kwargs)
-        return body
-
-    def bucket_refresh(self, bucket, account=None, **kwargs):
-        """
-        Refresh the counters of a bucket. Recompute them from the counters
-        of all shards (containers).
-
-        :deprecated: prefer using `BucketClient.bucket_refresh`
-        """
-        params = {}
-        if account:
-            params['account'] = account
-        self.account_request(bucket, 'POST', 'refresh-bucket', params=params,
-                             **kwargs)
-
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, region=None, bucket=None,
                        **kwargs):
@@ -258,7 +211,8 @@ class AccountClient(ServiceClient):
             account, container, 'GET', 'container/show', **kwargs)
         return body
 
-    def container_update(self, account, container, metadata=None, region=None,
+    def container_update(self, account, container, mtime, objects, bytes_used,
+                         objects_details=None, bytes_details=None, bucket=None,
                          **kwargs):
         """
         Update account with container-related metadata.
@@ -267,15 +221,35 @@ class AccountClient(ServiceClient):
         :type account: `str`
         :param container: name of the container whose metadata has changed
         :type container: `str`
-        :param metadata: container metadata ("bytes", "objects",
-        "mtime", "dtime")
-        :type metadata: `dict`
+        :param mtime: modification time (in second)
+        :type mtime: `float` or `str`
+        :param objects: new number of objects in the container
+        :type objects: `int`
+        :param bytes_used: new number of bytes in the container
+        :type bytes_used: `int`
+        :param objects_details: new number of objects by storage policy
+                                in the container
+        :type objects_details: `dict`
+        :param bytes_details: new number of bytes by storage policy
+                              in the container
+        :type bytes_details: `dict`
+        :param bucket: bucket name to which the container belongs
+        :type bucket: `str`
         """
-        metadata['name'] = container
-        region = region or metadata.get('region')
+        data = {
+            'mtime': mtime,
+            'objects': objects,
+            'bytes': bytes_used
+        }
+        if objects_details:
+            data['objects_details'] = objects_details
+        if bytes_details:
+            data['bytes_details'] = bytes_details
+        if bucket:
+            data['bucket'] = bucket
         _resp, body = self.container_request(
-            account, container, 'PUT', 'container/update', json=metadata,
-            region=region, **kwargs)
+            account, container, 'PUT', 'container/update', json=data,
+            **kwargs)
         return body
 
     def container_reset(self, account, container, mtime, **kwargs):
@@ -290,7 +264,6 @@ class AccountClient(ServiceClient):
         :type mtime: `float` or `str`
         """
         data = {
-            'name': container,
             'mtime': mtime
         }
         self.container_request(

@@ -506,9 +506,7 @@ class TestReplicateFilter(TestNotifyFilterBase):
             bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
             account=self.account)
         self.storage.account.container_update(
-            self.account, bname, {'bucket': bname,
-                                  'mtime': str(now),
-                                  'region': self.storage.bucket.region})
+            self.account, bname, now, 0, 0, bucket=bname)
         # Replication is disabled for this bucket,
         # but the filter won't do the check,
         # and forward the event anyway.
@@ -523,9 +521,7 @@ class TestReplicateFilter(TestNotifyFilterBase):
             bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None,
             account=self.account)
         self.storage.account.container_update(
-            self.account, bname, {'bucket': bname,
-                                  'mtime': str(now),
-                                  'region': self.storage.bucket.region})
+            self.account, bname, now, 0, 0, bucket=bname)
         self.assertTrue(self.notify_filter._should_notify(
             self.account, bname))
 
@@ -537,8 +533,6 @@ class TestReplicateFilter(TestNotifyFilterBase):
             bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None,
             account=self.account)
         self.storage.account.container_update(
-            self.account, bname, {'bucket': bname,
-                                  'mtime': str(now),
-                                  'region': self.storage.bucket.region})
+            self.account, bname, now, 0, 0, bucket=bname)
         self.assertFalse(self.notify_filter._should_notify(
             self.account, bname))

@@ -800,6 +800,11 @@ class Account(WerkzeugApp):
     @force_master
     def on_account_container_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
+        cname = self._get_item_id(req, key='container', what='container')
+        try:
+            region = self._get_item_id(req, key='region', what='region')
+        except BadRequest:
+            region = None
         data = req.get_data()
         if not data:
             raise BadRequest('Missing body')
@@ -807,18 +812,6 @@ class Account(WerkzeugApp):
             data = json.loads(data)
         except ValueError as exc:
             raise BadRequest('Expected JSON format') from exc
-        try:
-            cname = self._get_item_id(req, key='container', what='container')
-        except BadRequest:
-            # Continue to accept the old format
-            cname = data.get('name')
-            if not cname:
-                raise
-        try:
-            region = self._get_item_id(req, key='region', what='region')
-        except BadRequest:
-            # Continue to accept the old format
-            region = data.get('region')
         mtime = data.get('mtime')
         dtime = data.get('dtime')
         object_count = data.get('objects')
@@ -874,6 +867,7 @@ class Account(WerkzeugApp):
     @force_master
     def on_account_container_reset(self, req, **kwargs):
         account_id = self._get_account_id(req)
+        cname = self._get_item_id(req, key='container', what='container')
         data = req.get_data()
         if not data:
             raise BadRequest('Missing body')
@@ -881,13 +875,6 @@ class Account(WerkzeugApp):
             data = json.loads(data)
         except ValueError as exc:
             raise BadRequest('Expected JSON format') from exc
-        try:
-            cname = self._get_item_id(req, key='container', what='container')
-        except BadRequest:
-            # Continue to accept the old format
-            cname = data.get('name')
-            if not cname:
-                raise
         mtime = data.get('mtime')
         if mtime is None:
             raise BadRequest("Missing modification time")
