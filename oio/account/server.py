@@ -813,7 +813,13 @@ class Account(WerkzeugApp):
         except ValueError as exc:
             raise BadRequest('Expected JSON format') from exc
         mtime = data.get('mtime')
-        dtime = data.get('dtime')
+        if mtime is None:
+            if data.get('dtime') is not None:
+                raise BadRequest(
+                    "Deletion is no more accepted. "
+                    "Use '/v1.0/account/container/delete'.")
+            raise BadRequest("Missing modification time")
+        dtime = None
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
         bucket_name = data.get('bucket')  # can be None
