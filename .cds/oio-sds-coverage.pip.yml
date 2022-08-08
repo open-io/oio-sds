@@ -14,7 +14,7 @@ jobs:
           - apt install -y jq lcov python3-virtualenv virtualenv
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
-          - pip install --upgrade coverage pip virtualenv git+https://github.com/boyska/xq.git
+          - pip install --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
 
       - name: Download test result artifacts
         artifactDownload:
@@ -72,6 +72,38 @@ jobs:
           - mkdir coverage
           - mv coverage-report-c coverage-report-py coverage-summary.json coverage/
           - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.json">Coverage summary by language</a></body></html>' > coverage/index.html
+
+      - name: Publish code coverage reports on S3 public cloud
+        script: |+
+          #!/bin/bash
+          . $HOME/oiovenv/bin/activate
+          cd {{.cds.workspace}}
+          mkdir -p "$HOME/.aws"
+          cat <<EOF >>"$HOME/.aws/credentials"
+          [kpi]
+          aws_access_key_id={{.cds.proj.kpi_s3_access_key}}
+          aws_secret_access_key={{.cds.proj.kpi_s3_access_secret}}
+          region=gra
+          EOF
+          cat <<EOF >>"$HOME/.aws/config"
+          [plugins]
+          endpoint = awscli_plugin_endpoint
+          [profile kpi]
+          s3 =
+              endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
+              signature_version = s3v4
+              addressing_style = virtual
+              multipart_threshold = 100MB
+          s3api =
+              endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
+          EOF
+          # There may be a more elegant way in bash to filter out the name of
+          # development branches, but this weird method also applies to the
+          # OVH_Serve_Static_Files step (where we cannot use bash).
+          aws --profile kpi s3 cp coverage/coverage-summary.json s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.json
+          # If we re-run an old build, this will overwrite the report of the
+          # actual latest merged code. This will not happen often.
+          [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.json s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.json || true
 
       - name: Publish code coverage reports on Artifactory
         optional: true
