@@ -26,6 +26,7 @@ from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.conscience.client import ConscienceClient
+from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
 from oio.common.utils import depaginate, cid_from_name, monotonic_time
 from oio.common.green import sleep
@@ -483,23 +484,29 @@ class RdirClient(HttpApi):
     }
 
     def __init__(self, conf, directory_client=None, cache_duration=60.0,
-                 **kwargs):
+                 logger=None, **kwargs):
         super(RdirClient, self).__init__(service_type='rdir', **kwargs)
-        self.directory = directory_client or DirectoryClient(conf, **kwargs)
+        self.conf = conf
+        self.directory = directory_client or DirectoryClient(
+            self.conf, logger=logger, **kwargs)
+        self.logger = logger or self.directory.logger
+        self.oioproxy_kwargs = kwargs.copy()
+        self.oioproxy_kwargs['endpoint'] = (
+            self.directory.proxy_scheme + '://' + self.directory.proxy_netloc)
+        self.oioproxy_kwargs['pool_manager'] = self.directory.pool_manager
+        self.logger.error(str(self.oioproxy_kwargs))
+        self.admin = AdminClient(
+            self.conf, logger=self.logger, **self.oioproxy_kwargs)
         self.ns = conf['namespace']
         self._addr_cache = dict()
         self._cache_duration = cache_duration
-        self.conf = conf
         self._cs = None
-        self.logger = self.directory.logger
 
     @property
     def cs(self):
         if not self._cs:
             self._cs = ConscienceClient(
-                self.conf,
-                logger=self.directory.logger,
-                pool_manager=self.directory.pool_manager)
+                self.conf, logger=self.logger, **self.oioproxy_kwargs)
         return self._cs
 
     def _clear_cache(self, volume_id):
@@ -613,6 +620,19 @@ class RdirClient(HttpApi):
                     len(errors),
                     len(all_uri),
                     '\n'.join(errorsStr)))
+            for _, err in errors:
+                if isinstance(err, NotFound):
+                    self.logger.warning(
+                        'At least one rdir no longer manages the volume %s, '
+                        'flush the cache of oioproxy to be sure to have '
+                        'the new information', volume)
+                    try:
+                        # TODO(ADU): Flush only the cache of rdir assignments
+                        self.admin.proxy_flush_cache(high=False, low=True)
+                    except Exception as exc:
+                        self.logger.exception(
+                            'Failed to flush the cache of oioproxy: %s', exc)
+                    break
             # clear cache if at least one error
             self._clear_cache(volume)
 

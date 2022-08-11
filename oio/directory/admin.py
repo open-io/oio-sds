@@ -66,6 +66,7 @@ class AdminClient(ProxyClient):
         super(AdminClient, self).__init__(
             conf, request_prefix="/admin", **kwargs)
         kwargs.pop('pool_manager', None)
+        kwargs['endpoint'] = self.proxy_scheme + '://' + self.proxy_netloc
         self._kwargs = kwargs
         self._cache_client = None
         self._forwarder = None
