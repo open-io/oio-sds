@@ -654,7 +654,7 @@ class RdirClient(HttpApi):
         for key, value in data.items():
             body[key] = value
 
-        self._rdir_request(volume_id, 'POST', 'push', create=True,
+        self._rdir_request(volume_id, 'POST', 'push', create=False,
                            json=body, headers=headers)
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id,
@@ -896,7 +896,7 @@ class RdirClient(HttpApi):
             body[key] = value
 
         res = self._rdir_request(volume=volume_id, method='POST',
-                                 action='push', create=True, json=body,
+                                 action='push', create=False, json=body,
                                  service_type='meta2',
                                  **kwargs)
         return res, body
