@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -44,19 +44,19 @@ class MetaMapping(object):
     @property
     def admin(self):
         if not self._admin:
-            self._admin = AdminClient(self.conf)
+            self._admin = AdminClient(self.conf, logger=self.logger)
         return self._admin
 
     @property
     def conscience(self):
         if not self._conscience:
-            self._conscience = ConscienceClient(self.conf)
+            self._conscience = ConscienceClient(self.conf, logger=self.logger)
         return self._conscience
 
     @property
     def rdir(self):
         if not self._rdir:
-            self._rdir = RdirClient(self.conf)
+            self._rdir = RdirClient(self.conf, logger=self.logger)
         return self._rdir
 
     def reset(self):

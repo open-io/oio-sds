@@ -73,7 +73,7 @@ class Meta2DecommissionJob(XcuteRdirJob):
 
     def __init__(self, conf, logger=None):
         super(Meta2DecommissionJob, self).__init__(conf, logger=logger)
-        self.rdir_client = RdirClient(conf, logger=logger)
+        self.rdir_client = RdirClient(conf, logger=self.logger)
 
     def get_tasks(self, job_params, marker=None):
         containers = self._containers_from_rdir(job_params, marker)

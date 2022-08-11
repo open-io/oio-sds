@@ -97,7 +97,8 @@ class ClientManager(object):
         if self._account_client is None:
             from oio.account.client import AccountClient
             self._account_client = AccountClient(
-                self.client_conf, pool_manager=self.pool_manager)
+                self.client_conf, pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._account_client
 
     @property
@@ -105,15 +106,17 @@ class ClientManager(object):
         if self._xcute_client is None:
             from oio.xcute.client import XcuteClient
             self._xcute_client = XcuteClient(
-                self.client_conf, pool_manager=self.pool_manager)
+                self.client_conf, pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._xcute_client
 
     @property
     def admin(self):
         if self._admin_client is None:
             from oio.directory.admin import AdminClient
-            self._admin_client = AdminClient(self.client_conf,
-                                             pool_manager=self.pool_manager)
+            self._admin_client = AdminClient(
+                self.client_conf, pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._admin_client
 
     @property
@@ -121,7 +124,8 @@ class ClientManager(object):
         if self._conscience_client is None:
             from oio.conscience.client import ConscienceClient
             self._conscience_client = ConscienceClient(
-                self.client_conf, pool_manager=self.pool_manager)
+                self.client_conf, pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._conscience_client
 
     @property
@@ -135,8 +139,9 @@ class ClientManager(object):
     def rdir(self):
         if self._rdir_client is None:
             from oio.rdir.client import RdirClient
-            self._rdir_client = RdirClient(self.client_conf,
-                                           pool_manager=self.pool_manager)
+            self._rdir_client = RdirClient(
+                self.client_conf, pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._rdir_client
 
     @property
@@ -145,7 +150,8 @@ class ClientManager(object):
             from oio.rdir.client import RdirDispatcher
             self._rdir_dispatcher = RdirDispatcher(
                 self.client_conf, rdir_client=self.rdir,
-                pool_manager=self.pool_manager)
+                pool_manager=self.pool_manager,
+                logger=self.logger)
         return self._rdir_dispatcher
 
     @property
