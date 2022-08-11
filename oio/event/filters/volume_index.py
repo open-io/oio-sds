@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 from oio.common.constants import REQID_HEADER
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
-from oio.common.exceptions import OioException, VolumeException
+from oio.common.exceptions import OioException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
@@ -39,31 +39,29 @@ class VolumeIndexFilter(Filter):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_delete(
-                    volume_id, container_id, content_id, chunk_id,
-                    headers=headers)
-        except Exception as ex:
-            self.logger.warn(
-                "deindexing of chunk failed (reqid=%s volume_id=%s "
-                "container_id=%s content_id=%s chunk_id=%s): %s", reqid,
-                volume_id, container_id, content_id, chunk_id, ex)
+                volume_id, container_id, content_id, chunk_id,
+                headers=headers)
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to deindex chunk %s from %s (reqid=%s container_id=%s "
+                "content_id=%s): %s", chunk_id, volume_id, reqid, container_id,
+                content_id, exc)
 
-    def _chunk_push(self, reqid,
-                    volume_id, container_id, content_id, chunk_id,
+    def _chunk_push(self, reqid, volume_id, container_id, content_id, chunk_id,
                     content_path, content_ver, args):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_push(
-                    volume_id, container_id, content_id, chunk_id,
-                    content_path, content_ver,
-                    headers=headers, **args)
-        except Exception as ex:
-            self.logger.warn(
-                "indexing of chunk failed (reqid=%s volume_id=%s "
-                "container_id=%s content_id=%s chunk_id=%s): %s", reqid,
-                volume_id, container_id, content_id, chunk_id, ex)
+                volume_id, container_id, content_id, chunk_id,
+                content_path, content_ver,
+                headers=headers, **args)
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to index chunk %s from %s (reqid=%s container_id=%s "
+                "content_id=%s): %s", chunk_id, volume_id, reqid, container_id,
+                content_id, exc)
 
-    def _service_push(self, reqid, type_,
-                      volume_id, url, cid, mtime):
+    def _service_push(self, reqid, type_, volume_id, url, cid, mtime):
         if type_ != 'meta2':
             self.logger.debug(
                 'Indexing services of type %s is not supported', type_)
@@ -72,12 +70,12 @@ class VolumeIndexFilter(Filter):
         try:
             return self.rdir.meta2_index_push(
                 volume_id, url, cid, mtime, headers=headers)
-        except Exception as ex:
-            self.logger.warn("Failed to index %s from %s: %s",
-                             url, volume_id, ex)
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to index %s from %s (reqid=%s): %s", url, volume_id,
+                reqid, exc)
 
-    def _service_delete(self, reqid, type_,
-                        volume_id, url, cid):
+    def _service_delete(self, reqid, type_, volume_id, url, cid):
         if type_ != 'meta2':
             self.logger.debug(
                 'Indexing services of type %s is not supported', type_)
@@ -86,12 +84,10 @@ class VolumeIndexFilter(Filter):
         try:
             return self.rdir.meta2_index_delete(
                 volume_id, url, cid, headers=headers)
-        except VolumeException as ex:
-            self.logger.info("Cannot deinxed %s from %s: %s",
-                             url, volume_id, ex)
-        except Exception as ex:
-            self.logger.warn("Failed to deindex %s from %s: %s",
-                             url, volume_id, ex)
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to deindex %s from %s (reqid=%s): %s", url, volume_id,
+                reqid, exc)
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
