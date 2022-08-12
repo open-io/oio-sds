@@ -14,7 +14,6 @@
 # License along with this library.
 
 from oio.common.configuration import load_namespace_conf
-from oio.common.exceptions import from_response
 from oio.common.service_client import ServiceClient
 
 
@@ -45,10 +44,8 @@ class BucketClient(ServiceClient):
         No container linked to this bucket is created.
         """
         params = {'account': account}
-        resp, body = self.bucket_request(
+        resp, _body = self.bucket_request(
             bucket, 'PUT', 'create', params=params, **kwargs)
-        if resp.status not in (201, 202):
-            raise from_response(resp, body)
         return resp.status == 201
 
     def bucket_delete(self, bucket, account, force=None, **kwargs):
@@ -59,10 +56,8 @@ class BucketClient(ServiceClient):
         params = {'account': account}
         if force is not None:
             params['force'] = force
-        resp, body = self.bucket_request(
+        _resp, _body = self.bucket_request(
             bucket, 'POST', 'delete', params=params, **kwargs)
-        if resp.status != 204:
-            raise from_response(resp, body)
 
     def bucket_show(self, bucket, account=None, check_owner=None, **kwargs):
         """
@@ -73,10 +68,8 @@ class BucketClient(ServiceClient):
             params['account'] = account
         if check_owner is not None:
             params['check_owner'] = check_owner
-        resp, body = self.bucket_request(
+        _resp, body = self.bucket_request(
             bucket, 'GET', 'show', params=params, **kwargs)
-        if resp.status != 200:
-            raise from_response(resp, body)
         return body
 
     def bucket_update(self, bucket, metadata, to_delete, account=None,
@@ -94,13 +87,10 @@ class BucketClient(ServiceClient):
             params['account'] = account
         if check_owner is not None:
             params['check_owner'] = check_owner
-        resp, body = self.bucket_request(
+        _resp, _body = self.bucket_request(
             bucket, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete},
             params=params, **kwargs)
-        if resp.status != 200:
-            raise from_response(resp, body)
-        return body
 
     def bucket_refresh(self, bucket, account=None, check_owner=None, **kwargs):
         """
@@ -112,37 +102,29 @@ class BucketClient(ServiceClient):
             params['account'] = account
         if check_owner is not None:
             params['check_owner'] = check_owner
-        resp, body = self.bucket_request(
+        _resp, _body = self.bucket_request(
             bucket, 'POST', 'refresh', params=params, **kwargs)
-        if resp.status != 204:
-            raise from_response(resp, body)
 
     def bucket_reserve(self, bucket, account, **kwargs):
         """
         Reserve the bucket name during bucket creation.
         """
         params = {'account': account}
-        resp, body = self.bucket_request(
+        _resp, _body = self.bucket_request(
             bucket, 'PUT', 'reserve', params=params, **kwargs)
-        if resp.status != 201:
-            raise from_response(resp, body)
 
     def bucket_release(self, bucket, account, **kwargs):
         """
         Release the bucket reservration after success.
         """
         params = {'account': account}
-        resp, body = self.bucket_request(
+        _resp, _body = self.bucket_request(
             bucket, 'POST', 'release', params=params, **kwargs)
-        if resp.status != 204:
-            raise from_response(resp, body)
 
     def bucket_get_owner(self, bucket, **kwargs):
         """
         Get the bucket owner.
         """
-        resp, body = self.bucket_request(
+        _resp, body = self.bucket_request(
             bucket, 'GET', 'get-owner', **kwargs)
-        if resp.status != 200:
-            raise from_response(resp, body)
         return body

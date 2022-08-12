@@ -1317,12 +1317,11 @@ class Account(WerkzeugApp):
         decoded = json.loads(req.get_data())
         metadata = decoded.get('metadata')
         to_delete = decoded.get('to_delete')
-        info = self.backend.update_bucket_metadata(
+        success = self.backend.update_bucket_metadata(
             bname, metadata, to_delete, account=account, **kwargs)
-        if not info:
-            return NotFound('Bucket not found')
-        return Response(json.dumps(info, separators=(',', ':')),
-                        mimetype=HTTP_CONTENT_TYPE_JSON)
+        if success:
+            return Response(status=204)
+        return NotFound('Bucket not found')
 
     # ACCT{{
     # POST /v1.0/bucket/refresh?id=<bucket_name>

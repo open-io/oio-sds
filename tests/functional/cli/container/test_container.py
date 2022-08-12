@@ -65,10 +65,7 @@ class ContainerTest(CliTestCase):
         output = self.openio('bucket create ' + cname + opts)
         self.assertEqual('True\n', output)
         # Enable bucket replication before creating the first container
-        opts = self.get_format_opts(fields=(BUCKET_PROP_REPLI_ENABLED,))
-        output = self.openio('bucket set --replication yes ' +
-                             cname + opts)
-        self.assertEqual('True\n', output)
+        self.openio('bucket set --replication yes ' + cname)
 
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects',
                                             BUCKET_PROP_REPLI_ENABLED))

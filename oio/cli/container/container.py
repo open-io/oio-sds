@@ -276,7 +276,7 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
         return ('Name', 'Created'), (r for r in results)
 
 
-class SetBucket(ShowOne):
+class SetBucket(Command):
     """Set metadata on a bucket."""
 
     log = getLogger(__name__ + '.SetBucket')
@@ -313,17 +313,10 @@ class SetBucket(ShowOne):
         metadata = dict()
         if parsed_args.replicate is not None:
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
-        data = bucket_client.bucket_update(
+        bucket_client.bucket_update(
             parsed_args.bucket, account=account,
             check_owner=parsed_args.check_owner,
             metadata=metadata, to_delete=None, reqid=reqid)
-
-        if parsed_args.formatter == 'table':
-            from oio.common.easy_value import convert_size
-
-            data['bytes'] = convert_size(data['bytes'])
-            data['mtime'] = Timestamp(data.get('mtime', 0.0)).isoformat
-        return zip(*sorted(data.items()))
 
 
 class SetContainer(SetPropertyCommandMixin,

@@ -48,6 +48,9 @@ MTIME_FIELD = 'mtime'
 COUNTERS_FIELDS = (BYTES_FIELD, OBJECTS_FIELD, SHARDS_FIELD, CONTAINERS_FIELD,
                    BUCKETS_FIELD, ACCOUNTS_FIELD)
 TIMESTAMP_FIELDS = (CTIME_FIELD, MTIME_FIELD)
+RESERVED_BUCKET_FIELDS = ('account', REGION_FIELD, CTIME_FIELD, MTIME_FIELD,
+                          CONTAINERS_FIELD, BYTES_FIELD, OBJECTS_FIELD,
+                          BYTES_FIELD + '-details', OBJECTS_FIELD + '-details')
 
 
 def catch_service_errors(func):
@@ -314,6 +317,39 @@ class AccountBackendFdb(object):
             item_keys_values[1].append((key, value))
         _append_item(*item_keys_values)
         return items
+
+    @fdb.transactional
+    def _update_metadata(self, tr, space, to_update, to_delete,
+                         forbidden_keys=None):
+        if to_update is None:
+            to_update = {}
+        if to_delete is None:
+            to_delete = set()
+        else:
+            to_delete = set(to_delete)
+        if forbidden_keys is None:
+            forbidden_keys = ()
+
+        common_keys = set(to_update).intersection(to_delete)
+        if common_keys:
+            raise BadRequest(
+                f'Keys {common_keys} cannot be updated and deleted '
+                'at the same time')
+
+        for key, value in to_update.items():
+            if not isinstance(key, str):
+                raise BadRequest('All keys must be strings')
+            if not isinstance(value, str):
+                raise BadRequest('All values must be strings')
+            if key in forbidden_keys:
+                raise Forbidden(f'Key {key} cannot be changed')
+            tr[space.pack((key,))] = value.encode('utf-8')
+        for key in to_delete:
+            if not isinstance(key, str):
+                raise BadRequest('All keys must be strings')
+            if key in forbidden_keys:
+                raise Forbidden(f'Key {key} cannot be changed')
+            tr.clear(space.pack((key,)))
 
     # Status/metrics ----------------------------------------------------------
 
@@ -806,48 +842,34 @@ class AccountBackendFdb(object):
         self._update_metrics_stats(tr, region, stats_delta)
 
     @catch_service_errors
-    def update_account_metadata(self, account_id, metadata, to_delete=None,
+    def update_account_metadata(self, account_id, to_update, to_delete=None,
                                 **kwargs):
-        if not account_id:
-            return None
+        """
+        Update (or delete) account metadata.
 
-        _acct_id = self._val_element(self.db, self.acct_space,
-                                     account_id, 'id')
+        :param to_update: dict of entries to set (or update)
+        :param to_delete: iterable of keys to delete
+        """
+        return self._update_account_metadata(
+            self.db, account_id, to_update, to_delete)
 
-        if _acct_id is None:
+    @fdb.transactional
+    def _update_account_metadata(self, tr, account_id, to_update, to_delete):
+        """
+        [transactional] Update (or delete) account metadata.
+        """
+        account_space = self.acct_space[account_id]
+        account_metadata_space = self.metadata_space[account_id]
+
+        if not tr[account_space.pack((CTIME_FIELD,))].present():
+            # Account doesn't exist
             if self.autocreate:
-                self.create_account(account_id)
+                self._create_account(tr, account_id)
             else:
-                return None
+                return False
 
-        if not metadata and not to_delete:
-            return account_id
-        self._manage_metadata(self.db, self.metadata_space, account_id,
-                              metadata, to_delete)
-
-        return account_id
-
-    def cast_fields(self, info):
-        """
-        Cast dict entries to the type they are supposed to be.
-        """
-        for what in (b'bytes', b'objects'):
-            try:
-                info[what] = self._counter_value_to_counter(info.get(what))
-            except (TypeError, ValueError):
-                pass
-        for what in (b'ctime', b'mtime'):
-            try:
-                info[what] = self._timestamp_value_to_timestamp(info.get(what))
-            except (TypeError, ValueError):
-                pass
-        for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
-            try:
-                val = info.get(what)
-                decoded = val.decode('utf-8') if val is not None else None
-                info[what] = boolean_value(decoded)
-            except (TypeError, ValueError):
-                pass
+        self._update_metadata(tr, account_metadata_space, to_update, to_delete)
+        return True
 
     @catch_service_errors
     def refresh_account(self, account_id, **kwargs):
@@ -1929,20 +1951,31 @@ class AccountBackendFdb(object):
         """
         Update (or delete) bucket metadata.
 
-        :param metadata: dict of entries to set (or update)
+        :param to_update: dict of entries to set (or update)
         :param to_delete: iterable of keys to delete
         """
-        account_id = self._get_bucket_account(self.db, bname, **kwargs)
+        return self._update_bucket_metadata(
+            self.db, bname, metadata, to_delete, **kwargs)
 
-        self._manage_metadata(self.db, self.bucket_space[account_id], bname,
-                              metadata, to_delete)
+    @fdb.transactional
+    def _update_bucket_metadata(self, tr, bname, to_update, to_delete,
+                                **kwargs):
+        """
+        [transactional] Update (or delete) bucket metadata.
+        """
+        account_id = self._get_bucket_account(tr, bname, **kwargs)
+        bucket_space = self.bucket_space[account_id][bname]
 
-        info = self._multi_get(self.db, self.bucket_space[account_id], bname)
-        if not info:
-            return None
+        # Do not use the ctime, it is not present for old buckets
+        current_region = tr[bucket_space.pack((REGION_FIELD,))]
+        if not current_region.present():
+            # Bucket doesn't exist
+            return False
 
-        self.cast_fields(info)
-        return info
+        self._update_metadata(
+            tr, bucket_space, to_update, to_delete,
+            forbidden_keys=RESERVED_BUCKET_FIELDS)
+        return True
 
     @catch_service_errors
     def refresh_bucket(self, bucket_name, **kwargs):
@@ -2205,40 +2238,3 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _is_element(self, tr, space, key):
         return tr[space.pack((key,))].present()
-
-    @fdb.transactional
-    def _val_element(self, tr, space, id_x, key):
-        val = tr[space.pack((id_x, key))]
-        if val.present():
-            return val
-        return None
-
-    @fdb.transactional
-    def _multi_get(self, tr, multi_space, index):
-        pairs = tr[multi_space.range((index,))]
-        info = {}
-        for key, val in pairs:
-            unpacked_key = (multi_space.unpack(key)[-1])
-            info[bytes(unpacked_key, 'utf-8')] = val
-        return info
-
-    @fdb.transactional
-    def _get_metada(self, tr, req_account_id):
-        account_id = self._val_element(tr, self.acct_space,
-                                       req_account_id, 'id')
-        if account_id is None:
-            return None
-        meta = self._multi_get(tr, self.metadata_space,
-                               account_id.decode('utf-8'))
-        return meta
-
-    @fdb.transactional
-    def _manage_metadata(self, tr, space, id_x, metadata, to_delete):
-        if to_delete:
-            for element in to_delete:
-                tr.clear(space.pack((id_x, element)))
-
-        if metadata:
-            for key, value in metadata.items():
-                tr[space.pack((id_x, key))] = \
-                    bytes(str(value), 'utf-8')
