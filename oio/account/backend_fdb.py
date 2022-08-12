@@ -1136,7 +1136,7 @@ class AccountBackendFdb(object):
 
         # Add basic info
         tr[container_space.pack(('name',))] = cname.encode('utf-8')
-        tr[container_space.pack(('region',))] = region.encode('utf-8')
+        tr[container_space.pack((REGION_FIELD,))] = region.encode('utf-8')
         self._set_counter(tr, container_space.pack((BYTES_FIELD,)))
         self._set_counter(tr, container_space.pack((OBJECTS_FIELD,)))
         # Set container mtime
@@ -1244,7 +1244,7 @@ class AccountBackendFdb(object):
 
         if full:
             repli_enabled = None
-            bname = info.get('bucket')
+            bname = info.get(BUCKET_FIELD)
             if bname:
                 if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
                     account_id = account_id[len(SHARDING_ACCOUNT_PREFIX):]
@@ -1288,9 +1288,9 @@ class AccountBackendFdb(object):
         filters = []
         if region:
             region = region.upper()
-            filters.append(lambda name, info: info['region'] == region)
+            filters.append(lambda name, info: info[REGION_FIELD] == region)
         if bucket:
-            filters.append(lambda name, info: info['bucket'] == bucket)
+            filters.append(lambda name, info: info[BUCKET_FIELD] == bucket)
 
         start, stop = self._get_start_and_stop(
             containers_space, prefix=prefix, marker=marker,
@@ -1448,7 +1448,7 @@ class AccountBackendFdb(object):
                     'No update needed, '
                     'event older than last container update')
 
-        current_region = tr[container_space.pack(('region',))]
+        current_region = tr[container_space.pack((REGION_FIELD,))]
         if current_region.present():
             # Container is already associated with a region
             current_region = current_region.decode('utf-8')
@@ -1460,7 +1460,7 @@ class AccountBackendFdb(object):
                         'in account %s (before: %s, after: %s)',
                         cname, account_id, current_region, region)
                     # Fetch the bucket associated with this container
-                    current_bname = tr[container_space.pack(('bucket',))]
+                    current_bname = tr[container_space.pack((BUCKET_FIELD,))]
                     if current_bname.present():
                         current_bname = current_bname.value
                     else:
@@ -1474,7 +1474,8 @@ class AccountBackendFdb(object):
                         tr, account_id, cname, region, current_mtime)
                     # Reattach the bucket to the container.
                     if current_bname:
-                        tr[container_space.pack(('bucket',))] = current_bname
+                        tr[container_space.pack((BUCKET_FIELD,))] = \
+                            current_bname
                     current_region = region
             else:
                 region = current_region
@@ -1482,7 +1483,7 @@ class AccountBackendFdb(object):
             raise BadRequest('Missing region')
 
         container_has_new_bucket = False
-        current_bname = tr[container_space.pack(('bucket',))]
+        current_bname = tr[container_space.pack((BUCKET_FIELD,))]
         if current_bname.present():
             # Container is already associated with a bucket
             current_bname = current_bname.decode('utf-8')
@@ -1625,7 +1626,7 @@ class AccountBackendFdb(object):
         self._set_bucket_owner(tr, bname, account)
 
         # Do not use the ctime, it is not present for old buckets
-        current_region = tr[bucket_space.pack(('region',))]
+        current_region = tr[bucket_space.pack((REGION_FIELD,))]
         if current_region.present():
             # Bucket already exists
             current_region = current_region.decode('utf-8')
@@ -1646,7 +1647,7 @@ class AccountBackendFdb(object):
 
         # Add basic info
         tr[bucket_space.pack(('account',))] = account.encode('utf-8')
-        tr[bucket_space.pack(('region',))] = region.encode('utf-8')
+        tr[bucket_space.pack((REGION_FIELD,))] = region.encode('utf-8')
         self._set_counter(tr, bucket_space.pack((CONTAINERS_FIELD,)))
         self._set_counter(tr, bucket_space.pack((BYTES_FIELD,)))
         self._set_counter(tr, bucket_space.pack((OBJECTS_FIELD,)))
@@ -1681,7 +1682,7 @@ class AccountBackendFdb(object):
         bucket_space = self.bucket_space[account][bucket]
         try:
             # Do not use the ctime, it is not present for old buckets
-            current_region = tr[bucket_space.pack(('region',))]
+            current_region = tr[bucket_space.pack((REGION_FIELD,))]
             if not current_region.present():
                 raise NotFound('Bucket does not exist')
             current_region = current_region.decode('utf-8')
@@ -1800,7 +1801,7 @@ class AccountBackendFdb(object):
         filters = []
         if region:
             region = region.upper()
-            filters.append(lambda name, info: info['region'] == region)
+            filters.append(lambda name, info: info[REGION_FIELD] == region)
 
         start, stop = self._get_start_and_stop(
             buckets_space, prefix=prefix, marker=marker, end_marker=end_marker)
@@ -1835,7 +1836,7 @@ class AccountBackendFdb(object):
     @use_snapshot_reads
     def _format_bucket_for_listing(self, tr, bname, bucket_info):
         formatted = {}
-        kept_keys = TIMESTAMP_FIELDS + COUNTERS_FIELDS + ('region',)
+        kept_keys = TIMESTAMP_FIELDS + COUNTERS_FIELDS + (REGION_FIELD,)
         for key, value in bucket_info.items():
             if key in kept_keys:
                 formatted[key] = value
@@ -1896,7 +1897,7 @@ class AccountBackendFdb(object):
 
         bucket_space = self.bucket_space[account_id][bname]
 
-        current_region = tr[bucket_space.pack(('region',))]
+        current_region = tr[bucket_space.pack((REGION_FIELD,))]
         if not current_region.present():  # Bucket doesn't exist
             if container_is_deleted:
                 # Bucket is already deleted
@@ -1908,7 +1909,7 @@ class AccountBackendFdb(object):
             if not container_has_new_bucket:
                 # If the bucket is recreated, all of the container statistics
                 # will be added to the bucket, not just the delta
-                tr.clear(container_space.pack(('bucket',)))
+                tr.clear(container_space.pack((BUCKET_FIELD,)))
             return
         else:  # Bucket exists
             # Check that the region has not changed
@@ -1927,7 +1928,8 @@ class AccountBackendFdb(object):
                         tr, bucket_space.pack((CONTAINERS_FIELD,)), -1)
             elif container_has_new_bucket:
                 # Next time, only the delta will be added
-                tr[container_space.pack(('bucket',))] = bname.encode('utf-8')
+                tr[container_space.pack((BUCKET_FIELD,))] = \
+                    bname.encode('utf-8')
                 self._increment(tr, bucket_space.pack((CONTAINERS_FIELD,)))
 
         # Update bucket stats
@@ -2066,7 +2068,7 @@ class AccountBackendFdb(object):
 
         # Propagate container counters to bucket if container belongs to bucket
         def _process_data_to_counters():
-            if 'bucket' in data and data['bucket'] == bucket_name:
+            if BUCKET_FIELD in data and data[BUCKET_FIELD] == bucket_name:
                 counters[CONTAINERS_FIELD] += 1
                 for field in (BYTES_FIELD, OBJECTS_FIELD):
                     counters[field] += data.get(field, {})
@@ -2089,8 +2091,8 @@ class AccountBackendFdb(object):
                 # Reset data for next container
                 data = {}
 
-            if field == 'bucket':
-                data['bucket'] = value.decode('utf-8')
+            if field == BUCKET_FIELD:
+                data[BUCKET_FIELD] = value.decode('utf-8')
                 continue
             # Skip not counter values
             if field not in (BYTES_FIELD, OBJECTS_FIELD):
