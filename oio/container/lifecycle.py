@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -219,7 +219,7 @@ class ContainerLifecycle(object):
             container=container,
             properties=True,
             versions=True,
-            **kwargs
+            **kwargs,
         ):
             try:
                 obj_meta["container"] = container
@@ -378,7 +378,7 @@ class LifecycleRule(object):
         try:
             expiration = NoncurrentVersionExpiration.from_element(
                 rule_elt.findall(tag("NoncurrentVersionExpiration"), nsmap)[-1],
-                **kwargs
+                **kwargs,
             )
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
@@ -586,6 +586,90 @@ class LifecycleRuleFilter(object):
             _filter_elt.append(tag_elt)
 
         return filter_elt
+
+    def to_sql_query(self, formated_time=None, **kwargs):
+        # _query = 'SELECT * FROM aliases AS al '
+        # Beginning of query will be force by meta2 code to avoid
+        # update or delete queries
+        _query = ""
+        nb_filters = len(self.tags)
+        if self.prefix is not None:
+            nb_filters += 1
+        if self.lesser is not None:
+            nb_filters += 1
+        if self.greater is not None:
+            nb_filters += 1
+        if nb_filters == 0:
+            # No filter condition is equivalent to empty filter
+            return _query
+
+        _slo_cond = (
+            " LEFT JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
+            " INNER JOIN contents ct ON al.content = ct.id "
+        )
+
+        _lesser = ""
+        if self.lesser is not None:
+            _lesser = (
+                f" AND "
+                f"((ct.size <{self.lesser} AND pr.value IS NULL) OR "
+                f"pr.value < {self.lesser})"
+            )
+
+        _greater = ""
+        if self.greater is not None:
+            _greater = (
+                f" AND "
+                f"((ct.size >{self.greater} AND pr.value IS NULL) OR "
+                f"pr.value > {self.greater}) "
+            )
+
+        if len(self.tags) > 0:
+            _base_tag = (
+                " INNER JOIN properties pr2 ON al.alias = pr2.alias"
+                " AND al.version=pr2.version "
+            )
+
+            _tags = " AND pr2.key='x-object-sysmeta-swift3-tagging'"
+            for k, v in self.tags.items():
+                tag_elt = etree.Element("Tag")
+                key_elt = etree.Element("Key")
+                key_elt.text = k
+                tag_elt.append(key_elt)
+                value_elt = etree.Element("Value")
+                value_elt.text = v
+                tag_elt.append(value_elt)
+                _tag_key_cond = (
+                    " AND CAST(pr2.value as nvarchar(10000)) "
+                    f"LIKE '%<Tag><Key>{k}</Key>"
+                )
+                _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
+                _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
+
+            if _tags:
+                _query = f"{_query}{_base_tag}{_tags}"
+
+        if _lesser or _greater:
+            _query = f"{_query}{_slo_cond}"
+            if _lesser:
+                _query = f"{_query}{_lesser}"
+            if _greater:
+                _query = f"{_query}{_greater}"
+
+        if self.prefix is not None:
+            _prefix_cond = " WHERE ( al.alias LIKE '" f"{self.prefix}" "%'"
+            _query = f"{_query}{_prefix_cond}"
+        if formated_time is not None:
+            _time_cond = (
+                f" AND (al.mtime + {formated_time}) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER ))"
+            )
+            _query = f"{_query}{_time_cond}"
+        # close WHERE clause
+        if self.prefix is not None:
+            _query = f"{_query} )"
+        return _query
 
     def __str__(self):
         return etree.tostring(self._to_element_tree()).decode("utf-8")
