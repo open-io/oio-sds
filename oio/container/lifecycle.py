@@ -19,7 +19,7 @@ import json
 from oio.common.logger import get_logger
 
 LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
-TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
+TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
 
 
 class ContainerLifecycle(object):
@@ -81,3 +81,98 @@ class ContainerLifecycle(object):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: json_str}
         )
+
+    def build_sql_query(self, rule_filter, formated_time=None, **kwargs):
+        # _query = 'SELECT * FROM aliases AS al '
+        # Beginning of query will be force by meta2 code to avoid
+        # update or delete queries
+
+        rule = RuleFilter(rule_filter)
+        _query = ""
+        nb_filters = len(rule.tags)
+        if rule.prefix is not None:
+            nb_filters += 1
+        if rule.lesser is not None:
+            nb_filters += 1
+        if rule.greater is not None:
+            nb_filters += 1
+        if nb_filters == 0:
+            # No filter condition is equivalent to empty filter
+            return _query
+
+        _slo_cond = (
+            " LEFT JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
+            " INNER JOIN contents ct ON al.content = ct.id "
+        )
+
+        _lesser = ""
+        if rule.lesser is not None:
+            _lesser = (
+                f" AND "
+                f"((ct.size <{rule.lesser} AND pr.value IS NULL) OR "
+                f"pr.value < {rule.lesser})"
+            )
+
+        _greater = ""
+        if rule.greater is not None:
+            _greater = (
+                f" AND "
+                f"((ct.size >{rule.greater} AND pr.value IS NULL) OR "
+                f"pr.value > {rule.greater}) "
+            )
+
+        if len(rule.tags) > 0:
+            _base_tag = (
+                " INNER JOIN properties pr2 ON al.alias = pr2.alias"
+                " AND al.version=pr2.version "
+            )
+
+            _tags = f" AND pr2.key='{TAGGING_KEY}'"
+            for el in rule.tags:
+                for k, v in el.items():
+                    _tag_key_cond = (
+                        " AND CAST(pr2.value as nvarchar(10000)) "
+                        f"LIKE '%<Tag><Key>{k}</Key>"
+                    )
+                    _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
+                    _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
+
+            if _tags:
+                _query = f"{_query}{_base_tag}{_tags}"
+
+        if _lesser or _greater:
+            _query = f"{_query}{_slo_cond}"
+            if _lesser:
+                _query = f"{_query}{_lesser}"
+            if _greater:
+                _query = f"{_query}{_greater}"
+
+        if rule.prefix is not None:
+            _prefix_cond = f" WHERE ( al.alias LIKE '{rule.prefix}%'"
+            _query = f"{_query}{_prefix_cond}"
+        if formated_time is not None:
+            _time_cond = (
+                f" AND (al.mtime + {formated_time}) < (CAST "
+                "(strftime('%s', 'now') AS INTEGER ))"
+            )
+            _query = f"{_query}{_time_cond}"
+        # close WHERE clause
+        if rule.prefix is not None:
+            _query = f"{_query} )"
+        return _query
+
+
+class RuleFilter(object):
+    def __init__(self, rule_filter):
+        self.prefix = rule_filter.get("Prefix", None) or rule_filter.get(
+            "Filter", {}
+        ).get("Prefix", None)
+        self.greater = rule_filter.get("Filter", {}).get("ObjectSizeGreaterThan", None)
+        self.lesser = rule_filter.get("Filter", {}).get("ObjectSizeLessThan", None)
+        # Build a list of tags:
+        # Tags has two representations => Tags: List of tags if there are several tags
+        # otherwise single Tag: {}
+        self.tags = []
+        if rule_filter.get("Filter", {}).get("Tags") is not None:
+            self.tags = rule_filter.get("Filter", {}).get("Tags")
