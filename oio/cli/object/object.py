@@ -633,6 +633,13 @@ class ListObject(ContainerCommandMixin, Lister):
             action="store_true",
             help='Ask the meta2 to open a local database'
         )
+        parser.add_argument(
+            '--chunks',
+            dest='chunks',
+            default=False,
+            help='List chunks with objects (only readable with json format)',
+            action="store_true"
+        )
         return parser
 
     def _autocontainer_loop(self, account, marker=None, limit=None,
@@ -719,6 +726,8 @@ class ListObject(ContainerCommandMixin, Lister):
             kwargs['concurrency'] = parsed_args.concurrency
         if parsed_args.attempts:
             kwargs['request_attempts'] = parsed_args.attempts
+        if parsed_args.chunks:
+            kwargs['chunks'] = True
 
         account = self.app.client_manager.account
         if parsed_args.auto:
@@ -744,6 +753,13 @@ class ListObject(ContainerCommandMixin, Lister):
                         'Object listing has been truncated, next marker: %s',
                         resp.get('next_marker'))
 
+        def _format_chunks(chunks):
+            # only return chunks if format is json (other format are
+            # not readable anyway)
+            if parsed_args.formatter == 'json':
+                return chunks
+            return "n/a"
+
         if parsed_args.long_listing:
             from oio.common.timestamp import Timestamp
 
@@ -767,6 +783,8 @@ class ListObject(ContainerCommandMixin, Lister):
                                   Timestamp(obj['mtime']).isoformat,
                                   obj['policy'], obj['chunk_method'],
                                   _format_props(obj.get('properties', {})))
+                        if parsed_args.chunks:
+                            result += (_format_chunks(obj.get('chunks', {})),)
                         yield result
                     except KeyError as exc:
                         self.success = False
@@ -779,16 +797,23 @@ class ListObject(ContainerCommandMixin, Lister):
             def _gen_results(objects):
                 for obj in objects:
                     try:
-                        yield (
+                        result = (
                             obj['name'],
                             obj['size'] if not obj['deleted'] else 'deleted',
                             obj['hash'],
                             obj['version'])
+                        if parsed_args.chunks:
+                            result += (_format_chunks(obj.get('chunks', {})),)
+                        yield result
                     except KeyError as exc:
                         self.success = False
                         self.log.warn("Bad object entry, missing %s: %s",
                                       exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version')
+
+        if parsed_args.chunks:
+            columns += ('Chunks',)
+
         results = _gen_results(obj_gen)
         return (columns, results)
 

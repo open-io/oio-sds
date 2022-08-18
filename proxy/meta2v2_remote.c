@@ -372,6 +372,8 @@ _pack_list_params(MESSAGE msg, struct list_params_s *p)
 	if (p->flag_headers) flags |= M2V2_FLAG_HEADERS;
 	if (p->flag_nodeleted) flags |= M2V2_FLAG_NODELETED;
 	if (p->flag_properties) flags |= M2V2_FLAG_ALLPROPS;
+	// Beware of the negation of the flag
+	if (!p->flag_recursion) flags |= M2V2_FLAG_NORECURSION;
 	flags = g_htonl(flags);
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 

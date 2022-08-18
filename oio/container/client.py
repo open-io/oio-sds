@@ -554,7 +554,7 @@ class ContainerClient(ProxyClient):
                      marker=None, version_marker=None, end_marker=None,
                      prefix=None, delimiter=None, properties=False,
                      cid=None, versions=False, deleted=False,
-                     params=None, **kwargs):
+                     params=None, chunks=False, **kwargs):
         """
         Get the list of contents of a container.
 
@@ -563,7 +563,7 @@ class ContainerClient(ProxyClient):
         """
         p_up = {'max': limit, 'marker': marker, 'end_marker': end_marker,
                 'prefix': prefix, 'delimiter': delimiter,
-                'properties': properties}
+                'properties': properties, 'chunks': chunks}
         params.update(p_up)
         # As of 4.0.0.a3, to make it false, the 'all' parameter must be absent
         if versions:

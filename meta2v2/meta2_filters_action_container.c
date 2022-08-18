@@ -411,6 +411,8 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 		lp->flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
 		lp->flag_properties = BOOL(flags & M2V2_FLAG_ALLPROPS);
 		lp->flag_local = BOOL(flags & M2V2_FLAG_LOCAL);
+		// Beware of the negation of the flag
+		lp->flag_recursion = ! BOOL(flags & M2V2_FLAG_NORECURSION);
 	}
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);

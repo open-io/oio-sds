@@ -130,7 +130,8 @@ class ObjectStorageTest(unittest.TestCase):
                   'marker': marker, 'max': limit,
                   'delimiter': delimiter, 'prefix': prefix,
                   'end_marker': end_marker,
-                  'properties': False}
+                  'properties': False,
+                  'chunks': False}
         api.container._direct_request.assert_called_once_with(
             'GET', uri, params=params,
             autocreate=True, path=ANY, **self.common_kwargs)

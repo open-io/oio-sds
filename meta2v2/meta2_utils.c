@@ -1178,7 +1178,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 					(int)(suffix - name + len_delimiter), name);
 		} else {
 			if (lp.flag_headers)
-				_load_fk_by_name(sq3, alias, "image", cb, u);
+				_manage_alias(sq3, alias, lp.flag_recursion, cb, u);
 			if (lp.flag_properties)
 				_load_fk_by_name(sq3, alias, "properties", cb, u);
 

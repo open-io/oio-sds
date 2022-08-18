@@ -451,9 +451,14 @@ _serialize_property(struct bean_PROPERTIES_s *prop, GString *gstr)
 }
 
 static void
-_dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
-		GTree *headers, GTree *props)
+_dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
+		GSList *aliases, GTree *headers, GTree *props, GTree *chunks)
 {
+	/* Url will can be altered (if <chunks> is not NULL), so let's use a copy */
+	struct oio_url_s *object_url = oio_url_dup(url);
+	const gchar *policy = NULL;
+	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
+
 	g_string_append_static (gstr, "\"objects\":[");
 	gboolean first = TRUE;
 	for (; aliases ; aliases=aliases->next) {
@@ -467,6 +472,11 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 				ALIASES_get_version(a));
 		GSList *prop_list = g_tree_lookup(props, prop_key);
 		g_free(prop_key);
+
+		GString *chunk_key = metautils_gba_to_hexgstr(NULL,
+				ALIASES_get_content(a));
+		GSList *chunk_list = g_tree_lookup(chunks, chunk_key->str);
+		g_string_free(chunk_key, TRUE);
 
 		g_string_append_c(gstr, '{');
 		OIO_JSON_append_gstr(gstr, "name", ALIASES_get_alias(a));
@@ -530,17 +540,55 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 			}
 			g_string_append_c(gstr, '}');
 		}
+
+		if (chunk_list) {
+			/* PATH and VERSION need to be set to use to be able to
+			 * call <m2v2_extend_chunk_url> */
+			oio_url_set(object_url, OIOURL_PATH, ALIASES_get_alias(a)->str);
+			gchar strver[24];
+			g_snprintf(strver, sizeof(strver), "%"G_GINT64_FORMAT,
+					ALIASES_get_version(a));
+			oio_url_set(object_url, OIOURL_VERSION, strver);
+			if (h) {
+				policy = CONTENTS_HEADERS_get_policy(h)->str;
+			} else {
+				/* No header, no possibility to compute chunks */
+				continue;
+			}
+
+			g_string_append_static(gstr, ",\"chunks\":[");
+			gboolean inner_first = TRUE;
+			for (GSList *chunk = chunk_list;
+					chunk && chunk->data;
+					chunk = chunk->next) {
+				struct bean_CHUNKS_s *bchunk = chunk->data;
+				GError *err = m2v2_extend_chunk_url(object_url, policy, bchunk);
+				if (err) {
+					GRID_WARN("Failed to extend chunk url: (%d) (%s)",
+							err->code, err->message);
+					g_clear_error(&err);
+					continue;
+				}
+				COMA(gstr, inner_first);
+				_serialize_chunk(bchunk, gstr, _loca);
+			}
+			g_string_append_c(gstr, ']');
+		}
 		g_string_append_c(gstr, '}');
 	}
 	g_string_append_c (gstr, ']');
+
+	oio_url_clean(object_url);
 }
 
 static void
-_dump_json_beans (GString *gstr, GSList *beans)
+_dump_json_beans (struct oio_url_s *url, GString *gstr, GSList *beans)
 {
 	GSList *aliases = NULL;
 	GTree *headers = g_tree_new ((GCompareFunc)metautils_gba_cmp);
 	GTree *props = g_tree_new_full((GCompareDataFunc)metautils_strcmp3,
+			NULL, g_free, NULL);
+	GTree *chunks = g_tree_new_full((GCompareDataFunc)metautils_strcmp3,
 			NULL, g_free, NULL);
 
 	for (GSList *l = beans; l; l = l->next) {
@@ -558,22 +606,38 @@ _dump_json_beans (GString *gstr, GSList *beans)
 			GSList *val = g_tree_lookup(props, key);
 			val = g_slist_prepend(val, l->data);
 			g_tree_replace(props, key, val);
+		} else if (DESCR(l->data) == &descr_struct_CHUNKS) {
+			/* <chunks> is a GTree of GLists. There is one GList per object.
+			 * The key used to discriminate a list for an object is built from
+			 * the content.
+			 */
+			GString *key_string = metautils_gba_to_hexgstr(NULL,
+					CHUNKS_get_content(l->data));
+			/* A gchar* is needed because g_tree_destroy() will free it (and is
+			 * not able to free the GString).
+			 */
+			gchar *key = g_string_free(key_string, FALSE);
+			GSList *val = g_tree_lookup(chunks, key);
+			val = g_slist_prepend(val, l->data);
+			g_tree_replace(chunks, key, val);
 		}
 	}
 
-	_dump_json_aliases_and_headers(gstr, aliases, headers, props);
+	_dump_json_aliases_and_headers(url, gstr, aliases, headers, props, chunks);
 
-	gboolean _props_cleaner(gpointer key UNUSED,
+	gboolean _cleaner(gpointer key UNUSED,
 			gpointer val, gpointer data UNUSED)
 	{
 		g_slist_free(val);
 		return FALSE;
 	}
-	g_tree_foreach(props, _props_cleaner, NULL);
+	g_tree_foreach(props, _cleaner, NULL);
 	g_tree_destroy(props);
+	g_tree_foreach(chunks, _cleaner, NULL);
+	g_tree_destroy(chunks);
 
-	g_slist_free (aliases);
-	g_tree_destroy (headers);
+	g_slist_free(aliases);
+	g_tree_destroy(headers);
 }
 
 static void
@@ -631,13 +695,13 @@ _reply_list_result (struct req_args_s *args, GError * err,
 	_container_new_props_to_headers (args, out->props);
 
 	GString *gstr = g_string_sized_new (4096);
-	g_string_append_c (gstr, '{');
+	g_string_append_c(gstr, '{');
 	_dump_json_prefixes (gstr, tree_prefixes);
-	g_string_append_c (gstr, ',');
+	g_string_append_c(gstr, ',');
 	_dump_json_properties (gstr, out->props);
-	g_string_append_c (gstr, ',');
-	_dump_json_beans (gstr, out->beans);
-	g_string_append_c (gstr, '}');
+	g_string_append_c(gstr, ',');
+	_dump_json_beans (args->url, gstr, out->beans);
+	g_string_append_c(gstr, '}');
 
 	return _reply_success_json (args, gstr);
 }
@@ -1186,7 +1250,8 @@ _filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 			continue;
 		}
 		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS ||
-				DESCR(l->data) == &descr_struct_PROPERTIES) {
+				DESCR(l->data) == &descr_struct_PROPERTIES ||
+				DESCR(l->data) == &descr_struct_CHUNKS) {
 			prepend (l);
 			continue;
 		}
@@ -2320,7 +2385,7 @@ enum http_rc_e action_container_drain(struct req_args_s *args) {
 }
 
 // CONTAINER{{
-// GET /v3.0/{NS}/container/list?acct={account}&ref={container}&properties={bool}&max={int}
+// GET /v3.0/{NS}/container/list?acct={account}&ref={container}&properties={bool}&max={int}&chunks={bool}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // List object of container.
@@ -2395,6 +2460,8 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	}
 	if (oio_str_parse_bool(OPT("properties"), FALSE))
 		list_in.flag_properties = 1;
+	if (oio_str_parse_bool(OPT("chunks"), FALSE))
+		list_in.flag_recursion = 1;
 	if (!err)
 		err = _max(args, &list_in.maxkeys);
 	if (!err) {

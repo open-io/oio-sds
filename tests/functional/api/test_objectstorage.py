@@ -2289,6 +2289,10 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn('objects', res)
         self.assertIn('prefixes', res)
         self.assertIn('truncated', res)
+        for obj in res['objects']:
+            # Properties and chunks not asked so not expected
+            self.assertNotIn('properties', obj)
+            self.assertNotIn('chunks', obj)
         self.assertListEqual(objects, [x['name'] for x in res['objects']])
         self.assertFalse(res['prefixes'])
         self.assertFalse(res['truncated'])
@@ -2406,6 +2410,40 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertListEqual(['1/a', '1/aa'],
                              [x['name'] for x in res['objects']])
         self.assertListEqual([], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_properties(self):
+        objects = ['a', 'b', 'c']
+        self._upload_empty(*objects, properties={'foo': 'bar'})
+        res = self.api.object_list(self.account, self.cname,
+                                   properties=True)
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        for obj in res['objects']:
+            self.assertDictEqual({'foo': 'bar'}, obj['properties'])
+        self.assertListEqual(objects, [x['name'] for x in res['objects']])
+        self.assertFalse(res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+    def test_object_list_chunks(self):
+        objects = ['a', 'b', 'c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname, chunks=True)
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(objects, [x['name'] for x in res['objects']])
+        # For each object, ensure that the chunks are consistent with a locate
+        # request
+        for obj in res['objects']:
+            self.assertIn('chunks', obj)
+            loc = self.api.object_locate(self.account, self.cname, obj['name'])
+            locate_chunks = sorted(loc[1], key=lambda d: (d['pos'], d['url']))
+            list_chunks = sorted(obj['chunks'],
+                                 key=lambda d: (d['pos'], d['url']))
+            self.assertListEqual(locate_chunks, list_chunks)
+        self.assertFalse(res['prefixes'])
         self.assertFalse(res['truncated'])
 
     def test_depaginate_object_list_with_service_busy(self):

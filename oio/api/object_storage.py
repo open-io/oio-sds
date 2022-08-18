@@ -1062,13 +1062,14 @@ class ObjectStorageApi(object):
     def object_list(self, account, container, limit=None, marker=None,
                     version_marker=None, end_marker=None, prefix=None,
                     delimiter=None, properties=False, versions=False,
-                    deleted=False, **kwargs):
+                    deleted=False, chunks=False, **kwargs):
         """
         Lists objects inside a container.
 
         :param properties: if True, list object properties along with objects
         :param versions: if True, list all versions of objects
         :param deleted: if True, list also the deleted objects
+        :param chunks: if True, list all chunks of objects
 
         :returns: a dict which contains
            * 'objects': the `list` of object descriptions
@@ -1083,7 +1084,7 @@ class ObjectStorageApi(object):
             account, container, limit=limit, marker=marker,
             version_marker=version_marker, end_marker=end_marker,
             prefix=prefix, delimiter=delimiter, properties=properties,
-            versions=versions, deleted=deleted, **kwargs)
+            versions=versions, deleted=deleted, chunks=chunks, **kwargs)
 
         for obj in resp_body['objects']:
             try:
