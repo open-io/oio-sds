@@ -299,6 +299,10 @@ class SetBucket(Command):
             type=boolean_value,
             help='Enable or disable bucket replication.'
         )
+        parser.add_argument(
+            '--region',
+            help='Change the bucket region'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -310,9 +314,11 @@ class SetBucket(Command):
         except CommandError:
             account = None
         bucket_client = self.app.client_manager.storage.bucket
-        metadata = dict()
+        metadata = {}
         if parsed_args.replicate is not None:
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
+        if parsed_args.region:
+            metadata['region'] = parsed_args.region
         bucket_client.bucket_update(
             parsed_args.bucket, account=account,
             check_owner=parsed_args.check_owner,

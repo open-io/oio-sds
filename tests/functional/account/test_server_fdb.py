@@ -27,6 +27,7 @@ from werkzeug.wrappers import Response
 import fdb
 
 from oio.account.server import create_app
+from oio.common.exceptions import NotFound
 from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase
 from oio.account.common_fdb import CommonFdb
@@ -82,6 +83,14 @@ class TestAccountServer(TestAccountServerBase):
     def setUp(self):
         super(TestAccountServer, self).setUp()
         self._create_account(self.account_id)
+
+    def tearDown(self):
+        try:
+            self._flush_account(self.account_id)
+            self._delete_account(self.account_id)
+        except NotFound:
+            pass
+        return super().tearDown()
 
     def test_status(self):
         resp = self.app.get('/status')
@@ -206,6 +215,366 @@ class TestAccountServer(TestAccountServerBase):
                             query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)
         self.assertEqual(len(resp["listing"]), 0)
+
+    def test_change_container_region(self):
+        """
+        Ensure we can change the region of a container not linked
+        to any bucket.
+        """
+        # Add a new container
+        account_params = {
+            'id': self.account_id
+        }
+        container_params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().timestamp,
+            'objects': 12,
+            'bytes': 42,
+            'objects-details': {
+                'SINGLE': 5,
+                'TWOCOPIES': 7
+            },
+            'bytes-details': {
+                'SINGLE': 30,
+                'TWOCOPIES': 12
+            }
+        }
+        dataj = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        self.assertEqual(200, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('LOCALHOST', resp['region'])
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(0, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 0
+            }
+        }, resp['regions'])
+
+        # Update the container with a new region
+        container_params['region'] = 'test'
+        data['mtime'] = data['mtime'] + 1
+        dataj = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        self.assertEqual(200, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('TEST', resp['region'])
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(0, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 0,
+                    'TWOCOPIES': 0
+                },
+                'bytes-details': {
+                    'SINGLE': 0,
+                    'TWOCOPIES': 0
+                },
+                'shards': 0,
+                'containers': 0,
+                'buckets': 0
+            },
+            'TEST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 0
+            }
+        }, resp['regions'])
+
+    def test_change_container_region_without_changing_bucket_region(self):
+        """
+        Ensure we cannot change the region of a container
+        if it's different from the bucket it is linked to.
+        """
+        # Create a new bucket
+        account_params = {
+            'id': self.account_id
+        }
+        bucket_params = {
+            'id': 'foo',
+            'account': self.account_id,
+            'region': 'localhost'
+        }
+        resp = self.app.put('/v1.0/bucket/create', query_string=bucket_params)
+        self.assertEqual(201, resp.status_code)
+        container_params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        # Add a new container in the bucket with the same region
+        data = {
+            'mtime': Timestamp().timestamp,
+            'objects': 12,
+            'bytes': 42,
+            'objects-details': {
+                'SINGLE': 5,
+                'TWOCOPIES': 7
+            },
+            'bytes-details': {
+                'SINGLE': 30,
+                'TWOCOPIES': 12
+            },
+            'bucket': 'foo'
+        }
+        dataj = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        self.assertEqual(200, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('LOCALHOST', resp['region'])
+        expected_container_info = resp
+        resp = self.app.get('/v1.0/bucket/show',
+                            query_string=bucket_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('LOCALHOST', resp['region'])
+        expected_bucket_info = resp
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(1, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 1
+            }
+        }, resp['regions'])
+        expected_account_info = resp
+
+        # Update the container with a new region
+        container_params['region'] = 'test'
+        data['mtime'] = data['mtime'] + 1
+        dataj = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        # Because the container is linked to a bucket in another region,
+        # the request should fail
+        self.assertEqual(409, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual(expected_container_info, resp)
+        resp = self.app.get('/v1.0/bucket/show',
+                            query_string=bucket_params)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual(expected_bucket_info, resp)
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual(expected_account_info, resp)
+
+    def test_change_bucket_region(self):
+        """
+        Ensure we can change the region of a bucket and its container
+        (if we change the region of the bucket first).
+        """
+        # Create a new bucket
+        account_params = {
+            'id': self.account_id
+        }
+        bucket_params = {
+            'id': 'foo',
+            'account': self.account_id,
+            'region': 'localhost'
+        }
+        resp = self.app.put('/v1.0/bucket/create', query_string=bucket_params)
+        self.assertEqual(201, resp.status_code)
+        container_params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        # Add a new container in the bucket with the same region
+        data = {
+            'mtime': Timestamp().timestamp,
+            'objects': 12,
+            'bytes': 42,
+            'objects-details': {
+                'SINGLE': 5,
+                'TWOCOPIES': 7
+            },
+            'bytes-details': {
+                'SINGLE': 30,
+                'TWOCOPIES': 12
+            },
+            'bucket': 'foo'
+        }
+        dataj = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        self.assertEqual(200, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('LOCALHOST', resp['region'])
+        resp = self.app.get('/v1.0/bucket/show',
+                            query_string=bucket_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('LOCALHOST', resp['region'])
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(1, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 1
+            }
+        }, resp['regions'])
+
+        # Change the bucket region
+        resp = self.app.put('/v1.0/bucket/update',
+                            data=json.dumps({'metadata': {'region': 'test'}}),
+                            query_string=bucket_params)
+        self.assertEqual(204, resp.status_code)
+        container_params['region'] = 'test'
+        data['mtime'] = data['mtime'] + 1
+        dataj = json.dumps(data)
+        resp = self.app.get('/v1.0/bucket/show',
+                            query_string=bucket_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('TEST', resp['region'])
+        self.assertEqual(0, resp['bytes'])
+        self.assertEqual(0, resp['objects'])
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(1, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 0
+            },
+            'TEST': {
+                'objects-details': {},
+                'bytes-details': {},
+                'shards': 0,
+                'containers': 0,
+                'buckets': 1
+            }
+        }, resp['regions'])
+        # Update the container with the new region
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string=container_params)
+        # Because the container has the same new region as the bucket,
+        # the request should succeed
+        self.assertEqual(200, resp.status_code)
+        resp = self.app.get('/v1.0/account/container/show',
+                            query_string=container_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('TEST', resp['region'])
+        resp = self.app.get('/v1.0/bucket/show',
+                            query_string=bucket_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual('TEST', resp['region'])
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        resp = self.app.get('/v1.0/account/show', query_string=account_params)
+        resp = self.json_loads(resp.data)
+        self.assertEqual(42, resp['bytes'])
+        self.assertEqual(12, resp['objects'])
+        self.assertEqual(1, resp['containers'])
+        self.assertEqual(1, resp['buckets'])
+        self.assertDictEqual({
+            'LOCALHOST': {
+                'objects-details': {
+                    'SINGLE': 0,
+                    'TWOCOPIES': 0
+                },
+                'bytes-details': {
+                    'SINGLE': 0,
+                    'TWOCOPIES': 0
+                },
+                'shards': 0,
+                'containers': 0,
+                'buckets': 0
+            },
+            'TEST': {
+                'objects-details': {
+                    'SINGLE': 5,
+                    'TWOCOPIES': 7
+                },
+                'bytes-details': {
+                    'SINGLE': 30,
+                    'TWOCOPIES': 12
+                },
+                'shards': 0,
+                'containers': 1,
+                'buckets': 1
+            }
+        }, resp['regions'])
 
 
 IAM_POLICY_FULLACCESS = """{

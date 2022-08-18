@@ -1459,23 +1459,19 @@ class AccountBackendFdb(object):
                         'The region has changed for the container %s '
                         'in account %s (before: %s, after: %s)',
                         cname, account_id, current_region, region)
-                    # Fetch the bucket associated with this container
-                    current_bname = tr[container_space.pack((BUCKET_FIELD,))]
-                    if current_bname.present():
-                        current_bname = current_bname.value
-                    else:
-                        current_bname = None
-                    # Delete the container from the old region
+                    # If the container was associated with a bucket,
+                    # that bucket should have already changed region.
+                    # With this change, the bucket is no longer associated
+                    # with those old containers, so there is no need
+                    # to decrement the number of containers in the bucket.
+                    # Only delete the container from the old region...
                     self._real_delete_container(
                         tr, account_id, cname, current_region, current_mtime)
-                    # Recreate the container in the new region
-                    # His stats will be updated later
+                    # ...and recreate the container in the new region.
                     self._real_create_container(
                         tr, account_id, cname, region, current_mtime)
-                    # Reattach the bucket to the container.
-                    if current_bname:
-                        tr[container_space.pack((BUCKET_FIELD,))] = \
-                            current_bname
+                    # Bucket name will be associated when updating the bucket
+                    # and container stats will be updated right after.
                     current_region = region
             else:
                 region = current_region
@@ -1633,7 +1629,7 @@ class AccountBackendFdb(object):
             if region != current_region:
                 raise Conflict('Created in another region')
             return False
-        self._real_create_bucket(tr, bname, account, region, ctime=ctime)
+        self._real_create_bucket(tr, bname, account, region, ctime)
         return True
 
     @fdb.transactional
@@ -1756,7 +1752,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _bucket_info(self, tr, bname, **kwargs):
+    def _bucket_info(self, tr, bname, raw_metadata=False, **kwargs):
         """
         [transactional] Get all available information about a bucket.
         """
@@ -1770,8 +1766,9 @@ class AccountBackendFdb(object):
         info = self._unmarshal_info(iterator, unpack=bucket_space.unpack)
         if not info:
             return None
-        repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
-        info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
+        if not raw_metadata:
+            repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
+            info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
         return info
 
     @catch_service_errors
@@ -1970,13 +1967,56 @@ class AccountBackendFdb(object):
 
         # Do not use the ctime, it is not present for old buckets
         current_region = tr[bucket_space.pack((REGION_FIELD,))]
-        if not current_region.present():
+        if current_region.present():
+            current_region = current_region.decode('utf-8')
+        else:
             # Bucket doesn't exist
             return False
+
+        if to_update is None:
+            to_update = {}
+        # Allow to change the bucket region
+        new_region = to_update.pop(REGION_FIELD, None)
 
         self._update_metadata(
             tr, bucket_space, to_update, to_delete,
             forbidden_keys=RESERVED_BUCKET_FIELDS)
+
+        if new_region is None:
+            return True
+        if new_region == '':
+            raise BadRequest('Region cannot be empty')
+        new_region = new_region.upper()
+        if new_region == current_region:
+            # Nothing to do
+            return True
+
+        # Change the bucket region
+        ctime = tr[bucket_space.pack((CTIME_FIELD,))]
+        if ctime.present():
+            ctime = self._timestamp_value_to_timestamp(ctime.value)
+        else:
+            ctime = None
+        # Fetch the bucket metadata
+        metadata = self._bucket_info(tr, bname, account=account_id,
+                                     raw_metadata=True)
+        for field in RESERVED_BUCKET_FIELDS:
+            metadata.pop(field, None)
+        # Delete the bucket in the old region...
+        self._real_delete_bucket(
+            tr, bname, account_id, current_region)
+        # ...and recreate the bucket in the new region without stats
+        self._real_create_bucket(
+            tr, bname, account_id, new_region, ctime)
+        # Update the timestamp
+        if ctime is None:
+            del tr[bucket_space.pack((CTIME_FIELD,))]
+        else:
+            self._set_timestamp(
+                tr, bucket_space.pack((MTIME_FIELD,)),
+                self._get_timestamp())
+        # Re-add the bucket metadata
+        self._update_metadata(tr, bucket_space, metadata, None)
         return True
 
     @catch_service_errors
