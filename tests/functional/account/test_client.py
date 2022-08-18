@@ -17,11 +17,26 @@
 import time
 
 from mock import MagicMock as Mock
+from urllib3 import exceptions as urllibexc
 
 from oio.account.client import AccountClient
 from oio.account.bucket_client import BucketClient
-from oio.common.exceptions import NotFound, OioNetworkException
+from oio.common.exceptions import NotFound, OioNetworkException, \
+    OioProtocolError
 from tests.utils import BaseTestCase
+
+
+class AccountProtocolErrorPoolManager(object):
+
+    def __init__(self, pool_manager):
+        self.pool_manager = pool_manager
+        self.protocol_error = False
+
+    def request(self, _method, url, *args, **kwargs):
+        if 'v1.0/account' in url and not self.protocol_error:
+            self.protocol_error = True
+            raise urllibexc.ProtocolError('test')
+        return self.pool_manager.request(_method, url, *args, **kwargs)
 
 
 class TestAccountClient(BaseTestCase):
@@ -1323,7 +1338,7 @@ class TestAccountClient(BaseTestCase):
             self.account_client._get_service_addr = get_service_addr
 
     def test_container_reset(self):
-        metadata = dict()
+        metadata = {}
         metadata["mtime"] = time.time()
         metadata["bytes"] = 42
         metadata["objects"] = 12
@@ -1344,7 +1359,7 @@ class TestAccountClient(BaseTestCase):
         self.fail("No container container")
 
     def test_account_refresh(self):
-        metadata = dict()
+        metadata = {}
         metadata["mtime"] = time.time()
         metadata["bytes"] = 42
         metadata["objects"] = 12
@@ -1358,7 +1373,7 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp["objects"], 12)
 
     def test_account_flush(self):
-        metadata = dict()
+        metadata = {}
         metadata["mtime"] = time.time()
         metadata["bytes"] = 42
         metadata["objects"] = 12
@@ -1377,7 +1392,7 @@ class TestAccountClient(BaseTestCase):
     def test_account_delete_missing_container(self):
         bucket = 'bucket-%f' % time.time()
         self.bucket_client.bucket_create(bucket, self.account_id)
-        metadata = dict()
+        metadata = {}
         metadata['mtime'] = time.time()
         metadata['bytes'] = 42
         metadata['objects'] = 12
@@ -1392,7 +1407,7 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)
 
-        metadata = dict()
+        metadata = {}
         metadata['region'] = self.storage.bucket.region
         metadata['dtime'] = time.time()
         # The counters are voluntarily positive to verify
@@ -1414,7 +1429,7 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)
 
-        metadata = dict()
+        metadata = {}
         metadata['region'] = self.storage.bucket.region
         metadata['dtime'] = time.time()
         # To be sure, let's try with 0 counters (as with current requests).
@@ -1430,3 +1445,31 @@ class TestAccountClient(BaseTestCase):
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)
+
+    def test_account_retry_on_read(self):
+        original_pool_manager = self.account_client.pool_manager
+        try:
+            fake_pool_manager = AccountProtocolErrorPoolManager(
+                original_pool_manager)
+            self.account_client.pool_manager = fake_pool_manager
+            self.assertRaises(
+                OioProtocolError, self.account_client.account_create,
+                self.account_id)
+            self.assertTrue(fake_pool_manager.protocol_error)
+        finally:
+            self.account_client.pool_manager = original_pool_manager
+
+    def test_account_no_retry_on_write(self):
+        self.account_client.account_create(self.account_id)
+        self.accounts.add(self.account_id)
+
+        original_pool_manager = self.account_client.pool_manager
+        try:
+            fake_pool_manager = AccountProtocolErrorPoolManager(
+                original_pool_manager)
+            self.account_client.pool_manager = fake_pool_manager
+            self.assertIsNotNone(
+                self.account_client.account_show(self.account_id))
+            self.assertTrue(fake_pool_manager.protocol_error)
+        finally:
+            self.account_client.pool_manager = original_pool_manager

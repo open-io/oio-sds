@@ -20,7 +20,8 @@ from oio.common.configuration import load_namespace_conf
 from oio.common.constants import TIMEOUT_KEYS
 from oio.common.decorators import ensure_headers, patch_kwargs
 from oio.common.easy_value import float_value
-from oio.common.exceptions import OioException, OioNetworkException
+from oio.common.exceptions import OioException, OioNetworkException, \
+    OioProtocolError
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 
@@ -133,23 +134,37 @@ class ServiceClient(HttpApi):
         """Make a request to the service of specified service type."""
         self._maybe_refresh_endpoint()
 
-        if method in ['GET', 'HEAD']:
-            if not use_cache:
-                kwargs['headers']['X-No-Cache'] = '1'
+        read_request = method in ('GET', 'HEAD')
+        if read_request and not use_cache:
+            kwargs['headers']['X-No-Cache'] = '1'
 
-        try:
-            resp, body = self._request(
-                method, action, **kwargs)
-        except OioNetworkException as exc:
-            if self._refresh_delay >= 0.0:
-                self.logger.info(
-                    'Refreshing %s endpoint after error %s',
-                    self.service_type, exc)
-                try:
-                    self._refresh_endpoint()
-                except Exception as exc:
-                    self.logger.warning(
-                        'Failed to refresh %s endpoint: %s',
+        already_retried = False
+        while True:
+            try:
+                resp, body = self._request(
+                    method, action, **kwargs)
+                return resp, body
+            except OioNetworkException as exc:
+                if self._refresh_delay >= 0.0:
+                    self.logger.info(
+                        'Refreshing %s endpoint after error %s',
                         self.service_type, exc)
-            raise
-        return resp, body
+                    try:
+                        self._refresh_endpoint()
+                    except Exception as exc:
+                        self.logger.warning(
+                            'Failed to refresh %s endpoint: %s',
+                            self.service_type, exc)
+                if read_request and not already_retried:
+                    # Only try once on read requests
+                    # (specially for the protocol errors).
+                    # For write requests, the request may have been running
+                    # in the background. A retry may return an error.
+                    if isinstance(exc, OioProtocolError):
+                        already_retried = True
+                    if already_retried:
+                        self.logger.info(
+                            'Retry %s request after error %s',
+                            self.service_type, exc)
+                        continue
+                raise

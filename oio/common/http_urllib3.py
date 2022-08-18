@@ -20,7 +20,7 @@ from oio.common.green import patcher
 
 from urllib3 import exceptions as urllibexc
 from oio.common.exceptions import reraise, \
-    OioException, OioNetworkException, OioTimeout
+    OioException, OioNetworkException, OioProtocolError, OioTimeout
 
 
 urllib3 = patcher.import_patched('urllib3.__init__')
@@ -107,10 +107,11 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
         if isinstance(exc.reason, urllibexc.TimeoutError):
             reraise(OioTimeout, exc.reason, extra)
         reraise(OioNetworkException, exc, extra)
-    elif isinstance(exc, (urllibexc.ProtocolError,
-                          urllibexc.ProxyError,
+    elif isinstance(exc, (urllibexc.ProxyError,
                           urllibexc.ClosedPoolError)):
         reraise(OioNetworkException, exc, extra)
+    elif isinstance(exc, urllibexc.ProtocolError):
+        reraise(OioProtocolError, exc, extra)
     elif isinstance(exc, urllibexc.TimeoutError):
         reraise(OioTimeout, exc, extra)
     else:

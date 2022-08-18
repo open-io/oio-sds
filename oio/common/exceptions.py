@@ -188,6 +188,10 @@ class OioNetworkException(OioException):
     pass
 
 
+class OioProtocolError(OioNetworkException):
+    pass
+
+
 class OioTimeout(OioNetworkException):
     pass
 
