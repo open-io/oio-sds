@@ -1204,6 +1204,9 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 	SET("/$NS/container/checkpoint/#POST", action_container_checkpoint);
 
+	// Lifecycle
+	SET("/$NS/container/lifecycle/apply/#POST", action_container_lifecycle_apply);
+
 	// Sharding
 	SET("/$NS/container/sharding/find/#GET", action_container_sharding_find);
 	SET("/$NS/container/sharding/prepare/#POST", action_container_sharding_prepare);

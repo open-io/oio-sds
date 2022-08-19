@@ -143,6 +143,8 @@ License along with this library.
 #define NAME_MSGKEY_PREFIX_PROPERTY        "P:"
 #define NAME_MSGKEY_PREFIX_SHARED_PROPERTY "SP:"
 
+#define NAME_MSGKEY_INCR_OFFSET        "OFFSET"
+
 enum {
 	SCORE_UNSET = -2,
 	SCORE_UNLOCK = -1,
