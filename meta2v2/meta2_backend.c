@@ -3806,3 +3806,47 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 
 	return err;
 }
+
+GError*
+meta2_backend_copy_db_lifecycle(struct meta2_backend_s *m2b,
+		struct oio_url_s *url)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
+			NULL
+		};
+	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
+	if (!err) {
+		gchar *copy_path = NULL;
+
+		// Create a copy for lifecycle
+		copy_path = g_strdup_printf("%s.lifecycle", sq3->path_inline);
+		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+		if (err) {
+			g_prefix_error(&err,
+				"Failed to make local copy for lifecycle %s to %s: ",
+				sq3->path_inline, copy_path);
+			goto rollback;
+		}
+
+rollback:
+		if (err) {
+			// Try to remove copy
+			copy_path = g_strdup_printf(
+				"%s.lifecycle", sq3->path_inline);
+			if (remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+		}
+		g_free(copy_path);
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+	return err;
+}

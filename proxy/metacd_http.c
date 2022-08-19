@@ -1119,6 +1119,9 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_update/#POST", action_container_raw_update);
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
+	// Lifecycle
+	SET("/$NS/container/lifecycle/prepare/#POST", action_container_lifecycle_copy_db);
+
 	// Sharding
 	SET("/$NS/container/sharding/find/#GET", action_container_sharding_find);
 	SET("/$NS/container/sharding/prepare/#POST", action_container_sharding_prepare);

@@ -290,6 +290,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_CLEAN_SHARDING   "M2_CSCLEAN"
 # define NAME_MSGNAME_M2V2_SHOW_SHARDING    "M2_CSGET"
 # define NAME_MSGNAME_M2V2_ABORT_SHARDING   "M2_CSABORT"
+# define NAME_MSGNAME_M2V2_COPY_DB_LIFECYCLE "M2_CLFCOPY"
 
 /* -------------------------------------------------------------------------- */
 
