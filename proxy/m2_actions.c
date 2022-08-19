@@ -5062,3 +5062,50 @@ enum http_rc_e action_content_drain(struct req_args_s *args) {
 enum http_rc_e action_content_purge (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_purge);
 }
+
+static enum http_rc_e
+action_m2_container_lifecycle_apply(struct req_args_s *args, struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	gchar *offset = NULL;
+
+	oio_ext_allow_long_timeout(TRUE);
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_APPLY_LIFECYCLE(args->url, args->rq->body,
+				DL());
+	};
+	err = _resolve_meta2(args, CLIENT_SPECIFIED, _pack, &offset,
+			m2v2_offset_extract);
+	oio_ext_allow_long_timeout(FALSE);
+	if (offset) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "count", offset);
+	}
+	return _reply_m2_error(args, err);
+}
+
+// CONTENT{{
+// POST /v3.0/{NS}/container/lifecycle/apply?cid={cid}&service_id={service_id}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Apply logic to send events
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/lifecycle/apply?cid={cid}&service_id={service_id} HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 20
+//    x-oio-count: 100
+//
+// }}CONTENT
+enum http_rc_e
+action_container_lifecycle_apply(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_lifecycle_apply);
+}

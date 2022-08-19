@@ -47,6 +47,7 @@ gboolean m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply);
 gboolean m2v2_boolean_truncated_extract(gpointer ctx, guint status,
 		MESSAGE reply);
 
+gboolean m2v2_offset_extract(gpointer ctx, guint status, MESSAGE reply);
 struct m2v2_create_params_s;
 
 /* deadline known from thread-local */
@@ -289,5 +290,10 @@ GByteArray* m2v2_remote_pack_GET_SHARDS_IN_RANGE(
 	struct oio_url_s *url,
 	GByteArray *bounds_params,
 	gint64 dl);
+
+GByteArray* m2v2_remote_pack_APPLY_LIFECYCLE(
+		struct oio_url_s *url,
+        GByteArray *params,
+		gint64 dl);
 
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/
