@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -289,5 +289,9 @@ GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 /** Abort sharding. */
 GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url);
+
+/** Select object that match filter and */
+GError* meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *params);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

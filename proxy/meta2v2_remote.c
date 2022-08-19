@@ -155,6 +155,18 @@ m2v2_boolean_truncated_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 	return TRUE;
 }
 
+gboolean
+m2v2_offset_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
+{
+	gchar **offset = ctx;
+	EXTRA_ASSERT (offset != NULL);
+
+	*offset = metautils_message_extract_string_copy(reply,
+			NAME_MSGKEY_INCR_OFFSET);
+
+	return TRUE;
+}
+
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,
@@ -677,4 +689,17 @@ GByteArray*
 m2v2_remote_pack_ABORT_SHARDING(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_ABORT_SHARDING, url, NULL, dl);
+}
+
+GByteArray*
+m2v2_remote_pack_PREPARE_LIFECYCLE(struct oio_url_s *url, GByteArray *params,
+		gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PREPARE_LIFECYCLE, url,
+			NULL, dl);
+	if (params) {
+		metautils_message_set_BODY(msg, params->data,
+				params->len);
+	}
+	return message_marshall_gba_and_clean(msg);
 }

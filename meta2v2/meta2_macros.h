@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -294,6 +294,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_CLEAN_SHARDING   "M2_CSCLEAN"
 # define NAME_MSGNAME_M2V2_SHOW_SHARDING    "M2_CSGET"
 # define NAME_MSGNAME_M2V2_ABORT_SHARDING   "M2_CSABORT"
+# define NAME_MSGNAME_M2V2_PREPARE_LIFECYCLE "M2_LCPREP"
 
 /* -------------------------------------------------------------------------- */
 
