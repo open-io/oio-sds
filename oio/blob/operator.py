@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -47,7 +47,8 @@ class ChunkOperator(object):
 
     def rebuild(self, container_id, content_id, chunk_id_or_pos,
                 rawx_id=None, try_chunk_delete=False,
-                allow_frozen_container=True, allow_same_rawx=True):
+                allow_frozen_container=True, allow_same_rawx=True,
+                read_all_available_sources=False):
         """
         Try to find the chunk in the metadata of the specified object,
         then rebuild it.
@@ -86,7 +87,8 @@ class ChunkOperator(object):
             chunk_id, service_id=rawx_id,
             allow_frozen_container=allow_frozen_container,
             allow_same_rawx=allow_same_rawx,
-            chunk_pos=chunk_pos)
+            chunk_pos=chunk_pos,
+            read_all_available_sources=read_all_available_sources)
 
         if try_chunk_delete:
             try:

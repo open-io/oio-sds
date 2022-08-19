@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,7 @@ from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
 from oio.common.logger import get_logger
+from oio.common.storage_method import ECDriverError
 from oio.common.utils import fix_ranges, monotonic_time
 
 
@@ -341,7 +342,7 @@ class ECStream(object):
                     ec_start = monotonic_time()
                 try:
                     segment = self.storage_method.driver.decode(data)
-                except exceptions.ECError:
+                except ECDriverError:
                     # something terrible happened
                     self.logger.exception(
                         "ERROR decoding fragments (reqid=%s)", self.reqid)
@@ -754,7 +755,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         # Unlike plain replication, we cannot use the checksum returned
-        # by rawx services, whe have to compute the checksum client-side.
+        # by rawx services, we have to compute the checksum client-side.
         self.checksum = hashlib.new(self.chunk_checksum_algo or 'md5')
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
@@ -1090,13 +1091,14 @@ class ECWriteHandler(io.WriteHandler):
 class ECRebuildHandler(object):
     def __init__(self, meta_chunk, missing, storage_method,
                  connection_timeout=None, read_timeout=None,
-                 **_kwargs):
+                 read_all_available_sources=False, **kwargs):
         self.meta_chunk = meta_chunk
         self.missing = missing
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
-        self.logger = _kwargs.get('logger', LOGGER)
+        self.logger = kwargs.get('logger', LOGGER)
+        self.read_all_available_sources = read_all_available_sources
 
     def _get_response(self, chunk, headers):
         resp = None
@@ -1175,7 +1177,10 @@ class ECRebuildHandler(object):
             self.logger.warning(
                 'Use chunk(s) without size information to rebuild a chunk')
 
-        rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
+        if self.read_all_available_sources:
+            rebuild_iter = self._make_rebuild_iter(resps)
+        else:
+            rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return assumed_chunk_size, rebuild_iter
 
     def _make_rebuild_iter(self, resps):
@@ -1197,18 +1202,39 @@ class ECRebuildHandler(object):
                     pile.spawn(_get_frag, resp)
                 try:
                     with Timeout(self.read_timeout):
-                        frag = [frag for frag in pile]
+                        in_frags = [frag for frag in pile]
                 except Timeout as to:
                     self.logger.error('ERROR while rebuilding: %s', to)
                 except Exception:
                     self.logger.exception('ERROR while rebuilding')
                     break
-                if not all(frag):
+                if not all(in_frags):
                     break
-                rebuilt_frag = self._reconstruct(frag)
+                ok_frags = self._filter_broken_fragments(in_frags)
+                rebuilt_frag = self._reconstruct(ok_frags)
                 yield rebuilt_frag
 
         return frag_iter()
 
-    def _reconstruct(self, frag):
-        return self.storage_method.driver.reconstruct(frag, [self.missing])[0]
+    def _filter_broken_fragments(self, frags):
+        """
+        Try to read and check each fragment's EC metadata.
+
+        :returns: the list of fragments whose metadata is ok
+        """
+        frag_md_list = []
+        ok_frags = []
+        for i, frag in enumerate(frags):
+            try:
+                frag_md = self.storage_method.driver.get_metadata(frag)
+                frag_md_list.append(frag_md)
+                ok_frags.append(frag)
+            except ECDriverError as err:
+                self.logger.error(
+                    "Fragment %d in error, discarding it: %s", i, err)
+        # FIXME(FVE): here we should call verify_stripe_metadata(frag_md_list)
+        # but it does not work and I don't know why.
+        return ok_frags
+
+    def _reconstruct(self, frags):
+        return self.storage_method.driver.reconstruct(frags, [self.missing])[0]

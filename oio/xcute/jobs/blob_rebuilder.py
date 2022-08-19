@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,6 +34,8 @@ class RawxRebuildTask(XcuteTask):
         self.rawx_timeout = job_params['rawx_timeout']
         self.allow_frozen_container = job_params['allow_frozen_container']
         self.allow_same_rawx = job_params['allow_same_rawx']
+        self.read_all_available_sources = \
+            job_params['read_all_available_sources']
         self.try_chunk_delete = job_params['try_chunk_delete']
         self.dry_run = job_params['dry_run']
 
@@ -52,11 +55,12 @@ class RawxRebuildTask(XcuteTask):
         self.logger.debug('[reqid=%s] Rebuilding %s', reqid, chunk_id)
         try:
             chunk_size = self.chunk_operator.rebuild(
-                    container_id, content_id, chunk_id,
-                    rawx_id=self.service_id,
-                    try_chunk_delete=self.try_chunk_delete,
-                    allow_frozen_container=self.allow_frozen_container,
-                    allow_same_rawx=self.allow_same_rawx)
+                container_id, content_id, chunk_id,
+                rawx_id=self.service_id,
+                try_chunk_delete=self.try_chunk_delete,
+                allow_frozen_container=self.allow_frozen_container,
+                allow_same_rawx=self.allow_same_rawx,
+                read_all_available_sources=self.read_all_available_sources)
         except (ContentNotFound, OrphanChunk):
             return {'orphan_chunks': 1}
 
@@ -74,6 +78,7 @@ class RawxRebuildJob(XcuteRdirJob):
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_DECLARE_INCIDENT_DATE = False
+    DEFAULT_READ_ALL_AVAILABLE_SOURCES = False
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -97,6 +102,10 @@ class RawxRebuildJob(XcuteRdirJob):
         sanitized_job_params['allow_same_rawx'] = boolean_value(
             job_params.get('allow_same_rawx'),
             cls.DEFAULT_ALLOW_SAME_RAWX)
+
+        sanitized_job_params['read_all_available_sources'] = boolean_value(
+            job_params.get('read_all_available_sources'),
+            cls.DEFAULT_READ_ALL_AVAILABLE_SOURCES)
 
         sanitized_job_params['try_chunk_delete'] = boolean_value(
             job_params.get('try_chunk_delete'),

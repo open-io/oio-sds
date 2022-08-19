@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,8 @@ from oio.common.storage_functions import _get_weighted_random_score
 class ECContent(Content):
     def rebuild_chunk(self, chunk_id, service_id=None,
                       allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False):
+                      allow_frozen_container=False,
+                      read_all_available_sources=False):
         # Identify the chunk to rebuild
         candidates = self.chunks.filter(id=chunk_id)
         if service_id is not None:
@@ -71,7 +72,9 @@ class ECContent(Content):
 
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
-            chunks.raw(), current_chunk.subpos, self.storage_method)
+            chunks.raw(), current_chunk.subpos, self.storage_method,
+            read_all_available_sources=read_all_available_sources,
+            logger=self.logger)
         expected_chunk_size, stream = handler.rebuild()
 
         # Actually create the spare chunk
