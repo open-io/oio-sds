@@ -967,3 +967,47 @@ meta2_filter_action_abort_sharding(struct gridd_filter_ctx_s *ctx,
 	}
 	return FILTER_OK;
 }
+
+int
+meta2_filter_action_apply_lifecycle(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GError *err = NULL;
+	guint32 offset = 0;
+
+	gsize length_params = 0;
+	void *lifecycle_params = metautils_message_get_BODY(reply->request, &length_params);
+	json_object *jparams = NULL;
+	if (lifecycle_params) {
+		err = JSON_parse_buffer(lifecycle_params, length_params, &jparams);
+		if (!err && !json_object_is_type(jparams, json_type_object)) {
+			err = BADREQ("Expected JSON object for lifecycle");
+		}
+		if (err) {
+			if (jparams) {
+				json_object_put(jparams);
+			}
+			meta2_filter_ctx_set_error(ctx, err);
+			return FILTER_KO;
+		}
+	}
+
+	err = meta2_backend_apply_lifecycle_current(m2b, url, jparams);
+	if (err) {
+		if (jparams) {
+			json_object_put(jparams);
+		}
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+	if (jparams) {
+		json_object_put(jparams);
+	}
+	gchar tmp[64];
+	g_snprintf(tmp, sizeof(tmp), "%d", offset);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_INCR_OFFSET, tmp);
+
+	return FILTER_OK;
+}
