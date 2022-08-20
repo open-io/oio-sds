@@ -550,8 +550,10 @@ class TestContainerLifecycle(unittest.TestCase):
                 <Prefix></Prefix>
             </Filter>
             """)
-        self.assertRaises(ValueError,
-                          LifecycleRuleFilter.from_element, filter_elt)
+        # This is valid syntax and prefix outside filter is deprecated
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNone(filter_.prefix)
 
         filter_elt = etree.XML(
             """
@@ -680,6 +682,30 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_elt = etree.XML(
             """
             <Filter>
+                <ObjectSizeGreaterThan>100
+                </ObjectSizeGreaterThan>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNone(filter_.prefix)
+        self.assertIsNotNone(filter_.greater)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <ObjectSizeLessThan>100
+                </ObjectSizeLessThan>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNone(filter_.prefix)
+        self.assertIsNotNone(filter_.lesser)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
                 <Tag>
                     <Key>key</Key>
                     <Value>value1</Value>
@@ -694,6 +720,31 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(filter_)
         self.assertIsNone(filter_.prefix)
         self.assertDictEqual({'key': 'value2'}, filter_.tags)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                    <Prefix>Doc</Prefix>
+                </And>
+            </Filter>
+            """)
+        self.assertRaises(ValueError, LifecycleRuleFilter.from_element,
+                          filter_elt)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                    <Tag>
+                        <Key>key</Key>
+                        <Value>value</Value>
+                    Doc</Tag>
+                </And>
+            </Filter>
+            """)
+        self.assertRaises(ValueError, LifecycleRuleFilter.from_element,
+                          filter_elt)
 
         filter_elt = etree.XML(
             """
@@ -760,6 +811,77 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(filter_.prefix, "images/")
         self.assertDictEqual({'key1': 'value1', 'key2': 'value2'},
                              filter_.tags)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                    <ObjectSizeLessThan>100
+                    </ObjectSizeLessThan>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </And>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        print(filter_)
+        self.assertIsNone(filter_.prefix)
+        self.assertIsNotNone(filter_.lesser)
+        self.assertDictEqual({'key2': 'value2'},
+                             filter_.tags)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                <ObjectSizeGreaterThan>100
+                </ObjectSizeGreaterThan>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </And>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNone(filter_.prefix)
+        self.assertIsNotNone(filter_.greater)
+        self.assertDictEqual({'key2': 'value2'},
+                             filter_.tags)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                    <ObjectSizeLessThan>100
+                    </ObjectSizeLessThan>
+                    <Prefix>Doc</Prefix>
+                </And>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNotNone(filter_.prefix)
+        self.assertIsNotNone(filter_.lesser)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <And>
+                <ObjectSizeGreaterThan>100
+                </ObjectSizeGreaterThan>
+                    <Prefix>Doc</Prefix>
+                </And>
+            </Filter>
+            """)
+        filter_ = LifecycleRuleFilter.from_element(filter_elt)
+        self.assertIsNotNone(filter_)
+        self.assertIsNotNone(filter_.prefix)
+        self.assertIsNotNone(filter_.greater)
 
     def test_LifecycleRule_from_element(self):
         rule_elt = etree.XML(
@@ -880,6 +1002,7 @@ class TestContainerLifecycle(unittest.TestCase):
             """)
         self.assertRaises(ValueError, LifecycleRule.from_element, rule_elt)
 
+        # Days must be positive integer
         rule_elt = etree.XML(
             """
             <Rule>
@@ -892,6 +1015,22 @@ class TestContainerLifecycle(unittest.TestCase):
             </Rule>
             """)
         self.assertRaises(ValueError, LifecycleRule.from_element, rule_elt)
+
+        # Test valid Prefix outside of Filter tag
+        rule_elt = etree.XML(
+            """
+            <Rule>
+                <Prefix>doc/</Prefix>
+                <Status>Enabled</Status>
+                <Expiration>
+                    <Days>1</Days>
+                </Expiration>
+            </Rule>
+            """)
+        rule = LifecycleRule.from_element(rule_elt)
+        self.assertIsNotNone(rule)
+        self.assertIsNotNone(rule.filter)
+        self.assertIsNotNone(rule.filter.prefix)
 
         rule_elt = etree.XML(
             """
@@ -1364,16 +1503,16 @@ class TestContainerLifecycle(unittest.TestCase):
 
     def test_LifecycleRuleFilter_to_string(self):
         EXPECTED = '<Filter></Filter>'
-        filter_ = LifecycleRuleFilter(None, {})
+        filter_ = LifecycleRuleFilter(None, None, None, {})
         self.assertEqual(EXPECTED, str(filter_))
 
         EXPECTED = '<Filter><Prefix>documents/</Prefix></Filter>'
-        filter_ = LifecycleRuleFilter('documents/', {})
+        filter_ = LifecycleRuleFilter('documents/', None, None, {})
         self.assertEqual(EXPECTED, str(filter_))
 
         EXPECTED = '<Filter><Tag><Key>key</Key><Value>value</Value>' \
             + '</Tag></Filter>'
-        filter_ = LifecycleRuleFilter(None, {'key': 'value'})
+        filter_ = LifecycleRuleFilter(None, None, None, {'key': 'value'})
         self.assertEqual(EXPECTED, str(filter_))
 
         EXPECTED = '<Filter><And>' \
@@ -1381,7 +1520,7 @@ class TestContainerLifecycle(unittest.TestCase):
             + '<Tag><Key>key</Key><Value>value</Value></Tag>' \
             + '</And></Filter>'
         filter_ = LifecycleRuleFilter(
-            'documents/', {'key': 'value'})
+            'documents/', None, None, {'key': 'value'})
         self.assertEqual(EXPECTED, str(filter_))
 
     def test_LifecycleRule_to_string(self):
@@ -1389,7 +1528,7 @@ class TestContainerLifecycle(unittest.TestCase):
             + '<Status>Disabled</Status>' \
             + '<Expiration><Days>10</Days></Expiration>' \
             + '</Rule>'
-        filter_ = LifecycleRuleFilter(None, {})
+        filter_ = LifecycleRuleFilter(None, None, None, {})
         actions = [Expiration(DaysActionFilter(10))]
         rule = LifecycleRule('Test', filter_, False, actions)
         self.assertEqual(EXPECTED, str(rule))
@@ -1398,7 +1537,7 @@ class TestContainerLifecycle(unittest.TestCase):
             + '<Status>Enabled</Status>' \
             + '<Expiration><Days>10</Days></Expiration>' \
             + '</Rule>'
-        filter_ = LifecycleRuleFilter(None, {})
+        filter_ = LifecycleRuleFilter(None, None, None, {})
         actions = [Expiration(DaysActionFilter(10))]
         rule = LifecycleRule('Test', filter_, True, actions)
         self.assertEqual(EXPECTED, str(rule))
@@ -1424,6 +1563,7 @@ class TestContainerLifecycle(unittest.TestCase):
 
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
+        obj_meta['size'] = 0
         obj_meta['properties'] = {TAGGING_KEY: """
             <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                 <TagSet>
@@ -1477,6 +1617,7 @@ class TestContainerLifecycle(unittest.TestCase):
             <Filter>
                 <And>
                     <Prefix>documents/</Prefix>
+                    <ObjectSizeGreaterThan>1</ObjectSizeGreaterThan>
                 </And>
             </Filter>
             """)
@@ -1484,6 +1625,7 @@ class TestContainerLifecycle(unittest.TestCase):
 
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
+        obj_meta['size'] = 1
         obj_meta['properties'] = {TAGGING_KEY: """
             <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                 <TagSet>
@@ -1519,6 +1661,7 @@ class TestContainerLifecycle(unittest.TestCase):
 
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
+        obj_meta['size'] = 0
         obj_meta['properties'] = {TAGGING_KEY: """
             <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
                 <TagSet>
@@ -1600,6 +1743,7 @@ class TestContainerLifecycle(unittest.TestCase):
         obj_meta = self.obj_meta.copy()
         self.assertFalse(rule.match(obj_meta))
         obj_meta['name'] = "documents/foo"
+        obj_meta['size'] = 0
         self.assertFalse(rule.match(obj_meta))
         obj_meta['properties'][TAGGING_KEY] = """
             <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
