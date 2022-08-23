@@ -964,7 +964,7 @@ class ListContainer(Lister):
                 item_key=lambda x: x,
                 marker_key=lambda x: x['next_marker'],
                 truncated_key=lambda x: x['truncated'],
-                account=account)
+                account=account, **kwargs)
         else:
             acct_meta = acct_client.container_list(
                 account, **kwargs)
