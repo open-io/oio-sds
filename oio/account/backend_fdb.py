@@ -391,7 +391,11 @@ class AccountBackendFdb(object):
         info = self._unmarshal_info(
             iterator, has_regions=True, unpack=self.metrics_space.unpack)
         info.setdefault(ACCOUNTS_FIELD, 0)
-        info.setdefault(REGIONS_FIELD, {})
+        regions = info.setdefault(REGIONS_FIELD, {})
+        for _, region_info in regions.items():
+            # The other counters are already added
+            # in the `self._unmarshal_info` method
+            region_info.setdefault(SHARDS_FIELD, 0)
         return info
 
     def _metrics_to_prometheus_format(self, metrics):

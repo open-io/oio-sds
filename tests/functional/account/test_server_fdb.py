@@ -905,6 +905,7 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {
                 'LOCALHOST': {
                     'containers': 1,
+                    'shards': 0,
                     'buckets': 0,
                     'bytes-details': {},
                     'objects-details': {},
@@ -928,6 +929,7 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {
                 'LOCALHOST': {
                     'containers': 0,
+                    'shards': 0,
                     'buckets': 0,
                     'bytes-details': {},
                     'objects-details': {},
@@ -962,6 +964,7 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {
                 'LOCALHOST': {
                     'containers': 1,
+                    'shards': 0,
                     'buckets': 0,
                     'objects-details': {
                         'class1': 1,
@@ -991,6 +994,7 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {
                 'LOCALHOST': {
                     'containers': 2,
+                    'shards': 0,
                     'buckets': 0,
                     'objects-details': {
                         'class1': 1,
@@ -1040,6 +1044,7 @@ class TestAccountMetrics(TestAccountServerBase):
             'regions': {
                 'LOCALHOST': {
                     'containers': 1,
+                    'shards': 0,
                     'buckets': 0,
                     'objects-details': {
                         'class2': 1,
