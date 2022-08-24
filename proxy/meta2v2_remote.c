@@ -616,8 +616,14 @@ m2v2_remote_pack_ABORT_SHARDING(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_COPY_DB_LIFECYCLE(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_COPY_DB_LIFECYCLE(struct oio_url_s *url,  GSList *beans,
+		gboolean local, gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_COPY_DB_LIFECYCLE, url, NULL,
-			dl);
+	GByteArray *body = bean_sequence_marshall(beans);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_COPY_DB_LIFECYCLE, url,
+			body, dl);
+	if (local) {
+		metautils_message_add_field_strint(msg, NAME_MSGKEY_LOCAL, 1);
+	}
+	return message_marshall_gba_and_clean(msg);
 }

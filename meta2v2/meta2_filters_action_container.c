@@ -943,9 +943,16 @@ meta2_filter_action_prepare_lifecycle(struct gridd_filter_ctx_s *ctx,
 {
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-
-	GError *err = meta2_backend_copy_db_lifecycle(m2b, url);
-
+	GSList *beans = NULL;
+	GError *err = NULL;
+	gboolean local_copy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL;
+	if (local_copy) {
+		err = meta2_backend_copy_db_lifecycle(m2b, url);
+	} else
+	{
+		beans = meta2_filter_ctx_get_input_udata(ctx);
+		err = meta2_backend_apply_rule_lifecycle(m2b, url, beans);
+	}
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;

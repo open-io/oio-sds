@@ -3850,3 +3850,99 @@ rollback:
 	}
 	return err;
 }
+
+GError*
+meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+	gchar *suffix = "lifecycle";
+	gchar *base_query = "SELECT";
+
+	char *action = NULL;
+	char *query = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (beans == NULL) {
+		goto end;
+	}
+	if (beans) {
+		oio_url_get(url, OIOURL_NS);
+	}
+
+	if (DESCR(beans->data) != &descr_struct_LIFECYCLE_QUERY) {
+		err = BADREQ("Invalid type lifecycle query");
+		goto end;
+	}
+
+	action = LIFECYCLE_QUERY_get_action(beans->data)->str;
+	query = LIFECYCLE_QUERY_get_query(beans->data)->str;
+
+	gchar *full_query = g_strdup_printf("%s %s", base_query, query);
+	GRID_ERROR("metadata : action:%s full:%s base:%s %s", action, full_query,base_query, query);
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK,
+			NULL
+		};
+	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
+	if (err) {
+		goto end;
+	}
+
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (err) {
+		goto close;
+	}
+	//gint64 timestamp = oio_ext_real_time();
+
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+
+	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_WARN("Failed apply query %s %s", full_query, sqlite3_errmsg(sq3->db));
+	}
+
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		const guint8 *alias = sqlite3_column_text(stmt, 0);
+		gint64 version = sqlite3_column_int64(stmt, 1);
+		gint64 ctime = sqlite3_column_int64(stmt, 4);
+		GRID_ERROR("before event %s %"G_GINT64_FORMAT " %"G_GINT64_FORMAT,
+				object_name, version, ctime);
+		GString *event = oio_event__create_with_id(
+				"storage.lifecycle.action", url, oio_ext_get_reqid());
+		g_string_append(event, ",\"data\":{");
+		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+		append_str(event, "object", object_name);
+		append_int64(event, "version", version);
+		append_int64(event, "ctime", ctime);
+		append_str(event, "action", g_strdup(action));
+
+		g_string_append(event, "}}");
+		oio_events_queue__send(
+			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+
+		gint64 timestamp_end = oio_ext_real_time();
+		GRID_ERROR("event prepare & send timing:%"G_GINT64_FORMAT,
+				timestamp_end - timestamp_start);
+		count_rows++;
+	}
+	rc = sqlite3_finalize(stmt);
+	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+		GRID_WARN("Failed again %s", sqlite3_errmsg(sq3->db));
+	}
+
+	err = sqlx_transaction_end(repctx, err);
+	g_free(full_query);
+
+close:
+	sqlx_repository_unlock_and_close_noerror(sq3);
+end:
+	return err;
+}

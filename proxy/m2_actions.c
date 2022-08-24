@@ -968,6 +968,52 @@ _load_simplified_chunks(struct json_object *jbody, GSList **out)
 	return err;
 }
 
+static GError *
+_load_simplified_lifecycle_query (struct json_object *jbody, GSList **out)
+{
+
+	GError *err = NULL;
+	GSList *beans = NULL;
+	gpointer lifecycle = NULL;
+
+	// Load the beans
+	if (json_object_is_type(jbody, json_type_null)) {
+		// Nothing to do
+	} else if (json_object_is_type(jbody, json_type_array)) {
+		// Nothing to do
+	} else if (json_object_is_type(jbody, json_type_object)) {
+		struct bean_LIFECYCLE_QUERY_s *lifecycle_info = NULL;
+		struct json_object *jaction = NULL, *jquery = NULL;
+		struct oio_ext_json_mapping_s mapping[] = {
+			{"action",  &jaction,   json_type_string, 1},
+			{"query",   &jquery,    json_type_string, 1},
+			{NULL, NULL, 0, 0}
+		};
+
+		if (NULL != (err = oio_ext_extract_json(jbody, mapping))) {
+			_bean_clean(lifecycle_info);
+			return err;
+		}
+
+		lifecycle_info = _bean_create(&descr_struct_LIFECYCLE_QUERY);
+
+		LIFECYCLE_QUERY_set2_action(lifecycle_info, json_object_get_string(jaction));
+		LIFECYCLE_QUERY_set2_query(lifecycle_info, json_object_get_string(jquery));
+		lifecycle = lifecycle_info;
+		lifecycle_info = NULL;
+		beans = g_slist_prepend(beans, lifecycle);
+
+	} else {
+		err = BADREQ ("JSON: Not an array or an object");
+	}
+
+	if (err)
+		_bean_cleanl2(beans);
+	else
+		*out = beans;
+	return err;
+}
+
 static GSList *
 _load_properties_from_strv (gchar **props)
 {
@@ -4685,15 +4731,37 @@ enum http_rc_e action_content_purge (struct req_args_s *args) {
 }
 
 static enum http_rc_e
-action_m2_container_lifecycle_copy_db(struct req_args_s *args,
-		struct json_object *j UNUSED)
+action_m2_container_lifecycle_copy_db(struct req_args_s *args, struct json_object *j)
 {
 	GError *err = NULL;
-	if (!err) {
+	gboolean truncated = FALSE;
+	GSList *beans = NULL;
+	gboolean make_copy = _request_get_flag(args, "local");
+	oio_ext_allow_long_timeout(TRUE);
+	if (local_copy == FALSE) {
+		err = _load_simplified_lifecycle_query(j, &beans);
+		if (!err) {
+			PACKER_VOID(_pack) {
+				return m2v2_remote_pack_COPY_DB_LIFECYCLE(args->url, beans,
+						make_copy, DL());
+			};
+			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+					m2v2_boolean_truncated_extract);
+			args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+					g_strdup(truncated ? "true" : "false"));
+		}
+	} else
+	{
 		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_COPY_DB_LIFECYCLE(args->url, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+			return m2v2_remote_pack_COPY_DB_LIFECYCLE(args->url, NULL,
+					make_copy, DL());
+			};
+		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+				m2v2_boolean_truncated_extract);
+	}
+	oio_ext_allow_long_timeout(FALSE);
+	if (beans) {
+		_bean_cleanl2(beans);
 	}
 	return _reply_m2_error(args, err);
 }

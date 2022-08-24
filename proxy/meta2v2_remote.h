@@ -266,6 +266,8 @@ GByteArray* m2v2_remote_pack_ABORT_SHARDING(
 
 GByteArray* m2v2_remote_pack_COPY_DB_LIFECYCLE(
 		struct oio_url_s *url,
+        GSList *beans,
+		gboolean local,
 		gint64 dl);
 
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

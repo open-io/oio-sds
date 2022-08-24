@@ -702,6 +702,7 @@ static gridd_filter M2V2_ABORT_SHARDING_FILTERS[] =
 static gridd_filter M2V2_COPY_DB_LIFECYCLE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
@@ -710,6 +711,7 @@ static gridd_filter M2V2_COPY_DB_LIFECYCLE_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_extract_body_beans,
 	meta2_filter_action_prepare_lifecycle,
 	meta2_filter_reply_success,
 	NULL
