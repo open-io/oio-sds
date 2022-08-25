@@ -26,7 +26,8 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.cache import get_cached_object_metadata
 from oio.common.constants import DRAINING_STATE_IN_PROGRESS, \
-    M2_PROP_DRAINING_STATE, M2_PROP_OBJECTS, M2_PROP_USAGE, REQID_HEADER
+    M2_PROP_DRAINING_STATE, M2_PROP_OBJECTS, M2_PROP_USAGE, \
+    M2_PROP_VERSIONING_POLICY, REQID_HEADER
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
@@ -2378,6 +2379,52 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn('truncated', res)
         self.assertFalse(res['objects'])
         self.assertListEqual(['2/'], res['prefixes'])
+
+    def test_object_list_delimiter_with_versioning(self):
+        self.api.container_create(
+            self.account, self.cname, system={M2_PROP_VERSIONING_POLICY: '-1'})
+        objects = ['1/a', '1/b', '1/c', '2/d', '2/e']
+        self._upload_empty(*objects)
+        res = self.api.object_list(
+            self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['1/', '2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
+        # Add delete marker on the first object (and first sub-prefix)
+        self.api.object_delete(self.account, self.cname, '1/a')
+        res = self.api.object_list(
+            self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['1/', '2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
+        # Add delete marker on all objects in the first sub-prefix
+        self.api.object_delete(self.account, self.cname, '1/b')
+        self.api.object_delete(self.account, self.cname, '1/c')
+        res = self.api.object_list(
+            self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
+        # Reupload an empty object in the first sub-prefix
+        objects = ['1/c']
+        self._upload_empty(*objects)
+        res = self.api.object_list(
+            self.account, self.cname, delimiter='/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertFalse(res['objects'])
+        self.assertListEqual(['1/', '2/'], res['prefixes'])
+        self.assertFalse(res['truncated'])
 
     def test_object_list_prefix(self):
         objects = ['1/a', '1/aa', '1/b', '1/c', '2/d', '2/e']
