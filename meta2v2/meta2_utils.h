@@ -391,4 +391,7 @@ GError* m2db_create_triggers(struct sqlx_sqlite3_s *sq3);
 
 void m2db_drop_triggers(struct sqlx_sqlite3_s *sq3);
 
+/** Globally enable (or disable) meta2-defined SQL triggers. */
+GError* m2db_enable_triggers(struct sqlx_sqlite3_s *sq3, gboolean enabled);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

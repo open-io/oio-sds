@@ -204,6 +204,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		 "AND pr.key='" OBJ_PROP_RETENTION_MODE "' " \
 		 "AND CAST(pr.value AS TEXT)='GOVERNANCE')"
 
+#define DISABLE_TRIGGERS \
+	"INSERT OR REPLACE INTO admin VALUES ('disable_triggers', '1')"
+
+#define DISABLED_TRIGGERS \
+	"SELECT 1 FROM admin WHERE k='disable_triggers' AND v='1'"
+
+/* Due to the way replication is done, it is risky to delete rows from the
+ * admin table, it is safer to overwrite with something "false". */
+#define ENABLE_TRIGGERS \
+	"INSERT OR REPLACE INTO admin VALUES ('disable_triggers', '0')"
+
 #define RETAIN_UNTIL_CONDITION \
 	"SELECT 1 FROM properties AS pr " \
 	"WHERE pr.version=old.version " \
@@ -215,7 +226,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_LEGAL_HOLD_NAME \
 	"BEFORE DELETE ON aliases BEGIN " \
 	"SELECT CASE WHEN " \
-	 "(NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ")) " \
+	 "NOT EXISTS (" DISABLED_TRIGGERS ") " \
+	 "AND (NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ")) " \
 	 "AND NOT EXISTS (" DELETED_FLAG ") " \
 	 "AND EXISTS (" LEGAL_HOLD_ON ") " \
 	"THEN RAISE (abort,'" \
@@ -226,7 +238,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_RETAIN_UNTIL_NAME \
 	"BEFORE DELETE ON aliases BEGIN " \
 	"SELECT CASE WHEN " \
-	 "(NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE")) " \
+	 "NOT EXISTS (" DISABLED_TRIGGERS ") " \
+	 "AND (NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE")) " \
 	 "AND ((NOT EXISTS (" BYPASS_GOVERNANCE ")) " \
 		  "AND NOT EXISTS (" DELETED_FLAG ") " \
 		  "AND EXISTS (" RETAIN_UNTIL_CONDITION ")) " \

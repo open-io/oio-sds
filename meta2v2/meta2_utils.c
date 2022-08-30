@@ -2072,7 +2072,7 @@ static GError* m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, GSList *beans,
 }
 
 /* Returns NULL if the content is absent, an explicit error indicating it is
- * present or the error that occured while checking (if any) */
+ * present or the error that occurred while checking (if any) */
 static GError* m2db_check_content_absent(struct sqlx_sqlite3_s *sq3,
 		const guint8 *uid, const gsize len) {
 	GPtrArray *tmp = g_ptr_array_new ();
@@ -2337,7 +2337,7 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	/* Manage the potential conflict with the latest alias in place. */
 	const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
-	/* version explicitely specified */
+	/* version explicitly specified */
 	if (version == latest_version) {
 		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
 	} else if (version < latest_version) {
@@ -2445,7 +2445,7 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	/* This pointer is a helper to manipulate the current header.
 	 * A next variable <beans_to_delete> also works with this same pointer.
 	 * <beans_to_delete> is responsible for cleaning the pointer, this is why
-	 * <new_header> is not explicitely freed.
+	 * <new_header> is not explicitly freed.
 	 */
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
 	struct bean_ALIASES_s *new_alias = NULL;
@@ -2597,7 +2597,7 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 	/* This pointer is a helper to manipulate the current header.
 	 * A next variable <beans_to_delete> also works with this same pointer.
 	 * <beans_to_delete> is responsible for cleaning the pointer, this is why
-	 * <new_header> is not explicitely freed.
+	 * <new_header> is not explicitly freed.
 	 */
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
 	GSList *beans_to_delete = NULL;
@@ -4633,4 +4633,14 @@ m2db_drop_triggers(struct sqlx_sqlite3_s *sq3)
 		GRID_WARN("Failed to drop trigger_object_retain_until_delete");
 		return;
 	}
+}
+
+GError*
+m2db_enable_triggers(struct sqlx_sqlite3_s *sq3, gboolean enabled)
+{
+	GError *err = NULL;
+	int rc = sqlx_exec(sq3->db, enabled? ENABLE_TRIGGERS : DISABLE_TRIGGERS);
+	if (rc != SQLITE_OK)
+		err = SQLITE_GERROR(sq3->db, rc);
+	return err;
 }
