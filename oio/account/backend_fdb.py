@@ -2011,7 +2011,7 @@ class AccountBackendFdb(object):
             tr, bname, account_id, current_region)
         # ...and recreate the bucket in the new region without stats
         self._real_create_bucket(
-            tr, bname, account_id, new_region, ctime)
+            tr, bname, account_id, new_region, ctime or self._get_timestamp())
         # Update the timestamp
         if ctime is None:
             del tr[bucket_space.pack((CTIME_FIELD,))]
