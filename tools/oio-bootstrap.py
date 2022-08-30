@@ -3361,6 +3361,7 @@ def generate(options):
         "oio-delete-mpu-parts",
         "oio-drained",
         "oio-lifecycle-checkpoint",
+        "oio-lifecycle",
         "oio-preserved",
         "oio-rebuild",
         "oio-replication",

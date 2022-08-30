@@ -165,6 +165,12 @@
 				"descr": "Tube name (or routing key) for 'storage.meta2.deleted' events."
 			},
 			{ "type": "string",
+				"name": "oio_meta2_tube_lifecycle_generated",
+				"key": "meta2.tube.lifecycle_generated",
+				"limit": 256, "def": "oio-lifecycle",
+				"descr": "Tube name for lifecycle events"
+			},
+			{ "type": "string",
 				"name": "oio_rawx_tube_chunk_created",
 				"key": "rawx.tube.chunk_created",
 				"limit": 256, "def": "oio", "descr": "" },

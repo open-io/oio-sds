@@ -2703,7 +2703,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	/* In the reply's headers, we store only the "system" properties, i.e. those
 	 * that do not belong to the "user." domain */
 	gchar **sys = KV_extract_not_prefixed(pairs, "user.");
-	_container_old_props_to_headers (args, sys);
+	_container_old_props_to_headers(args, sys);
 	g_free(sys);
 
 	GString *body = g_string_sized_new(1024);
@@ -5068,7 +5068,6 @@ action_m2_container_lifecycle_apply(struct req_args_s *args, struct json_object 
 {
 	GError *err = NULL;
 	gchar *offset = NULL;
-
 	oio_ext_allow_long_timeout(TRUE);
 
 	PACKER_VOID(_pack) {

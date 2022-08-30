@@ -106,6 +106,7 @@ class EventTypes(object):
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
+    LIFECYCLE_ACTION = "storage.lifecycle.action"
 
     ALL_EVENTS = (
         ACCOUNT_SERVICES,
