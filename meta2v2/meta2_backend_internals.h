@@ -59,6 +59,7 @@ struct meta2_backend_s
 	struct oio_events_queue_s *notifier_content_broken;
 
 	struct oio_events_queue_s *notifier_meta2_deleted;
+	struct oio_events_queue_s *notifier_lifecycle_generated;
 
 	// Sync kafka queues
 	struct oio_events_queue_s *notifier_manifest_deleted;

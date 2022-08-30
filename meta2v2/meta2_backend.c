@@ -208,6 +208,8 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 
 	INIT(m2->notifier_manifest_deleted, oio_meta2_tube_manifest_deleted, TRUE);
 
+	INIT(m2->notifier_lifecycle_generated, oio_meta2_tube_lifecycle_generated, FALSE);
+
 	return err;
 #undef INIT
 }
@@ -295,6 +297,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_drained);
 
 	CLEAN(m2->notifier_meta2_deleted);
+	CLEAN(m2->notifier_lifecycle_generated);
 
 	CLEAN(m2->notifier_manifest_deleted);
 
@@ -1618,7 +1621,7 @@ _meta2_send_manifest_event(struct meta2_backend_s *m2b,
 	{
 		EXTRA_ASSERT(plist == NULL);
 		EXTRA_ASSERT(bean != NULL);
-		
+
 		if (&descr_struct_PROPERTIES == DESCR(bean)) {
 			struct bean_PROPERTIES_s *prop = bean;
 			gchar *expected_prop = "x-object-sysmeta-s3api-upload-id";
@@ -4138,7 +4141,7 @@ end:
 
 GError*
 meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, json_object *jparams)
+		struct oio_url_s *url, json_object *jparams, guint32 *incr_offset)
 {
 	GError *err = NULL;
 	gchar *full_query = NULL;
@@ -4199,6 +4202,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto rollback;
 	}
+	guint32 count_rows = 0;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
 				sqlite3_column_bytes(stmt, 0));
@@ -4215,6 +4219,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		append_str(event, "action", g_strdup(action));
 
 		g_string_append(event, "}}");
+		oio_events_queue__send(
+			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+
+		count_rows++;
 	}
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
@@ -4223,6 +4231,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
 				rc, sqlite3_errmsg(sq3->db));
 		goto rollback;
+	}
+	if (incr_offset) {
+		*incr_offset = count_rows;
 	}
 rollback:
 	err = sqlx_transaction_end(repctx, err);
