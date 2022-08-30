@@ -158,9 +158,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define META2_EVENTS_PREFIX "storage"
 # endif
 
-#define OBJ_PROP_LEGAL_HOLD_STATUS 	"x-object-sysmeta-s3api-legal-hold-status"
-#define OBJ_PROP_BYPASS_GOVERNANCE 	"x-object-sysmeta-s3api-retention-bypass-governance"
-#define OBJ_PROP_RETAIN_UNTILDATE 	"x-object-sysmeta-s3api-retention-retainuntildate"
+#define OBJ_PROP_LEGAL_HOLD_STATUS  "x-object-sysmeta-s3api-legal-hold-status"
+#define OBJ_PROP_BYPASS_GOVERNANCE  "x-object-sysmeta-s3api-retention-bypass-governance"
+#define OBJ_PROP_RETAIN_UNTILDATE   "x-object-sysmeta-s3api-retention-retainuntildate"
 #define OBJ_PROP_RETENTION_MODE     "x-object-sysmeta-s3api-retention-mode"
 
 #define OBJ_LOCK_ABORT_PATTERN      "object locked:"
@@ -180,45 +180,59 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CLEANING_ROOT "SELECT 1 FROM admin WHERE " \
 	"k='" M2V2_ADMIN_SHARD_COUNT "' AND CAST(v AS INTEGER)>0"
 
-#define SHARD_OUT_OF_RANGE "( SELECT 1 FROM admin WHERE k ='"\
-	M2V2_ADMIN_SHARDING_ROOT "' and " \
-	"( ( SELECT 1 from admin ad where ad.k = '" M2V2_ADMIN_SHARDING_LOWER \
-	"' and cast(ad.v AS TEXT) != '>' and '>'||old.alias <=cast(ad.v AS TEXT)) "\
-	"OR ( SELECT 1 from admin ad where ad.k = '" M2V2_ADMIN_SHARDING_UPPER \
-	"' and cast(ad.v AS TEXT) != '<' and '<' || old.alias >cast(ad.v AS TEXT))))"
+#define SHARD_OUT_OF_RANGE \
+	"(SELECT 1 FROM admin " \
+	 "WHERE k='" M2V2_ADMIN_SHARDING_ROOT "' " \
+	 "AND ((SELECT 1 FROM admin AS ad " \
+		   "WHERE ad.k='" M2V2_ADMIN_SHARDING_LOWER "' " \
+		   "AND CAST(ad.v AS TEXT) != '>' " \
+		   "AND '>'||old.alias <= CAST(ad.v AS TEXT)) "\
+		  "OR (SELECT 1 FROM admin AS ad " \
+			  "WHERE ad.k='" M2V2_ADMIN_SHARDING_UPPER "'" \
+			  "AND CAST(ad.v AS TEXT) != '<' " \
+			  "AND '<'||old.alias > CAST(ad.v AS TEXT))))"
 
-#define BYPASS_GOVERNANCE "SELECT 1 FROM properties pr WHERE "\
-	"pr.version=old.version AND pr.alias=old.alias "\
+#define BYPASS_GOVERNANCE \
+	"SELECT 1 FROM properties AS pr " \
+	"WHERE pr.version=old.version "\
+	"AND pr.alias=old.alias "\
 	"AND pr.key='" OBJ_PROP_BYPASS_GOVERNANCE "' "\
-	"AND CAST(pr.value AS TEXT)='True' AND "\
-	"(SELECT 1 FROM  properties pr WHERE "\
-	"pr.version=old.version AND pr.alias=old.alias "\
-	"AND pr.key='" OBJ_PROP_RETENTION_MODE "' AND "  \
-	"CAST(pr.value AS TEXT)='GOVERNANCE')"
+	"AND CAST(pr.value AS TEXT)='True' "\
+	"AND (SELECT 1 FROM properties AS pr " \
+		 "WHERE pr.version=old.version " \
+		 "AND pr.alias=old.alias "\
+		 "AND pr.key='" OBJ_PROP_RETENTION_MODE "' " \
+		 "AND CAST(pr.value AS TEXT)='GOVERNANCE')"
 
-#define RETAIN_UNTIL_CONDITION "SELECT 1 FROM properties pr WHERE "\
-	"pr.version=old.version	AND pr.alias=old.alias AND "\
-	"pr.key='" OBJ_PROP_RETAIN_UNTILDATE "' "\
+#define RETAIN_UNTIL_CONDITION \
+	"SELECT 1 FROM properties AS pr " \
+	"WHERE pr.version=old.version " \
+	"AND pr.alias=old.alias " \
+	"AND pr.key='" OBJ_PROP_RETAIN_UNTILDATE "' " \
 	"AND ((strftime('%Y-%m-%dT%H:%M:%SZ','now') < CAST(pr.value AS TEXT)))"
 
-#define TRIGGER_LEGAL_HOLD "CREATE TRIGGER IF NOT EXISTS " \
-	TRIGGER_LEGAL_HOLD_NAME " BEFORE DELETE ON aliases BEGIN " \
-	" SELECT CASE WHEN ("\
-	" NOT EXISTS ( " CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ") ) "\
-	" AND NOT EXISTS (" DELETED_FLAG " ) "\
-	"AND EXISTS (" LEGAL_HOLD_ON " ) " \
-	" THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
-	" deletion prevented by legal hold') END;END;"
+#define TRIGGER_LEGAL_HOLD \
+	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_LEGAL_HOLD_NAME \
+	"BEFORE DELETE ON aliases BEGIN " \
+	"SELECT CASE WHEN " \
+	 "(NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ")) " \
+	 "AND NOT EXISTS (" DELETED_FLAG ") " \
+	 "AND EXISTS (" LEGAL_HOLD_ON ") " \
+	"THEN RAISE (abort,'" \
+	OBJ_LOCK_ABORT_PATTERN " deletion prevented by legal hold') " \
+	"END; END;"
 
-#define TRIGGER_RETAIN_UNTIL "CREATE TRIGGER IF NOT EXISTS " \
-	TRIGGER_RETAIN_UNTIL_NAME " BEFORE DELETE ON aliases "\
-	"BEGIN SELECT CASE WHEN ( NOT EXISTS (" CLEANING_ROOT " OR " \
-	SHARD_OUT_OF_RANGE") ) AND ( ("\
-	"NOT EXISTS (" BYPASS_GOVERNANCE ") ) AND NOT EXISTS " \
-	"(" DELETED_FLAG ") "\
-	"AND EXISTS (" RETAIN_UNTIL_CONDITION ") "\
-	") THEN RAISE (abort,'" OBJ_LOCK_ABORT_PATTERN \
-	"deletion prevented by retain-until-date') END; END;"
+#define TRIGGER_RETAIN_UNTIL \
+	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_RETAIN_UNTIL_NAME \
+	"BEFORE DELETE ON aliases BEGIN " \
+	"SELECT CASE WHEN " \
+	 "(NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE")) " \
+	 "AND ((NOT EXISTS (" BYPASS_GOVERNANCE ")) " \
+		  "AND NOT EXISTS (" DELETED_FLAG ") " \
+		  "AND EXISTS (" RETAIN_UNTIL_CONDITION ")) " \
+	"THEN RAISE (abort,'" \
+	OBJ_LOCK_ABORT_PATTERN " deletion prevented by retain-until-date') " \
+	"END; END;"
 
 
 #define DROP_TRIGGER_LEGAL_HOLD "DROP TRIGGER IF EXISTS "\
