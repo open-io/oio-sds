@@ -3276,7 +3276,7 @@ meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
 		   to merge the remaining entries. */
 		if (!(err = _transaction_begin(to_merge_sq3, to_merge_url,
 				&to_merge_repctx))) {
-			m2db_remove_merged_entries(to_merge_sq3);
+			err = m2db_remove_merged_entries(to_merge_sq3);
 			err = sqlx_transaction_end(to_merge_repctx, err);
 		}
 		if (err) {
