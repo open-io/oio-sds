@@ -694,7 +694,7 @@ _reply_list_result (struct req_args_s *args, GError * err,
 	if (err)
 		return _reply_m2_error (args, err);
 
-	/* TODO to be removed as soon as all the clients consime the properties
+	/* TODO to be removed as soon as all the clients consume the properties
 	 * in the headers. */
 	_container_new_props_to_headers (args, out->props);
 
@@ -2636,7 +2636,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	/* In the reply's headers, we store only the "system" properties, i.e. those
 	 * that do not belong to the "user." domain */
 	gchar **sys = KV_extract_not_prefixed(pairs, "user.");
-	_container_old_props_to_headers (args, sys);
+	_container_old_props_to_headers(args, sys);
 	g_free(sys);
 
 	GString *body = g_string_sized_new(1024);
@@ -4902,7 +4902,6 @@ action_m2_container_lifecycle_prepare_events(struct req_args_s *args, struct jso
 {
 	GError *err = NULL;
 	gchar *offset = NULL;
-
 	oio_ext_allow_long_timeout(TRUE);
 
 	PACKER_VOID(_pack) {

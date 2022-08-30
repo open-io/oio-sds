@@ -204,6 +204,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
 
 	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted);
+	INIT(m2->notifier_lifecycle_generated, oio_meta2_tube_lifecycle_generated);
 
 	return err;
 #undef INIT
@@ -287,6 +288,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_drained);
 
 	CLEAN(m2->notifier_meta2_deleted);
+	CLEAN(m2->notifier_lifecycle_generated);
 
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;
@@ -3895,7 +3897,7 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 
 GError*
 meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, json_object *jparams)
+		struct oio_url_s *url, json_object *jparams, guint32 *incr_offset)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -3955,6 +3957,7 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto close;
 	}
+	guint32 count_rows = 0;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		char *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
@@ -3970,6 +3973,11 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 		append_str(event, "action", g_strdup(action));
 
 		g_string_append(event, "}}");
+		oio_events_queue__send(
+			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+
+		//gint64 timestamp_end = oio_ext_real_time();
+		count_rows++;
 	}
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
@@ -3979,7 +3987,7 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto close;
 	}
-
+	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
 
 close:

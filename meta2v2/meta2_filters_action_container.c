@@ -972,7 +972,7 @@ meta2_filter_action_prepare_lifecycle(struct gridd_filter_ctx_s *ctx,
 		}
 	}
 
-	err = meta2_backend_prepare_lifecycle(m2b, url, jparams);
+	err = meta2_backend_prepare_lifecycle(m2b, url, jparams, &offset);
 	if (err) {
 		if (jparams) {
 			json_object_put(jparams);
