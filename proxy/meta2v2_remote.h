@@ -46,6 +46,7 @@ gboolean m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply);
 gboolean m2v2_boolean_truncated_extract(gpointer ctx, guint status,
 		MESSAGE reply);
 
+gboolean m2v2_offset_extract(gpointer ctx, guint status, MESSAGE reply);
 struct m2v2_create_params_s;
 
 /* deadline known from thread-local */

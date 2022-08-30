@@ -205,6 +205,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
 
 	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted);
+	INIT(m2->notifier_lifecycle_generated, oio_meta2_tube_lifecycle_generated);
 
 	return err;
 #undef INIT
@@ -288,6 +289,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_drained);
 
 	CLEAN(m2->notifier_meta2_deleted);
+	CLEAN(m2->notifier_lifecycle_generated);
 
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;
@@ -388,23 +390,25 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 	return FALSE;
 }
 
+static void sep (GString *gs1) {
+	if (gs1->len > 1 && !strchr(",[{", gs1->str[gs1->len-1]))
+		g_string_append_c(gs1, ',');
+}
+
+static void append_int64 (GString *gs1, const char *k, gint64 v) {
+	sep(gs1);
+	g_string_append_printf(gs1, "\"%s\":%"G_GINT64_FORMAT, k, v);
+}
+
+static void append_str(GString *gs1, const char *k, gchar *v) {
+	sep(gs1);
+	oio_str_gstring_append_json_pair(gs1, k, v);
+	g_free(v);
+}
+
 static gchar *
 _container_state(struct sqlx_sqlite3_s *sq3, gboolean deleted)
 {
-	void sep (GString *gs1) {
-		if (gs1->len > 1 && !strchr(",[{", gs1->str[gs1->len-1]))
-			g_string_append_c(gs1, ',');
-	}
-	void append_int64 (GString *gs1, const char *k, gint64 v) {
-		sep(gs1);
-		g_string_append_printf(gs1, "\"%s\":%"G_GINT64_FORMAT, k, v);
-	}
-	void append_str(GString *gs1, const char *k, gchar *v) {
-		sep(gs1);
-		oio_str_gstring_append_json_pair(gs1, k, v);
-		g_free(v);
-	}
-
 	gchar **properties = NULL;
 	struct oio_url_s *url = sqlx_admin_get_url(sq3);
 	GString *gs = oio_event__create_with_id(
@@ -3853,7 +3857,7 @@ rollback:
 
 GError*
 meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans, guint32 *incr_offset)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -3883,7 +3887,6 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	query = LIFECYCLE_QUERY_get_query(beans->data)->str;
 
 	gchar *full_query = g_strdup_printf("%s %s", base_query, query);
-	GRID_ERROR("metadata : action:%s full:%s base:%s %s", action, full_query,base_query, query);
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK,
@@ -3905,15 +3908,14 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 
 	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		GRID_WARN("Failed apply query %s %s", full_query, sqlite3_errmsg(sq3->db));
+		GRID_WARN("Failed to apply query %s %s", full_query, sqlite3_errmsg(sq3->db));
 	}
-
+	guint32 count_rows = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		const guint8 *alias = sqlite3_column_text(stmt, 0);
+		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
-		gint64 ctime = sqlite3_column_int64(stmt, 4);
-		GRID_ERROR("before event %s %"G_GINT64_FORMAT " %"G_GINT64_FORMAT,
-				object_name, version, ctime);
+		gint64 mtime = sqlite3_column_int64(stmt, 5);
+
 		GString *event = oio_event__create_with_id(
 				"storage.lifecycle.action", url, oio_ext_get_reqid());
 		g_string_append(event, ",\"data\":{");
@@ -3921,23 +3923,21 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 		append_str(event, "object", object_name);
 		append_int64(event, "version", version);
-		append_int64(event, "ctime", ctime);
+		append_int64(event, "mtime", mtime);
 		append_str(event, "action", g_strdup(action));
 
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
 
-		gint64 timestamp_end = oio_ext_real_time();
-		GRID_ERROR("event prepare & send timing:%"G_GINT64_FORMAT,
-				timestamp_end - timestamp_start);
+		//gint64 timestamp_end = oio_ext_real_time();
 		count_rows++;
 	}
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
 		GRID_WARN("Failed again %s", sqlite3_errmsg(sq3->db));
 	}
-
+	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
 	g_free(full_query);
 

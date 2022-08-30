@@ -670,6 +670,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
 
+### meta2.tube.lifecycle_generated
+
+> Tube name for lifecycle events
+
+ * default: **oio-lifecycle**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_LIFECYCLE_GENERATED*
+
 ### meta2.tube.meta2_deleted
 
 > Tube name or full URI where to send 'storage.meta2.deleted' events.

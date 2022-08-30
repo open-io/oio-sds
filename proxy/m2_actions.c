@@ -690,7 +690,7 @@ _reply_list_result (struct req_args_s *args, GError * err,
 	if (err)
 		return _reply_m2_error (args, err);
 
-	/* TODO to be removed as soon as all the clients consime the properties
+	/* TODO to be removed as soon as all the clients consume the properties
 	 * in the headers. */
 	_container_new_props_to_headers (args, out->props);
 
@@ -2630,7 +2630,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	/* In the reply's headers, we store only the "system" properties, i.e. those
 	 * that do not belong to the "user." domain */
 	gchar **sys = KV_extract_not_prefixed(pairs, "user.");
-	_container_old_props_to_headers (args, sys);
+	_container_old_props_to_headers(args, sys);
 	g_free(sys);
 
 	GString *body = g_string_sized_new(1024);
@@ -4735,25 +4735,26 @@ action_m2_container_lifecycle_copy_db(struct req_args_s *args, struct json_objec
 	GError *err = NULL;
 	gboolean truncated = FALSE;
 	GSList *beans = NULL;
-	gboolean make_copy = _request_get_flag(args, "local");
+	gboolean local_copy = _request_get_flag(args, "local");
+	gchar *offset = NULL;
 	oio_ext_allow_long_timeout(TRUE);
 	if (local_copy == FALSE) {
 		err = _load_simplified_lifecycle_query(j, &beans);
 		if (!err) {
 			PACKER_VOID(_pack) {
 				return m2v2_remote_pack_COPY_DB_LIFECYCLE(args->url, beans,
-						make_copy, DL());
+						local_copy, DL());
 			};
-			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
-					m2v2_boolean_truncated_extract);
-			args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
-					g_strdup(truncated ? "true" : "false"));
+			err = _resolve_meta2(args, _prefer_master(), _pack, &offset,
+					m2v2_offset_extract);
+
+			oio_ext_allow_long_timeout(FALSE);
+			args->rp->add_header(PROXYD_HEADER_PREFIX "count", offset);
 		}
-	} else
-	{
+	} else {
 		PACKER_VOID(_pack) {
 			return m2v2_remote_pack_COPY_DB_LIFECYCLE(args->url, NULL,
-					make_copy, DL());
+					local_copy, DL());
 			};
 		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 				m2v2_boolean_truncated_extract);

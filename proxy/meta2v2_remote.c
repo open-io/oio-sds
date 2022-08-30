@@ -155,6 +155,18 @@ m2v2_boolean_truncated_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 	return TRUE;
 }
 
+gboolean
+m2v2_offset_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
+{
+	gchar **offset = ctx;
+	EXTRA_ASSERT (offset != NULL);
+
+	*offset = metautils_message_extract_string_copy(reply,
+			NAME_MSGKEY_INCR_OFFSET);
+
+	return TRUE;
+}
+
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,

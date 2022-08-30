@@ -290,6 +290,6 @@ GError* meta2_backend_copy_db_lifecycle(struct meta2_backend_s *m2b,
 		struct oio_url_s *url);
 
 GError* meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
-		struct oio_url_s *url,  GSList * beans);
+		struct oio_url_s *url,  GSList * beans, guint32 *incr_offset);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

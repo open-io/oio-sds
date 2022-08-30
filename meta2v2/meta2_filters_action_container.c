@@ -945,17 +945,22 @@ meta2_filter_action_prepare_lifecycle(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList *beans = NULL;
 	GError *err = NULL;
+	guint32 offset= 0 ;
 	gboolean local_copy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL;
 	if (local_copy) {
 		err = meta2_backend_copy_db_lifecycle(m2b, url);
 	} else
 	{
 		beans = meta2_filter_ctx_get_input_udata(ctx);
-		err = meta2_backend_apply_rule_lifecycle(m2b, url, beans);
+		err = meta2_backend_apply_rule_lifecycle(m2b, url, beans, &offset);
+		gchar tmp[64];
+		g_snprintf(tmp, sizeof(tmp), "%d", offset);
+		S3_RESPONSE_HEADER(NAME_MSGKEY_INCR_OFFSET, tmp);
 	}
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
+
 	return FILTER_OK;
 }
