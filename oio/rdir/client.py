@@ -494,7 +494,6 @@ class RdirClient(HttpApi):
         self.oioproxy_kwargs['endpoint'] = (
             self.directory.proxy_scheme + '://' + self.directory.proxy_netloc)
         self.oioproxy_kwargs['pool_manager'] = self.directory.pool_manager
-        self.logger.error(str(self.oioproxy_kwargs))
         self.admin = AdminClient(
             self.conf, logger=self.logger, **self.oioproxy_kwargs)
         self.ns = conf['namespace']
