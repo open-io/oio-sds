@@ -295,6 +295,6 @@ GError* meta2_backend_checkpoint(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, const gchar* prefix);
 /** Select object that match filter and send events */
 GError* meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, json_object *params);
+		struct oio_url_s *url, json_object *params, guint32 *incr_offset);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

@@ -3235,6 +3235,7 @@ def generate(options):
         "oio-deadletter",
         "oio-delayed",
         "oio-drained",
+        "oio-lifecycle",
         "oio-preserved",
         "oio-rebuild",
         "oio-replication",
