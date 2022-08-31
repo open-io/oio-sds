@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -729,20 +729,22 @@ _test_cycle (gconstpointer d)
 	const struct test_data_s *test_data = (const struct test_data_s*) d;
 
 	GPtrArray *tmp = g_ptr_array_new ();
-	for (int i=2*oio_ext_rand_int_range(0,9); i>0 ;--i) {
-		int len = oio_ext_rand_int_range (2,23);
-		gchar *str = g_malloc0(len);
-		oio_str_randomize (str, len, random_chars);
-		g_ptr_array_add (tmp, str);
+	for (int i = 2 * oio_ext_rand_int_range(0, 9); i > 0; --i) {
+		int len = oio_ext_rand_int_range(2, 23);
+		gchar *str = g_malloc0(len + 1);
+		oio_str_randomize(str, len, random_chars);
+		// Ensure we don't get the same key twice.
+		str[len - 1] = 'A' + i / 2;
+		g_ptr_array_add(tmp, str);
 	}
 	g_ptr_array_sort(tmp, (GCompareFunc)g_strcmp0);
-	g_ptr_array_add (tmp, NULL);
+	g_ptr_array_add(tmp, NULL);
 
 	oio_header_case = test_data->header_case;
 
 	test_data->func((const char * const *) tmp->pdata);
-	g_ptr_array_set_free_func (tmp, g_free);
-	g_ptr_array_free (tmp, TRUE);
+	g_ptr_array_set_free_func(tmp, g_free);
+	g_ptr_array_free(tmp, TRUE);
 }
 
 static void
