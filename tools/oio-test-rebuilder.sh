@@ -17,7 +17,7 @@
 
 OPENIOCTL=$(command -v openioctl.sh)
 CLI=$(command -v openio)
-ADMIN_CLI=$(command -v openio-admin)
+ADMIN_CLI="coverage run -p $(command -v openio-admin)"
 CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 INTEGRITY="$(command -v oio-crawler-integrity)"
