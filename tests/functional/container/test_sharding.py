@@ -47,10 +47,11 @@ class TestSharding(BaseTestCase):
 
     def setUp(self):
         super(TestSharding, self).setUp()
-        self.cname = 'test_sharding_%f' % time.time()
-        self.created = dict()
+        self.cname = f'test_sharding_{time.time()}'
+        self.created = {}
         self.container_sharding = ContainerSharding(self.conf)
         self.beanstalkd0.drain_tube('oio-preserved')
+        self.versioning_enabled = False
         self.system = {}
         self.objects_properties = {}
         self.object_lock = False
@@ -59,8 +60,14 @@ class TestSharding(BaseTestCase):
         for cname, created in self.created.items():
             try:
                 # delete objects
-                self.storage.object_delete_many(
-                    self.account, cname, objs=created)
+                if self.versioning_enabled:
+                    for obj_name, versions in created.items():
+                        for version, _ in versions:
+                            self.storage.object_delete(
+                                self.account, cname, obj_name, version=version)
+                else:
+                    self.storage.object_delete_many(
+                        self.account, cname, objs=created)
                 # FIXME temporary cleaning, this should be handled by deleting
                 # root container
                 shards = self.container_sharding.show_shards(
@@ -75,23 +82,50 @@ class TestSharding(BaseTestCase):
                 self.logger.warning('Failed to cleaning root %s', cname)
         super(TestSharding, self).tearDown()
 
-    def _create(self, cname, properties=None, bucket=None):
+    def _create(self, cname, properties=None, bucket=None, versioning=False):
         if bucket:
             self.storage.bucket.bucket_create(bucket, self.account)
             self.system[M2_PROP_BUCKET_NAME] = bucket
+        if versioning:
+            self.system[M2_PROP_VERSIONING_POLICY] = '-1'
+            self.versioning_enabled = True
         created = self.storage.container_create(
             self.account, cname, properties=properties, system=self.system)
         self.assertTrue(created)
-        self.created[cname] = set()
+        if self.versioning_enabled:
+            self.created[cname] = {}
+        else:
+            self.created[cname] = set()
+
+    def _get_objet_count(self, cname):
+        if self.versioning_enabled:
+            count = 0
+            for _, versions in self.created[cname].items():
+                for _, deleted in versions:
+                    if not deleted:
+                        count += 1
+        else:
+            count = len(self.created[cname])
+        return count
+
+    def _get_byte_count(self, cname):
+        if self.versioning_enabled:
+            count = 0
+            for obj, versions in self.created[cname].items():
+                for i, (_, deleted) in enumerate(versions):
+                    if not deleted:
+                        count += len(obj) + 1 + len(str(i))
+        else:
+            count = sum((len(obj) for obj in self.created[cname]))
+        return count
 
     def _check_bucket_stats(self, cname, bucket, account=None):
         stats = self.storage.bucket.bucket_show(bucket, account=account)
         if cname.endswith('+segments'):
             self.assertEqual(0, stats['objects'])
         else:
-            self.assertEqual(len(self.created[cname]), stats['objects'])
-        self.assertEqual(
-            sum((len(obj) for obj in self.created[cname])), stats['bytes'])
+            self.assertEqual(self._get_objet_count(cname), stats['objects'])
+        self.assertEqual(self._get_byte_count(cname), stats['bytes'])
 
     def _add_objects(self, cname, nb_objects, prefix='content',
                      bucket=None, account=None, cname_root=None,
@@ -104,11 +138,18 @@ class TestSharding(BaseTestCase):
         for i in range(nb_objects):
             obj_name = '%s_%d' % (prefix, i)
             reqid = request_id()
-            self.storage.object_create(
-                account, cname, obj_name=obj_name,
-                data=obj_name.encode('utf-8'), reqid=reqid,
+            data = obj_name
+            if self.versioning_enabled:
+                data += f'-{len(self.created[cname_root].get(obj_name, []))}'
+            data = data.encode('utf-8')
+            _, _, _, meta = self.storage.object_create_ext(
+                account, cname, obj_name=obj_name, data=data, reqid=reqid,
                 properties=properties)
-            self.created[cname_root].add(obj_name)
+            if self.versioning_enabled:
+                self.created[cname_root].setdefault(
+                    obj_name, []).append((meta['version'], False))
+            else:
+                self.created[cname_root].add(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
                                 types=(EventTypes.CONTAINER_STATE,))
@@ -127,7 +168,11 @@ class TestSharding(BaseTestCase):
             else:
                 self.storage.object_delete(
                     self.account, cname, obj_name, reqid=reqid)
-                self.created[cname].remove(obj_name)
+                if self.versioning_enabled:
+                    versions = self.created[cname].setdefault(obj_name, [])
+                    versions.append((str(int(versions[-1][1]) + 1), True))
+                else:
+                    self.created[cname].remove(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
                                 fields={'account': self.account,
@@ -135,17 +180,34 @@ class TestSharding(BaseTestCase):
                                 types=(EventTypes.CONTAINER_STATE,))
             stats = self.storage.bucket.bucket_show(
                 cname, account=self.account)
-            self.assertEqual(len(self.created[cname]), stats['objects'])
+            self.assertEqual(self._get_objet_count(cname), stats['objects'])
 
     def _check_objects(self, cname):
         # Check the objects list
         obj_list = self.storage.object_list(self.account, cname)
-        self.assertListEqual(sorted(self.created[cname]),
-                             [obj['name'] for obj in obj_list['objects']])
-        # Check the objects data
-        for obj_name in self.created[cname]:
-            _, data = self.storage.object_fetch(self.account, cname, obj_name)
-            self.assertEqual(obj_name.encode('utf-8'), b''.join(data))
+        if self.versioning_enabled:
+            self.assertListEqual(
+                sorted([obj for obj, versions in self.created[cname].items()
+                        if not versions[-1][1]]),
+                [obj['name'] for obj in obj_list['objects']])
+            # Check the objects data
+            for obj_name, versions in self.created[cname].items():
+                for i, (version, deleted) in enumerate(versions):
+                    if deleted:
+                        continue
+                    _, data = self.storage.object_fetch(
+                        self.account, cname, obj_name, version=version)
+                    self.assertEqual(f'{obj_name}-{i}'.encode('utf-8'),
+                                     b''.join(data))
+        else:
+            self.assertListEqual(
+                sorted(self.created[cname]),
+                [obj['name'] for obj in obj_list['objects']])
+            # Check the objects data
+            for obj_name in self.created[cname]:
+                _, data = self.storage.object_fetch(
+                    self.account, cname, obj_name)
+                self.assertEqual(obj_name.encode('utf-8'), b''.join(data))
 
     def _check_shards_objectlock_properties(self, resp):
         pass
@@ -182,6 +244,38 @@ class TestSharding(BaseTestCase):
     def test_shard_container(self):
         self._create(self.cname)
         self._add_objects(self.cname, 4)
+
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_0.'},
+                       {'index': 1, 'lower': 'content_0.', 'upper': ''}]
+        new_shards = self.container_sharding.format_shards(
+            test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True)
+        self.assertTrue(modified)
+
+        # check objects
+        self._check_objects(self.cname)
+
+        # check shards
+        show_shards = self.container_sharding.show_shards(
+            self.account, self.cname)
+        shards_content = [
+            {'content_0'},
+            {'content_1', 'content_2', 'content_3'}
+        ]
+        self._check_shards(show_shards, test_shards, shards_content)
+
+        # check root container properties
+        resp = self.storage.container.container_get_properties(self.account,
+                                                               self.cname)
+        self.assertEqual(int(resp['system'][M2_PROP_OBJECTS]), 0)
+        self.assertEqual(int(resp['system']['sys.m2.shards']),
+                         len(test_shards))
+
+    def test_shard_container_with_versioning(self):
+        self._create(self.cname, versioning=True)
+        self._add_objects(self.cname, 4)
+        self._delete_objects(self.cname, 2)
 
         test_shards = [{'index': 0, 'lower': '', 'upper': 'content_0.'},
                        {'index': 1, 'lower': 'content_0.', 'upper': ''}]
@@ -416,6 +510,39 @@ class TestSharding(BaseTestCase):
         nb_obj_to_add = 10
         self._create(self.cname)
         self._add_objects(self.cname, nb_obj_to_add)
+
+        partitions = [[10, 90], [50, 50], [60, 40]]
+        expected_shards = [
+            [{'index': 0, 'lower': '', 'upper': 'content_0', 'metadata': {},
+                'count': 1},
+             {'index': 1, 'lower': 'content_0', 'upper': '', 'metadata': {},
+                'count': 9}],
+            [{'index': 0, 'lower': '', 'upper': 'content_4', 'metadata': {},
+                'count': 5},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
+                'count': 5}],
+            [{'index': 0, 'lower': '', 'upper': 'content_5', 'metadata': {},
+                'count': 6},
+             {'index': 1, 'lower': 'content_5', 'upper': '', 'metadata': {},
+                'count': 4}]
+        ]
+
+        for i, partition in enumerate(partitions):
+            shards = self.container_sharding.find_shards(
+                self.account,
+                self.cname,
+                strategy='shard-with-partition',
+                strategy_params={"threshold": nb_obj_to_add - 1,
+                                 "partition": partition})
+
+            for j, shard in enumerate(shards):
+                self.assertDictEqual(shard, expected_shards[i][j])
+
+    def test_partition_with_versioning(self):
+        nb_obj_to_add = 10
+        self._create(self.cname, versioning=True)
+        self._add_objects(self.cname, nb_obj_to_add)
+        self._delete_objects(self.cname, nb_obj_to_add // 2)
 
         partitions = [[10, 90], [50, 50], [60, 40]]
         expected_shards = [
@@ -1007,7 +1134,11 @@ class TestSharding(BaseTestCase):
 
     def _delete_object(self, account, container, obj_name, reqid=None):
         self.storage.object_delete(account, container, obj_name, reqid=reqid)
-        self.created[self.cname].remove(obj_name)
+        if self.versioning_enabled:
+            versions = self.created[self.cname].setdefault(obj_name, [])
+            versions.append((str(int(versions[-1][1]) + 1), True))
+        else:
+            self.created[self.cname].remove(obj_name)
         self.wait_event = True
 
     def test_delete_on_shard(self):

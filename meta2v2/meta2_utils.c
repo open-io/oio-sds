@@ -3877,6 +3877,7 @@ _sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
 		if (clause->len > 0) g_string_append_static(clause, " AND");
 	}
 	GPtrArray *params = g_ptr_array_new();
+	g_string_append_static(clause, " deleted == 0");
 
 	if (lower && *lower) {
 		lazy_and();
@@ -3889,9 +3890,6 @@ _sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
 		g_string_append_static(clause, " alias <= ?");
 		g_ptr_array_add(params, g_variant_new_string(max_upper));
 	}
-
-	if (clause->len == 0)
-		clause = g_string_append_static(clause, " 1");
 
 	g_string_append_static(clause, " ORDER BY alias ASC");
 	// Fetch 2 aliases
@@ -3913,6 +3911,7 @@ _sharding_compute_size_to_sql_clause(const gchar *lower, const gchar *upper,
 		if (clause->len > 0) g_string_append_static(clause, " AND");
 	}
 	GPtrArray *params = g_ptr_array_new();
+	g_string_append_static(clause, " deleted == 0");
 
 	if (lower && *lower) {
 		lazy_and();
@@ -3925,9 +3924,6 @@ _sharding_compute_size_to_sql_clause(const gchar *lower, const gchar *upper,
 		g_string_append_static(clause, " alias <= ?");
 		g_ptr_array_add(params, g_variant_new_string(upper));
 	}
-
-	if (clause->len == 0)
-		clause = g_string_append_static(clause, " 1");
 
 	g_ptr_array_add(params, NULL);
 	return (GVariant**) g_ptr_array_free(params, FALSE);
