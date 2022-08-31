@@ -4057,7 +4057,6 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 		}
 
 		// Prepare upper and actual shard size
-		upper = NULL;
 		if (aliases->len < 2) {
 			// Set the upper for the last shard range for this container
 			// - if there is no alias, this is the end of the container
@@ -4110,6 +4109,7 @@ end_for:
 		if (upper) {
 			g_free(lower);
 			lower = upper;
+			upper = NULL;
 		}
 		_bean_cleanv2(aliases);
 	}
@@ -4118,7 +4118,8 @@ end:
 	if (!err) {
 		if (shard_ranges->len == 0) {
 			err = SYSERR("No shard range");
-		} else if (g_strcmp0(upper, max_upper) != 0) {
+		} else if (g_strcmp0(lower, max_upper) != 0) {
+			// When shard(s) have been found, the lower is the last upper
 			err = SYSERR("Wrong upper for the last shard");
 		}
 	}
