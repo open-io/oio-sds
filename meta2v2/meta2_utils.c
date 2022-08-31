@@ -3654,13 +3654,10 @@ _build_drain_container_clause(gchar *marker_start, GString *clause,
 		gint64 limit)
 {
 	GPtrArray *params = g_ptr_array_new ();
+	g_string_append_static(clause, " deleted == 0");
 	if (marker_start != NULL) {
-		g_string_append_static(clause, " alias > ?");
+		g_string_append_static(clause, " AND alias > ?");
 		g_ptr_array_add(params, g_variant_new_string(marker_start));
-	}
-
-	if (clause->len == 0) {
-		clause = g_string_append_static (clause, " 1");
 	}
 
 	g_string_append_static(clause, " ORDER BY alias ASC, version DESC");
