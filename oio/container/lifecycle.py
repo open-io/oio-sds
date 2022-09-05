@@ -29,6 +29,18 @@ TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
 
 LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
 
+# storage classes ordered from highest to lowest
+S3_STORAGE_CLASSES = [
+    "EXPRESS_ONEZONE",
+    "STANDARD",
+    "STANDARD_IA",
+    "INTELLIGENT_TIERING",
+    "ONEZONE_IA",
+    "GLACIER_IR",
+    "GLACIER",
+    "DEEP_ARCHIVE",
+]
+
 
 class ContainerLifecycle(object):
     def __init__(self, api, account, container, logger=None):
@@ -390,6 +402,116 @@ class ContainerLifecycle(object):
         # SELECT is forced on meta2 side
         query = " WHERE nb_versions=1"
         return query
+
+    def order_rules(self, versioned=False):
+        """
+        Rules Ordering
+        """
+        current_rules = dict()
+        non_current_rules = dict()
+        delete_marker_rules = dict()
+
+        id_current = 0
+        id_non_current = 0
+        id_delete_marker = 0
+        if self.conf_json is None:
+            return [{}, {}, {}]
+
+        for rule_id, rule in self.conf_json["Rules"].items():
+            expiration = rule.get("Expiration")
+            transitions = rule.get("Transitions", ())
+            noncurrent_expiration = rule.get("NoncurrentVersionExpiration")
+            noncurrent_transitions = rule.get("NoncurrentVersionTransitions", ())
+            if noncurrent_expiration:
+                non_current_rules[id_non_current] = (
+                    rule_id,
+                    "NoncurrentVersionExpiration",
+                    noncurrent_expiration,
+                    rule,
+                )
+                id_non_current = id_non_current + 1
+
+            if expiration:
+                if expiration.get("ExpiredObjectDeleteMarker"):
+                    delete_marker_rules[id_delete_marker] = (
+                        rule_id,
+                        "Expiration",
+                        expiration,
+                        rule,
+                    )
+                    id_delete_marker = id_delete_marker + 1
+                else:
+                    current_rules[id_current] = (
+                        rule_id,
+                        "Expiration",
+                        expiration,
+                        rule,
+                    )
+                    id_current = id_current + 1
+
+            for tr in transitions:
+                current_rules[id_current] = (rule_id, "Transitions", tr, rule)
+                id_current = id_current + 1
+
+            for tr in noncurrent_transitions:
+                non_current_rules[id_non_current] = (
+                    rule_id,
+                    "NoncurrentVersionTransitions",
+                    tr,
+                    rule,
+                )
+                id_non_current = id_non_current + 1
+
+        def order_current_action(act, versioned):
+            if versioned:
+                if act == "Expiration":
+                    return 1
+                elif act == "Transitions":
+                    return 0
+            else:
+                if act == "Expiration":
+                    return 0
+                elif act == "Transitions":
+                    return 1
+            return 0
+
+        def order_noncurrent_action(act):
+            if act == "NoncurrentVersionExpiration":
+                return 0
+            elif act == "NoncurrentVersionTransitions":
+                return 1
+            return 0
+
+        sorted_current_rules = dict(
+            sorted(
+                current_rules.items(),
+                key=lambda item: (
+                    (item[1][2].get("Days") or item[1][2].get("Date")),
+                    order_current_action(item[1][2], versioned),
+                ),
+                reverse=False,
+            )
+        )
+
+        sorted_noncurrent_rules = dict(
+            sorted(
+                non_current_rules.items(),
+                key=lambda item: (
+                    item[2].get("Days"),
+                    order_noncurrent_action(item[1]),
+                ),
+                reverse=False,
+            )
+        )
+
+        # Concat with priority to expiration rules
+        ordered_rules = [
+            sorted_current_rules,
+            sorted_noncurrent_rules,
+            delete_marker_rules,
+        ]
+
+        return ordered_rules
 
 
 class RuleFilter(object):
