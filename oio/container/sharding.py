@@ -288,6 +288,7 @@ class ContainerSharding(ProxyClient):
 
     DEFAULT_STRATEGY = 'shard-with-partition'
     DEFAULT_PARTITION = [50, 50]
+    DEFAULT_THRESHOLD = 10000
     DEFAULT_SHARD_SIZE = 100000
     DEFAULT_PRECLEAN_NEW_SHARDS = True
     DEFAULT_PRECLEAN_TIMEOUT = 60
@@ -533,7 +534,7 @@ class ContainerSharding(ProxyClient):
                 partition = partition.split(',')
             partition = [float(part) for part in partition]
         threshold = int_value(strategy_params.get('threshold'),
-                              self.DEFAULT_SHARD_SIZE)
+                              self.DEFAULT_THRESHOLD)
 
         formatted_strategy_params = dict()
         formatted_strategy_params['partition'] = partition

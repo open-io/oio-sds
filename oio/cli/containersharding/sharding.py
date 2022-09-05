@@ -118,7 +118,7 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
             [shard-with-partition]
             Number of objects in a container from which sharding is applied.
             (default: %d)
-            """ % ContainerSharding.DEFAULT_SHARD_SIZE
+            """ % ContainerSharding.DEFAULT_THRESHOLD
         )
         parser.add_argument(
             '--shard-size',

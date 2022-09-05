@@ -37,7 +37,7 @@ sharding_strategy = shard-with-partition
 ## Only the database size is checked by the crawler,
 ## this threshold is a parameter for the sharding strategy
 ## and won't be checked by the crawler.
-sharding_threshold = 100000
+sharding_threshold = 10000
 ## Partition to use for cutting the container.
 sharding_partition = 50,50
 # Try to clean up the copy before creating the new shard
