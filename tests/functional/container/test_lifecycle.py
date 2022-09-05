@@ -149,6 +149,128 @@ class TestContainerLifecycle(BaseClassLifeCycle):
             json_conf.replace(" ", "").replace("\n", ""),
         )
 
+    def test_order_rules_conf1(self):
+        """
+        Rules with expiration and transition: expiration rules are first
+        and transition rules are ordered by policy.
+        """
+
+        lifecycle_source = """
+            {"Rules":
+                {
+                    "rule-1":
+                    {
+                        "Status":"Enabled",
+                        "Filter":{},
+                        "Expiration": {
+                            "Days": 3
+                        }
+                    },
+
+                    "rule-2":
+                    {
+                        "Status":"Enabled",
+                        "Filter":{"Prefix": "documents"},
+                        "Transitions": [{
+                            "Days": 1,
+                            "StorageClass": "ARCHIVE"
+                        }],
+                        "Expiration": {
+                            "Days": 1
+                        }
+                    },
+                    "rule-3":
+                    {
+                        "Status":"Enabled",
+                        "Filter":{"Prefix": "documents"},
+                        "Transitions": [{
+                            "Days": 90,
+                            "StorageClass": "STANDARD_IA"
+                        },
+                        {
+                            "Days": 180,
+                            "StorageClass": "ARCHIVE"
+                        }]
+                    }
+                }
+
+            }"""
+
+        props = {LIFECYCLE_PROPERTY_KEY: lifecycle_source}
+        self.api.container_set_properties(
+            self.account, self.container, properties=props
+        )
+
+        self.lifecycle.load()
+
+        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
+
+        actions_order = list()
+        for k, v in sorted_current_rules.items():
+            action = v[1]
+            actions_order.append((v[0], str(action), v[2]))
+
+        self.assertEqual(
+            actions_order,
+            [
+                ("rule-2", "Expiration", {"Days": 1}),
+                ("rule-2", "Transitions", {"Days": 1, "StorageClass": "ARCHIVE"}),
+                ("rule-1", "Expiration", {"Days": 3}),
+                ("rule-3", "Transitions", {"Days": 90, "StorageClass": "STANDARD_IA"}),
+                ("rule-3", "Transitions", {"Days": 180, "StorageClass": "ARCHIVE"}),
+            ],
+        )
+
+    def test_order_rules_conf2(self):
+        """
+        Predominance of expiration over transition
+        """
+
+        lifecycle_source = """
+            {"Rules":
+                {
+                    "rule-1":
+                    {
+                        "Status":"Enabled",
+                        "Filter":{},
+                        "Transitions": [{
+                            "Days": 1,
+                            "StorageClass": "ARCHIVE"
+                        }]
+                    },
+                    "rule-2":
+                    {
+                        "Status":"Enabled",
+                        "Filter":{"Prefix": "documents"},
+                        "Expiration": {
+                            "Days": 10
+                        }
+                    }
+                }
+            }"""
+
+        props = {LIFECYCLE_PROPERTY_KEY: lifecycle_source}
+        self.api.container_set_properties(
+            self.account, self.container, properties=props
+        )
+
+        self.lifecycle.load()
+
+        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
+
+        actions_order = list()
+        for k, v in sorted_current_rules.items():
+            action = v[1]
+            actions_order.append((v[0], str(action), v[2]))
+
+        self.assertEqual(
+            actions_order,
+            [
+                ("rule-1", "Transitions", {"Days": 1, "StorageClass": "ARCHIVE"}),
+                ("rule-2", "Expiration", {"Days": 10}),
+            ],
+        )
+
 
 class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
     def setUp(self):
