@@ -18,7 +18,6 @@ import time
 
 from mock import patch
 
-from oio import ObjectStorageApi
 from oio.container.lifecycle import ContainerLifecycle, \
     LIFECYCLE_PROPERTY_KEY, TAGGING_KEY, \
     Expiration, Transition, \
@@ -39,7 +38,7 @@ class TestContainerLifecycle(BaseTestCase):
 
     def setUp(self):
         super(TestContainerLifecycle, self).setUp()
-        self.api = ObjectStorageApi(self.ns)
+        self.api = self.storage
         self.account = "test_lifecycle"
         self.container = "lifecycle-" + random_str(4)
         self.lifecycle = ContainerLifecycle(
