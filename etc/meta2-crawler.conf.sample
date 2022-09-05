@@ -46,7 +46,7 @@ sharding_partition = 50,50
 preclean_new_shards = True
 # Maximum amount of time the sharding process is allowed
 # to pre-clean shard copie
-sharding_preclean_timeout = 60
+sharding_preclean_timeout = 120
 # Maximum amount of time the sharding process is allowed to create new shard
 sharding_create_shard_timeout = 60
 # Maximum amount of time the sharding process is allowed to save writes
