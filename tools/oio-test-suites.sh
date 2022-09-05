@@ -45,17 +45,18 @@ function trap_exit {
 	echo "--------------------"
 	set +e
 	#pip list
+	touch everything.log
 	BEANSTALK=$(oio-test-config.py -t beanstalkd)
 	if [ -n "${BEANSTALK}" ]; then
 		# some tests stop all services, we must start beanstalk to dump events
 		$SYSTEMCTL start oio-beanstalkd.target
-		oio-dump-buried-events.py ${BEANSTALK}
+		oio-dump-buried-events.py ${BEANSTALK} >> everything.log
 	fi
-	lsof -i -P -n | grep LISTEN
-	$OPENIOCTL status2
-	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-page -l
+	lsof -i -P -n | grep LISTEN >> everything.log
+	$OPENIOCTL status2 >> everything.log
+	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-page -l >> everything.log
 	#dump_syslog
-	${SRCDIR}/tools/oio-gdb.py
+	${SRCDIR}/tools/oio-gdb.py >> everything.log
 }
 
 trap trap_exit EXIT

@@ -55,6 +55,12 @@ jobs:
           - ./tools/oio-travis-suites.sh
           - ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
 
+      - name: Save failure logs
+        always_executed: true
+        optional: true
+        script:
+          - '[ -f everything.log ] && worker upload --tag="{{.cds.version}}" everything.log || true'
+
       - name: Save coverage and test information
         script:
           - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
