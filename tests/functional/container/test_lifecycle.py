@@ -1498,6 +1498,130 @@ class TestContainerLifecycle(BaseClassLifeCycle):
             version=obj_meta3["version"],
         )
 
+    def test_order_rules_conf1(self):
+        """
+        Rules with expiration and transition: expiration rules are first
+        and transition rules are ordered by policy.
+        """
+        self.api.container_create(
+            self.account,
+            self.container,
+            properties={
+                LIFECYCLE_PROPERTY_KEY: """
+            <LifecycleConfiguration>
+                <Rule>
+                    <ID>rule-1></ID>
+                    <Filter>
+                    </Filter>
+                    <Expiration>
+                        <Days>1</Days>
+                    </Expiration>
+                    <Status>enabled</Status>
+                </Rule>
+                <Rule>
+                    <ID>rule-2></ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>
+                    </Filter>
+                    <Transition>
+                        <Days>1</Days>
+                        <StorageClass>ARCHIVE</StorageClass>
+                    </Transition>
+                    <Expiration>
+                        <Days>10</Days>
+                    </Expiration>
+                    <Status>Enabled</Status>
+                </Rule>
+                <Rule>
+                    <ID>rule-3></ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>
+                    </Filter>
+                    <Transition>
+                        <Days>90</Days>
+                        <StorageClass>STANDARD_IA</StorageClass>
+                    </Transition>
+                    <Transition>
+                        <Days>180</Days>
+                        <StorageClass>ARCHIVE</StorageClass>
+                    </Transition>
+                    <Status>Enabled</Status>
+                </Rule>
+            </LifecycleConfiguration>
+            """
+            },
+        )
+        self.lifecycle.load()
+
+        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
+        actions_order = list()
+        for k, v in sorted_current_rules.items():
+            action = v[1]
+            actions_order.append(str(action))
+        self.assertEqual(
+            actions_order,
+            [
+                "<Expiration><Days>1</Days></Expiration>",
+                "<Transition><StorageClass>ARCHIVE</StorageClass>"
+                "<Days>1</Days></Transition>",
+                "<Expiration><Days>10</Days></Expiration>",
+                "<Transition><StorageClass>STANDARD_IA</StorageClass>"
+                "<Days>90</Days></Transition>",
+                "<Transition><StorageClass>ARCHIVE</StorageClass><Days>180"
+                "</Days></Transition>",
+            ],
+        )
+
+    def test_order_rules_conf2(self):
+        """
+        Predominance of expiration over transition
+        """
+        self.api.container_create(
+            self.account,
+            self.container,
+            properties={
+                LIFECYCLE_PROPERTY_KEY: """
+            <LifecycleConfiguration>
+                <Rule>
+                    <ID>rule-1></ID>
+                    <Filter>
+                    </Filter>
+                    <Transition>
+                        <Days>1</Days>
+                        <StorageClass>ARCHIVE</StorageClass>
+                    </Transition>
+                    <Status>enabled</Status>
+                </Rule>
+                <Rule>
+                    <ID>rule-2></ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>
+                    </Filter>
+                    <Expiration>
+                        <Days>10</Days>
+                    </Expiration>
+                    <Status>Enabled</Status>
+                </Rule>
+            </LifecycleConfiguration>
+            """
+            },
+        )
+        self.lifecycle.load()
+
+        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
+        actions_order = list()
+        for k, v in sorted_current_rules.items():
+            action = v[1]
+            actions_order.append(str(action))
+        self.assertEqual(
+            actions_order,
+            [
+                "<Transition><StorageClass>ARCHIVE</StorageClass>"
+                "<Days>1</Days></Transition>",
+                "<Expiration><Days>10</Days></Expiration>",
+            ],
+        )
+
 
 class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
     CONTAINERS = set()

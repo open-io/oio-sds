@@ -208,6 +208,88 @@ class ContainerLifecycle(object):
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
 
+    def order_rules(self, versioned=False):
+        """
+        Rules Ordering
+        """
+        current_rules = dict()
+        non_current_rules = dict()
+        delete_marker_rules = dict()
+
+        id_current = 0
+        id_non_current = 0
+        id_delete_marker = 0
+        for rule in self.rules:
+            for act in rule.actions:
+                if isinstance(act, NoncurrentVersionExpiration) or isinstance(
+                    act, NoncurrentVersionTransition
+                ):
+                    non_current_rules[id_non_current] = (rule, act)
+                    id_non_current = id_non_current + 1
+                elif isinstance(act, Expiration) or isinstance(act, Transition):
+                    if type(act.filter) is DeletedMarkerActionFilter:
+                        delete_marker_rules[id_delete_marker] = (rule, act)
+                        id_delete_marker = id_delete_marker + 1
+                    else:
+                        current_rules[id_current] = (rule, act)
+                        id_current = id_current + 1
+                else:  # TODO(AbortIncompleteMultipartUpload)
+                    raise ValueError("Unsupported action %s for rule %s", act, rule)
+
+        def order_current_action(act, versioned):
+            if versioned:
+                if isinstance(act, Expiration):
+                    return 1
+                elif isinstance(act, Transition):
+                    return 0
+            else:
+                if isinstance(act, Expiration):
+                    return 0
+                elif isinstance(act, Transition):
+                    return 1
+            return 0
+
+        def order_noncurrent_action(act):
+            if isinstance(act, NoncurrentVersionExpiration):
+                return 0
+            elif isinstance(act, NoncurrentVersionTransition):
+                return 1
+            return 0
+
+        sorted_current_rules = dict(
+            sorted(
+                current_rules.items(),
+                key=lambda item: (
+                    (
+                        item[1][1].filter.days
+                        if (type(item[1][1].filter) is DaysActionFilter)
+                        else item[1][1].filter.date
+                    ),
+                    order_current_action(item[1][1], versioned),
+                ),
+                reverse=False,
+            )
+        )
+
+        sorted_noncurrent_rules = dict(
+            sorted(
+                non_current_rules.items(),
+                key=lambda item: (
+                    item[1][1].filter.days,
+                    order_noncurrent_action(item[1][1]),
+                ),
+                reverse=False,
+            )
+        )
+
+        # Concat with priority to expiration rules
+        ordered_rules = [
+            sorted_current_rules,
+            sorted_noncurrent_rules,
+            delete_marker_rules,
+        ]
+        return ordered_rules
+
     def process_container(self, container, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
@@ -1165,7 +1247,8 @@ class LifecycleAction(LifecycleActionFilter):
         raise NotImplementedError
 
 
-# TODO: implement AbortIncompleteMultipartUpload
+# TODO(AbortIncompleteMultipartUpload):
+# implement AbortIncompleteMultipartUpload
 
 
 class Expiration(LifecycleAction):
@@ -1248,9 +1331,29 @@ class Transition(LifecycleAction):
 
     STORAGE_POLICY_XML_TAG = "StorageClass"
 
+    # TODO(policy order) adapt to supported policies: ordered from lowest
+    # to highest
+    POLICY_ORDER = (
+        "GLACIER",
+        "ARCHIVE",
+        "INTELLIGENT_TIERING",
+        "STANDARD_IA",
+        "STANDARD",
+    )
+
     def __init__(self, filter_, policy, **kwargs):
         super(Transition, self).__init__(filter_, **kwargs)
         self.policy = policy
+
+    def __gt__(self, other):
+        return Transition.POLICY_ORDER.index(
+            self.policy
+        ) > Transition.POLICY_ORDER.index(other.policy)
+
+    def __lt__(self, other):
+        return Transition.POLICY_ORDER.index(
+            self.policy
+        ) < Transition.POLICY_ORDER.index(other.policy)
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
