@@ -505,6 +505,50 @@ class TestSharding(BaseTestCase):
             for j, shard in enumerate(shards):
                 self.assertDictEqual(shard, expected_shards[i][j])
 
+    def test_threshold_on_shard(self):
+        nb_obj_to_add = 10
+        self._create(self.cname)
+        self._add_objects(self.cname, nb_obj_to_add)
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content'},
+                       {'index': 1, 'lower': 'content', 'upper': ''}]
+        new_shards = self.container_sharding.format_shards(
+            test_shards, are_new=True)
+        print(self.container_sharding.preclean_new_shards)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        shard_meta = self.storage.container_get_properties(
+            None, None, cid=shards[1]['cid'])
+        shard_account = shard_meta['system']['sys.account']
+        shard_container = shard_meta['system']['sys.user.name']
+
+        expected_shards = [
+            [{'index': 0, 'lower': 'content', 'upper': 'content_4',
+                'metadata': {}, 'count': 5},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
+                'count': 5}],
+            [{'index': 0, 'lower': 'content', 'upper': 'content_4',
+                'metadata': {}, 'count': 5},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
+                'count': 5}],
+            [{'index': 0, 'lower': 'content', 'upper': '', 'metadata': {},
+                'count': 10}]
+        ]
+
+        thresholds = {nb_obj_to_add - 1, nb_obj_to_add, nb_obj_to_add + 1}
+        for i, threshold in enumerate(thresholds):
+            shards = self.container_sharding.find_shards(
+                shard_account,
+                shard_container,
+                strategy='shard-with-partition',
+                strategy_params={"threshold": threshold})
+
+            for j, shard in enumerate(shards):
+                self.assertDictEqual(shard, expected_shards[i][j])
+
     # partitions are applied with partition strategy
     def test_partition(self):
         nb_obj_to_add = 10

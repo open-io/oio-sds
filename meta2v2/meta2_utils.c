@@ -4012,7 +4012,7 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 	gint64 obj_count = m2db_get_obj_count(sq3);
 	if (obj_count < threshold) {
 		// Do nothing
-		upper = max_upper;
+		upper = g_strdup(max_upper);
 		struct bean_SHARD_RANGE_s *shard_range = _bean_create(
 				&descr_struct_SHARD_RANGE);
 		SHARD_RANGE_set2_lower(shard_range, lower);
@@ -4023,6 +4023,10 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 		SHARD_RANGE_set_metadata(shard_range, metadata);
 		g_string_free(metadata, TRUE);
 		g_ptr_array_add(shard_ranges, shard_range);
+		// The function expects the lower to be the value of the last upper
+		g_free(lower);
+		lower = upper;
+		upper = NULL;
 		goto end;
 	}
 
