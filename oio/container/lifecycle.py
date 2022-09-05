@@ -201,6 +201,34 @@ class ContainerLifecycle(object):
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
 
+    def order_rules(self):
+        """
+        Rules Ordering:
+        1 Predominance of delete over transition,
+        2 TODO Predominance of transition over creation of delete marker
+        3 For rules of same type transiton: order by policy
+        """
+        transition_rules = dict()
+        expiration_rules = dict()
+        id = 0
+        for rule in self.rules:
+            for act in rule.actions:
+                if isinstance(act, Expiration):
+                    expiration_rules[id] = (rule, act, None)
+                elif isinstance(act, Transition):
+                    transition_rules[id] = (rule, act, act.policy)
+                id = id + 1
+
+        # No need to order expiration list
+        # The first that match will apply and remove entry
+        # Order Transition list by policy
+        sorted_transition_rules = dict(sorted(transition_rules.items(),
+                                              key=lambda item: item[1][1]))
+
+        # Concat with priority to expiration rules
+        ordered_rules = {**expiration_rules, **sorted_transition_rules}
+        return ordered_rules
+
     def process_container(self, container, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
@@ -869,7 +897,8 @@ class LifecycleAction(LifecycleActionFilter):
         raise NotImplementedError
 
 
-# TODO: implement AbortIncompleteMultipartUpload
+# TODO(AbortIncompleteMultipartUpload):
+# implement AbortIncompleteMultipartUpload
 
 
 class Expiration(LifecycleAction):
@@ -929,9 +958,22 @@ class Transition(LifecycleAction):
 
     STORAGE_POLICY_XML_TAG = 'StorageClass'
 
+    # TODO(policy order) adapt to supported policies: ordered from lowest
+    # to highest
+    POLICY_ORDER = ('GLACIER', 'ARCHIVE', 'INTELLIGENT_TIERING',
+                    'STANDARD_IA', 'STANDARD')
+
     def __init__(self, filter_, policy, **kwargs):
         super(Transition, self).__init__(filter_, **kwargs)
         self.policy = policy
+
+    def __gt__(self, other):
+        return Transition.POLICY_ORDER.index(self.policy) > \
+            Transition.POLICY_ORDER.index(other.policy)
+
+    def __lt__(self, other):
+        return Transition.POLICY_ORDER.index(self.policy) < \
+            Transition.POLICY_ORDER.index(other.policy)
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
