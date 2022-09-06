@@ -396,6 +396,10 @@ class CommonTestCase(testtools.TestCase):
                 resp = self.request('POST', url,
                                     params={'id': t['addr']},
                                     headers=self.TEST_HEADERS)
+                if resp.status != 204:
+                    self.logger.warning(
+                        "Failed to flush caches of %s: (%d) %s",
+                        t['addr'], resp.status, resp.data)
                 self.assertEqual(resp.status, 204)
 
     @classmethod
@@ -412,6 +416,10 @@ class CommonTestCase(testtools.TestCase):
                 resp = self.request('POST', url,
                                     params={'id': t['addr']},
                                     headers=self.TEST_HEADERS)
+                if resp.status != 204:
+                    self.logger.warning(
+                        "Failed to reload LB of %s: (%d) %s",
+                        t['addr'], resp.status, resp.data)
                 self.assertEqual(resp.status, 204)
 
     def _reload(self):
