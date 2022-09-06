@@ -18,6 +18,8 @@
 import random
 import time
 
+from subprocess import CalledProcessError
+
 from oio import ObjectStorageApi
 from oio.common.autocontainer import HashedContainerBuilder
 from oio.common.utils import cid_from_name
@@ -30,11 +32,12 @@ class ItemCheckTest(CliTestCase):
     """Functional tests for item to check."""
 
     FLAT_BITS = 5
+    OBJECTS_CREATED = []
 
     @classmethod
     def setUpClass(cls):
         super(ItemCheckTest, cls).setUpClass()
-        cls.check_opts = cls.get_opts(['Type', 'Item', 'Status'])
+        cls.check_opts = cls.get_format_opts(fields=('Type', 'Item', 'Status'))
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
         cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
         # Prevent the chunks' rebuilds or moves by the crawlers
@@ -43,6 +46,18 @@ class ItemCheckTest(CliTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        conts = set()
+        for acct, cont, obj, vers in cls.OBJECTS_CREATED:
+            try:
+                cls.api.object_delete(acct, cont, obj, version=vers)
+                conts.add((acct, cont))
+            except Exception as exc:
+                print(f'Failed to delete {acct}/{cont}/{obj}: {exc}')
+        for acct, cont in conts:
+            try:
+                cls.api.container_delete(acct, cont)
+            except Exception as exc:
+                print(f'Failed to delete {acct}/{cont}: {exc}')
         cls._service('oio-rawx-crawler-1.service', 'start')
         cls._service('oio-rdir-crawler-1.service', 'start', wait=1)
         super(ItemCheckTest, cls).tearDownClass()
@@ -57,7 +72,10 @@ class ItemCheckTest(CliTestCase):
 
         self.beanstalkd0.drain_tube('oio-preserved')
 
-    def _wait_events(self, account, container, obj_name):
+    def _wait_for_events(self, account, container, obj_name):
+        self.wait_for_event(
+            'oio-preserved',
+            types=(EventTypes.CHUNK_NEW, ))
         self.wait_for_event(
             'oio-preserved',
             fields={'account': account, 'user': container, 'path': obj_name},
@@ -68,20 +86,20 @@ class ItemCheckTest(CliTestCase):
             types=(EventTypes.CONTAINER_STATE, ))
 
     def create_object(self, account, container, obj_name):
-        self.api.object_create(
+        obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data='test_item_check')
-        obj_meta, obj_chunks = self.api.object_locate(
-            account, container, obj_name)
-        self._wait_events(account, container, obj_name)
+        self._wait_for_events(account, container, obj_name)
+        self.__class__.OBJECTS_CREATED.append(
+            (account, container, obj_name, obj_meta['version']))
         return obj_meta, obj_chunks
 
     def create_object_auto(self, account, obj_name):
         container = self.autocontainer(obj_name)
-        self.api.object_create(
+        obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data='test_item_check')
-        obj_meta, obj_chunks = self.api.object_locate(
-            account, container, obj_name)
-        self._wait_events(account, container, obj_name)
+        self._wait_for_events(account, container, obj_name)
+        self.__class__.OBJECTS_CREATED.append(
+            (account, container, obj_name, obj_meta['version']))
         return container, obj_meta, obj_chunks
 
     def corrupt_chunk(self, chunk):
@@ -1208,13 +1226,14 @@ class ItemCheckTest(CliTestCase):
         self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_missing_chunk(self):
+        self.maxDiff = 1024
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name)
         cid = cid_from_name(self.account, self.container)
 
         missing_chunk = random.choice(obj_chunks)
 
-        expected_items = list()
+        expected_items = []
         expected_items.append('account account=%s OK' % self.account)
         expected_items.append(
             'container account=%s, container=%s, cid=%s OK'
@@ -1226,21 +1245,26 @@ class ItemCheckTest(CliTestCase):
                obj_meta['id'], obj_meta['version']))
         expected_items.append('chunk chunk=%s error' % missing_chunk['url'])
 
-        # Prevent the events
+        # Stop treating the events
         self._service('oio-event.target', 'stop', wait=8)
+        # Verify the event-agent is actually stopped
+        self.assertRaises(
+            CalledProcessError,
+            self._service, 'oio-event.target', 'status', wait=0)
 
         try:
-            # Delete chunk
+            # Delete the selected chunk
             self.api.blob_client.chunk_delete(missing_chunk['url'])
 
-            # Check with missing chunk
+            # Verify we know about the chunk, even if we just deleted it:
+            # it is still registered in rdir (we blocked the deletion event).
             output = self.openio_admin(
                 'chunk check %s %s'
                 % (missing_chunk['url'], self.check_opts),
                 expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('oio-event.target', 'start', wait=5)
+            self._service('oio-event.target', 'start', wait=2)
 
     def test_chunk_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1274,7 +1298,7 @@ class ItemCheckTest(CliTestCase):
                 % (chunk['url'], self.check_opts), expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('oio-event.target', 'start', wait=5)
+            self._service('oio-event.target', 'start', wait=2)
 
     def test_chunk_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
