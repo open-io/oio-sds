@@ -71,6 +71,20 @@ class TestContentRebuildFilter(BaseTestCase):
                       timeout=0.5)
         bt.close()
         self.wait_for_score(('rawx', 'meta2'), score_threshold=10, timeout=5.0)
+        self.objects_created = list()
+
+    def tearDown(self):
+        for obj in self.objects_created:
+            try:
+                self.storage.object_delete(self.account, self.container, obj)
+            except Exception as exc:
+                print('Failed to delete '
+                      f'{self.account}/{self.container}/{obj}: {exc}')
+        try:
+            self.storage.container_delete(self.account, self.container)
+        except Exception as exc:
+            print(f'Failed to delete {self.account}/{self.container}: {exc}')
+        super().tearDown()
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
                       content_id):
@@ -153,6 +167,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               data="test",
                                               policy="THREECOPIES",
                                               obj_name=content_name)
+        self.objects_created.append(content_name)
 
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
@@ -173,6 +188,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -195,6 +211,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -216,6 +233,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -238,6 +256,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="SINGLE",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -259,6 +278,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="THREECOPIES",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -282,6 +302,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               data=data,
                                               policy="THREECOPIES",
                                               obj_name=content_name)
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -309,6 +330,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               policy="EC",
                                               obj_name=content_name
                                               )
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -332,6 +354,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -356,6 +379,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
@@ -381,6 +405,7 @@ class TestContentRebuildFilter(BaseTestCase):
                                               data="test",
                                               policy="EC",
                                               obj_name=content_name)
+        self.objects_created.append(content_name)
         meta, chunks = self.object_storage_api.object_locate(
             container=self.container, obj=content_name,
             account=self.account)
