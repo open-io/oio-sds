@@ -33,5 +33,6 @@ fold SDK ./tools/oio-build-sdk.sh ${PWD}
 fold Release ./tools/oio-build-release.sh ${PWD}
 fold Warnings ./tools/oio-build-with-warnings.sh ${PWD}
 fold Copyright ./tools/oio-check-copyright.sh
+fold Versions ./tools/oio-check-version.sh ${PWD}
 fold Virtualenv pip install -e .
 fold Variables tox -e variables

@@ -28,13 +28,22 @@ jobs:
           #!/bin/bash
           . $HOME/oiovenv/bin/activate
           export TEST_COUNT=0
+          export TEST_FUNC=0
+          export TEST_UNIT=0
           shopt -s nullglob
           for TEST_RESULT in nosetests-*.xml
           do
-            ((TEST_COUNT+=$(xq -r "/testsuite/@tests" $TEST_RESULT)))
+            count=$(xq -r "/testsuite/@tests" $TEST_RESULT)
+            if [[ "$TEST_RESULT" =~ .+unit.* ]]
+            then
+              ((TEST_UNIT+=$count))
+            else
+              ((TEST_FUNC+=$count))
+            fi
+            ((TEST_COUNT+=$count))
           done
           shopt -u nullglob
-          echo "{\"tests\": {\"Python\": {\"total\": $TEST_COUNT}}}" > test-report-py.json
+          echo "{\"tests\": {\"Python\": {\"functional\": $TEST_FUNC, \"total\": $TEST_COUNT, \"unit\": $TEST_UNIT}}}" > test-report-py.json
 
       - name: Download code coverage artifacts
         artifactDownload:
@@ -67,17 +76,16 @@ jobs:
       - name: Create code coverage directory
         script:
           - cd {{.cds.workspace}}
-          - jq -s '.[0] * .[1] * .[2]' coverage-report-py.json coverage-report-c.json test-report-py.json > coverage-summary.json
-          - worker upload --tag='{{.cds.version}}' coverage-summary.json
           - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_total)"' coverage-report-py.json >coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_percent)"' coverage-report-py.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_total)"' coverage-report-c.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_percent)"' coverage-report-c.json >>coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_tests_total{language=\"python\",repository=\"oio-sds\"} \(.tests.Python.total)"' test-report-py.json >>coverage-summary.openmetrics
+          - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"functional\"} \(.tests.Python.functional)"' test-report-py.json >>coverage-summary.openmetrics
+          - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"unit\"} \(.tests.Python.unit)"' test-report-py.json >>coverage-summary.openmetrics
           - worker upload --tag='{{.cds.version}}' coverage-summary.openmetrics
           - mkdir coverage
-          - mv coverage-report-c coverage-report-py coverage-summary.json coverage-summary.openmetrics coverage/
-          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.json">Coverage summary by language</a><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
+          - mv coverage-report-c coverage-report-py coverage-summary.openmetrics coverage/
+          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
 
       - name: Publish code coverage reports on S3 public cloud
         script: |+
@@ -106,11 +114,9 @@ jobs:
           # There may be a more elegant way in bash to filter out the name of
           # development branches, but this weird method also applies to the
           # OVH_Serve_Static_Files step (where we cannot use bash).
-          aws --profile kpi s3 cp coverage/coverage-summary.json s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.json
           aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.openmetrics
           # If we re-run an old build, this will overwrite the report of the
           # actual latest merged code. This will not happen often.
-          [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.json s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.json || true
           [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.openmetrics || true
 
       - name: Publish code coverage reports on Artifactory

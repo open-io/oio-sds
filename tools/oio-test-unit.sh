@@ -30,3 +30,4 @@ make -C tests/unit test
 cd $SRCDIR
 tox -e pep8
 tox -e py3
+tox -e unit

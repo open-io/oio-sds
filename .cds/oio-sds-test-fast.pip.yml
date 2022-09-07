@@ -44,6 +44,7 @@ jobs:
           dpkg -i foundationdb-clients_${FDB_VERSION}-1_amd64.deb foundationdb-server_${FDB_VERSION}-1_amd64.deb
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
+          rm -f foundationdb*.deb
 
       - name: Run fast tests
         script:
@@ -51,12 +52,24 @@ jobs:
           - pgrep rsyslogd || rsyslogd &
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-failfast.sh
+          - coverage combine .coverage.*-vm*
+          - mv .coverage .coverage.build
+          - rm -f .coverage.*-vm*
 
       - name: Run unit tests
         script:
           - . $HOME/oio-env.sh
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-unit.sh
+          - coverage combine .coverage.*-vm*
+          - mv .coverage .coverage.unit
+          - rm -f .coverage.*-vm*
+
+      - name: Save coverage and test information
+        script:
+          - . $HOME/oiovenv/bin/activate
+          - 'worker upload --tag="{{.cds.version}}" {{.cds.workspace}}/.coverage.build {{.cds.workspace}}/.coverage.unit'
+          - '[ ! -f nosetests-*.xml ] || worker upload --tag="{{.cds.version}}" nosetests-*.xml'
 
     requirements:
       - model: Ubuntu-20.04-VM-b2-07

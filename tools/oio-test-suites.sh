@@ -245,7 +245,6 @@ func_tests () {
 
 	# Run the whole suite of functional tests (Python)
 	cd "$SRCDIR"
-	tox -e coverage
 	tox -e func
 
 	# Run the whole suite of functional tests (C)
@@ -289,7 +288,6 @@ test_meta2_filters () {
 	$OIO_RESET -N $OIO_NS $@
 
 	cd $SRCDIR
-	tox -e coverage
 	${PYTHON} $(command -v nosetests) tests.functional.m2_filters.test_filters
 
 	$SYSTEMCTL stop oio-cluster.target
