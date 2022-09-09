@@ -847,6 +847,17 @@ _srv_addr(struct service_info_s *si)
 	return g_strdup(addr);
 }
 
+static gchar*
+_srv_serviceid(struct service_info_s *si)
+{
+	gchar service_id[LIMIT_LENGTH_SRVID] = "";
+	struct service_tag_s *tag = service_info_get_tag (si->tags, "tag.service_id");
+	if (!tag || !service_tag_get_value_string (tag, service_id, sizeof(service_id), NULL))
+		return NULL;
+
+	return g_strdup(service_id);
+}
+
 static gboolean
 _srv_is_down(struct service_info_s *si)
 {
@@ -881,8 +892,11 @@ gridd_client_update_down_hosts(down_hosts_t *pdown, GSList *srv)
 			value = (void *)0xDEADBEAF;
 			nb_down++;
 		}
-		gchar* addr = _srv_addr(srv->data);
-		g_tree_replace(*pdown, addr, value);
+		gchar* key = _srv_serviceid(srv->data);
+		if (!key)
+			key = _srv_addr(srv->data);
+
+		g_tree_replace(*pdown, key, value);
 	}
 	return nb_down;
 }
