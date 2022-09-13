@@ -1257,7 +1257,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
 
-	err = m2b_open(m2, url, M2V2_OPEN_LOCAL, &sq3);
+	err = m2b_open(m2, url, M2V2_OPEN_LOCAL|M2V2_OPEN_URGENT, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 

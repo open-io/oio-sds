@@ -1659,8 +1659,9 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
+	const enum sqlx_open_type_e how = ((flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY)
+		| SQLX_OPEN_URGENT;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
 	if (err) {
 		reply->send_error(0, err);
