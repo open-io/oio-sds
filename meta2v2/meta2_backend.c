@@ -2718,7 +2718,7 @@ meta2_backend_find_shards_with_partition(struct meta2_backend_s *m2b,
 	}
 
 	struct m2_open_args_s open_args = {
-			_mode_readonly(M2V2_FLAG_MASTER),
+			_mode_readonly(M2V2_FLAG_MASTER)|M2V2_OPEN_URGENT,
 			NULL
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
@@ -2794,7 +2794,7 @@ meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
 	}
 
 	struct m2_open_args_s open_args = {
-			_mode_readonly(M2V2_FLAG_MASTER),
+			_mode_readonly(M2V2_FLAG_MASTER)|M2V2_OPEN_URGENT,
 			NULL
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
