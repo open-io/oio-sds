@@ -68,6 +68,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_peers);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_spare);
 M2V2_DECLARE_FILTER(meta2_filter_extract_body_beans);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_localflag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_urgentflag);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_flags32);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);

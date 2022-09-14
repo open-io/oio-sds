@@ -3086,6 +3086,7 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 	gboolean truncated = FALSE;
 	GSList *beans = NULL;
 	gboolean local = _request_get_flag(args, "local");
+	gboolean urgent = _request_get_flag(args, "urgent");
 
 	err = _load_simplified_shard_ranges(j, &beans);
 	if (!err) {
@@ -3098,7 +3099,7 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 			}
 			PACKER_VOID(_pack) {
 				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans,
-						local, DL());
+						local, urgent, DL());
 			};
 			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 					m2v2_boolean_truncated_extract);

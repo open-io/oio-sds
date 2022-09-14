@@ -664,6 +664,7 @@ static gridd_filter M2V2_CLEAN_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_header_urgentflag,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,

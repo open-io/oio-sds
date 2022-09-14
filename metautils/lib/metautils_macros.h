@@ -108,6 +108,7 @@ License along with this library.
 #define NAME_MSGKEY_TRUNCATED          "TRUNC"
 #define NAME_MSGKEY_TYPENAME           "T"
 #define NAME_MSGKEY_UPDATE             "UPDATE"
+#define NAME_MSGKEY_URGENT             "URGENT"
 #define NAME_MSGKEY_USER               "USR"
 #define NAME_MSGKEY_VERPOLICY          "VP"
 #define NAME_MSGKEY_VERSION            "VER"

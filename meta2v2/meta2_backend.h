@@ -270,7 +270,7 @@ GError* meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 
 /** Clean up new shard (and the root container). */
 GError* meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean *truncated);
+		struct oio_url_s *url, gboolean urgent, gboolean *truncated);
 
 /** Clean up local copies
  * Each table of each copie is cleaned in single step */

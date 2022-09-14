@@ -852,7 +852,9 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 		beans = meta2_filter_ctx_get_input_udata(ctx);
 		err = meta2_backend_clean_once_sharding(m2b, url, beans, &truncated);
 	} else {
-		err = meta2_backend_clean_sharding(m2b, url, &truncated);
+		gboolean urgent = meta2_filter_ctx_get_param(
+				ctx, NAME_MSGKEY_URGENT) != NULL;
+		err = meta2_backend_clean_sharding(m2b, url, urgent, &truncated);
 	}
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);

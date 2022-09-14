@@ -3600,7 +3600,7 @@ end:
 
 GError*
 meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean *truncated)
+		struct oio_url_s *url, gboolean urgent, gboolean *truncated)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -3610,7 +3610,8 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_repctx_s *repctx = NULL;
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
+			|(urgent ? M2V2_OPEN_URGENT : 0),
 			NULL
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);

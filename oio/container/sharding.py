@@ -846,6 +846,8 @@ class ContainerSharding(ProxyClient):
         else:
             cid = shard['cid']
             params = self._make_params(cid=cid, **kwargs)
+            # The first request must take priority to be sure to start cleaning
+            params['urgent'] = 1
         truncated = True
         while truncated:
             for i in range(attempts):
@@ -863,6 +865,8 @@ class ContainerSharding(ProxyClient):
                     self.logger.warning(
                         'Failed to clean the container (CID=%s), '
                         'retrying...: %s', shard['cid'], exc)
+            # The following requests should not disturb the client requests
+            params.pop('urgent', None)
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
         success = True
         if not no_vacuum:
