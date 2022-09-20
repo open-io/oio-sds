@@ -515,3 +515,18 @@ class ContainerTest(CliTestCase):
 
     def test_container_set_properties_with_cid(self):
         self._test_container_set_properties(with_cid=True)
+
+    def test_drain_tube(self):
+        tube = 'oio-test-drain'
+        self.beanstalkd0.use(tube)
+        tubes = self.beanstalkd0.tubes()
+        self.assertIn(tube, tubes)
+        self.beanstalkd0.put('job1')
+        self.beanstalkd0.put('job2')
+        stats = self.beanstalkd0.stats_tube(tube)
+        self.assertEqual(stats['current-jobs-ready'], 2)
+        drain = self.openio('events drain --tube ' + tube +
+                            ' --non-interactive')
+        stats = self.beanstalkd0.stats_tube(tube)
+        self.assertEqual(stats['current-jobs-ready'], 0)
+        self.assertIn('Drained', drain)

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -536,13 +536,16 @@ class Beanstalk(object):
         self.execute_command('delete', job_id)
 
     def _drain(self, fetch_func):
+        count = 0
         try:
             job_id = True
             while job_id is not None:
                 job_id, _ = fetch_func()
                 self.delete(job_id)
+                count += 1
         except ResponseError:
             pass
+        return count
 
     def drain_buried(self, tube):
         self.use(tube)

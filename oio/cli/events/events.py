@@ -76,3 +76,43 @@ class ListTubes(Lister):
     def take_action(self, parsed_args):
         tubes = self.app.client_manager.event.list_tubes()
         return [("Tubes",), ((x, ) for x in tubes)]
+
+
+class DrainTube(ShowOne):
+    """
+    Drain all events in a tube without processing them.
+    """
+
+    log = getLogger(__name__ + '.EventsDrain')
+
+    def get_parser(self, prog_name):
+        parser = super(DrainTube, self).get_parser(prog_name)
+        parser.add_argument(
+            '--non-interactive',
+            dest='interactive',
+            default=True,
+            action='store_false',
+            help='Bypass asking confirmation')
+        parser.add_argument(
+            '--tube',
+            default=None,
+            help='Name of the tube to interact with')
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        tube = parsed_args.tube
+        interactive = parsed_args.interactive
+        if interactive:
+            input_text = input(
+                'Note that this command will delete all jobs from tube'
+                '.\nAre you sure you want to continue? '
+                '[No/yes] ')
+            if input_text.lower() != 'yes':
+                return [("Aborted",), (tube,)]
+
+        tubes = self.app.client_manager.event.list_tubes()
+        if tube not in tubes:
+            raise ValueError('Invalid tube')
+        count = self.app.client_manager.event.beanstalk.drain_tube(tube)
+        return [("Drained",), (count,)]
