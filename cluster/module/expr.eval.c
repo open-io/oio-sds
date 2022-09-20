@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -179,8 +180,20 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					if (!acc)
 						return EXPR_EVAL_UNDEF;
 					ppS = acc(pUnary->expr.acc.field);
-					if (!ppS)
+					if (!ppS){
+						VARIABLE_PERIOD_DECLARE();
+						if (VARIABLE_PERIOD_SKIP(60)) {
+							GRID_DEBUG("%s.%s is missing",
+									pUnary->expr.acc.base,
+									pUnary->expr.acc.field);
+						} else {
+							/* once per minute */
+							GRID_WARN("%s.%s is missing",
+									pUnary->expr.acc.base,
+									pUnary->expr.acc.field);
+						}
 						return EXPR_EVAL_UNDEF;
+					}
 					*pD = strtod(ppS, &pEnd);
 					if (pEnd == ppS)
 						return EXPR_EVAL_UNDEF;
