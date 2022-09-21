@@ -2412,12 +2412,18 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2db_check_content(sorted, nsinfo, &checked_content, is_update);
 	if (send_event) {
 		if (err && err->code == CODE_CONTENT_UNCOMPLETE) {
+			/* Ensure there is a version in the URL used to create the
+			 * event. We cannot patch the input URL because m2db_put_alias
+			 * checks there is NO version in the URL. */
+			struct oio_url_s *url2 = oio_url_dup(url);
+			_patch_url_with_version(url2, sorted->aliases);
 			GString *event = oio_event__create_with_id(
-					"storage.content.broken", url, oio_ext_get_reqid());
+					"storage.content.broken", url2, oio_ext_get_reqid());
 			g_string_append(event, ",\"data\":{");
 			checked_content_append_json_string(checked_content, event);
 			g_string_append(event, "}}");
 			send_event(g_string_free(event, FALSE), NULL);
+			oio_url_clean(url2);
 		}
 		if ((!err || err->code == CODE_CONTENT_UNCOMPLETE)) {
 			GSList *chunk_meta = NULL;
