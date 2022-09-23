@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -185,6 +185,10 @@ const (
 	oioConfigFilePath  = oioEtcDir + "/sds.conf"
 	oioConfigDirPath   = oioEtcDir + "/sds.conf.d"
 	oioConfigLocalPath = ".oio/sds.conf"
+)
+
+const (
+	nonOptimalPlacementFolderName = "non_optimal_placement"
 )
 
 const (

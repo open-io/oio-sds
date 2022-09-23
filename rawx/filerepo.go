@@ -30,18 +30,19 @@ import (
 )
 
 type fileRepository struct {
-	root            string
-	rootFd          int
-	putOpenMode     uint32
-	putMkdirMode    os.FileMode
-	hashWidth       int
-	hashDepth       int
-	syncFile        bool
-	syncDir         bool
-	fallocateFile   bool
-	openNonBlock    bool
-	fadviseUpload   int
-	fadviseDownload int
+	root                          string
+	rootFd                        int
+	putOpenMode                   uint32
+	putMkdirMode                  os.FileMode
+	hashWidth                     int
+	hashDepth                     int
+	syncFile                      bool
+	syncDir                       bool
+	fallocateFile                 bool
+	openNonBlock                  bool
+	fadviseUpload                 int
+	fadviseDownload               int
+	nonOptimalPlacementFolderName string
 }
 
 func (fr *fileRepository) openFlagsRO() int {
@@ -76,6 +77,10 @@ func (fr *fileRepository) init(root string) error {
 	fr.fallocateFile = configDefaultFallocate
 	fr.fadviseUpload = configDefaultFadviseUpload
 	fr.fadviseDownload = configDefaultFadviseDownload
+	fr.nonOptimalPlacementFolderName = fmt.Sprintf("%s/%s", fr.root, nonOptimalPlacementFolderName)
+	if err := os.MkdirAll(fr.nonOptimalPlacementFolderName, fr.putMkdirMode); err != nil {
+		return err
+	}
 	fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|fr.openFlagsRO(), 0)
 	return err
 }
