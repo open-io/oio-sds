@@ -42,7 +42,7 @@ type fileRepository struct {
 	openNonBlock                  bool
 	fadviseUpload                 int
 	fadviseDownload               int
-	nonOptimalPlacementFolderName string
+	nonOptimalPlacementFolderPath string
 }
 
 func (fr *fileRepository) openFlagsRO() int {
@@ -77,8 +77,8 @@ func (fr *fileRepository) init(root string) error {
 	fr.fallocateFile = configDefaultFallocate
 	fr.fadviseUpload = configDefaultFadviseUpload
 	fr.fadviseDownload = configDefaultFadviseDownload
-	fr.nonOptimalPlacementFolderName = fmt.Sprintf("%s/%s", fr.root, nonOptimalPlacementFolderName)
-	if err := os.MkdirAll(fr.nonOptimalPlacementFolderName, fr.putMkdirMode); err != nil {
+	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, nonOptimalPlacementFolderName}, "/")
+	if err = os.MkdirAll(fr.nonOptimalPlacementFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
 	fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|fr.openFlagsRO(), 0)
@@ -184,6 +184,39 @@ func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 
 func (fr *fileRepository) put(name string) (fileWriter, error) {
 	return fr.putRelPath(fr.nameToRelPath(name))
+}
+
+func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
+	LogDebug("chunk %s doesn't have an optimal placement", name)
+
+	// Relative path of the chunk (from the rawx root)
+	relPath := fr.nameToRelPath(name)
+
+	// Construct relative symlink path according to:
+	// <hashDepth + 1> (+1 for nonOptimalPlacementFolder)
+	sb := strings.Builder{}
+	for i := 0; i < fr.hashDepth+1; i++ {
+		sb.WriteString("../")
+	}
+	sb.WriteString(relPath)
+	relOldPath := sb.String()
+
+	// Absolute destination of the chunk
+	absNewPath := strings.Join([]string{fr.nonOptimalPlacementFolderPath, relPath}, "/")
+
+	err := syscall.Symlink(relOldPath, absNewPath)
+	if err != nil {
+		// If Symlink failed because folder does not exist,
+		// create it and execute the function again.
+		if os.IsNotExist(err) {
+			// Lazy dir creation
+			err = os.MkdirAll(filepath.Dir(absNewPath), fr.putMkdirMode)
+			if err == nil {
+				return fr.createSymlinkNonOptimal(name)
+			}
+		}
+	}
+	return err
 }
 
 // Fast path: initial optimistic attempt when everything works fine

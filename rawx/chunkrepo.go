@@ -66,3 +66,7 @@ func (cr *chunkRepository) put(name string) (fileWriter, error) {
 func (cr *chunkRepository) link(fromName, toName string) (linkOperation, error) {
 	return cr.sub.link(fromName, toName)
 }
+
+func (cr *chunkRepository) symlinkNonOptimal(name string) error {
+	return cr.sub.createSymlinkNonOptimal(name)
+}

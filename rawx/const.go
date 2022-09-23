@@ -50,20 +50,21 @@ const (
 )
 
 const (
-	HeaderNameFullpath           = "X-oio-Chunk-Meta-Full-Path"
-	HeaderNameContainerID        = "X-oio-Chunk-Meta-Container-Id"
-	HeaderNameContentPath        = "X-oio-Chunk-Meta-Content-Path"
-	HeaderNameContentVersion     = "X-oio-Chunk-Meta-Content-Version"
-	HeaderNameContentID          = "X-oio-Chunk-Meta-Content-Id"
-	HeaderNameContentStgPol      = "X-oio-Chunk-Meta-Content-Storage-Policy"
-	HeaderNameContentChunkMethod = "X-oio-Chunk-Meta-Content-Chunk-Method"
-	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
-	HeaderNameChunkSize          = "X-oio-Chunk-Meta-Chunk-Size"
-	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
-	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
-	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
-	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
-	HeaderNameXattrVersion       = "X-oio-Chunk-Meta-Oio-Version"
+	HeaderNameFullpath            = "X-oio-Chunk-Meta-Full-Path"
+	HeaderNameContainerID         = "X-oio-Chunk-Meta-Container-Id"
+	HeaderNameContentPath         = "X-oio-Chunk-Meta-Content-Path"
+	HeaderNameContentVersion      = "X-oio-Chunk-Meta-Content-Version"
+	HeaderNameContentID           = "X-oio-Chunk-Meta-Content-Id"
+	HeaderNameContentStgPol       = "X-oio-Chunk-Meta-Content-Storage-Policy"
+	HeaderNameContentChunkMethod  = "X-oio-Chunk-Meta-Content-Chunk-Method"
+	HeaderNameChunkPosition       = "X-oio-Chunk-Meta-Chunk-Pos"
+	HeaderNameChunkSize           = "X-oio-Chunk-Meta-Chunk-Size"
+	HeaderNameChunkChecksum       = "X-oio-Chunk-Meta-Chunk-Hash"
+	HeaderNameMetachunkSize       = "X-oio-Chunk-Meta-Metachunk-Size"
+	HeaderNameMetachunkChecksum   = "X-oio-Chunk-Meta-Metachunk-Hash"
+	HeaderNameNonOptimalPlacement = "X-oio-Chunk-Meta-Non-Optimal-Placement"
+	HeaderNameChunkID             = "X-oio-Chunk-Meta-Chunk-Id"
+	HeaderNameXattrVersion        = "X-oio-Chunk-Meta-Oio-Version"
 )
 
 const (

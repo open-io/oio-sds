@@ -28,10 +28,10 @@ import (
 type optionsMap map[string]string
 
 // An array of all the string that evaluate as TRUE
-var ok = []string{"ok", "yes", "true", "enable", "enabled", "yeah", "on"}
+var ok = []string{"ok", "yes", "true", "enable", "enabled", "yeah", "on", "1"}
 
 // An array of all the string that evaluate as FALSE
-var nok = []string{"ko", "no", "false", "disable", "disabled", "nope", "off", "wot?"}
+var nok = []string{"ko", "no", "false", "disable", "disabled", "nope", "off", "wot?", "0"}
 
 // regex to extract a double quoted string
 var regexString = regexp.MustCompile(`^[^"]*("[^"\\]*(?:\\.[^"\\]*)*")[^"]*$`)

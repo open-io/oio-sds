@@ -48,9 +48,10 @@ type chunkInfo struct {
 	ChunkSize          string `json:"chunk_size,omitempty"`
 	OioVersion         string `json:"oio_version,omitempty"`
 
-	compression string
-	mtime       time.Time
-	size        int64
+	compression         string
+	mtime               time.Time
+	size                int64
+	nonOptimalPlacement bool // default to false
 }
 
 func cidFromName(account, container string) string {
@@ -470,6 +471,9 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
 			return chunk, errInvalidHeader
 		}
+	}
+	if GetBool(headers.Get(HeaderNameNonOptimalPlacement), false) {
+		chunk.nonOptimalPlacement = true
 	}
 
 	chunk.OioVersion = OioVersion

@@ -243,15 +243,21 @@ func (rr *rawxRequest) uploadChunk() {
 		io.Copy(ioutil.Discard, rr.req.Body)
 		rr.replyError("uploadChunk()", err)
 		out.abort()
-	} else {
-		out.commit()
-		//rr.rep.Header().Set("Content-Length", "0")
-		rr.rep.Header().Set("Connection", "keep-alive")
-		rr.req.Close = false
-		rr.chunk.fillHeadersLight(rr.rep.Header())
-		rr.replyCode(http.StatusCreated)
-		rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
+		return
 	}
+
+	out.commit()
+	// If chunk placement is not optimal
+	if rr.chunk.nonOptimalPlacement {
+		// Ignore if link creation failed. This link creation should not be blocking as
+		// a crawler would detect the non optimal placement in a near future.
+		rr.rawx.repo.symlinkNonOptimal(rr.chunkID)
+	}
+	rr.rep.Header().Set("Connection", "keep-alive")
+	rr.req.Close = false
+	rr.chunk.fillHeadersLight(rr.rep.Header())
+	rr.replyCode(http.StatusCreated)
+	rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 }
 
 func (rr *rawxRequest) copyChunk() {
