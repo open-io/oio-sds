@@ -8,3 +8,4 @@ gcovr
 mock>=1.0
 nose
 nose-timer
+testtools
