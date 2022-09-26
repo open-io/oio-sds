@@ -56,11 +56,19 @@ class Meta1Rebuilder(MetaRebuilder):
             listing_key=lambda x: x['listing'],
             item_key=lambda x: x['id'],
             marker_key=lambda x: x['next_marker'],
-            truncated_key=lambda x: x['truncated'])
+            truncated_key=lambda x: x['truncated'],
+            sharding_accounts=True)
         for account in accounts:
-            containers = self._full_container_list(account)
+            containers = depaginate(
+                self.api.account.container_list,
+                listing_key=lambda x: x['listing'],
+                item_key=lambda x: x[0],
+                marker_key=lambda x: x['next_marker'],
+                truncated_key=lambda x: x['truncated'],
+                account=account,
+                region=self.api.account.region)
             for container in containers:
-                cid = cid_from_name(account, container[0])
+                cid = cid_from_name(account, container)
                 prefix = cid[:self.meta1_digits]
                 if prefix not in prefixes:
                     queue.put(prefix.ljust(64, '0'))

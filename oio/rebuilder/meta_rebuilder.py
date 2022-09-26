@@ -45,18 +45,6 @@ class MetaRebuilder(Rebuilder):
                     break
         return True
 
-    def _full_container_list(self, account, **kwargs):
-        listing = self.api.container_list(account, **kwargs)
-        for element in listing:
-            yield element
-
-        while listing:
-            kwargs['marker'] = listing[-1][0]
-            listing = self.api.container_list(account, **kwargs)
-            if listing:
-                for element in listing:
-                    yield element
-
 
 class MetaRebuilderWorker(RebuilderWorker):
 
