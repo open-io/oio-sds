@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2016 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,15 @@ License along with this library.
 #include <glib.h>
 #include <core/url_internals.h>
 
-void oio_url_to_json (GString *out, struct oio_url_s *u);
+/**
+ * Convert an URL to the JSON object
+ *
+ * @param out an output string
+ * @param u the URL
+ * @param root_url replace account, container and CID of the container
+ *                 by the root CID in event (if it is set)
+ */
+void oio_url_to_json(GString *out, struct oio_url_s *u, gboolean root_url);
 
 struct oio_requri_s
 {

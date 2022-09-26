@@ -2401,7 +2401,8 @@ GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList **beans, meta2_send_event_cb send_event, gboolean is_update)
 {
-	GError *err = NULL;
+	GError *err = NULL, *err2 = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct namespace_info_s *nsinfo = NULL;
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
@@ -2412,6 +2413,14 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2db_check_content(sorted, nsinfo, &checked_content, is_update);
 	if (send_event) {
 		if (err && err->code == CODE_CONTENT_UNCOMPLETE) {
+			/* Ensure the root CID is loaded so that the event emitted
+			 * contains the correct CID (not the shard's). */
+			err2 = m2b_open_for_object(m2b, url,
+					M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+			if (err2 != NULL) {
+				goto end;
+			}
+			m2b_close(m2b, sq3, url);
 			/* Ensure there is a version in the URL used to create the
 			 * event. We cannot patch the input URL because m2db_put_alias
 			 * checks there is NO version in the URL. */
@@ -2432,6 +2441,14 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			GSList *flaws = NULL;
 			m2db_check_content_quality(sorted, chunk_meta, &flaws);
 			if (flaws) {
+				/* Ensure the root CID is loaded so that the event emitted
+				 * contains the correct CID (not the shard's). */
+				err2 = m2b_open_for_object(m2b, url,
+						M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+				if (err2 != NULL) {
+					goto end_uncomplete;
+				}
+				m2b_close(m2b, sq3, url);
 				/* Ensure there is a version in the URL used to create the
 				 * event. We cannot patch the input URL because m2db_put_alias
 				 * checks there is NO version in the URL. */
@@ -2449,11 +2466,13 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				}
 				oio_url_clean(url2);
 			}
+end_uncomplete:
 			g_slist_free_full(flaws, g_free);
 			_bean_cleanl2(chunk_meta);
 		}
 	}
 
+end:
 	m2v2_sorted_content_free(sorted);
 	if (checked_content)
 		checked_content_free(checked_content);

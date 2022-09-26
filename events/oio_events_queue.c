@@ -224,14 +224,16 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 void
 oio_event__init (GString *gs, const char *type, struct oio_url_s *url)
 {
-	oio_str_gstring_append_json_pair (gs, "event", type);
-	g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
+	oio_str_gstring_append_json_pair(gs, "event", type);
+	g_string_append_printf(gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 	if (!url)
-		g_string_append_static (gs, ",\"url\":null");
+		g_string_append_static(gs, ",\"url\":null");
 	else {
-		g_string_append_static (gs, ",\"url\":{");
-		oio_url_to_json (gs, url);
-		g_string_append_c (gs, '}');
+		g_string_append_static(gs, ",\"url\":{");
+		/* Since the shard may disappear, all events related to the object
+		 * must use the root container ID */
+		oio_url_to_json(gs, url, g_str_has_prefix(type, "storage.content."));
+		g_string_append_c(gs, '}');
 	}
 }
 

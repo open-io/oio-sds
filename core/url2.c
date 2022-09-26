@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -77,30 +78,41 @@ oio_url_check(const struct oio_url_s *u, const char *namespace,
 }
 
 void
-oio_url_to_json (GString *out, struct oio_url_s *u)
+oio_url_to_json(GString *out, struct oio_url_s *u, gboolean root_url)
 {
 	gsize len = out->len;
+	gsize starting_len = len;
 
-	oio_str_gstring_append_json_pair (out, "ns", u->ns[0] ? u->ns : NULL);
+	oio_str_gstring_append_json_pair(out, "ns", u->ns[0] ? u->ns : NULL);
+	if (root_url && oio_str_is_set(u->root_hexid)) {
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "id", u->root_hexid);
+		g_string_append_static(out, ",\"shard\":{");
+		len = out->len;
+	}
 	if (oio_str_is_set(u->account)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "account", u->account);
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "account", u->account);
 	}
 	if (oio_str_is_set(u->user)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "user", u->user);
-	}
-	if (oio_str_is_set(u->path)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "path", u->path);
-	}
-	if (oio_str_is_set(u->content)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "content", u->content);
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "user", u->user);
 	}
 	if (oio_url_get_id(u)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "id", u->hexid);
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "id", u->hexid);
+	}
+	if (root_url && oio_str_is_set(u->root_hexid)) {
+		g_string_append_static(out, "}");
+		len = starting_len;
+	}
+	if (oio_str_is_set(u->path)) {
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "path", u->path);
+	}
+	if (oio_str_is_set(u->content)) {
+		if (len != out->len) g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "content", u->content);
 	}
 	if (oio_str_is_set(u->version)) {
 		if (len != out->len)
