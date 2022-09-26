@@ -2164,12 +2164,16 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         data = random_data(self.chunk_size)
         self.api.object_create(self.account, name, obj_name=name,
                                data=data, properties={'test': 'it works'})
-
         obj1, chunks1 = self.api.object_locate(self.account, name, name)
+        for chunk in chunks1:
+            chunk.pop('score', None)
+
         _, _, _, obj_meta = self.api.object_create_ext(
             self.account, name, obj_name=name, data=data, restore_drained=True)
         self.assertEqual("Skipped", obj_meta['status'])
         obj2, chunks2 = self.api.object_locate(self.account, name, name)
+        for chunk in chunks2:
+            chunk.pop('score', None)
 
         # The object should be exactly the same (including its version)
         self.assertDictEqual(obj1, obj2)

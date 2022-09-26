@@ -14,6 +14,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.utils import request_id
+from oio.event.evob import EventTypes
+
 from tests.utils import random_str
 from tests.functional.cli import CliTestCase
 
@@ -27,9 +30,15 @@ class ServiceCheckTest(CliTestCase):
         container = 'rawx-check-' + random_str(6)
         obj = container + 'obj-' + random_str(6)
         # Upload an object (replicated or not).
-        self.storage.object_create(self.account, container,
-                                   data='test data', obj_name=obj)
+        reqid = request_id()
+        self.storage.object_create(
+            self.account, container, data='test data', obj_name=obj,
+            reqid=reqid)
         output = self.storage.object_locate(self.account, container, obj)
+        for _ in range(1 + len(output[1])):
+            self.wait_for_event(
+                'oio-preserved', reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_NEW))
         opts = self.get_format_opts(fields=['Chunk'])
         # Iterate over all rawx services hosting one of the chunks,
         # expect to find the chunks.
@@ -42,7 +51,12 @@ class ServiceCheckTest(CliTestCase):
             self.assertIn(rawx[1], output.split('\n'))
 
         # Delete the object.
-        self.storage.object_delete(self.account, container, obj)
+        reqid = request_id()
+        self.storage.object_delete(self.account, container, obj, reqid=reqid)
+        for _ in range(1 + len(output[1])):
+            self.wait_for_event(
+                'oio-preserved', reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_DELETED))
         # Iterate over all rawx services hosting one of the chunks,
         # expect NOT to find the chunks.
         for rawx in rawx_list:

@@ -72,25 +72,19 @@ class ItemCheckTest(CliTestCase):
 
         self.beanstalkd0.drain_tube('oio-preserved')
 
-    def _wait_for_events(self, account, container, obj_name, reqid=None):
-        self.wait_for_event(
-            'oio-preserved', reqid=reqid,
-            types=(EventTypes.CHUNK_NEW, ))
-        self.wait_for_event(
-            'oio-preserved', reqid=reqid,
-            fields={'account': account, 'user': container, 'path': obj_name},
-            types=(EventTypes.CONTENT_NEW, ))
-        self.wait_for_event(
-            'oio-preserved', reqid=reqid,
-            fields={'account': account, 'user': container},
-            types=(EventTypes.CONTAINER_STATE, ))
+    def _wait_for_events(self, chunks, reqid):
+        for _ in range(2 + len(chunks)):
+            self.wait_for_event(
+                'oio-preserved', reqid=reqid,
+                types=(EventTypes.CHUNK_NEW, EventTypes.CONTENT_NEW,
+                       EventTypes.CONTAINER_STATE))
 
     def create_object(self, account, container, obj_name):
         reqid = request_id()
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data='test_item_check',
             reqid=reqid)
-        self._wait_for_events(account, container, obj_name, reqid=reqid)
+        self._wait_for_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta['version']))
         return obj_meta, obj_chunks
@@ -101,7 +95,7 @@ class ItemCheckTest(CliTestCase):
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data='test_item_check',
             reqid=reqid)
-        self._wait_for_events(account, container, obj_name, reqid=reqid)
+        self._wait_for_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta['version']))
         return container, obj_meta, obj_chunks
