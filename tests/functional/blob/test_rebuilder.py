@@ -93,7 +93,8 @@ class TestBlobRebuilder(BaseTestCase):
                                   watchdog=self.watchdog)
         rebuilder_worker = rebuilder.create_worker(None, None)
         rebuilder_worker._process_item(
-            (self.ns, self.cid, self.content_id, chunk_id))
+            (self.ns, self.cid, self.content_id, self.path, self.version,
+             chunk_id))
 
         _, new_chunks = self.api.object_locate(
             self.account, self.container, self.path)

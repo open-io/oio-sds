@@ -155,7 +155,7 @@ class Target(object):
         if self.content_id:
             out += ', content_id=' + self.content_id
         if self.version:
-            out += ', version=' + self.version
+            out += ', version=' + str(self.version)
         if self.chunk:
             out += ', chunk=' + self.chunk
         return out
@@ -342,7 +342,7 @@ class Checker(object):
         # 1. Fetch chunk list from rdir (could be cached).
         # Unfortunately we cannot seek for a chunk ID.
         entries = [x for x in self.rdir_client.chunk_fetch(
-                       rawx_service, limit=-1) if x[1] == chunk_id]
+                   rawx_service, limit=-1) if x[1] == chunk_id]
         if not entries:
             self.logger.warn(
                 'Chunk %s not found in rdir' % chunk_id)
@@ -353,11 +353,8 @@ class Checker(object):
         # 2. Find content and container IDs
         target.cid = entries[0][0]
         target.content_id = entries[0][2]['content_id']
-        meta = self.api.object_get_properties(
-            None, None, None,
-            cid=target.cid, content=target.content_id)
-        target.obj = meta['name']
-        target.version = meta['version']
+        target.obj = entries[0][2]['path']
+        target.version = entries[0][2]['version']
         target.account, target.container = self.api.resolve_cid(target.cid)
 
     def send_result(self, target, errors=None, irreparable=False):
@@ -374,7 +371,7 @@ class Checker(object):
         reconstruction of the chunk.
         """
         item = (self.api.namespace, target.cid,
-                target.content_id, target.chunk)
+                target.content_id, target.obj, target.version, target.chunk)
         ev_dict = BlobRebuilder.task_event_from_item(item)
         if irreparable:
             ev_dict['data']['irreparable'] = irreparable
@@ -393,6 +390,8 @@ class Checker(object):
             error.append(target.container)
         if target.obj:
             error.append(target.obj)
+        if target.version:
+            error.append(target.version)
         if target.chunk:
             error.append(target.chunk)
         self.error_writer.writerow(error)
@@ -402,9 +401,9 @@ class Checker(object):
         if irreparable:
             error.append(IRREPARABLE_PREFIX)
         error.append(target.cid)
-        # FIXME(FVE): ensure we always resolve content_id,
-        # or pass object version along with object name.
-        error.append(target.content_id or target.obj)
+        error.append(target.content_id)
+        error.append(target.obj)
+        error.append(target.version)
         error.append(target.chunk)
         self.rebuild_writer.writerow(error)
 

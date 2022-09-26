@@ -69,6 +69,8 @@ class RawxDecommissionTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload['container_id']
         content_id = task_payload['content_id']
+        path = task_payload['path']
+        version = task_payload['version']
         chunk_id = task_payload['chunk_id']
 
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
@@ -101,7 +103,8 @@ class RawxDecommissionTask(XcuteTask):
         # Start moving the chunk
         try:
             content = self.content_factory.get(
-                container_id, content_id, reqid=reqid)
+                container_id, content_id, path=path, version=version,
+                reqid=reqid)
             content.move_chunk(
                 chunk_id, fake_excluded_chunks=self.fake_excluded_chunks,
                 service_id=self.service_id,
@@ -194,9 +197,11 @@ class RawxDecommissionJob(XcuteRdirJob):
 
         chunk_info = self.get_chunk_info(job_params, marker=marker)
         for container_id, chunk_id, descr in chunk_info:
-            task_id = '|'.join((container_id, descr['content_id'], chunk_id))
+            task_id = '|'.join((container_id, chunk_id))
             yield task_id, {'container_id': container_id,
                             'content_id': descr['content_id'],
+                            'path': descr['path'],
+                            'version': descr['version'],
                             'chunk_id': chunk_id}
 
             if usage_target <= 0:
@@ -224,16 +229,14 @@ class RawxDecommissionJob(XcuteRdirJob):
         kept_chunks_ratio = 1 - (usage_target / float(current_usage))
         chunk_info = self.get_chunk_info(job_params, marker=marker)
         i = 0
-        for i, (container_id, chunk_id, descr) \
-                in enumerate(chunk_info, 1):
+        for i, (container_id, chunk_id, _) in enumerate(chunk_info, 1):
             if i % 1000 == 0:
-                yield ('|'.join((container_id, descr['content_id'], chunk_id)),
+                yield ('|'.join((container_id, chunk_id)),
                        int(math.ceil(1000 * kept_chunks_ratio)))
 
         remaining = int(math.ceil(i % 1000 * kept_chunks_ratio))
         if remaining > 0:
-            yield ('|'.join((container_id, descr['content_id'], chunk_id)),
-                   remaining)
+            yield ('|'.join((container_id, chunk_id)), remaining)
 
     def get_chunk_info(self, job_params, marker=None):
         service_id = job_params['service_id']

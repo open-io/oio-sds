@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -127,13 +127,13 @@ class ItemRebuildTest(CliTestCase):
 
         expected_items = list()
         expected_items.append(
-            '%s|%s|%s|%s OK' % (
-                self.ns, cid, obj_meta['id'],
-                missing_chunk['url']))
+            '%s|%s|%s|%s|%s|%s OK' % (
+                self.ns, cid, obj_meta['id'], obj_meta['name'],
+                str(obj_meta['version']), missing_chunk['url']))
         expected_items.append(
-            '%s|%s|%s|%s OK' % (
-                self.ns, cid, second_obj_meta['id'],
-                second_missing_chunk['url']))
+            '%s|%s|%s|%s|%s|%s OK' % (
+                self.ns, cid, second_obj_meta['id'], second_obj_meta['name'],
+                str(second_obj_meta['version']), second_missing_chunk['url']))
 
         # Rebuild missing chunks
         opts = self.get_opts(['Chunk', 'Status'])

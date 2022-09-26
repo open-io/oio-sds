@@ -67,9 +67,11 @@ class ChunkRebuildCommand(ItemRebuildCommand):
 
         parser.add_argument(
             '--input-file',
-            help='Read chunks from this file. '
-                 'Each line should be formatted like '
-                 '"container_id|content_id|short_chunk_id_or_position".')
+            help="""
+            Read chunks from this file.
+            Each line should be formatted like
+            "container_id|content_id|path|version|short_chunk_id_or_position".
+            """)
 
         if not self.distributed:  # local
             parser.add_argument(

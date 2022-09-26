@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 from datetime import datetime
 from socket import gethostname
+from urllib.parse import quote, unquote
 
 from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import float_value, int_value, true_value
@@ -65,65 +66,76 @@ class BlobRebuilder(Tool):
         namespace = task_event['url']['ns']
         container_id = task_event['url']['id']
         content_id = task_event['url']['content']
+        path = task_event['url']['path']
+        version = task_event['url']['version']
         for chunk_id_or_pos in task_event['data']['missing_chunks']:
-            yield namespace, container_id, content_id, str(chunk_id_or_pos)
+            yield (namespace, container_id, content_id, path, version,
+                   str(chunk_id_or_pos))
 
     @staticmethod
     def task_event_from_item(item):
-        namespace, container_id, content_id, chunk_id_or_pos = item
-        return \
-            {
-                'when': time.time(),
-                'event': EventTypes.CONTENT_BROKEN,
-                'url': {
-                    'ns': namespace,
-                    'id': container_id,
-                    'content': content_id
-                },
-                'data': {
-                    'missing_chunks': [
-                        chunk_id_or_pos
-                    ]
-                }
+        namespace, container_id, content_id, path, version, \
+            chunk_id_or_pos = item
+        return {
+            'when': time.time(),
+            'event': EventTypes.CONTENT_BROKEN,
+            'url': {
+                'ns': namespace,
+                'id': container_id,
+                'content': content_id,
+                'path': path,
+                'version': version
+            },
+            'data': {
+                'missing_chunks': [
+                    chunk_id_or_pos
+                ]
             }
+        }
 
     @staticmethod
     def tasks_res_from_res_event(res_event):
         namespace = res_event['url']['ns']
         container_id = res_event['url']['id']
         content_id = res_event['url']['content']
+        path = res_event['url']['path']
+        version = res_event['url']['version']
         for chunk_rebuilt in res_event['data']['chunks_rebuilt']:
-            yield (namespace, container_id, content_id,
+            yield (namespace, container_id, content_id, path, version,
                    str(chunk_rebuilt['chunk_id_or_pos'])), \
                 chunk_rebuilt['bytes_processed'], chunk_rebuilt['error']
 
     @staticmethod
     def res_event_from_task_res(task_res):
         item, bytes_processed, error = task_res
-        namespace, container_id, content_id, chunk_id_or_pos = item
-        return \
-            {
-                'when': time.time(),
-                'event': EventTypes.CONTENT_REBUILT,
-                'url': {
-                    'ns': namespace,
-                    'id': container_id,
-                    'content': content_id
-                },
-                'data': {
-                    'chunks_rebuilt': [{
-                        'chunk_id_or_pos': chunk_id_or_pos,
-                        'bytes_processed': bytes_processed,
-                        'error': error
-                    }]
-                }
+        namespace, container_id, content_id, path, version, \
+            chunk_id_or_pos = item
+        return {
+            'when': time.time(),
+            'event': EventTypes.CONTENT_REBUILT,
+            'url': {
+                'ns': namespace,
+                'id': container_id,
+                'content': content_id,
+                'path': path,
+                'version': version
+            },
+            'data': {
+                'chunks_rebuilt': [{
+                    'chunk_id_or_pos': chunk_id_or_pos,
+                    'bytes_processed': bytes_processed,
+                    'error': error
+                }]
             }
+        }
 
     @staticmethod
     def string_from_item(item):
-        namespace, container_id, content_id, chunk_id_or_pos = item
-        return '%s|%s|%s|%s' % (
-            namespace, container_id, content_id, chunk_id_or_pos)
+        namespace, container_id, content_id, path, version, \
+            chunk_id_or_pos = item
+        return '%s|%s|%s|%s|%s|%s' % (
+            namespace, container_id, content_id, quote(path), str(version),
+            chunk_id_or_pos)
 
     def _fetch_items_from_input_file(self):
         with open(self.input_file, 'r') as ifile:
@@ -132,10 +144,10 @@ class BlobRebuilder(Tool):
                 if not stripped or stripped.startswith('#'):
                     continue
 
-                container_id, content_id, chunk_id_or_pos = \
-                    stripped.split('|', 3)[:3]
+                container_id, content_id, path, version, \
+                    chunk_id_or_pos = stripped.split('|', 5)
                 yield self.namespace, container_id, content_id, \
-                    chunk_id_or_pos
+                    unquote(path), int(version), chunk_id_or_pos
 
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
@@ -143,7 +155,8 @@ class BlobRebuilder(Tool):
             full_urls=True,
             shuffle=self.rdir_shuffle_chunks, timeout=self.rdir_timeout)
         for container_id, chunk_id, descr in lost_chunks:
-            yield self.namespace, container_id, descr['content_id'], chunk_id
+            yield self.namespace, container_id, descr['content_id'], \
+                descr['path'], descr['version'], chunk_id
 
     def _fetch_items(self):
         if self.input_file:
@@ -262,7 +275,8 @@ class BlobRebuilderWorker(ToolWorker):
                                             watchdog=tool.watchdog)
 
     def _process_item(self, item):
-        namespace, container_id, content_id, chunk_id_or_pos = item
+        namespace, container_id, content_id, path, version, \
+            chunk_id_or_pos = item
         if namespace != self.tool.namespace:
             raise ValueError('Invalid namespace (actual=%s, expected=%s)' % (
                 namespace, self.tool.namespace))
@@ -276,7 +290,7 @@ class BlobRebuilderWorker(ToolWorker):
         try:
             return self.chunk_operator.rebuild(
                 container_id, content_id, chunk_id_or_pos,
-                rawx_id=self.tool.rawx_id,
+                rawx_id=self.tool.rawx_id, path=path, version=version,
                 try_chunk_delete=self.try_chunk_delete,
                 allow_frozen_container=self.allow_frozen_container,
                 allow_same_rawx=self.allow_same_rawx)

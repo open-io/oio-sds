@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -348,6 +348,8 @@ class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
         for chunk in chunks:
             checker.check(Target(self.app.options.account,
                                  chunk=url + '/' + chunk[1],
+                                 version=chunk[2]['version'],
+                                 obj=chunk[2]['path'],
                                  content_id=chunk[2]['content_id'],
                                  cid=chunk[0]))
             for res in self._format_results(checker):

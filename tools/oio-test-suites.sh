@@ -413,12 +413,26 @@ func_tests_rebuilder_mover () {
 
 	wait_proxy_cache
 
-	for i in $(seq 1 100); do
-		dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
-				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
-		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
-				"--name object-${RANDOM} -f value"
-	done | ${PYTHON} $CLI
+	for i in {1..10}; do
+		CONTAINER="container-${RANDOM}"
+		for j in {1..10}; do
+			dd if=/dev/urandom of=/tmp/openio_object_$i_$j bs=1K \
+					count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+			echo "object create ${CONTAINER} /tmp/openio_object_$i_$j" \
+					"--name object-${RANDOM} -f value"
+		done | ${PYTHON} ${CLI}
+	done
+	# Shard the last container
+	${OPENIOCTL} stop @meta2-crawler
+	${PYTHON} ${CLI} container-sharding find-and-replace --threshold 1 \
+			--enable "${CONTAINER}"
+
+	# FIXME(ADU): I don't know why, but there are missing entries in the rdir.
+	# While waiting to find the explanation, it is necessary to force
+	# the passage of the indexers.
+	${OPENIOCTL} restart @meta2-indexer
+	sed -i "s#wait_random_time_before_starting = True#wait_random_time_before_starting = False#g" "${HOME}/.oio/sds/conf/${OIO_NS}-rawx-crawler.conf"
+	${OPENIOCTL} restart @rawx-crawler
 
 	if [ -n "${REBUILDER}" ]; then
 		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"

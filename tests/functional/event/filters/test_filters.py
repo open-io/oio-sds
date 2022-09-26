@@ -60,7 +60,6 @@ class TestContentRebuildFilter(BaseTestCase):
         syst = self.container_client.container_get_properties(
             self.account, self.container)['system']
         self.container_id = syst['sys.name'].split('.', 1)[0]
-        self.object_storage_api = self.storage
         queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
         self.queue_url = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + self.queue_url
@@ -86,16 +85,17 @@ class TestContentRebuildFilter(BaseTestCase):
             print(f'Failed to delete {self.account}/{self.container}: {exc}')
         super().tearDown()
 
-    def _create_event(self, content_name, present_chunks, missing_chunks,
-                      content_id):
+    def _create_event(self, obj_meta, present_chunks, missing_chunks):
         event = {}
         event["when"] = time.time()
         event["event"] = "storage.content.broken"
         event["data"] = {"present_chunks": present_chunks,
                          "missing_chunks": missing_chunks}
         event["url"] = {"ns": self.ns, "account": self.account,
-                        "user": self.container, "path": content_name,
-                        "id": self.container_id, "content": content_id}
+                        "user": self.container, "id": self.container_id,
+                        "content": obj_meta['id'],
+                        "path": obj_meta['name'],
+                        "version": obj_meta['version']}
         return event
 
     def _was_created_before(self, url, time_point):
@@ -129,160 +129,117 @@ class TestContentRebuildFilter(BaseTestCase):
         bt.close()
         time.sleep(2)
 
-    def _remove_chunks(self, chunks, content_id, path):
+    def _remove_chunks(self, obj_meta, chunks):
         if not chunks:
             return
         for chunk in chunks:
             chunk['id'] = chunk['url']
-            chunk['content'] = content_id
+            chunk['content'] = obj_meta['id']
             chunk['type'] = 'chunk'
         self.container_client.container_raw_delete(
             self.account, self.container, data=chunks,
-            path=path)
+            path=obj_meta['name'], version=obj_meta['version'])
         try:
             self.storage.blob_client.chunk_delete_many(chunks)
         except Exception:
             pass
 
-    def _check_rebuild(self, content_name, chunks, missing_pos, meta,
-                       chunks_to_remove, chunk_created=True):
+    def _check_rebuild(self, obj_meta, chunks, chunks_to_remove,
+                       chunk_created=True):
         start = time.time()
-        self._remove_chunks(chunks_to_remove, meta['id'], content_name)
+        self._remove_chunks(obj_meta, chunks_to_remove)
         time.sleep(1)  # Need to sleep 1s, because mtime has 1s precision
-        event = self._create_event(content_name, chunks, missing_pos,
-                                   meta['id'])
+        missing_pos = [chunk['pos'] for chunk in chunks_to_remove]
+        event = self._create_event(obj_meta, chunks, missing_pos)
         self.notify_filter.process(event, None, None)
         self._rebuild(event)
-        _, after = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
+        _, after = self.storage.object_locate(
+            account=self.account, container=self.container,
+            obj=obj_meta['name'], version=obj_meta['version'])
         self.assertIs(chunk_created,
                       self._is_chunks_created(chunks, after, missing_pos,
                                               start))
 
     def test_nothing_missing(self):
         content_name = "test_nothing_missing"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="THREECOPIES",
-                                              obj_name=content_name)
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="THREECOPIES")
         self.objects_created.append(content_name)
 
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
         chunks_to_remove = []
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = []
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove, chunk_created=True)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove,
+                            chunk_created=True)
 
     def test_missing_1_chunk(self):
         content_name = "test_missing_1_chunk"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="THREECOPIES",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="THREECOPIES")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_last_chunk(self):
         content_name = "test_missing_last_chunk"
         data = random_str(1024 * 1024 * 4)
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data=data,
-                                              policy="THREECOPIES",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data=data, policy="THREECOPIES")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_remove.append(chunks.pop(-1))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["3"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_2_chunks(self):
         content_name = "test_missing_2_chunks"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="THREECOPIES",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="THREECOPIES")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         for i in range(0, 2):
             chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0", "0"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_all_chunks(self):
         content_name = "test_missing_all_chunks"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="SINGLE",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="SINGLE")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove, chunk_created=False)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove,
+                            chunk_created=False)
 
     def test_missing_all_chunks_of_a_pos(self):
         content_name = "test_missing_2_chunks"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="THREECOPIES",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="THREECOPIES")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         for i in range(0, 3):
             chunks_to_remove.append(chunks.pop(0))
@@ -290,23 +247,17 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove, chunk_created=False)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove,
+                            chunk_created=False)
 
     def test_missing_multiple_chunks(self):
         content_name = "test_missing_multiple_chunks"
         data = random_str(1024 * 1024 * 4)
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data=data,
-                                              policy="THREECOPIES",
-                                              obj_name=content_name)
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data=data, policy="THREECOPIES")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(9))
         chunks_to_remove.append(chunks.pop(6))
@@ -315,75 +266,53 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0", "1", "2", "3"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_1_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
             self.skipTest("Not enough rawx. "
                           "EC tests needs at least 9 rawx to run")
         content_name = "test_missing_1_chunk_ec"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="EC",
-                                              obj_name=content_name
-                                              )
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="EC")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0.1"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_m_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
             self.skipTest("Not enough rawx. "
                           "EC tests needs at least 9 rawx to run")
         content_name = "test_missing_m_chunk_ec"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="EC",
-                                              obj_name=content_name)
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="EC")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         for i in range(0, 3):
             chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0.1", "0.2", "0.3"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_m_chunk_ec_2(self):
         if len(self.conf['services']['rawx']) < 9:
             self.skipTest("Not enough rawx. "
                           "EC tests needs at least 9 rawx to run")
         content_name = "test_missing_m_chunk_ec"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="EC",
-                                              obj_name=content_name)
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="EC")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         chunks_to_remove.append(chunks.pop(3))
@@ -391,25 +320,18 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0.1", "0.5", "0.8"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
 
     def test_missing_m1_chunk_ec(self):
         if len(self.conf['services']['rawx']) < 9:
             self.skipTest("Not enough rawx. "
                           "EC tests needs at least 9 rawx to run")
         content_name = "test_missing_m1_chunk_ec"
-        self.object_storage_api.object_create(account=self.account,
-                                              container=self.container,
-                                              data="test",
-                                              policy="EC",
-                                              obj_name=content_name)
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account, container=self.container,
+            obj_name=content_name, data="test", policy="EC")
         self.objects_created.append(content_name)
-        meta, chunks = self.object_storage_api.object_locate(
-            container=self.container, obj=content_name,
-            account=self.account)
-        chunks = list(chunks)
+
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         chunks_to_remove.append(chunks.pop(0))
@@ -418,9 +340,8 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop('score', None)
 
-        missing_pos = ["0.1", "0.2", "0.3", "0.4"]
-        self._check_rebuild(content_name, chunks, missing_pos, meta,
-                            chunks_to_remove, chunk_created=False)
+        self._check_rebuild(obj_meta, chunks, chunks_to_remove,
+                            chunk_created=False)
 
 
 class TestNotifyFilterBase(BaseTestCase):

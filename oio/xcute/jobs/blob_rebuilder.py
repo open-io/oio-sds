@@ -43,6 +43,8 @@ class RawxRebuildTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload['container_id']
         content_id = task_payload['content_id']
+        path = task_payload['path']
+        version = task_payload['version']
         chunk_id = task_payload['chunk_id']
 
         if self.dry_run:
@@ -54,11 +56,11 @@ class RawxRebuildTask(XcuteTask):
         self.logger.debug('[reqid=%s] Rebuilding %s', reqid, chunk_id)
         try:
             chunk_size = self.chunk_operator.rebuild(
-                    container_id, content_id, chunk_id,
-                    rawx_id=self.service_id,
-                    try_chunk_delete=self.try_chunk_delete,
-                    allow_frozen_container=self.allow_frozen_container,
-                    allow_same_rawx=self.allow_same_rawx)
+                container_id, content_id, chunk_id,
+                rawx_id=self.service_id, path=path, version=version,
+                try_chunk_delete=self.try_chunk_delete,
+                allow_frozen_container=self.allow_frozen_container,
+                allow_same_rawx=self.allow_same_rawx, reqid=reqid)
         except (ContentNotFound, OrphanChunk):
             return {'orphan_chunks': 1}
 
@@ -145,25 +147,24 @@ class RawxRebuildJob(XcuteRdirJob):
         chunk_info = self.get_chunk_info(job_params, marker=marker)
 
         for container_id, chunk_id, descr in chunk_info:
-            task_id = '|'.join((container_id, descr['content_id'], chunk_id))
+            task_id = '|'.join((container_id, chunk_id))
             yield task_id, {'container_id': container_id,
                             'content_id': descr['content_id'],
+                            'path': descr['path'],
+                            'version': descr['version'],
                             'chunk_id': chunk_id}
 
     def get_total_tasks(self, job_params, marker=None):
         chunk_info = self.get_chunk_info(job_params, marker=marker)
 
         i = 0
-        for i, (container_id, chunk_id, descr) \
-                in enumerate(chunk_info, 1):
+        for i, (container_id, chunk_id, descr) in enumerate(chunk_info, 1):
             if i % 1000 == 0:
-                yield ('|'.join((container_id, descr['content_id'], chunk_id)),
-                       1000)
+                yield ('|'.join((container_id, chunk_id)), 1000)
 
         remaining = i % 1000
         if remaining > 0:
-            yield ('|'.join((container_id, descr['content_id'], chunk_id)),
-                   remaining)
+            yield ('|'.join((container_id, chunk_id)), remaining)
 
     def get_chunk_info(self, job_params, marker=None):
         service_id = job_params['service_id']

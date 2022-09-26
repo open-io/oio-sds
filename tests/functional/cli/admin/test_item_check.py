@@ -22,7 +22,7 @@ from subprocess import CalledProcessError
 
 from oio import ObjectStorageApi
 from oio.common.autocontainer import HashedContainerBuilder
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase
 from tests.utils import random_str
@@ -72,32 +72,36 @@ class ItemCheckTest(CliTestCase):
 
         self.beanstalkd0.drain_tube('oio-preserved')
 
-    def _wait_for_events(self, account, container, obj_name):
+    def _wait_for_events(self, account, container, obj_name, reqid=None):
         self.wait_for_event(
-            'oio-preserved',
+            'oio-preserved', reqid=reqid,
             types=(EventTypes.CHUNK_NEW, ))
         self.wait_for_event(
-            'oio-preserved',
+            'oio-preserved', reqid=reqid,
             fields={'account': account, 'user': container, 'path': obj_name},
             types=(EventTypes.CONTENT_NEW, ))
         self.wait_for_event(
-            'oio-preserved',
+            'oio-preserved', reqid=reqid,
             fields={'account': account, 'user': container},
             types=(EventTypes.CONTAINER_STATE, ))
 
     def create_object(self, account, container, obj_name):
+        reqid = request_id()
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
-            account, container, obj_name=obj_name, data='test_item_check')
-        self._wait_for_events(account, container, obj_name)
+            account, container, obj_name=obj_name, data='test_item_check',
+            reqid=reqid)
+        self._wait_for_events(account, container, obj_name, reqid=reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta['version']))
         return obj_meta, obj_chunks
 
     def create_object_auto(self, account, obj_name):
+        reqid = request_id()
         container = self.autocontainer(obj_name)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
-            account, container, obj_name=obj_name, data='test_item_check')
-        self._wait_for_events(account, container, obj_name)
+            account, container, obj_name=obj_name, data='test_item_check',
+            reqid=reqid)
+        self._wait_for_events(account, container, obj_name, reqid=reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta['version']))
         return container, obj_meta, obj_chunks
@@ -1143,8 +1147,6 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s object check %s %s %s %s'
             % (self.account, self.container, self.obj_name,
                second_obj, self.check_opts))
-        print(expected_items)
-        print(output)
         self.assert_list_output(expected_items, output)
 
     def test_chunk_check(self):
