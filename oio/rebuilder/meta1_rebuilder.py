@@ -44,7 +44,8 @@ class Meta1Rebuilder(MetaRebuilder):
         hosted_services = (self.conscience.all_services('rawx')
                            + self.conscience.all_services('meta2'))
         for svc in hosted_services:
-            cid = cid_from_name('_RDIR', svc['addr'])
+            service_id = svc['tags'].get('tag.service_id', svc['addr'])
+            cid = cid_from_name('_RDIR', service_id)
             prefix = cid[:self.meta1_digits]
             if prefix not in prefixes:
                 queue.put(prefix.ljust(64, '0'))
