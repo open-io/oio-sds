@@ -37,15 +37,21 @@ XMLNS_S3 = "http://s3.amazonaws.com/doc/2006-03-01/"
 
 def iso8601_to_int(when):
     # The documentation says that "the time is always midnight UTC".
-    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    fmt = "%Y-%m-%dT%H:%M:%S.%fZ"
     try:
         parsed = time.strptime(when, fmt)
     except ValueError:
-        if "+" in when:  # Any numerical timezone
-            fmt = "%Y-%m-%dT%H:%M:%S%z"
-        else:  # No timezone
-            fmt = "%Y-%m-%dT%H:%M:%S"
-        parsed = time.strptime(when, fmt)
+        fmt = "%Y-%m-%dT%H:%M:%S.%f"
+        try:
+            parsed = time.strptime(when, fmt)
+        except ValueError:
+            if "+" in when:  # Any numerical timezone
+                fmt = "%Y-%m-%dT%H:%M:%S%z"
+            elif "Z" in when:
+                fmt = "%Y-%m-%dT%H:%M:%SZ"
+            else:  # No timezone
+                fmt = "%Y-%m-%dT%H:%M:%S"
+            parsed = time.strptime(when, fmt)
     return int(time.mktime(parsed))
 
 
@@ -336,7 +342,6 @@ class LifecycleRule(object):
         except IndexError:
             expiration = None
             action_filter_type = None
-
         transitions = list()
         for transition_elt in rule_elt.findall(tag("Transition"), nsmap):
             transition = Transition.from_element(transition_elt, **kwargs)
@@ -381,6 +386,7 @@ class LifecycleRule(object):
                 **kwargs,
             )
             action_filter_type = type(expiration.filter)
+
             actions.append(expiration)
         except IndexError:
             expiration = None
@@ -397,7 +403,7 @@ class LifecycleRule(object):
                 action_filter_type = type(transition.filter)
             elif type(transition.filter) is not action_filter_type:
                 raise ValueError(
-                    "'NoncurrentDays' and 'NoncurrentCount' in the same Rule"
+                    "'NoncurrentDays' and 'NewerNoncurrentVersions' in " "the same Rule"
                 )
             transitions.append(transition)
         if transitions:
@@ -423,11 +429,12 @@ class LifecycleRule(object):
                             "in the NoncurrentVersionTransition action"
                         )
                 elif action_filter_type == NoncurrentCountActionFilter:
-                    if expiration.filter.count <= transitions[0].filter.count:
+                    if expiration.filter.days <= transitions[0].filter.days:
                         raise ValueError(
-                            "'NoncurrentCount' "
+                            "'NewerNoncurrentVersions' "
                             "in the NoncurrentVersionExpiration "
-                            "action must be greater than 'NoncurrentCount' "
+                            "action must be greater than "
+                            " 'NewerNoncurrentVersions' "
                             "in the NoncurrentVersionTransition action"
                         )
             actions = actions + transitions
@@ -587,11 +594,29 @@ class LifecycleRuleFilter(object):
 
         return filter_elt
 
-    def to_sql_query(self, formated_time=None, **kwargs):
-        # _query = 'SELECT * FROM aliases AS al '
+    def to_sql_query(
+        self,
+        formated_days=None,
+        date=None,
+        non_current=False,
+        versioned=False,
+        expired_delete_marker=None,
+        **kwargs,
+    ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
-        _query = ""
+
+        _query = " "
+        skip_size_and_tag = False
+        if expired_delete_marker:
+            skip_size_and_tag = True
+
+        time_flag = False
+        if formated_days is not None:
+            time_flag = True
+        if date is not None:
+            time_flag = True
+
         nb_filters = len(self.tags)
         if self.prefix is not None:
             nb_filters += 1
@@ -610,45 +635,49 @@ class LifecycleRuleFilter(object):
         )
 
         _lesser = ""
-        if self.lesser is not None:
-            _lesser = (
-                f" AND "
-                f"((ct.size <{self.lesser} AND pr.value IS NULL) OR "
-                f"pr.value < {self.lesser})"
-            )
+        # bypass size when dealing with delete marker
+        if not skip_size_and_tag:
+            if self.lesser is not None:
+                _lesser = (
+                    f" AND "
+                    f"((ct.size <{self.lesser} AND pr.value IS NULL) OR "
+                    f"pr.value < {self.lesser})"
+                )
 
         _greater = ""
-        if self.greater is not None:
-            _greater = (
-                f" AND "
-                f"((ct.size >{self.greater} AND pr.value IS NULL) OR "
-                f"pr.value > {self.greater}) "
-            )
-
-        if len(self.tags) > 0:
-            _base_tag = (
-                " INNER JOIN properties pr2 ON al.alias = pr2.alias"
-                " AND al.version=pr2.version "
-            )
-
-            _tags = " AND pr2.key='x-object-sysmeta-swift3-tagging'"
-            for k, v in self.tags.items():
-                tag_elt = etree.Element("Tag")
-                key_elt = etree.Element("Key")
-                key_elt.text = k
-                tag_elt.append(key_elt)
-                value_elt = etree.Element("Value")
-                value_elt.text = v
-                tag_elt.append(value_elt)
-                _tag_key_cond = (
-                    " AND CAST(pr2.value as nvarchar(10000)) "
-                    f"LIKE '%<Tag><Key>{k}</Key>"
+        # bypass size and tags when dealing with delete marker
+        if not skip_size_and_tag:
+            if self.greater is not None:
+                _greater = (
+                    f" AND "
+                    f"((ct.size >{self.greater} AND pr.value IS NULL) OR "
+                    f"pr.value > {self.greater}) "
                 )
-                _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
-                _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
 
-            if _tags:
-                _query = f"{_query}{_base_tag}{_tags}"
+            if len(self.tags) > 0:
+                _base_tag = (
+                    " INNER JOIN properties pr2 ON al.alias ="
+                    "pr2.alias AND al.version=pr2.version "
+                )
+
+                _tags = " AND pr2.key='x-object-sysmeta-swift3-tagging'"
+                for k, v in self.tags.items():
+                    tag_elt = etree.Element("Tag")
+                    key_elt = etree.Element("Key")
+                    key_elt.text = k
+                    tag_elt.append(key_elt)
+                    value_elt = etree.Element("Value")
+                    value_elt.text = v
+                    tag_elt.append(value_elt)
+                    _tag_key_cond = (
+                        " AND CAST(pr2.value as nvarchar(10000))"
+                        f" LIKE '%<Tag><Key>{k}</Key>"
+                    )
+                    _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
+                    _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
+
+                if _tags:
+                    _query = f"{_query}{_base_tag}{_tags}"
 
         if _lesser or _greater:
             _query = f"{_query}{_slo_cond}"
@@ -657,18 +686,40 @@ class LifecycleRuleFilter(object):
             if _greater:
                 _query = f"{_query}{_greater}"
 
+        if self.prefix is not None or time_flag:
+            _query = f"{_query} WHERE ("
+
         if self.prefix is not None:
-            _prefix_cond = " WHERE ( al.alias LIKE '" f"{self.prefix}" "%'"
+            _prefix_cond = "( al.alias LIKE '" f"{self.prefix}" "%')"
             _query = f"{_query}{_prefix_cond}"
-        if formated_time is not None:
-            _time_cond = (
-                f" AND (al.mtime + {formated_time}) < (CAST "
-                f"(strftime('%s', 'now') AS INTEGER ))"
-            )
-            _query = f"{_query}{_time_cond}"
+        if expired_delete_marker is None:
+            if self.prefix is not None and time_flag:
+                _query = f"{_query}  AND "
+            if formated_days is not None:
+                _time_cond = (
+                    f" ((al.mtime + {formated_days}) < (CAST "
+                    f"(strftime('%s', 'now') AS INTEGER )))"
+                )
+                _query = f"{_query}{_time_cond}"
+            elif date is not None:
+                _time_cond = (
+                    f" (({date}) < (CAST " f"(strftime('%s', 'now') AS INTEGER )))"
+                )
+                _query = f"{_query}{_time_cond}"
+            else:
+                # Condition shouldn't occur
+                # (days or date is present except in case of
+                # expired delete marker)
+                raise ValueError(
+                    "Configuration needs days or date in filter %s",
+                    self._to_element_tree(),
+                )
+
         # close WHERE clause
-        if self.prefix is not None:
+        if self.prefix is not None or time_flag:
             _query = f"{_query} )"
+        if non_current or versioned:
+            _query = f"{_query} GROUP BY al.alias"
         return _query
 
     def __str__(self):
@@ -799,6 +850,10 @@ class DaysActionFilter(LifecycleActionFilter):
 
 
 class NoncurrentDaysActionFilter(DaysActionFilter):
+    def __init__(self, days, **kwargs):
+        super(DaysActionFilter, self).__init__(**kwargs)
+        self.days = days
+
     def _to_element_tree(self, **kwargs):
         days_elt = etree.Element("NoncurrentDays")
         days_elt.text = str(self.days)
@@ -831,39 +886,52 @@ class DateActionFilter(LifecycleActionFilter):
 
 
 class NoncurrentCountActionFilter(LifecycleActionFilter):
-    def __init__(self, count, **kwargs):
+    def __init__(self, days, count, **kwargs):
         super(NoncurrentCountActionFilter, self).__init__(**kwargs)
+        self.days = days
         self.count = count
         if self.lifecycle is None or self.lifecycle.processed_versions is None:
             self.last_object_name = None
             self.nb_noncurrent_version = 0
 
     @classmethod
-    def from_element(cls, count_elt, **kwargs):
-        try:
-            count = int(count_elt.text or "")
-            if count < 0:
-                raise ValueError()
-        except ValueError:
-            raise ValueError("The count must be greater than or equal to zero")
-        return cls(count, **kwargs)
+    def from_element(cls, days, count_elt, **kwargs):
+        if count_elt is not None:
+            try:
+                count = int(count_elt.text or "")
+                if count < 0:
+                    raise ValueError()
+            except ValueError:
+                raise ValueError("The count must be greater " "than or equal to zero")
+        else:
+            count = 0
+        return cls(days, count, **kwargs)
 
     def _to_element_tree(self, **kwargs):
-        count_elt = etree.Element("NoncurrentCount")
-        count_elt.text = str(self.count)
-        return count_elt
+        root = etree.Element("Noncurrent")
+        days_elt = etree.Element("NoncurrentDays")
+        days_elt.text = str(self.days)
+        root.append(days_elt)
+        if self.count != 0:
+            count_elt = etree.Element("NewerNoncurrentVersions")
+            count_elt.text = str(self.count)
+            root.append(count_elt)
+        return root
 
-    def match(self, obj_meta, **kwargs):
-        if self.lifecycle is None or self.lifecycle.processed_versions is None:
-            if obj_meta["name"] != self.last_object_name:
-                self.last_object_name = obj_meta["name"]
-                self.nb_noncurrent_version = 1
-            else:
-                self.nb_noncurrent_version += 1
-            return self.count < self.nb_noncurrent_version
+    def match(self, obj_meta, now=None, **kwargs):
+        now = now or time.time()
+        if float(obj_meta["mtime"]) + self.days * 86400 < now:
+            if self.lifecycle is None or self.lifecycle.processed_versions is None:
+                if obj_meta["name"] != self.last_object_name:
+                    self.last_object_name = obj_meta["name"]
+                    self.nb_noncurrent_version = 1
+                else:
+                    self.nb_noncurrent_version += 1
+                return self.count < self.nb_noncurrent_version
 
-        processed = self.lifecycle.processed_versions.nb_processed(obj_meta)
-        return self.count < processed
+            processed = self.lifecycle.processed_versions.nb_processed(obj_meta)
+            return self.count < processed
+        return False
 
 
 class LifecycleAction(LifecycleActionFilter):
@@ -910,6 +978,7 @@ class Expiration(LifecycleAction):
         :type expiration_elt: `lxml.etree.Element`
         """
         nsmap = expiration_elt.nsmap
+        action_filter = None
         try:
             days_elt = expiration_elt.findall(tag("Days"), nsmap)[-1]
         except IndexError:
@@ -919,15 +988,14 @@ class Expiration(LifecycleAction):
         except IndexError:
             date_elt = None
 
-        if days_elt is None and date_elt is None:
-            raise ValueError("Missing 'Days' or 'Date' element in Expiration action")
-        elif days_elt is not None and date_elt is not None:
+        if days_elt is not None and date_elt is not None:
             raise ValueError("'Days' and 'Date' in same Expiration action")
-
         if days_elt is not None:
             action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
         elif date_elt is not None:
             action_filter = DateActionFilter.from_element(date_elt, **kwargs)
+        if action_filter is None:
+            raise ValueError("Empty Expiration action")
         return cls(action_filter, **kwargs)
 
     def _to_element_tree(self, **kwargs):
@@ -1029,6 +1097,11 @@ class NoncurrentVersionExpiration(Expiration):
     Delete objects old versions.
     """
 
+    def __init__(self, filter, nb_days, count, **args):
+        super(NoncurrentVersionExpiration, self).__init__(filter, **args)
+        self.non_current_days = nb_days
+        self.newer_non_current_versions = count
+
     @classmethod
     def from_element(cls, expiration_elt, **kwargs):
         """
@@ -1038,38 +1111,43 @@ class NoncurrentVersionExpiration(Expiration):
         """
         nsmap = expiration_elt.nsmap
         try:
-            days_elt = expiration_elt.findall(tag("NoncurrentDays"), nsmap)[-1]
+            non_current_days_elt = expiration_elt.findall(tag("NoncurrentDays"), nsmap)[
+                -1
+            ]
         except IndexError:
-            days_elt = None
+            raise ValueError(
+                "Missing 'NoncurrentDays '"
+                "element in NoncurrentVersionExpiration action"
+            )
         try:
-            count_elt = expiration_elt.findall(tag("NoncurrentCount"), nsmap)[-1]
+            newer_non_current_el = expiration_elt.findall(
+                tag("NewerNoncurrentVersions"), nsmap
+            )[-1]
         except IndexError:
-            count_elt = None
+            newer_non_current_el = None
 
-        if days_elt is None and count_elt is None:
+        non_current_days = int(non_current_days_elt.text or "")
+        if non_current_days <= 0:
             raise ValueError(
-                "Missing 'NoncurrentDays' or 'NoncurrentCount' element "
-                "in NoncurrentVersionExpiration action"
+                "'NoncurrentDays' for NoncurrentVersionExpiration"
+                " action must be a positive integer"
             )
-        elif days_elt is not None and count_elt is not None:
-            raise ValueError(
-                "'NoncurrentDays' and 'NoncurrentCount' "
-                "in same NoncurrentVersionExpiration action"
-            )
+        newer_non_current_versions = None
+        action_filter = None
+        action_filter = NoncurrentCountActionFilter.from_element(
+            non_current_days, newer_non_current_el, **kwargs
+        )
+        newer_non_current_versions = action_filter.count
 
-        if days_elt is not None:
-            action_filter = NoncurrentDaysActionFilter.from_element(days_elt, **kwargs)
-            return cls(action_filter, **kwargs)
-        elif count_elt is not None:
-            action_filter = NoncurrentCountActionFilter.from_element(
-                count_elt, **kwargs
-            )
-            return cls(action_filter, **kwargs)
+        return cls(
+            action_filter, non_current_days, newer_non_current_versions, **kwargs
+        )
 
     def _to_element_tree(self, **kwargs):
         exp_elt = etree.Element("NoncurrentVersionExpiration")
         filter_elt = self.filter._to_element_tree(**kwargs)
-        exp_elt.append(filter_elt)
+        for el in filter_elt:
+            exp_elt.append(el)
         return exp_elt
 
     def match(self, obj_meta, **kwargs):
@@ -1087,6 +1165,12 @@ class NoncurrentVersionTransition(Transition):
     """
     Change object storage policy for old versions of the object only.
     """
+
+    def __init__(self, filter, policy, nb_days, count, **args):
+        super(NoncurrentVersionTransition, self).__init__(filter, policy, **args)
+        self.policy = policy
+        self.newer_non_current_versions = count
+        self.non_current_days = nb_days
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
@@ -1113,14 +1197,41 @@ class NoncurrentVersionTransition(Transition):
         try:
             days_elt = transition_elt.findall(tag("NoncurrentDays"), nsmap)[-1]
         except IndexError:
-            days_elt = None
-
-        if days_elt is None:
             raise ValueError(
-                "Missing 'NoncurrentDays' element in NoncurrentVersionTransition action"
+                "Missing 'NoncurrentDays' element in "
+                "NoncurrentVersionTransition action"
             )
-        action_filter = NoncurrentDaysActionFilter.from_element(days_elt, **kwargs)
-        return cls(action_filter, policy, **kwargs)
+        try:
+            newer_non_current_el = transition_elt.findall(
+                tag("NewerNoncurrentVersions"), nsmap
+            )[-1]
+        except IndexError:
+            newer_non_current_el = None
+
+        if days_elt is None and newer_non_current_el is None:
+            raise ValueError(
+                "Missing 'NoncurrentDays' and 'newer_non_current_el' element "
+                "in NoncurrentVersionTransition action"
+            )
+
+        non_current_days = None
+        newer_non_current_versions = None
+        action_filter = None
+        if days_elt is not None:
+            action_filter = NoncurrentDaysActionFilter.from_element(days_elt, **kwargs)
+            non_current_days = action_filter.days
+        action_filter = NoncurrentCountActionFilter.from_element(
+            non_current_days, newer_non_current_el, **kwargs
+        )
+        newer_non_current_versions = action_filter.count
+
+        return cls(
+            action_filter,
+            policy,
+            non_current_days,
+            newer_non_current_versions,
+            **kwargs,
+        )
 
     def _to_element_tree(self, **kwargs):
         trans_elt = etree.Element("NoncurrentVersionTransition")
@@ -1128,7 +1239,8 @@ class NoncurrentVersionTransition(Transition):
         policy_elt.text = self.policy
         trans_elt.append(policy_elt)
         filter_elt = self.filter._to_element_tree(**kwargs)
-        trans_elt.append(filter_elt)
+        for el in filter_elt:
+            trans_elt.append(el)
         return trans_elt
 
     def match(self, obj_meta, **kwargs):
