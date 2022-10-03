@@ -3712,7 +3712,7 @@ _meta2_abort_sharding(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 
 	// Safety check
 	const enum election_status_e election_status = sq3->election;
-	if (election_status != ELECTION_LEADER){
+	if (election_status && election_status != ELECTION_LEADER) {
 		return SYSERR("Not master");
 	}
 
