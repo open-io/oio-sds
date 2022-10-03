@@ -34,9 +34,22 @@ from tests.utils import BaseTestCase, random_str
 DEFAULT_GROUP_ID_TEST = "event-agent-test"
 
 
-class BaseClassLifeCycle(BaseTestCase):
-    CONTAINERS = set()
+class Helper(object):
+    def __init__(self, api, account, container):
+        self.api = api
+        self.account = account
+        self.container = container
 
+    def enable_versioning(self):
+        self.api.container_set_properties(
+            self.account, self.container, system={"sys.m2.policy.version": "-1"}
+        )
+        self.api.container_set_properties(
+            self.account, self.container, system={"sys.policy.version": "-1"}
+        )
+
+
+class BaseClassLifeCycle(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(BaseTestCase, cls).setUpClass()
@@ -61,6 +74,7 @@ class BaseClassLifeCycle(BaseTestCase):
         self.api.container_create(self.account, self.container)
         self.clean_later(self.container)
         self.lifecycle = ContainerLifecycle(self.api, self.account, self.container)
+        self.helper = Helper(self.api, self.account, self.container)
 
     def tearDown(self):
         super(BaseClassLifeCycle, self).tearDown()
@@ -73,7 +87,6 @@ class BaseClassLifeCycle(BaseTestCase):
         self.api.object_create(
             self.account, self.container, obj_name=name, data=data, **kwargs
         )
-        self.__class__.CONTAINERS.add(self.container)
         obj_meta = self.api.object_show(self.account, self.container, name)
         obj_meta["container"] = self.container
         if size is not None:
@@ -128,19 +141,21 @@ class TestContainerLifecycle(BaseClassLifeCycle):
         )
 
 
-class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
+class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
     def setUp(self):
-        super(TestLifecycleConformExpiration, self).setUp()
+        super(TestLifecycleConform, self).setUp()
         self.batch_size = 2
         self.to_match = []
         self.not_to_match = []
+        self.to_match_markers = []
+        self.lifecycle = ContainerLifecycle(self.api, self.account, self.container)
         self.proxy_client = ProxyClient(
             self.conf, pool_manager=self.api.container.pool_manager, logger=self.logger
         )
         admin_args = {}
         admin_args["force_master"] = False
         self.admin_client = AdminClient(self.conf, logger=self.logger, **admin_args)
-
+        self.helper = Helper(self.api, self.account, self.container)
         self.prefix = "doc"
         self.data_short = "test"
         self.data_middle = "test some data"
@@ -148,6 +163,10 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
 
         self.action = "Expiration"
         self.action_config = {"Expiration": {"Days": 11}}
+
+        self.versioning_enabled = False
+        self.number_of_versions = 1
+        self.expected_to_cycle = 1
 
         self.conditions = {
             "prefix": self.prefix,
@@ -166,7 +185,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
             </Tagset></Tagging>"""
 
     def tearDown(self):
-        super(TestLifecycleConformExpiration, self).tearDown()
+        super(TestLifecycleConform, self).tearDown()
 
     def _copy_db(self):
         self.cid = cid_from_name(self.account, self.container)
@@ -188,18 +207,148 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         )
         self.assertEqual(resp.status, 204)
 
-    def _check_and_apply(self, source):
-        self.assertIsNot(len(self.to_match), 0)
+    def _check_and_apply(self, source, nothing_to_match=False):
+        if not nothing_to_match:
+            self.assertIsNot(len(self.to_match), 0)
         self._copy_db()
         time.sleep(1)
         self._exec_rules_via_sql_query(source)
+
+    def _check_event(self, elements_to_match, event):
+        elem_to_remove = None
+        found = False
+        for elem in elements_to_match:
+            version = int(elem["version"])
+            if (
+                elem["name"] == event.data["object"]
+                and version == event.data["version"]
+                and int(elem["mtime"]) == event.data["mtime"]
+            ):
+                found = True
+                elem_to_remove = elem
+                break
+
+        return [found, elem_to_remove]
+
+    def _get_action_parameters(self, act_type, act):
+        days = None
+        date = None
+        delete_marker = None
+        if act_type == "Expiration":
+            days = act.get("Days")
+            date = act.get("Date")
+            delete_marker = act.get("ExpiredObjectDeleteMarker")
+        elif act_type == "Transitions":
+            days = act.get("Days")
+            date = act.get("Date")
+        return [days, date, delete_marker]
+
+    def _check_query_events(
+        self,
+        queries,
+        action,
+        view_queries,
+        newer_non_current_versions,
+        policy,
+        last_rule_action,
+    ):
+        for key_query, val_query in queries.items():
+            offset = 0
+            while True:
+                sql_query = val_query
+                if action in (
+                    "NoncurrentVersionExpiration",
+                    "NoncurrentVersionTransition",
+                ):
+                    sql_query = f"{sql_query} limit 100" f" offset {offset} "
+                else:
+                    sql_query = (
+                        f"{sql_query} limit {self.batch_size} " f" offset {offset} "
+                    )
+
+                kwargs = {}
+                params = {"cid": self.cid, "service_id": self.peer_to_use}
+                data = {}
+                data["action"] = action
+                data["suffix"] = "lifecycle"
+                if offset == 0 and key_query == "base":
+                    for key, val in view_queries.items():
+                        data[key] = val
+                data["query"] = sql_query
+                # force checks non_current_days
+                data["newerNoncurrentDays"] = 0
+                data["newerNoncurrentVersions"] = newer_non_current_versions
+                data["policy"] = policy
+                data["batch_size"] = self.batch_size
+                if last_rule_action:
+                    data["last_action"] = 1
+
+                reqid = request_id()
+                resp, body = self.proxy_client._request(
+                    "POST",
+                    "/container/lifecycle/apply",
+                    params=params,
+                    reqid=reqid,
+                    json=data,
+                    **kwargs,
+                )
+                count = int(resp.getheader("x-oio-count", 0))
+                offset += count
+                count_events = 0
+
+                if action in ("Expiration", "Transition"):
+                    exptected_events = count * self.expected_to_cycle
+                else:
+                    exptected_events = self.expected_to_cycle
+
+                while count_events < exptected_events:
+                    event = self.wait_for_kafka_event(
+                        types=(EventTypes.LIFECYCLE_ACTION,)
+                    )
+                    self.assertIsNotNone(event)
+                    self.assertEqual(event.event_type, "storage.lifecycle.action")
+                    self.assertEqual(event.data["account"], self.account)
+                    self.assertEqual(event.data["container"], self.container)
+
+                    elements_to_match = (
+                        self.to_match if key_query == "base" else self.to_match_markers
+                    )
+
+                    [found, elem_to_remove] = self._check_event(
+                        elements_to_match, event
+                    )
+                    if not found:
+                        # For debug
+                        print("elements_to_match:", elements_to_match)
+                        print("event.data:", event.data)
+                    self.assertEqual(found, True)
+                    list_of_bool = [
+                        True
+                        for elem in self.not_to_match
+                        if event.data["object"]
+                        and event.data["version"] in elem.values()
+                    ]
+                    self.assertEqual(any(list_of_bool), False)
+                    elements_to_match.remove(elem_to_remove)
+
+                    self.assertEqual(event.data["action"], action)
+                    count_events += 1
+
+                if count == 0:
+                    break
+
+    def _is_last_action_last_rule(self, rules, actions, count_rules, count_actions):
+        if (count_rules == len(rules) - 1) and (count_actions == len(actions) - 1):
+            return True
+        else:
+            return False
 
     def _get_actions(self, rule):
         actions = {}
         expiration = rule.get("Expiration", None)
         transitions = rule.get("Transitions", [])
         if expiration is not None:
-            actions["Expiration"] = expiration
+            actions["Expiration"] = [expiration]
         if len(transitions) > 0:
             actions["Transitions"] = transitions
         return actions
@@ -209,55 +358,119 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         lc.load_json(source)
         lc.save()
         json_dict = json.loads(source)
+
+        count_rules = 0
+        count_actions = 0
         for rule_id, rule in json_dict["Rules"].items():
             rule["ID"] = rule_id
             actions = self._get_actions(rule)
-            for act in actions:
-                # Force expiration for test
-                days_in_sec = 0
-                base_sql_query = lc.build_sql_query(rule, days_in_sec)
-                offset = 0
-                action = self.action
-                while True:
-                    sql_query = (
-                        f"{base_sql_query} limit {self.batch_size} " f" offset {offset}"
+            for act_type, act_list in actions.items():
+                for act in act_list:
+                    days_in_sec = None
+                    base_sql_query = None
+                    non_current = False
+                    newer_non_current_versions = 0
+                    non_current_days = 0
+                    policy = ""
+                    queries = {}
+                    view_queries = {}
+                    action = ""
+                    days = None
+                    date = None
+                    delete_marker = None
+
+                    if act_type == "NoncurrentVersionExpiration":
+                        newer_non_current_versions = act["NewerNoncurrentVersions"]
+                        non_current_days = act["Days"]
+                        non_current = True
+                        action = "NoncurrentVersionExpiration"
+                    elif act_type == "NoncurrentVersionTransitions":
+                        newer_non_current_versions = act["NewerNoncurrentVersions"]
+                        non_current_days = act["Days"]
+                        policy = act["StorageClass"]
+                        non_current = True
+                        action = "NoncurrentVersionTransition"
+                    elif act_type == "Expiration":
+                        action = "Expiration"
+                    elif act_type == "Transitions":
+                        policy = act["StorageClass"]
+                        action = "Transition"
+                    else:
+                        print("Unsupported action type", act_type)
+                        return
+
+                    days, date, delete_marker = self._get_action_parameters(
+                        act_type, act
                     )
-                    kwargs = {}
-                    params = {"cid": self.cid, "service_id": self.peer_to_use}
+                    # TODO(check if versioning is enabled on client side)
+                    # Versioning and NoncurrentVersions
+                    # For tests(non_current_days_in_sec set to 0)
+                    # non_current_days_in_sec = 86400 * non_current_days
+                    non_current_days_in_sec = 0 * non_current_days
 
-                    data = {}
+                    if self.versioning_enabled:
+                        if non_current:
+                            non_current_days_in_sec = non_current_days_in_sec
+                            noncurrent_view = lc.create_noncurrent_view(
+                                non_current_days_in_sec
+                            )
+                            current_view = lc.create_common_views(
+                                "current_view", non_current_days_in_sec
+                            )
 
-                    data["action"] = action
-                    data["query"] = sql_query
-                    data["suffix"] = "lifecycle"
-                    reqid = request_id()
-                    resp, body = self.proxy_client._request(
-                        "POST",
-                        "/container/lifecycle/apply",
-                        params=params,
-                        reqid=reqid,
-                        json=data,
-                        **kwargs,
+                            view_queries["noncurrent_view"] = noncurrent_view
+                            view_queries["current_view"] = current_view
+                            queries["base"] = lc.noncurrent_query()
+                        # versioning for Expiration/Transition
+                        else:
+                            delete_marker_view = lc.create_common_views(
+                                "marker_view", non_current_days_in_sec, deleted=True
+                            )
+                            vesioned_view = lc.create_common_views(
+                                "versioned_view", non_current_days_in_sec, deleted=False
+                            )
+
+                            noncurrent_view = lc.create_noncurrent_view(
+                                non_current_days_in_sec
+                            )
+
+                            view_queries["marker_view"] = delete_marker_view
+                            view_queries["versioned_view"] = vesioned_view
+                            view_queries["noncurrent_view"] = noncurrent_view
+
+                            queries["base"] = lc.build_sql_query(
+                                rule, non_current_days_in_sec, None, False, True
+                            )
+                            queries["marker"] = lc.markers_query()
+
+                    else:  # non versioned
+                        if days is not None:
+                            days_in_sec = 0 * days
+                        base_sql_query = lc.build_sql_query(rule, days_in_sec, date)
+                        queries["base"] = base_sql_query
+
+                    last_rule_action = 0
+                    self._check_query_events(
+                        queries,
+                        action,
+                        view_queries,
+                        newer_non_current_versions,
+                        policy,
+                        last_rule_action,
                     )
-                    count = int(resp.getheader("x-oio-count"))
-                    offset += count
+                count_actions += 1
+                self.assertEqual(len(self.to_match), 0)
+                self.assertEqual(len(self.to_match_markers), 0)
+            count_rules += 1
 
-                    for i in range(count):
-                        event = self.wait_for_kafka_event(
-                            types=(EventTypes.LIFECYCLE_ACTION,)
-                        )
-                        self.assertIsNotNone(event)
-                        self.assertEqual(event.event_type, "storage.lifecycle.action")
-                        self.assertEqual(event.data["account"], self.account)
-                        self.assertEqual(event.data["container"], self.container)
-                        self.assertIn(event.data["object"], self.to_match)
-                        self.assertNotIn(event.data["object"], self.not_to_match)
-                        self.to_match.remove(event.data["object"])
-                        self.assertEqual(event.data["action"], action)
 
-                    if count == 0:
-                        break
-            self.assertEqual(len(self.to_match), 0)
+class TestLifecycleConformExpiration(TestLifecycleConform):
+    def setUp(self):
+        super(TestLifecycleConformExpiration, self).setUp()
+        self.action = "Expiration"
+
+    def tearDown(self):
+        super(TestLifecycleConformExpiration, self).tearDown()
 
     def test_apply_prefix(self):
         source = (
@@ -278,13 +491,15 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/")
-            self.to_match.append(obj_meta["name"])
+            self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/")
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -320,13 +535,16 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
         for _ in range(self.number_match):
             obj_meta = self._upload_something(
                 data=self.data_short,
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.to_match.append(obj_meta["name"])
+            self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -334,7 +552,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -362,22 +580,25 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/", data=data_long)
-            self.to_match.append(obj_meta["name"])
+            self.to_match.append(obj_meta)
 
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/", data=data_short)
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/", data=data_short)
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/", data=data_long)
-            self.not_to_match.append(obj_meta["name"])
-
+            self.not_to_match.append(obj_meta)
         self._check_and_apply(source)
 
     def test_apply_prefix_and_lesser(self):
@@ -405,23 +626,44 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/", data=data_long)
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/", data=data_short)
-            self.to_match.append(obj_meta["name"])
+            self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/", data=data_short)
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/", data=data_long)
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
+
+    def _upload_expected_combine1(self):
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
     def test_combine1(self):
         # ["prefix', 'greater"]
@@ -450,17 +692,10 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix, data=self.data_short, random_length=5
-            )
-            self.not_to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix, data=self.data_long, random_length=6
-            )
-            self.to_match.append(obj_meta["name"])
+        self._upload_expected_combine1()
 
         self._check_and_apply(source)
 
@@ -491,23 +726,33 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix, data=self.data_middle, random_length=4
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix, data=self.data_short, random_length=5
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_middle, random_length=4
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "2" + random_str(5)
             obj_meta = self._upload_something(
-                prefix=self.prefix, data=self.data_long, random_length=6
+                name=name, data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -546,23 +791,31 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: self.not_match_tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -608,23 +861,31 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: self.not_match_tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -679,23 +940,31 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: self.not_match_tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "j" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    prefix=self.prefix,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -742,24 +1011,31 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix,
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: self.not_match_tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine7(self):
@@ -802,98 +1078,54 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_middle,
-                random_length=4,
-            )
-            self.not_to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_short,
-                random_length=5,
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_middle, random_length=4
+                )
+                self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(6),
-                data=self.data_long,
-                random_length=6,
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(6),
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_middle,
-                random_length=4,
-            )
-            self.not_to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_short,
-                random_length=5,
-            )
-            self.not_to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(6),
-                data=self.data_long,
-                random_length=6,
-            )
-            self.not_to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix="not-prefix-" + random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -902,7 +1134,58 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_middle,
+                random_length=4,
+            )
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_short,
+                random_length=5,
+            )
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(6),
+                data=self.data_long,
+                random_length=6,
+            )
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_middle,
+                random_length=4,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match.append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(6),
+                data=self.data_long,
+                random_length=6,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -910,7 +1193,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 data=self.data_middle,
                 random_length=4,
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -918,22 +1201,25 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 data=self.data_short,
                 random_length=5,
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=self.prefix + random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=self.prefix + random_str(5),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -942,7 +1228,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -951,8 +1237,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
-
+            self.not_to_match.append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine8(self):
@@ -983,24 +1268,29 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5), data=self.data_middle, random_length=4
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_middle, random_length=4
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_short, random_length=5
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta["name"])
-
+            self.not_to_match.append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine9(self):
@@ -1041,32 +1331,38 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
         for _ in range(self.number_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_middle, random_length=4
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_short, random_length=5
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1075,7 +1371,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1084,7 +1380,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1127,6 +1423,8 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1135,16 +1433,19 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1192,6 +1493,8 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1200,7 +1503,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1209,16 +1512,19 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1271,6 +1577,9 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(4),
@@ -1278,7 +1587,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1287,16 +1596,19 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1342,6 +1654,8 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1350,7 +1664,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1359,16 +1673,19 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_long,
-                random_length=6,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1407,42 +1724,52 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(6),
                 data=self.data_long,
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(7),
-                data=self.data_middle,
-                random_length=6,
-                properties={TAGGING_KEY: self.not_match_tag_set},
-            )
-            self.not_to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = str(j) + "2" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1489,42 +1816,52 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
+        for j in range(self.number_not_match):
+            name = str(j) + "2" + random_str(5)
             obj_meta = self._upload_something(
-                prefix=random_str(6),
+                name=name,
                 data=self.data_long,
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
+        for j in range(self.number_not_match):
+            name = str(j) + "3" + random_str(5)
             obj_meta = self._upload_something(
-                prefix=random_str(7),
+                name=name,
                 data=self.data_middle,
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1578,23 +1915,32 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1603,7 +1949,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1612,7 +1958,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1657,24 +2003,32 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_middle,
-                random_length=4,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(5),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_not_match):
+            name = str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1683,7 +2037,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1692,7 +2046,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1735,14 +2089,20 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1751,7 +2111,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
             self.assertIsNot(len(self.to_match), 0)
 
         self._check_and_apply(source)
@@ -1800,15 +2160,20 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
         )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
 
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(
-                prefix=random_str(4),
-                data=self.data_short,
-                random_length=5,
-                properties={TAGGING_KEY: tag_set},
-            )
-            self.to_match.append(obj_meta["name"])
+        for j in range(self.number_match):
+            name = str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -1817,7 +2182,7 @@ class TestLifecycleConformExpiration(CliTestCase, BaseClassLifeCycle):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta["name"])
+            self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -1829,3 +2194,6 @@ class TestLifecycleConformTransition(TestLifecycleConformExpiration):
         self.action_config = {
             "Transitions": [{"Days": 11, "StorageClass": "STANDARD_IA"}]
         }
+
+    def tearDown(self):
+        super(TestLifecycleConformTransition, self).tearDown()

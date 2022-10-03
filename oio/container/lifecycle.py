@@ -82,19 +82,36 @@ class ContainerLifecycle(object):
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: json_str}
         )
 
-    def build_sql_query(self, rule_filter, formated_time=None, **kwargs):
-        # _query = 'SELECT * FROM aliases AS al '
+    def build_sql_query(
+        self,
+        rule,
+        formated_days=None,
+        date=None,
+        non_current=False,
+        versioned=False,
+        expired_delete_marker=None,
+        **kwargs,
+    ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
+        rule_filter = RuleFilter(rule)
+        _query = " "
+        skip_size_and_tag = False
+        if expired_delete_marker:
+            skip_size_and_tag = True
 
-        rule = RuleFilter(rule_filter)
-        _query = ""
-        nb_filters = len(rule.tags)
-        if rule.prefix is not None:
+        time_flag = False
+        if formated_days is not None:
+            time_flag = True
+        if date is not None:
+            time_flag = True
+
+        nb_filters = len(rule_filter.tags)
+        if rule_filter.prefix is not None:
             nb_filters += 1
-        if rule.lesser is not None:
+        if rule_filter.lesser is not None:
             nb_filters += 1
-        if rule.greater is not None:
+        if rule_filter.greater is not None:
             nb_filters += 1
         if nb_filters == 0:
             # No filter condition is equivalent to empty filter
@@ -107,38 +124,41 @@ class ContainerLifecycle(object):
         )
 
         _lesser = ""
-        if rule.lesser is not None:
-            _lesser = (
-                f" AND "
-                f"((ct.size <{rule.lesser} AND pr.value IS NULL) OR "
-                f"pr.value < {rule.lesser})"
-            )
+        # bypass size when dealing with delete marker
+        if not skip_size_and_tag:
+            if rule_filter.lesser is not None:
+                _lesser = (
+                    f" AND "
+                    f"((ct.size <{rule_filter.lesser} AND pr.value IS NULL) OR "
+                    f"pr.value < {rule_filter.lesser})"
+                )
 
         _greater = ""
-        if rule.greater is not None:
-            _greater = (
-                f" AND "
-                f"((ct.size >{rule.greater} AND pr.value IS NULL) OR "
-                f"pr.value > {rule.greater}) "
-            )
+        # bypass size and tags when dealing with delete marker
+        if not skip_size_and_tag:
+            if rule_filter.greater is not None:
+                _greater = (
+                    f" AND "
+                    f"((ct.size >{rule_filter.greater} AND pr.value IS NULL) OR "
+                    f"pr.value > {rule_filter.greater}) "
+                )
 
-        if len(rule.tags) > 0:
-            _base_tag = (
-                " INNER JOIN properties pr2 ON al.alias = pr2.alias"
-                " AND al.version=pr2.version "
-            )
+            if len(rule_filter.tags) > 0:
+                _base_tag = (
+                    " INNER JOIN properties pr2 ON al.alias ="
+                    "pr2.alias AND al.version=pr2.version "
+                )
 
-            _tags = f" AND pr2.key='{TAGGING_KEY}'"
-            for el in rule.tags:
-                for k, v in el.items():
+                _tags = f" AND pr2.key='{TAGGING_KEY}'"
+                for el in rule_filter.tags:
+                    ((k, v),) = el.items()
                     _tag_key_cond = (
-                        " AND CAST(pr2.value as nvarchar(10000)) "
-                        f"LIKE '%<Tag><Key>{k}</Key>"
+                        " AND CAST(pr2.value as nvarchar(10000))"
+                        f" LIKE '%<Tag><Key>{k}</Key>"
                     )
                     _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
                     _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
 
-            if _tags:
                 _query = f"{_query}{_base_tag}{_tags}"
 
         if _lesser or _greater:
@@ -148,18 +168,39 @@ class ContainerLifecycle(object):
             if _greater:
                 _query = f"{_query}{_greater}"
 
-        if rule.prefix is not None:
-            _prefix_cond = f" WHERE ( al.alias LIKE '{rule.prefix}%'"
+        if rule_filter.prefix is not None or time_flag:
+            _query = f"{_query} WHERE ("
+
+        if rule_filter.prefix is not None:
+            _prefix_cond = f"( al.alias LIKE '{rule_filter.prefix}%')"
             _query = f"{_query}{_prefix_cond}"
-        if formated_time is not None:
-            _time_cond = (
-                f" AND (al.mtime + {formated_time}) < (CAST "
-                "(strftime('%s', 'now') AS INTEGER ))"
-            )
-            _query = f"{_query}{_time_cond}"
+        if expired_delete_marker is None:
+            if rule_filter.prefix is not None and time_flag:
+                _query = f"{_query}  AND "
+            if formated_days is not None:
+                _time_cond = (
+                    f" ((al.mtime + {formated_days}) < (CAST "
+                    f"(strftime('%s', 'now') AS INTEGER )))"
+                )
+                _query = f"{_query}{_time_cond}"
+            elif date is not None:
+                _time_cond = (
+                    f" (({date}) < (CAST " f"(strftime('%s', 'now') AS INTEGER )))"
+                )
+                _query = f"{_query}{_time_cond}"
+            else:
+                # Condition shouldn't occur
+                # (days or date is present except in case of
+                # expired delete marker)
+                raise ValueError(
+                    "Configuration needs days or date in filter ",
+                )
+
         # close WHERE clause
-        if rule.prefix is not None:
+        if rule_filter.prefix is not None or time_flag:
             _query = f"{_query} )"
+        if non_current or versioned:
+            _query = f"{_query} GROUP BY al.alias"
         return _query
 
 

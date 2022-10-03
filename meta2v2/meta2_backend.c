@@ -4284,16 +4284,28 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gchar *full_query = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	const gchar *base_query = "SELECT al.alias, al.version, al.deleted, al.mtime FROM aliases AS al ";
 
-	const char *action = NULL, *query = NULL, *suffix = NULL;
+	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
+	const gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
+			"COUNT(*) AS nb_versions, MAX(al.version) FROM versioned_view AS al";
+
+	const gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
+			"nb_versions FROM marker_view AS al";
+
+	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
-
+	int is_markers = 0;
+	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jis_markers = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
-	{"suffix",  &jsuffix,   json_type_string, 1},
-	{"action",  &jaction,   json_type_string, 1},
-	{"query",   &jquery,    json_type_string, 1},
-	{NULL, NULL, 0, 0}};
+		{"suffix", &jsuffix, json_type_string, 1},
+		{"action", &jaction, json_type_string, 1},
+		{"query", &jquery, json_type_string, 1},
+		{"is_markers", &jis_markers, json_type_int, 0},
+		{"policy", &jpolicy, json_type_string, 0},
+		{"batch_size", &jbatch_size, json_type_int, 0},
+		{"last_action", &jlast_action, json_type_int, 0},
+		{NULL, NULL, 0, 0}
+	};
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -4310,13 +4322,16 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	action = json_object_get_string(jaction);
 	query = json_object_get_string(jquery);
 	suffix = json_object_get_string(jsuffix);
-
+	is_markers = json_object_get_int(jis_markers);
 	if(!suffix  || !*suffix) {
 		err = BADREQ("Invalid suffix for lifecycle copy");
 		goto end;
 	}
 
-	full_query = g_strdup_printf("%s %s", base_query, query);
+	if (jpolicy) {
+		policy = json_object_get_string(jpolicy);
+	}
+
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
@@ -4324,14 +4339,34 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (err) {
 		goto end;
 	}
+	gint64 versioning = sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, 0);
+	gboolean current_action = (g_strcmp0(action, "Expiration") \
+			== 0 || g_strcmp0(action, "Transition") == 0);
+
+
+	if (!current_action) {
+		g_prefix_error(&err, "Bad action: %s", action);
+		goto end;
+	}
+	if (versioning == 0) {
+		full_query = g_strdup_printf("%s %s", base_query, query);
+	} else {
+		if (is_markers) {
+			full_query = g_strdup_printf("%s %s", base_query_marker , query);
+		} else {
+			full_query = g_strdup_printf("%s %s", base_query_versioned, query);
+		}
+	}
+
+	sqlite3_stmt *stmt = NULL;
+	int rc;
 
 	err = sqlx_transaction_begin(sq3, &repctx);
 	if (err) {
 		goto close;
 	}
 
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_ERROR("Failed to apply query %s %s", full_query, \
 				sqlite3_errmsg(sq3->db));
@@ -4340,11 +4375,24 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		goto rollback;
 	}
 	guint32 count_rows = 0;
-	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+	gint64 deleted = 0, nb_version = 0;
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
 				sqlite3_column_bytes(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
-		gint64 mtime = sqlite3_column_int64(stmt, 3);
+		// Expiration and Transition
+		// Manage current version and delete markers
+		if (versioning != 0) {
+			deleted = sqlite3_column_int64(stmt, 3);
+			nb_version = sqlite3_column_int64(stmt, 6);
+
+			if (deleted == 1) {
+				if (nb_version > 1) {
+					continue;
+				}
+			}
+		}
+		gint64 mtime = sqlite3_column_int64(stmt, 4);
 		GString *event = oio_event__create_with_id(
 				"storage.lifecycle.action", url, oio_ext_get_reqid());
 		g_string_append(event, ",\"data\":{");
@@ -4353,12 +4401,20 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		append_str(event, "object", object_name);
 		append_int64(event, "version", version);
 		append_int64(event, "mtime", mtime);
+		// Add delete marker when versioning and Expiration and
+		// current version is not a deleted marker
+		if (versioning != 0 && (deleted == 0) && \
+			(g_strcmp0(action, "Expiration") == 0) ) {
+			append_int64(event, "add_delete_marker", 1);
+		}
 		append_str(event, "action", g_strdup(action));
+		if (policy) {
+			append_str(event, "policy", g_strdup(policy));
+		}
 
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
-
 		count_rows++;
 	}
 	rc = sqlite3_finalize(stmt);
