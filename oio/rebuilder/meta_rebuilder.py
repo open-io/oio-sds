@@ -18,7 +18,8 @@ import time
 import sys
 
 from oio import ObjectStorageApi
-from oio.common.exceptions import NotFound, OioTimeout, ServiceBusy
+from oio.common.exceptions import NotFound, OioException, OioTimeout, \
+    ServiceBusy, from_multi_responses
 from oio.directory.admin import AdminClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
@@ -60,14 +61,17 @@ class MetaRebuilderWorker(RebuilderWorker):
             try:
                 if not missing_base:
                     # Check if the bases exist
-                    info = self.admin_client.has_base(self.type, cid=cid)
-                    for meta in info.values():
-                        if meta['status']['status'] != 200:
-                            missing_base = True
-                            break
+                    try:
+                        data = self.admin_client.has_base(self.type, cid=cid)
+                        from_multi_responses(data)
+                    except OioException as exc:
+                        self.logger.warning(
+                            'Missing base(s) for %s: %s', cid, exc)
+                        missing_base = True
 
                 if missing_base:
-                    self.admin_client.election_leave(self.type, cid=cid)
+                    data = self.admin_client.election_leave(self.type, cid=cid)
+                    from_multi_responses(data)
                     # TODO(adu): use self.admin_client.election_sync
                     # Setting a property will trigger a database replication
                     properties = {'sys.last_rebuild': str(int(time.time()))}

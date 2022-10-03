@@ -16,7 +16,7 @@
 
 from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
-from oio.common.exceptions import VolumeException
+from oio.common.exceptions import VolumeException, from_multi_responses
 from oio.common.logger import get_logger
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
@@ -282,13 +282,15 @@ class Meta2Database(object):
 
         self.logger.debug(
             "Resetting election (base=%s src=%s dst=%s)", bseq, src, dst)
-        self.admin.election_leave(self.service_type, cid=cid, **kwargs)
+        data = self.admin.election_leave(self.service_type, cid=cid, **kwargs)
+        from_multi_responses(data)
 
         try:
-            self.admin.remove_base(self.service_type, cid=cid, service_id=src,
-                                   **kwargs)
+            data = self.admin.remove_base(
+                self.service_type, cid=cid, service_id=src, **kwargs)
+            from_multi_responses(data)
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.warn(
+            self.logger.warning(
                 "Failed to remove source base (base=%s src=%s dst=%s): %s",
                 bseq, src, dst, exc)
 

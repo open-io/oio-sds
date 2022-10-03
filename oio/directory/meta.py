@@ -19,7 +19,8 @@ from collections import defaultdict
 from oio.directory.admin import AdminClient
 from oio.rdir.client import RdirClient
 from oio.conscience.client import ConscienceClient
-from oio.common.exceptions import OioException, ServiceBusy
+from oio.common.exceptions import OioException, ServiceBusy, \
+    from_multi_responses
 from oio.common.logger import get_logger
 
 
@@ -151,28 +152,31 @@ class MetaMapping(object):
                 # because the cache of peers in each election is cleared when
                 # restarting the FSM.
                 try:
-                    self.admin.election_leave(service_type, cid=cid)
+                    data = self.admin.election_leave(service_type, cid=cid)
+                    from_multi_responses(data)
                 except OioException as exc:
                     self.logger.warn(
                         "Failed to reset the election before deleting of "
                         "%s: %s",
                         cid, exc)
                 try:
-                    self.admin.remove_base(service_type, cid=cid,
-                                           service_id=no_longer_used)
+                    data = self.admin.remove_base(
+                        service_type, cid=cid, service_id=no_longer_used)
+                    from_multi_responses(data)
                 except OioException as exc:
-                    self.logger.warn(
+                    self.logger.warning(
                         "Failed to remove the base %s (%s): %s",
                         cid, no_longer_used.join(','), exc)
             try:
-                self.admin.election_leave(service_type, cid=cid)
+                data = self.admin.election_leave(service_type, cid=cid)
+                from_multi_responses(data)
                 election = self.admin.election_status(service_type, cid=cid)
                 for svc, status in election['peers'].items():
                     if status['status']['status'] not in (200, 303):
-                        self.logger.warn("Election not started for %s: %s",
-                                         svc, status)
+                        self.logger.warning(
+                            "Election not started for %s: %s", svc, status)
             except OioException as exc:
-                self.logger.warn(
+                self.logger.warning(
                     "Failed to get election status for base %s: %s",
                     cid, exc)
 

@@ -299,6 +299,9 @@ label_retry:
 		const char *service_id = SERVICE_ID();
 		EXTRA_ASSERT(service_id != NULL);
 		m1uv = g_strsplit(service_id, OIO_CSV_SEP, -1);
+		if (!ctx->multi_run && g_strv_length(m1uv) > 1) {
+			err = BADREQ("Only one service can be requested");
+		}
 	} else if (*ctx->type == '#') {
 		gboolean m0_only = g_strcmp0("#meta0", ctx->type) == 0;
 		err = hc_resolve_reference_directory(
@@ -316,6 +319,7 @@ label_retry:
 			 * in `_resolve_service_through_many_meta1`. */
 			retry = FALSE;
 			g_clear_error(&err);
+			g_strfreev(m1uv);
 			goto label_retry;
 		} else {
 			g_prefix_error(&err, "Directory error: ");
@@ -333,7 +337,7 @@ label_retry:
 			m1uv = tmp;
 			meta1_urlv_shift_addr(m1uv);
 		} else if (!*m1uv) {
-			g_strfreev (m1uv);
+			g_strfreev(m1uv);
 			return NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 		}
 
@@ -459,11 +463,11 @@ label_retry:
 				GError *last_err = err;
 				err = NULL;
 
-				/* But if we expected at least one service to respond,
-				 * and we still encounter that error with the last URL of the
-				 * array (!pu[1]), then this is an overall error that we should return. */
-				if ((ctx->which != CLIENT_RUN_ALL
-						&& ctx->which != CLIENT_SPECIFIED) && !next_url) {
+				if (!ctx->multi_run && !next_url) {
+					/* But if we expected at least one service to respond,
+					 * and we still encounter that error with the last URL
+					 * of the array (!pu[1]), then this is an overall error
+					 * that we should return. */
 					err = BUSY("No service replied (last error: (%d) %s)",
 							last_err->code, last_err->message);
 					stop = TRUE;
@@ -477,6 +481,9 @@ label_retry:
 							last_err->code, last_err->message);
 					stop = TRUE;
 				}
+
+				/* All the services must be reached, let's just remind the
+				 * error (already done) and continue to the next service */
 				g_clear_error(&last_err);
 			} else if (CODE_IS_RETRY(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
@@ -638,6 +645,7 @@ void client_init(struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->seq = seq;
 	sqlx_inline_name_fill_type_asis(&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq, suffix);
+	ctx->multi_run = how == CLIENT_RUN_ALL || how == CLIENT_SPECIFIED;
 	if (SERVICE_ID())
 		ctx->which = CLIENT_SPECIFIED;
 	else

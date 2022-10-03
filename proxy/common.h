@@ -250,6 +250,7 @@ struct client_ctx_s {
 	const char *type;
 	gint64 seq;
 	enum proxy_preference_e which;
+	gboolean multi_run;
 
 	/* output */
 	guint count;

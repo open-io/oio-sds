@@ -368,6 +368,17 @@ def from_response(resp, body=None):
         return cls(http_status, resp.reason)
 
 
+def from_multi_responses(data, excepted_status=(200,)):
+    errors = []
+    for svc, info in data.items():
+        status = info['status']['status']
+        if status not in excepted_status:
+            errors.append(from_status(
+                status, reason=f"{svc}: {info['status']['message']}"))
+    if errors:
+        raise OioException(errors)
+
+
 def reraise(exc_type, exc_value, extra_message=None):
     """
     Raise an exception of type `exc_type` with arguments of `exc_value`

@@ -27,7 +27,8 @@ from oio.common.constants import EXISTING_SHARD_STATE_ABORTED, \
     M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, M2_PROP_SHARDING_UPPER, \
     M2_PROP_SHARDS, NEW_SHARD_STATE_CLEANED_UP, STRLEN_CID
 from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
-from oio.common.exceptions import BadRequest, OioException, OioTimeout
+from oio.common.exceptions import BadRequest, OioException, OioTimeout, \
+    from_multi_responses
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
@@ -752,23 +753,22 @@ class ContainerSharding(ProxyClient):
 
         # Wait until all peers of the new shard are up to date
         while True:
-            has = self.admin.has_base('meta2', cid=shard['cid'], **kwargs)
-            peers_ready = True
-            for service, status in has.items():
-                if status['status']['status'] != 200:
-                    self.logger.debug(
-                        'Missing base for new shard %s '
-                        '(service=%s status=%s)',
-                        shard['cid'], service, str(status))
-                    peers_ready = False
-            if peers_ready:
+            try:
+                data = self.admin.has_base('meta2', cid=shard['cid'], **kwargs)
+                from_multi_responses(data)
                 break
-            if time.time() > deadline:
-                self.logger.warning(
-                    'Some peers are a missing base for new shard %s, '
-                    'but we can try to continue', shard['cid'])
-                break
-            time.sleep(0.1)
+            except Exception as exc:
+                if time.time() > deadline:
+                    self.logger.warning(
+                        'Some peers of the new shard %s do not yet have '
+                        'the database, but we can try to continue: %s',
+                        shard['cid'], exc)
+                    break
+                self.logger.debug(
+                    'Some peers of the new shard %s do not yet have '
+                    'the database: %s', shard['cid'], exc)
+                time.sleep(0.1)
+                continue
 
         # Check the sharding properties of a new shard
         # (and make sure have an established election)
@@ -1536,12 +1536,13 @@ class ContainerSharding(ProxyClient):
         if (smaller_shard_info['master']
                 != bigger_shard_info['master']):
             try:
+                service_id = bigger_shard_info['master']
                 suffix = 'sharding-%d-%d' % (
                     smaller_shard_info['timestamp'], smaller_shard['index'])
-                self.admin.remove_base(
+                data = self.admin.remove_base(
                     'meta2', cid=smaller_shard['cid'],
-                    service_id=bigger_shard_info['master'],
-                    suffix=suffix, **kwargs)
+                    service_id=service_id, suffix=suffix, **kwargs)
+                from_multi_responses(data)
             except Exception as exc:
                 self.logger.warning(
                     'Failed to delete the copy (CID=%s): %s',
@@ -1580,13 +1581,14 @@ class ContainerSharding(ProxyClient):
                 and smaller_shard['sharding']['master']
                 != bigger_shard['sharding']['master']):
             try:
+                service_id = bigger_shard['sharding']['master']
                 suffix = 'sharding-%d-%d' % (
                     smaller_shard['sharding']['timestamp'],
                     smaller_shard['index'])
-                self.admin.remove_base(
+                data = self.admin.remove_base(
                     'meta2', cid=smaller_shard['cid'],
-                    service_id=bigger_shard['sharding']['master'],
-                    suffix=suffix, **kwargs)
+                    service_id=service_id, suffix=suffix, **kwargs)
+                from_multi_responses(data)
             except Exception as exc:
                 self.logger.warning(
                     'Failed to delete the copy (CID=%s): %s',

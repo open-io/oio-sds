@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +17,7 @@
 from datetime import datetime
 
 from oio.common.easy_value import true_value
+from oio.common.exceptions import from_multi_responses
 from oio.common.tool import Tool, ToolWorker
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
@@ -145,13 +147,7 @@ class ContainerRepairerWorker(ToolWorker):
         if self.sync_bases:
             data = self.admin_client.election_sync(
                 service_type='meta2', account=account, reference=container)
-            for host, info in data.items():
-                if info['status']['status'] not in (200, 301):
-                    errors.append('%s (%d): %s' % (
-                        host, info['status']['status'],
-                        info['status']['message']))
-            if errors:
-                raise Exception(errors)
+            from_multi_responses(data, excepted_status=(200, 301))
 
         if self.update_account:
             self.container_client.container_touch(
