@@ -31,7 +31,8 @@ class LifecycleCliTest(CliTestCase):
                 </Filter>
                 <Status>Enabled</Status>
                 <NoncurrentVersionExpiration>
-                    <NoncurrentCount>1</NoncurrentCount>
+                    <NoncurrentDays>1</NoncurrentDays>
+                    <NewerNoncurrentVersions>1</NewerNoncurrentVersions>
                 </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>
@@ -47,7 +48,8 @@ class LifecycleCliTest(CliTestCase):
                 </Filter>
                 <Status>Enabled</Status>
                 <NoncurrentVersionExpiration>
-                    <NoncurrentCount>1</NoncurrentCount>
+                    <NoncurrentDays>1</NoncurrentDays>
+                    <NewerNoncurrentVersions>1</NewerNoncurrentVersions>
                 </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>"""
@@ -59,7 +61,8 @@ class LifecycleCliTest(CliTestCase):
                     <Prefix>documents/</Prefix>
                 </Filter>
                 <NoncurrentVersionExpiration>
-                    <NoncurrentCount>1</NoncurrentCount>
+                    <NoncurrentDays>1</NoncurrentDays>
+                    <NewerNoncurrentVersions>1</NewerNoncurrentVersions>
                 </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>
@@ -122,23 +125,21 @@ class LifecycleCliTest(CliTestCase):
         output = self.openio('object list --versions -f value ' + self.NAME)
         output = output[:-1].split('\n')
         self.assertEqual(10, len(output))
-        expected_output = output[0:2] + output[5:10]
+        expected_output = output[0:10]
         opts = self.get_opts(['Name', 'Result'])
         output = self.openio('lifecycle apply ' + self.NAME + opts)
         output = output[:-1].split('\n')
         self.assertEqual(10, len(output))
-        for i in range(0, 2):
+        for i in range(0, 5):
             self.assertIn('documents/test', output[i])
             self.assertIn('Kept', output[i])
-        for i in range(2, 5):
-            self.assertIn('documents/test', output[i])
-            self.assertIn('Deleted', output[i])
+            self.assertNotIn('Deleted', output[i])
         for i in range(5, 10):
             self.assertIn('images/test', output[i])
             self.assertIn('Kept', output[i])
+            self.assertNotIn('Deleted', output[i])
         output = self.openio('object list --versions -f value ' + self.NAME)
         output = output[:-1].split('\n')
-        self.assertEqual(7, len(output))
         self.assertEqual(expected_output, output)
 
         for line in output:

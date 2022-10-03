@@ -3891,8 +3891,30 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	gchar *suffix = "lifecycle";
 	gchar *base_query = "SELECT";
 
-	char *action = NULL;
-	char *query = NULL;
+	char *action = NULL, *query = NULL;
+	char *policy = NULL;
+
+	char *current_view_create = NULL, *marker_view_create = NULL,
+		*noncurrent_view_create = NULL, *versioned_view_create = NULL;
+
+	struct json_object *jversioned_view = NULL, *jmarker_view = NULL,
+			*jnoncurrent_view = NULL, *jcurrent_view = NULL,
+			*jpolicy = NULL, *jnoncurrent_versions = NULL,
+			*jnoncurrent_days = NULL, *jbatch_size = NULL,
+			*jlast_action = NULL, *json =NULL;
+
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"versioned_view",   &jversioned_view,  	json_type_string, 0},
+		{"marker_view",   &jmarker_view,  	json_type_string, 0},
+		{"noncurrent_view",   &jnoncurrent_view,  	json_type_string, 0},
+		{"current_view",   &jcurrent_view,  	json_type_string, 0},
+		{"policy",   &jpolicy,  	json_type_string, 0},
+		{"batch_size",   &jbatch_size,  	json_type_int, 0},
+		{"last_action",   &jlast_action,  	json_type_int, 0},
+		{"newerNoncurrentDays",&jnoncurrent_days, json_type_int, 0},
+		{"newerNoncurrentVersions",&jnoncurrent_versions, json_type_int, 0},
+		{NULL,      NULL,     0,             0}
+	};
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -3912,7 +3934,41 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	action = LIFECYCLE_QUERY_get_action(beans->data)->str;
 	query = LIFECYCLE_QUERY_get_query(beans->data)->str;
 
+	GString *metadata = LIFECYCLE_QUERY_get_metadata(beans->data);
+	if (!metadata) {
+		err = BADREQ("Missings views, queries for lifecycle");
+		goto end;
+	}
+	err = JSON_parse_buffer((guint8 *) metadata->str, metadata->len, &json);
+	if (err) {
+		goto end;
+	}
+	err = oio_ext_extract_json(json, mapping);
+	if (err) {
+		err = BADREQ("Missing lifecyle smetadata: (%d) %s",
+				err->code, err->message);
+		goto end;
+	}
+	if (jversioned_view) {
+		versioned_view_create = g_strdup(json_object_get_string(jversioned_view));
+	}
+	if (jmarker_view) {
+		marker_view_create = g_strdup(json_object_get_string(jmarker_view));
+	}
+	if (jnoncurrent_view) {
+		noncurrent_view_create = g_strdup(json_object_get_string(jnoncurrent_view));
+	}
+	if (jcurrent_view) {
+		current_view_create = g_strdup(json_object_get_string(jcurrent_view));
+	}
+	if (jpolicy) {
+		policy = g_strdup(json_object_get_string(jpolicy));
+	}
+
 	gchar *full_query = g_strdup_printf("%s %s", base_query, query);
+	GRID_ERROR("metadata : action:%s full:%s base:%s %s prio:%s", action,\
+	           full_query,base_query, query, policy);
+
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK,
@@ -3922,6 +3978,42 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	if (err) {
 		goto end;
 	}
+	gint64 versioning = sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, 0);
+	gboolean current_action = (g_strcmp0(action, "Expiration") \
+			== 0 || g_strcmp0(action, "Transition") == 0) ? \
+			TRUE: FALSE;
+	gboolean non_current_action = (g_strcmp0(action, "NoncurrentVersionExpiration") \
+			== 0 || g_strcmp0(action, "NoncurrentVersionTransition") == 0) ? \
+			TRUE: FALSE;
+
+
+	if (versioning == 0  && non_current_action) {
+		g_prefix_error(&err, "Unsupported configuration action: %s", action);
+		goto end;
+	}
+
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+	if (versioning != 0) {
+		if (current_view_create || marker_view_create || \
+			noncurrent_view_create || versioned_view_create) {
+			struct sqlx_repctx_s *repctx_view = NULL;
+			err = sqlx_transaction_begin(sq3, &repctx_view);
+			if (current_view_create) {
+				err = _create_view(sq3, current_view_create, "current_view");
+			}
+			if (marker_view_create) {
+				err = _create_view(sq3, marker_view_create, "marker_view");
+			}
+			if (noncurrent_view_create) {
+				err = _create_view(sq3, noncurrent_view_create, "noncurrent_view");
+			}
+			if (versioned_view_create) {
+				err = _create_view(sq3, versioned_view_create, "versioned_view");
+			}
+			err = sqlx_transaction_end(repctx_view, err);
+		}
+	}
 
 	err = sqlx_transaction_begin(sq3, &repctx);
 	if (err) {
@@ -3929,43 +4021,80 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	}
 	//gint64 timestamp = oio_ext_real_time();
 
-	sqlite3_stmt *stmt = NULL;
-	int rc;
-
 	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_WARN("Failed to apply query %s %s", full_query, sqlite3_errmsg(sq3->db));
 	}
 	guint32 count_rows = 0;
+	gint64 deleted = 0, nb_version = 0;
+	//gint64 now = oio_ext_real_time();
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		gint64 timestamp_start = oio_ext_real_time();
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
-		gint64 version = sqlite3_column_int64(stmt, 1);
-		gint64 mtime = sqlite3_column_int64(stmt, 5);
+		// Expiration and Transtion
+		if (current_action) {
+			// Manage current version and delete markers
+			if (versioning != 0) {
+				deleted = sqlite3_column_int64(stmt, 3);
+				nb_version = sqlite3_column_int64(stmt, 6);
 
-		GString *event = oio_event__create_with_id(
-				"storage.lifecycle.action", url, oio_ext_get_reqid());
-		g_string_append(event, ",\"data\":{");
-		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
-		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
-		append_str(event, "object", object_name);
-		append_int64(event, "version", version);
-		append_int64(event, "mtime", mtime);
-		append_str(event, "action", g_strdup(action));
+				if (deleted == 1) {
+					if (nb_version > 1) {
+						continue;
+					}
+				}
+			}
+			gint64 version = sqlite3_column_int64(stmt, 1);
+			gint64 mtime = sqlite3_column_int64(stmt, 5);
+			GRID_ERROR("before event %s %"G_GINT64_FORMAT " %"G_GINT64_FORMAT,
+					object_name, version, mtime);
+			GString *event = oio_event__create_with_id(
+					"storage.lifecycle.action", url, oio_ext_get_reqid());
+			g_string_append(event, ",\"data\":{");
+			append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+			append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+			append_str(event, "object", object_name);
+			append_int64(event, "version", version);
+			append_int64(event, "mtime", mtime);
+			// Add delete marker when versioning and Expiration and
+			// current version is not a deleted marker
+			if (versioning != 0 && (deleted == 0) && \
+				(g_strcmp0(action, "Expiration") == 0) ) {
+				append_int64(event, "add-delete-marker", 1);
+			}
+			append_str(event, "action", g_strdup(action));
+			if (policy) {
+				append_str(event, "policy", g_strdup(policy));
+			}
 
-		g_string_append(event, "}}");
-		oio_events_queue__send(
-			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+			g_string_append(event, "}}");
+			oio_events_queue__send(
+				m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
 
-		//gint64 timestamp_end = oio_ext_real_time();
-		count_rows++;
+			gint64 timestamp_end = oio_ext_real_time();
+			GRID_ERROR("event prepare & send timing:%"G_GINT64_FORMAT,
+					timestamp_end - timestamp_start);
+			count_rows++;
+		}
+		else if (non_current_action) {
+
+		}
+		else {
+			GRID_WARN("Not supported lifecycle action  %s", action);
+		}
 	}
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-		GRID_WARN("Failed again %s", sqlite3_errmsg(sq3->db));
+		GRID_WARN("Failed to finalize lifecycle sql query %s", sqlite3_errmsg(sq3->db));
 	}
 	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
 	g_free(full_query);
+	g_free(policy);
+	g_free(versioned_view_create);
+	g_free(marker_view_create);
+	g_free(noncurrent_view_create);
+	g_free(current_view_create);
 
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);

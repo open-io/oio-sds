@@ -200,44 +200,50 @@ class TestContainerLifecycle(unittest.TestCase):
     def test_NoncurrentCountActionFilter_from_element(self):
         count_elt = etree.XML(
             """
-            <Count></Count>
+            <NewerNoncurrentVersions></NewerNoncurrentVersions>
             """)
+        days = 5
         self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
+                          days,
                           count_elt)
 
         count_elt = etree.XML(
             """
-            <Count>10.5</Count>
+            <NewerNoncurrentVersions>10.5</NewerNoncurrentVersions>
             """)
         self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
+                          days,
                           count_elt)
 
         count_elt = etree.XML(
             """
-            <Count>-2</Count>
+            <NewerNoncurrentVersions>-2</NewerNoncurrentVersions>
             """)
         self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
+                          days,
                           count_elt)
 
         count_elt = etree.XML(
             """
-            <Count>test</Count>
+            <NewerNoncurrentVersions>test</NewerNoncurrentVersions>
             """)
         self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
+                          days,
                           count_elt)
 
         count_elt = etree.XML(
             """
-            <Count>2018-10-30T02:34:56</Count>
+            <NewerNoncurrentVersions>2018-10-30T02:34:56</NewerNoncurrentVersions>
             """)
         self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
+                          days,
                           count_elt)
 
         count_elt = etree.XML(
             """
-            <Count>12</Count>
+            <NewerNoncurrentVersions>12</NewerNoncurrentVersions>
             """)
-        count = NoncurrentCountActionFilter.from_element(count_elt)
+        count = NoncurrentCountActionFilter.from_element(days, count_elt)
         self.assertIsNotNone(count)
         self.assertEqual(12, count.count)
 
@@ -416,15 +422,17 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertRaises(ValueError,
                           NoncurrentVersionExpiration.from_element, exp_elt)
 
+        # This is a valid configuration
         exp_elt = etree.XML(
             """
             <NoncurrentVersionExpiration>
                 <NoncurrentDays>365</NoncurrentDays>
-                <NoncurrentCount>3</NoncurrentCount>
+                <NewerNoncurrentVersions>3</NewerNoncurrentVersions>
             </NoncurrentVersionExpiration>
             """)
-        self.assertRaises(ValueError,
-                          NoncurrentVersionExpiration.from_element, exp_elt)
+        exp = NoncurrentVersionExpiration.from_element(exp_elt)
+        self.assertIsNotNone(exp)
+        self.assertEqual(365, exp.filter.days)
 
         exp_elt = etree.XML(
             """
@@ -439,12 +447,12 @@ class TestContainerLifecycle(unittest.TestCase):
         exp_elt = etree.XML(
             """
             <NoncurrentVersionExpiration>
-                <NoncurrentCount>3</NoncurrentCount>
+                <NewerNoncurrentVersions>3</NewerNoncurrentVersions>
             </NoncurrentVersionExpiration>
             """)
-        exp = NoncurrentVersionExpiration.from_element(exp_elt)
-        self.assertIsNotNone(exp)
-        self.assertEqual(3, exp.filter.count)
+        # NoncurrentDays is compulsory
+        self.assertRaises(
+            ValueError, NoncurrentVersionTransition.from_element, exp_elt)
 
         exp_elt = etree.XML(
             """
@@ -460,8 +468,9 @@ class TestContainerLifecycle(unittest.TestCase):
         exp_elt = etree.XML(
             """
             <NoncurrentVersionExpiration>
-                <NoncurrentCount>5</NoncurrentCount>
-                <NoncurrentCount>3</NoncurrentCount>
+                <NoncurrentDays>20</NoncurrentDays>
+                <NewerNoncurrentVersions>5</NewerNoncurrentVersions>
+                <NewerNoncurrentVersions>3</NewerNoncurrentVersions>
             </NoncurrentVersionExpiration>
             """)
         exp = NoncurrentVersionExpiration.from_element(exp_elt)
@@ -827,7 +836,6 @@ class TestContainerLifecycle(unittest.TestCase):
             """)
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         self.assertIsNotNone(filter_)
-        print(filter_)
         self.assertIsNone(filter_.prefix)
         self.assertIsNotNone(filter_.lesser)
         self.assertDictEqual({'key2': 'value2'},
@@ -1283,7 +1291,7 @@ class TestContainerLifecycle(unittest.TestCase):
                 </Filter>
                 <Status>Enabled</Status>
                 <NoncurrentVersionExpiration>
-                    <NoncurrentCount>1</NoncurrentCount>
+                    <NewerNoncurrentVersions>1</NewerNoncurrentVersions>
                 </NoncurrentVersionExpiration>
                 <NoncurrentVersionTransition>
                     <NoncurrentDays>100</NoncurrentDays>
@@ -1356,12 +1364,12 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(600, expiration.filter.days)
         transition = rule.actions[4]
         self.assertEqual(NoncurrentVersionTransition, type(transition))
-        self.assertEqual(300, transition.filter.days)
-        self.assertEqual('SINGLE', transition.policy)
-        transition = rule.actions[5]
-        self.assertEqual(NoncurrentVersionTransition, type(transition))
         self.assertEqual(100, transition.filter.days)
         self.assertEqual('THREECOPIES', transition.policy)
+        transition = rule.actions[5]
+        self.assertEqual(NoncurrentVersionTransition, type(transition))
+        self.assertEqual(300, transition.filter.days)
+        self.assertEqual('SINGLE', transition.policy)
 
         rule_elt = etree.XML(
             """
@@ -1469,9 +1477,11 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(EXPECTED, str(date))
 
     def test_NoncurrentCountActionFilter_to_string(self):
-        EXPECTED = '<NoncurrentCount>1</NoncurrentCount>'
-        count = NoncurrentCountActionFilter(1)
-        self.assertEqual(EXPECTED, str(count))
+        EXPECTED = ('<Noncurrent><NoncurrentDays>1</NoncurrentDays>'
+                    '<NewerNoncurrentVersions>1</NewerNoncurrentVersions>'
+                    '</Noncurrent>')
+        count_elt = NoncurrentCountActionFilter(days=1, count=1)
+        self.assertEqual(EXPECTED, str(count_elt))
 
     def test_Expiration_to_string(self):
         EXPECTED = '<Expiration><Days>10</Days></Expiration>'
@@ -1488,17 +1498,20 @@ class TestContainerLifecycle(unittest.TestCase):
 
     def test_NoncurrentVersionExpiration_to_string(self):
         EXPECTED = '<NoncurrentVersionExpiration>' \
-            + '<Days>10</Days></NoncurrentVersionExpiration>'
-        days = DaysActionFilter(10)
-        exp = NoncurrentVersionExpiration(days)
+            + '<NoncurrentDays>10</NoncurrentDays>' \
+            + '</NoncurrentVersionExpiration>'
+        days_count = NoncurrentCountActionFilter(10, 0)
+        exp = NoncurrentVersionExpiration(days_count, 10, 0)
         self.assertEqual(EXPECTED, str(exp))
 
     def test_NoncurrentVersionTransition_to_string(self):
         EXPECTED = '<NoncurrentVersionTransition>' \
             + '<StorageClass>SINGLE</StorageClass>' \
-            + '<Days>10</Days></NoncurrentVersionTransition>'
-        days = DaysActionFilter(10)
-        trans = NoncurrentVersionTransition(days, 'SINGLE')
+            + '<NoncurrentDays>10</NoncurrentDays>' \
+            + '</NoncurrentVersionTransition>'
+        days_count = NoncurrentCountActionFilter(10, 0)
+        trans = NoncurrentVersionTransition(
+            days_count, 'SINGLE', 10, count=None)
         self.assertEqual(EXPECTED, str(trans))
 
     def test_LifecycleRuleFilter_to_string(self):
