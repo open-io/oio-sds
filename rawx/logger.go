@@ -37,6 +37,7 @@ type oioLogger interface {
 
 var accessLogGet = configAccessLogDefaultGet
 var accessLogPut = configAccessLogDefaultPut
+var accessLogPost = configAccessLogDefaultPost
 var accessLogDel = configAccessLogDefaultDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"

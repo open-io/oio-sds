@@ -413,6 +413,15 @@ func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunk
 	return chunk, nil
 }
 
+// Retrieve headers for specific POST calls
+func retrievePostHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
+	var chunk chunkInfo
+	if GetBool(headers.Get(HeaderNameNonOptimalPlacement), false) {
+		chunk.nonOptimalPlacement = true
+	}
+	return chunk, nil
+}
+
 // Check and load the info of the chunk.
 func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo

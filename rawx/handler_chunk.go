@@ -260,6 +260,34 @@ func (rr *rawxRequest) uploadChunk() {
 	rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 }
 
+func (rr *rawxRequest) updateChunk() {
+	var err error
+
+	// Check if chunk exists before continuing
+	if !rr.rawx.repo.check(rr.chunkID) {
+		rr.replyCode(http.StatusNotFound)
+		return
+	}
+
+	// Retrieve all headers needed for POST operation
+	if rr.chunk, err = retrievePostHeaders(&rr.req.Header, rr.chunkID); err != nil {
+		rr.replyError("updateChunk() headers", err)
+		return
+	}
+
+	if rr.chunk.nonOptimalPlacement {
+		if err = rr.rawx.repo.symlinkNonOptimal(rr.chunkID); err != nil {
+			// If the link already exists, a <ErrExist> error will be thrown,
+			// leading to a <409 Conflict> to the client.
+			rr.replyError("updateChunk() link", err)
+			return
+		}
+	}
+
+	// Everything is OK, return success
+	rr.replyCode(http.StatusOK)
+}
+
 func (rr *rawxRequest) copyChunk() {
 	var err error
 	if rr.chunk, err = retrieveDestinationHeader(&rr.req.Header, rr.rawx, rr.chunkID); err != nil {
@@ -275,6 +303,7 @@ func (rr *rawxRequest) copyChunk() {
 	op, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
 		rr.replyError("copyChunk()", err)
+		return
 	} else {
 		// Link created, try to place an xattr
 		err = rr.chunk.saveContentFullpathAttr(op)
@@ -555,6 +584,13 @@ func (rr *rawxRequest) serveChunk() {
 			rr.copyChunk()
 		}
 		spent, ttfb = IncrementStatReqCopy(rr)
+	case "POST":
+		if err := rr.drain(); err != nil {
+			rr.replyError("", err)
+		} else {
+			rr.updateChunk()
+		}
+		spent, ttfb = IncrementStatReqPost(rr)
 	default:
 		if err := rr.drain(); err != nil {
 			rr.replyError("", err)
@@ -619,6 +655,8 @@ func shouldAccessLog(status int, method string) bool {
 		return accessLogGet
 	case "PUT":
 		return accessLogPut
+	case "POST":
+		return accessLogPost
 	case "DELETE":
 		return accessLogDel
 	default:

@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
+// Copyright (C) 2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -57,6 +58,10 @@ func (cr *chunkRepository) get(name string) (fileReader, error) {
 	} else {
 		return nil, os.ErrNotExist
 	}
+}
+
+func (cr *chunkRepository) check(name string) bool {
+	return cr.sub.check(name)
 }
 
 func (cr *chunkRepository) put(name string) (fileWriter, error) {

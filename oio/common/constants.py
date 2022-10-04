@@ -126,6 +126,7 @@ CHUNK_HEADERS = {
     "metachunk_hash": "%smetachunk-hash" % CHUNK_METADATA_PREFIX,
     "full_path": "%sfull-path" % CHUNK_METADATA_PREFIX,
     "oio_version": "%soio-version" % CHUNK_METADATA_PREFIX,
+    "non_optimal_placement": "%snon-optimal-placement" % CHUNK_METADATA_PREFIX,
 }
 
 CHUNK_XATTR_KEYS = {
@@ -148,14 +149,15 @@ CHUNK_XATTR_KEYS = {
 CHUNK_XATTR_CONTENT_FULLPATH_PREFIX = 'oio.content.fullpath:'
 
 CHUNK_XATTR_KEYS_OPTIONAL = {
-    'content_chunksnb': True,
     'chunk_hash': True,
     'chunk_mtime': True,
     'chunk_size': True,
+    'compression': True,
+    'content_chunksnb': True,
     'metachunk_size': True,
     'metachunk_hash': True,
+    'non_optimal_placement': True,
     'oio_version': True,
-    'compression': True,
     # Superseded by full_path
     'container_id': True,
     'content_id': True,

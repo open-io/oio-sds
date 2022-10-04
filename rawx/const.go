@@ -137,6 +137,9 @@ const (
 	// Should successful PUT requests be logged by default
 	configAccessLogDefaultPut = true
 
+	// Should successful POST requests be logged by default
+	configAccessLogDefaultPost = true
+
 	// Should successful DELETE requests be logged by default
 	configAccessLogDefaultDelete = true
 )

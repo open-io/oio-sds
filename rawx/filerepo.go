@@ -153,6 +153,12 @@ func (fr *fileRepository) get(name string) (fileReader, error) {
 	return fr.getRelPath(fr.nameToRelPath(name))
 }
 
+// Returns true if file exists, false otherwise
+func (fr *fileRepository) check(name string) bool {
+	err := syscall.Faccessat(fr.rootFd, fr.nameToRelPath(name), syscall.F_OK, 0)
+	return err == nil
+}
+
 func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 	pathTemp := pendingPath(path)
 	fd, err := syscall.Openat(fr.rootFd, pathTemp, syscall.O_CREAT|syscall.O_EXCL|fr.openFlagsWO(), fr.putOpenMode)

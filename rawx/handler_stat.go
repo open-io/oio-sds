@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -30,6 +30,7 @@ import (
 type statInfo struct {
 	ReqTimeAll   uint64 `tag:"req.time"`
 	ReqTimePut   uint64 `tag:"req.time.put"`
+	ReqTimePost  uint64 `tag:"req.time.post"`
 	ReqTimeCopy  uint64 `tag:"req.time.copy"`
 	ReqTimeGet   uint64 `tag:"req.time.get"`
 	ReqTimeHead  uint64 `tag:"req.time.head"`
@@ -41,6 +42,7 @@ type statInfo struct {
 
 	ReqHitsAll   uint64 `tag:"req.hits"`
 	ReqHitsPut   uint64 `tag:"req.hits.put"`
+	ReqHitsPost  uint64 `tag:"req.hits.post"`
 	ReqHitsCopy  uint64 `tag:"req.hits.copy"`
 	ReqHitsGet   uint64 `tag:"req.hits.get"`
 	ReqHitsHead  uint64 `tag:"req.hits.head"`
@@ -98,6 +100,13 @@ func IncrementStatReqPut(rr *rawxRequest) (uint64, uint64) {
 	atomic.AddUint64(&counters.ReqTimePut, spent)
 	atomic.AddUint64(&counters.ReqHitsPut, 1)
 	atomic.AddUint64(&counters.RepBwritten, rr.bytesIn)
+	return spent, ttfb
+}
+
+func IncrementStatReqPost(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimePost, spent)
+	atomic.AddUint64(&counters.ReqHitsPost, 1)
 	return spent, ttfb
 }
 

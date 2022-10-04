@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +15,10 @@
 # License along with this library.
 
 import logging
+from os import path
+import random
 import time
+from urllib.parse import urlparse
 
 try:
     import subprocess32 as subprocess
@@ -29,7 +33,7 @@ from flaky import flaky
 from tests.utils import BaseTestCase
 
 from oio.api.object_storage import ObjectStorageApi
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.utils import request_id
 from oio.event.beanstalk import ResponseError
 from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
@@ -147,7 +151,7 @@ class TestPerfectibleContent(BaseTestCase):
                                headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY*2)
+        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY * 2)
 
         # Check the content of the event.
         self.assertEqual('storage.content.perfectible', event.event_type)
@@ -191,7 +195,7 @@ class TestPerfectibleContent(BaseTestCase):
                                headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY*2)
+        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY * 2)
 
         # Check the content of the event.
         self.assertEqual('storage.content.perfectible', event.event_type)
@@ -213,11 +217,11 @@ class TestPerfectibleContent(BaseTestCase):
                                        log_level='INFO'):
         # FIXME(FVE): find a way to call coverage on the subprocess
         blob_improver = subprocess.Popen(
-                    ['oio-blob-improver', self.ns,
-                     '--beanstalkd=' + self.conf['queue_addr'],
-                     '--retry-delay=1',
-                     '--log-level=' + log_level,
-                     '--stop-after-events=%d' % stop_after_events])
+            ['oio-blob-improver', self.ns,
+                '--beanstalkd=' + self.conf['queue_addr'],
+                '--retry-delay=1',
+                '--log-level=' + log_level,
+                '--stop-after-events=%d' % stop_after_events])
         if SUBPROCESS32:
             try:
                 blob_improver.wait(run_time)
@@ -273,6 +277,70 @@ class TestPerfectibleContent(BaseTestCase):
         if job:
             logging.debug("Unexpected job data: %s", data)
         self.assertIsNone(job)
+
+    def _get_rawx(self, addr):
+        """
+        Return the rawx dict from the conf with the specified addr.
+        """
+        all_rawx = self.conf["services"]["rawx"]
+        rawx = None
+        for _rawx in all_rawx:
+            if _rawx["addr"] == addr:
+                rawx = _rawx
+                break
+        self.assertIsNotNone(rawx)
+        return rawx
+
+    def _get_symlink_non_optimal_path(self, chunk_real_url):
+        url_parser = urlparse(chunk_real_url)
+        rawx = self._get_rawx(url_parser.netloc)
+        chunk_id = url_parser.path[1:]  # Remove leading trailing slash
+
+        # Construct abs path of symbolic link
+        # Assumptions:
+        #  - HASH_WIDTH = 3
+        #  - HASH_DEPTH = 1
+        return path.join(
+            rawx['path'],
+            "non_optimal_placement",
+            chunk_id[:3],
+            chunk_id
+        )
+
+    def test_post_non_optimal_chunk(self):
+        """
+        Test that symlink is created on POST with
+        <X-oio-Chunk-Meta-Non-Optimal-Placement> header.
+        """
+        # Upload an object.
+        container = self._random_user()
+        obj_name = "perfectiblepost"
+        reqid = request_id('perfectible-')
+        self.api.object_create(self.account, container,
+                               obj_name=obj_name,
+                               data=b'whatever',
+                               policy='THREECOPIES',
+                               headers={REQID_HEADER: reqid})
+
+        # Choose a chunk and locate it on the disk.
+        _, chunks = self.api.object_locate(self.account, container, obj_name)
+        chunk = random.choice(chunks)
+        abs_link = self._get_symlink_non_optimal_path(chunk['real_url'])
+
+        # Check symbolic link does not exist.
+        self.assertFalse(path.islink(abs_link))
+        self.assertFalse(path.exists(abs_link))
+
+        # Do the POST.
+        self.request(
+            'POST',
+            chunk['real_url'],
+            headers={CHUNK_HEADERS['non_optimal_placement']: True}
+        )
+
+        # Check symbolic link does exist.
+        self.assertTrue(path.islink(abs_link))
+        self.assertTrue(path.exists(abs_link))  # broken link would fail
 
 
 class TestPerfectibleLocalContent(TestPerfectibleContent):
