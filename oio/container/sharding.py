@@ -770,8 +770,27 @@ class ContainerSharding(ProxyClient):
                 time.sleep(0.1)
                 continue
 
+        # Make sure have an established election
+        while True:
+            try:
+                election = self.admin.election_status(
+                    'meta2', cid=shard['cid'], **kwargs)
+                from_multi_responses(
+                    election['peers'], excepted_status=(200, 303))
+                break
+            except Exception as exc:
+                if time.time() > deadline:
+                    self.logger.warning(
+                        'Election not established for new shard %s, '
+                        'but we can try to continue: %s', shard['cid'], exc)
+                    break
+                self.logger.debug(
+                    'Election not established for new shard %s: %s',
+                    shard['cid'], exc)
+                time.sleep(0.1)
+                continue
+
         # Check the sharding properties of a new shard
-        # (and make sure have an established election)
         meta = self.container.container_get_properties(
             cid=shard['cid'], **kwargs)
         root_cid_, shard_ = self.meta_to_shard(meta)
