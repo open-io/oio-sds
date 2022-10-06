@@ -213,7 +213,6 @@ extern "C" {
 # define OIO_CFG_CONSCIENCE   "conscience"
 # define OIO_CFG_ACCOUNTAGENT "event-agent"
 # define OIO_CFG_SWIFT        "swift"
-# define OIO_CFG_ECD          "ecd"
 
 # define USER_AGENT_HEADER "user-agent"
 
@@ -233,7 +232,6 @@ extern "C" {
 
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
-# define oio_cfg_get_ecd(ns)            oio_cfg_get_value((ns), OIO_CFG_ECD)
 
 /** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* oio_cfg_get_value (const gchar *ns, const gchar *what);

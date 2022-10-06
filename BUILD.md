@@ -15,8 +15,6 @@ When building only the SDK, OpenIO only depends on:
 Building the entire project will require the SDK dependencies, but also:
 * python: Pure python code generator (no dependency), and python modules.
 * python-distutils-extra: required for the installation process
-* httpd, httpd-devel: server base for ECD service (and rawx for code prior to version 6.0.0)
-* apr, apr-util-devel, apr-devel: internally used by rawx modules (prior to version 6.0.0)
 * attr, libattr-devel: we use xattr a lot to stamp rawx chunks and repositories base directory.
 * sqlite, sqlite-devel: base storage for META{0,1,2} services.
 * zeromq3, zeromq3-devel: communication of events between services and forward agents.
@@ -24,7 +22,6 @@ Building the entire project will require the SDK dependencies, but also:
 * python-setuptools
 * python-pbr
 * beanstalkd: you need it to have the event-agent working
-* libapache2-mod-wsgi-py3 (as named on Ubuntu), the WSGI module for apache2
 
 In addition, there some dependencies at runtime (the up-to-date list is in [requirements.txt](./requirements.txt)). You don't need to install them on the system, they will be installed by pip in your virtualenv (see [Building](#Building)).
 * python-eventlet
