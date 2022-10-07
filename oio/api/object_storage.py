@@ -383,7 +383,7 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def resolve_cid(self, cid, **kwargs):
         """Resolve a CID into account and container names."""
-        md = self.directory.show(cid=cid, **kwargs)
+        md = self.directory.list(cid=cid, **kwargs)
         return md.get('account'), md.get('name')
 
     @patch_kwargs
