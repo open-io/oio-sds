@@ -710,7 +710,7 @@ class EcChunkWriter(object):
         raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split("/")[-1]
-        hdrs = headers_from_object_metadata(sysmeta)
+        hdrs = headers_from_object_metadata(sysmeta, chunk["url"])
         if reqid:
             hdrs[REQID_HEADER] = reqid
 

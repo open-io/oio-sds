@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -995,9 +995,9 @@ class MetachunkPreparer(object):
         )
         self.stg_method = STORAGE_METHODS.load(self.obj_meta["chunk_method"])
 
-        self._all_chunks = list()
+        self._all_chunks = []
         if "properties" not in self.obj_meta:
-            self.obj_meta["properties"] = dict()
+            self.obj_meta["properties"] = {}
 
     def _fix_mc_pos(self, chunks, mc_pos):
         for chunk in chunks:

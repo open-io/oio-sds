@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -69,7 +69,9 @@ class RawxTestSuite(CommonTestCase):
                 "chunk_hash": checksum(data).hexdigest(),
                 "full_path": self.fullpath,
                 "oio_version": OIO_VERSION,
-            }
+                "properties": {},
+            },
+            f"{self.rawx}/{chunk_id}",
         )
         headers[CHUNK_HEADERS["chunk_pos"]] = 0
         headers[CHUNK_HEADERS["chunk_id"]] = chunk_id

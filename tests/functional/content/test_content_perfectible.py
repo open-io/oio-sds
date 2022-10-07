@@ -110,6 +110,36 @@ class TestPerfectibleContent(BaseTestCase):
             self.fail("No event received in the last %s seconds" % timeout)
         return event
 
+    def _get_rawx(self, netloc):
+        """
+        Return the rawx dict from the conf with the specified netloc.
+        Netloc could be direct IP addr or service_id.
+        """
+        all_rawx = self.conf["services"]["rawx"]
+        rawx = None
+        for _rawx in all_rawx:
+            addr = _rawx.get("addr")
+            if addr and addr == netloc:
+                rawx = _rawx
+                break
+            service_id = _rawx.get("service_id")
+            if service_id and service_id == netloc:
+                rawx = _rawx
+                break
+        self.assertIsNotNone(rawx)
+        return rawx
+
+    def _get_symlink_non_optimal_path(self, chunk_real_url):
+        url_parser = urlparse(chunk_real_url)
+        rawx = self._get_rawx(url_parser.netloc)
+        chunk_id = url_parser.path[1:]  # Remove leading trailing slash
+
+        # Construct abs path of symbolic link
+        # Assumptions:
+        #  - HASH_WIDTH = 3
+        #  - HASH_DEPTH = 1
+        return path.join(rawx["path"], "non_optimal_placement", chunk_id[:3], chunk_id)
+
     # This test must be executed first
     def test_0_upload_ok(self):
         """Check that no event is emitted when everything is ok."""
@@ -182,6 +212,9 @@ class TestPerfectibleContent(BaseTestCase):
                 warn_dist = qual["warn_dist"]
             self.assertEqual(qual["expected_slot"], qual["final_slot"])
             self.assertLessEqual(qual["final_dist"], qual["warn_dist"])
+            # Check that non optimal symlink have been created.
+            abs_link = self._get_symlink_non_optimal_path(chunk["id"])
+            self.assertTrue(path.islink(abs_link))
         self.assertLessEqual(lowest_dist, warn_dist)
 
     def test_upload_fallback(self):
@@ -224,6 +257,9 @@ class TestPerfectibleContent(BaseTestCase):
             qual = chunk["quality"]
             slot_matches.append(qual["final_slot"] == qual["expected_slot"])
             self.assertNotEqual(qual["final_slot"], banned_slot)
+            # Check that non optimal symlink have been created.
+            abs_link = self._get_symlink_non_optimal_path(chunk["id"])
+            self.assertTrue(path.islink(abs_link))
         self.assertIn(False, slot_matches)
 
     def _call_blob_improver_subprocess(
@@ -300,30 +336,6 @@ class TestPerfectibleContent(BaseTestCase):
         if job:
             logging.debug("Unexpected job data: %s", data)
         self.assertIsNone(job)
-
-    def _get_rawx(self, addr):
-        """
-        Return the rawx dict from the conf with the specified addr.
-        """
-        all_rawx = self.conf["services"]["rawx"]
-        rawx = None
-        for _rawx in all_rawx:
-            if _rawx["addr"] == addr:
-                rawx = _rawx
-                break
-        self.assertIsNotNone(rawx)
-        return rawx
-
-    def _get_symlink_non_optimal_path(self, chunk_real_url):
-        url_parser = urlparse(chunk_real_url)
-        rawx = self._get_rawx(url_parser.netloc)
-        chunk_id = url_parser.path[1:]  # Remove leading trailing slash
-
-        # Construct abs path of symbolic link
-        # Assumptions:
-        #  - HASH_WIDTH = 3
-        #  - HASH_DEPTH = 1
-        return path.join(rawx["path"], "non_optimal_placement", chunk_id[:3], chunk_id)
 
     def test_post_non_optimal_chunk(self):
         """

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -97,11 +97,11 @@ def ranges_from_http_header(val):
     return ranges
 
 
-def headers_from_object_metadata(metadata):
+def headers_from_object_metadata(metadata, chunk_url):
     """
     Generate chunk PUT request headers from object metadata.
     """
-    headers = dict()
+    headers = {}
     headers["transfer-encoding"] = "chunked"
     # FIXME: remove key incoherencies
     headers[CHUNK_HEADERS["content_id"]] = metadata["id"]
@@ -118,6 +118,20 @@ def headers_from_object_metadata(metadata):
             headers[CHUNK_HEADERS[key]] = text_type(metadata[key])
 
     headers[CHUNK_HEADERS["full_path"]] = metadata["full_path"]
+
+    # If chunk quality is not good enough, add <non_optimal_placement> header.
+    try:
+        qual = metadata["qualities"][chunk_url]
+        if (
+            qual
+            and qual["final_dist"] <= qual["warn_dist"]
+            or qual["expected_slot"] != qual["final_slot"]
+        ):
+            headers[CHUNK_HEADERS["non_optimal_placement"]] = True
+    except KeyError:
+        # Ignore if there is no qualities.
+        pass
+
     return headers
 
 

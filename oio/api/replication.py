@@ -175,7 +175,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         parsed = urlparse(raw_url)
         try:
             chunk_path = parsed.path.split("/")[-1]
-            hdrs = headers_from_object_metadata(self.sysmeta)
+            hdrs = headers_from_object_metadata(self.sysmeta, chunk["url"])
             hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
             hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
