@@ -1932,7 +1932,8 @@ class AccountBackendFdb(object):
             if current_region != region:
                 raise Conflict(
                     'The container must be in the same region as the bucket '
-                    'to belong to it')
+                    f'it belongs to. Bucket {bname} in {current_region}, '
+                    f'container {cname} in {region}')
 
             # Update containers counter
             if container_is_deleted:

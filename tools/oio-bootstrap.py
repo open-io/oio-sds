@@ -1144,8 +1144,6 @@ meta2.sharding.max_entries_cleaned=10
 sqliterepo.repo.hard_max=1024
 
 admin=${IP}:${PORT_ADMIN}
-
-ns.region = localhost
 """
 
 template_systemd_service_event_agent = """
@@ -1719,6 +1717,7 @@ def generate(options):
                META_HEADER=META_HEADER,
                PRESERVE='preserve' if options.get('preserve_events') else '',
                PYTHON_VERSION=PYTHON_VERSION,
+               REGION=options['config'].get('ns.region'),
                REPLICATION='replication' if options.get('replication_events')
                            else '',
                WANT_SERVICE_ID=want_service_id,
@@ -2431,6 +2430,9 @@ def main():
                         action='store_true', default=False,
                         help=("generate services service IDs randomly "
                               "(implies --with--service-id)"))
+    parser.add_argument("--region", "-r",
+                        default="localhost",
+                        help="Specify the region the namespace is running in")
 
     parser.add_argument("--profile",
                         choices=['default', 'valgrind', 'callgrind'],
@@ -2478,6 +2480,7 @@ def main():
     opts['with_service_id'] = \
         options.with_service_id or options.random_service_id
     opts['random_service_id'] = options.random_service_id
+    opts['config']['ns.region'] = options.region
 
     # Remove empty strings, then apply the default if no value remains
     options.ip = [str(x) for x in options.ip if x]

@@ -33,6 +33,7 @@ PORT=
 OIO="$HOME/.oio"
 SDS="$OIO/sds"
 BOOTSTRAP_CONFIG=
+REGION=
 SERVICE_ID=
 RANDOM_SERVICE_ID=
 PROFILE=
@@ -42,13 +43,14 @@ ZKSLOW=0
 verbose=0
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts "D:P:I:N:f:Z:p:CRUv" opt; do
+while getopts "D:P:I:N:f:Z:p:r:CRUv" opt; do
     case $opt in
         D) DATADIR="${OPTARG}" ;;
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
         U) SERVICE_ID=1 ;;
+        r) REGION="${OPTARG}" ;;
         R) RANDOM_SERVICE_ID=1 ;;
         f) if [ -n "$OPTARG" ]; then
             if  [ ${OPTARG::1} != "/" ]; then
@@ -78,6 +80,7 @@ if [ $verbose != 0 ] ; then
     echo "# $0" \
         "-I \"${IP}\"" \
         "-P \"${PORT}\"" \
+        "-r \"${REGION}\"" \
         "-N \"${NS}\"" \
         "-Z \"${ZKSLOW}\"" \
         "${BOOTSTRAP_CONFIG}"
@@ -110,6 +113,7 @@ fi
 
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
+if [[ -n "${REGION}" ]] ; then bootstrap_opt="${bootstrap_opt} --region ${REGION}" ; fi
 if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-service-id" ; fi
 if [[ -n "${RANDOM_SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --random-service-id" ; fi
 if [[ -n "${DATADIR}" ]] ; then bootstrap_opt="${bootstrap_opt} --data ${DATADIR}" ; fi

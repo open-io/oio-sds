@@ -20,14 +20,14 @@ from oio.common.service_client import ServiceClient
 class BucketClient(ServiceClient):
     """Simple client API for the bucket service."""
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, region=None, **kwargs):
         super(BucketClient, self).__init__(
             'account', conf, service_name='bucket-service',
             request_prefix='v1.0/bucket', **kwargs)
         # Some requests don't need the region,
         # let the requests fail if the region is needed
         self.region = load_namespace_conf(
-            conf['namespace'], failsafe=True).get('ns.region')
+            conf['namespace'], failsafe=True).get('ns.region', region)
 
     def bucket_request(self, bucket, *args, region=None, **kwargs):
         params = kwargs.setdefault('params', {})
