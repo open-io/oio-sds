@@ -242,9 +242,9 @@ class AccountClient(ServiceClient):
             'bytes': bytes_used
         }
         if objects_details:
-            data['objects_details'] = objects_details
+            data['objects-details'] = objects_details
         if bytes_details:
-            data['bytes_details'] = bytes_details
+            data['bytes-details'] = bytes_details
         if bucket:
             data['bucket'] = bucket
         _resp, body = self.container_request(
