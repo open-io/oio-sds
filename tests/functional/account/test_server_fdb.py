@@ -166,7 +166,13 @@ class TestAccountServer(TestAccountServerBase):
         data = {
             'mtime': Timestamp().normal,
             'objects': 12,
-            'bytes': 42
+            'objects-details': {
+                'SINGLE': 12
+            },
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 42
+            }
         }
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
@@ -204,7 +210,13 @@ class TestAccountServer(TestAccountServerBase):
         data = {
             'mtime': Timestamp().normal,
             'objects': 12,
-            'bytes': 42
+            'objects-details': {
+                'SINGLE': 12
+            },
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 42
+            }
         }
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
@@ -928,7 +940,13 @@ class TestAccountMetrics(TestAccountServerBase):
         data = {
             'mtime': time.time(),
             'objects': 1,
-            'bytes': 20
+            'objects-details': {
+                'SINGLE': 1
+            },
+            'bytes': 20,
+            'bytes-details': {
+                'SINGLE': 20
+            }
         }
         data = json.dumps(data)
         resp = self.app.put(
@@ -942,8 +960,12 @@ class TestAccountMetrics(TestAccountServerBase):
                     'containers': 1,
                     'shards': 0,
                     'buckets': 0,
-                    'bytes-details': {},
-                    'objects-details': {},
+                    'bytes-details': {
+                        'SINGLE': 20
+                    },
+                    'objects-details': {
+                        'SINGLE': 1
+                    },
                 }
             }
         }, resp)
@@ -966,8 +988,12 @@ class TestAccountMetrics(TestAccountServerBase):
                     'containers': 0,
                     'shards': 0,
                     'buckets': 0,
-                    'bytes-details': {},
-                    'objects-details': {},
+                    'bytes-details': {
+                        'SINGLE': 0
+                    },
+                    'objects-details': {
+                        'SINGLE': 0
+                    },
                 }
             }
         }, resp)
@@ -1109,3 +1135,117 @@ class TestAccountMetrics(TestAccountServerBase):
                 }
             }
         }, resp)
+
+    def test_update_container_without_details(self):
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'bytes': 42
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'objects-details': {
+                'SINGLE': 12
+            },
+            'bytes': 42
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 42
+            }
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_update_container_mismatch_between_total_and_details(self):
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'objects-details': {
+                'SINGLE': 10
+            },
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 44
+            }
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'objects-details': {
+                'SINGLE': 12
+            },
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 44
+            }
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'objects-details': {
+                'SINGLE': 10
+            },
+            'bytes': 42,
+            'bytes-details': {
+                'SINGLE': 42
+            }
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_update_container_special_underdash(self):
+        params = {
+            'id': self.account_id,
+            'container': 'foo',
+            'region': 'localhost'
+        }
+        data = {
+            'mtime': Timestamp().normal,
+            'objects': 12,
+            'objects_details': {
+                'SINGLE': 12
+            },
+            'bytes': 42,
+            'bytes_details': {
+                'SINGLE': 12
+            }
+        }
+        data = json.dumps(data)
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string=params)
+        self.assertEqual(resp.status_code, 400)

@@ -27,7 +27,7 @@ from pathlib import Path
 from tests.utils import BaseTestCase, random_str
 from testtools.testcase import ExpectedException
 from time import sleep, time
-from werkzeug.exceptions import Conflict
+from werkzeug.exceptions import BadRequest, Conflict
 
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.account.backend_fdb import AccountBackendFdb
@@ -445,55 +445,169 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['id'], account_id)
-        self.assertEqual(info['objects'], 0)
-        self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['containers'], 0)
-        self.assertTrue(info['ctime'])
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 0,
+            'shards': 0,
+            'objects': 0,
+            'bytes': 0,
+            'metadata': {},
+            'regions': {}
+        }, info)
 
         # first container
         self.backend.update_container(
-            account_id, 'c1', Timestamp().timestamp, 0, 1, 1, region=region)
+            account_id, 'c1', Timestamp().timestamp, 0, 1, 1, region=region,
+            objects_details={'SINGLE': 1}, bytes_details={'SINGLE': 1})
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 1)
-        self.assertEqual(info['objects'], 1)
-        self.assertEqual(info['bytes'], 1)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 1,
+            'shards': 0,
+            'objects': 1,
+            'bytes': 1,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 1
+                    },
+                    'bytes-details': {
+                        'SINGLE': 1
+                    }
+                }
+            }
+        }, info)
 
         # second container
         sleep(.00001)
         self.backend.update_container(
             account_id, 'c2', Timestamp().timestamp, 0, 0, 0, region=region)
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 2)
-        self.assertEqual(info['objects'], 1)
-        self.assertEqual(info['bytes'], 1)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 2,
+            'shards': 0,
+            'objects': 1,
+            'bytes': 1,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 2,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 1
+                    },
+                    'bytes-details': {
+                        'SINGLE': 1
+                    }
+                }
+            }
+        }, info)
 
         # update second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp().timestamp, 0, 1, 1)
+            account_id, 'c2', Timestamp().timestamp, 0, 1, 1,
+            objects_details={'SINGLE': 1}, bytes_details={'SINGLE': 1})
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 2)
-        self.assertEqual(info['objects'], 2)
-        self.assertEqual(info['bytes'], 2)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 2,
+            'shards': 0,
+            'objects': 2,
+            'bytes': 2,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 2,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 2
+                    },
+                    'bytes-details': {
+                        'SINGLE': 2
+                    }
+                }
+            }
+        }, info)
 
         # delete first container
         sleep(.00001)
         self.backend.update_container(
             account_id, 'c1', 0, Timestamp().timestamp, 0, 0)
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 1)
-        self.assertEqual(info['objects'], 1)
-        self.assertEqual(info['bytes'], 1)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 1,
+            'shards': 0,
+            'objects': 1,
+            'bytes': 1,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 1
+                    },
+                    'bytes-details': {
+                        'SINGLE': 1
+                    }
+                }
+            }
+        }, info)
 
         # delete second container
         sleep(.00001)
         self.backend.update_container(
             account_id, 'c2', 0, Timestamp().timestamp, 0, 0)
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 0)
-        self.assertEqual(info['objects'], 0)
-        self.assertEqual(info['bytes'], 0)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 0,
+            'shards': 0,
+            'objects': 0,
+            'bytes': 0,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 0,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 0
+                    },
+                    'bytes-details': {
+                        'SINGLE': 0
+                    }
+                }
+            }
+        }, info)
 
     def test_update_after_container_deletion(self):
         region = 'LOCALHOST'
@@ -507,11 +621,33 @@ class TestAccountBackend(BaseTestCase):
 
         # Container update event
         self.backend.update_container(
-            account_id, 'c1', Timestamp().timestamp, None, 3, 30)
+            account_id, 'c1', Timestamp().timestamp, None, 3, 30,
+            objects_details={'SINGLE': 3}, bytes_details={'SINGLE': 30})
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 1)
-        self.assertEqual(info['objects'], 3)
-        self.assertEqual(info['bytes'], 30)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 1,
+            'shards': 0,
+            'objects': 3,
+            'bytes': 30,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 3
+                    },
+                    'bytes-details': {
+                        'SINGLE': 30
+                    }
+                }
+            }
+        }, info)
 
         # Container is flushed, but the event is deferred
         flush_timestamp = Timestamp().normal
@@ -527,9 +663,30 @@ class TestAccountBackend(BaseTestCase):
             self.backend.update_container,
             account_id, 'c1', flush_timestamp, None, 0, 0)
         info = self.backend.info_account(account_id)
-        self.assertEqual(info['containers'], 0)
-        self.assertEqual(info['objects'], 0)
-        self.assertEqual(info['bytes'], 0)
+        info.pop('ctime')
+        info.pop('mtime')
+        self.assertDictEqual({
+            'id': account_id,
+            'buckets': 0,
+            'containers': 0,
+            'shards': 0,
+            'objects': 0,
+            'bytes': 0,
+            'metadata': {},
+            'regions': {
+                region: {
+                    'buckets': 0,
+                    'containers': 0,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 0
+                    },
+                    'bytes-details': {
+                        'SINGLE': 0
+                    }
+                }
+            }
+        }, info)
 
     def test_delete_container(self):
         region = 'LOCALHOST'
@@ -1106,11 +1263,12 @@ class TestAccountBackend(BaseTestCase):
         for i in range(10):
             name = "container%d" % i
             mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
-            objects = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
+            objects = random.randrange(1, 100)
             self.backend.update_container(
                 account_id, name, mtime, 0, objects, nb_bytes,
-                region=region)
+                region=region, objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
             total_bytes += nb_bytes
             total_objects += objects
             containers += 1
@@ -1119,19 +1277,25 @@ class TestAccountBackend(BaseTestCase):
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): objects
+                ('bytes', 'SINGLE'): nb_bytes,
+                ('objects',): objects,
+                ('objects', 'SINGLE'): objects
             }
         backend_info = (
             {
                 ('accounts',): 1,
-                ('containers', region): containers
+                ('containers', region): containers,
+                ('bytes', region, 'SINGLE'): total_bytes,
+                ('objects', region, 'SINGLE'): total_objects
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
+                    ('bytes', region, 'SINGLE'): total_bytes,
                     ('objects',): total_objects,
+                    ('objects', region, 'SINGLE'): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1146,26 +1310,33 @@ class TestAccountBackend(BaseTestCase):
         # Add an other account to check if it is not affected
         account_id2 = random_str(16)
         mtime2 = Timestamp().normal
-        self.backend.update_container(account_id2, name, mtime2, 0, 12, 42,
-                                      region=region)
+        self.backend.update_container(
+            account_id2, name, mtime2, 0, 12, 42, region=region,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
         containers_info[(account_id2, name)] = {
             ('name',): name,
             ('region',): region,
             ('mtime',): mtime2,
             ('bytes',): 42,
-            ('objects',): 12
+            ('bytes', 'SINGLE'): 42,
+            ('objects',): 12,
+            ('objects', 'SINGLE'): 12
         }
         backend_info = (
             {
                 ('accounts',): 2,
-                ('containers', region): containers + 1
+                ('containers', region): containers + 1,
+                ('bytes', region, 'SINGLE'): total_bytes + 42,
+                ('objects', region, 'SINGLE'): total_objects + 12
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
+                    ('bytes', region, 'SINGLE'): total_bytes,
                     ('objects',): total_objects,
+                    ('objects', region, 'SINGLE'): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1173,7 +1344,9 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
+                    ('bytes', region, 'SINGLE'): 42,
                     ('objects',): 12,
+                    ('objects', region, 'SINGLE'): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1439,12 +1612,13 @@ class TestAccountBackend(BaseTestCase):
         for i in range(10):
             name = "container%d" % i
             mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
-            objects = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
+            objects = random.randrange(1, 100)
             self.backend.update_container(
                 account_id, name, mtime, 0, objects, nb_bytes,
-                region=region)
-            if random.randrange(100) > 50:
+                region=region, objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
+            if random.randrange(1, 100) > 50:
                 total_bytes += nb_bytes
                 total_objects += objects
                 containers += 1
@@ -1453,7 +1627,9 @@ class TestAccountBackend(BaseTestCase):
                     ('region',): region,
                     ('mtime',): mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): objects
+                    ('bytes', 'SINGLE'): nb_bytes,
+                    ('objects',): objects,
+                    ('objects', 'SINGLE'): objects
                 }
             else:
                 # with some deleted containers
@@ -1465,14 +1641,18 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
-                ('containers', region): containers
+                ('containers', region): containers,
+                ('bytes', region, 'SINGLE'): total_bytes,
+                ('objects', region, 'SINGLE'): total_objects
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
+                    ('bytes', region, 'SINGLE'): total_bytes,
                     ('objects',): total_objects,
+                    ('objects', region, 'SINGLE'): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1487,26 +1667,33 @@ class TestAccountBackend(BaseTestCase):
         # Add an other account to check if it is not affected
         account_id2 = random_str(16)
         mtime2 = Timestamp().normal
-        self.backend.update_container(account_id2, name, mtime2, 0, 12, 42,
-                                      region=region)
+        self.backend.update_container(
+            account_id2, name, mtime2, 0, 12, 42, region=region,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
         containers_info[(account_id2, name)] = {
             ('name',): name,
             ('region',): region,
             ('mtime',): mtime2,
             ('bytes',): 42,
-            ('objects',): 12
+            ('bytes', 'SINGLE'): 42,
+            ('objects',): 12,
+            ('objects', 'SINGLE'): 12
         }
         backend_info = (
             {
                 ('accounts',): 2,
-                ('containers', region): containers + 1
+                ('containers', region): containers + 1,
+                ('bytes', region, 'SINGLE'): total_bytes + 42,
+                ('objects', region, 'SINGLE'): total_objects + 12
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
+                    ('bytes', region, 'SINGLE'): total_bytes,
                     ('objects',): total_objects,
+                    ('objects', region, 'SINGLE'): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1514,7 +1701,9 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
+                    ('bytes', region, 'SINGLE'): 42,
                     ('objects',): 12,
+                    ('objects', region, 'SINGLE'): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1530,7 +1719,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 2,
-                ('containers', region): 1
+                ('containers', region): 1,
+                ('bytes', region, 'SINGLE'): 42,
+                ('objects', region, 'SINGLE'): 12
             },
             {
                 (account_id,): {
@@ -1543,7 +1734,9 @@ class TestAccountBackend(BaseTestCase):
                 (account_id2,): {
                     ('id',): account_id2,
                     ('bytes',): 42,
+                    ('bytes', region, 'SINGLE'): 42,
                     ('objects',): 12,
+                    ('objects', region, 'SINGLE'): 12,
                     ('containers',): 1,
                     ('containers', region): 1,
                     ('buckets',): 0
@@ -1556,7 +1749,9 @@ class TestAccountBackend(BaseTestCase):
                     ('region',): region,
                     ('mtime',): mtime2,
                     ('bytes',): 42,
-                    ('objects',): 12
+                    ('bytes', 'SINGLE'): 42,
+                    ('objects',): 12,
+                    ('objects', 'SINGLE'): 12
                 }
             },
             {}
@@ -1600,12 +1795,13 @@ class TestAccountBackend(BaseTestCase):
         for i in range(10):
             name = "container%d" % i
             mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
-            objects = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
+            objects = random.randrange(1, 100)
             self.backend.update_container(
                 account_id, name, mtime, 0, objects, nb_bytes,
-                region=region)
-            if random.randrange(100) > 50:
+                region=region, objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
+            if random.randrange(1, 100) > 50:
                 total_bytes += nb_bytes
                 total_objects += objects
                 containers += 1
@@ -1614,7 +1810,9 @@ class TestAccountBackend(BaseTestCase):
                     ('region',): region,
                     ('mtime',): mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): objects
+                    ('bytes', 'SINGLE'): nb_bytes,
+                    ('objects',): objects,
+                    ('objects', 'SINGLE'): objects
                 }
             else:
                 # with some deleted containers
@@ -1628,12 +1826,13 @@ class TestAccountBackend(BaseTestCase):
         for i in range(8):
             name = "container%d" % i
             sharding_mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
-            objects = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
+            objects = random.randrange(1, 100)
             self.backend.update_container(
                 sharding_account_id, name, sharding_mtime, 0, objects,
-                nb_bytes, region=region)
-            if random.randrange(100) > 50:
+                nb_bytes, region=region, objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
+            if random.randrange(1, 100) > 50:
                 sharding_total_bytes += nb_bytes
                 sharding_total_objects += objects
                 shards += 1
@@ -1642,7 +1841,9 @@ class TestAccountBackend(BaseTestCase):
                     ('region',): region,
                     ('mtime',): sharding_mtime,
                     ('bytes',): nb_bytes,
-                    ('objects',): objects
+                    ('bytes', 'SINGLE'): nb_bytes,
+                    ('objects',): objects,
+                    ('objects', 'SINGLE'): objects
                 }
             else:
                 # with some deleted containers
@@ -1657,14 +1858,20 @@ class TestAccountBackend(BaseTestCase):
             {
                 ('accounts',): 1,
                 ('containers', region): containers,
-                ('shards', region): shards
+                ('shards', region): shards,
+                ('bytes', region, 'SINGLE'):
+                    total_bytes + sharding_total_bytes,
+                ('objects', region, 'SINGLE'):
+                    total_objects + sharding_total_objects
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): total_bytes,
+                    ('bytes', region, 'SINGLE'): total_bytes,
                     ('objects',): total_objects,
+                    ('objects', region, 'SINGLE'): total_objects,
                     ('containers',): containers,
                     ('containers', region): containers,
                     ('buckets',): 0
@@ -1673,7 +1880,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): sharding_account_id,
                     ('mtime',): sharding_mtime,
                     ('bytes',): sharding_total_bytes,
+                    ('bytes', region, 'SINGLE'): sharding_total_bytes,
                     ('objects',): sharding_total_objects,
+                    ('objects', region, 'SINGLE'): sharding_total_objects,
                     ('containers',): shards,
                     ('containers', region): shards,
                     ('buckets',): 0
@@ -1690,7 +1899,9 @@ class TestAccountBackend(BaseTestCase):
             {
                 ('accounts',): 1,
                 ('containers', region): 0,
-                ('shards', region): 0
+                ('shards', region): 0,
+                ('bytes', region, 'SINGLE'): 0,
+                ('objects', region, 'SINGLE'): 0
             },
             {
                 (account_id,): {
@@ -1788,23 +1999,27 @@ class TestAccountBackend(BaseTestCase):
                      random_str(16)):
             bucket_containers += 1
             mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
             account_bytes += nb_bytes
             bucket_bytes += nb_bytes
-            objects = random.randrange(100)
+            objects = random.randrange(1, 100)
             account_objects += objects
             if not name.endswith('+segments'):
                 bucket_objects += objects
             self.backend.update_container(
                 account_id, name, mtime, 0, objects, nb_bytes,
-                bucket_name=bucket, region=region)
+                bucket_name=bucket, region=region,
+                objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
             containers_info[(account_id, name)] = {
                 ('name',): name,
                 ('bucket',): bucket,
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): objects
+                ('bytes', 'SINGLE'): nb_bytes,
+                ('objects',): objects,
+                ('objects', 'SINGLE'): objects
             }
         buckets_info[(account_id, bucket)] = {
             ('account',): account_id,
@@ -1812,29 +2027,35 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): bucket_containers,
             ('mtime',): mtime,
             ('bytes',): bucket_bytes,
-            ('objects',): bucket_objects
+            ('bytes', 'SINGLE'): bucket_bytes,
+            ('objects',): bucket_objects,
+            ('objects', 'SINGLE'): bucket_objects
         }
         # Create 12 others containers (and buckets)
         for _ in range(12):
             name = random_str(16)
             self.backend.create_bucket(name, account_id, region)
             mtime = Timestamp().timestamp
-            nb_bytes = random.randrange(100)
+            nb_bytes = random.randrange(1, 100)
             account_bytes += nb_bytes
             bucket_bytes += nb_bytes
-            objects = random.randrange(100)
+            objects = random.randrange(1, 100)
             account_objects += objects
             bucket_objects += objects
             self.backend.update_container(
                 account_id, name, mtime, 0, objects, nb_bytes,
-                bucket_name=name, region=region)
+                bucket_name=name, region=region,
+                objects_details={'SINGLE': objects},
+                bytes_details={'SINGLE': nb_bytes})
             buckets_info[(account_id, name)] = {
                 ('account',): account_id,
                 ('region',): region,
                 ('containers',): 1,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): objects
+                ('bytes', 'SINGLE'): nb_bytes,
+                ('objects',): objects,
+                ('objects', 'SINGLE'): objects
             }
             containers_info[(account_id, name)] = {
                 ('name',): name,
@@ -1842,20 +2063,26 @@ class TestAccountBackend(BaseTestCase):
                 ('region',): region,
                 ('mtime',): mtime,
                 ('bytes',): nb_bytes,
-                ('objects',): objects
+                ('bytes', 'SINGLE'): nb_bytes,
+                ('objects',): objects,
+                ('objects', 'SINGLE'): objects
             }
         backend_info = (
             {
                 ('accounts',): 1,
                 ('containers', region): len(containers_info),
-                ('buckets', region): len(buckets_info)
+                ('buckets', region): len(buckets_info),
+                ('bytes', region, 'SINGLE'): account_bytes,
+                ('objects', region, 'SINGLE'): account_objects
             },
             {
                 (account_id,): {
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): account_bytes,
+                    ('bytes', region, 'SINGLE'): account_bytes,
                     ('objects',): account_objects,
+                    ('objects', region, 'SINGLE'): account_objects,
                     ('containers',): len(containers_info),
                     ('containers', region): len(containers_info),
                     ('buckets',): len(buckets_info),
@@ -1917,7 +2144,7 @@ class TestAccountBackend(BaseTestCase):
             sum_counters = {'bytes': 0, 'objects': 0}
             for policy in container_policies:
                 for field in ('bytes', 'objects'):
-                    counter = random.randrange(100)
+                    counter = random.randrange(1, 100)
                     sum_counters[field] += counter
                     ref_counters[field]['global'] += counter
                     # add to details
@@ -2052,13 +2279,16 @@ class TestAccountBackend(BaseTestCase):
         name1 = 'container1'
         mtime = Timestamp().timestamp
         self.backend.update_container(
-            account_id, name1, mtime, 0, 5, 41,
-            objects_details={'THREECOPIES': 2, 'EC': 3}, region=region)
+            account_id, name1, mtime, 0, 5, 41, region=region,
+            objects_details={'THREECOPIES': 2, 'EC': 3},
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
         container_info1 = {
             ('name',): name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2066,6 +2296,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 20,
+                ('bytes', region, 'EC'): 21,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1
@@ -2075,6 +2307,8 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
+                    ('bytes', region, 'THREECOPIES'): 20,
+                    ('bytes', region, 'EC'): 21,
                     ('objects',): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
@@ -2095,12 +2329,15 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 5, 41,
-            objects_details={'THREECOPIES': 2, 'EC': 3})
+            objects_details={'THREECOPIES': 2, 'EC': 3},
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
         container_info1 = {
             ('name',): name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2108,6 +2345,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 20,
+                ('bytes', region, 'EC'): 21,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1
@@ -2117,6 +2356,8 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
+                    ('bytes', region, 'THREECOPIES'): 20,
+                    ('bytes', region, 'EC'): 21,
                     ('objects',): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
@@ -2137,13 +2378,16 @@ class TestAccountBackend(BaseTestCase):
         name2 = 'container2'
         mtime = Timestamp().timestamp
         self.backend.update_container(
-            account_id, name2, mtime, 0, 7, 33,
-            objects_details={"THREECOPIES": 3, "SINGLE": 4}, region=region)
+            account_id, name2, mtime, 0, 7, 33, region=region,
+            objects_details={"THREECOPIES": 3, "SINGLE": 4},
+            bytes_details={"THREECOPIES": 13, "SINGLE": 20})
         container_info2 = {
             ('name',): name2,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 33,
+            ('bytes', 'THREECOPIES'): 13,
+            ('bytes', 'SINGLE'): 20,
             ('objects',): 7,
             ('objects', 'THREECOPIES'): 3,
             ('objects', 'SINGLE'): 4
@@ -2151,6 +2395,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 33,
+                ('bytes', region, 'EC'): 21,
+                ('bytes', region, 'SINGLE'): 20,
                 ('objects', region, 'THREECOPIES'): 5,
                 ('objects', region, 'EC'): 3,
                 ('objects', region, 'SINGLE'): 4,
@@ -2161,6 +2408,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 74,
+                    ('bytes', region, 'THREECOPIES'): 33,
+                    ('bytes', region, 'EC'): 21,
+                    ('bytes', region, 'SINGLE'): 20,
                     ('objects',): 12,
                     ('objects', region, 'THREECOPIES'): 5,
                     ('objects', region, 'EC'): 3,
@@ -2183,18 +2433,23 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 1, 20,
-            objects_details={"THREECOPIES": 1})
+            objects_details={"THREECOPIES": 1},
+            bytes_details={"THREECOPIES": 20})
         container_info1 = {
             ('name',): name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 20,
+            ('bytes', 'THREECOPIES'): 20,
             ('objects',): 1,
             ('objects', 'THREECOPIES'): 1
         }
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 33,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 20,
                 ('objects', region, 'THREECOPIES'): 4,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2206,6 +2461,9 @@ class TestAccountBackend(BaseTestCase):
                     ('mtime',): mtime,
                     ('bytes',): 53,
                     ('objects',): 8,
+                    ('bytes', region, 'THREECOPIES'): 33,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 20,
                     ('objects', region, 'THREECOPIES'): 4,
                     ('objects', region, 'EC'): 0,
                     ('objects', region, 'SINGLE'): 4,
@@ -2230,6 +2488,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 13,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 20,
                 ('objects', region, 'THREECOPIES'): 3,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2240,6 +2501,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime1,
                     ('bytes',): 33,
+                    ('bytes', region, 'THREECOPIES'): 13,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 20,
                     ('objects',): 7,
                     ('objects', region, 'THREECOPIES'): 3,
                     ('objects', region, 'EC'): 0,
@@ -2266,6 +2530,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 0,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2276,6 +2543,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 0,
+                    ('bytes', region, 'THREECOPIES'): 0,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 0,
                     ('objects',): 0,
                     ('objects', region, 'THREECOPIES'): 0,
                     ('objects', region, 'EC'): 0,
@@ -2298,6 +2568,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 0,
+                ('bytes', region, 'THREECOPIES'): 0,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2371,14 +2644,17 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 5, 41,
+            bucket_name=bucket_name1, region=region,
             objects_details={'THREECOPIES': 2, 'EC': 3},
-            bucket_name=bucket_name1, region=region)
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
         container_info1 = {
             ('name',): name1,
             ('bucket',): bucket_name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2389,6 +2665,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2396,6 +2674,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 20,
+                ('bytes', region, 'EC'): 21,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1,
@@ -2406,6 +2686,8 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
+                    ('bytes', region, 'THREECOPIES'): 20,
+                    ('bytes', region, 'EC'): 21,
                     ('objects',): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
@@ -2429,13 +2711,16 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 5, 41,
-            objects_details={'THREECOPIES': 2, 'EC': 3})
+            objects_details={'THREECOPIES': 2, 'EC': 3},
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
         container_info1 = {
             ('name',): name1,
             ('bucket',): bucket_name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2446,6 +2731,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 41,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 21,
             ('objects',): 5,
             ('objects', 'THREECOPIES'): 2,
             ('objects', 'EC'): 3
@@ -2453,6 +2740,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 20,
+                ('bytes', region, 'EC'): 21,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1,
@@ -2463,6 +2752,8 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
+                    ('bytes', region, 'THREECOPIES'): 20,
+                    ('bytes', region, 'EC'): 21,
                     ('objects',): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
@@ -2495,6 +2786,8 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 20,
+                ('bytes', region, 'EC'): 21,
                 ('objects', region, 'THREECOPIES'): 2,
                 ('objects', region, 'EC'): 3,
                 ('containers', region): 1,
@@ -2505,6 +2798,8 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 41,
+                    ('bytes', region, 'THREECOPIES'): 20,
+                    ('bytes', region, 'EC'): 21,
                     ('objects',): 5,
                     ('objects', region, 'THREECOPIES'): 2,
                     ('objects', region, 'EC'): 3,
@@ -2530,14 +2825,17 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name2, mtime, 0, 7, 33,
+            bucket_name=bucket_name2, region=region,
             objects_details={"THREECOPIES": 3, "SINGLE": 4},
-            bucket_name=bucket_name2, region=region)
+            bytes_details={"THREECOPIES": 10, "SINGLE": 23})
         container_info2 = {
             ('name',): name2,
             ('bucket',): bucket_name2,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 33,
+            ('bytes', 'THREECOPIES'): 10,
+            ('bytes', 'SINGLE'): 23,
             ('objects',): 7,
             ('objects', 'THREECOPIES'): 3,
             ('objects', 'SINGLE'): 4
@@ -2548,6 +2846,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 33,
+            ('bytes', 'THREECOPIES'): 10,
+            ('bytes', 'SINGLE'): 23,
             ('objects',): 7,
             ('objects', 'THREECOPIES'): 3,
             ('objects', 'SINGLE'): 4
@@ -2555,6 +2855,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 30,
+                ('bytes', region, 'EC'): 21,
+                ('bytes', region, 'SINGLE'): 23,
                 ('objects', region, 'THREECOPIES'): 5,
                 ('objects', region, 'EC'): 3,
                 ('objects', region, 'SINGLE'): 4,
@@ -2566,6 +2869,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 74,
+                    ('bytes', region, 'THREECOPIES'): 30,
+                    ('bytes', region, 'EC'): 21,
+                    ('bytes', region, 'SINGLE'): 23,
                     ('objects',): 12,
                     ('objects', region, 'THREECOPIES'): 5,
                     ('objects', region, 'EC'): 3,
@@ -2592,13 +2898,15 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().timestamp
         self.backend.update_container(
             account_id, name1, mtime, 0, 1, 20,
-            objects_details={"THREECOPIES": 1})
+            objects_details={"THREECOPIES": 1},
+            bytes_details={"THREECOPIES": 20})
         container_info1 = {
             ('name',): name1,
             ('bucket',): bucket_name1,
             ('region',): region,
             ('mtime',): mtime,
             ('bytes',): 20,
+            ('bytes', 'THREECOPIES'): 20,
             ('objects',): 1,
             ('objects', 'THREECOPIES'): 1
         }
@@ -2608,6 +2916,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 1,
             ('mtime',): mtime,
             ('bytes',): 20,
+            ('bytes', 'THREECOPIES'): 20,
+            ('bytes', 'EC'): 0,
             ('objects',): 1,
             ('objects', 'THREECOPIES'): 1,
             ('objects', 'EC'): 0
@@ -2615,6 +2925,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 30,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 23,
                 ('objects', region, 'THREECOPIES'): 4,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2626,6 +2939,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): mtime,
                     ('bytes',): 53,
+                    ('bytes', region, 'THREECOPIES'): 30,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 23,
                     ('objects',): 8,
                     ('objects', region, 'THREECOPIES'): 4,
                     ('objects', region, 'EC'): 0,
@@ -2657,6 +2973,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 0,
             ('mtime',): dtime1,
             ('bytes',): 0,
+            ('bytes', 'THREECOPIES'): 0,
+            ('bytes', 'EC'): 0,
             ('objects',): 0,
             ('objects', 'THREECOPIES'): 0,
             ('objects', 'EC'): 0
@@ -2664,6 +2982,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 10,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 23,
                 ('objects', region, 'THREECOPIES'): 3,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 4,
@@ -2675,6 +2996,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime1,
                     ('bytes',): 33,
+                    ('bytes', region, 'THREECOPIES'): 10,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 23,
                     ('objects',): 7,
                     ('objects', region, 'THREECOPIES'): 3,
                     ('objects', region, 'EC'): 0,
@@ -2709,6 +3033,8 @@ class TestAccountBackend(BaseTestCase):
             ('containers',): 0,
             ('mtime',): dtime2,
             ('bytes',): 0,
+            ('bytes', 'THREECOPIES'): 0,
+            ('bytes', 'SINGLE'): 0,
             ('objects',): 0,
             ('objects', 'THREECOPIES'): 0,
             ('objects', 'SINGLE'): 0
@@ -2716,6 +3042,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 0,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2727,6 +3056,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 0,
+                    ('bytes', region, 'THREECOPIES'): 0,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 0,
                     ('objects',): 0,
                     ('objects', region, 'THREECOPIES'): 0,
                     ('objects', region, 'EC'): 0,
@@ -2755,6 +3087,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 1,
+                ('bytes', region, 'THREECOPIES'): 0,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -2766,6 +3101,9 @@ class TestAccountBackend(BaseTestCase):
                     ('id',): account_id,
                     ('mtime',): dtime2,
                     ('bytes',): 0,
+                    ('bytes', region, 'THREECOPIES'): 0,
+                    ('bytes', region, 'EC'): 0,
+                    ('bytes', region, 'SINGLE'): 0,
                     ('objects',): 0,
                     ('objects', region, 'THREECOPIES'): 0,
                     ('objects', region, 'EC'): 0,
@@ -2789,6 +3127,9 @@ class TestAccountBackend(BaseTestCase):
         backend_info = (
             {
                 ('accounts',): 0,
+                ('bytes', region, 'THREECOPIES'): 0,
+                ('bytes', region, 'EC'): 0,
+                ('bytes', region, 'SINGLE'): 0,
                 ('objects', region, 'THREECOPIES'): 0,
                 ('objects', region, 'EC'): 0,
                 ('objects', region, 'SINGLE'): 0,
@@ -3257,4 +3598,86 @@ class TestAccountBackend(BaseTestCase):
                 (shards_account_id, name3): dtime3
             }
         )
+        self._check_backend(*backend_info)
+
+    def test_update_container_without_details(self):
+        account_id = 'test'
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {
+                ('accounts',): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
+        region = 'LOCALHOST'
+        name = 'container'
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region)
+        self._check_backend(*backend_info)
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region,
+            objects_details={'THREECOPIES': 2, 'EC': 3})
+        self._check_backend(*backend_info)
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region,
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
+        self._check_backend(*backend_info)
+
+    def test_update_container_mismatch_between_total_and_details(self):
+        account_id = 'test'
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {
+                ('accounts',): 1
+            },
+            {
+                (account_id,): {
+                    ('id',): account_id,
+                    ('bytes',): 0,
+                    ('objects',): 0,
+                    ('containers',): 0,
+                    ('buckets',): 0
+                }
+            },
+            {},
+            {},
+            {}
+        )
+        self._check_backend(*backend_info)
+
+        region = 'LOCALHOST'
+        name = 'container'
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region,
+            objects_details={'THREECOPIES': 2, 'EC': 4},
+            bytes_details={'THREECOPIES': 19, 'EC': 21})
+        self._check_backend(*backend_info)
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region,
+            objects_details={'THREECOPIES': 2, 'EC': 3},
+            bytes_details={'THREECOPIES': 19, 'EC': 21})
+        self._check_backend(*backend_info)
+        self.assertRaises(
+            BadRequest, self.backend.update_container,
+            account_id, name, Timestamp().timestamp, 0, 5, 41, region=region,
+            objects_details={'THREECOPIES': 2, 'EC': 4},
+            bytes_details={'THREECOPIES': 20, 'EC': 21})
         self._check_backend(*backend_info)

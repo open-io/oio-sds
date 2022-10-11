@@ -1365,10 +1365,24 @@ class AccountBackendFdb(object):
             object_count = 0
         if objects_details is None:
             objects_details = {}
+        total = 0
+        for _, count in objects_details.items():
+            total += count
+        if total != object_count:
+            raise BadRequest(
+                f'Mismatch between total objects ({object_count}) '
+                f'and detailed objects ({total})')
         if bytes_used is None:
             bytes_used = 0
         if bytes_details is None:
             bytes_details = {}
+        total = 0
+        for _, count in bytes_details.items():
+            total += count
+        if total != bytes_used:
+            raise BadRequest(
+                f'Mismatch between total bytes ({bytes_used}) '
+                f'and detailed bytes ({total})')
         new_stats = {
             OBJECTS_FIELD: object_count,
             f'{OBJECTS_FIELD}-details': objects_details,

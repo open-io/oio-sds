@@ -21,7 +21,7 @@ from urllib3 import exceptions as urllibexc
 
 from oio.account.client import AccountClient
 from oio.account.bucket_client import BucketClient
-from oio.common.exceptions import NotFound, OioNetworkException, \
+from oio.common.exceptions import BadRequest, NotFound, OioNetworkException, \
     OioProtocolError
 from tests.utils import BaseTestCase
 
@@ -1339,7 +1339,8 @@ class TestAccountClient(BaseTestCase):
     def test_container_reset(self):
         mtime = time.time()
         self.account_client.container_update(
-            self.account_id, "container", mtime, 12, 42)
+            self.account_id, "container", mtime, 12, 42,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
 
         self.account_client.container_reset(self.account_id, "container",
                                             time.time())
@@ -1356,36 +1357,138 @@ class TestAccountClient(BaseTestCase):
 
     def test_account_refresh(self):
         self.account_client.container_update(
-            self.account_id, "container", time.time(), 12, 42)
+            self.account_id, "container", time.time(), 12, 42,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
 
         self.account_client.account_refresh(self.account_id)
 
         resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp["bytes"], 42)
-        self.assertEqual(resp["objects"], 12)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual({
+            'id': self.account_id,
+            'buckets': 0,
+            'containers': 1,
+            'shards': 0,
+            'objects': 12,
+            'bytes': 42,
+            'metadata': {},
+            'regions': {
+                self.account_client.region.upper(): {
+                    'buckets': 0,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 12
+                    },
+                    'bytes-details': {
+                        'SINGLE': 42
+                    }
+                }
+            }
+        }, resp)
 
     def test_account_flush(self):
         self.account_client.container_update(
-            self.account_id, "container", time.time(), 12, 42)
+            self.account_id, "container", time.time(), 12, 42,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
+        resp = self.account_client.account_show(self.account_id)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual({
+            'id': self.account_id,
+            'buckets': 0,
+            'containers': 1,
+            'shards': 0,
+            'objects': 12,
+            'bytes': 42,
+            'metadata': {},
+            'regions': {
+                self.account_client.region.upper(): {
+                    'buckets': 0,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 12
+                    },
+                    'bytes-details': {
+                        'SINGLE': 42
+                    }
+                }
+            }
+        }, resp)
+        resp = self.account_client.container_list(self.account_id)
+        self.assertEqual(len(resp["listing"]), 1)
 
         self.account_client.account_flush(self.account_id)
 
         resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp["bytes"], 0)
-        self.assertEqual(resp["objects"], 0)
-
+        resp = self.account_client.account_show(self.account_id)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual({
+            'id': self.account_id,
+            'buckets': 0,
+            'containers': 0,
+            'shards': 0,
+            'objects': 0,
+            'bytes': 0,
+            'metadata': {},
+            'regions': {}
+        }, resp)
         resp = self.account_client.container_list(self.account_id)
         self.assertEqual(len(resp["listing"]), 0)
 
     def test_account_delete_missing_container(self):
         bucket = 'bucket-%f' % time.time()
+        expected_account_info = {
+            'id': self.account_id,
+            'buckets': 1,
+            'containers': 1,
+            'shards': 0,
+            'objects': 12,
+            'bytes': 42,
+            'metadata': {},
+            'regions': {
+                self.account_client.region.upper(): {
+                    'buckets': 1,
+                    'containers': 1,
+                    'shards': 0,
+                    'objects-details': {
+                        'SINGLE': 12
+                    },
+                    'bytes-details': {
+                        'SINGLE': 42
+                    }
+                }
+            }
+        }
+
         self.bucket_client.bucket_create(bucket, self.account_id)
         self.account_client.container_update(
-            self.account_id, "container", time.time(), 12, 42, bucket=bucket)
+            self.account_id, "container", time.time(), 12, 42, bucket=bucket,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 42})
         resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp['bytes'], 42)
-        self.assertEqual(resp['objects'], 12)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual(expected_account_info, resp)
         resp = self.bucket_client.bucket_show(bucket)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual({
+            'account': self.account_id,
+            'containers': 1,
+            'objects': 12,
+            'bytes': 42,
+            'objects-details': {
+                'SINGLE': 12
+            },
+            'bytes-details': {
+                'SINGLE': 42
+            },
+            'region': self.account_client.region.upper(),
+            'replication_enabled': False
+        }, resp)
         self.assertEqual(resp['bytes'], 42)
         self.assertEqual(resp['objects'], 12)
         self.assertEqual(resp['containers'], 1)
@@ -1395,9 +1498,9 @@ class TestAccountClient(BaseTestCase):
         # As the container didn't exist in the account service,
         # the statistics should not be changed.
         resp = self.account_client.account_show(self.account_id)
-        self.assertEqual(resp['bytes'], 42)
-        self.assertEqual(resp['objects'], 12)
-        self.assertEqual(resp['containers'], 1)
+        resp.pop('ctime')
+        resp.pop('mtime')
+        self.assertDictEqual(expected_account_info, resp)
 
     def test_account_retry_on_read(self):
         original_pool_manager = self.account_client.pool_manager
@@ -1426,3 +1529,36 @@ class TestAccountClient(BaseTestCase):
             self.assertTrue(fake_pool_manager.protocol_error)
         finally:
             self.account_client.pool_manager = original_pool_manager
+
+    def test_update_container_without_details(self):
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42)
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42,
+            objects_details={'SINGLE': 12})
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42,
+            bytes_details={'SINGLE': 42})
+
+    def test_update_container_mismatch_between_total_and_details(self):
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42,
+            objects_details={'SINGLE': 10}, bytes_details={'SINGLE': 44})
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42,
+            objects_details={'SINGLE': 10}, bytes_details={'SINGLE': 42})
+        mtime = time.time()
+        self.assertRaises(
+            BadRequest, self.account_client.container_update,
+            self.account_id, "container", mtime, 12, 42,
+            objects_details={'SINGLE': 12}, bytes_details={'SINGLE': 44})
