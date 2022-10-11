@@ -178,7 +178,7 @@ class ObjectStorageTest(unittest.TestCase):
         data = json.dumps({'properties': {}, 'system': {}})
         api.container._direct_request.assert_called_once_with(
             'POST', uri, params=params, data=data,
-            autocreate=True, **self.common_kwargs)
+            autocreate=True, region=None, **self.common_kwargs)
 
     def test_container_create_exist(self):
         api = self.api

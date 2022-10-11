@@ -393,6 +393,16 @@ meta2_filter_extract_force_versioning(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_region(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	EXTRACT_OPT(NAME_MSGKEY_REGION);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_simulate_versioning(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

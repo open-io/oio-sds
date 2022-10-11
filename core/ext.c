@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -184,6 +184,9 @@ struct oio_ext_local_s {
 	guint8 simulate_versioning;
 	/** Request originates from a redirect from a root container. */
 	guint8 is_shard_redirection;
+	/** If the caller sets a region, the backend service must check it is
+	 * in the same region before answering. */
+	gchar *region;
 	gchar *root_hexid;
 	gchar **shared_properties;
 	gchar reqid[LIMIT_LENGTH_REQID];
@@ -382,6 +385,20 @@ gboolean oio_ext_is_shard_redirection(void) {
 void oio_ext_set_is_shard_redirection(const gboolean is_shard_redirection) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->is_shard_redirection = BOOL(is_shard_redirection);
+}
+
+const gchar *oio_ext_get_region(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->region;
+}
+
+void oio_ext_set_region(const gchar *region) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->region) {
+		g_free(l->region);
+		l->region = NULL;
+	}
+	l->region = g_strdup(region);
 }
 
 const gchar *oio_ext_get_root_hexid(void) {

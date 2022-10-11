@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -133,6 +133,14 @@ void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
 gboolean oio_ext_is_shard_redirection(void);
 
 void oio_ext_set_is_shard_redirection(const gboolean is_shard);
+
+/** Get the region received from the request, if any. */
+const gchar *oio_ext_get_region(void);
+
+/** Set the region received from a request, in the thread-local storage.
+ * If the caller sets a region, the backend service must check it is
+ * in the same region before answering. */
+void oio_ext_set_region(const gchar *region);
 
 const gchar *oio_ext_get_root_hexid(void);
 

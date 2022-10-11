@@ -322,6 +322,12 @@
 				"def": "meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|",
 				"descr": "" },
 
+			{ "type": "string", "name": "oio_ns_region",
+				"key": "ns.region",
+				"limit": 64,
+				"def": "localhost",
+				"descr": "Geographical region where the cluster has been deployed (case insensitive)." },
+
 			{ "type": "string", "name": "oio_ns_storage_policy",
 				"key": "ns.storage_policy",
 				"limit": 128,

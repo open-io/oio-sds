@@ -238,6 +238,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	oio_ext_set_force_master(
 			flag_force_master || oio_str_parse_bool(force_master, FALSE));
 
+	/* Load the optional region: the backend will have to check if it is in
+	 * the same region */
+	const char* region = g_tree_lookup(rq->tree_headers, PROXYD_HEADER_REGION);
+	oio_ext_set_region(region);
+
 	/* Load the optional 'upgrade-to-tls' flag: this flag should only used for gateway  */
 	const char* upgrade_to_tls = g_tree_lookup(
 		rq->tree_headers, PROXYD_HEADER_UPGRADE_TO_TLS);
@@ -333,6 +338,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	oio_requri_clear (&ruri);
 	oio_url_pclean (&url);
 	oio_ext_set_reqid (NULL);
+	oio_ext_set_region(NULL);
 	return rc;
 }
 

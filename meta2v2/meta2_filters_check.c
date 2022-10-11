@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -138,6 +139,23 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 	TRACE_FILTER();
+	return FILTER_OK;
+}
+
+int
+meta2_filter_check_region(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+
+	const char *region = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REGION);
+	if (oio_str_is_set(region) && g_ascii_strcasecmp(region, oio_ns_region)) {
+		meta2_filter_ctx_set_error(
+				ctx,
+				BADREQ("Request addressed to region %s, but we are in %s",
+					region, oio_ns_region));
+		return FILTER_KO;
+	}
 	return FILTER_OK;
 }
 

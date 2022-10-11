@@ -59,6 +59,8 @@ M2V2_DECLARE_FILTER(meta2_filter_check_backend);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_is_master);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
 M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
+/** Check that the requested region matches the region we are in. */
+M2V2_DECLARE_FILTER(meta2_filter_check_region);
 
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_url);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_chunk_beans);
@@ -85,6 +87,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_force_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_simulate_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_find_shards_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_prepare_shard_params);
+M2V2_DECLARE_FILTER(meta2_filter_extract_region);
 M2V2_DECLARE_FILTER(meta2_filter_extract_sharding_info);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);

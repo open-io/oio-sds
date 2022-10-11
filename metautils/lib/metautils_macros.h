@@ -91,6 +91,7 @@ License along with this library.
 #define NAME_MSGKEY_PROPAGATE_SHARDS   "PROP_SHARDS"
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"
+#define NAME_MSGKEY_REGION             "REGION"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
 #define NAME_MSGKEY_RESTORE_DRAINED    "RESTORE"
 #define NAME_MSGKEY_ROOT_HEXID         "RID"

@@ -70,6 +70,10 @@ extern "C" {
 #  define PROXYD_HEADER_MODE PROXYD_HEADER_PREFIX "action-mode"
 # endif
 
+# ifndef PROXYD_HEADER_REGION
+#  define PROXYD_HEADER_REGION PROXYD_HEADER_PREFIX "region"
+# endif
+
 # ifndef PROXYD_HEADER_REQID
 #  define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
 # endif

@@ -713,6 +713,14 @@ Used by `gcc`
  * cmake directive: *OIO_NS_META1_DIGITS*
  * range: 0 -> 4
 
+### ns.region
+
+> Geographical region where the cluster has been deployed (case insensitive).
+
+ * default: **localhost**
+ * type: string
+ * cmake directive: *OIO_NS_REGION*
+
 ### ns.service_update_policy
 
 > TODO: to be documented

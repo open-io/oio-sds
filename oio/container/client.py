@@ -182,7 +182,8 @@ class ContainerClient(ProxyClient):
                         "Failed to refresh rawx service scores")
 
     def container_create(self, account, reference,
-                         properties=None, system=None, **kwargs):
+                         properties=None, system=None, region=None,
+                         **kwargs):
         """
         Create a container.
 
@@ -192,6 +193,8 @@ class ContainerClient(ProxyClient):
         :type reference: `str`
         :param properties: properties to set on the container
         :type properties: `dict`
+        :param region: ensure the container is created in this region
+        :type region: str
         :param system: system properties to set on the container
         :type system: `dict`
         :keyword headers: extra headers to send to the proxy
@@ -203,13 +206,13 @@ class ContainerClient(ProxyClient):
         data = json.dumps({'properties': properties or {},
                            'system': system or {}})
         resp, body = self._request('POST', '/create', params=params,
-                                   data=data, **kwargs)
+                                   data=data, region=region, **kwargs)
         if resp.status not in (204, 201):
             raise exceptions.from_response(resp, body)
         return resp.status == 201
 
     def container_create_many(self, account, containers, properties=None,
-                              **kwargs):
+                              region=None, **kwargs):
         """
         Create several containers.
 
@@ -219,6 +222,8 @@ class ContainerClient(ProxyClient):
         :type containers: iterable of `str`
         :param properties: properties to set on the containers
         :type properties: `dict`
+        :param region: ensure the containers are created in this region
+        :type region: str
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         :returns: a list of tuples with the name of the container and
@@ -235,7 +240,7 @@ class ContainerClient(ProxyClient):
                                          'system': kwargs.get('system', {})})
             data = json.dumps({"containers": unformatted_data})
             resp, body = self._request('POST', '/create_many', params=params,
-                                       data=data, **kwargs)
+                                       data=data, region=region, **kwargs)
             if resp.status not in (204, 200):
                 raise exceptions.from_response(resp, body)
             for container in body["containers"]:
@@ -249,19 +254,20 @@ class ContainerClient(ProxyClient):
             if head:
                 results += self.container_create_many(
                     account, head, properties=properties,
-                    **kwargs)
+                    region=region, **kwargs)
             if tail:
                 results += self.container_create_many(
                     account, tail, properties=properties,
-                    **kwargs)
+                    region=region, **kwargs)
             return results
+        # TODO(FVE): remove that, the proxy supports it
         except exceptions.NotFound:
             # Batches not supported by the proxy
             for container in containers:
                 try:
                     rc = self.container_create(
                         account, container, properties=properties,
-                        **kwargs)
+                        region=region, **kwargs)
                     results.append((container, rc))
                 except Exception:
                     results.append((container, False))

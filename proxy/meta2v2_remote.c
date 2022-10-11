@@ -161,8 +161,11 @@ GByteArray* m2v2_remote_pack_CREATE(
 		const gchar **headers,
 		gint64 dl)
 {
+	const gchar *region = oio_ext_get_region();
 	MESSAGE msg = _m2v2_build_request_with_extra_fields(
 			NAME_MSGNAME_M2V2_CREATE, url, NULL, headers, dl);
+	if (oio_str_is_set(region))
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REGION, region);
 	if (pols && pols->storage_policy)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pols->storage_policy);
 	if (pols && pols->version_policy)

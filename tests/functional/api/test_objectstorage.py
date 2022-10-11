@@ -49,6 +49,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
         super(ObjectStorageApiTestBase, self).setUp()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = list()
+        self.created_containers = set()
         self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
@@ -59,10 +60,20 @@ class ObjectStorageApiTestBase(BaseTestCase):
             except Exception:
                 logging.exception("Failed to delete %s/%s/%s//%s",
                                   self.ns, self.account, ct, name)
+        for acct, name in self.created_containers:
+            try:
+                self.api.container_delete(acct, name)
+            except Exception as err:
+                logging.warning("Failed to destroy %s/%s: %s",
+                                acct, name, err)
 
-    def _create(self, name, properties=None):
-        return self.api.container_create(self.account, name,
-                                         properties=properties)
+    def _create(self, name, properties=None, **kwargs):
+        res = self.api.container_create(self.account, name,
+                                        properties=properties,
+                                        **kwargs)
+        if res:
+            self.created_containers.add((self.account, name))
+        return res
 
     def _delete(self, name):
         self.api.container_delete(self.account, name)
@@ -191,6 +202,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         # clean
         self._delete(name)
+
+    def test_container_create_different_region(self):
+        name = "badregion" + random_str(4)
+        self.assertRaises(exc.ClientException, self._create, name,
+                          region="The Moon")
 
     def test_container_create_invalid_name(self):
         # Ah, those latin1 users!
@@ -1581,7 +1597,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                obj_name="should_be_created")
 
     def test_object_create_long_name(self):
-        """Create an objet whose name has the maximum length allowed"""
+        """Create an object whose name has the maximum length allowed"""
         cname = random_str(16)
         path = random_str(1023)
         self.api.object_create(self.account, cname,

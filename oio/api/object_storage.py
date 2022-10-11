@@ -390,7 +390,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_create(self, account, container, properties=None,
-                         **kwargs):
+                         region=None, **kwargs):
         """
         Create a container.
 
@@ -400,11 +400,13 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param properties: properties to set on the container
         :type properties: `dict`
+        :param region: ensure the container is created in this region
+        :type region: str
         :returns: True if the container has been created,
                   False if it already exists
         """
         return self.container.container_create(
-            account, container, properties=properties, **kwargs)
+            account, container, properties=properties, region=region, **kwargs)
 
     @handle_container_not_found
     @patch_kwargs
@@ -426,7 +428,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_create_many(self, account, containers, properties=None,
-                              **kwargs):
+                              region=None, **kwargs):
         """
         Create Many containers
 
@@ -436,9 +438,12 @@ class ObjectStorageApi(object):
         :type containers: `list`
         :param properties: properties to set on the containers
         :type properties: `dict`
+        :param region: ensure the containers are created in this region
+        :type region: str
         """
         return self.container.container_create_many(
-            account, containers, properties=properties, **kwargs)
+            account, containers, properties=properties, region=region,
+            **kwargs)
 
     @handle_container_not_found
     @patch_kwargs

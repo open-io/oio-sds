@@ -18,8 +18,8 @@ from urllib.parse import urlencode
 
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID, \
-    HTTP_CONTENT_TYPE_JSON
+    CONNECTION_TIMEOUT, READ_TIMEOUT, REGION_HEADER, REQID_HEADER, \
+    STRLEN_REQID, HTTP_CONTENT_TYPE_JSON
 from oio.common.easy_value import true_value
 from oio.common.exceptions import OioException, from_response
 from oio.common.http_urllib3 import urllib3, get_pool_manager, \
@@ -97,6 +97,8 @@ class HttpApi(object):
         :type headers: `dict`
         :keyword force_master: request will run on master service only.
         :type force_master: `bool`
+        :keyword region: ask the backend to check it is in the same region
+        :type region: str
 
         :raise oio.common.exceptions.OioTimeout: in case of read, write
         or connection timeout
@@ -144,6 +146,10 @@ class HttpApi(object):
                 to = float(to)
             out_headers[TIMEOUT_HEADER] = int(to * 1000000.0)
 
+        # Look for a region
+        if kwargs.get('region') is not None:
+            out_headers[REGION_HEADER] = str(kwargs['region'])
+
         # Look for a request ID
         if 'reqid' in kwargs:
             out_headers[REQID_HEADER] = str(kwargs['reqid'])
@@ -159,7 +165,7 @@ class HttpApi(object):
             out_headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
             data = jsonlib.dumps(json, separators=(',', ':'))
 
-        # Trigger performance measurments
+        # Trigger performance measurements
         perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             out_headers[PERFDATA_HEADER] = 'enabled'

@@ -52,10 +52,10 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_admin(FALSE);
 	oio_ext_set_force_master(FALSE);
 	oio_ext_set_force_versioning(NULL);
-	oio_ext_set_user_agent(NULL);
-	oio_ext_set_simulate_versioning(FALSE);
 	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);
+	oio_ext_set_simulate_versioning(FALSE);
+	oio_ext_set_user_agent(NULL);
 	oio_ext_allow_long_timeout(FALSE);
 
 	ctx = meta2_filter_ctx_new();
@@ -104,6 +104,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
+	meta2_filter_extract_region,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
@@ -111,6 +112,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_events_not_stalled,
+	meta2_filter_check_region,
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_extract_header_version_policy,
 	meta2_filter_extract_header_localflag,
@@ -155,6 +157,7 @@ static gridd_filter M2V2_EMPTY_FILTERS[] =
 	NULL
 };
 
+/* TODO(FVE): remove this, it seems unused */
 static gridd_filter M2V2_HAS_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
