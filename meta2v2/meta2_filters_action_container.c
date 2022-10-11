@@ -100,24 +100,6 @@ meta2_filter_action_empty_container(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-int
-meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
-{
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-
-	GError *e = meta2_backend_has_container(m2b, url);
-	if (NULL != e) {
-		if (e->code == CODE_CONTAINER_NOTFOUND)
-			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
 #define getflag(F,R,N) do { \
 	if (metautils_message_extract_flag (R, NAME_MSGKEY_##N, 0)) \
 		F |= M2V2_DESTROY_##N; \

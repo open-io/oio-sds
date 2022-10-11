@@ -256,7 +256,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define NAME_MSGNAME_M2V2_CREATE           "M2_CREATE"
 # define NAME_MSGNAME_M2V2_DESTROY          "M2_DESTROY"
-# define NAME_MSGNAME_M2V2_HAS              "M2_HAS"
 # define NAME_MSGNAME_M2V2_FLUSH            "M2_FLUSH"
 # define NAME_MSGNAME_M2V2_PURGE_CONTENT    "M2_CPURGE"
 # define NAME_MSGNAME_M2V2_PURGE_CONTAINER  "M2_BPURGE"

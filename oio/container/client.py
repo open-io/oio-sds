@@ -260,18 +260,6 @@ class ContainerClient(ProxyClient):
                     account, tail, properties=properties,
                     region=region, **kwargs)
             return results
-        # TODO(FVE): remove that, the proxy supports it
-        except exceptions.NotFound:
-            # Batches not supported by the proxy
-            for container in containers:
-                try:
-                    rc = self.container_create(
-                        account, container, properties=properties,
-                        region=region, **kwargs)
-                    results.append((container, rc))
-                except Exception:
-                    results.append((container, False))
-            return results
 
     def container_delete(self, account=None, reference=None, cid=None,
                          force=False, **kwargs):

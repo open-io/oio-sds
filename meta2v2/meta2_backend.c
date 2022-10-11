@@ -954,40 +954,6 @@ _transaction_begin(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	return NULL;
 }
 
-GError *
-meta2_backend_has_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url)
-{
-	GError *err = NULL;
-
-	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(url != NULL);
-	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
-
-	struct sqlx_name_inline_s n0;
-	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, NULL);
-	NAME2CONST(n,n0);
-
-	err = sqlx_repository_has_base(m2->repo, &n);
-	if (NULL != err) {
-		g_prefix_error(&err, "File error: ");
-		return err;
-	}
-
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	err = m2b_open(m2, url, M2V2_OPEN_LOCAL, &sq3);
-	if (NULL == err) {
-		/* The base is used in LOCAL mode, and with that option the INIT
-		 * flag is not checked. As an exception, we want the check to be
-		 * performed here. */
-		if (!_is_container_initiated(sq3))
-			err = NEWERROR(CODE_CONTAINER_NOTFOUND,
-					"Container created but not initiated");
-		m2b_close(m2, sq3, url);
-	}
-	return err;
-}
-
 static GError *
 _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 {

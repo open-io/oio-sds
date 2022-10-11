@@ -79,9 +79,6 @@ GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 GError* meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags);
 
-GError *meta2_backend_has_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url);
-
 GError *meta2_backend_container_isempty (struct meta2_backend_s *m2,
 		struct oio_url_s *url);
 
