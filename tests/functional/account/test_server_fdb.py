@@ -347,6 +347,7 @@ class TestAccountServer(TestAccountServerBase):
             "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
             "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
             "bucket": "foo",
+            "objects-s3": 12,
         }
         dataj = json.dumps(data)
         resp = self.app.put(
@@ -377,6 +378,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
+                    "objects-s3": 12,
                 }
             },
             resp["regions"],
@@ -456,6 +458,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
+                    "objects-s3": 12,
                 }
             },
             resp["regions"],
@@ -490,6 +493,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 1,
                     "buckets": 0,
+                    "objects-s3": 0,
                 },
                 "TEST": {
                     "objects-details": {},
@@ -497,6 +501,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 0,
                     "buckets": 1,
+                    "objects-s3": 0,
                 },
             },
             resp["regions"],
@@ -532,6 +537,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 0,
                     "buckets": 0,
+                    "objects-s3": 0,
                 },
                 "TEST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
@@ -539,6 +545,7 @@ class TestAccountServer(TestAccountServerBase):
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
+                    "objects-s3": 12,
                 },
             },
             resp["regions"],

@@ -1457,6 +1457,7 @@ class TestAccountClient(BaseTestCase):
                     "buckets": 1,
                     "containers": 1,
                     "shards": 0,
+                    "objects-s3": 12,
                     "objects-details": {"SINGLE": 12},
                     "bytes-details": {"SINGLE": 42},
                 }

@@ -34,6 +34,7 @@ LAST_UNICODE_CHAR = "\U0010fffd"
 MULTIUPLOAD_SUFFIX = "+segments"
 BYTES_FIELD = "bytes"
 OBJECTS_FIELD = "objects"
+OBJECTS_S3_FIELD = OBJECTS_FIELD + "-s3"
 SHARDS_FIELD = "shards"
 CONTAINERS_FIELD = "containers"
 BUCKETS_FIELD = "buckets"
@@ -50,6 +51,7 @@ COUNTERS_FIELDS = (
     CONTAINERS_FIELD,
     BUCKETS_FIELD,
     ACCOUNTS_FIELD,
+    OBJECTS_S3_FIELD,
 )
 TIMESTAMP_FIELDS = (CTIME_FIELD, MTIME_FIELD)
 RESERVED_BUCKET_FIELDS = (
@@ -62,6 +64,7 @@ RESERVED_BUCKET_FIELDS = (
     OBJECTS_FIELD,
     BYTES_FIELD + "-details",
     OBJECTS_FIELD + "-details",
+    OBJECTS_S3_FIELD,
 )
 
 
@@ -226,8 +229,8 @@ class AccountBackendFdb(object):
     def _set_counter(self, tr, key, value=0):
         tr[key] = struct.pack("<q", value)
 
-    def _increment(self, tr, key, inc=1):
-        if inc:
+    def _increment(self, tr, key, inc=1, force=False):
+        if inc or force:
             tr.add(key, struct.pack("<q", inc))
 
     def _counter_value_to_counter(self, counter_value):
@@ -448,7 +451,16 @@ class AccountBackendFdb(object):
         """
         [transactional] Update metrics stats for the specified region.
         """
+        if OBJECTS_S3_FIELD in stats_delta:
+            self._increment(
+                tr,
+                self.metrics_space.pack((OBJECTS_S3_FIELD, region)),
+                stats_delta.get(OBJECTS_S3_FIELD, 0),
+            )
+
         for key in (BYTES_FIELD, OBJECTS_FIELD):
+            if key not in stats_delta:
+                continue
             for policy, value in stats_delta[f"{key}-details"].items():
                 # Update stats by policy (by policy)
                 self._increment(
@@ -876,8 +888,16 @@ class AccountBackendFdb(object):
         """
         account_space = self.acct_space[account_id]
 
+        if OBJECTS_S3_FIELD in stats_delta:
+            self._increment(
+                tr,
+                account_space.pack((OBJECTS_S3_FIELD, region)),
+                stats_delta.get(OBJECTS_S3_FIELD, 0),
+            )
         # Update account stats
         for key in (BYTES_FIELD, OBJECTS_FIELD):
+            if key not in stats_delta:
+                continue
             # Update global stats
             value = stats_delta[key]
             self._increment(tr, account_space.pack((key,)), value)
@@ -937,7 +957,13 @@ class AccountBackendFdb(object):
         is_sharding = account_id.startswith(SHARDING_ACCOUNT_PREFIX)
 
         # Reset statistics
-        for field in (BYTES_FIELD, CONTAINERS_FIELD, OBJECTS_FIELD, BUCKETS_FIELD):
+        for field in (
+            BYTES_FIELD,
+            CONTAINERS_FIELD,
+            OBJECTS_FIELD,
+            BUCKETS_FIELD,
+            OBJECTS_S3_FIELD,
+        ):
             stats_range = self.acct_space[account_id][field].range()
             # Propagate to metrics
             for key, value in tr[stats_range.start : stats_range.stop]:
@@ -974,6 +1000,7 @@ class AccountBackendFdb(object):
             BUCKETS_FIELD: Counter(),
             CONTAINERS_FIELD: Counter(),
             OBJECTS_FIELD: {},
+            OBJECTS_S3_FIELD: Counter(),
         }
 
         # Counters for one container
@@ -1019,16 +1046,25 @@ class AccountBackendFdb(object):
             account_buckets = self.bucket_space[account_id]
             buckets_range = account_buckets.range()
 
+            region = None
+            objects = None
+
             iterator = tr.get_range(buckets_range.start, buckets_range.stop)
             for key, value in iterator:
                 _, *details = account_buckets.unpack(key)
 
-                if details[0] != REGION_FIELD:
-                    continue
+                if details[0] == REGION_FIELD:
+                    region = value.decode("utf-8")
 
-                region = value.decode("utf-8")
-                counters[BUCKETS_FIELD][region] += 1
-                counters[BUCKETS_FIELD][""] += 1
+                if len(details) == 1 and details[0] == OBJECTS_FIELD:
+                    objects = self._counter_value_to_counter(value)
+
+                if region is not None and objects is not None:
+                    counters[BUCKETS_FIELD][region] += 1
+                    counters[BUCKETS_FIELD][""] += 1
+                    counters[OBJECTS_S3_FIELD][region] += objects
+
+                    region = objects = None
 
         # Persist counters
         for field, counter in counters.items():
@@ -1036,7 +1072,8 @@ class AccountBackendFdb(object):
                 account_id,
                 field,
             )
-            if field in (BUCKETS_FIELD, CONTAINERS_FIELD):
+
+            if field in (BUCKETS_FIELD, CONTAINERS_FIELD, OBJECTS_S3_FIELD):
                 for region, value in counter.items():
                     key = field_key
                     if region:
@@ -1792,6 +1829,13 @@ class AccountBackendFdb(object):
         # Increase buckets counter in account
         self._increment(tr, self.acct_space[account].pack((BUCKETS_FIELD,)))
         self._increment(tr, self.acct_space[account].pack((BUCKETS_FIELD, region)))
+        # Set bucket objects counters
+        self._increment(
+            tr, self.acct_space[account].pack((OBJECTS_S3_FIELD, region)), 0, True
+        )
+        self._increment(
+            tr, self.metrics_space.pack((OBJECTS_S3_FIELD, region)), 0, True
+        )
         # Increase buckets counter in metrics
         self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)))
 
@@ -1860,6 +1904,8 @@ class AccountBackendFdb(object):
         """
         bucket_space = self.bucket_space[account][bucket]
 
+        objects = tr[bucket_space.pack((OBJECTS_FIELD,))]
+        objects = self._counter_value_to_counter(objects.value)
         # Delete bucket info
         bucket_range = bucket_space.range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
@@ -1884,8 +1930,14 @@ class AccountBackendFdb(object):
         # Decrease buckets counter in account
         self._increment(tr, self.acct_space[account].pack((BUCKETS_FIELD,)), -1)
         self._increment(tr, self.acct_space[account].pack((BUCKETS_FIELD, region)), -1)
+        self._increment(
+            tr, self.acct_space[account].pack((OBJECTS_S3_FIELD, region)), -objects
+        )
         # Decrease buckets counter in metrics
         self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)), -1)
+        self._increment(
+            tr, self.metrics_space.pack((OBJECTS_S3_FIELD, region)), -objects
+        )
 
     @catch_service_errors
     def get_bucket_info(self, bname, **kwargs):
@@ -2068,6 +2120,8 @@ class AccountBackendFdb(object):
 
         bucket_space = self.bucket_space[account_id][bname]
 
+        bucket_stats = {}
+
         current_region = tr[bucket_space.pack((REGION_FIELD,))]
         if not current_region.present():  # Bucket doesn't exist
             if container_is_deleted:
@@ -2112,6 +2166,8 @@ class AccountBackendFdb(object):
                 continue
             # Update global stats
             value = stats_delta[key]
+            if key == OBJECTS_FIELD:
+                bucket_stats[OBJECTS_S3_FIELD] = value
             self._increment(tr, bucket_space.pack((key,)), value)
             for policy, value in stats_delta[f"{key}-details"].items():
                 # Update stats by policy
@@ -2119,6 +2175,8 @@ class AccountBackendFdb(object):
 
         # Update bucket mtime
         self._update_timestamp(tr, bucket_space.pack((MTIME_FIELD,)), mtime)
+
+        self._update_account_stats(tr, account_id, region, bucket_stats, mtime)
 
     @catch_service_errors
     def update_bucket_metadata(self, bname, metadata, to_delete=None, **kwargs):

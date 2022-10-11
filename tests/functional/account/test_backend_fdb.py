@@ -68,6 +68,7 @@ class TestAccountBackend(BaseTestCase):
             "containers",
             "buckets",
             "accounts",
+            "objects-s3",
         ):
             value = struct.pack("<q", int(value))
         else:
@@ -319,9 +320,14 @@ class TestAccountBackend(BaseTestCase):
             self.assertEqual(self.backend.create_account(account, ctime=mtime), account)
 
             account_info = accounts_info.setdefault((account,), {})
+            root_account_info = account_info
             account_info[("id",)] = account
             account_info[("mtime",)] = mtime
             shard_account = account.startswith(SHARDING_ACCOUNT_PREFIX)
+
+            if shard_account:
+                root_account = account[len(SHARDING_ACCOUNT_PREFIX) :]
+                root_account_info = accounts_info.setdefault((root_account,), {})
 
             for bucket in buckets:
                 self.assertIn("region", bucket)
@@ -382,13 +388,22 @@ class TestAccountBackend(BaseTestCase):
                             _increment_info(account_info, field, None, None, value)
                             if not policy:
                                 continue
-                            if not details[field]:
-                                details[field] = {}
-                            details[field][policy] = value
+                            if field in details:
+                                if not details[field]:
+                                    details[field] = {}
+                                details[field][policy] = value
                             _increment_info(container_info, field, None, policy, value)
                             _increment_info(bucket_info, field, None, policy, value)
                             _increment_info(account_info, field, region, policy, value)
                             _increment_info(metrics_info, field, region, policy, value)
+                            if field == "objects":
+                                _field = f"{field}-s3"
+                                _increment_info(
+                                    root_account_info, _field, region, None, value
+                                )
+                                _increment_info(
+                                    metrics_info, _field, region, None, value
+                                )
 
                     containers_info[(account, container["name"])] = container_info
 
@@ -1450,7 +1465,7 @@ class TestAccountBackend(BaseTestCase):
                     "containers": [
                         {
                             "name": "CONTAINER_1",
-                            "objects": {"POL_1": 5, "POL_2": 10},
+                            "objects": {"POL_1": 1, "POL_2": 2},
                             "bytes": {"POL_1": 50, "POL_2": 100},
                         },
                         {
@@ -1480,12 +1495,12 @@ class TestAccountBackend(BaseTestCase):
                     "containers": [
                         {
                             "name": "CONTAINER_3-1",
-                            "objects": {"POL_1": 5, "POL_2": 10},
+                            "objects": {"POL_1": 3, "POL_2": 4},
                             "bytes": {"POL_1": 50, "POL_2": 100},
                         },
                         {
                             "name": "CONTAINER_3-2",
-                            "objects": {"POL_1": 6},
+                            "objects": {"POL_1": 5},
                             "bytes": {"POL_1": 60},
                         },
                     ],
@@ -2052,7 +2067,11 @@ class TestAccountBackend(BaseTestCase):
             ("objects",): 0,
         }
         backend_info = (
-            {("accounts",): 1, ("buckets", region): len(buckets_info)},
+            {
+                ("accounts",): 1,
+                ("buckets", region): len(buckets_info),
+                ("objects-s3", region): bucket_objects,
+            },
             {
                 (account_id,): {
                     ("id",): account_id,
@@ -2061,6 +2080,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers",): 0,
                     ("buckets",): len(buckets_info),
                     ("buckets", region): len(buckets_info),
+                    ("objects-s3", region): bucket_objects,
                 }
             },
             buckets_info,
@@ -2163,6 +2183,7 @@ class TestAccountBackend(BaseTestCase):
                 ("buckets", region): len(buckets_info),
                 ("bytes", region, "SINGLE"): account_bytes,
                 ("objects", region, "SINGLE"): account_objects,
+                ("objects-s3", region): bucket_objects,
             },
             {
                 (account_id,): {
@@ -2176,6 +2197,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): len(containers_info),
                     ("buckets",): len(buckets_info),
                     ("buckets", region): len(buckets_info),
+                    ("objects-s3", region): bucket_objects,
                 }
             },
             buckets_info,
@@ -2722,7 +2744,11 @@ class TestAccountBackend(BaseTestCase):
             ("objects",): 0,
         }
         backend_info = (
-            {("accounts",): 1, ("buckets", region): 1},
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("objects-s3", region): 0,
+            },
             {
                 (account_id,): {
                     ("id",): account_id,
@@ -2731,6 +2757,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers",): 0,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 0,
                 }
             },
             {(account_id, bucket_name1): bucket_info1},
@@ -2787,6 +2814,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "EC"): 3,
                 ("containers", region): 1,
                 ("buckets", region): 1,
+                ("objects-s3", region): 5,
             },
             {
                 (account_id,): {
@@ -2802,6 +2830,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 5,
                 }
             },
             {(account_id, bucket_name1): bucket_info1},
@@ -2855,6 +2884,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "EC"): 3,
                 ("containers", region): 1,
                 ("buckets", region): 1,
+                ("objects-s3", region): 5,
             },
             {
                 (account_id,): {
@@ -2870,6 +2900,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 5,
                 }
             },
             {(account_id, bucket_name1): bucket_info1},
@@ -2897,6 +2928,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "EC"): 3,
                 ("containers", region): 1,
                 ("buckets", region): 2,
+                ("objects-s3", region): 5,
             },
             {
                 (account_id,): {
@@ -2912,6 +2944,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 2,
                     ("buckets", region): 2,
+                    ("objects-s3", region): 5,
                 }
             },
             {
@@ -2973,6 +3006,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 4,
                 ("containers", region): 2,
                 ("buckets", region): 2,
+                ("objects-s3", region): 12,
             },
             {
                 (account_id,): {
@@ -2990,6 +3024,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 2,
                     ("buckets",): 2,
                     ("buckets", region): 2,
+                    ("objects-s3", region): 12,
                 }
             },
             {
@@ -3049,6 +3084,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 4,
                 ("containers", region): 2,
                 ("buckets", region): 2,
+                ("objects-s3", region): 8,
             },
             {
                 (account_id,): {
@@ -3066,6 +3102,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 2,
                     ("buckets",): 2,
                     ("buckets", region): 2,
+                    ("objects-s3", region): 8,
                 }
             },
             {
@@ -3106,6 +3143,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 4,
                 ("containers", region): 1,
                 ("buckets", region): 2,
+                ("objects-s3", region): 7,
             },
             {
                 (account_id,): {
@@ -3123,6 +3161,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 2,
                     ("buckets", region): 2,
+                    ("objects-s3", region): 7,
                 }
             },
             {
@@ -3162,6 +3201,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 0,
                 ("containers", region): 0,
                 ("buckets", region): 2,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3179,6 +3219,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 0,
                     ("buckets",): 2,
                     ("buckets", region): 2,
+                    ("objects-s3", region): 0,
                 }
             },
             {
@@ -3204,6 +3245,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 0,
                 ("containers", region): 0,
                 ("buckets", region): 0,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3221,6 +3263,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 0,
                     ("buckets",): 0,
                     ("buckets", region): 0,
+                    ("objects-s3", region): 0,
                 }
             },
             {},
@@ -3241,6 +3284,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "SINGLE"): 0,
                 ("containers", region): 0,
                 ("buckets", region): 0,
+                ("objects-s3", region): 0,
             },
             {},
             {},
@@ -3274,7 +3318,11 @@ class TestAccountBackend(BaseTestCase):
         bucket_name = "bucket"
         self.backend.create_bucket(bucket_name, account_id, region)
         backend_info = (
-            {("accounts",): 1, ("buckets", region): 1},
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("objects-s3", region): 0,
+            },
             {
                 (account_id,): {
                     ("id",): account_id,
@@ -3283,6 +3331,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers",): 0,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 0,
                 }
             },
             {
@@ -3335,6 +3384,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "pol2"): 5,
                 ("containers", region): 1,
                 ("buckets", region): 1,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3350,6 +3400,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 0,
                 }
             },
             {
@@ -3409,6 +3460,7 @@ class TestAccountBackend(BaseTestCase):
             ("containers", region): 2,
             ("buckets",): 1,
             ("buckets", region): 1,
+            ("objects-s3", region): 28,
         }
         backend_info = (
             {
@@ -3419,6 +3471,7 @@ class TestAccountBackend(BaseTestCase):
                 ("objects", region, "pol2"): 22,
                 ("containers", region): 2,
                 ("buckets", region): 1,
+                ("objects-s3", region): 28,
             },
             {(account_id,): account_info},
             {
@@ -3471,6 +3524,8 @@ class TestAccountBackend(BaseTestCase):
             ("objects", "pol1"): 5,
             ("objects", "pol2"): 7,
         }
+        account_info[("mtime",)] = mtime
+        account_info[("objects-s3", region)] = 40
         backend_info = (
             {
                 ("accounts",): 1,
@@ -3481,6 +3536,7 @@ class TestAccountBackend(BaseTestCase):
                 ("shards", region): 1,
                 ("containers", region): 2,
                 ("buckets", region): 1,
+                ("objects-s3", region): 40,
             },
             {
                 (account_id,): account_info,
@@ -3545,6 +3601,8 @@ class TestAccountBackend(BaseTestCase):
             ("containers", region): 0,
             ("buckets",): 0,
         }
+        account_info[("mtime",)] = dtime3
+        account_info[("objects-s3", region)] = 28
         backend_info = (
             {
                 ("accounts",): 1,
@@ -3555,6 +3613,7 @@ class TestAccountBackend(BaseTestCase):
                 ("shards", region): 0,
                 ("containers", region): 2,
                 ("buckets", region): 1,
+                ("objects-s3", region): 28,
             },
             {(account_id,): account_info, (shards_account_id,): shard_account_info},
             {
@@ -3594,6 +3653,7 @@ class TestAccountBackend(BaseTestCase):
                 ("shards", region): 0,
                 ("containers", region): 1,
                 ("buckets", region): 1,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3609,6 +3669,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 1,
                     ("buckets", region): 1,
+                    ("objects-s3", region): 0,
                 },
                 (shards_account_id,): shard_account_info,
             },
@@ -3643,6 +3704,7 @@ class TestAccountBackend(BaseTestCase):
                 ("shards", region): 0,
                 ("containers", region): 1,
                 ("buckets", region): 0,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3658,6 +3720,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 1,
                     ("buckets",): 0,
                     ("buckets", region): 0,
+                    ("objects-s3", region): 0,
                 },
                 (shards_account_id,): shard_account_info,
             },
@@ -3682,6 +3745,7 @@ class TestAccountBackend(BaseTestCase):
                 ("shards", region): 0,
                 ("containers", region): 0,
                 ("buckets", region): 0,
+                ("objects-s3", region): 0,
             },
             {
                 (account_id,): {
@@ -3697,6 +3761,7 @@ class TestAccountBackend(BaseTestCase):
                     ("containers", region): 0,
                     ("buckets",): 0,
                     ("buckets", region): 0,
+                    ("objects-s3", region): 0,
                 },
                 (shards_account_id,): shard_account_info,
             },
