@@ -3170,41 +3170,43 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 	gboolean _on_metachunk(gpointer ppos, GSList *chunks, gpointer udata UNUSED) {
 		gint mc_pos = GPOINTER_TO_INT(ppos);
 		GString *out = g_string_sized_new(1024);
-		g_string_append_c(out, '{');
-		oio_str_gstring_append_json_pair_int(out, "pos", mc_pos);
-		g_string_append_c(out, ',');
-		oio_str_gstring_append_json_quote(out, "chunks");
-		g_string_append(out, ":[");
 		gboolean must_send_event = FALSE;
 		for (GSList *cur = chunks; cur; cur = cur->next) {
 			GString *chunk_id = CHUNKS_get_id(cur->data);
 			struct oio_lb_selected_item_s *item = g_hash_table_lookup(
 					chunk_items, chunk_id->str);
 			if (item) {
-				if (cur != chunks)
-					g_string_append_c(out, ',');
-				g_string_append_c(out, '{');
-				meta2_json_encode_bean(out, cur->data);
-				g_string_append_c(out, ',');
-				oio_str_gstring_append_json_quote(out, "quality");
-				g_string_append_c(out, ':');
-				oio_selected_item_quality_to_json(out, item);
 				if (item->final_dist <= item->warn_dist ||
 						strcmp(item->final_slot, item->expected_slot)) {
+					if (!must_send_event) {
+						// first chunk, create the template
+						g_string_append_c(out, '{');
+						oio_str_gstring_append_json_pair_int(out, "pos", mc_pos);
+						g_string_append_c(out, ',');
+						oio_str_gstring_append_json_quote(out, "chunks");
+						g_string_append(out, ":[");
+					} else {
+						g_string_append_c(out, ',');
+					}
+					g_string_append_c(out, '{');
+					meta2_json_encode_bean(out, cur->data);
+					g_string_append_c(out, ',');
+					oio_str_gstring_append_json_quote(out, "quality");
+					g_string_append_c(out, ':');
+					oio_selected_item_quality_to_json(out, item);
 					must_send_event = TRUE;
+					g_string_append_c(out, '}');
 				}
-				g_string_append_c(out, '}');
 			} else {
 				GRID_DEBUG("%s: no quality description for chunk %s",
 						__FUNCTION__, chunk_id->str);
 			}
 		}
-		g_string_append(out, "]}");
 		if (must_send_event) {
+			g_string_append(out, "]}");
 			*to_be_improved = g_slist_prepend(*to_be_improved,
 					g_string_free(out, FALSE));
 		} else {
-			GRID_DEBUG("Event avoided (sufficient quality): %s", out->str);
 			g_string_free(out, TRUE);
 		}
 		return FALSE;

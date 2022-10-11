@@ -181,6 +181,7 @@ class TestPerfectibleContent(BaseTestCase):
             if qual["warn_dist"] < warn_dist:
                 warn_dist = qual["warn_dist"]
             self.assertEqual(qual["expected_slot"], qual["final_slot"])
+            self.assertLessEqual(qual["final_dist"], qual["warn_dist"])
         self.assertLessEqual(lowest_dist, warn_dist)
 
     def test_upload_fallback(self):
