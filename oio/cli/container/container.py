@@ -135,6 +135,10 @@ class CreateBucket(Lister):
     def get_parser(self, prog_name):
         parser = super(CreateBucket, self).get_parser(prog_name)
         parser.add_argument(
+            '--region',
+            help=('Ensure the container is created in this region')
+        )
+        parser.add_argument(
             'buckets',
             metavar='<bucket-name>',
             nargs='+',
@@ -152,7 +156,7 @@ class CreateBucket(Lister):
             # We are about to create a root container, reserve its name.
             try:
                 self.app.client_manager.storage.bucket.bucket_reserve(
-                    bucket, account)
+                    bucket, account, region=parsed_args.region)
             except Exception as exc:
                 self.log.error('Failed to reserve bucket name %s: %s',
                                bucket, exc)
@@ -162,7 +166,11 @@ class CreateBucket(Lister):
                 try:
                     system = {M2_PROP_BUCKET_NAME: bucket}
                     created = self.app.client_manager.storage.container_create(
-                        account, bucket, system=system)
+                        account,
+                        bucket,
+                        region=parsed_args.region,
+                        system=system
+                    )
                     if not created:
                         self.app.client_manager.storage.\
                             container_set_properties(
@@ -174,7 +182,7 @@ class CreateBucket(Lister):
                     # Container creation failed, remove reservation
                     try:
                         self.app.client_manager.storage.bucket.bucket_release(
-                            bucket, account)
+                            bucket, account, region=parsed_args.region)
                     except Exception as exc2:
                         self.log.error('Failed to release bucket %s: %s',
                                        bucket, exc2)
@@ -183,7 +191,7 @@ class CreateBucket(Lister):
                 # confirm reservation by creating the bucket.
                 try:
                     self.app.client_manager.storage.bucket.bucket_create(
-                        bucket, account)
+                        bucket, account, region=parsed_args.region)
                 except Exception as exc:
                     self.log.error('Failed to create bucket %s: %s',
                                    bucket, exc)
@@ -194,7 +202,7 @@ class CreateBucket(Lister):
                             self.app.client_manager.storage.container_delete(
                                 account, bucket)
                         self.app.client_manager.storage.bucket.bucket_release(
-                            bucket, account)
+                            bucket, account, region=parsed_args.region)
                     except Exception as exc2:
                         self.log.error('Failed to release bucket %s: %s',
                                        bucket, exc2)
@@ -227,8 +235,8 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
             help=('Declare the container belongs to the specified bucket')
         )
         parser.add_argument(
-            '--location',
-            help=('Declare the container belongs to the specified region')
+            '--region',
+            help=('Ensure the container is created in this region')
         )
         parser.add_argument(
             'containers',
@@ -262,6 +270,7 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
                 account,
                 parsed_args.containers,
                 properties=properties,
+                region=parsed_args.region,
                 system=system)
 
         else:
@@ -270,6 +279,7 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
                     account,
                     container,
                     properties=properties,
+                    region=parsed_args.region,
                     system=system)
                 results.append((container, success))
 
