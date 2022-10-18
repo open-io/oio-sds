@@ -25,9 +25,6 @@ pipeline = content_cleaner
 pipeline = content_cleaner
 # pipeline = webhook content_cleaner
 
-[handler:storage.content.perfectible]
-pipeline = content_improve
-
 [handler:storage.container.new]
 # pipeline = account_update replication
 pipeline = account_update
@@ -107,17 +104,6 @@ queue_url = ${QUEUE_URL}
 
 [filter:noop]
 use = egg:oio#noop
-
-[filter:content_improve]
-use = egg:oio#notify
-tube = oio-improve
-queue_url = beanstalk://127.0.0.1:6009
-# Exclude accounts and/or specific containers.
-# Account and container names must be urlencoded.
-# Values are separated with commas.
-#exclude = account/container
-#exclude = account1,account2,account3
-#exclude = account1/container1,account2,account3/container1
 
 [filter:webook]
 use = egg:oio#webhook

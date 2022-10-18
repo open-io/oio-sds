@@ -21,7 +21,7 @@ from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import (
     ContainerClient,
-    extract_chunk_qualities,
+    pop_chunk_qualities,
     NB_LOCATION_LEVELS,
 )
 from oio.common.constants import OIO_VERSION
@@ -234,9 +234,11 @@ class Content(object):
                     position=position,
                     **kwargs
                 )
-                quals = extract_chunk_qualities(
-                    spare_resp.get("properties", {}), raw=True
-                )
+                # Transform list of properties into a dict
+                properties = {
+                    x["key"]: x["value"] for x in spare_resp.get("properties", {})
+                }
+                quals = pop_chunk_qualities(properties)
                 if check_quality:
                     bal = ensure_better_chunk_qualities(chunks_broken, quals)
                 break

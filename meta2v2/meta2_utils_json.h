@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -37,9 +37,6 @@ GError *m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean);
 
 /**  */
 GError * m2v2_json_load_setof_xbean (struct json_object *j, GSList **out);
-
-GError *meta2_json_fill_item_quality(struct json_object *jqual,
-		struct oio_lb_selected_item_s *item);
 
 /** Convert alias beans to their JSON representation.
  * Ignores beans of other types. */

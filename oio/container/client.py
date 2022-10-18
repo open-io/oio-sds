@@ -58,22 +58,17 @@ CHUNK_SYSMETA_PREFIX = "__OIO_CHUNK__"
 NB_LOCATION_LEVELS = 4
 
 
-def extract_chunk_qualities(properties, raw=False):
+def pop_chunk_qualities(properties):
     """
-    Extract chunk quality information from a dictionary (or a list)
-    of properties.
+    Pop chunk quality information from a dictionary of properties.
 
-    :param properties: properties object.
-    :param raw: False if `properties` is a dictionary, True if
-        `properties` is a list of "raw" properties.
+    :param properties: properties dict.
     """
-    if raw:
-        properties = {x["key"]: x["value"] for x in properties}
-    qualities = {
-        k[len(CHUNK_SYSMETA_PREFIX) :]: json.loads(v)
-        for k, v in properties.items()
-        if k.startswith(CHUNK_SYSMETA_PREFIX)
-    }
+    qualities = {}
+    for k, _ in list(properties.items()):
+        if k.startswith(CHUNK_SYSMETA_PREFIX):
+            qualities[k[len(CHUNK_SYSMETA_PREFIX) :]] = json.loads(properties.pop(k))
+
     return qualities
 
 
@@ -988,9 +983,7 @@ class ContainerClient(ProxyClient):
             )
             chunks = body["chunks"]
             obj_meta = extract_content_headers_meta(resp.headers)
-            obj_meta["properties"] = dict()
-            # pylint: disable=no-member
-            obj_meta["properties"].update(body.get("properties", {}))
+            obj_meta["properties"] = body.get("properties", {})
         except exceptions.NotFound:
             # Proxy does not support v2 request (oio < 4.3)
             resp, chunks = self._direct_request(

@@ -14,23 +14,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
 from os import path
 import random
 import time
 from urllib.parse import urlparse
 
-try:
-    import subprocess32 as subprocess
-
-    SUBPROCESS32 = True
-except ImportError:
-    import subprocess
-
-    SUBPROCESS32 = False
-
 from collections import defaultdict
-from flaky import flaky
 
 from tests.utils import BaseTestCase
 
@@ -39,16 +28,6 @@ from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.utils import request_id
-from oio.event.beanstalk import ResponseError
-from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
-
-
-REASONABLE_EVENT_DELAY = 3.0
-
-
-def is_event_delay_error(err, *args):
-    """Tell if the first exception is related to an election error."""
-    return "No event received in the last" in str(err)
 
 
 class TestPerfectibleContent(BaseTestCase):
@@ -57,8 +36,6 @@ class TestPerfectibleContent(BaseTestCase):
         self.api = ObjectStorageApi(
             self.ns, endpoint=self.uri, pool_manager=self.http_pool
         )
-        # Ensure the tube is not clogged
-        self.beanstalkd.drain_tube(DEFAULT_IMPROVER_TUBE, timeout=0.2)
 
     def tearDown(self):
         super(TestPerfectibleContent, self).tearDown()
@@ -101,15 +78,6 @@ class TestPerfectibleContent(BaseTestCase):
             self.skip("This test requires 3 different 2nd level locations")
         return by_place
 
-    def _wait_for_event(self, timeout=REASONABLE_EVENT_DELAY):
-        """
-        Wait for an event in the oio-improve tube.
-        """
-        event = self.wait_for_event(DEFAULT_IMPROVER_TUBE, timeout=timeout)
-        if event is None:
-            self.fail("No event received in the last %s seconds" % timeout)
-        return event
-
     def _get_rawx(self, netloc):
         """
         Return the rawx dict from the conf with the specified netloc.
@@ -140,9 +108,26 @@ class TestPerfectibleContent(BaseTestCase):
         #  - HASH_DEPTH = 1
         return path.join(rawx["path"], "non_optimal_placement", chunk_id[:3], chunk_id)
 
-    # This test must be executed first
-    def test_0_upload_ok(self):
-        """Check that no event is emitted when everything is ok."""
+    def _is_symlink(self, abs_path):
+        # islink: check symbolic link
+        # exists: broken link would fail
+        return path.exists(abs_path) and path.islink(abs_path)
+
+    def _check_symlinks(self, chunks, should_exist=True):
+        """
+        Note: several chunks may be misplaced but it is impossible to know
+        exactly which ones.
+        """
+        symlink_found = False
+        for chunk in chunks:
+            abs_link = self._get_symlink_non_optimal_path(chunk["real_url"])
+            if self._is_symlink(abs_link):
+                symlink_found = True
+                break
+        self.assertEqual(should_exist, symlink_found)
+
+    def test_upload_ok(self):
+        """Check that no symlink is created when everything is ok."""
         self.wait_for_score(("rawx",))
         # Check we have enough service locations.
         self._aggregate_rawx_by_place()
@@ -150,7 +135,7 @@ class TestPerfectibleContent(BaseTestCase):
         # Upload an object.
         container = self._random_user()
         reqid = request_id("perfectible-")
-        self.api.object_create(
+        chunks, _, _ = self.api.object_create(
             self.account,
             container,
             obj_name="perfect",
@@ -159,17 +144,12 @@ class TestPerfectibleContent(BaseTestCase):
             headers={REQID_HEADER: reqid},
         )
 
-        # Wait on the oio-improve beanstalk tube.
-        self.beanstalkd.watch(DEFAULT_IMPROVER_TUBE)
-        # Ensure we do not receive any event.
-        self.assertRaises(
-            ResponseError, self.beanstalkd.reserve, timeout=REASONABLE_EVENT_DELAY
-        )
+        # Check that no chunk has a non optimal placement.
+        self._check_symlinks(chunks, should_exist=False)
 
-    @flaky(rerun_filter=is_event_delay_error)
     def test_upload_warn_dist(self):
         """
-        Check that an event is emitted when the warning distance is reached.
+        Check that a symlink is created when the warning distance is reached.
         """
         self.wait_for_score(("rawx",))
         # Check we have enough service locations.
@@ -182,7 +162,7 @@ class TestPerfectibleContent(BaseTestCase):
         # Upload an object.
         container = self._random_user()
         reqid = request_id("perfectible-")
-        self.api.object_create(
+        chunks, _, _ = self.api.object_create(
             self.account,
             container,
             obj_name="perfectible",
@@ -191,106 +171,16 @@ class TestPerfectibleContent(BaseTestCase):
             headers={REQID_HEADER: reqid},
         )
 
-        # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY * 2)
-
-        # Check the content of the event.
-        self.assertEqual("storage.content.perfectible", event.event_type)
-        self.assertEqual(reqid, event.reqid)
-        self.assertEqual(self.account, event.url["account"])
-        self.assertEqual(container, event.url["user"])
-        self.assertEqual("perfectible", event.url["path"])
-        mc = event.data
-        self.assertEqual(0, mc["pos"])  # only one metachunk in this test
-        lowest_dist = 4
-        warn_dist = 4
-        for chunk in mc["chunks"]:
-            qual = chunk["quality"]
-            if qual["final_dist"] < lowest_dist:
-                lowest_dist = qual["final_dist"]
-            if qual["warn_dist"] < warn_dist:
-                warn_dist = qual["warn_dist"]
-            self.assertEqual(qual["expected_slot"], qual["final_slot"])
-            self.assertLessEqual(qual["final_dist"], qual["warn_dist"])
-            # Check that non optimal symlink have been created.
-            abs_link = self._get_symlink_non_optimal_path(chunk["id"])
-            self.assertTrue(path.islink(abs_link))
-        self.assertLessEqual(lowest_dist, warn_dist)
+        # Check that at least one chunk has a non optimal placement.
+        self._check_symlinks(chunks)
 
     def test_upload_fallback(self):
         """
-        Test that an event is emitted when a fallback service slot is used.
+        Test that a symlink is created when a fallback service slot is used.
         """
         by_slot = self._aggregate_rawx_by_slot()
         if len(by_slot["rawx-odd"]) < 3:
             self.skip('This test requires at least 3 services in the "rawx-odd" slot')
-
-        # Lock all services of the 'rawx-even' slot.
-        banned_slot = "rawx-even"
-        self._lock_services("rawx", by_slot[banned_slot])
-
-        # Upload an object.
-        container = self._random_user()
-        reqid = request_id("perfectible-")
-        self.api.object_create(
-            self.account,
-            container,
-            obj_name="perfectible",
-            data=b"whatever",
-            policy="THREECOPIES",
-            headers={REQID_HEADER: reqid},
-        )
-
-        # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY * 2)
-
-        # Check the content of the event.
-        self.assertEqual("storage.content.perfectible", event.event_type)
-        self.assertEqual(reqid, event.reqid)
-        self.assertEqual(self.account, event.url["account"])
-        self.assertEqual(container, event.url["user"])
-        self.assertEqual("perfectible", event.url["path"])
-        mc = event.data
-        self.assertEqual(0, mc["pos"])  # only one metachunk in this test
-        slot_matches = list()
-        for chunk in mc["chunks"]:
-            qual = chunk["quality"]
-            slot_matches.append(qual["final_slot"] == qual["expected_slot"])
-            self.assertNotEqual(qual["final_slot"], banned_slot)
-            # Check that non optimal symlink have been created.
-            abs_link = self._get_symlink_non_optimal_path(chunk["id"])
-            self.assertTrue(path.islink(abs_link))
-        self.assertIn(False, slot_matches)
-
-    def _call_blob_improver_subprocess(
-        self, run_time=3.0, stop_after_events=1, log_level="INFO"
-    ):
-        # FIXME(FVE): find a way to call coverage on the subprocess
-        blob_improver = subprocess.Popen(
-            [
-                "oio-blob-improver",
-                self.ns,
-                "--beanstalkd=" + self.conf["queue_addr"],
-                "--retry-delay=1",
-                "--log-level=" + log_level,
-                "--stop-after-events=%d" % stop_after_events,
-            ]
-        )
-        if SUBPROCESS32:
-            try:
-                blob_improver.wait(run_time)
-            except Exception:
-                blob_improver.kill()
-        else:
-            time.sleep(run_time)
-            blob_improver.kill()
-
-    def test_blob_improver_threecopies(self):
-        by_slot = self._aggregate_rawx_by_slot()
-        if len(by_slot["rawx-odd"]) < 3:
-            self.skip('This test requires at least 3 services in the "rawx-odd" slot')
-        # Ensure the distance between services won't be a problem.
-        self._aggregate_rawx_by_place()
 
         # Lock all services of the 'rawx-even' slot.
         banned_slot = "rawx-even"
@@ -305,37 +195,11 @@ class TestPerfectibleContent(BaseTestCase):
             obj_name="perfectible",
             data=b"whatever",
             policy="THREECOPIES",
-            reqid=reqid,
+            headers={REQID_HEADER: reqid},
         )
 
-        # Wait for the "perfectible" event to be emitted,
-        # but do not consume it.
-        job, data = self.beanstalkd.wait_for_ready_job(
-            DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY
-        )
-        if job:
-            logging.debug("Expected job data: %s", data)
-        self.assertIsNotNone(job)
-        # "Unlock" the services of the 'rawx-even' slot.
-        self._lock_services("rawx", by_slot[banned_slot], score=100)
-
-        self._call_blob_improver_subprocess()
-
-        # Check some changes have been done on the object.
-        _, new_chunks = self.api.object_locate(self.account, container, "perfectible")
-        old_urls = sorted([x["url"] for x in chunks])
-        new_urls = sorted([x["url"] for x in new_chunks])
-        logging.debug("Old chunks: %s", old_urls)
-        logging.debug("New chunks: %s", new_urls)
-        self.assertNotEqual(old_urls, new_urls)
-
-        # Ensure no new "perfectible" event is emitted.
-        job, data = self.beanstalkd.wait_for_ready_job(
-            DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY
-        )
-        if job:
-            logging.debug("Unexpected job data: %s", data)
-        self.assertIsNone(job)
+        # Check that at least one chunk has a non optimal placement.
+        self._check_symlinks(chunks)
 
     def test_post_non_optimal_chunk(self):
         """
@@ -346,7 +210,7 @@ class TestPerfectibleContent(BaseTestCase):
         container = self._random_user()
         obj_name = "perfectiblepost"
         reqid = request_id("perfectible-")
-        self.api.object_create(
+        chunks, _, _ = self.api.object_create(
             self.account,
             container,
             obj_name=obj_name,
@@ -355,14 +219,12 @@ class TestPerfectibleContent(BaseTestCase):
             headers={REQID_HEADER: reqid},
         )
 
+        # Check that no chunk has a non optimal placement.
+        self._check_symlinks(chunks, should_exist=False)
+
         # Choose a chunk and locate it on the disk.
-        _, chunks = self.api.object_locate(self.account, container, obj_name)
         chunk = random.choice(chunks)
         abs_link = self._get_symlink_non_optimal_path(chunk["real_url"])
-
-        # Check symbolic link does not exist.
-        self.assertFalse(path.islink(abs_link))
-        self.assertFalse(path.exists(abs_link))
 
         # Do the POST.
         self.request(
@@ -372,8 +234,7 @@ class TestPerfectibleContent(BaseTestCase):
         )
 
         # Check symbolic link does exist.
-        self.assertTrue(path.islink(abs_link))
-        self.assertTrue(path.exists(abs_link))  # broken link would fail
+        self.assertTrue(self._is_symlink(abs_link))
 
     # TODO(FVE): move this in oio.container.client
     # And maybe change the input and output formats

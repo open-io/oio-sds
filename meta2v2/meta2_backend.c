@@ -2402,38 +2402,9 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		if ((!err || err->code == CODE_CONTENT_UNCOMPLETE)) {
 			GSList *chunk_meta = NULL;
+			// Extract qualities from properties (necessary for the C Client)
 			*beans = gslist_extract(*beans, &chunk_meta,
 					(GCompareFunc)_prop_is_not_prefixed, OIO_CHUNK_SYSMETA_PREFIX);
-			GSList *flaws = NULL;
-			m2db_check_content_quality(sorted, chunk_meta, &flaws);
-			if (flaws) {
-				/* Ensure the root CID is loaded so that the event emitted
-				 * contains the correct CID (not the shard's). */
-				err2 = m2b_open_for_object(m2b, url,
-						M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-				if (err2 != NULL) {
-					goto end_uncomplete;
-				}
-				m2b_close(m2b, sq3, url);
-				/* Ensure there is a version in the URL used to create the
-				 * event. We cannot patch the input URL because m2db_put_alias
-				 * checks there is NO version in the URL. */
-				struct oio_url_s *url2 = oio_url_dup(url);
-				_patch_url_with_version(url2, sorted->aliases);
-				for (GSList *msgs = flaws; msgs != NULL; msgs = msgs->next) {
-					gchar *msg = msgs->data;
-					GString *gs = oio_event__create_with_id(
-							"storage.content.perfectible",
-							url2, oio_ext_get_reqid());
-					g_string_append(gs, ",\"data\":");
-					g_string_append(gs, msg);
-					g_string_append(gs, "}");
-					send_event(g_string_free(gs, FALSE), NULL);
-				}
-				oio_url_clean(url2);
-			}
-end_uncomplete:
-			g_slist_free_full(flaws, g_free);
 			_bean_cleanl2(chunk_meta);
 		}
 	}

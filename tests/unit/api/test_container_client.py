@@ -19,7 +19,7 @@ from mock import MagicMock as Mock, patch
 
 from oio.common.exceptions import Conflict, ServiceBusy
 from oio.common.green import get_watchdog
-from oio.container.client import CHUNK_SYSMETA_PREFIX, extract_chunk_qualities
+from oio.container.client import CHUNK_SYSMETA_PREFIX, pop_chunk_qualities
 from tests.unit.api import FakeStorageApi
 from tests.utils import random_id
 
@@ -139,32 +139,15 @@ class ContainerClientTest(unittest.TestCase):
         key = "%shttp://%s/%s" % (CHUNK_SYSMETA_PREFIX, host, random_id(64))
         return key, DUMMY_QUAL_JSON
 
-    def test_extract_chunk_qualities(self):
-        properties = dict()
+    def test_pop_chunk_qualities(self):
+        properties = {}
         properties.update((self._gen_chunk_qual(),))
         properties.update((self._gen_chunk_qual("127.0.0.2:6022"),))
         properties.update((self._gen_chunk_qual("127.0.0.3:6023"),))
         keys = list(properties.keys())  # PY3: make a list from the view
         properties.update({"a": "b"})
 
-        quals = extract_chunk_qualities(properties)
-
-        self.assertNotIn("a", quals)
-        for key in keys:
-            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX) :], quals)
-        for val in quals.values():
-            self.assertDictEqual(DUMMY_QUAL, val)
-
-    def test_extract_chunk_qualities_raw(self):
-        properties = list()
-        keys = list()
-        for i in range(1, 4):
-            key, val = self._gen_chunk_qual("127.0.0.%d:602%d" % (i, i))
-            properties.append({"key": key, "value": val})
-            keys.append(key)
-        properties.append({"key": "a", "value": "b"})
-
-        quals = extract_chunk_qualities(properties, raw=True)
+        quals = pop_chunk_qualities(properties)
 
         self.assertNotIn("a", quals)
         for key in keys:

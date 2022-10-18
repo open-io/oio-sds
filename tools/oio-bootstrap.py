@@ -1278,9 +1278,6 @@ pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
 # pipeline = replication content_cleaner
 pipeline = ${REPLICATION} content_cleaner ${PRESERVE}
 
-[handler:storage.content.perfectible]
-pipeline = logger content_improve ${PRESERVE}
-
 [handler:storage.container.new]
 # pipeline = replication account_update
 pipeline = ${REPLICATION} account_update ${PRESERVE}
@@ -1318,11 +1315,6 @@ concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
-
-[filter:content_improve]
-use = egg:oio#notify
-tube = oio-improve
-queue_url = ${QUEUE_URL}
 
 [filter:content_rebuild]
 use = egg:oio#notify

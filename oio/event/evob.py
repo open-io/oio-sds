@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -90,7 +90,6 @@ class EventTypes(object):
     CONTENT_DRAINED = "storage.content.drained"
     CONTENT_UPDATE = "storage.content.update"
     CONTENT_NEW = "storage.content.new"
-    CONTENT_PERFECTIBLE = "storage.content.perfectible"
     CONTENT_REBUILT = "storage.content.rebuilt"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
@@ -106,7 +105,6 @@ class EventTypes(object):
         CONTENT_BROKEN,
         CONTENT_DELETED,
         CONTENT_NEW,
-        CONTENT_PERFECTIBLE,
         CONTENT_REBUILT,
         CONTENT_UPDATE,
     )

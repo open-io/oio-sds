@@ -56,7 +56,7 @@ from oio.common.decorators import (
 from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
 from oio.common.cache import del_cached_object_metadata, aggregate_cache_perfdata
-from oio.container.client import extract_chunk_qualities
+from oio.container.client import pop_chunk_qualities
 
 
 class ObjectStorageApi(object):
@@ -1733,7 +1733,7 @@ class ObjectStorageApi(object):
         )
         obj_meta["oio_version"] = obj_meta.get("oio_version") or OIO_VERSION
         if obj_meta.get("properties"):
-            obj_meta["qualities"] = extract_chunk_qualities(obj_meta["properties"])
+            obj_meta["qualities"] = pop_chunk_qualities(obj_meta["properties"])
 
         storage_method = STORAGE_METHODS.load(obj_meta["chunk_method"])
         if link:

@@ -558,45 +558,6 @@ m2db_del_drain_timestamp(struct sqlx_sqlite3_s *sq3)
 /* GET ---------------------------------------------------------------------- */
 
 static void
-_load_chunk_quality(GHashTable *qualities, struct bean_PROPERTIES_s *prop)
-{
-	GError *err = NULL;
-	GByteArray *val = PROPERTIES_get_value(prop);
-	json_tokener *parser = json_tokener_new();
-	json_object *jbody = json_tokener_parse_ex(
-			parser, (const char*)val->data, val->len);
-	if (json_tokener_get_error(parser) != json_tokener_success) {
-		err = NEWERROR(0, "%s",
-				json_tokener_error_desc(json_tokener_get_error(parser)));
-	} else {
-		struct oio_lb_selected_item_s *item = g_malloc0(sizeof *item);
-		err = meta2_json_fill_item_quality(jbody, item);
-		if (!err) {
-			GString *key = PROPERTIES_get_key(prop);
-			EXTRA_ASSERT(g_str_has_prefix(key->str, OIO_CHUNK_SYSMETA_PREFIX));
-			g_hash_table_insert(qualities,
-					g_strdup(key->str + strlen(OIO_CHUNK_SYSMETA_PREFIX)), item);
-		} else {
-			oio_lb_selected_item_free(item);
-		}
-	}
-
-	if (jbody)
-		json_object_put(jbody);
-	json_tokener_free(parser);
-	if (err)
-		GRID_WARN("Failed to parse chunk quality: %s", err->message);
-	g_clear_error(&err);
-}
-
-static void
-_load_chunk_qualities(GHashTable *qualities, GSList *properties)
-{
-	for (GSList *l = properties; l != NULL; l = l->	next)
-		_load_chunk_quality(qualities, l->data);
-}
-
-static void
 _sort_content_cb(gpointer sorted_content, gpointer bean)
 {
 	struct m2v2_sorted_content_s *content = sorted_content;
@@ -3154,67 +3115,6 @@ _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
 			break;
 	}
 	return err;
-}
-
-void
-m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
-		GSList *chunk_meta, GSList **to_be_improved)
-{
-	EXTRA_ASSERT(to_be_improved != NULL);
-	/* keys are chunk URLs,
-	 * values are <struct oio_lb_selected_item_s *> */
-	GHashTable *chunk_items = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) oio_lb_selected_item_free);
-	_load_chunk_qualities(chunk_items, chunk_meta);
-
-	gboolean _on_metachunk(gpointer ppos, GSList *chunks, gpointer udata UNUSED) {
-		gint mc_pos = GPOINTER_TO_INT(ppos);
-		GString *out = g_string_sized_new(1024);
-		gboolean must_send_event = FALSE;
-		for (GSList *cur = chunks; cur; cur = cur->next) {
-			GString *chunk_id = CHUNKS_get_id(cur->data);
-			struct oio_lb_selected_item_s *item = g_hash_table_lookup(
-					chunk_items, chunk_id->str);
-			if (item) {
-				if (item->final_dist <= item->warn_dist ||
-						strcmp(item->final_slot, item->expected_slot)) {
-					if (!must_send_event) {
-						// first chunk, create the template
-						g_string_append_c(out, '{');
-						oio_str_gstring_append_json_pair_int(out, "pos", mc_pos);
-						g_string_append_c(out, ',');
-						oio_str_gstring_append_json_quote(out, "chunks");
-						g_string_append(out, ":[");
-					} else {
-						g_string_append_c(out, ',');
-					}
-					g_string_append_c(out, '{');
-					meta2_json_encode_bean(out, cur->data);
-					g_string_append_c(out, ',');
-					oio_str_gstring_append_json_quote(out, "quality");
-					g_string_append_c(out, ':');
-					oio_selected_item_quality_to_json(out, item);
-					must_send_event = TRUE;
-					g_string_append_c(out, '}');
-				}
-			} else {
-				GRID_DEBUG("%s: no quality description for chunk %s",
-						__FUNCTION__, chunk_id->str);
-			}
-		}
-		if (must_send_event) {
-			g_string_append(out, "]}");
-			*to_be_improved = g_slist_prepend(*to_be_improved,
-					g_string_free(out, FALSE));
-		} else {
-			g_string_free(out, TRUE);
-		}
-		return FALSE;
-	}
-
-	g_tree_foreach(sorted_content->metachunks,
-			(GTraverseFunc)_on_metachunk, NULL);
-	g_hash_table_destroy(chunk_items);
 }
 
 GError *

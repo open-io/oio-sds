@@ -264,10 +264,6 @@ GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 		struct namespace_info_s *nsinfo,
 		struct checked_content_s **checked_content, gboolean update);
 
-void m2db_check_content_quality(
-		struct m2v2_sorted_content_s *sorted_content, GSList *chunk_meta,
-		GSList **to_be_improved);
-
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
