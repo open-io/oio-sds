@@ -1006,7 +1006,6 @@ _load_simplified_lifecycle_query (struct json_object *jbody, GSList **out)
 	} else {
 		err = BADREQ ("JSON: Not an array or an object");
 	}
-
 	if (err)
 		_bean_cleanl2(beans);
 	else

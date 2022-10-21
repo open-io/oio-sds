@@ -93,12 +93,18 @@ BEGIN
 		metadata [3] PrintableString OPTIONAL
 	}
 
+	M2V2Lifecycle ::= SEQUENCE {
+		action    [0] PrintableString,
+		query     [1] PrintableString
+	}
+
 	M2V2Bean ::= SEQUENCE {
 		alias      [0] M2V2Alias OPTIONAL,
 		header     [1] M2V2ContentHeader OPTIONAL,
 		chunk      [2] M2V2Chunk OPTIONAL,
 		prop       [3] M2V2Property OPTIONAL,
-		shardrange [4] M2V2ShardRange OPTIONAL
+		shardrange [4] M2V2ShardRange OPTIONAL,
+		lifecycle  [5] M2V2Lifecycle OPTIONAL
 	}
 
 	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean

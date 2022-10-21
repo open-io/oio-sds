@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -104,6 +104,18 @@ _generate_api_chunk(const M2V2Bean_t * asn)
 	CHUNKS_set2_content(result, asn->chunk->content.buf, asn->chunk->content.size);
 
 	CHUNKS_set2_position(result, (const char *)asn->chunk->position.buf);
+
+	return result;
+}
+
+static gpointer
+_generate_api_lifecycle(const M2V2Bean_t * asn)
+{
+
+	gpointer result = _bean_create(&descr_struct_LIFECYCLE_QUERY);
+
+	LIFECYCLE_QUERY_set2_action(result, (const char *)asn->lifecycle->action.buf);
+	LIFECYCLE_QUERY_set2_query(result, (const char *)asn->lifecycle->query.buf);
 
 	return result;
 }
@@ -266,6 +278,21 @@ _shard_range_to_asn(gpointer api, M2V2Bean_t *asn)
 	return TRUE;
 }
 
+
+static gboolean
+_lifecycle_to_asn(gpointer api, M2V2Bean_t *asn)
+{
+	struct bean_LIFECYCLE_QUERY_s *lifecycle = (struct bean_LIFECYCLE_QUERY_s *) api;
+	asn->lifecycle = ASN1C_CALLOC(1, sizeof(M2V2Lifecycle_t));
+
+	GString *action = LIFECYCLE_QUERY_get_action(lifecycle);
+	GString *query = LIFECYCLE_QUERY_get_query(lifecycle);
+
+	OCTET_STRING_fromBuf(&(asn->lifecycle->action), action->str, action->len);
+	OCTET_STRING_fromBuf(&(asn->lifecycle->query), query->str, query->len);
+
+	return TRUE;
+}
 /* -------------------------------------------------------------------------- */
 
 gpointer
@@ -279,10 +306,13 @@ bean_ASN2API(const M2V2Bean_t * asn)
 		return _generate_api_header(asn);
 	if (asn->chunk)
 		return _generate_api_chunk(asn);
+	if (asn->lifecycle)
+		return _generate_api_lifecycle(asn);
 	if (asn->prop)
 		return _generate_api_prop(asn);
 	if (asn->shardrange)
 		return _generate_api_shard_range(asn);
+
 	return NULL;
 }
 
@@ -303,6 +333,8 @@ bean_API2ASN(gpointer * api, M2V2Bean_t * asn)
 		return _property_to_asn(api, asn);
 	if (DESCR(api) == &descr_struct_SHARD_RANGE)
 		return _shard_range_to_asn(api, asn);
+	if (DESCR(api) == &descr_struct_LIFECYCLE_QUERY)
+		return _lifecycle_to_asn(api, asn);
 	return FALSE;
 }
 

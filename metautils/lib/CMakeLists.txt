@@ -136,6 +136,8 @@ add_custom_command(
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.h
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.h
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Lifecycle.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Lifecycle.h
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.h
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ShardRange.c
@@ -263,6 +265,7 @@ add_library(metautils STATIC
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Alias.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Chunk.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ContentHeader.c
+		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Lifecycle.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2Property.c
 		${CMAKE_BINARY_DIR}/metautils/asn1c/M2V2ShardRange.c
 

@@ -3,7 +3,7 @@
 # OpenIO SDS meta2v2
 # Copyright (C) 2014 Worldline, as part of Redcurrant
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -568,6 +568,14 @@ shards = generator.add_bean(Struct('shard_range')
                             .field(Text('metadata'), mandatory=False)
                             .PK(('lower', ))
                             .set_sql_name('shard_ranges')).set_order(6)
+
+lifecycle = generator.add_bean(
+                            Struct('lifecycle_query')
+                            .field(Text('action'))
+                            .field(Text('query'))
+                            .PK(('action', ))
+                            .set_sql_name('lifecycle')).set_order(7)
+
 
 generator.add_fk(ForeignKey((properties, ('alias', 'version'), "alias"),
                             (alias, ('alias', 'version'), "properties")))
