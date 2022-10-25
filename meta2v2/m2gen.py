@@ -573,6 +573,7 @@ lifecycle = generator.add_bean(
                             Struct('lifecycle_query')
                             .field(Text('action'))
                             .field(Text('query'))
+                            .field(Text('metadata'), mandatory=False)
                             .PK(('action', ))
                             .set_sql_name('lifecycle')).set_order(7)
 

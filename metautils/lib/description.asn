@@ -95,7 +95,8 @@ BEGIN
 
 	M2V2Lifecycle ::= SEQUENCE {
 		action    [0] PrintableString,
-		query     [1] PrintableString
+		query     [1] PrintableString,
+		metadata  [2] PrintableString OPTIONAL
 	}
 
 	M2V2Bean ::= SEQUENCE {

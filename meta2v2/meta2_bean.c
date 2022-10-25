@@ -116,7 +116,11 @@ _generate_api_lifecycle(const M2V2Bean_t * asn)
 
 	LIFECYCLE_QUERY_set2_action(result, (const char *)asn->lifecycle->action.buf);
 	LIFECYCLE_QUERY_set2_query(result, (const char *)asn->lifecycle->query.buf);
-
+	if (asn->lifecycle->metadata && asn->lifecycle->metadata->buf
+			&& asn->lifecycle->metadata->size > 0) {
+		LIFECYCLE_QUERY_set2_metadata(result,
+				(const char *)asn->lifecycle->metadata->buf);
+	}
 	return result;
 }
 
@@ -278,7 +282,6 @@ _shard_range_to_asn(gpointer api, M2V2Bean_t *asn)
 	return TRUE;
 }
 
-
 static gboolean
 _lifecycle_to_asn(gpointer api, M2V2Bean_t *asn)
 {
@@ -291,6 +294,12 @@ _lifecycle_to_asn(gpointer api, M2V2Bean_t *asn)
 	OCTET_STRING_fromBuf(&(asn->lifecycle->action), action->str, action->len);
 	OCTET_STRING_fromBuf(&(asn->lifecycle->query), query->str, query->len);
 
+	GString *metadata = LIFECYCLE_QUERY_get_metadata(lifecycle);
+	if (metadata != NULL) {
+		asn->lifecycle->metadata = OCTET_STRING_new_fromBuf(
+				&asn_DEF_OCTET_STRING, (const char *)metadata->str,
+				metadata->len);
+	}
 	return TRUE;
 }
 /* -------------------------------------------------------------------------- */

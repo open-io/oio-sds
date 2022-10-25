@@ -983,10 +983,11 @@ _load_simplified_lifecycle_query (struct json_object *jbody, GSList **out)
 		// Nothing to do
 	} else if (json_object_is_type(jbody, json_type_object)) {
 		struct bean_LIFECYCLE_QUERY_s *lifecycle_info = NULL;
-		struct json_object *jaction = NULL, *jquery = NULL;
+		struct json_object *jaction = NULL, *jquery = NULL, *jmetadata=NULL;
 		struct oio_ext_json_mapping_s mapping[] = {
 			{"action",  &jaction,   json_type_string, 1},
 			{"query",   &jquery,    json_type_string, 1},
+			{"metadata", &jmetadata, json_type_object, 0},
 			{NULL, NULL, 0, 0}
 		};
 
@@ -997,8 +998,15 @@ _load_simplified_lifecycle_query (struct json_object *jbody, GSList **out)
 
 		lifecycle_info = _bean_create(&descr_struct_LIFECYCLE_QUERY);
 
-		LIFECYCLE_QUERY_set2_action(lifecycle_info, json_object_get_string(jaction));
-		LIFECYCLE_QUERY_set2_query(lifecycle_info, json_object_get_string(jquery));
+		LIFECYCLE_QUERY_set2_action(lifecycle_info,
+				json_object_get_string(jaction));
+		LIFECYCLE_QUERY_set2_query(lifecycle_info,
+				json_object_get_string(jquery));
+		if (jmetadata && json_object_object_length(jmetadata) > 0) {
+			LIFECYCLE_QUERY_set2_metadata(lifecycle_info,
+					json_object_get_string(jmetadata));
+		}
+
 		lifecycle = lifecycle_info;
 		lifecycle_info = NULL;
 		beans = g_slist_prepend(beans, lifecycle);
