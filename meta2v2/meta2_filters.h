@@ -156,6 +156,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_replace_sharding);
 M2V2_DECLARE_FILTER(meta2_filter_action_clean_sharding);
 M2V2_DECLARE_FILTER(meta2_filter_action_show_sharding);
 M2V2_DECLARE_FILTER(meta2_filter_action_abort_sharding);
+M2V2_DECLARE_FILTER(meta2_filter_action_create_lifecycle_views);
 M2V2_DECLARE_FILTER(meta2_filter_action_apply_lifecycle);
 
 M2V2_DECLARE_FILTER(meta2_filter_action_exit_election);

@@ -724,6 +724,19 @@ m2v2_remote_pack_GET_SHARDS_IN_RANGE(struct oio_url_s *url,
 }
 
 GByteArray*
+m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(struct oio_url_s *url, GByteArray *params,
+		gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE_LIFECYCLE_VIEWS, url,
+			NULL, dl);
+	if (params) {
+		metautils_message_set_BODY(msg, params->data,
+				params->len);
+	}
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_APPLY_LIFECYCLE(struct oio_url_s *url, GByteArray *params,
 		gint64 dl)
 {

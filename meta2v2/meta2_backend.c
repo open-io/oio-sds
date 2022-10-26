@@ -4057,6 +4057,143 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 	return err;
 }
 
+static GError* _create_view(struct sqlx_sqlite3_s *sq3, const char *view_query,
+		const char *view_name) {
+	GError* err = NULL;
+	const gchar *base_view_create = "CREATE";
+	gchar view[256] = {0};
+	int rc;
+	if (view_query == NULL) {
+		goto end;
+	}
+	g_snprintf(view, sizeof(view), "DROP VIEW IF EXISTS %s;", view_name);
+	rc = sqlx_exec(sq3->db, view);
+	if (rc != SQLITE_OK) {
+		err = SQLITE_GERROR(sq3->db, rc);
+		g_prefix_error(&err, "Failed to drop view %s", view_name);
+		GRID_ERROR("Failed to drop view: %s rc: %d", view_name, rc);
+		goto end;
+	}
+	gchar *full_view = g_strdup_printf("%s %s", base_view_create, view_query);
+	rc = sqlx_exec(sq3->db, full_view);
+	if (rc != SQLITE_OK) {
+		err = SQLITE_GERROR(sq3->db, rc);
+		g_prefix_error(&err, "Failed to create view %s", view_name);
+		GRID_ERROR("Failed to create view %s %d", full_view, rc);
+	}
+	g_free(full_view);
+end:
+	return err;
+}
+
+GError*
+meta2_backend_create_lifecycle_views(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jparams)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	const char *suffix = NULL;
+	struct json_object *jsuffix = NULL;
+
+	const char *current_view_create = NULL, *marker_view_create = NULL,
+		*noncurrent_view_create = NULL, *versioned_view_create = NULL;
+	struct json_object *jversioned_view = NULL, *jmarker_view = NULL,
+			*jnoncurrent_view = NULL, *jcurrent_view = NULL;
+
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"suffix", &jsuffix, json_type_string, 1},
+		{"versioned_view", &jversioned_view, json_type_string, 0},
+		{"marker_view", &jmarker_view, json_type_string, 0},
+		{"noncurrent_view", &jnoncurrent_view, json_type_string, 0},
+		{"current_view", &jcurrent_view, json_type_string, 0},
+		{NULL, NULL, 0, 0}
+	};
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (jparams == NULL) {
+		goto end;
+	}
+	err = oio_ext_extract_json(jparams, mapping);
+	if (err != NULL) {
+		goto end;
+	}
+
+	suffix = json_object_get_string(jsuffix);
+	if(! suffix  || !*suffix) {
+		err = BADREQ("Invalid suffix for lifecycle copy");
+		goto end;
+	}
+
+	if (jversioned_view) {
+		versioned_view_create = json_object_get_string(jversioned_view);
+	}
+	if (jmarker_view) {
+		marker_view_create = json_object_get_string(jmarker_view);
+	}
+	if (jnoncurrent_view) {
+		noncurrent_view_create = json_object_get_string(jnoncurrent_view);
+	}
+	if (jcurrent_view) {
+		current_view_create = json_object_get_string(jcurrent_view);
+	}
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
+	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
+	if (err) {
+		goto end;
+	}
+
+	gint64 versioning = sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, 0);
+	if (!VERSIONS_ENABLED(versioning)) {
+		goto close;
+	}
+
+	if (!current_view_create && !marker_view_create &&\
+		!noncurrent_view_create && !versioned_view_create) {
+		goto close;
+	}
+
+	struct sqlx_repctx_s *repctx_view = NULL;
+	err = sqlx_transaction_begin(sq3, &repctx_view);
+	if (err) {
+		goto close;
+	}
+	if (current_view_create) {
+		err = _create_view(sq3, current_view_create, "current_view");
+		if (err) {
+			goto rollback;
+		}
+	}
+	if (marker_view_create) {
+		err = _create_view(sq3, marker_view_create, "marker_view");
+		if (err) {
+			goto rollback;
+		}
+	}
+	if (noncurrent_view_create) {
+		err = _create_view(sq3, noncurrent_view_create, "noncurrent_view");
+		if (err) {
+			goto rollback;
+		}
+	}
+	if (versioned_view_create) {
+		err = _create_view(sq3, versioned_view_create, "versioned_view");
+		if (err) {
+			goto rollback;
+		}
+	}
+rollback:
+	err = sqlx_transaction_end(repctx_view, err);
+close:
+	sqlx_repository_unlock_and_close_noerror(sq3);
+end:
+	return err;
+}
+
 GError*
 meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const gchar* prefix, const gchar* suffix)
