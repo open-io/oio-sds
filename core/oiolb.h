@@ -1,6 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -51,6 +52,9 @@ struct oio_lb_selected_item_s
 	guint16 expected_dist;
 	guint16 final_dist;
 	guint16 warn_dist;
+	guint8 cur_items_by_level[OIO_LB_LOC_LEVELS];
+	guint8 max_items_by_level[OIO_LB_LOC_LEVELS];
+	guint8 warn_items_by_level[OIO_LB_LOC_LEVELS];
 };
 
 
@@ -154,12 +158,17 @@ void oio_lb_world__rehash_all_slots(struct oio_lb_world_s *self);
 
 /* Maximum distance between services */
 #define OIO_LB_OPT_MAX_DIST       "max_dist"
-/* Absolute minimum distance between services */
+/* Absolute minimum distance between services (replaced by hard_max_items) */
 #define OIO_LB_OPT_MIN_DIST       "min_dist"
 /* Distance between services at which the LB will emit a warning */
 #define OIO_LB_OPT_WARN_DIST      "warn_dist"
 /* Look for services close to each other (boolean string) */
 #define OIO_LB_OPT_NEARBY         "nearby_mode"
+/* Absolute maximum number of items to select for each location level */
+#define OIO_LB_OPT_HARD_MAX       "hard_max_items"
+/* Number of services per location level that will trigger, when surpassed,
+ * a placement improvement. */
+#define OIO_LB_OPT_SOFT_MAX       "soft_max_items"
 
 /* Set a pool option. See option names above. */
 void oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,

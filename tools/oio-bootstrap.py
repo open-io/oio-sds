@@ -731,6 +731,9 @@ EC=NONE:EC
 EC21=NONE:EC21
 ECX21=NONE:ECX21
 
+JUSTENOUGH=justenoughrawx:EC
+NOTENOUGH=notenoughrawx:EC
+
 [DATA_SECURITY]
 # Data security definitions
 # --------------------------
@@ -769,6 +772,14 @@ template_service_pools = """
 # - the name of a slot where to pick services if there is
 #   not enough in the previous slot
 # - and so on...
+#
+# "hard_max_items" is the absolute maximum number of items to select for
+# each location level. This can be defined in place of "min_dist".
+#
+# "soft_max_items" is the number of services per location level that is
+# considered too much for an optimal placement. When surpassed, an extra
+# metadata will be saved in order to trigger a placement improvement.
+# This can be defined in place of "warn_dist".
 #
 # "nearby_mode" is a boolean telling to find services close to each other.
 #
@@ -832,6 +843,20 @@ targets=3,rawx
 min_dist=2
 warn_dist=2
 
+# Special pools for placement tests
+[pool:justenoughrawx]
+targets=9,rawx
+min_dist=1
+warn_dist=0
+hard_max_items=9.9.3.1
+soft_max_items=9.9.2.1
+
+[pool:notenoughrawx]
+targets=9,rawx
+min_dist=1
+warn_dist=0
+hard_max_items=9.9.2.1
+soft_max_items=9.9.2.1
 """
 
 template_service_types = """

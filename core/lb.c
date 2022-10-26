@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -341,6 +341,13 @@ struct oio_lb_pool_LOCAL_s
 
 	/* If true, look for items close to each other. */
 	gboolean nearby_mode : 16;
+
+	/* Absolute maximum number of services to select per location level. */
+	guint8 hard_max_items[OIO_LB_LOC_LEVELS];
+
+	/* Number of services per location level that will trigger, when surpassed,
+	 * a placement improvement. */
+	guint8 soft_max_items[OIO_LB_LOC_LEVELS];
 };
 
 struct polling_ctx_s
@@ -378,6 +385,13 @@ struct polling_ctx_s
 
 	/* Minimum acceptable distance between selected services. */
 	guint16 min_dist;
+
+	/* Absolute maximum number of services to select per location level. */
+	const guint8 *hard_max_items;
+
+	/* Number of services per location level that will trigger, when surpassed,
+	 * a placement improvement. */
+	const guint8 *soft_max_items;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -429,6 +443,9 @@ _item_dup(const struct oio_lb_selected_item_s *sel)
 	res->expected_slot = g_strdup(sel->expected_slot);
 	res->final_slot = g_strdup(sel->final_slot);
 	res->item = g_memdup(sel->item, sizeof(*sel->item));
+	/* cur_items_by_level, max_items_by_level and warn_items_by_level
+	 * are embedded in the main structure and do not require an
+	 * explicit copy. */
 	return res;
 }
 
@@ -525,6 +542,16 @@ key_from_loc_level(oio_location_t loc, int level)
 	return key;
 }
 
+static void
+_print_items_tab(GString *inout, guint8 *tab)
+{
+	for (int level = OIO_LB_LOC_LEVELS - 1; level >= 0; level--) {
+		g_string_append_printf(inout, "%d", tab[level]);
+		if (level)
+			g_string_append_c(inout, '.');
+	}
+}
+
 static int
 _compare_stored_items_by_location (const void *k0, const void *k)
 {
@@ -615,8 +642,14 @@ _warn_dirty_poll(const char *fmt, ...)
 
 static gboolean
 _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
-		struct oio_lb_slot_s *slot)
+		struct oio_lb_slot_s *slot, guint8 *popularity_by_level,
+		guint8 *max_by_level)
 {
+	EXTRA_ASSERT(popularity_by_level != NULL);
+	EXTRA_ASSERT(max_by_level != NULL);
+
+	// Level 0 is storage device, level 3 is datacenter (usually)
+	max_by_level[0] = 1;
 	for (int level = 1; level <= 3; level++) {
 		GQuark key = key_from_loc_level(item, level);
 		// How many different items there is under this level
@@ -637,8 +670,18 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		// How often the location has been chosen
 		guint32 popularity = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(ctx->counters + level, key));
+		popularity_by_level[level] = (guint8) MIN(popularity, 255);
 		// Maximum number of elements with this location that we can take
-		guint32 max = 1 + (ctx->n_targets - 1) / (slot->items->len / n_leafs);
+		guint32 max = ctx->hard_max_items[level];
+		if (max == 0) {
+			// We are considering a subtree of services. Compute the proportion
+			// this subtree represents compared to the whole cluster, and
+			// allow to choose the same proportion of "targets".
+			// If we were using floats, this could be rewritten as:
+			// max = ctx->n_targets * (n_leafs / slot->items->len)
+			max = 1 + (ctx->n_targets - 1) / (slot->items->len / n_leafs);
+		}
+		max_by_level[level] = (guint8) MIN(max, 255);
 
 		// This gives better results on well balanced platforms,
 		// but is not resilient to service failures.
@@ -833,6 +876,12 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
+	/* If ctx->hard_max_items is zero, max_by_level will be computed by
+	 * _item_is_too_popular(), otherwise it will be a copy of
+	 * ctx->hard_max_items. */
+	guint8 max_by_level[OIO_LB_LOC_LEVELS] = {0};
+	guint8 pop_by_level[OIO_LB_LOC_LEVELS] = {0};
+
 	// Check the item is not in "avoids" list
 	if (_item_is_too_close(ctx->avoids, loc, 1))
 		return NULL;
@@ -849,13 +898,21 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 				ctx->check_distance? distance : 1))
 			return NULL;
 		// Check the item has not been chosen too much already
-		if (_item_is_too_popular(ctx, loc, slot))
+		if (_item_is_too_popular(ctx, loc, slot, pop_by_level, max_by_level))
 			return NULL;
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
 
 	struct oio_lb_selected_item_s *selected = _item_select(item);
+
+	memcpy(selected->cur_items_by_level, pop_by_level, sizeof(pop_by_level));
+	memcpy(selected->max_items_by_level, max_by_level, sizeof(max_by_level));
+	memcpy(selected->warn_items_by_level, ctx->soft_max_items,
+			OIO_LB_LOC_LEVELS * sizeof(guint8));
+	// Add the service we are currently accepting
+	for (int j = 0; j < OIO_LB_LOC_LEVELS; selected->cur_items_by_level[j++] += 1);
+
 	/* In case we do not enforce the distance check, we still need to find
 	 * the lowest distance reached, for hypothetical future improvement. */
 	if (ctx->check_distance) {
@@ -1174,6 +1231,8 @@ _local__patch(struct oio_lb_pool_s *self,
 		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)oio_lb_selected_item_free),
+		.hard_max_items = lb->hard_max_items,
+		.soft_max_items = lb->soft_max_items,
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1202,13 +1261,26 @@ _local__patch(struct oio_lb_pool_s *self,
 					(!lb->nearby_mode && dist < reached_dist))
 				reached_dist = dist;
 		} else {
+			GString *max_items = g_string_sized_new(32);
+			_print_items_tab(max_items, lb->hard_max_items);
 			/* the strings are '\0' separated, printf won't display them */
-			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
-					"from [%s], %u/%u services polled, %u known services, "
-					"%u services in slot, min_dist=%u", *ptarget, count,
-					count_targets - count_known_targets, count_known_targets,
+			err = NEWERROR(
+					CODE_POLICY_NOT_SATISFIABLE,
+					"no service polled from [%s], "
+					"%u/%u services polled, "
+					"%u known services, "
+					"%u services in slot, "
+					"min_dist=%u, "
+					"hard_max_items=%s",
+					*ptarget,
+					count, count_targets - count_known_targets,
+					count_known_targets,
 					oio_lb_world__count_slot_items_unlocked(
-						lb->world, *ptarget), lb->min_dist);
+						lb->world, *ptarget),
+					lb->min_dist,
+					max_items->str
+			);
+			g_string_free(max_items, TRUE);
 			break;
 		}
 		++ctx.next_polled;
@@ -1298,10 +1370,10 @@ oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 
 	/* Prepare the string to be easy to parse:
 	 * replace commas with null characters. */
-	const size_t tolen = strlen (to);
-	gchar *copy = g_malloc (tolen + 2);
-	memcpy (copy, to, tolen + 1);
-	copy [tolen+1] = '\0';
+	const size_t to_len = strlen(to);
+	gchar *copy = g_malloc(to_len + 2);
+	memcpy(copy, to, to_len + 1);
+	copy[to_len + 1] = '\0';
 	for (gchar *p = copy; *p; ) {
 		if (!(p = strchr(p, OIO_CSV_SEP_C)))
 			break;
@@ -1313,6 +1385,21 @@ oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 	lb->targets = g_realloc (lb->targets, (len+2) * sizeof(gchar*));
 	lb->targets [len] = copy;
 	lb->targets [len+1] = NULL;
+}
+
+static void
+_max_items_to_tab(const gchar *value, guint8 *tab)
+{
+	// Discard what's after the extra dot (hence the +1)
+	gchar **toks = g_strsplit(value, ".", OIO_LB_LOC_LEVELS + 1);
+	gchar **lvl_max_str = toks;
+	for (int i = OIO_LB_LOC_LEVELS;
+			*lvl_max_str && i > 0;
+			lvl_max_str++, i--) {
+		int num = atoi(*lvl_max_str);
+		tab[i-1] = (guint8) MIN(num, 255);
+	}
+	g_strfreev(toks);
 }
 
 void
@@ -1362,6 +1449,10 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		}
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
+	} else if (!strcmp(key, OIO_LB_OPT_HARD_MAX)) {
+		_max_items_to_tab(value, lb->hard_max_items);
+	} else if (!strcmp(key, OIO_LB_OPT_SOFT_MAX)) {
+		_max_items_to_tab(value, lb->soft_max_items);
 	} else {
 		GRID_WARN("Invalid pool option: %s", key);
 	}
@@ -1719,7 +1810,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			for (guint i=i0; !found && i<slot->items->len ;++i) {
 				if (item0 == _slot_get(slot,i)) {
 					found = TRUE;
-					/* we found the old item, now check the loca matches */
+					/* we found the old item, now check the location matches */
 					if (item0->weight <= 0) {
 						g_array_remove_index_fast(slot->items, i);
 						slot->flag_dirty_order = 1;
@@ -2199,7 +2290,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 			__FUNCTION__, pin, mode,
 			count_targets, count_slots, max_suspects, nb_locals);
 
-	// Eventually complete with traditionnally polled services
+	// Eventually complete with traditionally polled services
 	GError *err = NULL;
 	if (selection->len < count_targets) {
 		void _select(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
@@ -2219,7 +2310,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	if (flawed && nb_locals > 0)
 		*flawed = TRUE;
 
-	// If no error occured, we can upstream the polled services
+	// If no error occurred, we can upstream the polled services
 	for (guint i=0; !err && i < selection->len; ++i)
 		on_id(selection->pdata[i], NULL);
 
@@ -2272,6 +2363,25 @@ oio_selected_item_quality_to_json(GString *inout,
 	g_string_append_c(qual, ',');
 	oio_str_gstring_append_json_pair(qual,
 			"final_slot", sel->final_slot);
+
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_quote(qual, "cur_items");
+	g_string_append(qual, ":\"");
+	_print_items_tab(qual, sel->cur_items_by_level);
+	g_string_append_c(qual, '"');
+
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_quote(qual, "hard_max_items");
+	g_string_append(qual, ":\"");
+	_print_items_tab(qual, sel->max_items_by_level);
+	g_string_append_c(qual, '"');
+
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_quote(qual, "soft_max_items");
+	g_string_append(qual, ":\"");
+	_print_items_tab(qual, sel->warn_items_by_level);
+	g_string_append_c(qual, '"');
+
 	g_string_append_c(qual, '}');
 	return qual;
 }

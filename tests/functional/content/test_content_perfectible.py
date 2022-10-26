@@ -34,6 +34,8 @@ from tests.utils import BaseTestCase
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
+from oio.common.exceptions import ServiceBusy
+from oio.common.json import json
 from oio.common.utils import request_id
 from oio.event.beanstalk import ResponseError
 from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
@@ -341,6 +343,61 @@ class TestPerfectibleContent(BaseTestCase):
         # Check symbolic link does exist.
         self.assertTrue(path.islink(abs_link))
         self.assertTrue(path.exists(abs_link))  # broken link would fail
+
+    # TODO(FVE): move this in oio.container.client
+    # And maybe change the input and output formats
+    @staticmethod
+    def _items_in_excess(current, target):
+        """
+        Returns the number of items in excess (if any) and at which level.
+
+        Level 0 is the storage device, level 3 is usually the datacenter.
+        """
+        cur = [int(x) for x in current.split(".", 4)]
+        tgt = [int(x) for x in target.split(".", 4)]
+        for idx in range(0, 4):
+            if cur[idx] > tgt[idx]:
+                return cur[idx] - tgt[idx], 3 - idx
+        return 0, None
+
+    def test_prepare_not_enough_rawx(self):
+        """
+        Ensure the new "hard_max_items" parameter works as expected.
+        """
+        self._aggregate_rawx_by_place()
+        self.assertRaises(
+            ServiceBusy,
+            self.api.container.content_prepare,
+            self.account, "whatever", "whatever", size=1, stgpol="NOTENOUGH"
+        )
+
+    def test_prepare_just_enough_rawx(self):
+        """
+        Make sure we can select services in a tight situation (not enough
+        servers to ensure a distance greater than 1), and that we can
+        detect this case thanks to chunk metadata.
+        """
+        self._aggregate_rawx_by_place()
+        meta, _chunks = self.api.container.content_prepare(
+            self.account, "whatever", "whatever", size=1, stgpol="JUSTENOUGH")
+        soft_excess = []
+        for key, qual in meta["properties"].items():
+            quality = json.loads(qual)
+            self.assertIn("cur_items", quality)
+            self.assertIn("hard_max_items", quality)
+            self.assertIn("soft_max_items", quality)
+            self.assertEqual(
+                0,
+                self._items_in_excess(quality["cur_items"],
+                                      quality["hard_max_items"])[0]
+            )
+            soft_excess.append(
+                self._items_in_excess(quality["cur_items"],
+                                      quality["soft_max_items"])[0]
+            )
+        # Make sure at least one chunk is misplaced (which is supposed to be
+        # the case with the JUSTENOUGH pool)
+        self.assertGreater(max(soft_excess), 0)
 
 
 class TestPerfectibleLocalContent(TestPerfectibleContent):

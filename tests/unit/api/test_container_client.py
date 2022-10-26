@@ -23,11 +23,24 @@ from oio.container.client import CHUNK_SYSMETA_PREFIX, extract_chunk_qualities
 from tests.unit.api import FakeStorageApi
 from tests.utils import random_id
 
-DUMMY_QUAL = {u'final_dist': 2, u'expected_slot': u'rawx-odd',
-              u'warn_dist': 1, u'expected_dist': 2, u'final_slot': u'rawx'}
-DUMMY_QUAL_JSON = "{\"expected_dist\":2,\"final_dist\":2," \
-                  "\"warn_dist\":1,\"expected_slot\":\"rawx-odd\"," \
-                  "\"final_slot\":\"rawx\"}"
+DUMMY_QUAL = {
+    "final_dist": 2,
+    "expected_slot": "rawx-odd",
+    "warn_dist": 1,
+    "expected_dist": 2,
+    "final_slot": "rawx",
+    "cur_items": "9.9.3.1",
+    "hard_max_items": "9.9.3.1",
+    "soft_max_items": "9.9.3.1"
+}
+DUMMY_QUAL_JSON = (
+    '{"expected_dist":2,"final_dist":2,'
+    '"warn_dist":1,"expected_slot":"rawx-odd",'
+    '"final_slot":"rawx",'
+    '"cur_items":"9.9.3.1",'
+    '"hard_max_items":"9.9.3.1",'
+    '"soft_max_items":"9.9.3.1"}'
+)
 
 
 class ContainerClientTest(unittest.TestCase):
