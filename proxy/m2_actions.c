@@ -5064,6 +5064,47 @@ enum http_rc_e action_content_purge (struct req_args_s *args) {
 }
 
 static enum http_rc_e
+action_m2_container_lifecycle_create_views(struct req_args_s *args, struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	oio_ext_allow_long_timeout(TRUE);
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(args->url, args->rq->body,
+				DL());
+	};
+	err = _resolve_meta2(args, CLIENT_SPECIFIED, _pack, NULL, NULL);
+
+	oio_ext_allow_long_timeout(FALSE);
+	return _reply_m2_error(args, err);
+}
+
+// CONTENT{{
+// POST /v3.0/{NS}/container/lifecycle/views/create?cid={cid}&service_id={service_id}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Create views to handle sql matching
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/lifecycle/views/create?cid={cid}&service_id={service_id} HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
+enum http_rc_e
+action_container_lifecycle_create_views(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_lifecycle_create_views);
+}
+
+static enum http_rc_e
 action_m2_container_lifecycle_apply(struct req_args_s *args, struct json_object *j UNUSED)
 {
 	GError *err = NULL;

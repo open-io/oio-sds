@@ -290,6 +290,10 @@ GByteArray* m2v2_remote_pack_GET_SHARDS_IN_RANGE(
 	struct oio_url_s *url,
 	GByteArray *bounds_params,
 	gint64 dl);
+GByteArray* m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(
+		struct oio_url_s *url,
+        GByteArray *params,
+		gint64 dl);
 
 GByteArray* m2v2_remote_pack_APPLY_LIFECYCLE(
 		struct oio_url_s *url,
