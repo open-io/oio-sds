@@ -297,6 +297,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_CHECKPOINT         "M2_CHECKPOINT"
 # define NAME_MSGNAME_M2V2_SHARDS_IN_RANGE    "M2_CSRANGE"
 # define NAME_MSGNAME_M2V2_APPLY_LIFECYCLE    "M2_LCPREP"
+# define NAME_MSGNAME_M2V2_CREATE_LIFECYCLE_VIEWS  "M2_LCVIEW"
 
 /* -------------------------------------------------------------------------- */
 
