@@ -3855,6 +3855,32 @@ rollback:
 	return err;
 }
 
+static GError* _create_view(struct sqlx_sqlite3_s *sq3, const char *view_query, const char *view_name) {
+	GError* err = NULL;
+	gchar *base_view_create = "CREATE";
+	gchar view[64] = {0};
+	int rc;
+	if (view_query) {
+		g_snprintf(view, sizeof(view), "DROP VIEW IF EXISTS %s;", view_name);
+		rc = sqlx_exec(sq3->db, view);
+		if (rc != SQLITE_OK) {
+			err = SQLITE_GERROR(sq3->db, rc);
+			GRID_WARN("Failed to drop view: %s rc: %d", view_name, rc);
+			return err;
+		}
+		gchar *full_view = g_strdup_printf("%s %s", base_view_create, view_query);
+		rc = sqlx_exec(sq3->db, full_view);
+		if (rc != SQLITE_OK) {
+			err = SQLITE_GERROR(sq3->db, rc);
+			GRID_WARN("Failed to create view %s %d", full_view, rc);
+			g_free(full_view);
+			return err;
+		}
+		g_free(full_view);
+	}
+	return err;
+}
+
 GError*
 meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans, guint32 *incr_offset)
