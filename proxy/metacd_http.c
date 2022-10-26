@@ -1188,6 +1188,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/checkpoint/#POST", action_container_checkpoint);
 
 	// Lifecycle
+	SET("/$NS/container/lifecycle/views/create/#POST", action_container_lifecycle_create_views);
 	SET("/$NS/container/lifecycle/apply/#POST", action_container_lifecycle_apply);
 
 	// Sharding
