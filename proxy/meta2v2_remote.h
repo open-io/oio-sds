@@ -279,6 +279,11 @@ GByteArray* m2v2_remote_pack_ABORT_SHARDING(
 		struct oio_url_s *url,
 		gint64 dl);
 
+GByteArray* m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(
+		struct oio_url_s *url,
+        GByteArray *params,
+		gint64 dl);
+
 GByteArray* m2v2_remote_pack_PREPARE_LIFECYCLE(
 		struct oio_url_s *url,
         GByteArray *params,

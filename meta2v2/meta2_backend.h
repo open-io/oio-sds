@@ -290,6 +290,11 @@ GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url);
 
+/** Prepare views to use for select queries */
+GError*
+meta2_backend_create_lifecycle_views(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jparams);
+
 /** Select object that match filter and */
 GError* meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, json_object *params, guint32 *incr_offset);

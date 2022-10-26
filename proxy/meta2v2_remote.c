@@ -692,6 +692,19 @@ m2v2_remote_pack_ABORT_SHARDING(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
+m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(struct oio_url_s *url, GByteArray *params,
+		gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE_LIFECYCLE_VIEWS, url,
+			NULL, dl);
+	if (params) {
+		metautils_message_set_BODY(msg, params->data,
+				params->len);
+	}
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_PREPARE_LIFECYCLE(struct oio_url_s *url, GByteArray *params,
 		gint64 dl)
 {

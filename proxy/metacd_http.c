@@ -1178,6 +1178,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
 	// Lifecycle
+	SET("/$NS/container/lifecycle/views/create/#POST", action_container_lifecycle_create_views);
 	SET("/$NS/container/lifecycle/prepare/#POST", action_container_lifecycle_prepare_events);
 
 	// Sharding
