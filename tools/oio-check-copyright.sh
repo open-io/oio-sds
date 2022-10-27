@@ -18,12 +18,32 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 EXCLUDED_FILES=("core/tree.h")
+root_path=$(pwd)
+script_path=$(dirname $(realpath "$0"))
+if [[ "$root_path" == "$script_path" ]]; then
+    BLAME_PATH="../$(dirname $0)/.git-blame-ignore-revs"
+else
+	BLAME_PATH="./.git-blame-ignore-revs"
+fi
+
+declare -A EXCLUDED_COMMIT
+while read -r line; 
+do
+	if [[ "$line" == \#* ]];then
+		continue
+	else
+		EXCLUDED_COMMIT+="$line"
+fi
+done < "$BLAME_PATH"
 
 function find_last_modification {
 	FILE=$1
 	(git log -8 --no-merges --pretty="format:%H" -- "${FILE}"; echo) |
 		while read COMMIT; do
 			if [ -z "${COMMIT}" ]; then
+				continue
+			fi
+			if [[ " ${EXCLUDED_COMMIT[@]} " =~ " ${COMMIT} " ]]; then
 				continue
 			fi
 			MODIFIED=$(git show "${COMMIT}" -- "${FILE}" | grep -v -E '(^(\+\+\+|---)|Copyright \(C\) )' | grep -E '^(\+|-)' | head -n 1)
