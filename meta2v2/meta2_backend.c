@@ -4296,6 +4296,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
 	int is_markers = 0;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jis_markers = NULL;
+
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
@@ -4408,7 +4409,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 			append_int64(event, "add_delete_marker", 1);
 		}
 		append_str(event, "action", g_strdup(action));
-		if (policy) {
+		if (policy && *policy) {
 			append_str(event, "policy", g_strdup(policy));
 		}
 
@@ -4430,6 +4431,156 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 rollback:
 	err = sqlx_transaction_end(repctx, err);
+close:
+	sqlx_repository_unlock_and_close_noerror(sq3);
+end:
+	g_free(full_query);
+	return err;
+}
+
+
+GError*
+meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jparams, guint32 *incr_offset)
+{
+	GError *err = NULL;
+	gchar *full_query = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime ";
+
+	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL;
+	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
+	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL;
+
+	int batch_size = 0;
+
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"suffix", &jsuffix, json_type_string, 1},
+		{"action", &jaction, json_type_string, 1},
+		{"query", &jquery, json_type_string, 1},
+		{"policy", &jpolicy, json_type_string, 0},
+		{"batch_size", &jbatch_size, json_type_int, 0},
+		{"last_action", &jlast_action, json_type_int, 0},
+		{NULL, NULL, 0, 0}
+	};
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (jparams == NULL) {
+		goto end;
+	}
+
+	err = oio_ext_extract_json(jparams, mapping);
+	if (err != NULL) {
+		goto end;
+	}
+
+	action = json_object_get_string(jaction);
+	query = json_object_get_string(jquery);
+	suffix = json_object_get_string(jsuffix);
+	if(!suffix  || !*suffix) {
+		err = BADREQ("Invalid suffix for lifecycle copy");
+		goto end;
+	}
+
+	if (jpolicy) {
+		policy = json_object_get_string(jpolicy);
+	}
+	if (jbatch_size) {
+		batch_size = json_object_get_int(jbatch_size);
+	}
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
+	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
+	if (err) {
+		goto end;
+	}
+	gint64 versioning = sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, 0);
+	gboolean non_current_action = (g_strcmp0(action, "NoncurrentVersionExpiration") \
+			== 0 || g_strcmp0(action, "NoncurrentVersionTransition") == 0);
+
+	if (versioning == 0  && non_current_action) {
+		g_prefix_error(&err, "Unsupported configuration action: %s for non versioned container", action);
+		goto end;
+	}
+
+	full_query = g_strdup_printf("%s %s", base_query, query);
+
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (err) {
+		goto close;
+	}
+
+	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_ERROR("Failed to apply query %s %s", full_query, \
+				sqlite3_errmsg(sq3->db));
+		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+				rc, sqlite3_errmsg(sq3->db));
+		goto close;
+	}
+	guint32 count_rows = 0, count_versions = 0;
+	gint32 count_objects = 0;
+	gchar *object_name_to_process = NULL;
+
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
+		gint64 version = sqlite3_column_int64(stmt, 1);
+		gint64 mtime = sqlite3_column_int64(stmt, 4);
+
+		if (count_versions == 0) {
+			object_name_to_process = g_strdup(object_name);
+			count_versions++;
+			count_objects++;
+		} else if (g_strcmp0(object_name_to_process, object_name)==0) {
+			// new version same object
+			count_versions++;
+		} else {
+			// new object
+			count_versions = 1;
+			g_free(object_name_to_process);
+			object_name_to_process = g_strdup(object_name);
+			count_objects++;
+		}
+
+		if (count_objects > batch_size) {
+			count_rows--;
+			break;
+		}
+
+		count_rows++;
+
+		GString *event = oio_event__create_with_id(
+				"storage.lifecycle.action", url, oio_ext_get_reqid());
+		g_string_append(event, ",\"data\":{");
+		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+		append_str(event, "object", object_name);
+		append_int64(event, "version", version);
+		append_int64(event, "mtime", mtime);
+		append_str(event, "action", g_strdup(action));
+		if (policy) {
+			append_str(event, "policy", g_strdup(policy));
+		}
+
+		g_string_append(event, "}}");
+		oio_events_queue__send(
+			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+	}
+	rc = sqlite3_finalize(stmt);
+	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+		GRID_WARN("Failed to finalize lifecycle sql query %s", sqlite3_errmsg(sq3->db));
+	}
+	*incr_offset = count_rows;
+	err = sqlx_transaction_end(repctx, err);
+
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:

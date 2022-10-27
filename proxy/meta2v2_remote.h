@@ -297,6 +297,7 @@ GByteArray* m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(
 
 GByteArray* m2v2_remote_pack_APPLY_LIFECYCLE(
 		struct oio_url_s *url,
+		const gchar *action_type,
         GByteArray *params,
 		gint64 dl);
 

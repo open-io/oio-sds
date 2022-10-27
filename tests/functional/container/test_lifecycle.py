@@ -293,6 +293,14 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     data["last_action"] = 1
 
                 reqid = request_id()
+                if action in (
+                    "NoncurrentVersionExpiration",
+                    "NoncurrentVersionTransition",
+                ):
+                    params["action_type"] = "noncurrent"
+                else:
+                    params["action_type"] = "current"
+
                 resp, body = self.proxy_client._request(
                     "POST",
                     "/container/lifecycle/apply",
@@ -429,7 +437,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
 
                             view_queries["noncurrent_view"] = noncurrent_view
                             view_queries["current_view"] = current_view
-                            queries["base"] = lc.noncurrent_query()
+                            queries["base"] = lc.noncurrent_query(
+                                newer_non_current_versions
+                            )
                         # versioning for Expiration/Transition
                         else:
                             delete_marker_view = lc.create_common_views(

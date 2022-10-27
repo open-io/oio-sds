@@ -1049,9 +1049,6 @@ meta2_filter_action_create_lifecycle_views(struct gridd_filter_ctx_s *ctx,
 	}
 
 	err = meta2_backend_create_lifecycle_views(m2b, url, jparams);
-	if (err) {
-		goto error;
-	}
 error:
 	if (err) {
 		ret = FILTER_KO;
@@ -1073,6 +1070,7 @@ meta2_filter_action_apply_lifecycle(struct gridd_filter_ctx_s *ctx,
 	guint32 offset = 0;
 
 	gsize length_params = 0;
+	const gchar *action_type = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ACTION_TYPE);
 	void *lifecycle_params = metautils_message_get_BODY(reply->request, &length_params);
 	json_object *jparams = NULL;
 	int ret = FILTER_KO;
@@ -1086,8 +1084,11 @@ meta2_filter_action_apply_lifecycle(struct gridd_filter_ctx_s *ctx,
 			goto error;
 		}
 	}
-
-	err = meta2_backend_apply_lifecycle_current(m2b, url, jparams, &offset);
+	if (action_type && g_strcmp0(action_type, "noncurrent") == 0){
+		err = meta2_backend_apply_lifecycle_noncurrent(m2b, url, jparams, &offset);
+	} else {
+		err = meta2_backend_apply_lifecycle_current(m2b, url, jparams, &offset);
+	}
 	if (err) {
 		goto error;
 	}
