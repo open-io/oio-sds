@@ -31,8 +31,8 @@ def exp(path):
 
 
 SYSTEMDDIR = exp("${HOME}/.config/systemd/user")
-if 'OIO_SYSTEMD_SYSTEM' in os.environ:
-    SYSTEMDDIR = '/etc/systemd/system'
+if "OIO_SYSTEMD_SYSTEM" in os.environ:
+    SYSTEMDDIR = "/etc/systemd/system"
 SYSTEMD_CONF = SYSTEMDDIR + "/%s"
 WATCH_CONF = exp("${HOME}/.oio/sds/conf/watch/%s-%s.yml")
 HTTPD_CONF = exp("${HOME}/.oio/sds/conf/%s-%s.httpd.conf")
@@ -48,8 +48,7 @@ class SystemDict(dict):
 
 class SystemdParser(configparser.RawConfigParser):
     def __init__(self):
-        super().__init__(
-            dict_type=SystemDict, strict=False, allow_no_value=True)
+        super().__init__(dict_type=SystemDict, strict=False, allow_no_value=True)
         self.optionxform = str
 
     def _join_multiline_values(self):
@@ -59,11 +58,9 @@ class SystemdParser(configparser.RawConfigParser):
         fp.write("[{}]\n".format(section_name))
         for key, values in section_items:
             for value in values:
-                value = self._interpolation.before_write(
-                    self, section_name, key, value)
-                if (value is not None and len(value) > 0) \
-                        or not self._allow_no_value:
-                    value = delimiter + str(value).replace('\n', '\n\t')
+                value = self._interpolation.before_write(self, section_name, key, value)
+                if (value is not None and len(value) > 0) or not self._allow_no_value:
+                    value = delimiter + str(value).replace("\n", "\n\t")
                     fp.write("{}{}\n".format(key, value))
         fp.write("\n")
 
@@ -72,40 +69,42 @@ class BaseServiceIdTest(BaseTestCase):
     def setUp(self):
         super(BaseServiceIdTest, self).setUp()
 
-        if not self.conf['with_service_id']:
+        if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
 
         self._cnt = random_str(10)
         self.api = self.storage
         self.name = None
-        self.wait_for_score(('meta2', ))
+        self.wait_for_score(("meta2",))
 
     def tearDown(self):
         super(BaseServiceIdTest, self).tearDown()
-        self.wait_for_score(('meta2', ))
+        self.wait_for_score(("meta2",))
         self._reload_meta()
 
     def _update_apache(self, port):
         path = HTTPD_CONF % (self.ns, self.name)
         with open(path, "r") as fp:
-            data = fp.read().split('\n')
+            data = fp.read().split("\n")
         for idx in range(len(data)):
-            if data[idx].startswith('Listen'):
-                data[idx] = data[idx].split(':')[0] + ':' + str(port)
-            elif data[idx].startswith('<VirtualHost'):
-                data[idx] = data[idx].split(':')[0] + ':' + str(port) + '>'
+            if data[idx].startswith("Listen"):
+                data[idx] = data[idx].split(":")[0] + ":" + str(port)
+            elif data[idx].startswith("<VirtualHost"):
+                data[idx] = data[idx].split(":")[0] + ":" + str(port) + ">"
         with open(path, "w") as fp:
-            fp.write('\n'.join(data))
+            fp.write("\n".join(data))
 
     def _cache_flush(self):
-        for item in ('local', 'low', 'high'):
-            r = self.http_pool.request('POST', 'http://%s/v3.0/cache/flush/%s'
-                                       % (self.conf['proxy'], item))
+        for item in ("local", "low", "high"):
+            r = self.http_pool.request(
+                "POST", "http://%s/v3.0/cache/flush/%s" % (self.conf["proxy"], item)
+            )
             self.assertEqual(r.status, 204)
 
     def _create_data(self):
-        ret = self.api.object_create(self.account, self._cnt,
-                                     obj_name="plop", data="*" * 1024)
+        ret = self.api.object_create(
+            self.account, self._cnt, obj_name="plop", data="*" * 1024
+        )
         ret = self.api.object_locate(self.account, self._cnt, "plop")
         return ret
 
@@ -133,13 +132,13 @@ class BaseServiceIdTest(BaseTestCase):
         with open(path, "r") as fp:
             conf = yaml.load(fp, Loader=yaml.Loader)
 
-        conf['port'] = port
+        conf["port"] = port
 
         with open(path, "w") as fp:
             yaml.dump(conf, stream=fp)
 
     def _change_rawx_addr(self, name, port):
-        service = 'oio-%s.service' % name
+        service = "oio-%s.service" % name
         self._service(service, "stop")
 
         self._update_systemd_service_rawx(service, port)
@@ -158,17 +157,17 @@ class TestRawxServiceId(BaseServiceIdTest):
     def setUp(self):
         super(TestRawxServiceId, self).setUp()
 
-        if not self.conf['with_service_id']:
+        if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
 
         # support mixed deployment
         self.rawx = {}
-        while 'service_id' not in self.rawx:
-            self.rawx = random.choice(self.conf['services']['rawx'])
+        while "service_id" not in self.rawx:
+            self.rawx = random.choice(self.conf["services"]["rawx"])
 
-        self.name = "rawx-%d" % int(self.rawx['num'])
+        self.name = "rawx-%d" % int(self.rawx["num"])
 
-        self._port = int(self.rawx['addr'].split(':')[1])
+        self._port = int(self.rawx["addr"].split(":")[1])
         self._newport = self._port + 10000 + random.randint(0, 200)
 
         self.org_rawx = self.rawx.copy()
@@ -184,29 +183,29 @@ class TestRawxServiceId(BaseServiceIdTest):
             return False
 
         for item in ret:
-            if self.rawx['service_id'] in item['url']:
+            if self.rawx["service_id"] in item["url"]:
                 try:
-                    self.http_pool.request('GET', item.get('real_url'))
+                    self.http_pool.request("GET", item.get("real_url"))
                     return True
                 except Exception as exc:
-                    print("%s: %s", item.get('real_url'), str(exc))
+                    print("%s: %s", item.get("real_url"), str(exc))
         return False
 
     def _update_systemd_service_rawx(self, service, port):
         conf = SystemdParser()
         conf.read(SYSTEMD_CONF % service)
 
-        unit = conf['Unit']
-        if 'OioGroup' in unit:
-            val = unit['OioGroup'][0].split(',')
-            old_addr, old_port = val[3].split(':')
-            val[3] = old_addr + ':' + str(port)
-            unit['OioGroup'][0] = ','.join(val)
+        unit = conf["Unit"]
+        if "OioGroup" in unit:
+            val = unit["OioGroup"][0].split(",")
+            old_addr, old_port = val[3].split(":")
+            val[3] = old_addr + ":" + str(port)
+            unit["OioGroup"][0] = ",".join(val)
 
-            section = conf['Service']
-            if 'ExecStartPost' in section:
-                val = section['ExecStartPost'][0]
-                section['ExecStartPost'][0] = val.replace(old_port, str(port))
+            section = conf["Service"]
+            if "ExecStartPost" in section:
+                val = section["ExecStartPost"][0]
+                section["ExecStartPost"][0] = val.replace(old_port, str(port))
 
         with open(SYSTEMD_CONF % service, "w") as fp:
             conf.write(fp)
@@ -218,7 +217,7 @@ class TestRawxServiceId(BaseServiceIdTest):
         while True:
             ret = self._create_data()[1]
             for item in ret:
-                if self.rawx['service_id'] in item['url']:
+                if self.rawx["service_id"] in item["url"]:
                     return
 
     def test_rawx_service_id_new_addr(self):
@@ -236,18 +235,18 @@ class TestMeta2ServiceId(BaseServiceIdTest):
     def setUp(self):
         super(TestMeta2ServiceId, self).setUp()
 
-        if not self.conf['with_service_id']:
+        if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
 
         # support mixed deployment
-        self.meta2 = list(self.conf['services']['meta2'])
+        self.meta2 = list(self.conf["services"]["meta2"])
         for entry in self.meta2:
-            port = int(entry['addr'].split(':')[1])
-            entry['old_port'] = port
-            if 'service_id' in entry:
-                entry['new_port'] = port + 1000
+            port = int(entry["addr"].split(":")[1])
+            entry["old_port"] = port
+            if "service_id" in entry:
+                entry["new_port"] = port + 1000
             else:
-                entry['new_port'] = port
+                entry["new_port"] = port
 
     def tearDown(self):
         super(TestMeta2ServiceId, self).tearDown()
@@ -256,36 +255,36 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         conf = SystemdParser()
         conf.read(SYSTEMD_CONF % service)
 
-        unit = conf['Unit']
-        if 'OioGroup' in unit:
-            val = unit['OioGroup'][0].split(',')
-            old_addr, old_port = val[3].split(':')
-            val[3] = old_addr + ':' + str(port)
-            unit['OioGroup'][0] = ','.join(val)
+        unit = conf["Unit"]
+        if "OioGroup" in unit:
+            val = unit["OioGroup"][0].split(",")
+            old_addr, old_port = val[3].split(":")
+            val[3] = old_addr + ":" + str(port)
+            unit["OioGroup"][0] = ",".join(val)
 
-            section = conf['Service']
-            if 'ExecStart' in section:
-                val = section['ExecStart'][0]
-                section['ExecStart'][0] = val.replace(old_port, str(port))
-            if 'ExecStartPost' in section:
-                val = section['ExecStartPost'][0]
-                section['ExecStartPost'][0] = val.replace(old_port, str(port))
+            section = conf["Service"]
+            if "ExecStart" in section:
+                val = section["ExecStart"][0]
+                section["ExecStart"][0] = val.replace(old_port, str(port))
+            if "ExecStartPost" in section:
+                val = section["ExecStartPost"][0]
+                section["ExecStartPost"][0] = val.replace(old_port, str(port))
 
         with open(SYSTEMD_CONF % service, "w") as fp:
             conf.write(fp)
 
     def _change_meta2_addr(self, field):
         for entry in self.meta2:
-            name = "meta2-%s" % entry['num']
+            name = "meta2-%s" % entry["num"]
             port = entry[field]
 
-            service = 'oio-%s.service' % name
-            self._service(service, 'stop')
+            service = "oio-%s.service" % name
+            self._service(service, "stop")
             self._update_systemd_service_meta(service, port)
             self._update_event_watch(name, port)
 
-            self._service(service, 'daemon-reload')
-            self._service(service, 'start')
+            self._service(service, "daemon-reload")
+            self._service(service, "start")
 
         self._service("oio-conscience-agent-1.service", "restart")
         check_call(["openio", "cluster", "flush", "meta2"])
@@ -294,10 +293,10 @@ class TestMeta2ServiceId(BaseServiceIdTest):
 
     def test_meta2_service_id_new_addr(self):
         self._create_data()
-        self._change_meta2_addr('new_port')
+        self._change_meta2_addr("new_port")
 
         self._wait_for_data_availability(timeout=10)
 
         # reset configuration
-        self._change_meta2_addr('old_port')
+        self._change_meta2_addr("old_port")
         self._wait_for_data_availability(timeout=10)

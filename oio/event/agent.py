@@ -35,24 +35,22 @@ class HaltServer(BaseException):
 
 
 class Runner(object):
-
     WORKER_START_ERROR = 3
 
-    SIGNALS = [getattr(signal, "SIG%s" % x)
-               for x in "HUP QUIT INT TERM".split()]
+    SIGNALS = [getattr(signal, "SIG%s" % x) for x in "HUP QUIT INT TERM".split()]
     SIG_NAMES = dict(
-        (getattr(signal, name), name[3:].lower()) for name in dir(signal)
+        (getattr(signal, name), name[3:].lower())
+        for name in dir(signal)
         if name[:3] == "SIG" and name[3] != "_"
     )
 
     def __init__(self, conf_file, worker_class, **kwargs):
-        section_name = 'event-agent'
+        section_name = "event-agent"
         self.conf = read_conf(conf_file, section_name)
-        self.logger = get_logger(
-            self.conf, verbose=kwargs.pop('verbose', False))
+        self.logger = get_logger(self.conf, verbose=kwargs.pop("verbose", False))
         redirect_stdio(self.logger)
-        drop_privileges(self.conf.get('user', 'openio'))
-        self.num_workers = int_value(self.conf.get('workers'), CPU_COUNT)
+        drop_privileges(self.conf.get("user", "openio"))
+        self.num_workers = int_value(self.conf.get("workers"), CPU_COUNT)
         if self.num_workers <= 0:
             self.num_workers = CPU_COUNT
         self.worker_class = worker_class
@@ -60,7 +58,7 @@ class Runner(object):
         self.sig_queue = []
 
     def start(self):
-        self.logger.info('Starting event-agent')
+        self.logger.info("Starting event-agent")
         self.pid = os.getpid()
         self.configure_signals()
 
@@ -86,7 +84,7 @@ class Runner(object):
                     continue
 
                 if sig not in self.SIG_NAMES:
-                    self.logger.info('Ignoring unknown signal: %s', sig)
+                    self.logger.info("Ignoring unknown signal: %s", sig)
                     continue
 
                 signame = self.SIG_NAMES.get(sig)

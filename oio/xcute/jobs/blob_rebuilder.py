@@ -25,51 +25,56 @@ from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class RawxRebuildTask(XcuteTask):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(RawxRebuildTask, self).__init__(
-            conf, job_params, logger=logger, watchdog=watchdog)
+            conf, job_params, logger=logger, watchdog=watchdog
+        )
 
-        self.service_id = job_params['service_id']
-        self.rawx_timeout = job_params['rawx_timeout']
-        self.allow_frozen_container = job_params['allow_frozen_container']
-        self.allow_same_rawx = job_params['allow_same_rawx']
-        self.try_chunk_delete = job_params['try_chunk_delete']
-        self.dry_run = job_params['dry_run']
+        self.service_id = job_params["service_id"]
+        self.rawx_timeout = job_params["rawx_timeout"]
+        self.allow_frozen_container = job_params["allow_frozen_container"]
+        self.allow_same_rawx = job_params["allow_same_rawx"]
+        self.try_chunk_delete = job_params["try_chunk_delete"]
+        self.dry_run = job_params["dry_run"]
 
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
-                                            watchdog=self.watchdog)
+        self.chunk_operator = ChunkOperator(
+            self.conf, logger=self.logger, watchdog=self.watchdog
+        )
 
     def process(self, task_id, task_payload, reqid=None):
-        container_id = task_payload['container_id']
-        content_id = task_payload['content_id']
-        path = task_payload['path']
-        version = task_payload['version']
-        chunk_id = task_payload['chunk_id']
+        container_id = task_payload["container_id"]
+        content_id = task_payload["content_id"]
+        path = task_payload["path"]
+        version = task_payload["version"]
+        chunk_id = task_payload["chunk_id"]
 
         if self.dry_run:
-            self.logger.debug('[reqid=%s] [dryrun] Rebuilding %s',
-                              reqid, chunk_id)
-            return {'skipped_chunks': 1}
+            self.logger.debug("[reqid=%s] [dryrun] Rebuilding %s", reqid, chunk_id)
+            return {"skipped_chunks": 1}
 
         # Start rebuilding the chunk
-        self.logger.debug('[reqid=%s] Rebuilding %s', reqid, chunk_id)
+        self.logger.debug("[reqid=%s] Rebuilding %s", reqid, chunk_id)
         try:
             chunk_size = self.chunk_operator.rebuild(
-                container_id, content_id, chunk_id,
-                rawx_id=self.service_id, path=path, version=version,
+                container_id,
+                content_id,
+                chunk_id,
+                rawx_id=self.service_id,
+                path=path,
+                version=version,
                 try_chunk_delete=self.try_chunk_delete,
                 allow_frozen_container=self.allow_frozen_container,
-                allow_same_rawx=self.allow_same_rawx, reqid=reqid)
+                allow_same_rawx=self.allow_same_rawx,
+                reqid=reqid,
+            )
         except (ContentNotFound, OrphanChunk):
-            return {'orphan_chunks': 1}
+            return {"orphan_chunks": 1}
 
-        return {'rebuilt_chunks': 1, 'rebuilt_bytes': chunk_size}
+        return {"rebuilt_chunks": 1, "rebuilt_bytes": chunk_size}
 
 
 class RawxRebuildJob(XcuteRdirJob):
-
-    JOB_TYPE = 'rawx-rebuild'
+    JOB_TYPE = "rawx-rebuild"
     TASK_CLASS = RawxRebuildTask
 
     DEFAULT_RAWX_TIMEOUT = 60.0
@@ -81,78 +86,79 @@ class RawxRebuildJob(XcuteRdirJob):
 
     @classmethod
     def sanitize_params(cls, job_params):
-        sanitized_job_params, _ = super(
-            RawxRebuildJob, cls).sanitize_params(job_params)
+        sanitized_job_params, _ = super(RawxRebuildJob, cls).sanitize_params(job_params)
 
         # specific configuration
-        service_id = job_params.get('service_id')
+        service_id = job_params.get("service_id")
         if not service_id:
-            raise ValueError('Missing service ID')
-        sanitized_job_params['service_id'] = service_id
+            raise ValueError("Missing service ID")
+        sanitized_job_params["service_id"] = service_id
 
-        sanitized_job_params['rawx_timeout'] = float_value(
-            job_params.get('rawx_timeout'),
-            cls.DEFAULT_RAWX_TIMEOUT)
+        sanitized_job_params["rawx_timeout"] = float_value(
+            job_params.get("rawx_timeout"), cls.DEFAULT_RAWX_TIMEOUT
+        )
 
-        sanitized_job_params['dry_run'] = boolean_value(
-            job_params.get('dry_run'),
-            cls.DEFAULT_DRY_RUN)
+        sanitized_job_params["dry_run"] = boolean_value(
+            job_params.get("dry_run"), cls.DEFAULT_DRY_RUN
+        )
 
-        sanitized_job_params['allow_same_rawx'] = boolean_value(
-            job_params.get('allow_same_rawx'),
-            cls.DEFAULT_ALLOW_SAME_RAWX)
+        sanitized_job_params["allow_same_rawx"] = boolean_value(
+            job_params.get("allow_same_rawx"), cls.DEFAULT_ALLOW_SAME_RAWX
+        )
 
-        sanitized_job_params['try_chunk_delete'] = boolean_value(
-            job_params.get('try_chunk_delete'),
-            cls.DEFAULT_TRY_CHUNK_DELETE)
+        sanitized_job_params["try_chunk_delete"] = boolean_value(
+            job_params.get("try_chunk_delete"), cls.DEFAULT_TRY_CHUNK_DELETE
+        )
 
-        sanitized_job_params['allow_frozen_container'] = boolean_value(
-            job_params.get('allow_frozen_container'),
-            cls.DEFAULT_ALLOW_FROZEN_CT)
+        sanitized_job_params["allow_frozen_container"] = boolean_value(
+            job_params.get("allow_frozen_container"), cls.DEFAULT_ALLOW_FROZEN_CT
+        )
 
         set_specific_incident_date = int_value(
-            job_params.get('set_specific_incident_date'),
-            None)
+            job_params.get("set_specific_incident_date"), None
+        )
         if set_specific_incident_date is None:
             set_incident_date = boolean_value(
-                job_params.get('set_incident_date'),
-                cls.DEFAULT_DECLARE_INCIDENT_DATE)
+                job_params.get("set_incident_date"), cls.DEFAULT_DECLARE_INCIDENT_DATE
+            )
             if set_incident_date:
                 set_specific_incident_date = int(time.time())
         else:
             set_incident_date = True
-        sanitized_job_params['set_incident_date'] = set_incident_date
-        sanitized_job_params['set_specific_incident_date'] = \
-            set_specific_incident_date
+        sanitized_job_params["set_incident_date"] = set_incident_date
+        sanitized_job_params["set_specific_incident_date"] = set_specific_incident_date
 
-        return sanitized_job_params, 'rawx/%s' % service_id
+        return sanitized_job_params, "rawx/%s" % service_id
 
     def __init__(self, conf, logger=None):
         super(RawxRebuildJob, self).__init__(conf, logger=logger)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
 
     def prepare(self, job_params):
-        service_id = job_params['service_id']
-        rdir_timeout = job_params['rdir_timeout']
-        set_incident_date = job_params['set_incident_date']
-        set_specific_incident_date = job_params['set_specific_incident_date']
+        service_id = job_params["service_id"]
+        rdir_timeout = job_params["rdir_timeout"]
+        set_incident_date = job_params["set_incident_date"]
+        set_specific_incident_date = job_params["set_specific_incident_date"]
 
         if not set_incident_date:
             return
 
         self.rdir_client.admin_incident_set(
-            service_id, set_specific_incident_date, timeout=rdir_timeout)
+            service_id, set_specific_incident_date, timeout=rdir_timeout
+        )
 
     def get_tasks(self, job_params, marker=None):
         chunk_info = self.get_chunk_info(job_params, marker=marker)
 
         for container_id, chunk_id, descr in chunk_info:
-            task_id = '|'.join((container_id, chunk_id))
-            yield task_id, {'container_id': container_id,
-                            'content_id': descr['content_id'],
-                            'path': descr['path'],
-                            'version': descr['version'],
-                            'chunk_id': chunk_id}
+            task_id = "|".join((container_id, chunk_id))
+            yield task_id, {
+                "container_id": container_id,
+                "content_id": descr["content_id"],
+                "path": descr["path"],
+                "version": descr["version"],
+                "chunk_id": chunk_id,
+            }
 
     def get_total_tasks(self, job_params, marker=None):
         chunk_info = self.get_chunk_info(job_params, marker=marker)
@@ -160,19 +166,23 @@ class RawxRebuildJob(XcuteRdirJob):
         i = 0
         for i, (container_id, chunk_id, descr) in enumerate(chunk_info, 1):
             if i % 1000 == 0:
-                yield ('|'.join((container_id, chunk_id)), 1000)
+                yield ("|".join((container_id, chunk_id)), 1000)
 
         remaining = i % 1000
         if remaining > 0:
-            yield ('|'.join((container_id, chunk_id)), remaining)
+            yield ("|".join((container_id, chunk_id)), remaining)
 
     def get_chunk_info(self, job_params, marker=None):
-        service_id = job_params['service_id']
-        rdir_fetch_limit = job_params['rdir_fetch_limit']
-        rdir_timeout = job_params['rdir_timeout']
+        service_id = job_params["service_id"]
+        rdir_fetch_limit = job_params["rdir_fetch_limit"]
+        rdir_timeout = job_params["rdir_timeout"]
 
         chunk_info = self.rdir_client.chunk_fetch(
-            service_id, rebuild=True, timeout=rdir_timeout,
-            limit=rdir_fetch_limit, start_after=marker)
+            service_id,
+            rebuild=True,
+            timeout=rdir_timeout,
+            limit=rdir_fetch_limit,
+            start_after=marker,
+        )
 
         return chunk_info

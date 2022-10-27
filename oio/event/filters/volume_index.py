@@ -21,121 +21,163 @@ from oio.common.exceptions import OioException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
-SERVICE_EVENTS = [EventTypes.ACCOUNT_SERVICES, EventTypes.META2_DELETED,
-                  EventTypes.CONTAINER_DELETED]
+SERVICE_EVENTS = [
+    EventTypes.ACCOUNT_SERVICES,
+    EventTypes.META2_DELETED,
+    EventTypes.CONTAINER_DELETED,
+]
 
 
 class VolumeIndexFilter(Filter):
-
     def __init__(self, *args, **kwargs):
         super(VolumeIndexFilter, self).__init__(*args, **kwargs)
-        self.rdir = self.app_env['rdir_client']
+        self.rdir = self.app_env["rdir_client"]
 
     _attempts_push = 3
     _attempts_delete = 3
 
-    def _chunk_delete(self, reqid,
-                      volume_id, container_id, content_id, chunk_id):
+    def _chunk_delete(self, reqid, volume_id, container_id, content_id, chunk_id):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_delete(
-                volume_id, container_id, content_id, chunk_id,
-                headers=headers)
+                volume_id, container_id, content_id, chunk_id, headers=headers
+            )
         except Exception as exc:
             self.logger.warning(
                 "Failed to deindex chunk %s from %s (reqid=%s container_id=%s "
-                "content_id=%s): %s", chunk_id, volume_id, reqid, container_id,
-                content_id, exc)
+                "content_id=%s): %s",
+                chunk_id,
+                volume_id,
+                reqid,
+                container_id,
+                content_id,
+                exc,
+            )
 
-    def _chunk_push(self, reqid, volume_id, container_id, content_id, chunk_id,
-                    content_path, content_ver, args):
+    def _chunk_push(
+        self,
+        reqid,
+        volume_id,
+        container_id,
+        content_id,
+        chunk_id,
+        content_path,
+        content_ver,
+        args,
+    ):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_push(
-                volume_id, container_id, content_id, chunk_id,
-                content_path, content_ver,
-                headers=headers, **args)
+                volume_id,
+                container_id,
+                content_id,
+                chunk_id,
+                content_path,
+                content_ver,
+                headers=headers,
+                **args
+            )
         except Exception as exc:
             self.logger.warning(
                 "Failed to index chunk %s from %s (reqid=%s container_id=%s "
-                "content_id=%s): %s", chunk_id, volume_id, reqid, container_id,
-                content_id, exc)
+                "content_id=%s): %s",
+                chunk_id,
+                volume_id,
+                reqid,
+                container_id,
+                content_id,
+                exc,
+            )
 
     def _service_push(self, reqid, type_, volume_id, url, cid, mtime):
-        if type_ != 'meta2':
-            self.logger.debug(
-                'Indexing services of type %s is not supported', type_)
+        if type_ != "meta2":
+            self.logger.debug("Indexing services of type %s is not supported", type_)
             return
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.meta2_index_push(
-                volume_id, url, cid, mtime, headers=headers)
+                volume_id, url, cid, mtime, headers=headers
+            )
         except Exception as exc:
             self.logger.warning(
-                "Failed to index %s from %s (reqid=%s): %s", url, volume_id,
-                reqid, exc)
+                "Failed to index %s from %s (reqid=%s): %s", url, volume_id, reqid, exc
+            )
 
     def _service_delete(self, reqid, type_, volume_id, url, cid):
-        if type_ != 'meta2':
-            self.logger.debug(
-                'Indexing services of type %s is not supported', type_)
+        if type_ != "meta2":
+            self.logger.debug("Indexing services of type %s is not supported", type_)
             return
         headers = {REQID_HEADER: reqid}
         try:
-            return self.rdir.meta2_index_delete(
-                volume_id, url, cid, headers=headers)
+            return self.rdir.meta2_index_delete(volume_id, url, cid, headers=headers)
         except Exception as exc:
             self.logger.warning(
-                "Failed to deindex %s from %s (reqid=%s): %s", url, volume_id,
-                reqid, exc)
+                "Failed to deindex %s from %s (reqid=%s): %s",
+                url,
+                volume_id,
+                reqid,
+                exc,
+            )
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
         mtime = event.when // 1000000  # seconds
         if event.event_type in CHUNK_EVENTS:
             data = event.data
-            volume_id = data.get('volume_service_id') or data.get('volume_id')
-            container_id = data.get('container_id')
-            content_id = data.get('content_id')
-            chunk_id = data.get('chunk_id')
-            content_path = data.get('content_path')
-            content_ver = data.get('content_version')
+            volume_id = data.get("volume_service_id") or data.get("volume_id")
+            container_id = data.get("container_id")
+            content_id = data.get("content_id")
+            chunk_id = data.get("chunk_id")
+            content_path = data.get("content_path")
+            content_ver = data.get("content_version")
             try:
                 if event.event_type == EventTypes.CHUNK_DELETED:
                     self._chunk_delete(
-                        event.reqid,
-                        volume_id, container_id, content_id, chunk_id)
+                        event.reqid, volume_id, container_id, content_id, chunk_id
+                    )
                 else:
-                    args = {'mtime': mtime}
+                    args = {"mtime": mtime}
                     self._chunk_push(
                         event.reqid,
-                        volume_id, container_id, content_id, chunk_id,
-                        content_path, content_ver, args)
+                        volume_id,
+                        container_id,
+                        content_id,
+                        chunk_id,
+                        content_path,
+                        content_ver,
+                        args,
+                    )
             except OioException as exc:
-                resp = EventError(event=event,
-                                  body="rdir update error: %s" % exc)
+                resp = EventError(event=event, body="rdir update error: %s" % exc)
                 return resp(env, beanstalkd, cb)
         elif event.event_type in SERVICE_EVENTS:
-            container_id = event.url['id']
-            container_url = '/'.join((event.url['ns'],
-                                      event.url['account'],
-                                      event.url['user']))
+            container_id = event.url["id"]
+            container_url = "/".join(
+                (event.url["ns"], event.url["account"], event.url["user"])
+            )
             if event.event_type == EventTypes.ACCOUNT_SERVICES:
                 peers = event.data
                 for peer in peers:
-                    self._service_push(event.reqid, peer['type'], peer['host'],
-                                       container_url, container_id, mtime)
+                    self._service_push(
+                        event.reqid,
+                        peer["type"],
+                        peer["host"],
+                        container_url,
+                        container_id,
+                        mtime,
+                    )
             elif event.event_type == EventTypes.META2_DELETED:
-                peer = event.data['peer']
+                peer = event.data["peer"]
                 self._service_delete(
-                    event.reqid, 'meta2', peer, container_url, container_id)
+                    event.reqid, "meta2", peer, container_url, container_id
+                )
             elif event.event_type == EventTypes.CONTAINER_DELETED:
                 # TODO(adu): Delete when it will no longer be used
-                peers = event.data.get('peers') or list()
+                peers = event.data.get("peers") or list()
                 for peer in peers:
                     self._service_delete(
-                        event.reqid, 'meta2', peer, container_url,
-                        container_id)
+                        event.reqid, "meta2", peer, container_url, container_id
+                    )
         return self.app(env, beanstalkd, cb)
 
 
@@ -145,4 +187,5 @@ def filter_factory(global_conf, **local_conf):
 
     def except_filter(app):
         return VolumeIndexFilter(app, conf)
+
     return except_filter

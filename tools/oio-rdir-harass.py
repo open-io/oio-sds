@@ -36,10 +36,10 @@ CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
 
 class Harasser(object):
     def __init__(self, ns, max_containers=256, max_contents=256):
-        conf = {'namespace': ns}
+        conf = {"namespace": ns}
         self.cs = ConscienceClient(conf)
         self.rdir = RdirClient(conf)
-        self.rawx_list = [x['id'] for x in self.cs.all_services('rawx')]
+        self.rawx_list = [x["id"] for x in self.cs.all_services("rawx")]
         self.sent = set()
         self.max_containers = max_containers
         self.max_contents = max_contents
@@ -58,25 +58,25 @@ class Harasser(object):
         start = time.time()
         nb_rawx = len(self.rawx_list)
         while loop > 0:
-            args = {'mtime': int(start)}
+            args = {"mtime": int(start)}
             # vol_id = random.choice(self.rawx_list)
             # container_id = "%064X" % (random.randrange(self.max_containers))
             # content_id = "%032X" % (random.randrange(self.max_contents))
             vol_id = self.rawx_list[loop % nb_rawx]
             container_id = "%064X" % (loop + count_start_container)
             content_id = "%032X" % (loop + count_start_content)
-            chunk_id = "http://%s/%064X" \
-                % (vol_id, random.randrange(2**128))
+            chunk_id = "http://%s/%064X" % (vol_id, random.randrange(2**128))
             self.rdir.chunk_push(
-                vol_id, container_id, content_id, chunk_id, content_id, 1,
-                **args)
+                vol_id, container_id, content_id, chunk_id, content_id, 1, **args
+            )
             self.sent.add((vol_id, container_id, content_id, chunk_id))
             loop -= 1
         end = time.time()
         self.pushed_count += loops
-        self.pushed_time += end-start
-        print("%d pushed in %.3fs, %d req/s" %
-              (loops, end-start, loops/(end-start)))
+        self.pushed_time += end - start
+        print(
+            "%d pushed in %.3fs, %d req/s" % (loops, end - start, loops / (end - start))
+        )
 
     def harass_del(self, min_loops=0):
         min_loops = min(min_loops, len(self.sent))
@@ -90,9 +90,11 @@ class Harasser(object):
             loop -= 1
         end = time.time()
         self.removed_count += loops
-        self.removed_time += end-start
-        print("%d removed in %.3fs, %d req/s" %
-              (loops, end-start, loops/(end-start)))
+        self.removed_time += end - start
+        print(
+            "%d removed in %.3fs, %d req/s"
+            % (loops, end - start, loops / (end - start))
+        )
 
     def __call__(self):
         try:
@@ -103,17 +105,25 @@ class Harasser(object):
             print("Cleaning...")
             self.harass_del(len(self.sent))
             print("Stats:")
-            print("Pushed %d in %.3fs, %d req/s" % (self.pushed_count,
-                                                    self.pushed_time,
-                                                    self.pushed_count /
-                                                    self.pushed_time))
-            print("Removed %d in %.3fs, %d req/s" % (self.removed_count,
-                                                     self.removed_time,
-                                                     self.removed_count /
-                                                     self.removed_time))
+            print(
+                "Pushed %d in %.3fs, %d req/s"
+                % (
+                    self.pushed_count,
+                    self.pushed_time,
+                    self.pushed_count / self.pushed_time,
+                )
+            )
+            print(
+                "Removed %d in %.3fs, %d req/s"
+                % (
+                    self.removed_count,
+                    self.removed_time,
+                    self.removed_count / self.removed_time,
+                )
+            )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) > 3:
         HARASS = Harasser(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))
     elif len(sys.argv) > 2:

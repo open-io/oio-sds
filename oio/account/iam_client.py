@@ -21,40 +21,46 @@ class IamClient(ServiceClient):
 
     def __init__(self, conf, **kwargs):
         super(IamClient, self).__init__(
-            'account', conf, service_name='iam-service',
-            request_prefix='v1.0/iam', **kwargs)
+            "account",
+            conf,
+            service_name="iam-service",
+            request_prefix="v1.0/iam",
+            **kwargs
+        )
 
     def iam_request(self, account, *args, **kwargs):
-        params = kwargs.setdefault('params', {})
+        params = kwargs.setdefault("params", {})
         if account:
-            params['account'] = account
+            params["account"] = account
         return self.service_request(*args, **kwargs)
 
     def delete_user_policy(self, account, user, policy_name=None, **kwargs):
-        params = {'user': user}
+        params = {"user": user}
         if policy_name:
-            params['policy-name'] = policy_name
-        _resp, body = self.iam_request(account, 'DELETE', 'delete-user-policy',
-                                       params=params, **kwargs)
+            params["policy-name"] = policy_name
+        _resp, body = self.iam_request(
+            account, "DELETE", "delete-user-policy", params=params, **kwargs
+        )
         return body
 
     def get_user_policy(self, account, user, policy_name=None, **kwargs):
-        params = {'user': user}
+        params = {"user": user}
         if policy_name:
-            params['policy-name'] = policy_name
-        _resp, body = self.iam_request(account, 'GET', 'get-user-policy',
-                                       params=params, **kwargs)
+            params["policy-name"] = policy_name
+        _resp, body = self.iam_request(
+            account, "GET", "get-user-policy", params=params, **kwargs
+        )
         return body
 
     def list_users(self, account, **kwargs):
-        _resp, body = self.iam_request(account, 'GET', 'list-users',
-                                       **kwargs)
+        _resp, body = self.iam_request(account, "GET", "list-users", **kwargs)
         return body
 
     def list_user_policies(self, account, user, **kwargs):
-        params = {'user': user}
-        _resp, body = self.iam_request(account, 'GET', 'list-user-policies',
-                                       params=params, **kwargs)
+        params = {"user": user}
+        _resp, body = self.iam_request(
+            account, "GET", "list-user-policies", params=params, **kwargs
+        )
         return body
 
     def load_merged_user_policies(self, account, user, **kwargs):
@@ -66,17 +72,17 @@ class IamClient(ServiceClient):
         :param user: user of account
         :type user: `str`
         """
-        params = {'user': user}
-        _resp, body = self.iam_request(account, 'GET',
-                                       'load-merged-user-policies',
-                                       params=params, **kwargs)
+        params = {"user": user}
+        _resp, body = self.iam_request(
+            account, "GET", "load-merged-user-policies", params=params, **kwargs
+        )
         return body
 
-    def put_user_policy(self, account, user, policy, policy_name=None,
-                        **kwargs):
-        params = {'user': user}
+    def put_user_policy(self, account, user, policy, policy_name=None, **kwargs):
+        params = {"user": user}
         if policy_name:
-            params['policy-name'] = policy_name
-        _resp, body = self.iam_request(account, 'PUT', 'put-user-policy',
-                                       params=params, data=policy, **kwargs)
+            params["policy-name"] = policy_name
+        _resp, body = self.iam_request(
+            account, "PUT", "put-user-policy", params=params, data=policy, **kwargs
+        )
         return body

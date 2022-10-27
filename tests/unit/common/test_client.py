@@ -18,15 +18,12 @@ from oio.common.client import ProxyClient
 
 
 class ProxyClientTest(unittest.TestCase):
-
     def test_endpoint(self):
-        proxy_client = ProxyClient({"namespace": "OPENIO"},
-                                   endpoint="127.0.0.1:4444")
+        proxy_client = ProxyClient({"namespace": "OPENIO"}, endpoint="127.0.0.1:4444")
         self.assertEqual(proxy_client.proxy_netloc, "127.0.0.1:4444")
-        self.assertEqual(proxy_client.endpoint,
-                         "http://127.0.0.1:4444/v3.0/OPENIO")
-        proxy_client = ProxyClient({"namespace": "OPENIO"},
-                                   endpoint="http://127.0.0.1:4444")
+        self.assertEqual(proxy_client.endpoint, "http://127.0.0.1:4444/v3.0/OPENIO")
+        proxy_client = ProxyClient(
+            {"namespace": "OPENIO"}, endpoint="http://127.0.0.1:4444"
+        )
         self.assertEqual(proxy_client.proxy_netloc, "127.0.0.1:4444")
-        self.assertEqual(proxy_client.endpoint,
-                         "http://127.0.0.1:4444/v3.0/OPENIO")
+        self.assertEqual(proxy_client.endpoint, "http://127.0.0.1:4444/v3.0/OPENIO")

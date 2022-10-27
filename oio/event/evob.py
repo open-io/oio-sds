@@ -36,12 +36,12 @@ def _event_env_property(field):
 
 
 class Event(object):
-    job_id = _event_env_property('job_id')
-    event_type = _event_env_property('event')
-    data = _event_env_property('data')
-    reqid = _event_env_property('request_id')
-    url = _event_env_property('url')
-    when = _event_env_property('when')
+    job_id = _event_env_property("job_id")
+    event_type = _event_env_property("event")
+    data = _event_env_property("data")
+    reqid = _event_env_property("request_id")
+    url = _event_env_property("url")
+    when = _event_env_property("when")
 
     def __init__(self, env):
         self.env = env
@@ -64,7 +64,7 @@ class Response(object):
         if not self.event:
             self.event = Event(env)
         if not self.body:
-            self.body = ''
+            self.body = ""
         cb(self.status, self.body)
 
 
@@ -77,29 +77,29 @@ class EventException(Response, Exception):
 class EventTypes(object):
     """Enum class for event type names."""
 
-    ACCOUNT_SERVICES = 'account.services'
-    CHUNK_DELETED = 'storage.chunk.deleted'
-    CHUNK_NEW = 'storage.chunk.new'
-    CONTAINER_DELETED = 'storage.container.deleted'
-    CONTAINER_NEW = 'storage.container.new'
-    CONTAINER_STATE = 'storage.container.state'
-    CONTAINER_UPDATE = 'storage.container.update'
-    CONTENT_APPEND = 'storage.content.append'
-    CONTENT_BROKEN = 'storage.content.broken'
-    CONTENT_DELETED = 'storage.content.deleted'
-    CONTENT_DRAINED = 'storage.content.drained'
-    CONTENT_UPDATE = 'storage.content.update'
-    CONTENT_NEW = 'storage.content.new'
-    CONTENT_PERFECTIBLE = 'storage.content.perfectible'
-    CONTENT_REBUILT = 'storage.content.rebuilt'
-    META2_DELETED = 'storage.meta2.deleted'
-    XCUTE_TASKS = 'xcute.tasks'
+    ACCOUNT_SERVICES = "account.services"
+    CHUNK_DELETED = "storage.chunk.deleted"
+    CHUNK_NEW = "storage.chunk.new"
+    CONTAINER_DELETED = "storage.container.deleted"
+    CONTAINER_NEW = "storage.container.new"
+    CONTAINER_STATE = "storage.container.state"
+    CONTAINER_UPDATE = "storage.container.update"
+    CONTENT_APPEND = "storage.content.append"
+    CONTENT_BROKEN = "storage.content.broken"
+    CONTENT_DELETED = "storage.content.deleted"
+    CONTENT_DRAINED = "storage.content.drained"
+    CONTENT_UPDATE = "storage.content.update"
+    CONTENT_NEW = "storage.content.new"
+    CONTENT_PERFECTIBLE = "storage.content.perfectible"
+    CONTENT_REBUILT = "storage.content.rebuilt"
+    META2_DELETED = "storage.meta2.deleted"
+    XCUTE_TASKS = "xcute.tasks"
 
     CONTAINER_EVENTS = (
         CONTAINER_DELETED,
         CONTAINER_NEW,
         CONTAINER_STATE,
-        CONTAINER_UPDATE
+        CONTAINER_UPDATE,
     )
     CONTENT_EVENTS = (
         CONTENT_APPEND,
@@ -108,7 +108,7 @@ class EventTypes(object):
         CONTENT_NEW,
         CONTENT_PERFECTIBLE,
         CONTENT_REBUILT,
-        CONTENT_UPDATE
+        CONTENT_UPDATE,
     )
 
 

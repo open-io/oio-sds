@@ -15,12 +15,10 @@
 
 
 from oio.event.consumer import StopServe
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, \
-    RawxCrawlerOk
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, RawxCrawlerOk
 
 
 class Handler(object):
-
     def __init__(self, app, conf):
         self.app = app
         self.app_env = app.app_env
@@ -36,13 +34,13 @@ class Handler(object):
             res = self.process(chunk)
             return res(env, cb)
         except StopServe:
-            self.logger.info('chunk_id=%s not handled: the process is '
-                             'stopping', chunk.chunk_id)
-            res = RawxCrawlerError(chunk=chunk, body='Process is stopping')
+            self.logger.info(
+                "chunk_id=%s not handled: the process is stopping", chunk.chunk_id
+            )
+            res = RawxCrawlerError(chunk=chunk, body="Process is stopping")
         except Exception as err:
-            self.logger.exception('chunk_id=%s not handled: %s',
-                                  chunk.chunk_id, err)
-            res = RawxCrawlerError(chunk=chunk, body='An error occurred')
+            self.logger.exception("chunk_id=%s not handled: %s", chunk.chunk_id, err)
+            res = RawxCrawlerError(chunk=chunk, body="An error occurred")
         return res(env, cb)
 
     def get_stats(self):

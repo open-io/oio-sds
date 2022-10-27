@@ -22,15 +22,13 @@ from tests.unit.api import FakeApiResponse
 
 
 class AccountClientTest(unittest.TestCase):
-
     def _build_account_client(self, **kwargs):
         endpoint = "http://1.2.3.4:8000"
         resp = FakeApiResponse()
-        body = {"listing": [['ct', 0, 0, 0]]}
-        client = AccountClient({'namespace': 'fake'},
-                               endpoint=endpoint,
-                               proxy_endpoint=endpoint,
-                               **kwargs)
+        body = {"listing": [["ct", 0, 0, 0]]}
+        client = AccountClient(
+            {"namespace": "fake"}, endpoint=endpoint, proxy_endpoint=endpoint, **kwargs
+        )
         client._direct_request = Mock(return_value=(resp, body))
         return client
 
@@ -39,15 +37,15 @@ class AccountClientTest(unittest.TestCase):
         client = self._build_account_client(read_timeout=66.6)
 
         # Do NOT pass read_timeout to the method call
-        client.container_list('acct')
+        client.container_list("acct")
         # Ensure the internal methods have been called with a read_timeout
         call_args = client._direct_request.call_args
-        self.assertIn('read_timeout', call_args[1])
-        self.assertEqual(66.6, call_args[1]['read_timeout'])
+        self.assertIn("read_timeout", call_args[1])
+        self.assertEqual(66.6, call_args[1]["read_timeout"])
 
         # Now pass a read_timeout to the method call
-        client.container_list('acct', read_timeout=33.3)
+        client.container_list("acct", read_timeout=33.3)
         # Ensure the internal methods have been called with a read_timeout
         call_args = client._direct_request.call_args
-        self.assertIn('read_timeout', call_args[1])
-        self.assertEqual(33.3, call_args[1]['read_timeout'])
+        self.assertIn("read_timeout", call_args[1])
+        self.assertEqual(33.3, call_args[1]["read_timeout"])

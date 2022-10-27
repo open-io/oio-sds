@@ -32,7 +32,7 @@ class MissingAttribute(OioException):
         self.attribute = attribute
 
     def __str__(self):
-        return '%s' % self.attribute
+        return "%s" % self.attribute
 
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__, self.attribute)
@@ -76,6 +76,7 @@ class SpareChunkException(Meta2Exception):
     Exception raised when no spare chunk has been found,
     or some may have been found but they don't match all criteria.
     """
+
     pass
 
 
@@ -96,6 +97,7 @@ class ServiceUnavailable(OioException):
     Exception raised when some services are temporarily
     not available. This does not mean data is lost.
     """
+
     pass
 
 
@@ -116,6 +118,7 @@ class RetryLater(OioException):
     Exception raised by workers that want a task to be
     rescheduled later.
     """
+
     pass
 
 
@@ -185,6 +188,7 @@ class SourceReadError(OioException):
 
 class OioNetworkException(OioException):
     """Network related exception (connection, timeout...)."""
+
     pass
 
 
@@ -201,6 +205,7 @@ class SourceReadTimeout(OioTimeout):
     Specialization of OioTimeout for the case when a timeout occurs
     while reading data from a client application.
     """
+
     pass
 
 
@@ -213,7 +218,7 @@ class DeadlineReached(OioException):
 
     def __str__(self):
         if not self.args:
-            return 'Deadline reached'
+            return "Deadline reached"
         return super(DeadlineReached, self).__str__()
 
 
@@ -222,6 +227,7 @@ class VolumeException(OioException):
     Exception raised when someone is trying to contact a rdir service,
     but there is none assigned to the specified rawx.
     """
+
     pass
 
 
@@ -229,16 +235,17 @@ class StatusMessageException(OioException):
     """
     Error carrying an HTTP status, an OIO status and a message.
     """
+
     def __init__(self, http_status, status=None, message=None):
         self.http_status = http_status
-        self.message = message or 'n/a'
+        self.message = message or "n/a"
         self.status = status
         super(StatusMessageException, self).__init__(self.message)
 
     def __str__(self):
         out = "%s (HTTP %s)" % (self.message, self.http_status)
         if self.status:
-            out += ' (STATUS %s)' % self.status
+            out += " (STATUS %s)" % self.status
         return out
 
 
@@ -246,6 +253,7 @@ class UnfinishedUploadException(OioException):
     """
     Exception raised when a number of chunks are not uploaded.
     """
+
     def __init__(self, exception, chunks_already_uploaded):
         self.exception = exception
         self.chunks_already_uploaded = chunks_already_uploaded
@@ -267,6 +275,7 @@ class BadRequest(ClientException):
     """
     Request is not correct.
     """
+
     def __init__(self, http_status=400, status=None, message=None):
         super(BadRequest, self).__init__(http_status, status, message)
 
@@ -275,12 +284,14 @@ class Forbidden(ClientException):
     """
     Operation is forbidden.
     """
+
     def __init__(self, http_status=403, status=None, message=None):
         super(Forbidden, self).__init__(http_status, status, message)
 
 
 class NotFound(ClientException):
     """Resource was not found."""
+
     def __init__(self, http_status=404, status=None, message=None):
         super(NotFound, self).__init__(http_status, status, message)
 
@@ -290,6 +301,7 @@ class MethodNotAllowed(ClientException):
     Request method is not allowed.
     May be raised when the namespace is in WORM mode and user tries to delete.
     """
+
     def __init__(self, http_status=405, status=None, message=None):
         super(MethodNotAllowed, self).__init__(http_status, status, message)
 
@@ -303,8 +315,7 @@ class Conflict(ClientException):
 
 class ClientPreconditionFailed(ClientException):
     def __init__(self, http_status=412, status=None, message=None):
-        super(ClientPreconditionFailed, self).__init__(
-            http_status, status, message)
+        super(ClientPreconditionFailed, self).__init__(http_status, status, message)
 
 
 class TooLarge(ClientException):
@@ -324,6 +335,7 @@ class ServiceBusy(ClientException):
     handle the request at the moment. The user is invited to retry after a
     few seconds.
     """
+
     def __init__(self, http_status=503, status=None, message=None):
         super(ServiceBusy, self).__init__(http_status, status, message)
 
@@ -356,11 +368,11 @@ def from_response(resp, body=None):
         message = "n/a"
         status = None
         try:
-            message = body.get('message')
-            status = body.get('status')
+            message = body.get("message")
+            status = body.get("status")
         except Exception:
             if isinstance(body, binary_type):
-                message = body.decode('utf-8')
+                message = body.decode("utf-8")
             else:
                 message = body
         return cls(http_status, status, message)
@@ -371,10 +383,11 @@ def from_response(resp, body=None):
 def from_multi_responses(data, excepted_status=(200,)):
     errors = []
     for svc, info in data.items():
-        status = info['status']['status']
+        status = info["status"]["status"]
         if status not in excepted_status:
-            errors.append(from_status(
-                status, reason=f"{svc}: {info['status']['message']}"))
+            errors.append(
+                from_status(status, reason=f"{svc}: {info['status']['message']}")
+            )
     if errors:
         raise OioException(errors)
 
@@ -386,7 +399,7 @@ def reraise(exc_type, exc_value, extra_message=None):
     """
     args = exc_value.args
     if isinstance(exc_value, StatusMessageException):
-        args = (exc_value.message, ) + args
+        args = (exc_value.message,) + args
     if extra_message:
-        args = (extra_message, ) + args
+        args = (extra_message,) + args
     six_reraise(exc_type, exc_type(*args), exc_info()[2])

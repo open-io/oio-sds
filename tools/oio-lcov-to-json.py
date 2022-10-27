@@ -23,20 +23,17 @@ OUTPUT_FILE = sys.argv[2] if len(sys.argv) > 2 else None
 
 PROC = subprocess.Popen(["lcov", "-l", LCOV_FILE], stdout=subprocess.PIPE)
 PROC_OUTPUT, _ERR = PROC.communicate()
-LCOV_OUTPUT = PROC_OUTPUT.decode('utf-8')
+LCOV_OUTPUT = PROC_OUTPUT.decode("utf-8")
 LAST_LINE = LCOV_OUTPUT.splitlines()[-1]
-PERCENT, LINES = LAST_LINE.split('|')[1].split(' ', 1)
+PERCENT, LINES = LAST_LINE.split("|")[1].split(" ", 1)
 COV = {
-    'coverage': {
-       'C': {
-           'line_percent': float(PERCENT[:-1]),
-           'line_total': int(LINES.strip())
-        }
+    "coverage": {
+        "C": {"line_percent": float(PERCENT[:-1]), "line_total": int(LINES.strip())}
     }
 }
 
 if OUTPUT_FILE:
-    with open(OUTPUT_FILE, 'w') as OUT:
+    with open(OUTPUT_FILE, "w") as OUT:
         json.dump(COV, OUT)
 else:
     json.dump(COV, sys.stdout)

@@ -27,22 +27,21 @@ from oio.cli import Command
 class ElectionCmdMixin(object):
     """Base class for election subcommands"""
 
-    log = getLogger(__name__ + '.Election')
+    log = getLogger(__name__ + ".Election")
 
     def patch_parser(self, parser):
         # TODO(jfs): Add a --cid option that allow iterating on all the
         #            ensembles for just one election
-        parser.add_argument('srvtype', metavar='<service_type>',
-                            help="Service type")
+        parser.add_argument("srvtype", metavar="<service_type>", help="Service type")
 
     def get_params(self, parsed_args):
-        ns = self.app.client_manager.zk['ns']
-        cnxstr = self.app.client_manager.sds_conf['zookeeper']
+        ns = self.app.client_manager.zk["ns"]
+        cnxstr = self.app.client_manager.sds_conf["zookeeper"]
         return ns, cnxstr
 
     def iterate_groups(self, parsed_args, non_leaf=False):
-        from oio.zk.client import get_connected_handles, \
-            generate_namespace_tree as _run
+        from oio.zk.client import get_connected_handles, generate_namespace_tree as _run
+
         ns, cnxstr = self.get_params(parsed_args)
         for zh in get_connected_handles(cnxstr, logger=self.log):
             for group in _run(ns, parsed_args.srvtype, non_leaf=non_leaf):
@@ -50,7 +49,7 @@ class ElectionCmdMixin(object):
             zh.close()
 
     def _list_nodes(self, zh, path):
-        path = path.replace('//', '/')
+        path = path.replace("//", "/")
         try:
             children = list(zh.get_children(path))
             if len(children) <= 0:
@@ -66,7 +65,7 @@ class ElectionCmdMixin(object):
             return
         seen = dict()
         for child in children:
-            key, num = child.split('-', 1)
+            key, num = child.split("-", 1)
             if key not in seen:
                 seen[key] = []
             seen[key].append(num)
@@ -78,41 +77,55 @@ class ElectionCmdMixin(object):
 class ElectionReset(ElectionCmdMixin, lister.Lister):
     """Mass-reset elections."""
 
-    log = getLogger(__name__ + '.ElectionReset')
+    log = getLogger(__name__ + ".ElectionReset")
 
     def get_parser(self, prog_name):
         parser = super(ElectionReset, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
-                '-s', '--smart',
-                action="store_true", dest="SMART", default=False,
-                help="Delete duplicate nodes")
+            "-s",
+            "--smart",
+            action="store_true",
+            dest="SMART",
+            default=False,
+            help="Delete duplicate nodes",
+        )
         parser.add_argument(
-                '--dry-run',
-                action="store_true", dest="DRY", default=False,
-                help="Do not delete, just print")
+            "--dry-run",
+            action="store_true",
+            dest="DRY",
+            default=False,
+            help="Do not delete, just print",
+        )
         parser.add_argument(
-                '--min-services',
-                type=int, action="store", dest="MIN", default=4,
-                help="Do not delete election if less the NUM")
+            "--min-services",
+            type=int,
+            action="store",
+            dest="MIN",
+            default=4,
+            help="Do not delete election if less the NUM",
+        )
         parser.add_argument(
-                '--alone',
-                action="store_true", dest="ALONE", default=False,
-                help="Also consider members alone in their group")
+            "--alone",
+            action="store_true",
+            dest="ALONE",
+            default=False,
+            help="Also consider members alone in their group",
+        )
         return parser
 
     def take_action(self, parsed_args):
-        columns = ('group', 'node', 'status')
+        columns = ("group", "node", "status")
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
         def action(group, node):
             if parsed_args.DRY:
-                return group, node, 'Skipped'
+                return group, node, "Skipped"
             else:
                 try:
-                    zh.delete(group + '/' + node)
-                    return group, node, 'Deleted'
+                    zh.delete(group + "/" + node)
+                    return group, node, "Deleted"
                 except Exception as ex:
                     return group, node, str(ex)
 
@@ -124,16 +137,16 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                 yield action(group, children[0])
             elif parsed_args.MIN > len(children):
                 for node in children:
-                    yield group, node, 'Too few nodes'
+                    yield group, node, "Too few nodes"
             elif parsed_args.SMART:
                 children.sort()
                 # check for services registered several times
                 group = {}
                 for child in children:
-                    n = group + '/' + child
+                    n = group + "/" + child
                     addr, node_stat = zh.get(n)
                     if addr is not None:
-                        addr = addr.decode('utf-8')
+                        addr = addr.decode("utf-8")
                     print(repr(addr), repr(node_stat))
                     if addr in group:
                         # Mark the oldest nodes for removal
@@ -148,7 +161,7 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
 class ElectionStat(ElectionCmdMixin, lister.Lister):
     """Dump election nodes."""
 
-    log = getLogger(__name__ + '.ElectionStat')
+    log = getLogger(__name__ + ".ElectionStat")
 
     def get_parser(self, prog_name):
         parser = super(ElectionStat, self).get_parser(prog_name)
@@ -156,46 +169,52 @@ class ElectionStat(ElectionCmdMixin, lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        columns = ('group', 'member', 'size', 'value')
+        columns = ("group", "member", "size", "value")
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
         for zh, group in self.iterate_groups(parsed_args):
             children = list(self._list_nodes(zh, group))
             for child in children:
-                n = group + '/' + child
+                n = group + "/" + child
                 addr, node_stat = zh.get(n)
                 if addr is not None:
-                    addr = addr.decode('utf-8')
+                    addr = addr.decode("utf-8")
                 yield group, child, node_stat.data_length, repr(addr)
 
 
 class ElectionSmudge(ElectionCmdMixin, lister.Lister):
     """Putrefies elections with the addition of fake nodes."""
 
-    log = getLogger(__name__ + '.ElectionSmudge')
+    log = getLogger(__name__ + ".ElectionSmudge")
 
     def get_parser(self, prog_name):
         parser = super(ElectionSmudge, self).get_parser(prog_name)
         self.patch_parser(parser)
-        parser.add_argument('--value', metavar='<VALUE>', type=str, default='',
-                            help="content of the Zookeeper node")
+        parser.add_argument(
+            "--value",
+            metavar="<VALUE>",
+            type=str,
+            default="",
+            help="content of the Zookeeper node",
+        )
         return parser
 
     def take_action(self, parsed_args):
-        columns = ('group', 'member', 'status')
+        columns = ("group", "member", "status")
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
         from oio.zk.client import _acl_openbar
+
         for zh, group in self.iterate_groups(parsed_args):
             for key, _, last in self._list_elections(zh, group):
-                tail = str(1+int(last)).rjust(10, '0')
-                suffix = key + '-' + tail
-                path = group + '/' + suffix
+                tail = str(1 + int(last)).rjust(10, "0")
+                suffix = key + "-" + tail
+                path = group + "/" + suffix
                 value = parsed_args.value
                 if isinstance(value, six.text_type):
-                    value = value.encode('utf-8')
+                    value = value.encode("utf-8")
                 try:
                     zh.create(path, value=value, acl=_acl_openbar)
                     yield group, suffix, "OK"
@@ -206,15 +225,18 @@ class ElectionSmudge(ElectionCmdMixin, lister.Lister):
 class HierarchyArmageddon(ElectionCmdMixin, Command):
     """Remove the hierarchy tree in the Zookeeper ensembles"""
 
-    log = getLogger(__name__ + '.HierarchyArmageddon')
+    log = getLogger(__name__ + ".HierarchyArmageddon")
 
     def get_parser(self, prog_name):
         parser = super(HierarchyArmageddon, self).get_parser(prog_name)
         # JFS: No patching
         parser.add_argument(
-                "--fuck-the-world",
-                dest='yeah', action='store_true', default=False,
-                help="I am very sure I want to fuck my Zookeeper up")
+            "--fuck-the-world",
+            dest="yeah",
+            action="store_true",
+            default=False,
+            help="I am very sure I want to fuck my Zookeeper up",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -223,12 +245,12 @@ class HierarchyArmageddon(ElectionCmdMixin, Command):
             self.log.warn("This action on [%s] requires iron bollocks.", ns)
             return
         from oio.zk.client import get_connected_handles, delete_children
+
         for zh in get_connected_handles(cnxstr, logger=self.log):
             try:
                 delete_children(zh.get(), ns, self.log)
             except Exception as ex:
-                self.log.exception("Failed to flush '%s': %s",
-                                   zh.cnxstr, str(ex))
+                self.log.exception("Failed to flush '%s': %s", zh.cnxstr, str(ex))
                 self.__class__.success = False
             finally:
                 zh.close()
@@ -237,19 +259,25 @@ class HierarchyArmageddon(ElectionCmdMixin, Command):
 class HierarchyBootstrap(ElectionCmdMixin, Command):
     """Create the election tree in the Zookeeper ensembles."""
 
-    log = getLogger(__name__ + '.HierarchyArmageddon')
+    log = getLogger(__name__ + ".HierarchyArmageddon")
 
     def get_parser(self, prog_name):
         parser = super(HierarchyBootstrap, self).get_parser(prog_name)
         # JFS: No patching
         parser.add_argument(
-                "--slow",
-                dest='slow', action='store_true', default=False,
-                help="Create with small batches")
+            "--slow",
+            dest="slow",
+            action="store_true",
+            default=False,
+            help="Create with small batches",
+        )
         parser.add_argument(
-                "--lazy",
-                dest='lazy', action='store_true', default=False,
-                help="Only create if there is no clue of existing NS")
+            "--lazy",
+            dest="lazy",
+            action="store_true",
+            default=False,
+            help="Only create if there is no clue of existing NS",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -260,14 +288,18 @@ class HierarchyBootstrap(ElectionCmdMixin, Command):
         # Send a bootstrap on each ensemble
         ns, cnxstr = self.get_params(parsed_args)
         from oio.zk.client import get_connected_handles, create_namespace_tree
+
         for zh in get_connected_handles(cnxstr, logger=self.log):
             try:
-                create_namespace_tree(zh.get(), ns, self.log,
-                                      batch_size=batch_size,
-                                      precheck=parsed_args.lazy)
+                create_namespace_tree(
+                    zh.get(),
+                    ns,
+                    self.log,
+                    batch_size=batch_size,
+                    precheck=parsed_args.lazy,
+                )
             except Exception as ex:
-                self.log.exception("Failed to bootstrap '%s': %s",
-                                   zh.cnxstr, ex)
+                self.log.exception("Failed to bootstrap '%s': %s", zh.cnxstr, ex)
                 self.__class__.success = False
             finally:
                 zh.close()

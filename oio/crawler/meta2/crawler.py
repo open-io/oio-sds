@@ -24,15 +24,16 @@ class Meta2Worker(CrawlerWorker):
     Meta2 Worker responsible for a single volume.
     """
 
-    SERVICE_TYPE = 'meta2'
+    SERVICE_TYPE = "meta2"
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
         super(Meta2Worker, self).__init__(conf, volume_path, **kwargs)
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
-            self.logger.warning('Meta2worker volume %s handling failure %s',
-                                self.volume, msg)
+            self.logger.warning(
+                "Meta2worker volume %s handling failure %s", self.volume, msg
+            )
 
     def process_path(self, path):
         db_id = path.rsplit("/")[-1].rsplit(".")
@@ -40,14 +41,14 @@ class Meta2Worker(CrawlerWorker):
             self.logger.warning("Malformed db file name: %s", path)
             self.invalid_paths += 1
             return False
-        if db_id[2] != 'meta2':
+        if db_id[2] != "meta2":
             self.logger.warning("Bad extension filename: %s", path)
             self.invalid_paths += 1
             return False
 
         cid_seq = ".".join([db_id[0], db_id[1]])
         if len(cid_seq) < STRLEN_REFERENCEID:
-            self.logger.warning('Not a valid CID: %s', cid_seq)
+            self.logger.warning("Not a valid CID: %s", cid_seq)
             return False
 
         meta2db = Meta2DB(self.app_env, dict())
@@ -57,7 +58,7 @@ class Meta2Worker(CrawlerWorker):
         try:
             meta2db.seq = int(db_id[1])
         except ValueError:
-            self.logger.warning('Bad sequence number: %s', db_id[1])
+            self.logger.warning("Bad sequence number: %s", db_id[1])
             return False
 
         try:
@@ -65,20 +66,25 @@ class Meta2Worker(CrawlerWorker):
             self.successes += 1
         except Exception:
             self.errors += 1
-            self.logger.exception('Failed to apply pipeline')
+            self.logger.exception("Failed to apply pipeline")
         self.scanned_since_last_report += 1
         return True
 
 
 class Meta2Crawler(Crawler):
-
-    SERVICE_TYPE = 'meta2'
+    SERVICE_TYPE = "meta2"
 
     def __init__(self, conf, conf_file=None, **kwargs):
         super(Meta2Crawler, self).__init__(conf, conf_file=conf_file)
 
     def _init_volume_workers(self):
         self.volume_workers = [
-            Meta2Worker(self.conf, volume, logger=self.logger, api=self.api,
-                        watchdog=self.watchdog)
-            for volume in self.volumes]
+            Meta2Worker(
+                self.conf,
+                volume,
+                logger=self.logger,
+                api=self.api,
+                watchdog=self.watchdog,
+            )
+            for volume in self.volumes
+        ]

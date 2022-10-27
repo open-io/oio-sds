@@ -13,8 +13,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.constants import (
+    BUCKET_PROP_REPLI_ENABLED,
+    CONNECTION_TIMEOUT,
+    READ_TIMEOUT,
+)
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.utils import CacheDict, monotonic_time, request_id
 from oio.event.evob import EventTypes
@@ -32,53 +35,58 @@ class ReplicateFilter(NotifyFilter):
     replicated, before forwarding the event to the replication queue.
     """
 
-    ALLOWED_EVENT_TYPES = (EventTypes.CONTAINER_EVENTS +
-                           EventTypes.CONTENT_EVENTS)
+    ALLOWED_EVENT_TYPES = EventTypes.CONTAINER_EVENTS + EventTypes.CONTENT_EVENTS
 
     def init(self):
         super(ReplicateFilter, self).init()
-        self.account = self.app_env['account_client']
-        self.cache_duration = float_value(self.conf.get('cache_duration'),
-                                          CACHE_DURATION)
-        self.cache_size = int_value(self.conf.get('cache_size'),
-                                    CACHE_SIZE)
+        self.account = self.app_env["account_client"]
+        self.cache_duration = float_value(
+            self.conf.get("cache_duration"), CACHE_DURATION
+        )
+        self.cache_size = int_value(self.conf.get("cache_size"), CACHE_SIZE)
         self.cache = CacheDict(self.cache_size)
         self.check_account = boolean_value(
-            self.conf.get('check_replication_enabled'), False)
+            self.conf.get("check_replication_enabled"), False
+        )
         self.connection_timeout = float_value(
-            self.conf.get('connection_timeout'), CONNECTION_TIMEOUT)
-        self.force_master = boolean_value(
-            self.conf.get('force_master'), False)
-        self.read_timeout = float_value(self.conf.get('read_timeout'),
-                                        READ_TIMEOUT)
+            self.conf.get("connection_timeout"), CONNECTION_TIMEOUT
+        )
+        self.force_master = boolean_value(self.conf.get("force_master"), False)
+        self.read_timeout = float_value(self.conf.get("read_timeout"), READ_TIMEOUT)
 
     def _should_notify(self, account, container):
         if not self.check_account:
             return True
         now = monotonic_time()
-        enabled, last_update = self.cache.get((account, container),
-                                              (None, 0))
+        enabled, last_update = self.cache.get((account, container), (None, 0))
         if now - last_update > self.cache_duration:
             try:
                 ctinfo = self.account.container_show(
-                    account, container, force_master=self.force_master,
+                    account,
+                    container,
+                    force_master=self.force_master,
                     connection_timeout=self.connection_timeout,
                     read_timeout=self.read_timeout,
-                    reqid=request_id('ev-repl-'))
+                    reqid=request_id("ev-repl-"),
+                )
                 enabled = ctinfo.get(BUCKET_PROP_REPLI_ENABLED, False)
                 self.cache[(account, container)] = (enabled, now)
             except Exception:
                 self.logger.exception(
                     "Not updating the cached value %s=%s for %s/%s",
-                    BUCKET_PROP_REPLI_ENABLED, enabled, account, container)
+                    BUCKET_PROP_REPLI_ENABLED,
+                    enabled,
+                    account,
+                    container,
+                )
         return enabled
 
     def should_notify(self, event):
-        if (event.event_type not in self.ALLOWED_EVENT_TYPES or
-                not super(ReplicateFilter, self).should_notify(event)):
+        if event.event_type not in self.ALLOWED_EVENT_TYPES or not super(
+            ReplicateFilter, self
+        ).should_notify(event):
             return False
-        return self._should_notify(event.url.get('account'),
-                                   event.url.get('user'))
+        return self._should_notify(event.url.get("account"), event.url.get("user"))
 
 
 def filter_factory(global_conf, **local_conf):
@@ -87,4 +95,5 @@ def filter_factory(global_conf, **local_conf):
 
     def create_filter(app):
         return ReplicateFilter(app, conf)
+
     return create_filter

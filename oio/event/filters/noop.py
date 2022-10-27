@@ -23,6 +23,7 @@ class NoopFilter(Filter):
 
     Useful if you just want to drop the events.
     """
+
     pass
 
 
@@ -32,4 +33,5 @@ def filter_factory(global_conf, **local_conf):
 
     def noop_filter(app):
         return NoopFilter(app, conf)
+
     return noop_filter

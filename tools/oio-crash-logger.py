@@ -17,9 +17,9 @@ import sys
 from tempfile import NamedTemporaryFile
 from oio.common.logger import get_logger, redirect_stdio
 
-with NamedTemporaryFile(mode='rb', prefix='nolog-') as tmp:
-    LOGGER = get_logger({'log_address': tmp.name})
+with NamedTemporaryFile(mode="rb", prefix="nolog-") as tmp:
+    LOGGER = get_logger({"log_address": tmp.name})
     redirect_stdio(LOGGER)
-    LOGGER.warn('Trying to log something boring.')
+    LOGGER.warn("Trying to log something boring.")
 
 sys.exit(0)

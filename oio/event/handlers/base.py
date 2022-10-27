@@ -35,12 +35,13 @@ class Handler(object):
             res = self.process(event)
             return res(env, beanstalkd, cb)
         except StopServe:
-            self.logger.info('Job %s not handled: the process is stopping',
-                             event.job_id)
-            res = EventError(event=event, body='Process is stopping')
+            self.logger.info(
+                "Job %s not handled: the process is stopping", event.job_id
+            )
+            res = EventError(event=event, body="Process is stopping")
         except Exception as err:
-            self.logger.exception('Job %s not handled: %s', event.job_id, err)
-            res = EventError(event=event, body='An error occurred')
+            self.logger.exception("Job %s not handled: %s", event.job_id, err)
+            res = EventError(event=event, body="An error occurred")
         return res(env, beanstalkd, cb)
 
 

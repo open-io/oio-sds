@@ -31,4 +31,5 @@ def filter_factory(global_conf, **local_conf):
 
     def bury_filter(app):
         return BuryFilter(app, conf)
+
     return bury_filter

@@ -21,19 +21,23 @@ from oio.conscience.checker.base import BaseChecker
 
 
 class HttpChecker(BaseChecker):
-    checker_type = 'http'
+    checker_type = "http"
 
     def _configure(self):
-        for k in ('uri', ):
+        for k in ("uri",):
             if k not in self.checker_conf:
                 raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k)
+                    'Missing field "%s" in configuration' % k
+                )
 
-        self.path = self.checker_conf['uri'].lstrip('/')
-        self.name = '%s|%s' % (self.name, self.path)
-        self.url = '%s:%s%s%s' % (self.host, self.port,
-                                  '' if self.path.startswith('/') else '/',
-                                  self.path)
+        self.path = self.checker_conf["uri"].lstrip("/")
+        self.name = "%s|%s" % (self.name, self.path)
+        self.url = "%s:%s%s%s" % (
+            self.host,
+            self.port,
+            "" if self.path.startswith("/") else "/",
+            self.path,
+        )
 
     def _check(self, reqid=None):
         resp = None
@@ -41,8 +45,7 @@ class HttpChecker(BaseChecker):
             # We have clues that the connection will be reused quickly to get
             # stats, thus we do not explicitly require its closure.
             hdrs = {REQID_HEADER: reqid}
-            resp = self.agent.pool_manager.request("GET", self.url,
-                                                   headers=hdrs)
+            resp = self.agent.pool_manager.request("GET", self.url, headers=hdrs)
             if resp.status == 200:
                 self.last_check_success = True
             else:
@@ -50,8 +53,12 @@ class HttpChecker(BaseChecker):
         except Exception as err:
             # Avoid spamming the logs
             if self.last_check_success:
-                self.logger.warn('ERROR performing %s check (%s): %s',
-                                 self.checker_type, self.url, err)
+                self.logger.warn(
+                    "ERROR performing %s check (%s): %s",
+                    self.checker_type,
+                    self.url,
+                    err,
+                )
             self.last_check_success = False
         finally:
             if resp:
@@ -60,5 +67,5 @@ class HttpChecker(BaseChecker):
                 except urllibexc.HTTPError:
                     pass
             if not self.last_check_success:
-                self.logger.warn('%s check failed', self.name)
+                self.logger.warn("%s check failed", self.name)
             return self.last_check_success

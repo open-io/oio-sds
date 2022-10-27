@@ -27,39 +27,43 @@ from tests.utils import BaseTestCase
 class TestMeta2EventsEmission(BaseTestCase):
     def setUp(self):
         super(TestMeta2EventsEmission, self).setUp()
-        if not self.conf.get('webhook', ''):
-            self.skipTest('webhook is required')
+        if not self.conf.get("webhook", ""):
+            self.skipTest("webhook is required")
 
-        self.acct = 'AccountWebhook%f' % time.time()
-        self.cnt_name = 'TestWebhookEvents%f' % time.time()
-        self.obj_name = 'obj%f' % time.time()
+        self.acct = "AccountWebhook%f" % time.time()
+        self.cnt_name = "TestWebhookEvents%f" % time.time()
+        self.obj_name = "obj%f" % time.time()
         self.storage_api = ObjectStorageApi(self.ns)
         self.pool = get_pool_manager()
         self._clean()
 
     def _get(self, success=True, timeout=2, event_id=None):
-        path = '%s/%s/%s' % (self.acct, self.cnt_name, self.obj_name)
+        path = "%s/%s/%s" % (self.acct, self.cnt_name, self.obj_name)
         start = time.time()
         while time.time() - start < timeout:
-            res = self.pool.request('GET', 'http://127.0.0.1:9081/' + path)
+            res = self.pool.request("GET", "http://127.0.0.1:9081/" + path)
             if success and res.status == 200:
                 obj = json.loads(res.data)
-                if not event_id or event_id < obj['eventId']:
+                if not event_id or event_id < obj["eventId"]:
                     return res, obj
             if not success and res.status == 404:
                 return res, None
 
             time.sleep(0.1)
         # fixme
-        assert("Timeout waiting webhook event")
+        assert "Timeout waiting webhook event"
 
     def _clean(self):
-        self.pool.request('POST', 'http://127.0.0.1:9081/PURGE')
+        self.pool.request("POST", "http://127.0.0.1:9081/PURGE")
 
     def _add(self, data, properties=None):
-        self.storage_api.object_create(self.acct, self.cnt_name,
-                                       data=data, obj_name=self.obj_name,
-                                       properties=properties)
+        self.storage_api.object_create(
+            self.acct,
+            self.cnt_name,
+            data=data,
+            obj_name=self.obj_name,
+            properties=properties,
+        )
         ret, data = self._get()
         self.assertEqual(ret.status, 200)
         return ret, data
@@ -73,34 +77,34 @@ class TestMeta2EventsEmission(BaseTestCase):
     def test_content_add(self):
         content = "XXX"
         ret, data = self._add(content)
-        self.assertEqual(data['data']['account'], self.acct)
-        self.assertEqual(data['data']['container'], self.cnt_name)
-        self.assertEqual(data['data']['name'], self.obj_name)
-        self.assertEqual(data['data']['size'], len(content))
+        self.assertEqual(data["data"]["account"], self.acct)
+        self.assertEqual(data["data"]["container"], self.cnt_name)
+        self.assertEqual(data["data"]["name"], self.obj_name)
+        self.assertEqual(data["data"]["size"], len(content))
 
     def test_content_add_with_metadata(self):
-        properties = {'key1': 'val1'}
+        properties = {"key1": "val1"}
         ret, data = self._add(data="XXX", properties=properties)
-        self.assertEqual(data['data']['account'], self.acct)
-        self.assertEqual(data['data']['container'], self.cnt_name)
-        self.assertEqual(data['data']['name'], self.obj_name)
-        self.assertEqual(data['data']['metadata'], properties)
+        self.assertEqual(data["data"]["account"], self.acct)
+        self.assertEqual(data["data"]["container"], self.cnt_name)
+        self.assertEqual(data["data"]["name"], self.obj_name)
+        self.assertEqual(data["data"]["metadata"], properties)
 
     def test_content_update_metadata(self):
-        properties = {'key1': 'val1'}
+        properties = {"key1": "val1"}
         ret, data = self._add(data="XXX", properties=properties)
-        self.assertEqual(data['data']['metadata'], properties)
+        self.assertEqual(data["data"]["metadata"], properties)
 
-        properties = {'key1': 'NEWVAL'}
+        properties = {"key1": "NEWVAL"}
         self.storage_api.object_set_properties(
-            self.acct, self.cnt_name,
-            self.obj_name, properties)
+            self.acct, self.cnt_name, self.obj_name, properties
+        )
 
-        event_id = data['eventId']
+        event_id = data["eventId"]
         res, data = self._get(event_id=event_id)
         self.assertEqual(res.status, 200)
-        self.assertGreater(data['eventId'], event_id)
-        self.assertEqual(data['data']['metadata'], properties)
+        self.assertGreater(data["eventId"], event_id)
+        self.assertEqual(data["data"]["metadata"], properties)
 
     def test_content_remove(self):
         self._add("XX")

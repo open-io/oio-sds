@@ -23,53 +23,53 @@ from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class Meta2DecommissionTask(XcuteTask):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(Meta2DecommissionTask, self).__init__(
-            conf, job_params, logger=logger, watchdog=watchdog)
+            conf, job_params, logger=logger, watchdog=watchdog
+        )
 
-        self.src = job_params['service_id']
-        self.dst = job_params['dst']
+        self.src = job_params["service_id"]
+        self.dst = job_params["dst"]
 
         self.meta2 = Meta2Database(conf, logger=logger)
 
     def process(self, task_id, task_payload, reqid=None):
-        container_id = task_payload['container_id']
+        container_id = task_payload["container_id"]
 
         moved = self.meta2.move(container_id, self.src, dst=self.dst)
 
         resp = Counter()
 
         for res in moved:
-            if res['err'] is not None:
-                resp['errors'] += 1
+            if res["err"] is not None:
+                resp["errors"] += 1
 
                 continue
 
-            resp['moved_seq'] += 1
-            resp['to.' + res['dst']] += 1
+            resp["moved_seq"] += 1
+            resp["to." + res["dst"]] += 1
 
         return resp
 
 
 class Meta2DecommissionJob(XcuteRdirJob):
-
-    JOB_TYPE = 'meta2-decommission'
+    JOB_TYPE = "meta2-decommission"
     TASK_CLASS = Meta2DecommissionTask
 
     @classmethod
     def sanitize_params(cls, job_params):
-        sanitized_job_params, _ = super(
-            Meta2DecommissionJob, cls).sanitize_params(job_params)
+        sanitized_job_params, _ = super(Meta2DecommissionJob, cls).sanitize_params(
+            job_params
+        )
 
-        src = job_params.get('service_id')
+        src = job_params.get("service_id")
         if not src:
-            raise ValueError('Missing service ID')
-        sanitized_job_params['service_id'] = src
+            raise ValueError("Missing service ID")
+        sanitized_job_params["service_id"] = src
 
-        sanitized_job_params['dst'] = job_params.get('dst')
+        sanitized_job_params["dst"] = job_params.get("dst")
 
-        return sanitized_job_params, 'meta2'
+        return sanitized_job_params, "meta2"
 
     def __init__(self, conf, logger=None):
         super(Meta2DecommissionJob, self).__init__(conf, logger=logger)
@@ -96,15 +96,15 @@ class Meta2DecommissionJob(XcuteRdirJob):
         yield marker, remaining
 
     def _containers_from_rdir(self, job_params, marker):
-        service_id = job_params['service_id']
-        rdir_fetch_limit = job_params['rdir_fetch_limit']
-        rdir_timeout = job_params['rdir_timeout']
+        service_id = job_params["service_id"]
+        rdir_fetch_limit = job_params["rdir_fetch_limit"]
+        rdir_timeout = job_params["rdir_timeout"]
 
         containers = self.rdir_client.meta2_index_fetch_all(
-            service_id, marker=marker, timeout=rdir_timeout,
-            limit=rdir_fetch_limit)
+            service_id, marker=marker, timeout=rdir_timeout, limit=rdir_fetch_limit
+        )
         for container_info in containers:
-            container_url = container_info['container_url']
-            container_id = container_info['container_id']
+            container_url = container_info["container_url"]
+            container_id = container_info["container_id"]
 
             yield container_url, container_id

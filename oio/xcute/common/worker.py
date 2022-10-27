@@ -27,7 +27,6 @@ from oio.xcute.jobs import JOB_TYPES
 
 
 class XcuteWorker(object):
-
     def __init__(self, conf, logger=None, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
@@ -36,48 +35,53 @@ class XcuteWorker(object):
         self.tasks = CacheDict(size=10)
 
     def process(self, beanstalkd_job):
-        job_id = beanstalkd_job['job_id']
-        job_config = beanstalkd_job['job_config']
-        job_params = job_config['params']
+        job_id = beanstalkd_job["job_id"]
+        job_config = beanstalkd_job["job_config"]
+        job_params = job_config["params"]
 
         task = self.tasks.get(job_id)
         if task is not None and task.params_have_changed(job_params):
             task = None
         if task is None:
-            job_type = beanstalkd_job['job_type']
+            job_type = beanstalkd_job["job_type"]
             task_class = JOB_TYPES[job_type].TASK_CLASS
-            task = task_class(self.conf, job_params, logger=self.logger,
-                              watchdog=self.watchdog)
+            task = task_class(
+                self.conf, job_params, logger=self.logger, watchdog=self.watchdog
+            )
             self.tasks[job_id] = task
 
-        tasks_per_second = job_config['tasks_per_second']
-        tasks = beanstalkd_job['tasks']
+        tasks_per_second = job_config["tasks_per_second"]
+        tasks = beanstalkd_job["tasks"]
 
         task_errors = Counter()
         task_results = Counter()
 
         tasks_run_time = 0
         for task_id, task_payload in iteritems(tasks):
-            tasks_run_time = ratelimit(
-                tasks_run_time, tasks_per_second)
+            tasks_run_time = ratelimit(tasks_run_time, tasks_per_second)
 
-            reqid = job_id + request_id('-')
+            reqid = job_id + request_id("-")
             reqid = reqid[:STRLEN_REQID]
             try:
                 task_result = task.process(task_id, task_payload, reqid=reqid)
                 task_results.update(task_result)
             except Exception as exc:
-                self.logger.warning('[job_id=%s] Fail to process task %s: %s',
-                                    job_id, task_id, exc)
+                self.logger.warning(
+                    "[job_id=%s] Fail to process task %s: %s", job_id, task_id, exc
+                )
                 task_errors[type(exc).__name__] += 1
 
-        return job_id, list(tasks.keys()), task_results, task_errors, \
-            beanstalkd_job['beanstalkd_reply']
+        return (
+            job_id,
+            list(tasks.keys()),
+            task_results,
+            task_errors,
+            beanstalkd_job["beanstalkd_reply"],
+        )
 
-    def reply(self, job_id, task_ids, task_results,
-              task_errors, beanstalkd_reply_info):
-        beanstalkd_reply_addr = beanstalkd_reply_info['addr']
-        beanstalkd_reply_tube = beanstalkd_reply_info['tube']
+    def reply(self, job_id, task_ids, task_results, task_errors, beanstalkd_reply_info):
+        beanstalkd_reply_addr = beanstalkd_reply_info["addr"]
+        beanstalkd_reply_tube = beanstalkd_reply_info["tube"]
 
         beanstalkd_reply_info = (beanstalkd_reply_addr, beanstalkd_reply_tube)
         beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
@@ -88,10 +92,12 @@ class XcuteWorker(object):
 
             self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
 
-        reply_payload = json.dumps({
-            'job_id': job_id,
-            'task_ids': task_ids,
-            'task_results': task_results,
-            'task_errors': task_errors,
-        })
+        reply_payload = json.dumps(
+            {
+                "job_id": job_id,
+                "task_ids": task_ids,
+                "task_results": task_results,
+                "task_errors": task_errors,
+            }
+        )
         beanstalkd_reply.put(reply_payload)

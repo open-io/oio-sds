@@ -14,16 +14,19 @@
 
 import unittest
 
-from oio.common.autocontainer import (ContainerBuilder, RegexContainerBuilder,
-                                      HashedContainerBuilder, NoMatchFound)
+from oio.common.autocontainer import (
+    ContainerBuilder,
+    RegexContainerBuilder,
+    HashedContainerBuilder,
+    NoMatchFound,
+)
 
 
 class ContainerBuilderTest(unittest.TestCase):
-
     def test_verify_ok(self):
         builder = ContainerBuilder()
         self.assertTrue(builder.verify("yes"))
-        self.assertTrue(builder.verify(u"yes/"))
+        self.assertTrue(builder.verify("yes/"))
 
     def test_verify_ko(self):
         builder = ContainerBuilder()
@@ -34,7 +37,6 @@ class ContainerBuilderTest(unittest.TestCase):
 
 
 class HashedContainerBuilderTest(unittest.TestCase):
-
     def test_8_bits_length(self):
         builder = HashedContainerBuilder(bits=8)
         self.assertTrue(builder.verify("F0"))
@@ -94,72 +96,80 @@ class HashedContainerBuilderTest(unittest.TestCase):
 
 
 class RegexContainerBuilderTest(unittest.TestCase):
-
     def test_bad_parameters(self):
         self.assertRaises(ValueError, RegexContainerBuilder, None)
         self.assertRaises(ValueError, RegexContainerBuilder, [])
         self.assertRaises(ValueError, RegexContainerBuilder, tuple())
 
     def test_digit_block(self):
-        builder = RegexContainerBuilder(r'(\d+)')
+        builder = RegexContainerBuilder(r"(\d+)")
         self.assertEqual(builder("abc/123/def"), "123")
         self.assertEqual(builder("abc123def"), "123")
         self.assertRaises(NoMatchFound, builder, "abcdef")
 
     def test_concatenated_digits(self):
-        builder = RegexContainerBuilder(r'(\d+)/(\d+)/(\d+)')
-        self.assertEqual(builder(
-            "previews/images/591/384/697/normal/idirlgfdh.jpg?1502312379"),
-            "591384697")
-        self.assertEqual(builder(
-            "previews/images/59/38/69/normal/idirlgfdh.jpg?1502312379"),
-            "593869")
+        builder = RegexContainerBuilder(r"(\d+)/(\d+)/(\d+)")
+        self.assertEqual(
+            builder("previews/images/591/384/697/normal/idirlgfdh.jpg?1502312379"),
+            "591384697",
+        )
+        self.assertEqual(
+            builder("previews/images/59/38/69/normal/idirlgfdh.jpg?1502312379"),
+            "593869",
+        )
         self.assertRaises(
-            NoMatchFound, builder,
-            "previews/images/normal/idirlgfdh.jpg?1502312379")
+            NoMatchFound, builder, "previews/images/normal/idirlgfdh.jpg?1502312379"
+        )
 
     def test_several_regex(self):
-        builder = RegexContainerBuilder((r'(\d+)/(\d+)/\d+/original',
-                                         r'(\d+)/(\d+)/(\d+)/normal'))
-        self.assertEqual(builder(
-            "previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
-            "591384")
-        self.assertEqual(builder(
-            "previews/images/591/384/697/normal/idirlgfdh.jpg?1502312379"),
-            "591384697")
+        builder = RegexContainerBuilder(
+            (r"(\d+)/(\d+)/\d+/original", r"(\d+)/(\d+)/(\d+)/normal")
+        )
+        self.assertEqual(
+            builder("previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
+            "591384",
+        )
+        self.assertEqual(
+            builder("previews/images/591/384/697/normal/idirlgfdh.jpg?1502312379"),
+            "591384697",
+        )
         self.assertRaises(
-            NoMatchFound, builder,
-            "previews/images/591/384/697/medium/idirlgfdh.jpg?1502312379")
+            NoMatchFound,
+            builder,
+            "previews/images/591/384/697/medium/idirlgfdh.jpg?1502312379",
+        )
 
     def test_prefix_container(self):
-        builder = RegexContainerBuilder((r'^([^/]*/[^/]*/).*', ))
-        self.assertEqual(builder(
-            "previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
-            "previews/images/")
+        builder = RegexContainerBuilder((r"^([^/]*/[^/]*/).*",))
+        self.assertEqual(
+            builder("previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
+            "previews/images/",
+        )
 
     def test_wildcard_fallback(self):
-        builder = RegexContainerBuilder((r'(\d+)/(\d+)/\d+/',
-                                         r'^([^/]+/)',
-                                         r'^(.{1,10})'))
-        self.assertEqual(builder(
-            "previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
-            "591384")
-        self.assertEqual(builder(
-            "previews/images/normal/idirlgfdh.jpg?1502312379"),
-            "previews/")
-        self.assertEqual(builder(
-            "91d44c2637e476a3862a5ded7fd55ef053364916.png"),
-            "91d44c2637")
-        self.assertEqual(builder(
-            "91d44"),
-            "91d44")
+        builder = RegexContainerBuilder(
+            (r"(\d+)/(\d+)/\d+/", r"^([^/]+/)", r"^(.{1,10})")
+        )
+        self.assertEqual(
+            builder("previews/images/591/384/697/original/idirlgfdh.jpg?1502312379"),
+            "591384",
+        )
+        self.assertEqual(
+            builder("previews/images/normal/idirlgfdh.jpg?1502312379"), "previews/"
+        )
+        self.assertEqual(
+            builder("91d44c2637e476a3862a5ded7fd55ef053364916.png"), "91d44c2637"
+        )
+        self.assertEqual(builder("91d44"), "91d44")
 
     def test_alternatives(self):
-        builder = RegexContainerBuilder((
-            r'(\d+)/(\d+)/\d+/',
-            r'^(.+)/.*?([0-9A-Fa-f]{2})(?=[0-9A-Fa-f]{6})',
-            r'^(.*)/')
+        builder = RegexContainerBuilder(
+            (
+                r"(\d+)/(\d+)/\d+/",
+                r"^(.+)/.*?([0-9A-Fa-f]{2})(?=[0-9A-Fa-f]{6})",
+                r"^(.*)/",
+            )
         )
-        gen = builder.alternatives('cloud-images/img-01234567')
+        gen = builder.alternatives("cloud-images/img-01234567")
         names = [x for x in gen]
-        self.assertListEqual(['cloud-images01', 'cloud-images'], names)
+        self.assertListEqual(["cloud-images01", "cloud-images"], names)

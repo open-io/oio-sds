@@ -23,7 +23,6 @@ from oio.event.filters.base import Filter
 
 
 class NotifyFilter(Filter):
-
     @staticmethod
     def _parse_exclude(array):
         """
@@ -33,11 +32,11 @@ class NotifyFilter(Filter):
         empty list means that everything is accepted
         """
         if isinstance(array, string_types):
-            array = array.split(',')
+            array = array.split(",")
         exclude = dict()
         for elt in array:
-            if '/' in elt:
-                acct, cnt = elt.split('/', 1)
+            if "/" in elt:
+                acct, cnt = elt.split("/", 1)
                 acct = unquote(acct)
                 cnt = unquote(cnt)
                 if exclude.get(acct, None):
@@ -63,17 +62,17 @@ class NotifyFilter(Filter):
     def should_notify(self, event):
         # Some events do not have a URL (e.g. chunk events),
         # we cannot filter them easily, so we let them pass.
-        return not event.url or self._should_notify(event.url.get('account'),
-                                                    event.url.get('user'))
+        return not event.url or self._should_notify(
+            event.url.get("account"), event.url.get("user")
+        )
 
     def init(self):
-        queue_url = self.conf.get('queue_url')
-        self.exclude = self._parse_exclude(
-            self.conf.get('exclude', []))
+        queue_url = self.conf.get("queue_url")
+        self.exclude = self._parse_exclude(self.conf.get("exclude", []))
         if not queue_url:
             raise ValueError("Missing 'queue_url' in the configuration")
         self.beanstalk = Beanstalk.from_url(queue_url)
-        self.tube = self.conf.get('tube', 'notif')
+        self.tube = self.conf.get("tube", "notif")
         self.beanstalk.use(self.tube)
 
     def process(self, env, beanstalkd, cb):
@@ -82,11 +81,10 @@ class NotifyFilter(Filter):
             try:
                 # Encode without whitespace to make sure not
                 # to exceed the maximum size of the event (default: 65535)
-                data = json.dumps(env,
-                                  separators=(',', ':'))  # compact encoding
+                data = json.dumps(env, separators=(",", ":"))  # compact encoding
                 self.beanstalk.put(data)
             except BeanstalkError as err:
-                msg = 'notify failure: %s' % str(err)
+                msg = "notify failure: %s" % str(err)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, beanstalkd, cb)
 
@@ -99,4 +97,5 @@ def filter_factory(global_conf, **local_conf):
 
     def except_filter(app):
         return NotifyFilter(app, conf)
+
     return except_filter

@@ -19,58 +19,61 @@
 from __future__ import print_function
 
 from tests.utils import BaseTestCase
-from tests.utils import CODE_SRVTYPE_NOTMANAGED, CODE_POLICY_NOT_SATISFIABLE, \
-    CODE_POLICY_NOT_SUPPORTED
+from tests.utils import (
+    CODE_SRVTYPE_NOTMANAGED,
+    CODE_POLICY_NOT_SATISFIABLE,
+    CODE_POLICY_NOT_SUPPORTED,
+)
 
 
 class BaseLbTest(BaseTestCase):
-
     def fill_slots(self, slots, count=1, lowport=7000):
         for num in range(count):
-            srvin = self._srv('echo',
-                              extra_tags={"tag.slots": ','.join(slots)},
-                              lowport=lowport+num,
-                              highport=lowport+num)
+            srvin = self._srv(
+                "echo",
+                extra_tags={"tag.slots": ",".join(slots)},
+                lowport=lowport + num,
+                highport=lowport + num,
+            )
             self._lock_srv(srvin)
 
     def fill_sameport(self, count=1):
         for num in range(count):
-            srvin = self._srv('echo', lowport=7000, highport=7000,
-                              ip='127.0.0.%d' % (2+num))
+            srvin = self._srv(
+                "echo", lowport=7000, highport=7000, ip="127.0.0.%d" % (2 + num)
+            )
             self._lock_srv(srvin)
 
 
 class TestLbChoose(BaseLbTest):
-
     def test_choose_1(self):
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'rawx'})
+        resp = self.request("GET", self._url_lb("choose"), params={"type": "rawx"})
         self.assertEqual(resp.status, 200)
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertIsInstance(parsed[0], dict)
-        resp = self.request('GET', self._url_lb('nothing'),
-                            params={'type': 'rawx'})
+        resp = self.request("GET", self._url_lb("nothing"), params={"type": "rawx"})
         self.assertError(resp, 404, 404)
 
     def test_choose_2(self):
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'rawx', 'size': 2})
+        resp = self.request(
+            "GET", self._url_lb("choose"), params={"type": "rawx", "size": 2}
+        )
         self.assertEqual(resp.status, 200)
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(2, len(parsed))
 
     def test_choose_too_much(self):
-        if len(self.conf['services']['rawx']) >= 10000:
+        if len(self.conf["services"]["rawx"]) >= 10000:
             self.skipTest("need less than 10000 rawx to run")
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'rawx', 'size': 10000})
+        resp = self.request(
+            "GET", self._url_lb("choose"), params={"type": "rawx", "size": 10000}
+        )
         self.assertError(resp, 503, CODE_POLICY_NOT_SATISFIABLE)
 
     def test_choose_wrong_type(self):
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'rowix'})
+        resp = self.request("GET", self._url_lb("choose"), params={"type": "rowix"})
         self.assertError(resp, 404, CODE_SRVTYPE_NOTMANAGED)
 
     def test_choose_1_slot(self):
@@ -78,23 +81,25 @@ class TestLbChoose(BaseLbTest):
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
         self._reload()
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'echo', 'slot': 'fast'})
+        resp = self.request(
+            "GET", self._url_lb("choose"), params={"type": "echo", "slot": "fast"}
+        )
         self.assertEqual(resp.status, 200)
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(1, len(parsed))
-        self.assertGreaterEqual(int(parsed[0]["addr"].split(':')[1]), 8000)
+        self.assertGreaterEqual(int(parsed[0]["addr"].split(":")[1]), 8000)
 
     def test_choose_4_slot(self):
         self._reload()
         self.fill_slots(["fast"], 3, 8000)
         self.fill_slots(["slow"], 3, 7000)
         self._reload()
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'echo',
-                                    'slot': 'fast',
-                                    'size': 4})
+        resp = self.request(
+            "GET",
+            self._url_lb("choose"),
+            params={"type": "echo", "slot": "fast", "size": 4},
+        )
         self.assertEqual(resp.status, 200)
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
@@ -102,7 +107,7 @@ class TestLbChoose(BaseLbTest):
         fast_count = 0
         slow_count = 0
         for element in parsed:
-            if int(element['addr'].split(':')[1]) >= 8000:
+            if int(element["addr"].split(":")[1]) >= 8000:
                 fast_count += 1
             else:
                 slow_count += 1
@@ -122,8 +127,9 @@ class TestLbChoose(BaseLbTest):
         self._reload()
         self.fill_sameport(3)
         self._reload()
-        resp = self.request('GET', self._url_lb('choose'),
-                            params={'type': 'echo', 'size': 3})
+        resp = self.request(
+            "GET", self._url_lb("choose"), params={"type": "echo", "size": 3}
+        )
         if resp.status != 200:
             print(self.json_loads(resp.data))
             self.assertEqual(resp.status, 200)
@@ -133,15 +139,14 @@ class TestLbChoose(BaseLbTest):
 
 
 class TestLbPoll(BaseLbTest):
-
     def test_poll_invalid(self):
-        resp = self.request('POST', self._url_lb('poll'),
-                            params={'policy': 'invalid'})
+        resp = self.request("POST", self._url_lb("poll"), params={"policy": "invalid"})
         self.assertError(resp, 400, CODE_POLICY_NOT_SUPPORTED)
 
     def _test_poll_policy(self, pol_name, count, json=None):
-        resp = self.request('POST', self._url_lb('poll'),
-                            params={'policy': pol_name}, json=json)
+        resp = self.request(
+            "POST", self._url_lb("poll"), params={"policy": pol_name}, json=json
+        )
         parsed = self.json_loads(resp.data)
         self.assertEqual(resp.status, 200)
         self.assertIsInstance(parsed, list)
@@ -150,42 +155,41 @@ class TestLbPoll(BaseLbTest):
         return parsed
 
     def test_poll_single(self):
-        self._test_poll_policy('SINGLE', 1)
+        self._test_poll_policy("SINGLE", 1)
 
     def test_poll_threecopies(self):
-        if len(self.conf['services']['rawx']) < 3:
+        if len(self.conf["services"]["rawx"]) < 3:
             self.skipTest("need at least 3 rawx to run")
-        self._test_poll_policy('THREECOPIES', 3)
+        self._test_poll_policy("THREECOPIES", 3)
 
     def test_poll_ec(self):
-        if len(self.conf['services']['rawx']) < 9:
+        if len(self.conf["services"]["rawx"]) < 9:
             self.skipTest("need at least 9 rawx to run")
-        self._test_poll_policy('EC', 9)
+        self._test_poll_policy("EC", 9)
 
     def test_poll_ec_avoid(self):
-        if len(self.conf['services']['rawx']) < 10:
+        if len(self.conf["services"]["rawx"]) < 10:
             self.skipTest("need at least 10 rawx to run")
-        svcs = self._test_poll_policy('EC', 9)
+        svcs = self._test_poll_policy("EC", 9)
         excluded_id = svcs[0]["id"]
         data = {"avoid": [str(excluded_id)]}
-        svcs2 = self._test_poll_policy('EC', 9, data)
-        self.assertNotIn(excluded_id,
-                         (svc["id"] for svc in svcs2))
+        svcs2 = self._test_poll_policy("EC", 9, data)
+        self.assertNotIn(excluded_id, (svc["id"] for svc in svcs2))
 
     def test_poll_ec_known_1(self):
-        if len(self.conf['services']['rawx']) < 9:
+        if len(self.conf["services"]["rawx"]) < 9:
             self.skipTest("need at least 9 rawx to run")
-        svcs = self._test_poll_policy('EC', 9)
+        svcs = self._test_poll_policy("EC", 9)
         known_id = svcs[0]["id"]
         data = {"known": [str(known_id)]}
-        svcs2 = self._test_poll_policy('EC', 8, data)
+        svcs2 = self._test_poll_policy("EC", 8, data)
         self.assertNotIn(known_id, (svc["id"] for svc in svcs2))
 
     def test_poll_ec_known_5(self):
-        if len(self.conf['services']['rawx']) < 9:
+        if len(self.conf["services"]["rawx"]) < 9:
             self.skipTest("need at least 9 rawx to run")
-        svcs = self._test_poll_policy('EC', 9)
+        svcs = self._test_poll_policy("EC", 9)
         known_ids = [str(svcs[i]["id"]) for i in range(5)]
         data = {"known": known_ids}
-        svcs2 = self._test_poll_policy('EC', 4, data)
+        svcs2 = self._test_poll_policy("EC", 4, data)
         self.assertNotIn(known_ids, (svc["id"] for svc in svcs2))

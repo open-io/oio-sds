@@ -67,23 +67,24 @@ class Meta2IndexingWorker(object):
         self.last_index_time = 0
         self.start_time = 0
         self.indexed_since_last_report = 0
-        self.scans_interval = int_value(
-            conf.get('interval'), 1800)
-        self.report_interval = int_value(
-            conf.get('report_interval'), 300)
-        self.max_indexed_per_second = int_value(
-            conf.get('scanned_per_second'), 3000)
+        self.scans_interval = int_value(conf.get("interval"), 1800)
+        self.report_interval = int_value(conf.get("report_interval"), 300)
+        self.max_indexed_per_second = int_value(conf.get("scanned_per_second"), 3000)
         self.namespace, self.volume_id = check_volume_for_service_type(
-            self.volume, "meta2")
+            self.volume, "meta2"
+        )
         self.attempt_bad_index_removal = boolean_value(
-            conf.get('try_removing_faulty_indexes'), False)
+            conf.get("try_removing_faulty_indexes"), False
+        )
 
         if not pool_manager:
             pool_manager = get_pool_manager(pool_connections=10)
-        self.index_client = RdirClient(conf, logger=self.logger,
-                                       pool_manager=pool_manager)
-        self.dir_client = DirectoryClient(conf, logger=self.logger,
-                                          pool_manager=pool_manager)
+        self.index_client = RdirClient(
+            conf, logger=self.logger, pool_manager=pool_manager
+        )
+        self.dir_client = DirectoryClient(
+            conf, logger=self.logger, pool_manager=pool_manager
+        )
 
     def report(self, tag):
         """
@@ -96,34 +97,29 @@ class Meta2IndexingWorker(object):
         elapsed = (now - self.start_time) or 0.00001
         since_last_rprt = (now - self.last_report_time) or 0.00001
         self.logger.info(
-            'volume_id=%(volume_id)s %(tag)s=%(current_time)s '
-            'elapsed=%(elapsed).02f '
-            'pass=%(pass)d '
-            'errors=%(errors)d '
-            'containers_indexed=%(total_indexed)d %(index_rate).2f/s',
+            "volume_id=%(volume_id)s %(tag)s=%(current_time)s "
+            "elapsed=%(elapsed).02f "
+            "pass=%(pass)d "
+            "errors=%(errors)d "
+            "containers_indexed=%(total_indexed)d %(index_rate).2f/s",
             {
-                'volume_id': self.volume_id,
-                'tag': tag,
-                'current_time': datetime.fromtimestamp(
-                    int(now)).isoformat(),
-                'pass': self.full_scan_nb,
-                'errors': self.failed_nb,
-                'total_indexed': total,
-                'index_rate': self.indexed_since_last_report / since_last_rprt,
-                'elapsed': elapsed
-            }
+                "volume_id": self.volume_id,
+                "tag": tag,
+                "current_time": datetime.fromtimestamp(int(now)).isoformat(),
+                "pass": self.full_scan_nb,
+                "errors": self.failed_nb,
+                "total_indexed": total,
+                "index_rate": self.indexed_since_last_report / since_last_rprt,
+                "elapsed": elapsed,
+            },
         )
         self.last_report_time = now
         self.indexed_since_last_report = 0
 
     def warn(self, msg, container_id):
         self.logger.warn(
-            'volume_id=%(volume_id)s container_id=%(container_id)s %(error)s',
-            {
-                'volume_id': self.volume_id,
-                'container_id': container_id,
-                'error': msg
-            }
+            "volume_id=%(volume_id)s container_id=%(container_id)s %(error)s",
+            {"volume_id": self.volume_id, "container_id": container_id, "error": msg},
         )
 
     def _attempt_index_removal(self, db_path, cid):
@@ -135,8 +131,9 @@ class Meta2IndexingWorker(object):
         except exc.OioException as exception:
             self.warn(
                 container_id=cid,
-                msg="Unable to remove database from the volume "
-                    "index : {0}".format(str(exception))
+                msg="Unable to remove database from the volume index : {0}".format(
+                    str(exception)
+                ),
             )
 
     def index_meta2_database(self, db_id):
@@ -147,40 +144,44 @@ class Meta2IndexingWorker(object):
         :param db_id: The ContentID representing the reference to the database.
         """
         if len(db_id) < STRLEN_REFERENCEID:
-            self.warn('Not a valid container ID', db_id)
+            self.warn("Not a valid container ID", db_id)
             return
         try:
             srvcs = self.dir_client.list(cid=db_id)
-            account, container = srvcs['account'], srvcs['name']
-            is_peer = self.volume_id in [x['host'] for x in srvcs['srv'] if
-                                         x['type'] == 'meta2']
+            account, container = srvcs["account"], srvcs["name"]
+            is_peer = self.volume_id in [
+                x["host"] for x in srvcs["srv"] if x["type"] == "meta2"
+            ]
 
             container_id = db_id.rsplit(".")[0]
 
             if six.PY2:
                 if isinstance(account, six.text_type):
-                    account = account.encode('utf-8')
+                    account = account.encode("utf-8")
                 if isinstance(container, six.text_type):
-                    container = container.encode('utf-8')
+                    container = container.encode("utf-8")
             cont_url = "{0}/{1}/{2}".format(self.namespace, account, container)
 
             if not is_peer:
-                self.warn("Trying to index a container that isn't handled by"
-                          "this volume", db_id)
+                self.warn(
+                    "Trying to index a container that isn't handled bythis volume",
+                    db_id,
+                )
                 if self.attempt_bad_index_removal:
                     self._attempt_index_removal(cont_url, container_id)
                 return
 
-            self.index_client.meta2_index_push(volume_id=self.volume_id,
-                                               container_url=cont_url,
-                                               mtime=time.time(),
-                                               container_id=container_id)
+            self.index_client.meta2_index_push(
+                volume_id=self.volume_id,
+                container_url=cont_url,
+                mtime=time.time(),
+                container_id=container_id,
+            )
 
             self.success_nb += 1
         except exc.OioException as exception:
             self.failed_nb += 1
-            self.warn("Unable to to index container: %s" % str(exception),
-                      db_id)
+            self.warn("Unable to to index container: %s" % str(exception), db_id)
 
         self.indexed_since_last_report += 1
 
@@ -198,7 +199,6 @@ class Meta2IndexingWorker(object):
         self.report("starting")
 
         for db_path in paths:
-
             # Graceful exit, hopefully
             if self._stop:
                 break
@@ -213,8 +213,7 @@ class Meta2IndexingWorker(object):
             self.index_meta2_database(db_id)
 
             self.last_index_time = ratelimit(
-                self.last_index_time,
-                self.max_indexed_per_second
+                self.last_index_time, self.max_indexed_per_second
             )
 
             now = time.time()
@@ -234,8 +233,7 @@ class Meta2IndexingWorker(object):
                 self.last_scan_time = time.time()
                 time.sleep(self.scans_interval)
             except exc.OioException as exception:
-                self.logger.exception("ERROR during indexing meta2: %s",
-                                      exception)
+                self.logger.exception("ERROR during indexing meta2: %s", exception)
 
     def stop(self):
         """
@@ -255,10 +253,9 @@ class Meta2Indexer(Daemon):
         self.logger = get_logger(conf)
         if not conf.get("volume_list"):
             raise exc.OioException("No meta2 volumes provided to index !")
-        self.volumes = [x.strip() for x in conf.get('volume_list').split(',')]
+        self.volumes = [x.strip() for x in conf.get("volume_list").split(",")]
         self.pool = ContextPool(len(self.volumes))
-        self.volume_workers = [Meta2IndexingWorker(x, conf) for x in
-                               self.volumes]
+        self.volume_workers = [Meta2IndexingWorker(x, conf) for x in self.volumes]
 
     def run(self, *args, **kwargs):
         for worker in self.volume_workers:

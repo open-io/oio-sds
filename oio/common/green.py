@@ -24,15 +24,19 @@ from datetime import datetime, timedelta
 
 from six import string_types
 
-import eventlet.hubs as eventlet_hubs # noqa
-from eventlet import sleep, patcher, greenthread # noqa
-from eventlet import Queue, Timeout, GreenPile, GreenPool # noqa
-from eventlet.green import thread, threading, socket # noqa
-from eventlet.event import Event # noqa
-from eventlet.green.httplib import (HTTPConnection, HTTPSConnection, # noqa
-    HTTPResponse, _UNKNOWN) # noqa
-from eventlet.queue import Empty, LifoQueue, LightQueue # noqa
-from eventlet.semaphore import Semaphore # noqa
+import eventlet.hubs as eventlet_hubs  # noqa
+from eventlet import sleep, patcher, greenthread  # noqa
+from eventlet import Queue, Timeout, GreenPile, GreenPool  # noqa
+from eventlet.green import thread, threading, socket  # noqa
+from eventlet.event import Event  # noqa
+from eventlet.green.httplib import (  # noqa
+    HTTPConnection,
+    HTTPSConnection,
+    HTTPResponse,
+    _UNKNOWN,
+)
+from eventlet.queue import Empty, LifoQueue, LightQueue  # noqa
+from eventlet.semaphore import Semaphore  # noqa
 
 
 def eventlet_monkey_patch():
@@ -47,27 +51,29 @@ logging._lock = logging.threading.RLock()
 class OioTimeout(Timeout):
     """Wrapper over eventlet.Timeout with better __str__."""
 
-    msg_prefix = ''
+    msg_prefix = ""
 
     def __str__(self):
-        return "%stimeout %s" % (self.__class__.msg_prefix,
-                                 super(OioTimeout, self).__str__())
+        return "%stimeout %s" % (
+            self.__class__.msg_prefix,
+            super(OioTimeout, self).__str__(),
+        )
 
 
 class ConnectionTimeout(OioTimeout):
-    msg_prefix = 'Connection '
+    msg_prefix = "Connection "
 
 
 class SourceReadTimeout(OioTimeout):
-    msg_prefix = 'Source read '
+    msg_prefix = "Source read "
 
 
 class ChunkWriteTimeout(OioTimeout):
-    msg_prefix = 'Chunk write '
+    msg_prefix = "Chunk write "
 
 
 class ChunkReadTimeout(OioTimeout):
-    msg_prefix = 'Chunk read '
+    msg_prefix = "Chunk read "
 
 
 def eventlet_yield():
@@ -76,7 +82,7 @@ def eventlet_yield():
 
 
 def get_hub():
-    return 'poll'
+    return "poll"
 
 
 def ratelimit(run_time, max_rate, increment=1, rate_buffer=5, time_time=None):
@@ -120,20 +126,20 @@ def ratelimit_validate_policy(policy):
     :raises: `ValueError` if one of the rules is not respected.
     """
     if not policy:
-        raise ValueError('Policy must contain at least one rate')
+        raise ValueError("Policy must contain at least one rate")
 
     min_time = timedelta(0)
     max_time = timedelta(hours=24)
 
     for entry in policy:
         if len(entry) < 2:
-            raise ValueError('Ratelimit entries must be 2-tuples')
+            raise ValueError("Ratelimit entries must be 2-tuples")
         if entry[0] < min_time:
-            raise ValueError('Start time cannot be negative')
+            raise ValueError("Start time cannot be negative")
         if entry[0] >= max_time:
-            raise ValueError('Start time cannot be more than 24 hours')
+            raise ValueError("Start time cannot be more than 24 hours")
         if entry[1] < 0:
-            raise ValueError('Rate must be zero or positive')
+            raise ValueError("Rate must be zero or positive")
 
     policy.sort()
     return True
@@ -198,25 +204,23 @@ def ratelimit_policy_from_string(policy_str):
     :rtype: `list` of 2-tuples with a `datetime.timedelta` and an integer.
     """
     policy = list()
-    if ';' not in policy_str:
+    if ";" not in policy_str:
         try:
             td = timedelta(0)
             rate = int(policy_str)
         except ValueError as err:
-            raise ValueError("Unparseable rate limit '%s': %s" %
-                             (policy_str, err))
+            raise ValueError("Unparseable rate limit '%s': %s" % (policy_str, err))
         policy.append((td, rate))
         return policy
-    changes = policy_str.split(';')
+    changes = policy_str.split(";")
     for change in changes:
         try:
-            time_str, rate_str = change.split(':', 1)
-            hour_str, min_str = time_str.split('h', 1)
+            time_str, rate_str = change.split(":", 1)
+            hour_str, min_str = time_str.split("h", 1)
             td = timedelta(hours=int(hour_str), minutes=int(min_str))
             rate = int(rate_str)
         except ValueError as err:
-            raise ValueError("Unparseable rate change '%s': %s" %
-                             (change, err))
+            raise ValueError("Unparseable rate change '%s': %s" % (change, err))
         policy.append((td, rate))
     policy.sort()
     return policy
@@ -244,13 +248,15 @@ def ratelimit_function_build(policy):
         time_time = time.time()
         curr_date = datetime.fromtimestamp(time_time)
 
-        return ratelimit(run_time,
-                         ratelimit_function_curr_rate(
-                             curr_date=curr_date,
-                             policy=_ratelimiter.policy),
-                         increment,
-                         rate_buffer,
-                         time_time)
+        return ratelimit(
+            run_time,
+            ratelimit_function_curr_rate(
+                curr_date=curr_date, policy=_ratelimiter.policy
+            ),
+            increment,
+            rate_buffer,
+            time_time,
+        )
 
     _ratelimiter.policy = policy
 
@@ -319,8 +325,7 @@ except ImportError:
             self._timeouts[key] = timeout_definition
             # Wake up the watchdog loop only when there is a new shorter
             # timeout
-            if (self._next_expiration is None
-                    or self._next_expiration > timeout_at):
+            if self._next_expiration is None or self._next_expiration > timeout_at:
                 # There could be concurrency on .send(), so wrap it in a try
                 try:
                     if not self._evt.ready():
@@ -336,7 +341,7 @@ except ImportError:
             """
             try:
                 if key in self._timeouts:
-                    del(self._timeouts[key])
+                    del self._timeouts[key]
             except KeyError:
                 pass
 
@@ -360,16 +365,14 @@ except ImportError:
                 if to_at <= now:
                     try:
                         if k in self._timeouts:
-                            del(self._timeouts[k])
+                            del self._timeouts[k]
                     except KeyError:
                         pass
                     e = exc()
                     e.seconds = timeout
-                    eventlet.hubs.get_hub().schedule_call_global(
-                        0, gth.throw, e)
+                    eventlet.hubs.get_hub().schedule_call_global(0, gth.throw, e)
                 else:
-                    if (self._next_expiration is None
-                            or self._next_expiration > to_at):
+                    if self._next_expiration is None or self._next_expiration > to_at:
                         self._next_expiration = to_at
             if self._next_expiration is None:
                 sleep_duration = self._next_expiration
@@ -381,6 +384,7 @@ except ImportError:
         """
         Context manager to schedule a timeout in a Watchdog instance
         """
+
         def __init__(self, watchdog, timeout, exc, timeout_at=None):
             """
             Schedule a timeout in a Watchdog instance
@@ -414,10 +418,12 @@ def get_watchdog(called_from_main_application=False):
     Watchdog instance (e.g. swift).
     """
     if not called_from_main_application:
-        warnings.simplefilter('once')
-        warnings.warn("Calling get_watchdog() is a bad idea. The watchdog "
-                      "instance should be passed as parameter.",
-                      stacklevel=2)
+        warnings.simplefilter("once")
+        warnings.warn(
+            "Calling get_watchdog() is a bad idea. The watchdog "
+            "instance should be passed as parameter.",
+            stacklevel=2,
+        )
     global __WATCHDOG
     if __WATCHDOG is None:
         __WATCHDOG = Watchdog()

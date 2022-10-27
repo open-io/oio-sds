@@ -34,25 +34,24 @@ class MyTCPServer(SocketServer.TCPServer):
 
 
 class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
-
     def do_POST(self):
         global DATA
 
-        if self.path == '/PURGE':
+        if self.path == "/PURGE":
             DATA = {}
             self.send_response(200)
             self.end_headers()
             return
 
-        content_len = int(self.headers.get('content-length', 0))
+        content_len = int(self.headers.get("content-length", 0))
         body = json.loads(self.rfile.read(content_len))
 
-        name = '/'.join([body['data']['account'], body['data']['container'],
-                         body['data']['name']])
-        if body['eventType'] in ('storage.content.new',
-                                 'storage.content.update'):
+        name = "/".join(
+            [body["data"]["account"], body["data"]["container"], body["data"]["name"]]
+        )
+        if body["eventType"] in ("storage.content.new", "storage.content.update"):
             DATA[name] = body
-        elif body['eventType'] == 'storage.content.deleted':
+        elif body["eventType"] == "storage.content.deleted":
             if name in DATA:
                 del DATA[name]
         else:
@@ -64,17 +63,17 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        path = self.path.strip('/')
+        path = self.path.strip("/")
 
         if not path:
             data = json.dumps(DATA.keys())
         else:
-            data = DATA.get(self.path.strip('/'), None)
+            data = DATA.get(self.path.strip("/"), None)
 
         if data:
-            body = json.dumps(data).encode('utf-8')
+            body = json.dumps(data).encode("utf-8")
             self.send_response(200)
-            self.send_header('Content-Length', len(body))
+            self.send_header("Content-Length", len(body))
             self.end_headers()
             self.wfile.write(body)
         else:
@@ -84,9 +83,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 def options():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--port", type=int, default=PORT,
-        help="Port to listen")
+    parser.add_argument("--port", type=int, default=PORT, help="Port to listen")
     return parser.parse_args()
 
 

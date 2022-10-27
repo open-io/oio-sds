@@ -21,25 +21,17 @@ from oio.common.logger import get_logger
 class XcuteJobStatus(object):
     """Enum class for job type names."""
 
-    ON_HOLD = 'ON_HOLD'
-    WAITING = 'WAITING'
-    RUNNING = 'RUNNING'
-    PAUSED = 'PAUSED'
-    FAILED = 'FAILED'
-    FINISHED = 'FINISHED'
+    ON_HOLD = "ON_HOLD"
+    WAITING = "WAITING"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    FAILED = "FAILED"
+    FINISHED = "FINISHED"
 
-    ALL = (
-        ON_HOLD,
-        WAITING,
-        RUNNING,
-        PAUSED,
-        FAILED,
-        FINISHED
-    )
+    ALL = (ON_HOLD, WAITING, RUNNING, PAUSED, FAILED, FINISHED)
 
 
 class XcuteTask(object):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         self.conf = conf
         self.job_params = job_params
@@ -54,7 +46,6 @@ class XcuteTask(object):
 
 
 class XcuteJob(object):
-
     JOB_TYPE = None
     TASK_CLASS = None
 
@@ -68,44 +59,44 @@ class XcuteJob(object):
     @classmethod
     def sanitize_config(cls, job_config):
         """
-            Validate and sanitize the job configuration
-            Ex: cast a string as integer, set a default
-            Also return the lock id if there is one
+        Validate and sanitize the job configuration
+        Ex: cast a string as integer, set a default
+        Also return the lock id if there is one
         """
         sanitized_job_config = dict()
 
         tasks_per_second = int_value(
-            job_config.get('tasks_per_second'),
-            cls.DEFAULT_TASKS_PER_SECOND)
-        sanitized_job_config['tasks_per_second'] = tasks_per_second
+            job_config.get("tasks_per_second"), cls.DEFAULT_TASKS_PER_SECOND
+        )
+        sanitized_job_config["tasks_per_second"] = tasks_per_second
 
-        tasks_batch_size = int_value(
-            job_config.get('tasks_batch_size'), None)
+        tasks_batch_size = int_value(job_config.get("tasks_batch_size"), None)
         if tasks_batch_size is None:
             if tasks_per_second > 0:
-                tasks_batch_size = min(
-                    tasks_per_second, cls.MAX_TASKS_BATCH_SIZE)
+                tasks_batch_size = min(tasks_per_second, cls.MAX_TASKS_BATCH_SIZE)
             else:
                 tasks_batch_size = cls.MAX_TASKS_BATCH_SIZE
         elif tasks_batch_size < 1:
-            raise ValueError('Tasks batch size should be positive')
+            raise ValueError("Tasks batch size should be positive")
         elif tasks_batch_size > cls.MAX_TASKS_BATCH_SIZE:
-            raise ValueError('Tasks batch size should be less than %d' %
-                             cls.MAX_TASKS_BATCH_SIZE)
-        sanitized_job_config['tasks_batch_size'] = tasks_batch_size
+            raise ValueError(
+                "Tasks batch size should be less than %d" % cls.MAX_TASKS_BATCH_SIZE
+            )
+        sanitized_job_config["tasks_batch_size"] = tasks_batch_size
 
         sanitized_job_params, lock = cls.sanitize_params(
-            job_config.get('params') or dict())
-        sanitized_job_config['params'] = sanitized_job_params
+            job_config.get("params") or dict()
+        )
+        sanitized_job_config["params"] = sanitized_job_params
 
         return sanitized_job_config, lock
 
     @classmethod
     def sanitize_params(cls, job_params):
         """
-            Validate and sanitize the job parameters
-            Ex: cast a string as integer, set a default
-            Also return the lock id if there is one
+        Validate and sanitize the job parameters
+        Ex: cast a string as integer, set a default
+        Also return the lock id if there is one
         """
         sanitized_job_params = dict()
 
@@ -117,16 +108,16 @@ class XcuteJob(object):
             merged_config = current_config.copy()
             # If it is not set in the new configuration,
             # recompute the new value
-            merged_config.pop('tasks_batch_size', None)
+            merged_config.pop("tasks_batch_size", None)
             # Udpate configuration
             merged_config.update(new_config)
             # Update parameters
-            merged_params = (current_config.get('params') or dict()).copy()
-            merged_params.update(new_config.get('params') or dict())
-            merged_config['params'] = merged_params
+            merged_params = (current_config.get("params") or dict()).copy()
+            merged_params.update(new_config.get("params") or dict())
+            merged_config["params"] = merged_params
             return merged_config
         except (TypeError, KeyError):
-            raise ValueError('Wrong config format')
+            raise ValueError("Wrong config format")
 
     def prepare(self, job_params):
         """
@@ -139,19 +130,19 @@ class XcuteJob(object):
 
     def get_tasks(self, job_params, marker=None):
         """
-            Yields the job tasks as
-            (task_id, task_payload)
-            task_id must be a string and can be used as a marker
+        Yields the job tasks as
+        (task_id, task_payload)
+        task_id must be a string and can be used as a marker
         """
         raise NotImplementedError()
 
     def get_total_tasks(self, job_params, marker=None):
         """
-            Yields numbers of tasks as
-            (marker, tasks_incr)
-            The sum of all tasks_incr yielded
-            must be the total of tasks in the job
-            NB: do not define if not needed
+        Yields numbers of tasks as
+        (marker, tasks_incr)
+        The sum of all tasks_incr yielded
+        must be the total of tasks in the job
+        NB: do not define if not needed
         """
 
         return None

@@ -33,21 +33,24 @@ class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
         # Check the request
         qpath, qhdr, qbody = req
         if qpath is not None and qpath != self.path:
-            raise Exception("unexpected request got: %s, expected: %s" %
-                            (str(self.path), str(qpath)))
+            raise Exception(
+                "unexpected request got: %s, expected: %s"
+                % (str(self.path), str(qpath))
+            )
         if qhdr is not None:
             for k, v in qhdr.items():
                 if k not in self.headers:
-                    raise Exception("missing headers: "+k)
+                    raise Exception("missing headers: " + k)
                 if self.headers[k] != v:
                     raise Exception(
-                            "invalid header value got: %s, expected: %s" %
-                            (str(self.headers[k]), str(v)))
+                        "invalid header value got: %s, expected: %s"
+                        % (str(self.headers[k]), str(v))
+                    )
 
         # Reply
         pcode, phdr, pbody = rep
         if isinstance(pbody, string_types):
-            pbody = pbody.encode('utf-8')
+            pbody = pbody.encode("utf-8")
         self.send_response(pcode)
         for k, v in phdr.items():
             self.send_header(k, v)
@@ -73,7 +76,7 @@ class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
 
 
 def http2url(s):
-    return '127.0.0.1:' + str(s.server_port)
+    return "127.0.0.1:" + str(s.server_port)
 
 
 class Service(threading.Thread):
@@ -96,69 +99,151 @@ def test_get(lib):
         services.append(Service(h))
 
     rawx_expectations = [
-        (("/0000000000000000000000000000000000000000000000000000000000000000",
-            {"Range": "bytes=0-63"}, ""),
-         (200, {"Content-Range": "bytes=0-63/64"}, "0"*64)),
-
-        (("/0000000000000000000000000000000000000000000000000000000000000001",
-            {"Range": "bytes=0-63"}, ""),
-         (200, {"Content-Range": "bytes=0-63/64"}, "0"*64)),
-
-        (("/0000000000000000000000000000000000000000000000000000000000000004",
-            {"Range": "bytes=0-15"}, ""),
-         (200, {"Content-Range": "bytes=0-15/16"}, "0"*16)),
-        (("/0000000000000000000000000000000000000000000000000000000000000005",
-            {"Range": "bytes=0-15"}, ""),
-         (200, {"Content-Range": "bytes=0-15/16"}, "0"*16)),
-        (("/0000000000000000000000000000000000000000000000000000000000000006",
-            {"Range": "bytes=0-15"}, ""),
-         (200, {"Content-Range": "bytes=0-15/16"}, "0"*16)),
-        (("/0000000000000000000000000000000000000000000000000000000000000007",
-            {"Range": "bytes=0-15"}, ""),
-         (200, {"Content-Range": "bytes=0-15/16"}, "0"*16)),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000000",
+                {"Range": "bytes=0-63"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-63/64"}, "0" * 64),
+        ),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000001",
+                {"Range": "bytes=0-63"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-63/64"}, "0" * 64),
+        ),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000004",
+                {"Range": "bytes=0-15"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-15/16"}, "0" * 16),
+        ),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000005",
+                {"Range": "bytes=0-15"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-15/16"}, "0" * 16),
+        ),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000006",
+                {"Range": "bytes=0-15"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-15/16"}, "0" * 16),
+        ),
+        (
+            (
+                "/0000000000000000000000000000000000000000000000000000000000000007",
+                {"Range": "bytes=0-15"},
+                "",
+            ),
+            (200, {"Content-Range": "bytes=0-15/16"}, "0" * 16),
+        ),
     ]
     for h in http[1:]:
         h.expectations = rawx_expectations
     czero = "000000000000000000000000000000000000000000000000000000000000000"
     hash_zero = "00000000000000000000000000000000"
     http[0].expectations = [
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (503, {}, "")),
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {"x-oio-content-meta-chunk-method": "plain"}, "[]")),
-
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {"x-oio-content-meta-chunk-method": "plain"}, json.dumps([
-                {"url": "http://%s/%s%d" % (urls[1], czero, 0),
-                 "pos": "0", "size": 64, "hash": hash_zero},
-                                 ]))),
-
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {"x-oio-content-meta-chunk-method": "plain"}, json.dumps([
-             {"url": "http://%s/%s%d" % (urls[1], czero, 1),
-              "pos": "0", "size": 64, "hash": hash_zero},
-             {"url": "http://%s/%s%d" % (urls[2], czero, 2),
-              "pos": "0", "size": 64, "hash": hash_zero},
-             {"url": "http://%s/%s%d" % (urls[3], czero, 3),
-              "pos": "0", "size": 64, "hash": hash_zero},
-             ]))),
-
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (200, {"x-oio-content-meta-chunk-method": "plain"}, json.dumps([
-             {"url": "http://%s/%s%d" % (urls[1], czero, 4),
-              "pos": "0.0", "size": 16, "hash": hash_zero},
-             {"url": "http://%s/%s%d" % (urls[2], czero, 5),
-              "pos": "1.0", "size": 16, "hash": hash_zero},
-             {"url": "http://%s/%s%d" % (urls[3], czero, 6),
-              "pos": "2.0", "size": 16, "hash": hash_zero},
-             {"url": "http://%s/%s%d" % (urls[3], czero, 7),
-              "pos": "3.0", "size": 16, "hash": hash_zero},
-             ]))),
+        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (503, {}, "")),
+        (
+            ("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
+            (200, {"x-oio-content-meta-chunk-method": "plain"}, "[]"),
+        ),
+        (
+            ("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
+            (
+                200,
+                {"x-oio-content-meta-chunk-method": "plain"},
+                json.dumps(
+                    [
+                        {
+                            "url": "http://%s/%s%d" % (urls[1], czero, 0),
+                            "pos": "0",
+                            "size": 64,
+                            "hash": hash_zero,
+                        },
+                    ]
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
+            (
+                200,
+                {"x-oio-content-meta-chunk-method": "plain"},
+                json.dumps(
+                    [
+                        {
+                            "url": "http://%s/%s%d" % (urls[1], czero, 1),
+                            "pos": "0",
+                            "size": 64,
+                            "hash": hash_zero,
+                        },
+                        {
+                            "url": "http://%s/%s%d" % (urls[2], czero, 2),
+                            "pos": "0",
+                            "size": 64,
+                            "hash": hash_zero,
+                        },
+                        {
+                            "url": "http://%s/%s%d" % (urls[3], czero, 3),
+                            "pos": "0",
+                            "size": 64,
+                            "hash": hash_zero,
+                        },
+                    ]
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
+            (
+                200,
+                {"x-oio-content-meta-chunk-method": "plain"},
+                json.dumps(
+                    [
+                        {
+                            "url": "http://%s/%s%d" % (urls[1], czero, 4),
+                            "pos": "0.0",
+                            "size": 16,
+                            "hash": hash_zero,
+                        },
+                        {
+                            "url": "http://%s/%s%d" % (urls[2], czero, 5),
+                            "pos": "1.0",
+                            "size": 16,
+                            "hash": hash_zero,
+                        },
+                        {
+                            "url": "http://%s/%s%d" % (urls[3], czero, 6),
+                            "pos": "2.0",
+                            "size": 16,
+                            "hash": hash_zero,
+                        },
+                        {
+                            "url": "http://%s/%s%d" % (urls[3], czero, 7),
+                            "pos": "3.0",
+                            "size": 16,
+                            "hash": hash_zero,
+                        },
+                    ]
+                ),
+            ),
+        ),
     ]
     for s in services:
         s.start()
 
-    cfg = json.dumps({"NS": {"proxy": urls[0]}}).encode('utf-8')
+    cfg = json.dumps({"NS": {"proxy": urls[0]}}).encode("utf-8")
     try:
         lib.test_init(cfg, b"NS")
         lib.test_get_fail(cfg, b"NS", b"NS/ACCT/JFS//plop")
@@ -168,7 +253,7 @@ def test_get(lib):
         lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
     finally:
         for h in http:
-            assert(0 == len(h.expectations))
+            assert 0 == len(h.expectations)
             h.shutdown()
         for s in services:
             s.join()
@@ -177,18 +262,15 @@ def test_get(lib):
 def test_has(lib):
     proxy = BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
     proxy.expectations = [
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (204, {}, "")),
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (404, {}, "")),
-        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
-            (500, {}, "")),
+        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (204, {}, "")),
+        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (404, {}, "")),
+        (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (500, {}, "")),
     ]
-    proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
+    proxy_url = str(proxy.server_name) + ":" + str(proxy.server_port)
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode("utf-8")
     try:
         lib.test_init(cfg, b"NS")
         lib.test_has(cfg, b"NS", b"NS/ACCT/JFS//plop")
@@ -197,7 +279,7 @@ def test_has(lib):
     finally:
         proxy.shutdown()
         service.join()
-    assert(0 == len(proxy.expectations))
+    assert 0 == len(proxy.expectations)
 
 
 def test_list_fail(lib):
@@ -205,31 +287,37 @@ def test_list_fail(lib):
     proxy.expectations = [
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (501, {}, "")),
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "lskj")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "{}")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "{\"objects\":[]}")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "{\"prefixes\":[]}")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "{\"objects\":[]\"prefixes\":[]}")),
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-            (200, {}, "{\"objects\":[{}]\"prefixes\":[]}")),
+        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "lskj")),
+        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{}")),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (200, {}, '{"objects":[]}'),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (200, {}, '{"prefixes":[]}'),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (200, {}, '{"objects":[]"prefixes":[]}'),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (200, {}, '{"objects":[{}]"prefixes":[]}'),
+        ),
     ]
-    proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
+    proxy_url = str(proxy.server_name) + ":" + str(proxy.server_port)
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode("utf-8")
     try:
         lib.test_init(cfg, b"NS")
         lib.test_list_badarg(cfg, b"NS")
         while len(proxy.expectations) > 0:
             # invalid HTTP reply status
             lib.test_list_fail(cfg, b"NS", b"NS/ACCT/JFS")
-        assert(0 == len(proxy.expectations))
+        assert 0 == len(proxy.expectations)
     finally:
         proxy.shutdown()
         service.join()
@@ -239,86 +327,141 @@ def test_list_ok(lib):
     names = ("plap", "plep", "plip", "plop", "plup", "plyp")
     proxy = BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
     proxy.expectations = [
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-         (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-         (200, {}, json.dumps({
-                "objects": [{"name": x, "hash": "0000",
-                             "size": 0, "version": 1}
-                            for x in names],
-                "prefixes": [],
-                              }))),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
-         (200, {}, json.dumps({
-                "objects": [{"name": x, "hash": "0000",
-                             "size": 0, "version": 1}
-                            for x in names if x.startswith("pla")],
-                "prefixes": [],
-                              }))),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap", {}, ""),
-         (200, {"X-Oio-list-truncated": False, "X-Oio-list-next": "plep", },
-            json.dumps({
-                "objects": [{"name": "plep", "hash": "0000",
-                             "size": 0, "version": 1}],
-                "prefixes": [],
-                       }))),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-         (200, {"X-Oio-list-truncated": True, "X-Oio-list-next": "plep", },
-            json.dumps({
-                "objects": [
-                    {"name": "plap", "hash": "0000", "size": 0, "version": 1},
-                    {"name": "plep", "hash": "0000", "size": 0, "version": 1},
-                ],
-                "prefixes": [],
-                       }))),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
-         (200, {"X-Oio-list-truncated": True, "X-Oio-list-next": "plep", },
-            json.dumps({
-                "objects": [
-                    {"name": "plap", "hash": "0000", "size": 0, "version": 1},
-                    {"name": "plep", "hash": "0000", "size": 0, "version": 1},
-                ],
-                "prefixes": [],
-                       }))),
-
-        (("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap&max=1",
-          {}, ""),
-         (200, {"X-Oio-list-truncated": False, "X-Oio-list-next": "plep", },
-            json.dumps({
-                "objects": [{"name": "plep", "hash": "0000",
-                             "size": 0, "version": 1}],
-                "prefixes": [],
-                       }))),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (200, {}, '{"objects":[],"prefixes":[]}'),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (
+                200,
+                {},
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": x, "hash": "0000", "size": 0, "version": 1}
+                            for x in names
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
+            (
+                200,
+                {},
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": x, "hash": "0000", "size": 0, "version": 1}
+                            for x in names
+                            if x.startswith("pla")
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap", {}, ""),
+            (
+                200,
+                {
+                    "X-Oio-list-truncated": False,
+                    "X-Oio-list-next": "plep",
+                },
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": "plep", "hash": "0000", "size": 0, "version": 1}
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+            (
+                200,
+                {
+                    "X-Oio-list-truncated": True,
+                    "X-Oio-list-next": "plep",
+                },
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": "plap", "hash": "0000", "size": 0, "version": 1},
+                            {"name": "plep", "hash": "0000", "size": 0, "version": 1},
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
+            (
+                200,
+                {
+                    "X-Oio-list-truncated": True,
+                    "X-Oio-list-next": "plep",
+                },
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": "plap", "hash": "0000", "size": 0, "version": 1},
+                            {"name": "plep", "hash": "0000", "size": 0, "version": 1},
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
+        (
+            ("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap&max=1", {}, ""),
+            (
+                200,
+                {
+                    "X-Oio-list-truncated": False,
+                    "X-Oio-list-next": "plep",
+                },
+                json.dumps(
+                    {
+                        "objects": [
+                            {"name": "plep", "hash": "0000", "size": 0, "version": 1}
+                        ],
+                        "prefixes": [],
+                    }
+                ),
+            ),
+        ),
     ]
-    proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
+    proxy_url = str(proxy.server_name) + ":" + str(proxy.server_port)
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode("utf-8")
     try:
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 0,
-                                    None, None, None, 0)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 6,
-                                    None, None, None, 0)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
-                                    b"pla", None, None, 0)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
-                                    None, b"plap", None, 0)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2,
-                                    None, None, None, 0)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2,
-                                    None, None, None, 2)
-        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
-                                    None, b"plap", None, 1)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 0, None, None, None, 0)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 6, None, None, None, 0)
+        lib.test_list_success_count(
+            cfg, b"NS", b"NS/ACCT/JFS", 1, b"pla", None, None, 0
+        )
+        lib.test_list_success_count(
+            cfg, b"NS", b"NS/ACCT/JFS", 1, None, b"plap", None, 0
+        )
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2, None, None, None, 0)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2, None, None, None, 2)
+        lib.test_list_success_count(
+            cfg, b"NS", b"NS/ACCT/JFS", 1, None, b"plap", None, 1
+        )
     finally:
         proxy.shutdown()
         service.join()
-    assert(0 == len(proxy.expectations))
+    assert 0 == len(proxy.expectations)
 
 
 def test_list(lib):
@@ -326,7 +469,7 @@ def test_list(lib):
     test_list_ok(lib)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     lib = cdll.LoadLibrary(sys.argv[1] + "/liboiosds_test.so")
     lib.setup()
     test_has(lib)

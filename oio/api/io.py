@@ -16,8 +16,7 @@
 
 
 from __future__ import absolute_import
-from oio.common.green import eventlet_yield, Timeout, \
-    get_watchdog, WatchdogTimeout
+from oio.common.green import eventlet_yield, Timeout, get_watchdog, WatchdogTimeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
@@ -28,14 +27,28 @@ from six.moves.urllib_parse import urlparse
 from oio.common import exceptions as exc, green
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.fullpath import decode_fullpath
-from oio.common.http import parse_content_type,\
-    parse_content_range, ranges_from_http_header, http_header_from_ranges
+from oio.common.http import (
+    parse_content_type,
+    parse_content_range,
+    ranges_from_http_header,
+    http_header_from_ranges,
+)
 from oio.common.http_eventlet import http_connect
-from oio.common.utils import GeneratorIO, group_chunk_errors, \
-    deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout, \
-    cid_from_name, compute_chunk_id, get_hasher
-from oio.common.storage_method import STORAGE_METHODS, \
-    parse_chunk_method, unparse_chunk_method
+from oio.common.utils import (
+    GeneratorIO,
+    group_chunk_errors,
+    deadline_to_timeout,
+    monotonic_time,
+    set_deadline_from_read_timeout,
+    cid_from_name,
+    compute_chunk_id,
+    get_hasher,
+)
+from oio.common.storage_method import (
+    STORAGE_METHODS,
+    parse_chunk_method,
+    unparse_chunk_method,
+)
 from oio.common.logger import get_logger
 
 LOGGER = get_logger({}, __name__)
@@ -84,46 +97,55 @@ class IOBaseWrapper(RawIOBase):
     def readinto(self, b):  # pylint: disable=invalid-name
         read_len = len(b)
         read_data = self.read(read_len)
-        b[0:len(read_data)] = read_data
+        b[0 : len(read_data)] = read_data
         return len(read_data)
 
 
 class _WriteHandler(object):
-    def __init__(self, chunk_preparer, storage_method, headers=None,
-                 **kwargs):
+    def __init__(self, chunk_preparer, storage_method, headers=None, **kwargs):
         self.chunk_prep = None
         self._load_chunk_prep(chunk_preparer)
         self.storage_method = storage_method
         self.headers = headers or dict()
-        self.connection_timeout = kwargs.get('connection_timeout',
-                                             CONNECTION_TIMEOUT)
-        self.deadline = kwargs.get('deadline')
-        self.logger = kwargs.get('logger', LOGGER)
+        self.connection_timeout = kwargs.get("connection_timeout", CONNECTION_TIMEOUT)
+        self.deadline = kwargs.get("deadline")
+        self.logger = kwargs.get("logger", LOGGER)
         self.extra_kwargs = kwargs
 
     def _load_chunk_prep(self, chunk_preparer):
         if isinstance(chunk_preparer, dict):
+
             def _sort_and_yield():
                 for pos in sorted(chunk_preparer.keys()):
                     yield chunk_preparer[pos]
+
             self.chunk_prep = _sort_and_yield
         else:
             self.chunk_prep = chunk_preparer
 
     @property
     def write_timeout(self):
-        if 'write_timeout' in self.extra_kwargs:
-            return self.extra_kwargs['write_timeout']
+        if "write_timeout" in self.extra_kwargs:
+            return self.extra_kwargs["write_timeout"]
         elif self.deadline is not None:
             return deadline_to_timeout(self.deadline, True)
         return CHUNK_TIMEOUT
 
 
 class LinkHandler(_WriteHandler):
-    def __init__(self, fullpath, chunk_preparer, storage_method, blob_client,
-                 policy, headers=None, **kwargs):
+    def __init__(
+        self,
+        fullpath,
+        chunk_preparer,
+        storage_method,
+        blob_client,
+        policy,
+        headers=None,
+        **kwargs
+    ):
         super(LinkHandler, self).__init__(
-            chunk_preparer, storage_method, headers=headers, **kwargs)
+            chunk_preparer, storage_method, headers=headers, **kwargs
+        )
         self.fullpath = fullpath
         self.blob_client = blob_client
         self.policy = policy
@@ -135,33 +157,42 @@ class LinkHandler(_WriteHandler):
         for meta_chunk in self.chunk_prep():
             try:
                 handler = MetachunkLinker(
-                    meta_chunk, self.fullpath, self.blob_client,
+                    meta_chunk,
+                    self.fullpath,
+                    self.blob_client,
                     storage_method=self.storage_method,
                     policy=self.policy,
                     reqid=self.headers.get(REQID_HEADER),
                     connection_timeout=self.connection_timeout,
-                    write_timeout=self.write_timeout, **kwargs)
+                    write_timeout=self.write_timeout,
+                    **kwargs
+                )
                 chunks = handler.link()
             except Exception as ex:
                 if isinstance(ex, exc.UnfinishedUploadException):
                     # pylint: disable=no-member
-                    content_chunks = content_chunks + \
-                        ex.chunks_already_uploaded
+                    content_chunks = content_chunks + ex.chunks_already_uploaded
                     ex = ex.exception
                 raise exc.UnfinishedUploadException(ex, content_chunks)
 
             for chunk in chunks:
-                if not chunk.get('error'):
+                if not chunk.get("error"):
                     content_chunks.append(chunk)
 
         return content_chunks
 
 
 class WriteHandler(_WriteHandler):
-    def __init__(self, source, sysmeta, chunk_preparer,
-                 storage_method, headers=None,
-                 object_checksum_algo='md5',
-                 **kwargs):
+    def __init__(
+        self,
+        source,
+        sysmeta,
+        chunk_preparer,
+        storage_method,
+        headers=None,
+        object_checksum_algo="md5",
+        **kwargs
+    ):
         """
         :param connection_timeout: timeout to establish the connection
         :param write_timeout: timeout to send a buffer of data
@@ -171,7 +202,8 @@ class WriteHandler(_WriteHandler):
             computation and let the rawx compute it (will be blake3).
         """
         super(WriteHandler, self).__init__(
-            chunk_preparer, storage_method, headers=headers, **kwargs)
+            chunk_preparer, storage_method, headers=headers, **kwargs
+        )
         if isinstance(source, IOBase):
             self.source = BufferedReader(source)
         else:
@@ -182,8 +214,8 @@ class WriteHandler(_WriteHandler):
 
     @property
     def read_timeout(self):
-        if 'read_timeout' in self.extra_kwargs:
-            return self.extra_kwargs['read_timeout']
+        if "read_timeout" in self.extra_kwargs:
+            return self.extra_kwargs["read_timeout"]
         elif self.deadline is not None:
             return deadline_to_timeout(self.deadline, True)
         return CLIENT_TIMEOUT
@@ -199,17 +231,18 @@ class WriteHandler(_WriteHandler):
         raise NotImplementedError()
 
     def patch_chunk_method(self):
-        chunk_method = self.sysmeta.get('chunk_method')
+        chunk_method = self.sysmeta.get("chunk_method")
         if not chunk_method:
             if not self.storage_method:
                 raise ValueError(
-                    "Either chunk_method or storage_method must be defined")
+                    "Either chunk_method or storage_method must be defined"
+                )
             chunk_method = self.storage_method.to_chunk_method()
-        if 'oca=' not in chunk_method:
+        if "oca=" not in chunk_method:
             chunk_method_name, params = parse_chunk_method(chunk_method)
-            params['oca'] = self.object_checksum_algo
+            params["oca"] = self.object_checksum_algo
             chunk_method = unparse_chunk_method(chunk_method_name, params)
-        self.sysmeta['chunk_method'] = chunk_method
+        self.sysmeta["chunk_method"] = chunk_method
 
 
 def consume(it):
@@ -226,7 +259,7 @@ class Closeable(object):
 
     def close(self):
         for iterator in self.iterables:
-            close_method = getattr(iterator, 'close', None)
+            close_method = getattr(iterator, "close", None)
             if close_method:
                 close_method()
         self.iterables = None
@@ -235,7 +268,7 @@ class Closeable(object):
 def chain(iterable):
     iterator = iter(iterable)
     try:
-        d = ''
+        d = ""
         while not d:
             d = next(iterator)
         return Closeable([d], iterator)
@@ -245,9 +278,9 @@ def chain(iterable):
 
 def iters_to_raw_body(parts_iter):
     try:
-        body_iter = next(parts_iter)['iter']
+        body_iter = next(parts_iter)["iter"]
     except StopIteration:
-        return ''
+        return ""
 
     def wrap(it, _j):
         for d in it:
@@ -256,6 +289,7 @@ def iters_to_raw_body(parts_iter):
             next(_j)
         except StopIteration:
             pass
+
     return wrap(body_iter, parts_iter)
 
 
@@ -272,10 +306,20 @@ class ChunkReader(object):
     Reads a chunk.
     """
 
-    def __init__(self, chunk_iter, buf_size, headers,
-                 connection_timeout=None, read_timeout=None,
-                 align=False, perfdata=None, resp_by_chunk=None,
-                 watchdog=None, verify_checksum=False, **_kwargs):
+    def __init__(
+        self,
+        chunk_iter,
+        buf_size,
+        headers,
+        connection_timeout=None,
+        read_timeout=None,
+        align=False,
+        perfdata=None,
+        resp_by_chunk=None,
+        watchdog=None,
+        verify_checksum=False,
+        **_kwargs
+    ):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
@@ -312,7 +356,7 @@ class ChunkReader(object):
         else:
             self._resp_by_chunk = dict()
         self.perfdata = perfdata
-        self.logger = _kwargs.get('logger', LOGGER)
+        self.logger = _kwargs.get("logger", LOGGER)
         self.verify_checksum = verify_checksum
         self.watchdog = watchdog or get_watchdog()
 
@@ -338,9 +382,8 @@ class ChunkReader(object):
         :raises `oio.common.exceptions.UnsatisfiableRange`:
         :raises `oio.common.exceptions.EmptyByteRange`:
         """
-        if 'Range' in self.request_headers:
-            request_range = ranges_from_http_header(
-                self.request_headers['Range'])
+        if "Range" in self.request_headers:
+            request_range = ranges_from_http_header(self.request_headers["Range"])
             start, end = request_range[0]
             if start is None:
                 # suffix byte range
@@ -364,11 +407,10 @@ class ChunkReader(object):
                 # prefix byte range
                 request_range = [(start, None)] + request_range[1:]
 
-            self.request_headers['Range'] = http_header_from_ranges(
-                request_range)
+            self.request_headers["Range"] = http_header_from_ranges(request_range)
         else:
             # just add an offset to the request
-            self.request_headers['Range'] = 'bytes=%d-' % nb_bytes
+            self.request_headers["Range"] = "bytes=%d-" % nb_bytes
 
     def _get_request(self, chunk):
         """
@@ -376,18 +418,26 @@ class ChunkReader(object):
         Save the response object in `self.sources` list.
         """
         try:
-            with WatchdogTimeout(self.watchdog, self.connection_timeout,
-                                 green.ConnectionTimeout):
+            with WatchdogTimeout(
+                self.watchdog, self.connection_timeout, green.ConnectionTimeout
+            ):
                 raw_url = chunk.get("real_url", chunk["url"])
                 parsed = urlparse(raw_url)
-                perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
-                    if self.perfdata is not None else None
-                conn = http_connect(parsed.netloc, 'GET', parsed.path,
-                                    self.request_headers, scheme=parsed.scheme,
-                                    perfdata=perfdata_rawx,
-                                    perfdata_suffix=chunk['url'])
-            with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                 green.OioTimeout):
+                perfdata_rawx = (
+                    self.perfdata.setdefault("rawx", dict())
+                    if self.perfdata is not None
+                    else None
+                )
+                conn = http_connect(
+                    parsed.netloc,
+                    "GET",
+                    parsed.path,
+                    self.request_headers,
+                    scheme=parsed.scheme,
+                    perfdata=perfdata_rawx,
+                    perfdata_suffix=chunk["url"],
+                )
+            with WatchdogTimeout(self.watchdog, self.read_timeout, green.OioTimeout):
                 if perfdata_rawx:
                     getresp_start = monotonic_time()
                 source = conn.getresponse()
@@ -395,16 +445,19 @@ class ChunkReader(object):
                 # We haven't actually
                 # got the first byte, but we got the response headers.
                 if perfdata_rawx:
-                    perfdata_rawx["ttfb." + chunk['url']] = \
+                    perfdata_rawx["ttfb." + chunk["url"]] = (
                         monotonic_time() - getresp_start
+                    )
         except (SocketError, Timeout) as err:
-            self.logger.error('Connection failed to %s (reqid=%s): %s',
-                              chunk, self.reqid, err)
+            self.logger.error(
+                "Connection failed to %s (reqid=%s): %s", chunk, self.reqid, err
+            )
             self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
             return False
         except Exception as err:
-            self.logger.exception('Connection failed to %s (reqid=%s)',
-                                  chunk, self.reqid)
+            self.logger.exception(
+                "Connection failed to %s (reqid=%s)", chunk, self.reqid
+            )
             self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
             return False
 
@@ -414,11 +467,17 @@ class ChunkReader(object):
             self.sources.append((source, chunk))
             return True
         else:
-            self.logger.warning("Invalid response from %s (reqid=%s): %d %s",
-                                chunk, self.reqid, source.status,
-                                source.reason)
-            self._resp_by_chunk[chunk["url"]] = (source.status,
-                                                 text_type(source.reason))
+            self.logger.warning(
+                "Invalid response from %s (reqid=%s): %d %s",
+                chunk,
+                self.reqid,
+                source.status,
+                source.reason,
+            )
+            self._resp_by_chunk[chunk["url"]] = (
+                source.status,
+                text_type(source.reason),
+            )
             close_source(source, self.logger)
         return False
 
@@ -446,8 +505,7 @@ class ChunkReader(object):
             # All errors are of the same type, group them
             status, chunks = errors.popitem()
             raise exc.from_status(status[0], "%s %s" % (status[1], chunks))
-        raise exc.ServiceUnavailable("unavailable chunks: %s" %
-                                     self._resp_by_chunk)
+        raise exc.ServiceUnavailable("unavailable chunks: %s" % self._resp_by_chunk)
 
     def stream(self):
         """
@@ -459,20 +517,22 @@ class ChunkReader(object):
 
         def _iter():
             if self.verify_checksum:
-                expected = (self.verify_checksum
-                            if isinstance(self.verify_checksum, str)
-                            else self.headers.get(CHUNK_HEADERS['chunk_hash']))
+                expected = (
+                    self.verify_checksum
+                    if isinstance(self.verify_checksum, str)
+                    else self.headers.get(CHUNK_HEADERS["chunk_hash"])
+                )
                 _, params = parse_chunk_method(self.chunk_method)
-                checksum_algo = params.get('cca')
+                checksum_algo = params.get("cca")
                 if not checksum_algo and expected:
-                    checksum_algo = 'md5' if len(expected) == 32 else 'blake3'
+                    checksum_algo = "md5" if len(expected) == 32 else "blake3"
                 checksum = get_hasher(checksum_algo)
             else:
                 expected = None
                 checksum = None
 
             for part in parts_iter:
-                for data in part['iter']:
+                for data in part["iter"]:
                     if checksum is not None:
                         checksum.update(data)
                     yield data
@@ -480,11 +540,13 @@ class ChunkReader(object):
             if checksum:
                 self.checksum = checksum.hexdigest()
                 if not expected:
-                    self.logger.warning("Cannot verify checksum: "
-                                        "header is missing or empty")
+                    self.logger.warning(
+                        "Cannot verify checksum: header is missing or empty"
+                    )
                 elif self.checksum.lower() != expected.lower():
-                    raise exc.CorruptedChunk("Expected %s, computed %s" % (
-                        expected, self.checksum))
+                    raise exc.CorruptedChunk(
+                        "Expected %s, computed %s" % (expected, self.checksum)
+                    )
             return
 
         if PY2:
@@ -504,18 +566,16 @@ class ChunkReader(object):
             self.discard_bytes = discard_bytes(self.buf_size, start)
 
         # change headers for efficient recovery
-        if 'Range' in self.request_headers:
+        if "Range" in self.request_headers:
             try:
-                orig_ranges = ranges_from_http_header(
-                    self.request_headers['Range'])
+                orig_ranges = ranges_from_http_header(self.request_headers["Range"])
                 new_ranges = [(start, end)] + orig_ranges[1:]
             except ValueError:
                 new_ranges = [(start, end)]
         else:
             new_ranges = [(start, end)]
 
-        self.request_headers['Range'] = http_header_from_ranges(
-            new_ranges)
+        self.request_headers["Range"] = http_header_from_ranges(new_ranges)
 
     def get_next_part(self, parts_iter):
         """
@@ -526,10 +586,10 @@ class ChunkReader(object):
         """
         while True:
             try:
-                with WatchdogTimeout(self.watchdog, CHUNK_TIMEOUT,
-                                     green.ChunkReadTimeout):
-                    start, end, length, headers, part = next(
-                        parts_iter[0])
+                with WatchdogTimeout(
+                    self.watchdog, CHUNK_TIMEOUT, green.ChunkReadTimeout
+                ):
+                    start, end, length, headers, part = next(parts_iter[0])
                 return (start, end, length, headers, part)
             except green.ChunkReadTimeout:
                 # TODO recover
@@ -538,15 +598,16 @@ class ChunkReader(object):
     def iter_from_resp(self, source, parts_iter, part, chunk):
         bytes_consumed = 0
         count = 0
-        buf = b''
+        buf = b""
         if self.perfdata is not None:
-            rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-            chunk_url = chunk['url']
+            rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+            chunk_url = chunk["url"]
             source[0].download_start = monotonic_time()
         while True:
             try:
-                with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                     green.ChunkReadTimeout):
+                with WatchdogTimeout(
+                    self.watchdog, self.read_timeout, green.ChunkReadTimeout
+                ):
                     data = part.read(next(self.read_size))
                     count += 1
                     buf += data
@@ -558,22 +619,24 @@ class ChunkReader(object):
                 except exc.EmptyByteRange:
                     # we are done already
                     break
-                buf = b''
+                buf = b""
                 # find a new source to perform recovery
                 new_source, new_chunk = self._get_source()
                 if new_source:
                     self.logger.warning(
-                        "Failed to read from %s (%s), "
-                        "retrying from %s (reqid=%s)",
-                        chunk, crto, new_chunk, self.reqid)
+                        "Failed to read from %s (%s), retrying from %s (reqid=%s)",
+                        chunk,
+                        crto,
+                        new_chunk,
+                        self.reqid,
+                    )
                     close_source(source[0], self.logger)
                     # switch source
                     source[0] = new_source
                     chunk = new_chunk
                     parts_iter[0] = make_iter_from_resp(source[0])
                     try:
-                        _j, _j, _j, _j, part = \
-                            self.get_next_part(parts_iter)
+                        _j, _j, _j, _j, part = self.get_next_part(parts_iter)
                     except StopIteration:
                         # failed to recover
                         # we did our best
@@ -581,21 +644,21 @@ class ChunkReader(object):
 
                 else:
                     self.logger.warning(
-                        "Failed to read from %s (%s, reqid=%s)",
-                        chunk, crto, self.reqid)
+                        "Failed to read from %s (%s, reqid=%s)", chunk, crto, self.reqid
+                    )
                     # no valid source found to recover
                     raise
             else:
                 # discard bytes
                 if buf and self.discard_bytes:
                     if self.discard_bytes < len(buf):
-                        buf = buf[self.discard_bytes:]
+                        buf = buf[self.discard_bytes :]
                         bytes_consumed += self.discard_bytes
                         self.discard_bytes = 0
                     else:
                         self.discard_bytes -= len(buf)
                         bytes_consumed += len(buf)
-                        buf = b''
+                        buf = b""
 
                 # no data returned
                 # flush out buffer
@@ -603,20 +666,20 @@ class ChunkReader(object):
                     if buf:
                         bytes_consumed += len(buf)
                         yield buf
-                    buf = b''
+                    buf = b""
                     break
 
                 # If buf_size is defined, yield bounded data buffers
                 if self.buf_size is not None:
                     while len(buf) >= self.buf_size:
-                        read_d = buf[:self.buf_size]
-                        buf = buf[self.buf_size:]
+                        read_d = buf[: self.buf_size]
+                        buf = buf[self.buf_size :]
                         yield read_d
                         bytes_consumed += len(read_d)
                 else:
                     yield buf
                     bytes_consumed += len(buf)
-                    buf = b''
+                    buf = b""
 
                 # avoid starvation by yielding
                 # every once in a while
@@ -625,9 +688,10 @@ class ChunkReader(object):
 
         if self.perfdata is not None:
             download_end = monotonic_time()
-            key = 'download.' + chunk_url
-            rawx_perfdata[key] = rawx_perfdata.get(key, 0.0) \
-                + download_end - source[0].download_start
+            key = "download." + chunk_url
+            rawx_perfdata[key] = (
+                rawx_perfdata.get(key, 0.0) + download_end - source[0].download_start
+            )
 
     def _get_iter(self, chunk, source):
         source = [source]
@@ -636,20 +700,22 @@ class ChunkReader(object):
             body_iter = None
             try:
                 while True:
-                    start, end, length, headers, part = \
-                        self.get_next_part(parts_iter)
+                    start, end, length, headers, part = self.get_next_part(parts_iter)
                     self.fill_ranges(start, end, length)
-                    body_iter = self.iter_from_resp(
-                        source, parts_iter, part, chunk)
-                    result = {'start': start, 'end': end, 'length': length,
-                              'iter': body_iter, 'headers': headers}
+                    body_iter = self.iter_from_resp(source, parts_iter, part, chunk)
+                    result = {
+                        "start": start,
+                        "end": end,
+                        "length": length,
+                        "iter": body_iter,
+                        "headers": headers,
+                    }
                     yield result
             except StopIteration:
                 pass
 
         except green.ChunkReadTimeout:
-            self.logger.exception("Failure during chunk read (reqid=%s)",
-                                  self.reqid)
+            self.logger.exception("Failure during chunk read (reqid=%s)", self.reqid)
             raise
         except Exception:
             self.logger.exception("Failure during read (reqid=%s)", self.reqid)
@@ -666,7 +732,7 @@ class ChunkReader(object):
     def _create_iter(self, chunk, source):
         parts_iter = self._get_iter(chunk, source)
         for part in parts_iter:
-            for d in part['iter']:
+            for d in part["iter"]:
                 yield d
 
     def __iter__(self):
@@ -674,7 +740,7 @@ class ChunkReader(object):
         if not parts_iter:
             raise exc.ChunkException()
         for part in parts_iter:
-            for data in part['iter']:
+            for data in part["iter"]:
                 yield data
         return
 
@@ -698,14 +764,19 @@ def exp_ramp_gen(start, maximum):
 
 
 class _MetachunkWriter(object):
-
-    def __init__(self, storage_method=None, quorum=None,
-                 reqid=None, perfdata=None, watchdog=None,
-                 **kwargs):
+    def __init__(
+        self,
+        storage_method=None,
+        quorum=None,
+        reqid=None,
+        perfdata=None,
+        watchdog=None,
+        **kwargs
+    ):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
-            raise ValueError('Missing storage_method or quorum')
+            raise ValueError("Missing storage_method or quorum")
         self.perfdata = perfdata
         self.reqid = reqid
         self.watchdog = watchdog or get_watchdog()
@@ -735,12 +806,16 @@ class _MetachunkWriter(object):
         """
         if len(successes) < self.quorum:
             errors = group_chunk_errors(
-                ((chunk["url"], chunk.get("error", "success"))
-                 for chunk in successes + failures))
+                (
+                    (chunk["url"], chunk.get("error", "success"))
+                    for chunk in successes + failures
+                )
+            )
             new_exc = exc.ServiceBusy(
-                message=("RAWX write failure, quorum not reached (%d/%d): %s" %
-                         (len(successes), self.quorum, errors)))
-            for err in [x.get('error') for x in failures]:
+                message="RAWX write failure, quorum not reached (%d/%d): %s"
+                % (len(successes), self.quorum, errors)
+            )
+            for err in [x.get("error") for x in failures]:
                 if isinstance(err, exc.SourceReadError):
                     raise exc.SourceReadError(new_exc)
                 elif isinstance(err, green.SourceReadTimeout):
@@ -748,7 +823,7 @@ class _MetachunkWriter(object):
                     raise exc.SourceReadTimeout(new_exc)
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
-                elif err == 'HTTP 409':
+                elif err == "HTTP 409":
                     raise exc.Conflict(new_exc)
             raise new_exc
 
@@ -757,27 +832,41 @@ class MetachunkLinker(_MetachunkWriter):
     """
     Create new hard links for all the chunks of a metachunk.
     """
-    def __init__(self, meta_chunk_target, fullpath, blob_client, policy,
-                 storage_method=None, quorum=None, reqid=None, perfdata=None,
-                 connection_timeout=None, write_timeout=None,
-                 **kwargs):
+
+    def __init__(
+        self,
+        meta_chunk_target,
+        fullpath,
+        blob_client,
+        policy,
+        storage_method=None,
+        quorum=None,
+        reqid=None,
+        perfdata=None,
+        connection_timeout=None,
+        write_timeout=None,
+        **kwargs
+    ):
         super(MetachunkLinker, self).__init__(
-            storage_method=storage_method, quorum=quorum, reqid=reqid,
-            perfdata=perfdata, **kwargs)
+            storage_method=storage_method,
+            quorum=quorum,
+            reqid=reqid,
+            perfdata=perfdata,
+            **kwargs
+        )
         self.meta_chunk_target = meta_chunk_target
         self.fullpath = fullpath
         self.blob_client = blob_client
         self.policy = policy
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or CHUNK_TIMEOUT
-        self.logger = kwargs.get('logger', LOGGER)
+        self.logger = kwargs.get("logger", LOGGER)
 
     @classmethod
     def filter_kwargs(cls, kwargs):
-        return {k: v for k, v in kwargs.items()
-                if k in ('perfdata',
-                         'logger',
-                         'watchdog')}
+        return {
+            k: v for k, v in kwargs.items() if k in ("perfdata", "logger", "watchdog")
+        }
 
     def link(self):
         """
@@ -790,16 +879,21 @@ class MetachunkLinker(_MetachunkWriter):
         cid = cid_from_name(acct, ct)
         for chunk_target in self.meta_chunk_target:
             try:
-                chunk_id = compute_chunk_id(cid, path, vers,
-                                            chunk_target['pos'],
-                                            self.policy)
+                chunk_id = compute_chunk_id(
+                    cid, path, vers, chunk_target["pos"], self.policy
+                )
                 resp, new_chunk_url = self.blob_client.chunk_link(
-                    chunk_target['url'], chunk_id, self.fullpath,
+                    chunk_target["url"],
+                    chunk_id,
+                    self.fullpath,
                     connection_timeout=self.connection_timeout,
-                    write_timeout=self.write_timeout, reqid=self.reqid,
-                    perfdata=self.perfdata, logger=self.logger)
+                    write_timeout=self.write_timeout,
+                    reqid=self.reqid,
+                    perfdata=self.perfdata,
+                    logger=self.logger,
+                )
                 new_chunk = chunk_target.copy()
-                new_chunk['url'] = new_chunk_url
+                new_chunk["url"] = new_chunk_url
                 new_meta_chunks.append(new_chunk)
             except Exception:
                 failed_chunks.append(chunk_target)
@@ -815,31 +909,48 @@ class MetachunkWriter(_MetachunkWriter):
     Base class for metachunk writers
     """
 
-    def __init__(self, sysmeta, storage_method=None, quorum=None,
-                 chunk_checksum_algo='blake3', reqid=None,
-                 chunk_buffer_min=32768, chunk_buffer_max=262144,
-                 perfdata=None, **_kwargs):
+    def __init__(
+        self,
+        sysmeta,
+        storage_method=None,
+        quorum=None,
+        chunk_checksum_algo="blake3",
+        reqid=None,
+        chunk_buffer_min=32768,
+        chunk_buffer_max=262144,
+        perfdata=None,
+        **_kwargs
+    ):
         super(MetachunkWriter, self).__init__(
-            storage_method=storage_method, quorum=quorum, reqid=reqid,
-            perfdata=perfdata, **_kwargs)
+            storage_method=storage_method,
+            quorum=quorum,
+            reqid=reqid,
+            perfdata=perfdata,
+            **_kwargs
+        )
         self.sysmeta = sysmeta
-        if self.storage_method and 'cca' in self.storage_method.params:
-            self.chunk_checksum_algo = self.storage_method.params['cca']
+        if self.storage_method and "cca" in self.storage_method.params:
+            self.chunk_checksum_algo = self.storage_method.params["cca"]
         else:
             self.chunk_checksum_algo = chunk_checksum_algo
-        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
-                                             chunk_buffer_max)
+        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min, chunk_buffer_max)
         self.patch_chunk_method()
 
     @classmethod
     def filter_kwargs(cls, kwargs):
-        return {k: v for k, v in kwargs.items()
-                if k in ('chunk_checksum_algo',
-                         'chunk_buffer_min',
-                         'chunk_buffer_max',
-                         'perfdata',
-                         'logger',
-                         'watchdog')}
+        return {
+            k: v
+            for k, v in kwargs.items()
+            if k
+            in (
+                "chunk_checksum_algo",
+                "chunk_buffer_min",
+                "chunk_buffer_max",
+                "perfdata",
+                "logger",
+                "watchdog",
+            )
+        }
 
     def buffer_size(self):
         """
@@ -851,24 +962,26 @@ class MetachunkWriter(_MetachunkWriter):
         return next(self._buffer_size_gen)
 
     def patch_chunk_method(self):
-        chunk_method = self.sysmeta.get('chunk_method')
+        chunk_method = self.sysmeta.get("chunk_method")
         if not chunk_method:
             if not self.storage_method:
                 raise ValueError(
-                    "Either chunk_method or storage_method must be defined")
+                    "Either chunk_method or storage_method must be defined"
+                )
             chunk_method = self.storage_method.to_chunk_method()
-        if 'cca=' not in chunk_method:
+        if "cca=" not in chunk_method:
             chunk_method_name, params = parse_chunk_method(chunk_method)
-            params['cca'] = self.chunk_checksum_algo
+            params["cca"] = self.chunk_checksum_algo
             chunk_method = unparse_chunk_method(chunk_method_name, params)
-        self.sysmeta['chunk_method'] = chunk_method
+        self.sysmeta["chunk_method"] = chunk_method
 
 
 class MetachunkPreparer(object):
     """Get metadata for a new object and continuously yield new metachunks."""
 
-    def __init__(self, container_client, account, container, obj_name,
-                 policy=None, **kwargs):
+    def __init__(
+        self, container_client, account, container, obj_name, policy=None, **kwargs
+    ):
         self.account = account
         self.container = container
         self.obj_name = obj_name
@@ -878,30 +991,30 @@ class MetachunkPreparer(object):
 
         # TODO: optimize by asking more than one metachunk at a time
         self.obj_meta, self.first_body = self.container_client.content_prepare(
-            account, container, obj_name, size=1, stgpol=policy,
-            **kwargs)
-        self.stg_method = STORAGE_METHODS.load(self.obj_meta['chunk_method'])
+            account, container, obj_name, size=1, stgpol=policy, **kwargs
+        )
+        self.stg_method = STORAGE_METHODS.load(self.obj_meta["chunk_method"])
 
         self._all_chunks = list()
-        if 'properties' not in self.obj_meta:
-            self.obj_meta['properties'] = dict()
+        if "properties" not in self.obj_meta:
+            self.obj_meta["properties"] = dict()
 
     def _fix_mc_pos(self, chunks, mc_pos):
         for chunk in chunks:
-            raw_pos = chunk['pos'].split('.')
+            raw_pos = chunk["pos"].split(".")
             if self.stg_method.ec:
-                chunk['num'] = int(raw_pos[1])
-                chunk['pos'] = '%d.%d' % (mc_pos, chunk['num'])
+                chunk["num"] = int(raw_pos[1])
+                chunk["pos"] = "%d.%d" % (mc_pos, chunk["num"])
             else:
-                chunk['pos'] = text_type(mc_pos)
+                chunk["pos"] = text_type(mc_pos)
 
     def __call__(self):
-        mc_pos = self.extra_kwargs.get('meta_pos', 0)
+        mc_pos = self.extra_kwargs.get("meta_pos", 0)
         self._fix_mc_pos(self.first_body, mc_pos)
         self._all_chunks.extend(self.first_body)
         yield self.first_body
-        if 'version' not in self.extra_kwargs:
-            self.extra_kwargs['version'] = self.obj_meta['version']
+        if "version" not in self.extra_kwargs:
+            self.extra_kwargs["version"] = self.obj_meta["version"]
         while True:
             mc_pos += 1
             # If we are here, we know that the client is still
@@ -909,10 +1022,15 @@ class MetachunkPreparer(object):
             # postpone the deadline.
             set_deadline_from_read_timeout(self.extra_kwargs, force=True)
             meta, next_body = self.container_client.content_prepare(
-                self.account, self.container, self.obj_name,
-                position=mc_pos, size=1,
-                stgpol=self.policy, **self.extra_kwargs)
-            self.obj_meta['properties'].update(meta.get('properties', {}))
+                self.account,
+                self.container,
+                self.obj_name,
+                position=mc_pos,
+                size=1,
+                stgpol=self.policy,
+                **self.extra_kwargs
+            )
+            self.obj_meta["properties"].update(meta.get("properties", {}))
             self._fix_mc_pos(next_body, mc_pos)
             self._all_chunks.extend(next_body)
             yield next_body
@@ -931,14 +1049,14 @@ def make_iter_from_resp(resp):
     (start, end, length, headers, body_file)
     """
     if resp.status == 200:
-        content_length = int(resp.getheader('Content-Length'))
-        return iter([(0, content_length - 1, content_length,
-                    resp.getheaders(), resp)])
-    content_type, params = parse_content_type(resp.getheader('Content-Type'))
-    if content_type != 'multipart/byteranges':
-        start, end, _ = parse_content_range(
-            resp.getheader('Content-Range'))
+        content_length = int(resp.getheader("Content-Length"))
+        return iter([(0, content_length - 1, content_length, resp.getheaders(), resp)])
+    content_type, params = parse_content_type(resp.getheader("Content-Type"))
+    if content_type != "multipart/byteranges":
+        start, end, _ = parse_content_range(resp.getheader("Content-Range"))
         return iter([(start, end, end - start + 1, resp.getheaders(), resp)])
     else:
-        raise ValueError("Invalid response with code %d and content-type %s" %
-                         resp.status, content_type)
+        raise ValueError(
+            "Invalid response with code %d and content-type %s" % resp.status,
+            content_type,
+        )

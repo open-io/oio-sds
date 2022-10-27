@@ -28,6 +28,7 @@ except ImportError as err:
 
     class ECDriver(object):
         """Dummy wrapper for ECDriver, when erasure-coding is not available."""
+
         def __init__(self, *_args, **_kwargs):
             raise ECDriverError(EC_MSG)
 
@@ -41,14 +42,14 @@ def parse_chunk_method(chunk_method):
     and a dictionary of parameters.
     """
     param_list = dict()
-    if '/' in chunk_method:
-        chunk_method, params = chunk_method.split('/', 1)
-        params = params.split(',')
+    if "/" in chunk_method:
+        chunk_method, params = chunk_method.split("/", 1)
+        params = params.split(",")
         if len(params) >= 1:
             for param in params:
                 param = param.lstrip()
-                if '=' in param:
-                    k, v = param.split('=', 1)
+                if "=" in param:
+                    k, v = param.split("=", 1)
                     param_list[k] = v
                 elif param:
                     param_list[param] = "1"
@@ -59,19 +60,19 @@ def unparse_chunk_method(chunk_method, params):
     """
     Generate a "packed" version of a chunk method and its parameters.
     """
-    return (chunk_method + '/'
-            + ','.join(f"{k}={params[k]}" for k in sorted(params.keys())))
+    return (
+        chunk_method + "/" + ",".join(f"{k}={params[k]}" for k in sorted(params.keys()))
+    )
 
 
 def guess_storage_method(url):
     """
     Guess the storage method from a chunk URL.
     """
-    return 'plain'
+    return "plain"
 
 
 class StorageMethods(object):
-
     def __init__(self, methods):
         self.index = methods
         self.cache = {}
@@ -84,8 +85,7 @@ class StorageMethods(object):
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
         except Exception as exc:
-            reraise(exceptions.InvalidStorageMethod, str(exc),
-                    sys.exc_info()[2])
+            reraise(exceptions.InvalidStorageMethod, str(exc), sys.exc_info()[2])
         params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
         self.cache[chunk_method].type = storage_method
@@ -127,8 +127,7 @@ class StorageMethod(object):
         """
         Serialize this to a chunk_method string.
         """
-        return unparse_chunk_method('ec' if self.ec else 'plain',
-                                    self.params)
+        return unparse_chunk_method("ec" if self.ec else "plain", self.params)
 
     @property
     def params(self):
@@ -137,14 +136,15 @@ class StorageMethod(object):
         """
         return self._params
 
-    def fix_missing_checksum_algo(self, chunk_checksum_algo='blake3',
-                                  object_checksum_algo='md5'):
+    def fix_missing_checksum_algo(
+        self, chunk_checksum_algo="blake3", object_checksum_algo="md5"
+    ):
         """
         Set the chunk checksum algorithm and the object checksum algorithm
         in case they are not already present in the storage method.
         """
-        self.params.setdefault('cca', chunk_checksum_algo)
-        self.params.setdefault('oca', object_checksum_algo)
+        self.params.setdefault("cca", chunk_checksum_algo)
+        self.params.setdefault("oca", object_checksum_algo)
 
 
 class ReplicatedStorageMethod(StorageMethod):
@@ -152,16 +152,15 @@ class ReplicatedStorageMethod(StorageMethod):
         super(ReplicatedStorageMethod, self).__init__(name=name, **kwargs)
 
         try:
-            self._params['nb_copy'] = int(nb_copy)
+            self._params["nb_copy"] = int(nb_copy)
         except (TypeError, ValueError):
-            raise exceptions.InvalidStorageMethod('Invalid %r nb_copy' %
-                                                  nb_copy)
+            raise exceptions.InvalidStorageMethod("Invalid %r nb_copy" % nb_copy)
         self._quorum = (self.nb_copy + 1) // 2
 
     @classmethod
     def build(cls, params):
-        nb_copy = params.pop('nb_copy', 1)
-        return cls('repli', nb_copy, **params)
+        nb_copy = params.pop("nb_copy", 1)
+        return cls("repli", nb_copy, **params)
 
     @property
     def quorum(self):
@@ -169,7 +168,7 @@ class ReplicatedStorageMethod(StorageMethod):
 
     @property
     def expected_chunks(self):
-        return self.params['nb_copy']
+        return self.params["nb_copy"]
 
     @property
     def min_chunks_to_read(self):
@@ -177,50 +176,60 @@ class ReplicatedStorageMethod(StorageMethod):
 
     @property
     def nb_copy(self):
-        return self.params['nb_copy']
+        return self.params["nb_copy"]
 
 
 class ECStorageMethod(StorageMethod):
-
-    def __init__(self, name, ec_segment_size, ec_type, ec_nb_data,
-                 ec_nb_parity, **kwargs):
+    def __init__(
+        self, name, ec_segment_size, ec_type, ec_nb_data, ec_nb_parity, **kwargs
+    ):
         super(ECStorageMethod, self).__init__(name=name, ec=True, **kwargs)
 
         try:
-            self.params['k'] = int(ec_nb_data)
+            self.params["k"] = int(ec_nb_data)
         except (TypeError, ValueError):
-            raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_data' %
-                                                  ec_nb_data)
+            raise exceptions.InvalidStorageMethod("Invalid %r ec_nb_data" % ec_nb_data)
 
         try:
-            self.params['m'] = int(ec_nb_parity)
+            self.params["m"] = int(ec_nb_parity)
         except (TypeError, ValueError):
-            raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_parity' %
-                                                  ec_nb_parity)
+            raise exceptions.InvalidStorageMethod(
+                "Invalid %r ec_nb_parity" % ec_nb_parity
+            )
 
         self._ec_segment_size = ec_segment_size
-        self.params['algo'] = ec_type
+        self.params["algo"] = ec_type
 
         try:
-            self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
-                                   ec_type=ec_type)
+            self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity, ec_type=ec_type)
         except ECDriverError as exc:
             msg = "'%s' (%s: %s) Check erasure code packages." % (
-                ec_type, exc.__class__.__name__, exc)
-            reraise(exceptions.InvalidStorageMethod,
-                    exceptions.InvalidStorageMethod(msg),
-                    sys.exc_info()[2])
-        self._ec_quorum_size = \
+                ec_type,
+                exc.__class__.__name__,
+                exc,
+            )
+            reraise(
+                exceptions.InvalidStorageMethod,
+                exceptions.InvalidStorageMethod(msg),
+                sys.exc_info()[2],
+            )
+        self._ec_quorum_size = (
             self.ec_nb_data + self.driver.min_parity_fragments_needed()
+        )
 
     @classmethod
     def build(cls, params):
-        ec_nb_data = params.pop('k')
-        ec_nb_parity = params.pop('m')
-        ec_type = params.pop('algo')
-        return cls('ec', ec_segment_size=EC_SEGMENT_SIZE,
-                   ec_type=ec_type, ec_nb_data=ec_nb_data,
-                   ec_nb_parity=ec_nb_parity, **params)
+        ec_nb_data = params.pop("k")
+        ec_nb_parity = params.pop("m")
+        ec_type = params.pop("algo")
+        return cls(
+            "ec",
+            ec_segment_size=EC_SEGMENT_SIZE,
+            ec_type=ec_type,
+            ec_nb_data=ec_nb_data,
+            ec_nb_parity=ec_nb_parity,
+            **params,
+        )
 
     @property
     def quorum(self):
@@ -228,23 +237,23 @@ class ECStorageMethod(StorageMethod):
 
     @property
     def expected_chunks(self):
-        return self.params['k'] + self.params['m']
+        return self.params["k"] + self.params["m"]
 
     @property
     def min_chunks_to_read(self):
-        return self.params['k']
+        return self.params["k"]
 
     @property
     def ec_type(self):
-        return self.params['algo']
+        return self.params["algo"]
 
     @property
     def ec_nb_data(self):
-        return self.params['k']
+        return self.params["k"]
 
     @property
     def ec_nb_parity(self):
-        return self.params['m']
+        return self.params["m"]
 
     @property
     def ec_segment_size(self):
@@ -252,14 +261,14 @@ class ECStorageMethod(StorageMethod):
 
     @property
     def ec_fragment_size(self):
-        return self.driver.get_segment_info(
-            self.ec_segment_size, self.ec_segment_size)['fragment_size']
+        return self.driver.get_segment_info(self.ec_segment_size, self.ec_segment_size)[
+            "fragment_size"
+        ]
 
 
 def load_methods():
     global _STORAGE_METHODS
-    methods = {'plain': ReplicatedStorageMethod,
-               'ec': ECStorageMethod}
+    methods = {"plain": ReplicatedStorageMethod, "ec": ECStorageMethod}
     _STORAGE_METHODS = StorageMethods(methods)
 
 

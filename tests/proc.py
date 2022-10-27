@@ -52,7 +52,7 @@ def check_for_server(port):
 
 
 def does_startup_fail(path):
-    with open('/dev/null', 'w') as out:
+    with open("/dev/null", "w") as out:
         fd = out.fileno()
-        proc = Popen(['oio-rdir-server', path], stderr=fd)
+        proc = Popen(["oio-rdir-server", path], stderr=fd)
         return check_process_absent(proc)

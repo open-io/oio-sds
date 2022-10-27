@@ -17,10 +17,10 @@ from logging import getLogger
 
 LOG = getLogger(__name__)
 
-API_NAME = 'zk'
+API_NAME = "zk"
 
 
 def make_client(instance):
     # FIXME(jfs): The pseudo-factorisation of the client_manager is a pure
     #             nightmare. Let's remove this ASAP.
-    return {'ns': instance.namespace}
+    return {"ns": instance.namespace}

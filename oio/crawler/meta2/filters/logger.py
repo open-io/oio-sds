@@ -22,7 +22,7 @@ class Logger(Filter):
     Log info for for given container.
     """
 
-    NAME = 'Logger'
+    NAME = "Logger"
 
     def init(self):
         self.successes = 0
@@ -31,17 +31,14 @@ class Logger(Filter):
     def process(self, env, cb):
         try:
             meta2db = Meta2DB(self.app_env, env)
-            self.logger.info('Got container %s', meta2db.cid)
+            self.logger.info("Got container %s", meta2db.cid)
             self.successes += 1
         except Exception:
             self.errors += 1
         return self.app(env, cb)
 
     def _get_filter_stats(self):
-        return {
-            'successes': self.successes,
-            'errors': self.errors
-        }
+        return {"successes": self.successes, "errors": self.errors}
 
     def _reset_filter_stats(self):
         self.successes = 0
@@ -54,4 +51,5 @@ def filter_factory(global_conf, **local_conf):
 
     def log_filter(app):
         return Logger(app, conf)
+
     return log_filter

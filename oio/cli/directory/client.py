@@ -17,12 +17,12 @@ from logging import getLogger
 
 LOG = getLogger(__name__)
 
-API_NAME = 'directory'
+API_NAME = "directory"
 
 
 class DirectoryClientCli(object):
     def __init__(self, namespace, **kwargs):
-        self.conf = {'namespace': namespace}
+        self.conf = {"namespace": namespace}
         self.conf.update(kwargs)
         self._cluster = None
         self._rdir_lb = None
@@ -32,6 +32,7 @@ class DirectoryClientCli(object):
     def cluster(self):
         if not self._cluster:
             from oio.conscience.client import ConscienceClient
+
             self._cluster = ConscienceClient(self.conf)
         return self._cluster
 
@@ -39,6 +40,7 @@ class DirectoryClientCli(object):
     def rdir_lb(self):
         if not self._rdir_lb:
             from oio.rdir.client import RdirDispatcher
+
             self._rdir_lb = RdirDispatcher(self.conf)
         return self._rdir_lb
 
@@ -46,6 +48,7 @@ class DirectoryClientCli(object):
     def meta0(self):
         if not self._meta0:
             from oio.directory.meta0 import Meta0Client
+
             self._meta0 = Meta0Client(self.conf)
         return self._meta0
 
@@ -58,7 +61,5 @@ def make_client(instance):
     :param instance: an instance of ClientManager
     :returns: an instance of DirectoryClientCli
     """
-    client = DirectoryClientCli(
-        **instance.cli_conf()
-    )
+    client = DirectoryClientCli(**instance.cli_conf())
     return client

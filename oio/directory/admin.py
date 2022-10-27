@@ -27,35 +27,44 @@ def service_id_to_string(service_id):
         return service_id
     else:
         try:
-            return ','.join(service_id)
+            return ",".join(service_id)
         except Exception:
             raise ValueError("'service_id' must be a string or a list")
 
 
 def loc_params(func):
     """Wrap database localization parameters in request parameters"""
+
     @wraps(func)
-    def _wrapped(self, service_type=None, account=None, reference=None,
-                 cid=None, service_id=None, suffix=None, **kwargs):
-        params = kwargs.pop('params', {})
+    def _wrapped(
+        self,
+        service_type=None,
+        account=None,
+        reference=None,
+        cid=None,
+        service_id=None,
+        suffix=None,
+        **kwargs
+    ):
+        params = kwargs.pop("params", {})
         if service_type:
-            params['type'] = service_type
-        elif 'type' not in params:
+            params["type"] = service_type
+        elif "type" not in params:
             raise ValueError("Missing value for service_type")
 
         if cid:
-            params['cid'] = cid
+            params["cid"] = cid
         elif account and reference:
-            params['acct'] = account
-            params['ref'] = reference
-        elif 'cid' not in params and \
-             ('acct' not in params or 'ref' not in params):
+            params["acct"] = account
+            params["ref"] = reference
+        elif "cid" not in params and ("acct" not in params or "ref" not in params):
             raise ValueError("Missing value for account and reference or cid")
         if service_id:
-            params['service_id'] = service_id_to_string(service_id)
+            params["service_id"] = service_id_to_string(service_id)
         if suffix:
-            params['suffix'] = suffix
+            params["suffix"] = suffix
         return func(self, params, **kwargs)
+
     return _wrapped
 
 
@@ -63,10 +72,9 @@ class AdminClient(ProxyClient):
     """Low level database administration client."""
 
     def __init__(self, conf, **kwargs):
-        super(AdminClient, self).__init__(
-            conf, request_prefix="/admin", **kwargs)
-        kwargs.pop('pool_manager', None)
-        kwargs['endpoint'] = self.proxy_scheme + '://' + self.proxy_netloc
+        super(AdminClient, self).__init__(conf, request_prefix="/admin", **kwargs)
+        kwargs.pop("pool_manager", None)
+        kwargs["endpoint"] = self.proxy_scheme + "://" + self.proxy_netloc
         self._kwargs = kwargs
         self._cache_client = None
         self._forwarder = None
@@ -78,9 +86,12 @@ class AdminClient(ProxyClient):
         """
         if self._cache_client is None:
             self._cache_client = ProxyClient(
-                self.conf, request_prefix="/cache",
+                self.conf,
+                request_prefix="/cache",
                 pool_manager=self.pool_manager,
-                no_ns_in_url=True, **self._kwargs)
+                no_ns_in_url=True,
+                **self._kwargs
+            )
         return self._cache_client
 
     @property
@@ -90,9 +101,12 @@ class AdminClient(ProxyClient):
         """
         if self._forwarder is None:
             self._forwarder = ProxyClient(
-                self.conf, request_prefix="/forward",
+                self.conf,
+                request_prefix="/forward",
                 pool_manager=self.pool_manager,
-                no_ns_in_url=True, **self._kwargs)
+                no_ns_in_url=True,
+                **self._kwargs
+            )
         return self._forwarder
 
     @loc_params
@@ -100,7 +114,7 @@ class AdminClient(ProxyClient):
         """
         Get debugging information about an election.
         """
-        _, body = self._request('POST', '/debug', params=params, **kwargs)
+        _, body = self._request("POST", "/debug", params=params, **kwargs)
         return body
 
     @loc_params
@@ -108,7 +122,7 @@ class AdminClient(ProxyClient):
         """
         Force all peers to leave the election.
         """
-        _, body = self._request('POST', '/leave', params=params, **kwargs)
+        _, body = self._request("POST", "/leave", params=params, **kwargs)
         return body
 
     @loc_params
@@ -116,7 +130,7 @@ class AdminClient(ProxyClient):
         """
         Trigger or refresh an election.
         """
-        _, body = self._request('POST', '/ping', params=params, **kwargs)
+        _, body = self._request("POST", "/ping", params=params, **kwargs)
         return body
 
     @loc_params
@@ -153,23 +167,23 @@ class AdminClient(ProxyClient):
             }
 
         """
-        _, body = self._request('POST', '/status', params=params, **kwargs)
-        resp = {'peers': body, 'type': params['type']}
+        _, body = self._request("POST", "/status", params=params, **kwargs)
+        resp = {"peers": body, "type": params["type"]}
         for svc_id in body.keys():
-            if body[svc_id]['status']['status'] == 200:
-                resp['master'] = svc_id
-            elif body[svc_id]['status']['status'] == 303:
-                slaves = resp.get('slaves', [])
+            if body[svc_id]["status"]["status"] == 200:
+                resp["master"] = svc_id
+            elif body[svc_id]["status"]["status"] == 303:
+                slaves = resp.get("slaves", [])
                 slaves.append(svc_id)
-                resp['slaves'] = slaves
+                resp["slaves"] = slaves
         return resp
 
     @loc_params
     def election_sync(self, params, check_type=None, **kwargs):
         """Try to synchronize a dubious election."""
         if isinstance(check_type, int):
-            params['check_type'] = check_type
-        _, body = self._request('POST', '/sync', params=params, **kwargs)
+            params["check_type"] = check_type
+        _, body = self._request("POST", "/sync", params=params, **kwargs)
         return body
 
     @loc_params
@@ -177,24 +191,22 @@ class AdminClient(ProxyClient):
         """
         Ask each peer if base exists.
         """
-        _, body = self._request('POST', '/has', params=params, **kwargs)
+        _, body = self._request("POST", "/has", params=params, **kwargs)
         return body
 
     @loc_params
-    def set_properties(self, params,
-                       properties=None, system=None, **kwargs):
+    def set_properties(self, params, properties=None, system=None, **kwargs):
         """
         Set user or system properties in the admin table of an sqliterepo base.
         """
         data = dict()
         if properties:
-            data['properties'] = properties
+            data["properties"] = properties
         if system:
-            data['system'] = dict()
+            data["system"] = dict()
             for k, v in system:
-                data['system'][k if k.startswith('sys.') else 'sys.' + k] = v
-        self._request('POST', "/set_properties",
-                      params=params, json=data, **kwargs)
+                data["system"][k if k.startswith("sys.") else "sys." + k] = v
+        self._request("POST", "/set_properties", params=params, json=data, **kwargs)
 
     @loc_params
     def get_properties(self, params, **kwargs):
@@ -202,8 +214,9 @@ class AdminClient(ProxyClient):
         Get user and system properties from the admin table of an
         sqliterepo base.
         """
-        _resp, body = self._request('POST', "/get_properties",
-                                    params=params, data='', **kwargs)
+        _resp, body = self._request(
+            "POST", "/get_properties", params=params, data="", **kwargs
+        )
         return body
 
     @loc_params
@@ -211,9 +224,8 @@ class AdminClient(ProxyClient):
         """
         Force the new peer set in the replicas of the old peer set.
         """
-        data = {'system': {'sys.peers': ','.join(sorted(peers))}}
-        self._request('POST', "/set_properties",
-                      params=params, json=data, **kwargs)
+        data = {"system": {"sys.peers": ",".join(sorted(peers))}}
+        self._request("POST", "/set_properties", params=params, json=data, **kwargs)
 
     @loc_params
     def copy_base_from(self, params, svc_from, svc_to, **kwargs):
@@ -223,9 +235,8 @@ class AdminClient(ProxyClient):
         :param svc_from: id of the source service.
         :param svc_to: id of the destination service.
         """
-        data = {'to': svc_to, 'from': svc_from}
-        self._request('POST', "/copy",
-                      params=params, json=data, **kwargs)
+        data = {"to": svc_to, "from": svc_from}
+        self._request("POST", "/copy", params=params, json=data, **kwargs)
 
     @loc_params
     def copy_base_to(self, params, svc_to, **kwargs):
@@ -235,15 +246,14 @@ class AdminClient(ProxyClient):
 
         :param svc_to: id of the destination service.
         """
-        self._request('POST', "/copy",
-                      params=params, json={'to': svc_to}, **kwargs)
+        self._request("POST", "/copy", params=params, json={"to": svc_to}, **kwargs)
 
     @loc_params
     def remove_base(self, params, **kwargs):
         """
         Remove specific base.
         """
-        _, body = self._request('POST', '/remove', params=params, **kwargs)
+        _, body = self._request("POST", "/remove", params=params, **kwargs)
         return body
 
     @loc_params
@@ -252,19 +262,19 @@ class AdminClient(ProxyClient):
         Vacuum (defragment) the database on the master service, then
         resynchronize it on the slaves.
         """
-        self._request('POST', '/vacuum', params=params, **kwargs)
+        self._request("POST", "/vacuum", params=params, **kwargs)
 
     # Proxy's cache and config actions ################################
 
     def _proxy_endpoint(self, proxy_netloc=None):
         if proxy_netloc and proxy_netloc != self.cache_client.proxy_netloc:
             return self.cache_client.endpoint.replace(
-                self.cache_client.proxy_netloc, proxy_netloc)
+                self.cache_client.proxy_netloc, proxy_netloc
+            )
         else:
             return self.cache_client.endpoint
 
-    def proxy_flush_cache(self, high=True, low=True, proxy_netloc=None,
-                          **kwargs):
+    def proxy_flush_cache(self, high=True, low=True, proxy_netloc=None, **kwargs):
         """
         Flush "high" and "low" proxy caches. By default, flush the cache of
         the local proxy. If `proxy_netloc` is provided, flush the cache
@@ -272,11 +282,11 @@ class AdminClient(ProxyClient):
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
         if high:
-            url = endpoint + '/flush/high'
-            self.cache_client._direct_request('POST', url, **kwargs)
+            url = endpoint + "/flush/high"
+            self.cache_client._direct_request("POST", url, **kwargs)
         if low:
-            url = endpoint + '/flush/low'
-            self.cache_client._direct_request('POST', url, **kwargs)
+            url = endpoint + "/flush/low"
+            self.cache_client._direct_request("POST", url, **kwargs)
 
     def proxy_get_cache_status(self, proxy_netloc=None, **kwargs):
         """
@@ -284,8 +294,8 @@ class AdminClient(ProxyClient):
         cache, including the current number of entries.
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        url = endpoint + '/status'
-        _resp, body = self.cache_client._direct_request('GET', url, **kwargs)
+        url = endpoint + "/status"
+        _resp, body = self.cache_client._direct_request("GET", url, **kwargs)
         return body
 
     def proxy_get_live_config(self, proxy_netloc=None, **kwargs):
@@ -299,7 +309,8 @@ class AdminClient(ProxyClient):
         if not proxy_netloc:
             proxy_netloc = self.proxy_netloc
         _resp, body = self._direct_request(
-            'GET', 'http://' + proxy_netloc + '/v3.0/config', **kwargs)
+            "GET", "http://" + proxy_netloc + "/v3.0/config", **kwargs
+        )
         return body
 
     def proxy_set_live_config(self, proxy_netloc=None, config=None, **kwargs):
@@ -311,21 +322,22 @@ class AdminClient(ProxyClient):
         if config is None:
             raise ValueError("Missing value for 'config'")
         _resp, body = self._direct_request(
-            'POST', 'http://' + proxy_netloc + '/v3.0/config',
-            json=config, **kwargs)
+            "POST", "http://" + proxy_netloc + "/v3.0/config", json=config, **kwargs
+        )
         return body
 
     # Forwarded actions ###############################################
 
-    def _forward_service_action(self, svc_id, action, method='POST', **kwargs):
+    def _forward_service_action(self, svc_id, action, method="POST", **kwargs):
         """Execute service-specific actions."""
         _resp, body = self.forwarder._request(
-            method, action, params={'id': svc_id}, **kwargs)
+            method, action, params={"id": svc_id}, **kwargs
+        )
         return body
 
     def service_flush_cache(self, svc_id, **kwargs):
         """Flush the resolver cache of an sqliterepo-based service."""
-        self._forward_service_action(svc_id, '/flush', **kwargs)
+        self._forward_service_action(svc_id, "/flush", **kwargs)
 
     def service_get_live_config(self, svc_id, **kwargs):
         """
@@ -336,8 +348,7 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        return self._forward_service_action(
-            svc_id, '/config', method='GET', **kwargs)
+        return self._forward_service_action(svc_id, "/config", method="GET", **kwargs)
 
     def service_set_live_config(self, svc_id, config, **kwargs):
         """
@@ -346,8 +357,7 @@ class AdminClient(ProxyClient):
         Notice that some parameters may not be taken into account,
         and no parameter will survive a service restart.
         """
-        return self._forward_service_action(
-            svc_id, '/config', json=config, **kwargs)
+        return self._forward_service_action(svc_id, "/config", json=config, **kwargs)
 
     def service_get_info(self, svc_id, **kwargs):
         """
@@ -358,11 +368,9 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        return self._forward_service_action(
-            svc_id, '/info', method='GET', **kwargs)
+        return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
 
-    def service_balance_elections(self, svc_id, max_ops=0, inactivity=0,
-                                  **kwargs):
+    def service_balance_elections(self, svc_id, max_ops=0, inactivity=0, **kwargs):
         """
         Balance elections to get an acceptable slave/master ratio.
 
@@ -371,15 +379,14 @@ class AdminClient(ProxyClient):
         :param inactivity: avoid expiring election whose last activity is
                            younger than the specified value.
         """
-        params = {'inactivity': int(inactivity),
-                  'max': int(max_ops),
-                  'id': svc_id}
+        params = {"inactivity": int(inactivity), "max": int(max_ops), "id": svc_id}
         _resp, body = self.forwarder._request(
-            'POST', '/balance-masters', params=params, **kwargs)
+            "POST", "/balance-masters", params=params, **kwargs
+        )
         return _resp.status, body
 
     def service_reload_lb(self, svc_id, **kwargs):
         """
         Force the service to reload its internal load balancer.
         """
-        self._forward_service_action(svc_id, '/reload', **kwargs)
+        self._forward_service_action(svc_id, "/reload", **kwargs)

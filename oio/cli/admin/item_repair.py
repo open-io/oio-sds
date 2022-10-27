@@ -19,8 +19,12 @@ from cliff import lister
 from oio.account.rebuilder import AccountRebuilder
 from oio.container.repairer import ContainerRepairer
 from oio.content.repairer import ContentRepairer
-from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
-    ObjectCommandMixin, ToolCommandMixin
+from oio.cli.admin.common import (
+    AccountCommandMixin,
+    ContainerCommandMixin,
+    ObjectCommandMixin,
+    ToolCommandMixin,
+)
 
 
 class ItemRepairCommand(ToolCommandMixin, lister.Lister):
@@ -44,9 +48,8 @@ class ItemRepairCommand(ToolCommandMixin, lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        ToolCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
-        self.logger.debug('take_action(%s)', parsed_args)
+        ToolCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         return self.columns, self._take_action(parsed_args)
 
@@ -66,7 +69,7 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
     """
 
     tool_class = AccountRebuilder
-    columns = ('Entry', 'Status', 'Errors')
+    columns = ("Entry", "Status", "Errors")
 
     def get_parser(self, prog_name):
         parser = super(AccountRepair, self).get_parser(prog_name)
@@ -77,25 +80,27 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
         accounts = list()
         for account_name in parsed_args.accounts:
             account = dict()
-            account['namespace'] = self.app.options.ns
-            account['account'] = account_name
+            account["namespace"] = self.app.options.ns
+            account["account"] = account_name
             accounts.append(account)
 
         self.repairer = AccountRebuilder(
-            self.tool_conf, accounts=accounts, logger=self.logger,
-            watchdog=self.watchdog)
+            self.tool_conf,
+            accounts=accounts,
+            logger=self.logger,
+            watchdog=self.watchdog,
+        )
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
             if error is None:
-                status = 'OK'
+                status = "OK"
             else:
-                status = 'error'
+                status = "error"
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        AccountCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
+        AccountCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return super(AccountRepair, self).take_action(parsed_args)
 
 
@@ -110,58 +115,66 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     """
 
     tool_class = ContainerRepairer
-    columns = ('Container', 'Status', 'Errors')
+    columns = ("Container", "Status", "Errors")
 
     def get_parser(self, prog_name):
         parser = super(ContainerRepair, self).get_parser(prog_name)
         ContainerCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--no-rebuild-bases', action='store_false', dest='rebuild_bases',
-            help='Don\'t rebuild the missing, lost bases. '
-                 '(default=%s)'
-            % (not self.tool_class.DEFAULT_REBUILD_BASES))
+            "--no-rebuild-bases",
+            action="store_false",
+            dest="rebuild_bases",
+            help="Don't rebuild the missing, lost bases. (default=%s)"
+            % (not self.tool_class.DEFAULT_REBUILD_BASES),
+        )
         parser.add_argument(
-            '--no-sync-bases', action='store_false', dest='sync_bases',
-            help='Don\'t synchronize its bases. '
-                 '(default=%s)'
-            % (not self.tool_class.DEFAULT_SYNC_BASES))
+            "--no-sync-bases",
+            action="store_false",
+            dest="sync_bases",
+            help="Don't synchronize its bases. (default=%s)"
+            % (not self.tool_class.DEFAULT_SYNC_BASES),
+        )
         parser.add_argument(
-            '--no-update-account', action='store_false', dest='update_account',
-            help='Don\'t update the counters for the account service. '
-                 '(default=%s)'
-            % (not self.tool_class.DEFAULT_UPDATE_ACCOUNT))
+            "--no-update-account",
+            action="store_false",
+            dest="update_account",
+            help="Don't update the counters for the account service. (default=%s)"
+            % (not self.tool_class.DEFAULT_UPDATE_ACCOUNT),
+        )
         return parser
 
     def _take_action(self, parsed_args):
-        self.tool_conf['rebuild_bases'] = parsed_args.rebuild_bases
-        self.tool_conf['sync_bases'] = parsed_args.sync_bases
-        self.tool_conf['update_account'] = parsed_args.update_account
+        self.tool_conf["rebuild_bases"] = parsed_args.rebuild_bases
+        self.tool_conf["sync_bases"] = parsed_args.sync_bases
+        self.tool_conf["update_account"] = parsed_args.update_account
 
         containers = self.resolve_containers(self.app, parsed_args, no_id=True)
         containers_to_repair = list()
         for account, container_name, _ in containers:
             container = dict()
-            container['namespace'] = self.app.options.ns
-            container['account'] = account
-            container['container'] = container_name
+            container["namespace"] = self.app.options.ns
+            container["account"] = account
+            container["container"] = container_name
             containers_to_repair.append(container)
 
         self.repairer = ContainerRepairer(
-            self.tool_conf, containers=containers_to_repair,
-            logger=self.logger, watchdog=self.watchdog)
+            self.tool_conf,
+            containers=containers_to_repair,
+            logger=self.logger,
+            watchdog=self.watchdog,
+        )
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
             if error is None:
-                status = 'OK'
+                status = "OK"
             else:
-                status = 'error'
+                status = "error"
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        ContainerCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return super(ContainerRepair, self).take_action(parsed_args)
 
 
@@ -175,7 +188,7 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     """
 
     tool_class = ContentRepairer
-    columns = ('Object', 'Status', 'Errors')
+    columns = ("Object", "Status", "Errors")
 
     def get_parser(self, prog_name):
         parser = super(ObjectRepair, self).get_parser(prog_name)
@@ -187,26 +200,28 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
         objects_to_repair = list()
         for container, obj_name, version in objects:
             obj = dict()
-            obj['namespace'] = self.app.options.ns
-            obj['account'] = account
-            obj['container'] = container
-            obj['name'] = obj_name
-            obj['version'] = version
+            obj["namespace"] = self.app.options.ns
+            obj["account"] = account
+            obj["container"] = container
+            obj["name"] = obj_name
+            obj["version"] = version
             objects_to_repair.append(obj)
 
         self.repairer = ContentRepairer(
-            self.tool_conf, objects=objects_to_repair,
-            logger=self.logger, watchdog=self.watchdog)
+            self.tool_conf,
+            objects=objects_to_repair,
+            logger=self.logger,
+            watchdog=self.watchdog,
+        )
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
             if error is None:
-                status = 'OK'
+                status = "OK"
             else:
-                status = 'error'
+                status = "error"
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        ObjectCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
+        ObjectCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return super(ObjectRepair, self).take_action(parsed_args)

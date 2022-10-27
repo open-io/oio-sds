@@ -23,8 +23,7 @@ from six import text_type
 from six.moves.urllib_parse import urlparse
 
 from oio.api import io
-from oio.common.exceptions import OioTimeout, SourceReadError, \
-    SourceReadTimeout
+from oio.common.exceptions import OioTimeout, SourceReadError, SourceReadTimeout
 from oio.common.http import headers_from_object_metadata
 from oio.common.utils import encode, get_hasher, monotonic_time
 from oio.common.constants import CHUNK_HEADERS
@@ -35,18 +34,29 @@ LOGGER = get_logger({}, __name__)
 
 
 class ReplicatedMetachunkWriter(io.MetachunkWriter):
-    def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
-                 quorum=None, connection_timeout=None, write_timeout=None,
-                 read_timeout=None, headers=None, **kwargs):
+    def __init__(
+        self,
+        sysmeta,
+        meta_chunk,
+        global_checksum,
+        storage_method,
+        quorum=None,
+        connection_timeout=None,
+        write_timeout=None,
+        read_timeout=None,
+        headers=None,
+        **kwargs
+    ):
         super(ReplicatedMetachunkWriter, self).__init__(
-            sysmeta, storage_method=storage_method, quorum=quorum, **kwargs)
+            sysmeta, storage_method=storage_method, quorum=quorum, **kwargs
+        )
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.headers = headers or {}
-        self.logger = kwargs.get('logger', LOGGER)
+        self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):
         bytes_transferred = 0
@@ -88,8 +98,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                             read_size = remaining_bytes
                     else:
                         read_size = buffer_size
-                    with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                         green.SourceReadTimeout):
+                    with WatchdogTimeout(
+                        self.watchdog, self.read_timeout, green.SourceReadTimeout
+                    ):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as err:
@@ -97,7 +108,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
-                                    conn.queue.put(b'')
+                                    conn.queue.put(b"")
                             break
                     self.global_checksum.update(data)
                     if meta_checksum:
@@ -111,28 +122,25 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)
 
-                    self.quorum_or_fail([co.chunk for co in current_conns],
-                                        failed_chunks)
+                    self.quorum_or_fail(
+                        [co.chunk for co in current_conns], failed_chunks
+                    )
 
                 for conn in current_conns:
                     while conn.queue.qsize():
                         green.eventlet_yield()
 
         except green.SourceReadTimeout as err:
-            self.logger.warning('Source read timeout (reqid=%s): %s',
-                                self.reqid, err)
+            self.logger.warning("Source read timeout (reqid=%s): %s", self.reqid, err)
             raise SourceReadTimeout(err)
         except SourceReadError as err:
-            self.logger.warning('Source read error (reqid=%s): %s',
-                                self.reqid, err)
+            self.logger.warning("Source read error (reqid=%s): %s", self.reqid, err)
             raise
         except Timeout as to:
-            self.logger.warning('Timeout writing data (reqid=%s): %s',
-                                self.reqid, to)
+            self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             raise OioTimeout(to)
         except Exception:
-            self.logger.exception('Exception writing data (reqid=%s)',
-                                  self.reqid)
+            self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
             raise
 
         success_chunks = []
@@ -145,19 +153,17 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
 
         hexsum = meta_checksum.hexdigest() if meta_checksum else None
 
-        for (conn, resp) in pile:
+        for conn, resp in pile:
             if resp:
                 self._handle_resp(
-                    conn, resp,
-                    hexsum,
-                    bytes_transferred,
-                    success_chunks, failed_chunks)
+                    conn, resp, hexsum, bytes_transferred, success_chunks, failed_chunks
+                )
         self.quorum_or_fail(success_chunks, failed_chunks)
 
         for chunk in success_chunks:
             chunk["size"] = bytes_transferred
 
-        return bytes_transferred, success_chunks[0]['hash'], success_chunks
+        return bytes_transferred, success_chunks[0]["hash"], success_chunks
 
     def _connect_put(self, chunk):
         """
@@ -168,34 +174,44 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
         try:
-            chunk_path = parsed.path.split('/')[-1]
+            chunk_path = parsed.path.split("/")[-1]
             hdrs = headers_from_object_metadata(self.sysmeta)
             hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
             hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
             hdrs = encode(hdrs)
 
-            with WatchdogTimeout(self.watchdog, self.connection_timeout,
-                                 green.ConnectionTimeout):
-                perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
-                    if self.perfdata is not None else None
+            with WatchdogTimeout(
+                self.watchdog, self.connection_timeout, green.ConnectionTimeout
+            ):
+                perfdata_rawx = (
+                    self.perfdata.setdefault("rawx", dict())
+                    if self.perfdata is not None
+                    else None
+                )
                 conn = io.http_connect(
-                    parsed.netloc, 'PUT', parsed.path, hdrs,
+                    parsed.netloc,
+                    "PUT",
+                    parsed.path,
+                    hdrs,
                     scheme=parsed.scheme,
                     perfdata=perfdata_rawx,
-                    perfdata_suffix=chunk['url'])
+                    perfdata_suffix=chunk["url"],
+                )
                 conn.set_cork(True)
                 conn.chunk = chunk
             return conn, chunk
         except (SocketError, Timeout) as err:
             msg = str(err)
-            self.logger.warning("Failed to connect to %s (reqid=%s): %s",
-                                chunk, self.reqid, err)
+            self.logger.warning(
+                "Failed to connect to %s (reqid=%s): %s", chunk, self.reqid, err
+            )
         except Exception as err:
             msg = str(err)
-            self.logger.exception("Failed to connect to %s (reqid=%s)",
-                                  chunk, self.reqid)
-        chunk['error'] = msg
+            self.logger.exception(
+                "Failed to connect to %s (reqid=%s)", chunk, self.reqid
+            )
+        chunk["error"] = msg
         return None, chunk
 
     def _send_data(self, conn):
@@ -206,17 +222,17 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         while True:
             data = conn.queue.get()
             if isinstance(data, text_type):
-                data = data.encode('utf-8')
+                data = data.encode("utf-8")
             if not conn.failed:
                 try:
-                    with WatchdogTimeout(self.watchdog, self.write_timeout,
-                                         green.ChunkWriteTimeout):
-                        if self.perfdata is not None \
-                                and conn.upload_start is None:
+                    with WatchdogTimeout(
+                        self.watchdog, self.write_timeout, green.ChunkWriteTimeout
+                    ):
+                        if self.perfdata is not None and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
-                        conn.send(b'%x\r\n' % len(data))
+                        conn.send(b"%x\r\n" % len(data))
                         conn.send(data)
-                        conn.send(b'\r\n')
+                        conn.send(b"\r\n")
                     if not data:
                         if self.perfdata is not None:
                             fin_start = monotonic_time()
@@ -224,15 +240,15 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         conn.set_cork(False)
                         if self.perfdata is not None:
                             fin_end = monotonic_time()
-                            rawx_perfdata = self.perfdata.setdefault('rawx',
-                                                                     dict())
-                            chunk_url = conn.chunk['url']
-                            rawx_perfdata['upload_finish.' + chunk_url] = \
+                            rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+                            chunk_url = conn.chunk["url"]
+                            rawx_perfdata["upload_finish." + chunk_url] = (
                                 fin_end - fin_start
+                            )
                     green.eventlet_yield()
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
-                    conn.chunk['error'] = str(err)
+                    conn.chunk["error"] = str(err)
 
     def _get_response(self, conn):
         """
@@ -241,28 +257,35 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         :returns: a tuple with `conn` and the response object or an exception.
         """
         try:
-            with WatchdogTimeout(self.watchdog, self.write_timeout,
-                                 green.ChunkWriteTimeout):
+            with WatchdogTimeout(
+                self.watchdog, self.write_timeout, green.ChunkWriteTimeout
+            ):
                 resp = conn.getresponse()
                 if self.perfdata is not None:
                     upload_end = monotonic_time()
-                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    chunk_url = conn.chunk['url']
-                    perfdata_rawx['upload.' + chunk_url] = \
+                    perfdata_rawx = self.perfdata.setdefault("rawx", dict())
+                    chunk_url = conn.chunk["url"]
+                    perfdata_rawx["upload." + chunk_url] = (
                         upload_end - conn.upload_start
+                    )
         except Timeout as err:
             resp = err
             self.logger.warning(
-                'Failed to read response from %s (reqid=%s): %s',
-                conn.chunk, self.reqid, err)
+                "Failed to read response from %s (reqid=%s): %s",
+                conn.chunk,
+                self.reqid,
+                err,
+            )
         except Exception as err:
             resp = err
-            self.logger.exception("Failed to read response from %s (reqid=%s)",
-                                  conn.chunk, self.reqid)
+            self.logger.exception(
+                "Failed to read response from %s (reqid=%s)", conn.chunk, self.reqid
+            )
         return (conn, resp)
 
-    def _handle_resp(self, conn, resp, checksum, bytes_transferred,
-                     successes, failures):
+    def _handle_resp(
+        self, conn, resp, checksum, bytes_transferred, successes, failures
+    ):
         """
         If `resp` is an exception or its status is not 201,
         declare `conn` as failed and put `conn.chunk` in
@@ -274,37 +297,48 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         if resp:
             if isinstance(resp, (Exception, Timeout)):
                 conn.failed = True
-                conn.chunk['error'] = str(resp)
+                conn.chunk["error"] = str(resp)
                 failures.append(conn.chunk)
             elif resp.status != 201:
                 conn.failed = True
-                conn.chunk['error'] = 'HTTP %s' % resp.status
+                conn.chunk["error"] = "HTTP %s" % resp.status
                 failures.append(conn.chunk)
                 self.logger.error(
                     "Unexpected status code from %s (reqid=%s): %s",
-                    conn.chunk, self.reqid, resp.status)
+                    conn.chunk,
+                    self.reqid,
+                    resp.status,
+                )
             else:
-                rawx_checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
-                rawx_chunk_size = resp.getheader(CHUNK_HEADERS['chunk_size'])
-                if rawx_checksum and checksum and \
-                        rawx_checksum.lower() != checksum:
+                rawx_checksum = resp.getheader(CHUNK_HEADERS["chunk_hash"])
+                rawx_chunk_size = resp.getheader(CHUNK_HEADERS["chunk_size"])
+                if rawx_checksum and checksum and rawx_checksum.lower() != checksum:
                     conn.failed = True
-                    conn.chunk['error'] = \
-                        "checksum mismatch: %s (local), %s (rawx)" % \
-                        (checksum, rawx_checksum.lower())
+                    conn.chunk["error"] = "checksum mismatch: %s (local), %s (rawx)" % (
+                        checksum,
+                        rawx_checksum.lower(),
+                    )
                     failures.append(conn.chunk)
-                    self.logger.error("%s (reqid=%s): %s",
-                                      conn.chunk['url'], self.reqid,
-                                      conn.chunk['error'])
-                elif rawx_chunk_size is not None \
-                        and int(rawx_chunk_size) != bytes_transferred:
+                    self.logger.error(
+                        "%s (reqid=%s): %s",
+                        conn.chunk["url"],
+                        self.reqid,
+                        conn.chunk["error"],
+                    )
+                elif (
+                    rawx_chunk_size is not None
+                    and int(rawx_chunk_size) != bytes_transferred
+                ):
                     conn.failed = True
-                    conn.chunk['error'] = \
-                        "chunk size mismatch: %d (local), %s (rawx)" % \
-                        (bytes_transferred, rawx_chunk_size)
+                    conn.chunk[
+                        "error"
+                    ] = "chunk size mismatch: %d (local), %s (rawx)" % (
+                        bytes_transferred,
+                        rawx_chunk_size,
+                    )
                     failures.append(conn.chunk)
                 else:
-                    conn.chunk['hash'] = checksum or rawx_checksum
+                    conn.chunk["hash"] = checksum or rawx_checksum
                     successes.append(conn.chunk)
         conn.close()
 
@@ -322,14 +356,18 @@ class ReplicatedWriteHandler(io.WriteHandler):
         kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)
 
         for meta_chunk in self.chunk_prep():
-            size = self.sysmeta['chunk_size']
+            size = self.sysmeta["chunk_size"]
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, global_checksum, self.storage_method,
+                self.sysmeta,
+                meta_chunk,
+                global_checksum,
+                self.storage_method,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
-                **kwargs)
+                **kwargs
+            )
             bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks
 

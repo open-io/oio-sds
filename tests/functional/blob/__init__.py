@@ -20,84 +20,88 @@ import random
 import shutil
 from hashlib import sha256
 
-from oio.common.constants import CHUNK_XATTR_KEYS, \
-    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.constants import CHUNK_XATTR_KEYS, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.xattr import xattr
 from oio.common.fullpath import encode_old_fullpath
 from oio.common.utils import cid_from_name
 
 
-def convert_to_old_chunk(chunk_path, account, container, path, version,
-                         content_id, add_old_fullpath=False):
-    chunk_id = chunk_path.rsplit('/', 1)[1]
+def convert_to_old_chunk(
+    chunk_path, account, container, path, version, content_id, add_old_fullpath=False
+):
+    chunk_id = chunk_path.rsplit("/", 1)[1]
     cid = cid_from_name(account, container)
     with open(chunk_path) as fd:
         xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['chunk_id'],
-            chunk_id.encode('utf-8'))
+            fd, "user." + CHUNK_XATTR_KEYS["chunk_id"], chunk_id.encode("utf-8")
+        )
         xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['container_id'],
-            cid.encode('utf-8'))
+            fd, "user." + CHUNK_XATTR_KEYS["container_id"], cid.encode("utf-8")
+        )
         xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['content_path'],
-            path.encode('utf-8'))
+            fd, "user." + CHUNK_XATTR_KEYS["content_path"], path.encode("utf-8")
+        )
         xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['content_version'],
-            str(version).encode('utf-8'))
+            fd,
+            "user." + CHUNK_XATTR_KEYS["content_version"],
+            str(version).encode("utf-8"),
+        )
         xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['content_id'],
-            content_id.encode('utf-8'))
+            fd, "user." + CHUNK_XATTR_KEYS["content_id"], content_id.encode("utf-8")
+        )
         if add_old_fullpath:
             old_fullpath = encode_old_fullpath(
-                account, container, path, version).encode('utf-8')
+                account, container, path, version
+            ).encode("utf-8")
             hasher = sha256()
             hasher.update(old_fullpath)
             hash_old_fullpath = hasher.hexdigest().upper()
-            xattr.setxattr(
-                fd, 'user.oio:' + hash_old_fullpath, old_fullpath)
-        xattr.setxattr(
-            fd, 'user.' + CHUNK_XATTR_KEYS['oio_version'], b'4.0')
+            xattr.setxattr(fd, "user.oio:" + hash_old_fullpath, old_fullpath)
+        xattr.setxattr(fd, "user." + CHUNK_XATTR_KEYS["oio_version"], b"4.0")
         try:
             xattr.removexattr(
-                fd, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)
+                fd, "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id
+            )
         except IOError:
             pass
 
 
 def remove_fullpath_xattr(chunk_path):
-    key = 'user.%s%s' % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
-                         chunk_path.rsplit('/', 1)[-1])
-    with open(chunk_path, 'w') as fd:
+    key = "user.%s%s" % (
+        CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
+        chunk_path.rsplit("/", 1)[-1],
+    )
+    with open(chunk_path, "w") as fd:
         try:
             xattr.removexattr(fd, key)
         except IOError as err:
-            print('Failed to remove fullpath: %s' % err)
+            print("Failed to remove fullpath: %s" % err)
 
 
 def remove_xattr(chunk_path, key):
-    with open(chunk_path, 'w') as fd:
+    with open(chunk_path, "w") as fd:
         try:
             xattr.removexattr(fd, key)
         except IOError as err:
-            print('Failed to remove fullpath: %s' % err)
+            print("Failed to remove fullpath: %s" % err)
 
 
 def random_buffer(dictionary, n):
     slot = 512
-    pattern = ''.join(random.choice(dictionary) for _ in range(slot))
+    pattern = "".join(random.choice(dictionary) for _ in range(slot))
     t = []
     while len(t) * slot < n:
         t.append(pattern)
-    return ''.join(t)[:n]
+    return "".join(t)[:n]
 
 
 def random_chunk_id():
-    return random_buffer('0123456789ABCDEF', 64)
+    return random_buffer("0123456789ABCDEF", 64)
 
 
 def copy_chunk(src, dst):
     shutil.copyfile(src, dst)
     all_xattrs = xattr.get_all(src)
-    with open(dst, 'r') as fd:
+    with open(dst, "r") as fd:
         for k, v in all_xattrs:
             xattr.setxattr(fd, k, v)

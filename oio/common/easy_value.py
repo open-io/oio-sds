@@ -19,7 +19,7 @@ from six import binary_type, string_types
 
 
 def int_value(value, default):
-    if value in (None, 'None', ''):
+    if value in (None, "None", ""):
         return default
     try:
         value = int(value)
@@ -29,7 +29,7 @@ def int_value(value, default):
 
 
 def float_value(value, default):
-    if value in (None, 'None', ''):
+    if value in (None, "None", ""):
         return default
     try:
         value = float(value)
@@ -38,17 +38,18 @@ def float_value(value, default):
     return value
 
 
-TRUE_VALUES = set(('true', '1', 'yes', 'on', 't', 'y'))
-FALSE_VALUES = set(('false', '0', 'no', 'off', 'f', 'n'))
+TRUE_VALUES = set(("true", "1", "yes", "on", "t", "y"))
+FALSE_VALUES = set(("false", "0", "no", "off", "f", "n"))
 
 
 def true_value(value):
-    return value is True or \
-        (isinstance(value, string_types) and value.lower() in TRUE_VALUES)
+    return value is True or (
+        isinstance(value, string_types) and value.lower() in TRUE_VALUES
+    )
 
 
 def boolean_value(value, default=False):
-    if value in (None, 'None', ''):
+    if value in (None, "None", ""):
         return default
     try:
         value = str(value).lower()
@@ -57,7 +58,7 @@ def boolean_value(value, default=False):
         elif value in FALSE_VALUES:
             return False
         else:
-            raise ValueError('Boolean value expected')
+            raise ValueError("Boolean value expected")
     except (TypeError, ValueError):
         raise
 
@@ -65,14 +66,14 @@ def boolean_value(value, default=False):
 METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
 
-def convert_size(size, unit=''):
+def convert_size(size, unit=""):
     if abs(size) < 1000.0:
-        return '%.0f%s%s' % (size, METRIC_SYMBOLS[0], unit)
+        return "%.0f%s%s" % (size, METRIC_SYMBOLS[0], unit)
     for metric_symbol in METRIC_SYMBOLS[1:-1]:
         size /= 1000.0
         if abs(size) < 1000.0:
-            return '%.3f%s%s' % (size, metric_symbol, unit)
-    return '%.3f%s%s' % (size, METRIC_SYMBOLS[-1], unit)
+            return "%.3f%s%s" % (size, metric_symbol, unit)
+    return "%.3f%s%s" % (size, METRIC_SYMBOLS[-1], unit)
 
 
 def is_hexa(hexa, size=None):
@@ -95,10 +96,9 @@ def debinarize(something):
     :type something: bytes, list, dict, or anything else.
     """
     if isinstance(something, binary_type):
-        return something.decode('utf-8')
+        return something.decode("utf-8")
     elif isinstance(something, list):
         return [debinarize(o) for o in something]
     elif isinstance(something, dict):
-        return {debinarize(k): debinarize(v)
-                for k, v in something.items()}
+        return {debinarize(k): debinarize(v) for k, v in something.items()}
     return something

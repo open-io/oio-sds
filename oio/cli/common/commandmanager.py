@@ -38,7 +38,7 @@ class CommandManager(commandmanager.CommandManager):
         if group is not None:
             for entry_point in iter_entry_points(group):
                 cmd_name = (
-                    entry_point.name.replace('_', ' ')
+                    entry_point.name.replace("_", " ")
                     if self.convert_underscores
                     else entry_point.name
                 )

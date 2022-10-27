@@ -39,9 +39,9 @@ class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
 
     def take_action(self, parsed_args):
         SingleServiceCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
-        self.logger.debug('take_action(%s)', parsed_args)
+            self, self.app, parsed_args
+        )
+        self.logger.debug("take_action(%s)", parsed_args)
 
-        conf = self.app.client_manager.admin.service_get_info(
-            parsed_args.service)
+        conf = self.app.client_manager.admin.service_get_info(parsed_args.service)
         return zip(*sorted(flat_dict_from_dict(parsed_args, conf).items()))

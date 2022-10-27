@@ -34,47 +34,49 @@ def random_data(data_size):
 
 
 class TestFilters(BaseTestCase):
-
     def setUp(self):
         super(TestFilters, self).setUp()
-        self.account = self.conf['account']
-        self.namespace = self.conf['namespace']
-        self.chunk_size = self.conf['chunk_size']
-        self.gridconf = {'namespace': self.namespace}
-        self.content_factory = ContentFactory(self.gridconf,
-                                              watchdog=self.watchdog)
-        self.container_name = 'TestFilter%f' % time.time()
+        self.account = self.conf["account"]
+        self.namespace = self.conf["namespace"]
+        self.chunk_size = self.conf["chunk_size"]
+        self.gridconf = {"namespace": self.namespace}
+        self.content_factory = ContentFactory(self.gridconf, watchdog=self.watchdog)
+        self.container_name = "TestFilter%f" % time.time()
         self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(
-            account=self.account, reference=self.container_name,
-            admin_mode=True)
-        self.container_id = cid_from_name(self.account,
-                                          self.container_name).upper()
+            account=self.account, reference=self.container_name, admin_mode=True
+        )
+        self.container_id = cid_from_name(self.account, self.container_name).upper()
         self.stgpol = "SINGLE"
 
     def _prepare_content(self, path, content_id, admin_mode):
         self.container_client.content_prepare(
-            account=self.account, reference=self.container_name, path=path,
-            content_id=content_id, size=1, stgpol=self.stgpol, autocreate=True,
-            admin_mode=admin_mode)
+            account=self.account,
+            reference=self.container_name,
+            path=path,
+            content_id=content_id,
+            size=1,
+            stgpol=self.stgpol,
+            autocreate=True,
+            admin_mode=admin_mode,
+        )
 
     def _new_content(self, data, path, admin_mode):
-        old_content = self.content_factory.new(self.container_id, path,
-                                               len(data), self.stgpol,
-                                               admin_mode=admin_mode)
+        old_content = self.content_factory.new(
+            self.container_id, path, len(data), self.stgpol, admin_mode=admin_mode
+        )
         old_content.create(BytesIO(data), admin_mode=admin_mode)
-        return self.content_factory.get(self.container_id,
-                                        old_content.content_id)
+        return self.content_factory.get(self.container_id, old_content.content_id)
 
     def test_slave_and_admin(self):
         if not os.getenv("SLAVE"):
             self.skipTest("must be in slave mode")
         data = random_data(10)
-        path = 'test_slave'
+        path = "test_slave"
         try:
             self._new_content(data, path, False)
         except ClientException as exc:
-            self.assertIn('NS slave!', str(exc))
+            self.assertIn("NS slave!", str(exc))
         else:
             self.fail("New content: no exception")
         content = self._new_content(data, path, True)
@@ -84,7 +86,7 @@ class TestFilters(BaseTestCase):
         if not os.getenv("WORM"):
             self.skipTest("must be in worm mode")
         data = random_data(10)
-        path = 'test_worm'
+        path = "test_worm"
         content = self._new_content(data, path, True)
 
         # Prepare without admin mode:
@@ -93,7 +95,7 @@ class TestFilters(BaseTestCase):
         # now work despite the presence of the content.
         self._prepare_content(path, None, False)
         self._prepare_content(path, content.content_id, False)
-        self._prepare_content('test_worm_prepare', content.content_id, False)
+        self._prepare_content("test_worm_prepare", content.content_id, False)
         self._prepare_content(path, random_id(32), False)
 
         # Overwrite without admin mode
@@ -103,7 +105,7 @@ class TestFilters(BaseTestCase):
         # Prepare with admin mode
         self._prepare_content(path, None, True)
         self._prepare_content(path, content.content_id, True)
-        self._prepare_content('test_worm_prepare', content.content_id, True)
+        self._prepare_content("test_worm_prepare", content.content_id, True)
         self._prepare_content(path, random_id(32), True)
 
         # Overwrite with admin mode
@@ -113,10 +115,10 @@ class TestFilters(BaseTestCase):
         try:
             content.delete()
         except ClientException as exc:
-            self.assertIn('worm', str(exc))
+            self.assertIn("worm", str(exc))
         else:
             self.fail("Delete without admin mode: no exception")
-        downloaded_data = b''.join(content.fetch())
+        downloaded_data = b"".join(content.fetch())
         self.assertEqual(downloaded_data, data2)
 
         # Delete with admin mode

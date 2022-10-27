@@ -19,98 +19,129 @@ import unittest
 from mock import MagicMock as Mock
 
 from oio.common.exceptions import PreconditionFailed
+
 # See comment further down
 # from oio.common.logger import get_logger
-from oio.directory.meta0 import \
-        Meta0PrefixMapping, \
-        generate_short_prefixes as prefixes, \
-        _slice_services, _bootstrap
+from oio.directory.meta0 import (
+    Meta0PrefixMapping,
+    generate_short_prefixes as prefixes,
+    _slice_services,
+    _bootstrap,
+)
 
 
 class TestMeta0Bootstrap(unittest.TestCase):
-
     def setUp(self):
         super(TestMeta0Bootstrap, self).setUp()
 
     def generate_services(self, count, nb_sites=1, fill_token=2):
-        assert(count > 0)
-        assert(nb_sites > 0)
-        sites = ['s' + str(i) for i in range(nb_sites)]
+        assert count > 0
+        assert nb_sites > 0
+        sites = ["s" + str(i) for i in range(nb_sites)]
 
         def _loc(i):
             s = []
             s.append(sites[i % len(sites)])
             for _ in range(fill_token):
-                s.append('0')
-            s.append('h' + str(i))
-            return '.'.join(s)
+                s.append("0")
+            s.append("h" + str(i))
+            return ".".join(s)
 
         for i in range(count):
-            yield {'addr': '127.0.0.1:{0}'.format(6000+i),
-                   'id': 'srv-{0}'.format(i),
-                   'type': 'meta1', 'tags': {'tag.loc': _loc(i)}}
+            yield {
+                "addr": "127.0.0.1:{0}".format(6000 + i),
+                "id": "srv-{0}".format(i),
+                "type": "meta1",
+                "tags": {"tag.loc": _loc(i)},
+            }
 
     def _test_ok(self, groups, sites=1, replicas=1, level=0, fill_token=0):
         nb_services = sites * 3
-        srv = list(self.generate_services(nb_services, nb_sites=sites,
-                                          fill_token=fill_token))
+        srv = list(
+            self.generate_services(nb_services, nb_sites=sites, fill_token=fill_token)
+        )
         _after = _bootstrap(srv, groups, replicas, level)
         ideal_per_slice = (len(groups) * replicas) // sites
         for start, end in _slice_services(_after, level):
-            total = sum(len(s['bases']) for s in _after[start:end])
+            total = sum(len(s["bases"]) for s in _after[start:end])
             # Check the sites are evenly loaded
-            bounds = (ideal_per_slice, ideal_per_slice+1)
+            bounds = (ideal_per_slice, ideal_per_slice + 1)
             self.assertIn(total, bounds)
             # Check services are uniformly balanced within the
             # current slice.
             ideal_per_node = total // (end - start)
-            bounds = (ideal_per_node, ideal_per_node+1)
+            bounds = (ideal_per_node, ideal_per_node + 1)
             for s in _after[start:end]:
-                self.assertIn(len(s['bases']), bounds)
+                self.assertIn(len(s["bases"]), bounds)
 
     def test_bootstrap_not_enough_sites(self):
-        for groups in (prefixes(1),  # 16
-                       prefixes(2),  # 256
-                       prefixes(3),  # 4096
-                       prefixes(4)):  # 64ki
+        for groups in (
+            prefixes(1),  # 16
+            prefixes(2),  # 256
+            prefixes(3),  # 4096
+            prefixes(4),
+        ):  # 64ki
             groups = list(groups)
             for replicas in range(2, 5):
                 for sites in range(1, replicas):
-                    srv = list(self.generate_services(sites*3,
-                                                      nb_sites=sites,
-                                                      fill_token=2))
-                    self.assertRaises(PreconditionFailed,
-                                      _bootstrap, srv, groups,
-                                      replicas=replicas, level=0,
-                                      degradation=1)
+                    srv = list(
+                        self.generate_services(sites * 3, nb_sites=sites, fill_token=2)
+                    )
+                    self.assertRaises(
+                        PreconditionFailed,
+                        _bootstrap,
+                        srv,
+                        groups,
+                        replicas=replicas,
+                        level=0,
+                        degradation=1,
+                    )
 
     def test_bootstrap_enough_sites(self):
-        for groups in (prefixes(1),  # 16
-                       prefixes(2),  # 256
-                       prefixes(3),  # 4096
-                       prefixes(4)):  # 64ki
+        for groups in (
+            prefixes(1),  # 16
+            prefixes(2),  # 256
+            prefixes(3),  # 4096
+            prefixes(4),
+        ):  # 64ki
             groups = list(groups)
             max_replicas = 5
-            for replicas in range(1, max_replicas+1):
-                for sites in range(replicas, max_replicas+1):
-                    self._test_ok(groups, sites=sites, replicas=replicas,
-                                  level=0, fill_token=2)
+            for replicas in range(1, max_replicas + 1):
+                for sites in range(replicas, max_replicas + 1):
+                    self._test_ok(
+                        groups, sites=sites, replicas=replicas, level=0, fill_token=2
+                    )
 
     def test_bootstrap_partial_locations(self):
-        for groups in (prefixes(1),  # 16
-                       prefixes(2),  # 256
-                       prefixes(3),  # 4096
-                       prefixes(4)):  # 64ki
+        for groups in (
+            prefixes(1),  # 16
+            prefixes(2),  # 256
+            prefixes(3),  # 4096
+            prefixes(4),
+        ):  # 64ki
             groups = list(groups)
             # whatever the number of bases to spread, a partial location
             # is well padded left
             srv = list(self.generate_services(9, nb_sites=3, fill_token=0))
-            self.assertRaises(PreconditionFailed, _bootstrap,
-                              srv, groups, replicas=2, level=0, degradation=1)
-            self.assertRaises(PreconditionFailed, _bootstrap,
-                              srv, groups, replicas=2, level=1, degradation=1)
-            self._test_ok(groups, sites=3, replicas=1,
-                          level=2, fill_token=2)
+            self.assertRaises(
+                PreconditionFailed,
+                _bootstrap,
+                srv,
+                groups,
+                replicas=2,
+                level=0,
+                degradation=1,
+            )
+            self.assertRaises(
+                PreconditionFailed,
+                _bootstrap,
+                srv,
+                groups,
+                replicas=2,
+                level=1,
+                degradation=1,
+            )
+            self._test_ok(groups, sites=3, replicas=1, level=2, fill_token=2)
 
 
 class FakeConscienceClient(object):
@@ -122,28 +153,32 @@ class FakeConscienceClient(object):
 
     def generate_services(self, count, locations=3):
         self._all_services = []
-        for i in range(1, count+1):
-            svc = {"addr": "127.0.1.1:6%03d" % i,
-                   "score": 100,
-                   "tags": {"tag.loc": "location%d" % (i % locations)}}
+        for i in range(1, count + 1):
+            svc = {
+                "addr": "127.0.1.1:6%03d" % i,
+                "score": 100,
+                "tags": {"tag.loc": "location%d" % (i % locations)},
+            }
             self._all_services.append(svc)
 
 
 class TestMeta0PrefixMapping(unittest.TestCase):
-
     def setUp(self):
         super(TestMeta0PrefixMapping, self).setUp()
         self.cs_client = FakeConscienceClient()
-        self.m0_client = Mock(conf={'namespace': 'OPENIO'})
+        self.m0_client = Mock(conf={"namespace": "OPENIO"})
         # Disabling the logging helps passing tests on Travis CI
         # self.logger = get_logger(None, 'test')
         self.logger = Mock()
 
     def make_mapping(self, replicas=3, digits=None):
-        mapping = Meta0PrefixMapping(self.m0_client,
-                                     conscience_client=self.cs_client,
-                                     replicas=replicas, digits=digits,
-                                     logger=self.logger)
+        mapping = Meta0PrefixMapping(
+            self.m0_client,
+            conscience_client=self.cs_client,
+            replicas=replicas,
+            digits=digits,
+            logger=self.logger,
+        )
         return mapping
 
     def test_bootstrap_3_services(self):
@@ -152,8 +187,9 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.bootstrap()
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         for count in n_pfx_by_svc.values():
-            self.assertIn(count, range(mapping.num_bases() - 5000,
-                                       mapping.num_bases() + 5000))
+            self.assertIn(
+                count, range(mapping.num_bases() - 5000, mapping.num_bases() + 5000)
+            )
 
     def test_bootstrap_20_services(self):
         n = 20
@@ -167,8 +203,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         for count in n_pfx_by_svc.values():
             self.assertIn(count, arange)
 
-    def _test_bootstrap_rebalanced(self, n_svc, replicas,
-                                   locations=-1, digits=None):
+    def _test_bootstrap_rebalanced(self, n_svc, replicas, locations=-1, digits=None):
         if locations < 0:
             locations = n_svc
         self.cs_client.generate_services(n_svc, locations=locations)
@@ -178,9 +213,10 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         self.assertTrue(mapping.check_replicas())
         n_pfx_by_svc = mapping.count_pfx_by_svc()
         for svc1_addr, count in n_pfx_by_svc.items():
-            svc1 = mapping.services.get(svc1_addr, {'upper_limit': svc1_addr})
-            arange = range(int(svc1['upper_limit'] * 0.92),
-                           int(svc1['upper_limit'] * 1.08))
+            svc1 = mapping.services.get(svc1_addr, {"upper_limit": svc1_addr})
+            arange = range(
+                int(svc1["upper_limit"] * 0.92), int(svc1["upper_limit"] * 1.08)
+            )
             self.assertIn(count, arange)
 
     def test_bootstrap_4_services_rebalanced(self):
@@ -227,10 +263,10 @@ class TestMeta0PrefixMapping(unittest.TestCase):
             if svc1_addr == svc["addr"]:
                 self.assertEqual(0, count)
             else:
-                svc1 = mapping.services.get(
-                    svc1_addr, {'upper_limit': svc1_addr})
-                arange = range(int(svc1['upper_limit'] * 0.95),
-                               int(svc1['upper_limit'] * 1.05))
+                svc1 = mapping.services.get(svc1_addr, {"upper_limit": svc1_addr})
+                arange = range(
+                    int(svc1["upper_limit"] * 0.95), int(svc1["upper_limit"] * 1.05)
+                )
                 self.assertIn(count, arange)
 
     def test_decommission_one_by_one(self):
@@ -243,18 +279,17 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         self.assertTrue(mapping.check_replicas())
 
         svc = list(mapping.services.values())[0]
-        for base in list(svc['bases']):
-            old_peers = [x['addr'] for x in mapping.services_by_base[base]]
-            self.logger.info("Decommissioning base %s from %s",
-                             base, svc['addr'])
+        for base in list(svc["bases"]):
+            old_peers = [x["addr"] for x in mapping.services_by_base[base]]
+            self.logger.info("Decommissioning base %s from %s", base, svc["addr"])
             mapping.decommission(svc, [base])
-            new_peers = [x['addr'] for x in mapping.services_by_base[base]]
+            new_peers = [x["addr"] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
             self.logger.debug("Old peers: %s", old_peers)
             self.logger.debug("New peers: %s", new_peers)
             self.logger.debug("Peers kept: %s", preserved)
             self.assertTrue(mapping.check_replicas())
-            self.assertNotIn(svc['addr'], new_peers)
+            self.assertNotIn(svc["addr"], new_peers)
             self.assertEqual(replicas - 1, len(preserved))
 
         self.assertTrue(mapping.check_replicas())
@@ -271,28 +306,27 @@ class TestMeta0PrefixMapping(unittest.TestCase):
 
         mapping = self.make_mapping(replicas=replicas, digits=digits)
         mapping._admin = Mock()
-        mapping._admin.election_status = Mock(return_value={'peers': {}})
+        mapping._admin.election_status = Mock(return_value={"peers": {}})
         mapping.load_json(mapping_str)
 
         svc = list(mapping.services.values())[0]
-        self.logger.info("Decommissioning everything from %s", svc['addr'])
-        self.logger.info("Bases: %s", svc['bases'])
-        moved = list(svc['bases'])
+        self.logger.info("Decommissioning everything from %s", svc["addr"])
+        self.logger.info("Bases: %s", svc["bases"])
+        moved = list(svc["bases"])
         for base in moved:
-            old_peers = [x['addr'] for x in mapping.services_by_base[base]]
-            self.logger.info("Decommissioning base %s from %s",
-                             base, svc['addr'])
-            self.assertIn(svc['addr'], old_peers)
+            old_peers = [x["addr"] for x in mapping.services_by_base[base]]
+            self.logger.info("Decommissioning base %s from %s", base, svc["addr"])
+            self.assertIn(svc["addr"], old_peers)
             mapping.decommission(svc, [base])
             old_peers2 = mapping.raw_services_by_base[base]
-            new_peers = [x['addr'] for x in mapping.services_by_base[base]]
+            new_peers = [x["addr"] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
             self.logger.debug("Old peers: %s (real)", old_peers)
             self.logger.debug("Old peers: %s (computed)", old_peers2)
             self.logger.debug("New peers: %s", new_peers)
             self.logger.debug("Peers kept: %s", preserved)
             self.assertTrue(mapping.check_replicas())
-            self.assertNotIn(svc['addr'], new_peers)
+            self.assertNotIn(svc["addr"], new_peers)
             self.assertEqual(replicas - 1, len(preserved))
 
         self.assertTrue(mapping.check_replicas())

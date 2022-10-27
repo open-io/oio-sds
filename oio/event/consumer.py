@@ -29,14 +29,13 @@ from oio.common.easy_value import int_value
 from oio.common.json import json
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
-from oio.common.exceptions import ExplicitBury, OioNetworkException, \
-    ClientException
+from oio.common.exceptions import ExplicitBury, OioNetworkException, ClientException
 
 
 SLEEP_TIME = 1
 ACCOUNT_SERVICE_TIMEOUT = 60
-ACCOUNT_SERVICE = 'account'
-DEFAULT_TUBE = 'oio'
+ACCOUNT_SERVICE = "account"
+DEFAULT_TUBE = "oio"
 
 BEANSTALK_RECONNECTION = 2.0
 # default release delay (in seconds)
@@ -60,9 +59,7 @@ class StopServe(Exception):
 
 
 class Worker(object):
-
-    SIGNALS = [getattr(signal, "SIG%s" % x)
-               for x in "HUP QUIT INT TERM CHLD".split()]
+    SIGNALS = [getattr(signal, "SIG%s" % x) for x in "HUP QUIT INT TERM CHLD".split()]
 
     def __init__(self, ppid, conf, logger):
         self.ppid = ppid
@@ -129,37 +126,33 @@ class EventWorker(Worker):
         self.tube = None
 
     def init(self):
-        self.concurrency = int_value(self.conf.get('concurrency'), 10)
+        self.concurrency = int_value(self.conf.get("concurrency"), 10)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
-        acct_refresh_interval = int_value(
-            self.conf.get('acct_refresh_interval'), 3600)
-        rdir_refresh_interval = int_value(
-            self.conf.get('rdir_refresh_interval'), 3600)
-        self.app_env['account_client'] = AccountClient(
+        acct_refresh_interval = int_value(self.conf.get("acct_refresh_interval"), 3600)
+        rdir_refresh_interval = int_value(self.conf.get("rdir_refresh_interval"), 3600)
+        self.app_env["account_client"] = AccountClient(
             self.conf,
             logger=self.logger,
             refresh_delay=acct_refresh_interval,
             pool_connections=3,  # 1 account, 1 proxy, 1 extra
         )
-        self.app_env['rdir_client'] = RdirClient(
+        self.app_env["rdir_client"] = RdirClient(
             self.conf,
             logger=self.logger,
             pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
             cache_duration=rdir_refresh_interval,
         )
-        self.app_env['watchdog'] = \
-            get_watchdog(called_from_main_application=True)
+        self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 
-        if 'handlers_conf' not in self.conf:
+        if "handlers_conf" not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
-        self.handlers = loadhandlers(self.conf.get('handlers_conf'),
-                                     global_conf=self.conf,
-                                     app=self)
+        self.handlers = loadhandlers(
+            self.conf.get("handlers_conf"), global_conf=self.conf, app=self
+        )
 
-        for opt in ('acct_update', 'rdir_update',
-                    'retries_per_second', 'batch_size'):
+        for opt in ("acct_update", "rdir_update", "retries_per_second", "batch_size"):
             if opt in self.conf:
-                self.logger.warn('Deprecated option: %s', opt)
+                self.logger.warn("Deprecated option: %s", opt)
 
         super(EventWorker, self).init()
 
@@ -170,23 +163,22 @@ class EventWorker(Worker):
     def safe_decode_job(self, job_id, data):
         try:
             env = json.loads(data)
-            env['job_id'] = job_id
+            env["job_id"] = job_id
             return env
         except json.JSONDecodeError as exc:
-            self.logger.warn('Failed to decode job %s: %s',
-                             job_id, exc)
+            self.logger.warn("Failed to decode job %s: %s", job_id, exc)
             return None
         except Exception:
-            self.logger.exception('Failed to decode job %s', job_id)
+            self.logger.exception("Failed to decode job %s", job_id)
             return None
 
     def run(self):
         coros = []
-        queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
+        queue_url = self.conf.get("queue_url", "beanstalk://127.0.0.1:11300")
 
         server_gt = greenthread.getcurrent()
 
-        for url in queue_url.split(';'):
+        for url in queue_url.split(";"):
             for _ in range(self.concurrency):
                 beanstalk = Beanstalk.from_url(url)
                 gt = eventlet.spawn(self.handle, beanstalk)
@@ -232,27 +224,30 @@ class EventWorker(Worker):
                     continue
                 event = self.safe_decode_job(job_id, data)
                 if not event:
-                    self.logger.warn("Burying event %s: %s",
-                                     job_id, "malformed")
+                    self.logger.warn("Burying event %s: %s", job_id, "malformed")
                     beanstalk.bury(job_id)
                 else:
                     try:
                         self.process_event(job_id, event, beanstalk)
                     except (ClientException, OioNetworkException) as exc:
-                        self.logger.warn("Burying event %s (%s): %s",
-                                         job_id, event.get('event'), exc)
+                        self.logger.warn(
+                            "Burying event %s (%s): %s", job_id, event.get("event"), exc
+                        )
                         beanstalk.bury(job_id)
                     except ExplicitBury:
-                        self.logger.info("Burying event %s (%s)",
-                                         job_id, event.get('event'))
+                        self.logger.info(
+                            "Burying event %s (%s)", job_id, event.get("event")
+                        )
                         beanstalk.bury(job_id)
                     except StopServe:
-                        self.logger.info("Releasing event %s (%s): stopping",
-                                         job_id, event.get('event'))
+                        self.logger.info(
+                            "Releasing event %s (%s): stopping",
+                            job_id,
+                            event.get("event"),
+                        )
                         beanstalk.release(job_id)
                     except Exception:
-                        self.logger.exception("Burying event %s: %s",
-                                              job_id, event)
+                        self.logger.exception("Burying event %s: %s", job_id, event)
                         beanstalk.bury(job_id)
         except StopServe:
             pass
@@ -260,7 +255,7 @@ class EventWorker(Worker):
     def process_event(self, job_id, event, beanstalk):
         handler = self.get_handler(event)
         if not handler:
-            self.logger.warn('no handler found for %r' % event)
+            self.logger.warn("no handler found for %r" % event)
             beanstalk.delete(job_id)
             return
 
@@ -270,20 +265,20 @@ class EventWorker(Worker):
                     beanstalk.delete(job_id)
                 except ResponseError as err:
                     self.logger.warn(
-                        "Job %s succeeded but was not deleted: %s",
-                        job_id, err)
+                        "Job %s succeeded but was not deleted: %s", job_id, err
+                    )
             elif is_error(status):
                 self.logger.warn(
-                    'event %s handling failure (release with delay): %s',
-                    job_id, msg)
+                    "event %s handling failure (release with delay): %s", job_id, msg
+                )
                 try:
                     beanstalk.release(job_id, delay=RELEASE_DELAY)
                 except ResponseError as err:
                     self.logger.error(
-                        "Job %s failed and could not be rescheduled: %s",
-                        job_id, err)
+                        "Job %s failed and could not be rescheduled: %s", job_id, err
+                    )
 
         handler(event, beanstalk, cb)
 
     def get_handler(self, event):
-        return self.handlers.get(event.get('event'), None)
+        return self.handlers.get(event.get("event"), None)

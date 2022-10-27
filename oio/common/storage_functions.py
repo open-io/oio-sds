@@ -89,10 +89,9 @@ def get_meta_ranges(ranges, chunks):
     :returns: a list of dictionaries indexed by metachunk positions
     """
     range_infos = []
-    meta_sizes = [chunks[pos][0]['size'] for pos in sorted(chunks.keys())]
+    meta_sizes = [chunks[pos][0]["size"] for pos in sorted(chunks.keys())]
     for obj_start, obj_end in ranges:
-        meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end,
-                                                    meta_sizes)
+        meta_ranges = obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes)
         range_infos.append(meta_ranges)
     return range_infos
 
@@ -138,13 +137,15 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
         position = int(raw_position[0])
         if ec_security:
             num = int(raw_position[1])
-            chunk['num'] = int(raw_position[1])
+            chunk["num"] = int(raw_position[1])
             nums = nums_by_position.setdefault(position, set())
             if num in nums:
                 if logger:
                     logger.warning(
-                        'Duplicated position (%s) for %s', chunk['pos'],
-                        chunk['real_url'])
+                        "Duplicated position (%s) for %s",
+                        chunk["pos"],
+                        chunk["real_url"],
+                    )
                 continue
             nums.add(num)
         chunks_at_position = chunks.setdefault(position, list())
@@ -156,7 +157,7 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
             continue
         byhash = dict()
         for chunk in local_chunks:
-            h = chunk.get('hash')
+            h = chunk.get("hash")
             if h not in byhash:
                 byhash[h] = list()
             byhash[h].append(chunk)
@@ -175,8 +176,8 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
         # don't always start with the highest element.
         clist.sort(key=_get_weighted_random_score, reverse=True)
         for element in clist:
-            element['offset'] = offset
-        offset += clist[0]['size']
+            element["offset"] = offset
+        offset += clist[0]["size"]
 
     return chunks
 
@@ -193,17 +194,16 @@ def _make_object_metadata(headers):
             key = k.replace(prefix, "")
             # TODO temporary workaround
             # This is used by properties set through swift
-            if key.startswith('x-'):
+            if key.startswith("x-"):
                 props[key[2:]] = v
             else:
-                meta[key.replace('-', '_')] = v
-    meta['properties'] = props
+                meta[key.replace("-", "_")] = v
+    meta["properties"] = props
     return meta
 
 
 @ensure_headers
-def fetch_stream(chunks, ranges, storage_method, headers=None,
-                 **kwargs):
+def fetch_stream(chunks, ranges, storage_method, headers=None, **kwargs):
     ranges = ranges or [(None, None)]
     meta_range_list = get_meta_ranges(ranges, chunks)
 
@@ -211,23 +211,20 @@ def fetch_stream(chunks, ranges, storage_method, headers=None,
         for pos in sorted(meta_range_dict.keys()):
             meta_start, meta_end = meta_range_dict[pos]
             if meta_start is not None and meta_end is not None:
-                headers['Range'] = http_header_from_ranges(
-                    (meta_range_dict[pos], ))
-            reader = ChunkReader(
-                iter(chunks[pos]), None, headers=headers,
-                **kwargs)
+                headers["Range"] = http_header_from_ranges((meta_range_dict[pos],))
+            reader = ChunkReader(iter(chunks[pos]), None, headers=headers, **kwargs)
             try:
                 it = reader.get_iter()
             except exc.NotFound as err:
                 raise exc.UnrecoverableContent(
-                    "Cannot download position %d: %s" %
-                    (pos, err))
+                    "Cannot download position %d: %s" % (pos, err)
+                )
             except Exception as err:
                 raise exc.ServiceUnavailable(
-                    "Error while downloading position %d: %s" %
-                    (pos, err))
+                    "Error while downloading position %d: %s" % (pos, err)
+                )
             for part in it:
-                for dat in part['iter']:
+                for dat in part["iter"]:
                     yield dat
 
 
@@ -239,21 +236,21 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
         for pos in sorted(meta_range_dict.keys()):
             meta_start, meta_end = meta_range_dict[pos]
             handler = ECChunkDownloadHandler(
-                storage_method, chunks[pos],
-                meta_start, meta_end, **kwargs)
+                storage_method, chunks[pos], meta_start, meta_end, **kwargs
+            )
             try:
                 stream = handler.get_stream()
             except exc.NotFound as err:
                 raise exc.UnrecoverableContent(
-                    "Cannot download position %d: %s" %
-                    (pos, err))
+                    "Cannot download position %d: %s" % (pos, err)
+                )
             except Exception as err:
                 raise exc.ServiceUnavailable(
-                    "Error while downloading position %d: %s" %
-                    (pos, err))
+                    "Error while downloading position %d: %s" % (pos, err)
+                )
             try:
                 for part_info in stream:
-                    for dat in part_info['iter']:
+                    for dat in part_info["iter"]:
                         yield dat
             finally:
                 # This must be done in a finally block to handle the case

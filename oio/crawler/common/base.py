@@ -17,7 +17,6 @@ from oio.common.logger import get_logger
 
 
 class Filter(object):
-
     NAME = None
 
     def __init__(self, app, conf, logger=None):

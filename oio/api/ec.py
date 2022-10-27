@@ -14,10 +14,20 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
-    ContextPool, ConnectionTimeout, Empty, GreenPile, LightQueue, \
-    SourceReadTimeout, Timeout, Queue, eventlet_yield, \
-    WatchdogTimeout
+from oio.common.green import (
+    ChunkReadTimeout,
+    ChunkWriteTimeout,
+    ContextPool,
+    ConnectionTimeout,
+    Empty,
+    GreenPile,
+    LightQueue,
+    SourceReadTimeout,
+    Timeout,
+    Queue,
+    eventlet_yield,
+    WatchdogTimeout,
+)
 
 import collections
 import math
@@ -31,18 +41,22 @@ from oio.common import exceptions
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.easy_value import int_value
 from oio.common.exceptions import SourceReadError
-from oio.common.http import HeadersDict, parse_content_range, \
-    ranges_from_http_header, headers_from_object_metadata
+from oio.common.http import (
+    HeadersDict,
+    parse_content_range,
+    ranges_from_http_header,
+    headers_from_object_metadata,
+)
 from oio.common.logger import get_logger
-from oio.common.utils import fix_ranges, get_hasher, monotonic_time, \
-    request_id
+from oio.common.utils import fix_ranges, get_hasher, monotonic_time, request_id
 
 
 LOGGER = get_logger({}, __name__)
 
 
-def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
-                                    fragment_size):
+def segment_range_to_fragment_range(
+    segment_start, segment_end, segment_size, fragment_size
+):
     """
     Converts a segment range into a fragment range.
 
@@ -54,13 +68,19 @@ def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
         * fragment_end is the last byte of the last fragment,
           or None if this is a prefix byte range
     """
-    fragment_start = ((segment_start // segment_size * fragment_size)
-                      if segment_start is not None else None)
+    fragment_start = (
+        (segment_start // segment_size * fragment_size)
+        if segment_start is not None
+        else None
+    )
 
-    fragment_end = (None if segment_end is None else
-                    ((segment_end + 1) // segment_size * fragment_size)
-                    if segment_start is None else
-                    ((segment_end + 1) // segment_size * fragment_size) - 1)
+    fragment_end = (
+        None
+        if segment_end is None
+        else ((segment_end + 1) // segment_size * fragment_size)
+        if segment_start is None
+        else ((segment_end + 1) // segment_size * fragment_size) - 1
+    )
 
     return (fragment_start, fragment_end)
 
@@ -84,13 +104,18 @@ def meta_chunk_range_to_segment_range(meta_start, meta_end, segment_size):
 
     """
 
-    segment_start = (int(meta_start // segment_size)
-                     * segment_size) if meta_start is not None else None
-    segment_end = (None if meta_end is None else
-                   (((int(meta_end // segment_size) + 1)
-                     * segment_size) - 1) if meta_start is not None else
-                   (int(math.ceil((float(meta_end) / segment_size) + 1))
-                       * segment_size))
+    segment_start = (
+        (int(meta_start // segment_size) * segment_size)
+        if meta_start is not None
+        else None
+    )
+    segment_end = (
+        None
+        if meta_end is None
+        else (((int(meta_end // segment_size) + 1) * segment_size) - 1)
+        if meta_start is not None
+        else (int(math.ceil((float(meta_end) / segment_size) + 1)) * segment_size)
+    )
     return (segment_start, segment_end)
 
 
@@ -99,9 +124,20 @@ class ECChunkDownloadHandler(object):
     Handles the download of an EC meta chunk
     """
 
-    def __init__(self, storage_method, chunks, meta_start, meta_end, headers,
-                 connection_timeout=None, read_timeout=None, reqid=None,
-                 perfdata=None, watchdog=None, **_kwargs):
+    def __init__(
+        self,
+        storage_method,
+        chunks,
+        meta_start,
+        meta_end,
+        headers,
+        connection_timeout=None,
+        read_timeout=None,
+        reqid=None,
+        perfdata=None,
+        watchdog=None,
+        **_kwargs
+    ):
         """
         :param connection_timeout: timeout to establish the connections
         :param read_timeout: timeout to read a buffer of data
@@ -112,13 +148,13 @@ class ECChunkDownloadHandler(object):
         self.meta_end = meta_end
         # the meta chunk length
         # (the amount of actual data stored into the meta chunk)
-        self.meta_length = self.chunks[0]['size']
+        self.meta_length = self.chunks[0]["size"]
         self.headers = headers
         self.connection_timeout = connection_timeout
         self.read_timeout = read_timeout
         self.reqid = reqid
         self.perfdata = perfdata
-        self.logger = _kwargs.get('logger', LOGGER)
+        self.logger = _kwargs.get("logger", LOGGER)
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -142,18 +178,23 @@ class ECChunkDownloadHandler(object):
             self.meta_start = self.meta_length + self.meta_start
 
         segment_start, segment_end = meta_chunk_range_to_segment_range(
-            self.meta_start, self.meta_end, segment_size)
+            self.meta_start, self.meta_end, segment_size
+        )
 
         fragment_start, fragment_end = segment_range_to_fragment_range(
-            segment_start, segment_end, segment_size, fragment_size)
+            segment_start, segment_end, segment_size, fragment_size
+        )
 
-        range_infos.append({
-            'req_meta_start': self.meta_start,
-            'req_meta_end': self.meta_end,
-            'req_segment_start': segment_start,
-            'req_segment_end': segment_end,
-            'req_fragment_start': fragment_start,
-            'req_fragment_end': fragment_end})
+        range_infos.append(
+            {
+                "req_meta_start": self.meta_start,
+                "req_meta_end": self.meta_end,
+                "req_segment_start": segment_start,
+                "req_segment_end": segment_end,
+                "req_fragment_start": fragment_start,
+                "req_fragment_end": fragment_end,
+            }
+        )
         return range_infos
 
     def _get_fragment(self, chunk_iter, range_infos, storage_method):
@@ -162,15 +203,22 @@ class ECChunkDownloadHandler(object):
         if range_infos:
             # only handle one range
             range_info = range_infos[0]
-            headers['Range'] = 'bytes=%s-%s' % (
-                range_info['req_fragment_start'],
-                range_info['req_fragment_end'])
-        reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
-                                headers, self.connection_timeout,
-                                self.read_timeout, perfdata=self.perfdata,
-                                align=True, logger=self.logger,
-                                resp_by_chunk=self._resp_by_chunk,
-                                watchdog=self.watchdog)
+            headers["Range"] = "bytes=%s-%s" % (
+                range_info["req_fragment_start"],
+                range_info["req_fragment_end"],
+            )
+        reader = io.ChunkReader(
+            chunk_iter,
+            storage_method.ec_fragment_size,
+            headers,
+            self.connection_timeout,
+            self.read_timeout,
+            perfdata=self.perfdata,
+            align=True,
+            logger=self.logger,
+            resp_by_chunk=self._resp_by_chunk,
+            watchdog=self.watchdog,
+        )
         return (reader, reader.get_iter())
 
     def get_stream(self):
@@ -182,8 +230,9 @@ class ECChunkDownloadHandler(object):
             pile = GreenPile(pool)
             # we use eventlet GreenPile to spawn readers
             for _j in range(self.storage_method.ec_nb_data):
-                pile.spawn(self._get_fragment, chunk_iter, range_infos,
-                           self.storage_method)
+                pile.spawn(
+                    self._get_fragment, chunk_iter, range_infos, self.storage_method
+                )
 
             readers = []
             for reader, parts_iter in pile:
@@ -196,19 +245,26 @@ class ECChunkDownloadHandler(object):
             # all readers should return the same Content-Length
             # so just take the headers from one of them
             resp_headers = HeadersDict(readers[0][0].headers)
-            fragment_length = int(resp_headers.get('Content-Length'))
+            fragment_length = int(resp_headers.get("Content-Length"))
             read_iterators = [it for _, it in readers]
-            stream = ECStream(self.storage_method, read_iterators, range_infos,
-                              self.meta_length, fragment_length,
-                              reqid=self.reqid, perfdata=self.perfdata,
-                              logger=self.logger)
+            stream = ECStream(
+                self.storage_method,
+                read_iterators,
+                range_infos,
+                self.meta_length,
+                fragment_length,
+                reqid=self.reqid,
+                perfdata=self.perfdata,
+                logger=self.logger,
+            )
             # start the stream
             stream.start()
             return stream
         else:
             raise exceptions.ServiceUnavailable(
-                'Not enough valid sources to read (%d/%d)' % (
-                    len(readers), self.storage_method.ec_nb_data))
+                "Not enough valid sources to read (%d/%d)"
+                % (len(readers), self.storage_method.ec_nb_data)
+            )
 
 
 class ECStream(object):
@@ -217,8 +273,18 @@ class ECStream(object):
 
     Handles the different readers.
     """
-    def __init__(self, storage_method, readers, range_infos, meta_length,
-                 fragment_length, reqid=None, perfdata=None, logger=None):
+
+    def __init__(
+        self,
+        storage_method,
+        readers,
+        range_infos,
+        meta_length,
+        fragment_length,
+        reqid=None,
+        perfdata=None,
+        logger=None,
+    ):
         self.storage_method = storage_method
         self.readers = readers
         self.range_infos = range_infos
@@ -245,26 +311,33 @@ class ECStream(object):
         fragment_iterators = []
         for iterator in self.readers:
             part_info = next(iterator)
-            fragment_iterators.append(part_info['iter'])
-            headers = HeadersDict(part_info['headers'])
+            fragment_iterators.append(part_info["iter"])
+            headers = HeadersDict(part_info["headers"])
         return headers, fragment_iterators
 
     def _iter_range(self, range_info, segment_iter):
-        meta_start = range_info['resp_meta_start']
-        meta_end = range_info['resp_meta_end']
-        segment_start = range_info['resp_segment_start']
-        segment_end = range_info['resp_segment_end']
+        meta_start = range_info["resp_meta_start"]
+        meta_end = range_info["resp_meta_end"]
+        segment_start = range_info["resp_segment_start"]
+        segment_end = range_info["resp_segment_end"]
 
-        segment_end = (min(segment_end, self.meta_length - 1)
-                       if segment_end is not None
-                       else self.meta_length - 1)
-        meta_end = (min(meta_end, self.meta_length - 1)
-                    if meta_end is not None
-                    else self.meta_length - 1)
+        segment_end = (
+            min(segment_end, self.meta_length - 1)
+            if segment_end is not None
+            else self.meta_length - 1
+        )
+        meta_end = (
+            min(meta_end, self.meta_length - 1)
+            if meta_end is not None
+            else self.meta_length - 1
+        )
 
         num_segments = int(
-            math.ceil(float(segment_end + 1 - segment_start)
-                      / self.storage_method.ec_segment_size))
+            math.ceil(
+                float(segment_end + 1 - segment_start)
+                / self.storage_method.ec_segment_size
+            )
+        )
 
         # we read full segments from the chunks
         # however we may be requested a byte range
@@ -311,10 +384,9 @@ class ECStream(object):
                 # ignore
                 pass
             except ChunkReadTimeout as err:
-                self.logger.error('%s (reqid=%s)', err, self.reqid)
+                self.logger.error("%s (reqid=%s)", err, self.reqid)
             except Exception:
-                self.logger.exception("Exception on reading (reqid=%s)",
-                                      self.reqid)
+                self.logger.exception("Exception on reading (reqid=%s)", self.reqid)
             finally:
                 queue.resize(2)
                 # put None to indicate the decoding loop
@@ -349,27 +421,32 @@ class ECStream(object):
                 except exceptions.ECError:
                     # something terrible happened
                     self.logger.exception(
-                        "ERROR decoding fragments (reqid=%s)", self.reqid)
+                        "ERROR decoding fragments (reqid=%s)", self.reqid
+                    )
                     raise
                 finally:
                     if self.perfdata is not None:
                         ec_end = monotonic_time()
                         duration = ec_end - ec_start
-                        rawx_pdata = self.perfdata.setdefault('rawx', dict())
-                        rawx_pdata['ec.segments'] = \
-                            rawx_pdata.get('ec.segments', 0) + 1
-                        rawx_pdata['ec.total'] = \
-                            rawx_pdata.get('ec.total', 0.0) + duration
-                        if 'ec.firstsegment' not in rawx_pdata:
-                            rawx_pdata['ec.firstsegment'] = duration
+                        rawx_pdata = self.perfdata.setdefault("rawx", dict())
+                        rawx_pdata["ec.segments"] = rawx_pdata.get("ec.segments", 0) + 1
+                        rawx_pdata["ec.total"] = (
+                            rawx_pdata.get("ec.total", 0.0) + duration
+                        )
+                        if "ec.firstsegment" not in rawx_pdata:
+                            rawx_pdata["ec.firstsegment"] = duration
 
                 yield segment
 
     def _convert_range(self, req_start, req_end, length):
         try:
-            ranges = ranges_from_http_header("bytes=%s-%s" % (
-                req_start if req_start is not None else b'',
-                req_end if req_end is not None else b''))
+            ranges = ranges_from_http_header(
+                "bytes=%s-%s"
+                % (
+                    req_start if req_start is not None else b"",
+                    req_end if req_end is not None else b"",
+                )
+            )
         except ValueError:
             return (None, None)
 
@@ -382,50 +459,58 @@ class ECStream(object):
     def _add_ranges(self, range_infos):
         for range_info in range_infos:
             meta_start, meta_end = self._convert_range(
-                range_info['req_meta_start'], range_info['req_meta_end'],
-                self.meta_length)
-            range_info['resp_meta_start'] = meta_start
-            range_info['resp_meta_end'] = meta_end
-            range_info['satisfiable'] = \
-                (meta_start is not None and meta_end is not None)
+                range_info["req_meta_start"],
+                range_info["req_meta_end"],
+                self.meta_length,
+            )
+            range_info["resp_meta_start"] = meta_start
+            range_info["resp_meta_end"] = meta_end
+            range_info["satisfiable"] = meta_start is not None and meta_end is not None
 
             segment_start, segment_end = self._convert_range(
-                range_info['req_segment_start'], range_info['req_segment_end'],
-                self.meta_length)
+                range_info["req_segment_start"],
+                range_info["req_segment_end"],
+                self.meta_length,
+            )
 
             segment_size = self.storage_method.ec_segment_size
 
-            if range_info['req_segment_start'] is None and \
-                    segment_start % segment_size != 0:
+            if (
+                range_info["req_segment_start"] is None
+                and segment_start % segment_size != 0
+            ):
                 segment_start += segment_start - (segment_start % segment_size)
 
-            range_info['resp_segment_start'] = segment_start
-            range_info['resp_segment_end'] = segment_end
+            range_info["resp_segment_start"] = segment_start
+            range_info["resp_segment_end"] = segment_end
 
     def _add_ranges_for_fragment(self, fragment_length, range_infos):
         for range_info in range_infos:
             fragment_start, fragment_end = self._convert_range(
-                range_info['req_fragment_start'],
-                range_info['req_fragment_end'],
-                fragment_length)
-            range_info['resp_fragment_start'] = fragment_start
-            range_info['resp_fragment_end'] = fragment_end
+                range_info["req_fragment_start"],
+                range_info["req_fragment_end"],
+                fragment_length,
+            )
+            range_info["resp_fragment_start"] = fragment_start
+            range_info["resp_fragment_end"] = fragment_end
 
     def _stream(self):
         if not self.range_infos:
-            range_infos = [{
-                'req_meta_start': 0,
-                'req_meta_end': self.meta_length - 1,
-                'resp_meta_start': 0,
-                'resp_meta_end': self.meta_length - 1,
-                'req_segment_start': 0,
-                'req_segment_end': self.meta_length - 1,
-                'req_fragment_start': 0,
-                'req_fragment_end': self.fragment_length - 1,
-                'resp_fragment_start': 0,
-                'resp_fragment_end': self.fragment_length - 1,
-                'satisfiable': self.meta_length > 0
-            }]
+            range_infos = [
+                {
+                    "req_meta_start": 0,
+                    "req_meta_end": self.meta_length - 1,
+                    "resp_meta_start": 0,
+                    "resp_meta_end": self.meta_length - 1,
+                    "req_segment_start": 0,
+                    "req_segment_end": self.meta_length - 1,
+                    "req_fragment_start": 0,
+                    "req_fragment_end": self.fragment_length - 1,
+                    "resp_fragment_start": 0,
+                    "resp_fragment_end": self.fragment_length - 1,
+                    "satisfiable": self.meta_length > 0,
+                }
+            ]
 
         else:
             range_infos = self.range_infos
@@ -442,10 +527,11 @@ class ECStream(object):
                     break
 
                 headers, fragment_iters = next_range
-                content_range = headers.get('Content-Range')
+                content_range = headers.get("Content-Range")
                 if content_range is not None:
-                    fragment_start, fragment_end, fragment_length = \
-                        parse_content_range(content_range)
+                    fragment_start, fragment_end, fragment_length = parse_content_range(
+                        content_range
+                    )
                 elif self.fragment_length <= 0:
                     fragment_start = None
                     fragment_end = None
@@ -460,9 +546,11 @@ class ECStream(object):
                 satisfiable = False
 
                 for range_info in range_infos:
-                    satisfiable |= range_info['satisfiable']
-                    k = (range_info['resp_fragment_start'],
-                         range_info['resp_fragment_end'])
+                    satisfiable |= range_info["satisfiable"]
+                    k = (
+                        range_info["resp_fragment_start"],
+                        range_info["resp_fragment_end"],
+                    )
                     results.setdefault(k, []).append(range_info)
 
                 try:
@@ -471,19 +559,23 @@ class ECStream(object):
                     self.logger.error(
                         "Invalid range: %s, available: %s (reqid=%s)",
                         repr((fragment_start, fragment_end)),
-                        results.keys(), self.reqid)
+                        results.keys(),
+                        self.reqid,
+                    )
                     raise
                 segment_iter = self._decode_segments(fragment_iters)
 
-                if not range_info['satisfiable']:
+                if not range_info["satisfiable"]:
                     io.consume(segment_iter)
                     continue
 
                 byterange_iter = self._iter_range(range_info, segment_iter)
 
-                result = {'start': range_info['resp_meta_start'],
-                          'end': range_info['resp_meta_end'],
-                          'iter': byterange_iter}
+                result = {
+                    "start": range_info["resp_meta_start"],
+                    "end": range_info["resp_meta_end"],
+                    "iter": byterange_iter,
+                }
 
                 yield result
 
@@ -529,8 +621,7 @@ def ec_encode(storage_method, n):
                     amount -= len(part)
                     total_len -= len(part)
                 # let's encode!
-                encode_result.append(
-                    storage_method.driver.encode(b''.join(parts)))
+                encode_result.append(storage_method.driver.encode(b"".join(parts)))
 
             # transform the result
             #
@@ -545,7 +636,7 @@ def ec_encode(storage_method, n):
             # [(fragment_2_0 + fragment_2_1 + ...), # write to chunk 2
             #  ...]
 
-            result = [b''.join(p) for p in zip(*encode_result)]
+            result = [b"".join(p) for p in zip(*encode_result)]
             data = yield result
         else:
             # not enough data to encode
@@ -554,11 +645,11 @@ def ec_encode(storage_method, n):
     # empty input data
     # which means end of stream
     # encode what is left in the buf
-    whats_left = b''.join(buf)
+    whats_left = b"".join(buf)
     if whats_left:
         last_fragments = storage_method.driver.encode(whats_left)
     else:
-        last_fragments = [b''] * n
+        last_fragments = [b""] * n
     yield last_fragments
 
 
@@ -566,9 +657,17 @@ class EcChunkWriter(object):
     """
     Writes an EC chunk
     """
-    def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='blake3', perfdata=None,
-                 watchdog=None, **kwargs):
+
+    def __init__(
+        self,
+        chunk,
+        conn,
+        write_timeout=None,
+        chunk_checksum_algo="blake3",
+        perfdata=None,
+        watchdog=None,
+        **kwargs
+    ):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
@@ -580,9 +679,9 @@ class EcChunkWriter(object):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
         self.queue = Queue(io.PUT_QUEUE_DEPTH)
-        self.reqid = kwargs.get('reqid')
+        self.reqid = kwargs.get("reqid")
         self.perfdata = perfdata
-        self.logger = kwargs.get('logger', LOGGER)
+        self.logger = kwargs.get("logger", LOGGER)
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -596,14 +695,21 @@ class EcChunkWriter(object):
         return self._conn
 
     @classmethod
-    def connect(cls, chunk, sysmeta, reqid=None,
-                connection_timeout=None, write_timeout=None,
-                watchdog=None, **kwargs):
+    def connect(
+        cls,
+        chunk,
+        sysmeta,
+        reqid=None,
+        connection_timeout=None,
+        write_timeout=None,
+        watchdog=None,
+        **kwargs
+    ):
         if not watchdog:
             raise ValueError("watchdog is None")
         raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
-        chunk_path = parsed.path.split('/')[-1]
+        chunk_path = parsed.path.split("/")[-1]
         hdrs = headers_from_object_metadata(sysmeta)
         if reqid:
             hdrs[REQID_HEADER] = reqid
@@ -613,24 +719,36 @@ class EcChunkWriter(object):
 
         # in the trailer
         # metachunk_size & metachunk_hash
-        trailers = (CHUNK_HEADERS["metachunk_size"],
-                    CHUNK_HEADERS["metachunk_hash"])
-        if kwargs.get('chunk_checksum_algo'):
-            trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
-        hdrs["Trailer"] = ', '.join(trailers)
-        with WatchdogTimeout(watchdog,
-                             connection_timeout or io.CONNECTION_TIMEOUT,
-                             ConnectionTimeout):
-            perfdata = kwargs.get('perfdata', None)
-            perfdata_rawx = perfdata.setdefault('rawx', dict()) \
-                if perfdata is not None else None
+        trailers = (CHUNK_HEADERS["metachunk_size"], CHUNK_HEADERS["metachunk_hash"])
+        if kwargs.get("chunk_checksum_algo"):
+            trailers = trailers + (CHUNK_HEADERS["chunk_hash"],)
+        hdrs["Trailer"] = ", ".join(trailers)
+        with WatchdogTimeout(
+            watchdog, connection_timeout or io.CONNECTION_TIMEOUT, ConnectionTimeout
+        ):
+            perfdata = kwargs.get("perfdata", None)
+            perfdata_rawx = (
+                perfdata.setdefault("rawx", dict()) if perfdata is not None else None
+            )
             conn = io.http_connect(
-                parsed.netloc, 'PUT', parsed.path, hdrs, scheme=parsed.scheme,
-                perfdata=perfdata_rawx, perfdata_suffix=chunk['url'])
+                parsed.netloc,
+                "PUT",
+                parsed.path,
+                hdrs,
+                scheme=parsed.scheme,
+                perfdata=perfdata_rawx,
+                perfdata_suffix=chunk["url"],
+            )
             conn.set_cork(True)
             conn.chunk = chunk
-        return cls(chunk, conn, write_timeout=write_timeout,
-                   reqid=reqid, watchdog=watchdog, **kwargs)
+        return cls(
+            chunk,
+            conn,
+            write_timeout=write_timeout,
+            reqid=reqid,
+            watchdog=watchdog,
+            **kwargs
+        )
 
     def start(self, pool):
         """Spawn the send coroutine"""
@@ -645,10 +763,10 @@ class EcChunkWriter(object):
             # use HTTP transfer encoding chunked
             # to write data to RAWX
             try:
-                with WatchdogTimeout(self.watchdog, self.write_timeout,
-                                     ChunkWriteTimeout):
-                    if self.perfdata is not None \
-                            and self.conn.upload_start is None:
+                with WatchdogTimeout(
+                    self.watchdog, self.write_timeout, ChunkWriteTimeout
+                ):
+                    if self.perfdata is not None and self.conn.upload_start is None:
                         self.conn.upload_start = monotonic_time()
                     self.conn.send(b"%x\r\n" % len(data))
                     self.conn.send(data)
@@ -658,9 +776,10 @@ class EcChunkWriter(object):
             except (Exception, ChunkWriteTimeout) as exc:
                 self.failed = True
                 msg = text_type(exc)
-                self.logger.warning("Failed to write to %s (%s, reqid=%s)",
-                                    self.chunk, msg, self.reqid)
-                self.chunk['error'] = 'write: %s' % msg
+                self.logger.warning(
+                    "Failed to write to %s (%s, reqid=%s)", self.chunk, msg, self.reqid
+                )
+                self.chunk["error"] = "write: %s" % msg
             # Indicate that the data is completely sent
             self.queue.task_done()
 
@@ -677,7 +796,7 @@ class EcChunkWriter(object):
         Wait until all data in the queue
         has been processed by the send coroutine
         """
-        self.logger.debug("Waiting for %s to receive data", self.chunk['url'])
+        self.logger.debug("Waiting for %s to receive data", self.chunk["url"])
         # Wait until the data is completely sent to continue
         self.queue.join()
 
@@ -698,45 +817,44 @@ class EcChunkWriter(object):
         """
         self.wait()
         if self.failed:
-            self.logger.debug("NOT sending end marker and trailers to %s, "
-                              "because upload has failed", self.chunk['url'])
+            self.logger.debug(
+                "NOT sending end marker and trailers to %s, because upload has failed",
+                self.chunk["url"],
+            )
             return self.chunk
-        self.logger.debug("Sending end marker and trailers to %s",
-                          self.chunk['url'])
+        self.logger.debug("Sending end marker and trailers to %s", self.chunk["url"])
         parts = [
-            '0\r\n',
-            '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_size'],
-                            metachunk_size),
-            '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_hash'],
-                            metachunk_hash)
+            "0\r\n",
+            "%s: %s\r\n" % (CHUNK_HEADERS["metachunk_size"], metachunk_size),
+            "%s: %s\r\n" % (CHUNK_HEADERS["metachunk_hash"], metachunk_hash),
         ]
         if self.checksum:
-            parts.append('%s: %s\r\n' % (CHUNK_HEADERS['chunk_hash'],
-                                         self.checksum.hexdigest()))
-        parts.append('\r\n')
-        to_send = ''.join(parts).encode('utf-8')
+            parts.append(
+                "%s: %s\r\n" % (CHUNK_HEADERS["chunk_hash"], self.checksum.hexdigest())
+            )
+        parts.append("\r\n")
+        to_send = "".join(parts).encode("utf-8")
         if self.perfdata is not None:
             fin_start = monotonic_time()
         try:
-            with WatchdogTimeout(self.watchdog, self.write_timeout,
-                                 ChunkWriteTimeout):
+            with WatchdogTimeout(self.watchdog, self.write_timeout, ChunkWriteTimeout):
                 self.conn.send(to_send)
                 # Last segment sent, disable TCP_CORK to flush buffers
                 self.conn.set_cork(False)
         except (Exception, ChunkWriteTimeout) as exc:
             self.failed = True
             msg = text_type(exc)
-            self.logger.warning("Failed to finish %s (%s, reqid=%s)",
-                                self.chunk, msg, self.reqid)
-            self.chunk['error'] = 'finish: %s' % msg
+            self.logger.warning(
+                "Failed to finish %s (%s, reqid=%s)", self.chunk, msg, self.reqid
+            )
+            self.chunk["error"] = "finish: %s" % msg
             return self.chunk
         finally:
             if self.perfdata is not None:
                 fin_end = monotonic_time()
-                rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-                chunk_url = self.conn.chunk['url']
-                rawx_perfdata['upload_finish.' + chunk_url] = \
-                    fin_end - fin_start
+                rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+                chunk_url = self.conn.chunk["url"]
+                rawx_perfdata["upload_finish." + chunk_url] = fin_end - fin_start
         return None
 
     def getresponse(self):
@@ -745,38 +863,46 @@ class EcChunkWriter(object):
             # As the server may buffer data before writing it to non-volatile
             # storage, we don't know if we have to wait while sending data or
             # while reading response, thus we apply the same timeout to both.
-            with WatchdogTimeout(self.watchdog, self.write_timeout,
-                                 ChunkWriteTimeout):
+            with WatchdogTimeout(self.watchdog, self.write_timeout, ChunkWriteTimeout):
                 resp = self.conn.getresponse()
                 return resp
         finally:
             if self.perfdata is not None:
-                perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                chunk_url = self.conn.chunk['url']
+                perfdata_rawx = self.perfdata.setdefault("rawx", dict())
+                chunk_url = self.conn.chunk["url"]
                 upload_end = monotonic_time()
-                perfdata_rawx['upload.' + chunk_url] = \
+                perfdata_rawx["upload." + chunk_url] = (
                     upload_end - self.conn.upload_start
+                )
 
 
 class EcMetachunkWriter(io.MetachunkWriter):
-    def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
-                 connection_timeout=None, write_timeout=None,
-                 read_timeout=None,
-                 **kwargs):
-        kwargs.setdefault('chunk_buffer_min', storage_method.ec_segment_size)
-        kwargs.setdefault('chunk_buffer_max', storage_method.ec_segment_size)
+    def __init__(
+        self,
+        sysmeta,
+        meta_chunk,
+        global_checksum,
+        storage_method,
+        connection_timeout=None,
+        write_timeout=None,
+        read_timeout=None,
+        **kwargs
+    ):
+        kwargs.setdefault("chunk_buffer_min", storage_method.ec_segment_size)
+        kwargs.setdefault("chunk_buffer_max", storage_method.ec_segment_size)
         super(EcMetachunkWriter, self).__init__(
-            sysmeta, storage_method=storage_method, **kwargs)
+            sysmeta, storage_method=storage_method, **kwargs
+        )
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         # Unlike plain replication, we cannot use the checksum returned
         # by rawx services, we have to compute the checksum client-side.
-        self.checksum = get_hasher(self.chunk_checksum_algo or 'blake3')
+        self.checksum = get_hasher(self.chunk_checksum_algo or "blake3")
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = list()
-        self.logger = kwargs.get('logger', LOGGER)
+        self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):
         writers = self._get_writers()
@@ -820,15 +946,16 @@ class EcMetachunkWriter(io.MetachunkWriter):
         fragments = ec_stream.send(data)
         if self.perfdata is not None:
             ec_end = monotonic_time()
-            rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-            rawx_perfdata['ec.total'] = rawx_perfdata.get('ec.total', 0.0) \
-                + ec_end - ec_start
+            rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+            rawx_perfdata["ec.total"] = (
+                rawx_perfdata.get("ec.total", 0.0) + ec_end - ec_start
+            )
         if fragments is None:
             # not enough data given
             return current_writers
 
         for writer in writers:
-            fragment = fragments[writer.chunk['num']]
+            fragment = fragments[writer.chunk["num"]]
             if not writer.failed:
                 if writer.checksum:
                     writer.checksum.update(fragment)
@@ -837,8 +964,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 current_writers.remove(writer)
                 self.failed_chunks.append(writer.chunk)
         eventlet_yield()
-        self.quorum_or_fail([w.chunk for w in current_writers],
-                            self.failed_chunks)
+        self.quorum_or_fail([w.chunk for w in current_writers], self.failed_chunks)
         return current_writers
 
     def _stream(self, source, size, writers):
@@ -857,8 +983,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     writer.start(pool)
 
                 def read(read_size):
-                    with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                         SourceReadTimeout):
+                    with WatchdogTimeout(
+                        self.watchdog, self.read_timeout, SourceReadTimeout
+                    ):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
@@ -882,19 +1009,21 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
-                        curr_writers = self.encode_and_send(ec_stream, data,
-                                                            curr_writers)
+                        curr_writers = self.encode_and_send(
+                            ec_stream, data, curr_writers
+                        )
                 else:
                     while True:
                         data = read(self.buffer_size())
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
-                        curr_writers = self.encode_and_send(ec_stream, data,
-                                                            curr_writers)
+                        curr_writers = self.encode_and_send(
+                            ec_stream, data, curr_writers
+                        )
 
                 # flush out buffered data
-                self.encode_and_send(ec_stream, b'', curr_writers)
+                self.encode_and_send(ec_stream, b"", curr_writers)
 
                 # trailer headers
                 # metachunk size
@@ -904,31 +1033,28 @@ class EcMetachunkWriter(io.MetachunkWriter):
 
                 finish_pile = GreenPile(pool)
                 for writer in writers:
-                    finish_pile.spawn(writer.finish,
-                                      metachunk_size, metachunk_hash)
+                    finish_pile.spawn(writer.finish, metachunk_size, metachunk_hash)
                 for just_failed in finish_pile:
                     # Avoid reporting problems twice
-                    if just_failed and not any(x['url'] == just_failed['url']
-                                               for x in self.failed_chunks):
+                    if just_failed and not any(
+                        x["url"] == just_failed["url"] for x in self.failed_chunks
+                    ):
                         self.failed_chunks.append(just_failed)
 
                 return bytes_transferred
 
         except SourceReadTimeout as exc:
-            self.logger.warning('%s (reqid=%s)', exc, self.reqid)
+            self.logger.warning("%s (reqid=%s)", exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
-            self.logger.warning('Source read error (reqid=%s): %s',
-                                self.reqid, exc)
+            self.logger.warning("Source read error (reqid=%s): %s", self.reqid, exc)
             raise
         except Timeout as to:
-            self.logger.warning('Timeout writing data (reqid=%s): %s',
-                                self.reqid, to)
+            self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to)
         except Exception:
-            self.logger.exception('Exception writing data (reqid=%s)',
-                                  self.reqid)
+            self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
             raise
 
     def _get_writers(self):
@@ -948,45 +1074,68 @@ class EcMetachunkWriter(io.MetachunkWriter):
         """Spawn a writer for the chunk and connect it"""
         try:
             writer = EcChunkWriter.connect(
-                chunk, self.sysmeta, reqid=self.reqid,
+                chunk,
+                self.sysmeta,
+                reqid=self.reqid,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 chunk_checksum_algo=self.chunk_checksum_algo,
                 perfdata=self.perfdata,
                 logger=self.logger,
-                watchdog=self.watchdog)
+                watchdog=self.watchdog,
+            )
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = text_type(exc)
-            self.logger.warning("Failed to connect to %s (%s, reqid=%s): %s",
-                                chunk, msg, self.reqid, exc)
-            chunk['error'] = 'connect: %s' % msg
+            self.logger.warning(
+                "Failed to connect to %s (%s, reqid=%s): %s",
+                chunk,
+                msg,
+                self.reqid,
+                exc,
+            )
+            chunk["error"] = "connect: %s" % msg
             return None, chunk
 
     def _dispatch_response(self, writer, resp, success_chunks):
         if resp:
             if resp.status == 201:
-                checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
-                chunk_size = resp.getheader(CHUNK_HEADERS['chunk_size'])
-                if checksum and writer.checksum and \
-                        checksum.lower() != writer.checksum.hexdigest():
-                    writer.chunk['error'] = \
-                        "checksum mismatch: %s (local), %s (rawx)" % \
-                        (writer.checksum.hexdigest(), checksum.lower())
+                checksum = resp.getheader(CHUNK_HEADERS["chunk_hash"])
+                chunk_size = resp.getheader(CHUNK_HEADERS["chunk_size"])
+                if (
+                    checksum
+                    and writer.checksum
+                    and checksum.lower() != writer.checksum.hexdigest()
+                ):
+                    writer.chunk[
+                        "error"
+                    ] = "checksum mismatch: %s (local), %s (rawx)" % (
+                        writer.checksum.hexdigest(),
+                        checksum.lower(),
+                    )
                     self.failed_chunks.append(writer.chunk)
-                elif chunk_size is not None \
-                        and int(chunk_size) != writer.bytes_transferred:
-                    writer.chunk['error'] = \
-                        "chunk size mismatch: %d (local), %s (rawx)" % \
-                        (writer.bytes_transferred, chunk_size)
+                elif (
+                    chunk_size is not None
+                    and int(chunk_size) != writer.bytes_transferred
+                ):
+                    writer.chunk[
+                        "error"
+                    ] = "chunk size mismatch: %d (local), %s (rawx)" % (
+                        writer.bytes_transferred,
+                        chunk_size,
+                    )
                     self.failed_chunks.append(writer.chunk)
                 else:
                     success_chunks.append(writer.chunk)
             else:
                 self.logger.warning(
                     "Unexpected status code from %s (reqid=%s): (%s) %s)",
-                    writer.chunk, self.reqid, resp.status, resp.reason)
-                writer.chunk['error'] = 'resp: HTTP %s' % resp.status
+                    writer.chunk,
+                    self.reqid,
+                    resp.status,
+                    resp.reason,
+                )
+                writer.chunk["error"] = "resp: HTTP %s" % resp.status
                 self.failed_chunks.append(writer.chunk)
         else:
             self.failed_chunks.append(writer.chunk)
@@ -1014,7 +1163,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 continue
             pile.spawn(self._get_response, writer)
 
-        for (writer, resp) in pile:
+        for writer, resp in pile:
             self._dispatch_response(writer, resp, success_chunks)
 
         self.quorum_or_fail(success_chunks, self.failed_chunks)
@@ -1030,8 +1179,11 @@ class EcMetachunkWriter(io.MetachunkWriter):
             msg = text_type(exc)
             self.logger.warning(
                 "Failed to read response for %s (reqid=%s): %s",
-                writer.chunk, self.reqid, msg)
-            writer.chunk['error'] = 'resp: %s' % msg
+                writer.chunk,
+                self.reqid,
+                msg,
+            )
+            writer.chunk["error"] = "resp: %s" % msg
         # close_source() will be called in a finally block later.
         # But we do not want to wait for all writers to have finished writing
         # before closing connections.
@@ -1052,14 +1204,13 @@ class ECWriteHandler(io.WriteHandler):
         content_chunks = []
 
         # the platform chunk size
-        chunk_size = self.sysmeta['chunk_size']
+        chunk_size = self.sysmeta["chunk_size"]
 
         # this gives us an upper bound
         max_size = self.storage_method.ec_nb_data * chunk_size
         if max_size > self.storage_method.ec_segment_size:
             # align metachunk size on EC segment size
-            max_size = \
-                max_size - max_size % self.storage_method.ec_segment_size
+            max_size = max_size - max_size % self.storage_method.ec_segment_size
 
         # meta chunks:
         #
@@ -1074,24 +1225,26 @@ class ECWriteHandler(io.WriteHandler):
         kwargs = EcMetachunkWriter.filter_kwargs(self.extra_kwargs)
         for meta_chunk in self.chunk_prep():
             handler = EcMetachunkWriter(
-                self.sysmeta, meta_chunk,
-                global_checksum, self.storage_method,
+                self.sysmeta,
+                meta_chunk,
+                global_checksum,
+                self.storage_method,
                 reqid=self.headers.get(REQID_HEADER),
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                **kwargs)
-            bytes_transferred, checksum, chunks = handler.stream(self.source,
-                                                                 max_size)
+                **kwargs
+            )
+            bytes_transferred, checksum, chunks = handler.stream(self.source, max_size)
 
             # chunks checksum is the metachunk hash
             # chunks size is the metachunk size
             for chunk in chunks:
-                chunk['hash'] = checksum
-                chunk['size'] = bytes_transferred
+                chunk["hash"] = checksum
+                chunk["size"] = bytes_transferred
                 # add the chunks whose upload succeeded
                 # to the content chunk list
-                if not chunk.get('error'):
+                if not chunk.get("error"):
                     content_chunks.append(chunk)
 
             total_bytes_transferred += bytes_transferred
@@ -1107,16 +1260,24 @@ class ECWriteHandler(io.WriteHandler):
 
 
 class ECRebuildHandler(object):
-    def __init__(self, meta_chunk, missing, storage_method,
-                 connection_timeout=None, read_timeout=None,
-                 watchdog=None, reqid=None, **_kwargs):
+    def __init__(
+        self,
+        meta_chunk,
+        missing,
+        storage_method,
+        connection_timeout=None,
+        read_timeout=None,
+        watchdog=None,
+        reqid=None,
+        **_kwargs
+    ):
         self.meta_chunk = meta_chunk
         self.missing = missing
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
-        self.logger = _kwargs.get('logger', LOGGER)
-        self.reqid = reqid or request_id('ecrebuild-')
+        self.logger = _kwargs.get("logger", LOGGER)
+        self.reqid = reqid or request_id("ecrebuild-")
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -1128,24 +1289,27 @@ class ECRebuildHandler(object):
         :returns: the response object (ready to read data)
         """
         resp = None
-        parsed = urlparse(chunk.get('real_url', chunk['url']))
+        parsed = urlparse(chunk.get("real_url", chunk["url"]))
         try:
-            with WatchdogTimeout(self.watchdog, self.connection_timeout,
-                                 ConnectionTimeout):
-                conn = io.http_connect(
-                    parsed.netloc, 'GET', parsed.path, headers)
+            with WatchdogTimeout(
+                self.watchdog, self.connection_timeout, ConnectionTimeout
+            ):
+                conn = io.http_connect(parsed.netloc, "GET", parsed.path, headers)
 
-            with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                 ChunkReadTimeout):
+            with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkReadTimeout):
                 resp = conn.getresponse()
             if resp.status != 200:
-                self.logger.warning('Invalid GET response from %s: %s %s',
-                                    chunk, resp.status, resp.reason)
+                self.logger.warning(
+                    "Invalid GET response from %s: %s %s",
+                    chunk,
+                    resp.status,
+                    resp.reason,
+                )
                 resp = None
         except (SocketError, Timeout) as err:
-            self.logger.error('ERROR fetching %s: %s', chunk, err)
+            self.logger.error("ERROR fetching %s: %s", chunk, err)
         except Exception:
-            self.logger.exception('ERROR fetching %s', chunk)
+            self.logger.exception("ERROR fetching %s", chunk)
         return resp
 
     def rebuild(self):
@@ -1165,9 +1329,10 @@ class ECRebuildHandler(object):
             if not resp:
                 continue
             chunk_size = int_value(
-                resp.getheader(CHUNK_HEADERS['chunk_size'], None), None)
+                resp.getheader(CHUNK_HEADERS["chunk_size"], None), None
+            )
             if chunk_size is None:
-                self.logger.warning('Missing chunk size')
+                self.logger.warning("Missing chunk size")
                 resps_without_chunk_size.append(resp)
                 continue
             total_resps += 1
@@ -1182,35 +1347,38 @@ class ECRebuildHandler(object):
                 max_resps = nb_resp
                 assumed_chunk_size = chunk_size
         if assumed_chunk_size is None:
-            self.logger.warning(
-                'No chunk available with chunk size information')
+            self.logger.warning("No chunk available with chunk size information")
             resps = []
         else:
             resps = resps_by_size[assumed_chunk_size]
             if max_resps != total_resps:
                 self.logger.warning(
-                    '%d/%d chunks are not the same size as others (%d), '
-                    'they should be removed',
-                    total_resps - max_resps, total_resps, assumed_chunk_size)
+                    "%d/%d chunks are not the same size as others (%d), "
+                    "they should be removed",
+                    total_resps - max_resps,
+                    total_resps,
+                    assumed_chunk_size,
+                )
         # Check the number of chunks available
         if max_resps < nb_data:
             # Add the chunks without size information
             # assuming they are the correct size
             resps = resps + resps_without_chunk_size
             if len(resps) < nb_data:
-                self.logger.error(
-                    'Unable to read enough valid sources to rebuild')
+                self.logger.error("Unable to read enough valid sources to rebuild")
                 raise exceptions.UnrecoverableContent(
-                    'Not enough valid sources to rebuild')
+                    "Not enough valid sources to rebuild"
+                )
             self.logger.warning(
-                'Use chunk(s) without size information to rebuild a chunk')
+                "Use chunk(s) without size information to rebuild a chunk"
+            )
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
         return assumed_chunk_size, rebuild_iter
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):
-            buf = b''
+            buf = b""
             remaining = self.storage_method.ec_fragment_size
             while remaining:
                 data = resp.read(remaining)
@@ -1226,13 +1394,12 @@ class ECRebuildHandler(object):
                 for resp in resps:
                     pile.spawn(_get_frag, resp)
                 try:
-                    with WatchdogTimeout(self.watchdog, self.read_timeout,
-                                         Timeout):
+                    with WatchdogTimeout(self.watchdog, self.read_timeout, Timeout):
                         frag = list(pile)
                 except Timeout as to:
-                    self.logger.error('ERROR while rebuilding: %s', to)
+                    self.logger.error("ERROR while rebuilding: %s", to)
                 except Exception:
-                    self.logger.exception('ERROR while rebuilding')
+                    self.logger.exception("ERROR while rebuilding")
                     break
                 if not all(frag):
                     break

@@ -48,17 +48,14 @@ def set_http_requests(cb):
             return len(self.records)
 
         def __call__(self, host, method, path, headers, **kwargs):
-            req = {'host': host,
-                   'method': method,
-                   'path': path,
-                   'headers': headers}
+            req = {"host": host, "method": method, "path": path, "headers": headers}
             conn = FakeConn(req)
             self.records.append(conn)
             return conn
 
     fake_conn = ConnectionRecord()
 
-    with mock.patch('oio.api.io.http_connect', new=fake_conn):
+    with mock.patch("oio.api.io.http_connect", new=fake_conn):
         yield fake_conn
 
 
@@ -73,7 +70,7 @@ def set_http_connect(*args, **kwargs):
         # This does not work with Python 3
         unused_status = list(new.status_iter)
         if PY2 and unused_status:
-            raise AssertionError('unused status %r' % unused_status)
+            raise AssertionError("unused status %r" % unused_status)
 
     finally:
         oio.api.io.http_connect = old
@@ -96,8 +93,7 @@ class FakeStatus(object):
 
 def fake_http_connect(*status_iter, **kwargs):
     class FakeConn(object):
-        def __init__(self, status, body=b'', headers=None, cb_body=None,
-                     conn_id=None):
+        def __init__(self, status, body=b"", headers=None, cb_body=None, conn_id=None):
             if not isinstance(status, FakeStatus):
                 status = FakeStatus(status)
             self._status = status
@@ -113,9 +109,11 @@ def fake_http_connect(*status_iter, **kwargs):
             return self
 
         def getheaders(self):
-            headers = HeadersDict({
-                'content-length': len(self.body),
-            })
+            headers = HeadersDict(
+                {
+                    "content-length": len(self.body),
+                }
+            )
             headers.update(self.headers)
             return headers.items()
 
@@ -137,12 +135,12 @@ def fake_http_connect(*status_iter, **kwargs):
         def close(self):
             self.closed = True
 
-    if isinstance(kwargs.get('headers'), (list, tuple)):
-        headers_iter = iter(kwargs['headers'])
+    if isinstance(kwargs.get("headers"), (list, tuple)):
+        headers_iter = iter(kwargs["headers"])
     else:
-        headers_iter = iter([kwargs.get('headers', {})] * len(status_iter))
-    raw_body = kwargs.get('body')
-    body_iter = kwargs.get('body_iter')
+        headers_iter = iter([kwargs.get("headers", {})] * len(status_iter))
+    raw_body = kwargs.get("body")
+    body_iter = kwargs.get("body_iter")
     if body_iter:
         body_iter = iter(body_iter)
     status_iter = iter(status_iter)
@@ -151,14 +149,15 @@ def fake_http_connect(*status_iter, **kwargs):
     def connect(*args, **ckwargs):
         headers = next(headers_iter)
         if body_iter is None:
-            body = raw_body or b''
+            body = raw_body or b""
         else:
             body = next(body_iter)
         if kwargs.get("slow_connect", False):
             sleep(1)
         i, status = next(conn_id_status_iter)
-        return FakeConn(status, body=body, headers=headers, conn_id=i,
-                        cb_body=kwargs.get('cb_body'))
+        return FakeConn(
+            status, body=body, headers=headers, conn_id=i, cb_body=kwargs.get("cb_body")
+        )
 
     connect.status_iter = status_iter
 

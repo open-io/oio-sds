@@ -35,7 +35,7 @@ class ItemMoveCommand(lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         return self.columns, self._take_action(parsed_args)
 
@@ -52,42 +52,44 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommand):
     a destination service is automatically selected.
     """
 
-    columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
-               'Errors')
+    columns = ("Container", "Base", "Source", "Destination", "Status", "Errors")
 
     def get_parser(self, prog_name):
         parser = super(ContainerMove, self).get_parser(prog_name)
         ContainerCommandMixin.patch_parser(self, parser)
         parser.add_argument(
-            '--src',
-            metavar='<service_id>',
+            "--src",
+            metavar="<service_id>",
             required=True,
-            help='ID of the source service',
+            help="ID of the source service",
         )
         parser.add_argument(
-            '--dst',
-            metavar='<service_id>',
-            help='ID of the destination service',
+            "--dst",
+            metavar="<service_id>",
+            help="ID of the destination service",
         )
         return parser
 
     def _take_action(self, parsed_args):
         containers = self.resolve_containers(self.app, parsed_args)
-        meta2 = Meta2Database(self.app.client_manager.client_conf,
-                              logger=self.logger)
+        meta2 = Meta2Database(self.app.client_manager.client_conf, logger=self.logger)
         for _, container_name, container_id in containers:
-            moved = meta2.move(container_id, parsed_args.src,
-                               dst=parsed_args.dst)
+            moved = meta2.move(container_id, parsed_args.src, dst=parsed_args.dst)
             for res in moved:
-                if res['err'] is None:
-                    status = 'OK'
+                if res["err"] is None:
+                    status = "OK"
                 else:
                     self.success = False
-                    status = 'error'
-                yield (container_name, res['base'], res['src'], res['dst'],
-                       status, res['err'])
+                    status = "error"
+                yield (
+                    container_name,
+                    res["base"],
+                    res["src"],
+                    res["dst"],
+                    status,
+                    res["err"],
+                )
 
     def take_action(self, parsed_args):
-        ContainerCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return super(ContainerMove, self).take_action(parsed_args)

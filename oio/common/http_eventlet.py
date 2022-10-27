@@ -19,8 +19,13 @@ import ssl
 from six import text_type
 from six.moves.urllib_parse import quote
 
-from oio.common.green import socket, HTTPConnection, HTTPSConnection, \
-    HTTPResponse, _UNKNOWN
+from oio.common.green import (
+    socket,
+    HTTPConnection,
+    HTTPSConnection,
+    HTTPResponse,
+    _UNKNOWN,
+)
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time
 
@@ -28,8 +33,7 @@ logger = get_logger({}, __name__)
 
 
 class CustomHTTPResponse(HTTPResponse):
-    def __init__(self, sock, debuglevel=0, strict=0,
-                 method=None, url=None):
+    def __init__(self, sock, debuglevel=0, strict=0, method=None, url=None):
         self.sock = sock
         try:
             self._actual_socket = sock.fd._sock
@@ -40,7 +44,7 @@ class CustomHTTPResponse(HTTPResponse):
                 # SSL doesn't expose fd
                 self._actual_socket = None
 
-        self.fp = sock.makefile('rb')
+        self.fp = sock.makefile("rb")
         self.debuglevel = debuglevel
         self.strict = strict
         self._method = method
@@ -61,9 +65,8 @@ class CustomHTTPResponse(HTTPResponse):
         except (ValueError, AttributeError) as err:
             # We have seen that in production but could not reproduce.
             # This message will help us track the error further.
-            if ("no attribute 'recv'" in str(err)
-                    or "Read on closed" in str(err)):
-                raise IOError('reading socket after close')
+            if "no attribute 'recv'" in str(err) or "Read on closed" in str(err):
+                raise IOError("reading socket after close")
             else:
                 raise
 
@@ -97,26 +100,26 @@ class CustomHttpConnection(HTTPConnection):
         """
         Enable or disable TCP_CORK on the underlying socket.
         """
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
-                             1 if enabled else 0)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1 if enabled else 0)
 
     def set_nodelay(self, enabled=True):
         """
         Enable or disable TCP_NODELAY on the underlying socket.
         """
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
-                             1 if enabled else 0)
+        self.sock.setsockopt(
+            socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if enabled else 0
+        )
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
         self._method = method
         self._path = url
-        return HTTPConnection.putrequest(self, method, url, skip_host,
-                                         skip_accept_encoding)
+        return HTTPConnection.putrequest(
+            self, method, url, skip_host, skip_accept_encoding
+        )
 
     def getresponse(self):
         response = HTTPConnection.getresponse(self)
-        logger.debug('HTTP %s %s:%s %s',
-                     self._method, self.host, self.port, self._path)
+        logger.debug("HTTP %s %s:%s %s", self._method, self.host, self.port, self._path)
         return response
 
 
@@ -132,40 +135,48 @@ class CustomHttpsConnection(HTTPSConnection):
         """
         Enable or disable TCP_CORK on the underlying socket.
         """
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
-                             1 if enabled else 0)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1 if enabled else 0)
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
         self._method = method
         self._path = url
-        return HTTPSConnection.putrequest(self, method, url, skip_host,
-                                          skip_accept_encoding)
+        return HTTPSConnection.putrequest(
+            self, method, url, skip_host, skip_accept_encoding
+        )
 
     def getresponse(self):
         response = HTTPSConnection.getresponse(self)
-        logger.debug('HTTPS %s %s:%s %s',
-                     self._method, self.host, self.port, self._path)
+        logger.debug(
+            "HTTPS %s %s:%s %s", self._method, self.host, self.port, self._path
+        )
         return response
 
 
-def http_connect(host, method, path, headers=None, query_string=None,
-                 scheme="http", perfdata=None, perfdata_suffix=None):
+def http_connect(
+    host,
+    method,
+    path,
+    headers=None,
+    query_string=None,
+    scheme="http",
+    perfdata=None,
+    perfdata_suffix=None,
+):
     if isinstance(path, text_type):
         try:
-            path = path.encode('utf-8')
+            path = path.encode("utf-8")
         except UnicodeError as e:
-            logger.exception('ERROR encoding to UTF-8: %s', text_type(e))
-    if path.startswith(b'/'):
+            logger.exception("ERROR encoding to UTF-8: %s", text_type(e))
+    if path.startswith(b"/"):
         path = quote(path)
     else:
-        path = quote(b'/' + path)
+        path = quote(b"/" + path)
     if scheme == "https":
-        conn = CustomHttpsConnection(host,
-                                     context=ssl._create_unverified_context())
+        conn = CustomHttpsConnection(host, context=ssl._create_unverified_context())
     else:
         conn = CustomHttpConnection(host)
     if query_string:
-        path += b'?' + query_string
+        path += b"?" + query_string
     if perfdata is not None:
         start = monotonic_time()
         # connect() is called by putrequest() if we don't call it explicitly.
@@ -184,8 +195,6 @@ def http_connect(host, method, path, headers=None, query_string=None,
     conn.endheaders()
     if perfdata is not None:
         headers_end = monotonic_time()
-        perfdata['connect.' + perfdata_suffix] = \
-            connect_end - start
-        perfdata['sendheaders.' + perfdata_suffix] = \
-            headers_end - connect_end
+        perfdata["connect." + perfdata_suffix] = connect_end - start
+        perfdata["sendheaders." + perfdata_suffix] = headers_end - connect_end
     return conn

@@ -23,19 +23,18 @@ import subprocess
 
 
 def move_rawx(volume, target_use, user, namespace, conf):
-    result = ''
-    result_err = ''
+    result = ""
+    result_err = ""
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE
-    cmd = 'oio-blob-mover ' + conf + ' --generate-config --user ' + user
-    cmd += ' --ns ' + namespace + ' --usage-target ' + target_use
-    cmd += ' --volume ' + volume + ' -vvv'
-    proc = subprocess.Popen(cmd, stdin=None, stdout=stdout,
-                            stderr=stderr, shell=True)
+    cmd = "oio-blob-mover " + conf + " --generate-config --user " + user
+    cmd += " --ns " + namespace + " --usage-target " + target_use
+    cmd += " --volume " + volume + " -vvv"
+    proc = subprocess.Popen(cmd, stdin=None, stdout=stdout, stderr=stderr, shell=True)
     result, result_err = proc.communicate()
     if result == "":
         result = result_err
-    result = result.decode('utf-8')
+    result = result.decode("utf-8")
     if proc.returncode != 0:
         raise Exception("Mover failed on rawx " + volume)
     return result
@@ -43,12 +42,10 @@ def move_rawx(volume, target_use, user, namespace, conf):
 
 def make_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('user', help="System user")
-    parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('--dry-run', action="store_true",
-                        help="Show rebalanced rawx")
-    parser.add_argument('--conf-file',
-                        help="Path to store configuration file.")
+    parser.add_argument("user", help="System user")
+    parser.add_argument("namespace", help="Namespace")
+    parser.add_argument("--dry-run", action="store_true", help="Show rebalanced rawx")
+    parser.add_argument("--conf-file", help="Path to store configuration file.")
     return parser
 
 
@@ -56,24 +53,24 @@ def main():
     args = make_arg_parser().parse_args()
     conf = args.conf_file if args.conf_file else "mover.conf"
     cs = ConscienceClient({"namespace": args.namespace})
-    all_rawx = cs.all_services('rawx', full=True)
+    all_rawx = cs.all_services("rawx", full=True)
     # Sort rawx by disk usage
-    all_rawx.sort(key=lambda c: c['tags']['stat.space'])
+    all_rawx.sort(key=lambda c: c["tags"]["stat.space"])
     dic = dict()
     sum_size = 0
     nrawx = 0
     for rawx in all_rawx:
-        addr = rawx['addr']
-        volume = rawx['tags']['tag.vol']
-        du = float(rawx['tags']['stat.space'])
+        addr = rawx["addr"]
+        volume = rawx["tags"]["tag.vol"]
+        du = float(rawx["tags"]["stat.space"])
         # Keep only rawx with big disk usage
-        if nrawx < len(all_rawx)/2:
+        if nrawx < len(all_rawx) / 2:
             dic[addr] = volume
         sum_size += du
         nrawx += 1
     if nrawx == 0:
         return
-    av = sum_size/nrawx
+    av = sum_size / nrawx
     # Lock rawx, run blob-mover and unlock rawx
     target_use = str(int(av))
     for addr in dic:
@@ -81,12 +78,17 @@ def main():
         print("Lock rawx at " + addr)
         if not args.dry_run:
             cs.lock_score(infos_srv)
-        print("Run mover on rawx at " + addr +
-              " to get disk usage under " + str(target_use))
+        print(
+            "Run mover on rawx at "
+            + addr
+            + " to get disk usage under "
+            + str(target_use)
+        )
         if not args.dry_run:
             try:
-                output = move_rawx(dic[addr], target_use,
-                                   args.user, args.namespace, conf)
+                output = move_rawx(
+                    dic[addr], target_use, args.user, args.namespace, conf
+                )
                 print(output)
             except Exception as err:
                 print("ERROR: " + str(err))
@@ -98,5 +100,5 @@ def main():
         remove(conf)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

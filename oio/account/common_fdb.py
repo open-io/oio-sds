@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-class CommonFdb():
+class CommonFdb:
     FDB_VERSION = 630
-    DEFAULT_FDB = '/etc/foundationdb/fdb.cluster'
-    MAIN_NAMESPACE = 'public'
+    DEFAULT_FDB = "/etc/foundationdb/fdb.cluster"
+    MAIN_NAMESPACE = "public"

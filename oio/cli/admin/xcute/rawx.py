@@ -34,56 +34,69 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--chunks-per-second', type=int,
-            help='Max chunks per second. '
-                 '(default=%d)'
-                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
+            "--chunks-per-second",
+            type=int,
+            help="Max chunks per second. (default=%d)"
+            % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND,
+        )
         parser.add_argument(
-            '--rawx-timeout', type=float,
-            help='Timeout for rawx operations, in seconds. (default=%f)'
-                 % self.JOB_CLASS.DEFAULT_RAWX_TIMEOUT)
+            "--rawx-timeout",
+            type=float,
+            help="Timeout for rawx operations, in seconds. (default=%f)"
+            % self.JOB_CLASS.DEFAULT_RAWX_TIMEOUT,
+        )
         parser.add_argument(
-            '--dry-run', action='store_true',
-            help='Display actions but do nothing.')
+            "--dry-run", action="store_true", help="Display actions but do nothing."
+        )
         parser.add_argument(
-            '--delete-faulty-chunks', action='store_true',
-            help='Try to delete faulty chunks after they have been '
-                 'rebuilt elsewhere. This option is useful if the chunks '
-                 'you are rebuilding are not actually missing but are '
-                 'corrupted.')
+            "--delete-faulty-chunks",
+            action="store_true",
+            help=(
+                "Try to delete faulty chunks after they have been "
+                "rebuilt elsewhere. This option is useful if the chunks "
+                "you are rebuilding are not actually missing but are "
+                "corrupted."
+            ),
+        )
         parser.add_argument(
-            '--allow-frozen-container', action='store_true',
-            help='Allow rebuilding a chunk in a frozen container.')
+            "--allow-frozen-container",
+            action="store_true",
+            help="Allow rebuilding a chunk in a frozen container.",
+        )
         parser.add_argument(
-            '--set-incident-date', action='store_true',
-            help='Set a new incident date to rebuild from the current date. '
-                 'Otherwise, the already existing incident date will be used '
-                 '(see "openio volume admin show").')
+            "--set-incident-date",
+            action="store_true",
+            help=(
+                "Set a new incident date to rebuild from the current date. "
+                "Otherwise, the already existing incident date will be used "
+                '(see "openio volume admin show").'
+            ),
+        )
         parser.add_argument(
-            '--set-specific-incident-date', type=int,
-            help='Set a specific incident date to rebuild from this date '
-                 '(seconds since Epoch). '
-                 'Override the "--set-incident-date" parameter.')
+            "--set-specific-incident-date",
+            type=int,
+            help=(
+                "Set a specific incident date to rebuild from this date "
+                "(seconds since Epoch). "
+                'Override the "--set-incident-date" parameter.'
+            ),
+        )
 
         return parser
 
     def get_job_config(self, parsed_args):
         job_params = {
-            'service_id': parsed_args.service,
-            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
-            'rdir_timeout': parsed_args.rdir_timeout,
-            'rawx_timeout': parsed_args.rawx_timeout,
-            'dry_run': parsed_args.dry_run,
-            'try_chunk_delete': parsed_args.delete_faulty_chunks,
-            'allow_frozen_container': parsed_args.allow_frozen_container,
-            'set_incident_date': parsed_args.set_incident_date,
-            'set_specific_incident_date':
-                parsed_args.set_specific_incident_date
+            "service_id": parsed_args.service,
+            "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
+            "rdir_timeout": parsed_args.rdir_timeout,
+            "rawx_timeout": parsed_args.rawx_timeout,
+            "dry_run": parsed_args.dry_run,
+            "try_chunk_delete": parsed_args.delete_faulty_chunks,
+            "allow_frozen_container": parsed_args.allow_frozen_container,
+            "set_incident_date": parsed_args.set_incident_date,
+            "set_specific_incident_date": parsed_args.set_specific_incident_date,
         }
-        return {
-            'tasks_per_second': parsed_args.chunks_per_second,
-            'params': job_params
-        }
+        return {"tasks_per_second": parsed_args.chunks_per_second, "params": job_params}
 
 
 class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
@@ -102,47 +115,55 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--chunks-per-second', type=int,
-            help='Max chunks per second. '
-                 '(default=%d)'
-                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
+            "--chunks-per-second",
+            type=int,
+            help="Max chunks per second. (default=%d)"
+            % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND,
+        )
         parser.add_argument(
-            '--rawx-timeout', type=float,
-            help='Timeout for rawx operations, in seconds. (default=%f)'
-                 % self.JOB_CLASS.DEFAULT_RAWX_TIMEOUT)
+            "--rawx-timeout",
+            type=float,
+            help="Timeout for rawx operations, in seconds. (default=%f)"
+            % self.JOB_CLASS.DEFAULT_RAWX_TIMEOUT,
+        )
         parser.add_argument(
-            '--min-chunk-size', type=int,
-            help='Only move chunks larger than the given size.')
+            "--min-chunk-size",
+            type=int,
+            help="Only move chunks larger than the given size.",
+        )
         parser.add_argument(
-            '--max-chunk-size', type=int,
-            help='Only move chunks smaller than the given size.')
+            "--max-chunk-size",
+            type=int,
+            help="Only move chunks smaller than the given size.",
+        )
         parser.add_argument(
-            '--excluded-rawx',
-            help='List of rawx not to use to move the chunks.')
+            "--excluded-rawx", help="List of rawx not to use to move the chunks."
+        )
         parser.add_argument(
-            '--usage-target', type=float,
-            help='Target percentage of volume usage. (default=%f)'
-                 % self.JOB_CLASS.DEFAULT_USAGE_TARGET)
+            "--usage-target",
+            type=float,
+            help="Target percentage of volume usage. (default=%f)"
+            % self.JOB_CLASS.DEFAULT_USAGE_TARGET,
+        )
         parser.add_argument(
-            '--usage-check-interval', type=float,
-            help='Interval between disk usage check in seconds. (default=%f)'
-                 % self.JOB_CLASS.DEFAULT_USAGE_CHECK_INTERVAL)
+            "--usage-check-interval",
+            type=float,
+            help="Interval between disk usage check in seconds. (default=%f)"
+            % self.JOB_CLASS.DEFAULT_USAGE_CHECK_INTERVAL,
+        )
 
         return parser
 
     def get_job_config(self, parsed_args):
         job_params = {
-            'service_id': parsed_args.service,
-            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
-            'rdir_timeout': parsed_args.rdir_timeout,
-            'rawx_timeout': parsed_args.rawx_timeout,
-            'min_chunk_size': parsed_args.min_chunk_size,
-            'max_chunk_size': parsed_args.max_chunk_size,
-            'excluded_rawx': parsed_args.excluded_rawx,
-            'usage_target': parsed_args.usage_target,
-            'usage_check_interval': parsed_args.usage_check_interval
+            "service_id": parsed_args.service,
+            "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
+            "rdir_timeout": parsed_args.rdir_timeout,
+            "rawx_timeout": parsed_args.rawx_timeout,
+            "min_chunk_size": parsed_args.min_chunk_size,
+            "max_chunk_size": parsed_args.max_chunk_size,
+            "excluded_rawx": parsed_args.excluded_rawx,
+            "usage_target": parsed_args.usage_target,
+            "usage_check_interval": parsed_args.usage_check_interval,
         }
-        return {
-            'tasks_per_second': parsed_args.chunks_per_second,
-            'params': job_params
-        }
+        return {"tasks_per_second": parsed_args.chunks_per_second, "params": job_params}

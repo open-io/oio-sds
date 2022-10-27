@@ -25,7 +25,6 @@ def is_error(status):
 
 
 def _rawx_env_property(field):
-
     def getter(self):
         value = self.env.get(field, None)
         return value
@@ -37,10 +36,9 @@ def _rawx_env_property(field):
 
 
 class ChunkWrapper(object):
-
-    chunk_id = _rawx_env_property('chunk_id')
-    chunk_path = _rawx_env_property('chunk_path')
-    meta = _rawx_env_property('meta')
+    chunk_id = _rawx_env_property("chunk_id")
+    chunk_path = _rawx_env_property("chunk_path")
+    meta = _rawx_env_property("meta")
 
     def __init__(self, env):
         self.env = env
@@ -50,7 +48,6 @@ class ChunkWrapper(object):
 
 
 class RawxCrawlerResponse(object):
-
     def __init__(self, body=None, status=200, chunk=None, **kwargs):
         self.status = status
         self.chunk = chunk
@@ -64,19 +61,17 @@ class RawxCrawlerResponse(object):
         if not self.chunk:
             self.chunk = ChunkWrapper(env)
         if not self.body:
-            self.body = ''
+            self.body = ""
         cb(self.status, self.body)
 
 
 class RawxCrawlerResponseException(RawxCrawlerResponse, Exception):
-
     def __init__(self, *args, **kwargs):
         RawxCrawlerResponse.__init__(self, *args, **kwargs)
         Exception.__init__(self, self.status)
 
 
 class StatusMap(object):
-
     def __getitem__(self, key):
         return partial(RawxCrawlerResponseException, status=key)
 

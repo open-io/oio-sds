@@ -26,7 +26,7 @@ class ContainerVacuum(ContainerCommandMixin, lister.Lister):
     resynchronize the database on the slaves.
     """
 
-    columns = ('Container', 'Status')
+    columns = ("Container", "Status")
 
     def get_parser(self, prog_name):
         parser = super(ContainerVacuum, self).get_parser(prog_name)
@@ -38,23 +38,23 @@ class ContainerVacuum(ContainerCommandMixin, lister.Lister):
         if parsed_args.is_cid:
             for cid in parsed_args.containers:
                 try:
-                    admin.vacuum_base("meta2", cid=cid,
-                                      reqid=self.app.request_id())
+                    admin.vacuum_base("meta2", cid=cid, reqid=self.app.request_id())
                     yield cid, "OK"
                 except Exception as err:
                     yield cid, str(err)
         else:
             for cname in parsed_args.containers:
                 try:
-                    admin.vacuum_base("meta2",
-                                      account=self.app.options.account,
-                                      reference=cname,
-                                      reqid=self.app.request_id())
+                    admin.vacuum_base(
+                        "meta2",
+                        account=self.app.options.account,
+                        reference=cname,
+                        reqid=self.app.request_id(),
+                    )
                     yield cname, "OK"
                 except Exception as err:
                     yield cname, str(err)
 
     def take_action(self, parsed_args):
-        ContainerCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return self.columns, self._take_action(parsed_args)

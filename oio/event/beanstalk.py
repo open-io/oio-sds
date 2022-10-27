@@ -26,9 +26,9 @@ import yaml
 from oio.common import exceptions
 
 
-SYM_CRLF = b'\r\n'
+SYM_CRLF = b"\r\n"
 
-DEFAULT_PRIORITY = 2 ** 31
+DEFAULT_PRIORITY = 2**31
 
 DEFAULT_TTR = 120
 
@@ -91,8 +91,7 @@ class Reader(object):
             raise TimeoutError("Timeout reading from socket")
         except socket.error:
             e = sys.exc_info()[1]
-            raise ConnectionError("Error while reading from socket: %s" %
-                                  (e.args,))
+            raise ConnectionError("Error while reading from socket: %s" % (e.args,))
 
     def read(self, length):
         length = length + 2
@@ -168,7 +167,7 @@ class BaseParser(object):
         if not response:
             raise ConnectionError(SERVER_CLOSED_CONNECTION_ERROR)
         response = response.split()
-        return response[0].decode('utf-8'), response[1:]
+        return response[0].decode("utf-8"), response[1:]
 
     def read(self, size):
         response = self._buffer.read(size)
@@ -183,18 +182,24 @@ class Connection(object):
     def from_url(cls, url, **kwargs):
         url = urlparse(url)
         if not url.netloc:
-            raise ConnectionError('Invalid URL')
+            raise ConnectionError("Invalid URL")
         url_options = {}
-        url_options.update({
-            'host': url.hostname,
-            'port': int(url.port)})
+        url_options.update({"host": url.hostname, "port": int(url.port)})
         kwargs.update(url_options)
         return cls(**kwargs)
 
-    def __init__(self, host=None, port=None, use_tubes=None,
-                 watch_tubes=None, socket_timeout=None,
-                 socket_connect_timeout=None, socket_keepalive=False,
-                 socket_keepalive_options=None, socket_read_size=65536):
+    def __init__(
+        self,
+        host=None,
+        port=None,
+        use_tubes=None,
+        watch_tubes=None,
+        socket_timeout=None,
+        socket_connect_timeout=None,
+        socket_keepalive=False,
+        socket_keepalive_options=None,
+        socket_read_size=65536,
+    ):
         self.pid = os.getpid()
         self.host = host
         self.port = int(port)
@@ -238,8 +243,7 @@ class Connection(object):
 
     def _connect(self):
         err = None
-        for res in socket.getaddrinfo(self.host, self.port, 0,
-                                      socket.SOCK_STREAM):
+        for res in socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM):
             family, socktype, proto, canonname, socket_address = res
             sock = None
             try:
@@ -247,8 +251,7 @@ class Connection(object):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
                 if self.socket_keepalive:
-                    sock.setsockopt(
-                        socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                     for k, v in iteritems(self.socket_keepalive_options):
                         sock.setsockopt(socket.SOL_TCP, k, v)
 
@@ -270,11 +273,18 @@ class Connection(object):
 
     def _error_message(self, exception):
         if len(exception.args) == 1:
-            return "Error connecting to %s:%s. %s." % \
-                (self.host, self.port, exception.args[0])
+            return "Error connecting to %s:%s. %s." % (
+                self.host,
+                self.port,
+                exception.args[0],
+            )
         else:
-            return "Error %s connecting to %s:%s. %s." % \
-                (exception.args[0], self.host, self.port, exception.args[1])
+            return "Error %s connecting to %s:%s. %s." % (
+                exception.args[0],
+                self.host,
+                self.port,
+                exception.args[1],
+            )
 
     def on_connect(self):
         self._parser.on_connect(self)
@@ -284,11 +294,11 @@ class Connection(object):
             self._watch(watch_tube)
 
     def _use(self, tube):
-        self.send_command('use', tube)
+        self.send_command("use", tube)
         self.read_response()
 
     def _watch(self, tube):
-        self.send_command('watch', tube)
+        self.send_command("watch", tube)
         self.read_response()
 
     def disconnect(self):
@@ -304,20 +314,20 @@ class Connection(object):
 
     def pack_command(self, command, body, *args):
         output = []
-        output.append(command.encode('utf-8'))
+        output.append(command.encode("utf-8"))
         for arg in args:
-            output.append(b' ' + str(arg).encode('utf-8'))
+            output.append(b" " + str(arg).encode("utf-8"))
         if body is not None:
             if isinstance(body, str):
-                body = body.encode('utf-8')
-            output.append(b' ' + str(len(body)).encode('utf-8'))
+                body = body.encode("utf-8")
+            output.append(b" " + str(len(body)).encode("utf-8"))
             output.append(SYM_CRLF)
             output.append(body)
         output.append(SYM_CRLF)
-        return b''.join(output)
+        return b"".join(output)
 
     def send_command(self, command, *args, **kwargs):
-        encoded = self.pack_command(command, kwargs.get('body'), *args)
+        encoded = self.pack_command(command, kwargs.get("body"), *args)
         if not self._sock:
             self.connect()
         try:
@@ -329,12 +339,13 @@ class Connection(object):
             err = sys.exc_info()[1]
             self.disconnect()
             if len(err.args) == 1:
-                errno, errmsg = 'UNKNOWN', err.args[0]
+                errno, errmsg = "UNKNOWN", err.args[0]
             else:
                 errno = err.args[0]
                 errmsg = err.args[1]
-            raise ConnectionError("Error %s while writing to socket. %s." %
-                                  (errno, errmsg))
+            raise ConnectionError(
+                "Error %s while writing to socket. %s." % (errno, errmsg)
+            )
         except Exception:
             self.disconnect()
             raise
@@ -378,7 +389,7 @@ def parse_yaml(connection, response, **kwargs):
 
 def parse_body(connection, response, **kwargs):
     results = response[1]
-    job_id = results[0].decode('utf-8')
+    job_id = results[0].decode("utf-8")
     job_size = int(results[1])
     body = connection.read_body(job_size)
     if job_size > 0 and not body:
@@ -387,81 +398,93 @@ def parse_body(connection, response, **kwargs):
 
 
 class Beanstalk(object):
-    RESPONSE_CALLBACKS = dict_merge({
-        'list-tubes': parse_yaml,
-        'peek': parse_body,
-        'peek-buried': parse_body,
-        'peek-delayed': parse_body,
-        'peek-ready': parse_body,
-        'reserve': parse_body,
-        'reserve-with-timeout': parse_body,
-        'stats': parse_yaml,
-        'stats-tube': parse_yaml
-    })
-    EXPECTED_OK = dict_merge({
-        'bury': ['BURIED'],
-        'delete': ['DELETED'],
-        'list-tubes': ['OK'],
-        'kick': ['KICKED'],
-        'kick-job': ['KICKED'],
-        'peek': ['FOUND'],
-        'peek-buried': ['FOUND'],
-        'peek-delayed': ['FOUND'],
-        'peek-ready': ['FOUND'],
-        'put': ['INSERTED'],
-        'release': ['RELEASED'],
-        'reserve': ['RESERVED'],
-        'reserve-with-timeout': ['RESERVED'],
-        'stats': ['OK'],
-        'stats-tube': ['OK'],
-        'use': ['USING'],
-        'watch': ['WATCHING'],
-    })
-    EXPECTED_ERR = dict_merge({
-        'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
-        'delete': ['NOT_FOUND'],
-        'list-tubes': [],
-        'kick': ['OUT_OF_MEMORY'],
-        'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY'],
-        'peek': ['NOT_FOUND'],
-        'peek-buried': ['NOT_FOUND'],
-        'peek-delayed': ['NOT_FOUND'],
-        'peek-ready': ['NOT_FOUND'],
-        'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
-        'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
-        'reserve-with-timeout': ['DEADLINE_SOON', 'TIMED_OUT'],
-        'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
-        'stats': [],
-        'stats-tube': ['NOT_FOUND'],
-        'use': [],
-        'watch': [],
-    })
+    RESPONSE_CALLBACKS = dict_merge(
+        {
+            "list-tubes": parse_yaml,
+            "peek": parse_body,
+            "peek-buried": parse_body,
+            "peek-delayed": parse_body,
+            "peek-ready": parse_body,
+            "reserve": parse_body,
+            "reserve-with-timeout": parse_body,
+            "stats": parse_yaml,
+            "stats-tube": parse_yaml,
+        }
+    )
+    EXPECTED_OK = dict_merge(
+        {
+            "bury": ["BURIED"],
+            "delete": ["DELETED"],
+            "list-tubes": ["OK"],
+            "kick": ["KICKED"],
+            "kick-job": ["KICKED"],
+            "peek": ["FOUND"],
+            "peek-buried": ["FOUND"],
+            "peek-delayed": ["FOUND"],
+            "peek-ready": ["FOUND"],
+            "put": ["INSERTED"],
+            "release": ["RELEASED"],
+            "reserve": ["RESERVED"],
+            "reserve-with-timeout": ["RESERVED"],
+            "stats": ["OK"],
+            "stats-tube": ["OK"],
+            "use": ["USING"],
+            "watch": ["WATCHING"],
+        }
+    )
+    EXPECTED_ERR = dict_merge(
+        {
+            "bury": ["NOT_FOUND", "OUT_OF_MEMORY"],
+            "delete": ["NOT_FOUND"],
+            "list-tubes": [],
+            "kick": ["OUT_OF_MEMORY"],
+            "kick-job": ["NOT_FOUND", "OUT_OF_MEMORY"],
+            "peek": ["NOT_FOUND"],
+            "peek-buried": ["NOT_FOUND"],
+            "peek-delayed": ["NOT_FOUND"],
+            "peek-ready": ["NOT_FOUND"],
+            "put": ["JOB_TOO_BIG", "BURIED", "DRAINING", "OUT_OF_MEMORY"],
+            "reserve": ["DEADLINE_SOON", "TIMED_OUT"],
+            "reserve-with-timeout": ["DEADLINE_SOON", "TIMED_OUT"],
+            "release": ["BURIED", "NOT_FOUND", "OUT_OF_MEMORY"],
+            "stats": [],
+            "stats-tube": ["NOT_FOUND"],
+            "use": [],
+            "watch": [],
+        }
+    )
 
     @classmethod
     def from_url(cls, url, **kwargs):
         if url is None or not url:
-            raise ConnectionError('Empty URL')
-        if not url.startswith('beanstalk://'):
+            raise ConnectionError("Empty URL")
+        if not url.startswith("beanstalk://"):
             import warnings
-            warnings.warn(
-                    'Invalid URL scheme, expecting beanstalk',
-                    DeprecationWarning)
+
+            warnings.warn("Invalid URL scheme, expecting beanstalk", DeprecationWarning)
         connection = Connection.from_url(url, **kwargs)
         return cls(connection=connection)
 
-    def __init__(self, host=None, port=None, socket_timeout=None,
-                 socket_connect_timeout=None, socket_keepalive=None,
-                 socket_keepalive_options=None, connection=None,
-                 **kwargs):
+    def __init__(
+        self,
+        host=None,
+        port=None,
+        socket_timeout=None,
+        socket_connect_timeout=None,
+        socket_keepalive=None,
+        socket_keepalive_options=None,
+        connection=None,
+        **kwargs
+    ):
         if not connection:
             self.socket_timeout = socket_timeout
             kwargs2 = {
-                'host': host,
-                'port': int(port),
-                'socket_connect_timeout': socket_connect_timeout,
-                'socket_keepalive': socket_keepalive,
-                'socket_keepalive_options': socket_keepalive_options,
-                'socket_timeout': socket_timeout,
+                "host": host,
+                "port": int(port),
+                "socket_connect_timeout": socket_connect_timeout,
+                "socket_keepalive": socket_keepalive,
+                "socket_keepalive_options": socket_keepalive_options,
+                "socket_timeout": socket_timeout,
             }
 
             connection = Connection(**kwargs2)
@@ -500,7 +523,8 @@ class Beanstalk(object):
         if status in self.expected_ok[command_name]:
             if command_name in self.response_callbacks:
                 return self.response_callbacks[command_name](
-                        connection, response, **kwargs)
+                    connection, response, **kwargs
+                )
             return response
         elif status in self.expected_err[command_name]:
             raise ResponseError(command_name, status, results)
@@ -508,10 +532,9 @@ class Beanstalk(object):
             raise InvalidResponse(command_name, status, results)
 
     def put(self, body, priority=DEFAULT_PRIORITY, delay=0, ttr=DEFAULT_TTR):
-        assert isinstance(body, str), 'body must be str'
-        _, results = self.execute_command('put', priority, delay, ttr,
-                                          body=body)
-        job_id = results[0].decode('utf-8')
+        assert isinstance(body, str), "body must be str"
+        _, results = self.execute_command("put", priority, delay, ttr, body=body)
+        job_id = results[0].decode("utf-8")
         return job_id
 
     def use(self, tube):
@@ -522,18 +545,18 @@ class Beanstalk(object):
 
     def reserve(self, timeout=None):
         if timeout is not None:
-            return self.execute_command('reserve-with-timeout', timeout)
+            return self.execute_command("reserve-with-timeout", timeout)
         else:
-            return self.execute_command('reserve')
+            return self.execute_command("reserve")
 
     def bury(self, job_id, priority=DEFAULT_PRIORITY):
-        self.execute_command('bury', job_id, priority)
+        self.execute_command("bury", job_id, priority)
 
     def release(self, job_id, priority=DEFAULT_PRIORITY, delay=0):
-        self.execute_command('release', job_id, priority, delay)
+        self.execute_command("release", job_id, priority, delay)
 
     def delete(self, job_id):
-        self.execute_command('delete', job_id)
+        self.execute_command("delete", job_id)
 
     def _drain(self, fetch_func):
         count = 0
@@ -555,6 +578,7 @@ class Beanstalk(object):
         """Delete all jobs from the specified tube."""
         self.watch(tube)
         from functools import partial
+
         return self._drain(partial(self.reserve, timeout=timeout))
 
     def kick_job(self, job_id):
@@ -564,7 +588,7 @@ class Beanstalk(object):
         :param job_id: the job id to kick
         :type job_id: `str`
         """
-        self.execute_command('kick-job', job_id)
+        self.execute_command("kick-job", job_id)
 
     def kick(self, bound=1000):
         """
@@ -575,15 +599,15 @@ class Beanstalk(object):
         :param bound: upper bound on the number of jobs to kick
         :type bound: `int`
         """
-        kicked = int(self.execute_command('kick', str(bound))[1][0])
+        kicked = int(self.execute_command("kick", str(bound))[1][0])
         return kicked
 
-    def _peek_generic(self, command_suffix=''):
-        command = 'peek' + command_suffix
+    def _peek_generic(self, command_suffix=""):
+        command = "peek" + command_suffix
         try:
             return self.execute_command(command)
         except ResponseError as err:
-            if err.args[0] == command and err.args[1] == 'NOT_FOUND':
+            if err.args[0] == command and err.args[1] == "NOT_FOUND":
                 return None, None
             else:
                 raise
@@ -592,16 +616,17 @@ class Beanstalk(object):
         """
         Read the next buried job without kicking it.
         """
-        return self._peek_generic('-buried')
+        return self._peek_generic("-buried")
 
     def peek_ready(self):
         """
         read the next ready job without reserving it.
         """
-        return self._peek_generic('-ready')
+        return self._peek_generic("-ready")
 
-    def wait_until_empty(self, tube, timeout=float('inf'), poll_interval=0.2,
-                         initial_delay=0.0):
+    def wait_until_empty(
+        self, tube, timeout=float("inf"), poll_interval=0.2, initial_delay=0.0
+    ):
         """
         Wait until the the specified tube is empty, or the timeout expires.
         """
@@ -609,13 +634,13 @@ class Beanstalk(object):
         if initial_delay > 0.0:
             time.sleep(initial_delay)
         stats = self.stats_tube(tube)
-        while (stats['current-jobs-ready'] or stats['current-jobs-reserved']) \
-                and time.time() < deadline:
+        while (
+            stats["current-jobs-ready"] or stats["current-jobs-reserved"]
+        ) and time.time() < deadline:
             time.sleep(poll_interval)
             stats = self.stats_tube(tube)
 
-    def wait_for_ready_job(self, tube, timeout=float('inf'),
-                           poll_interval=0.2):
+    def wait_for_ready_job(self, tube, timeout=float("inf"), poll_interval=0.2):
         """
         Wait until the the specified tube has a ready job,
         or the timeout expires.
@@ -629,13 +654,13 @@ class Beanstalk(object):
         return job_id, data
 
     def stats(self):
-        return self.execute_command('stats')
+        return self.execute_command("stats")
 
     def stats_tube(self, tube):
-        return self.execute_command('stats-tube', tube)
+        return self.execute_command("stats-tube", tube)
 
     def tubes(self):
-        return self.execute_command('list-tubes')
+        return self.execute_command("list-tubes")
 
     def close(self):
         if self._connection:
@@ -650,7 +675,7 @@ class TubedBeanstalkd(object):
 
     def __init__(self, addr, tube, logger, **kwargs):
         addr = addr.strip()
-        if addr.startswith('beanstalk://'):
+        if addr.startswith("beanstalk://"):
             addr = addr[12:]
         self.addr = addr
         self.tube = tube
@@ -665,9 +690,8 @@ class TubedBeanstalkd(object):
         if self.connected:
             return
 
-        self.logger.debug('Connecting to %s using tube %s',
-                          self.addr, self.tube)
-        self.beanstalkd = Beanstalk.from_url('beanstalk://' + self.addr)
+        self.logger.debug("Connecting to %s using tube %s", self.addr, self.tube)
+        self.beanstalkd = Beanstalk.from_url("beanstalk://" + self.addr)
         self.beanstalkd.use(self.tube)
         self.beanstalkd.watch(self.tube)
         self.connected = True
@@ -685,7 +709,6 @@ class TubedBeanstalkd(object):
 
 
 class BeanstalkdListener(TubedBeanstalkd):
-
     def __init__(self, addr, tube, logger, **kwargs):
         # pylint: disable=no-member
         super(BeanstalkdListener, self).__init__(addr, tube, logger, **kwargs)
@@ -717,29 +740,41 @@ class BeanstalkdListener(TubedBeanstalkd):
         except ConnectionError as exc:
             self.close()
             self.logger.warn(
-                'Disconnected from %s using tube %s (job=%s): %s',
-                self.addr, self.tube, job_id, exc)
-            if 'Invalid URL' in str(exc):
+                "Disconnected from %s using tube %s (job=%s): %s",
+                self.addr,
+                self.tube,
+                job_id,
+                exc,
+            )
+            if "Invalid URL" in str(exc):
                 raise
             time.sleep(1.0)
         except exceptions.ExplicitBury as exc:
-            self.logger.warn("Job bury on %s using tube %s (job=%s): %s",
-                             self.addr, self.tube, job_id, exc)
+            self.logger.warn(
+                "Job bury on %s using tube %s (job=%s): %s",
+                self.addr,
+                self.tube,
+                job_id,
+                exc,
+            )
         except BeanstalkError as exc:
-            if isinstance(exc, ResponseError) and 'TIMED_OUT' in str(exc):
+            if isinstance(exc, ResponseError) and "TIMED_OUT" in str(exc):
                 raise exceptions.OioTimeout()
 
-            self.logger.exception("ERROR on %s using tube %s (job=%s)",
-                                  self.addr, self.tube, job_id)
+            self.logger.exception(
+                "ERROR on %s using tube %s (job=%s)", self.addr, self.tube, job_id
+            )
         except Exception:
-            self.logger.exception("ERROR on %s using tube %s (job=%s)",
-                                  self.addr, self.tube, job_id)
+            self.logger.exception(
+                "ERROR on %s using tube %s (job=%s)", self.addr, self.tube, job_id
+            )
 
     def fetch_jobs(self, on_job, reserve_timeout=None, **kwargs):
         while self.running:
             try:
-                for job_info in self.fetch_job(on_job, timeout=reserve_timeout,
-                                               **kwargs):
+                for job_info in self.fetch_job(
+                    on_job, timeout=reserve_timeout, **kwargs
+                ):
                     yield job_info
             except exceptions.OioTimeout:
                 pass
@@ -751,8 +786,7 @@ class BeanstalkdSender(TubedBeanstalkd):
     high_limit is reached.
     """
 
-    def __init__(self, addr, tube, logger,
-                 low_limit=512, high_limit=1024, **kwargs):
+    def __init__(self, addr, tube, logger, low_limit=512, high_limit=1024, **kwargs):
         # pylint: disable=no-member
         super(BeanstalkdSender, self).__init__(addr, tube, logger, **kwargs)
         self.low_limit = low_limit
@@ -776,8 +810,7 @@ class BeanstalkdSender(TubedBeanstalkd):
         try:
             self._connect(**kwargs)
             with self.nb_jobs_lock:
-                job_id = self.beanstalkd.put(
-                    job, priority=priority, delay=delay)
+                job_id = self.beanstalkd.put(job, priority=priority, delay=delay)
                 self.nb_jobs += 1
                 if self.nb_jobs >= self.high_limit:
                     self.accepts_jobs = False
@@ -785,13 +818,18 @@ class BeanstalkdSender(TubedBeanstalkd):
         except ConnectionError as exc:
             self.close()
             self.logger.warn(
-                'Disconnected from %s using tube %s (job=%s): %s',
-                self.addr, self.tube, job_id, exc)
-            if 'Invalid URL' in str(exc):
+                "Disconnected from %s using tube %s (job=%s): %s",
+                self.addr,
+                self.tube,
+                job_id,
+                exc,
+            )
+            if "Invalid URL" in str(exc):
                 raise
         except Exception:
-            self.logger.exception("ERROR on %s using tube %s (job=%s)",
-                                  self.addr, self.tube, job_id)
+            self.logger.exception(
+                "ERROR on %s using tube %s (job=%s)", self.addr, self.tube, job_id
+            )
         return False
 
     def send_event(self, event, **kwargs):

@@ -39,4 +39,5 @@ def filter_factory(global_conf, **local_conf):
 
     def dump_filter(app):
         return DumpFilter(app, conf)
+
     return dump_filter

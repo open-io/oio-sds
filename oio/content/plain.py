@@ -29,25 +29,29 @@ from oio.common.utils import group_chunk_errors, request_id
 class PlainContent(Content):
     def fetch(self):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec,
-                              logger=self.logger)
-        stream = fetch_stream(chunks, None, storage_method,
-                              watchdog=self.blob_client.watchdog)
+        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec, logger=self.logger)
+        stream = fetch_stream(
+            chunks, None, storage_method, watchdog=self.blob_client.watchdog
+        )
         return stream
 
     def create(self, stream, **kwargs):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         sysmeta = self._generate_sysmeta()
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec,
-                              logger=self.logger)
+        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec, logger=self.logger)
 
         # TODO deal with headers
         headers = {}
         handler = ReplicatedWriteHandler(
-            stream, sysmeta, chunks, storage_method, headers=headers,
-            watchdog=self.blob_client.watchdog)
+            stream,
+            sysmeta,
+            chunks,
+            storage_method,
+            headers=headers,
+            watchdog=self.blob_client.watchdog,
+        )
         # The write handler may patch the chunk method
-        self.chunk_method = sysmeta['chunk_method']
+        self.chunk_method = sysmeta["chunk_method"]
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
         # TODO sanity checks
@@ -56,11 +60,17 @@ class PlainContent(Content):
         self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(self, chunk_id, service_id=None,
-                      allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False, reqid=None):
+    def rebuild_chunk(
+        self,
+        chunk_id,
+        service_id=None,
+        allow_same_rawx=False,
+        chunk_pos=None,
+        allow_frozen_container=False,
+        reqid=None,
+    ):
         if reqid is None:
-            reqid = request_id('plaincontent-')
+            reqid = request_id("plaincontent-")
         # Identify the chunk to rebuild
         candidates = self.chunks.filter(id=chunk_id)
         if service_id is not None:
@@ -79,19 +89,18 @@ class PlainContent(Content):
             candidates = candidates.exclude(host=service_id)
         else:
             candidates = candidates.exclude(id=chunk_id)
-        duplicate_chunks = candidates \
-            .sort(key=lambda chunk: _get_weighted_random_score(chunk.raw()),
-                  reverse=True) \
-            .all()
+        duplicate_chunks = candidates.sort(
+            key=lambda chunk: _get_weighted_random_score(chunk.raw()), reverse=True
+        ).all()
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
 
         if current_chunk is None:
             chunk = {}
-            chunk['hash'] = duplicate_chunks[0].checksum
-            chunk['size'] = duplicate_chunks[0].size
-            chunk['url'] = ''
-            chunk['pos'] = chunk_pos
+            chunk["hash"] = duplicate_chunks[0].checksum
+            chunk["size"] = duplicate_chunks[0].size
+            chunk["url"] = ""
+            chunk["pos"] = chunk_pos
             current_chunk = Chunk(chunk)
 
         # Find a spare chunk address
@@ -99,8 +108,8 @@ class PlainContent(Content):
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_urls, _quals = self._get_spare_chunk(
-            duplicate_chunks, broken_list, position=current_chunk.pos,
-            reqid=reqid)
+            duplicate_chunks, broken_list, position=current_chunk.pos, reqid=reqid
+        )
         spare_url = spare_urls[0]
 
         # Actually create the spare chunk, by duplicating a good one
@@ -111,18 +120,22 @@ class PlainContent(Content):
                 while True:
                     try:
                         self.blob_client.chunk_copy(
-                            src.url, spare_url, chunk_id=chunk_id,
-                            fullpath=self.full_path, cid=self.container_id,
-                            path=self.path, version=self.version,
-                            content_id=self.content_id, reqid=reqid)
+                            src.url,
+                            spare_url,
+                            chunk_id=chunk_id,
+                            fullpath=self.full_path,
+                            cid=self.container_id,
+                            path=self.path,
+                            version=self.version,
+                            content_id=self.content_id,
+                            reqid=reqid,
+                        )
                         break
                     except Conflict as exc:
                         if not first:
                             raise
-                        storage_method = STORAGE_METHODS.load(
-                            self.chunk_method)
-                        if len(duplicate_chunks) \
-                                > storage_method.expected_chunks - 2:
+                        storage_method = STORAGE_METHODS.load(self.chunk_method)
+                        if len(duplicate_chunks) > storage_method.expected_chunks - 2:
                             raise
                         # Now that chunk IDs are predictable,
                         # it is possible to have conflicts
@@ -130,51 +143,60 @@ class PlainContent(Content):
                         exc_info = sys.exc_info()
                         first = False
                         self.logger.warning(
-                            'The chunk destination is already used '
-                            'by another chunk, '
-                            'retrying to use another destination: %s', exc)
+                            "The chunk destination is already used "
+                            "by another chunk, "
+                            "retrying to use another destination: %s",
+                            exc,
+                        )
                         try:
                             chunk_notin = current_chunk.raw().copy()
-                            chunk_notin['url'] = spare_url
-                            chunks_notin = duplicate_chunks + [
-                                Chunk(chunk_notin)]
+                            chunk_notin["url"] = spare_url
+                            chunks_notin = duplicate_chunks + [Chunk(chunk_notin)]
                             spare_urls, _quals = self._get_spare_chunk(
-                                chunks_notin, broken_list,
-                                position=current_chunk.pos, reqid=reqid)
+                                chunks_notin,
+                                broken_list,
+                                position=current_chunk.pos,
+                                reqid=reqid,
+                            )
                             spare_url = spare_urls[0]
                             continue
                         except Exception as exc2:
                             self.logger.warning(
-                                'Failed to find another destination: %s',
-                                exc2)
+                                "Failed to find another destination: %s", exc2
+                            )
                         reraise(exc_info[0], exc_info[1], exc_info[2])
-                self.logger.debug('Chunk copied from %s to %s, registering it',
-                                  src.url, spare_url)
+                self.logger.debug(
+                    "Chunk copied from %s to %s, registering it", src.url, spare_url
+                )
                 break
             except Exception as err:
                 self.logger.warning(
-                    "Failed to copy chunk from %s to %s: %s %s", src.url,
-                    spare_url, type(err), err)
+                    "Failed to copy chunk from %s to %s: %s %s",
+                    src.url,
+                    spare_url,
+                    type(err),
+                    err,
+                )
                 errors.append((src.url, err))
         else:
-            raise UnrecoverableContent("No copy available of missing chunk, "
-                                       "or could not copy them. %s" % (
-                                           group_chunk_errors(errors),))
+            raise UnrecoverableContent(
+                "No copy available of missing chunk, or could not copy them. %s"
+                % (group_chunk_errors(errors),)
+            )
 
         try:
             # Register the spare chunk in object's metadata
             if chunk_id is None:
-                self._add_raw_chunk(current_chunk, spare_url,
-                                    frozen=allow_frozen_container,
-                                    reqid=reqid)
+                self._add_raw_chunk(
+                    current_chunk, spare_url, frozen=allow_frozen_container, reqid=reqid
+                )
             else:
-                self._update_spare_chunk(current_chunk, spare_url,
-                                         frozen=allow_frozen_container,
-                                         reqid=reqid)
+                self._update_spare_chunk(
+                    current_chunk, spare_url, frozen=allow_frozen_container, reqid=reqid
+                )
         except Exception:
             self.blob_client.chunk_delete(spare_url, reqid=reqid)
             raise
-        self.logger.debug('Chunk %s repaired in %s',
-                          chunk_id or chunk_pos, spare_url)
+        self.logger.debug("Chunk %s repaired in %s", chunk_id or chunk_pos, spare_url)
 
         return current_chunk.size

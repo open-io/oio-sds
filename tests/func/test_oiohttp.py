@@ -24,10 +24,10 @@ from six import string_types
 from six.moves import BaseHTTPServer
 
 
-class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
+class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
     def reply(self):
         inbody = None
-        length = self.headers.get('content-length')
+        length = self.headers.get("content-length")
         if length is None:
             inbody = []
             while True:
@@ -38,11 +38,11 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
                     break
                 chunk = self.rfile.read(chunk_length)
                 inbody.append(chunk)
-            inbody = b''.join(inbody)
+            inbody = b"".join(inbody)
         elif int(length) > 0:
             inbody = self.rfile.read(int(length))
         else:
-            inbody = b''
+            inbody = b""
         self.log_message("body: %d", len(inbody))
 
         if len(self.server.expectations) <= 0:
@@ -52,21 +52,25 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
         # Check the request
         qpath, qhdr, qbody = req
         if qpath is not None and qpath != self.path:
-            raise Exception("unexpected request got: %s, expected: %s" %
-                            (str(self.path), str(qpath)))
+            raise Exception(
+                "unexpected request got: %s, expected: %s"
+                % (str(self.path), str(qpath))
+            )
 
         if qhdr is not None:
             for k, v in qhdr.items():
                 if k not in self.headers:
                     raise Exception("missing headers: " + k)
                 if self.headers[k] != v:
-                    raise Exception("invalid header [%s] value got: %s" %
-                                    (str(self.headers[k]), str(v)))
+                    raise Exception(
+                        "invalid header [%s] value got: %s"
+                        % (str(self.headers[k]), str(v))
+                    )
 
         # Reply
         pcode, phdr, pbody = rep
         if isinstance(pbody, string_types):
-            pbody = pbody.encode('utf-8')
+            pbody = pbody.encode("utf-8")
         self.send_response(pcode)
         for k, v in phdr.items():
             self.send_header(k, v)
@@ -91,7 +95,7 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
         return self.reply()
 
 
-class Service (threading.Thread):
+class Service(threading.Thread):
     def __init__(self, srv):
         threading.Thread.__init__(self)
         self.srv = srv
@@ -103,27 +107,23 @@ class Service (threading.Thread):
 def test_ok(lib):
     http, services, urls = [], [], []
     for i in range(3):
-        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000 + i),
-                                              DumbHttpMock))
+        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000 + i), DumbHttpMock))
     for h in http:
-        urls.append(('http://127.0.0.1:%d/' % h.server_port).encode('utf-8'))
+        urls.append(("http://127.0.0.1:%d/" % h.server_port).encode("utf-8"))
         services.append(Service(h))
     expectations = [
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
-
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
         (("/", {"Content-Length": "1"}, "0"), (200, {}, "")),
-
         (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
         (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
         (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
         (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
-
         (("/", {"Transfer-Encoding": "chunked"}, "0" * 128), (200, {}, "")),
     ]
     for h in http:
@@ -145,13 +145,13 @@ def test_ok(lib):
         lib.test_upload_ok(0, -1, urls[0], None)
     finally:
         for h in http:
-            assert(0 == len(h.expectations))
+            assert 0 == len(h.expectations)
             h.shutdown()
         for s in services:
             s.join()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     LIB = cdll.LoadLibrary(sys.argv[1] + "/liboiohttp_test.so")
     LIB.setup()
     test_ok(LIB)

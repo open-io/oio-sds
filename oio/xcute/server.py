@@ -15,9 +15,13 @@
 # License along with this library.
 
 from functools import wraps
-from werkzeug.exceptions import HTTPException, \
-    BadRequest as HTTPBadRequest, Forbidden as HTTPForbidden, \
-    NotFound as HTTPNotFound, InternalServerError as HTTPInternalServerError
+from werkzeug.exceptions import (
+    HTTPException,
+    BadRequest as HTTPBadRequest,
+    Forbidden as HTTPForbidden,
+    NotFound as HTTPNotFound,
+    InternalServerError as HTTPInternalServerError,
+)
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
@@ -42,8 +46,9 @@ def handle_exceptions(func):
         except Forbidden as exc:
             raise HTTPForbidden(exc.message)
         except Exception as exc:
-            self.logger.exception('Internal error: %s', exc)
+            self.logger.exception("Internal error: %s", exc)
             raise HTTPInternalServerError(str(exc))
+
     return handle_exceptions_wrapper
 
 
@@ -53,122 +58,115 @@ class XcuteServer(WerkzeugApp):
         self.logger = logger or get_logger(self.conf)
         self.backend = XcuteBackend(self.conf, logger=self.logger)
 
-        url_map = Map([
-            Rule('/status', endpoint='status'),
-            Submount('/v1.0/xcute', [
-                Rule('/job/list', endpoint='job_list',
-                     methods=['GET']),
-                Rule('/job/create', endpoint='job_create',
-                     methods=['POST']),
-                Rule('/job/show', endpoint='job_show',
-                     methods=['GET']),
-                Rule('/job/pause', endpoint='job_pause',
-                     methods=['POST']),
-                Rule('/job/resume', endpoint='job_resume',
-                     methods=['POST']),
-                Rule('/job/update', endpoint='job_update',
-                     methods=['POST']),
-                Rule('/job/delete', endpoint='job_delete',
-                     methods=['DELETE']),
-                Rule('/lock/list', endpoint='lock_list',
-                     methods=['GET']),
-                Rule('/lock/show', endpoint='lock_show',
-                     methods=['GET']),
-            ])
-        ])
+        url_map = Map(
+            [
+                Rule("/status", endpoint="status"),
+                Submount(
+                    "/v1.0/xcute",
+                    [
+                        Rule("/job/list", endpoint="job_list", methods=["GET"]),
+                        Rule("/job/create", endpoint="job_create", methods=["POST"]),
+                        Rule("/job/show", endpoint="job_show", methods=["GET"]),
+                        Rule("/job/pause", endpoint="job_pause", methods=["POST"]),
+                        Rule("/job/resume", endpoint="job_resume", methods=["POST"]),
+                        Rule("/job/update", endpoint="job_update", methods=["POST"]),
+                        Rule("/job/delete", endpoint="job_delete", methods=["DELETE"]),
+                        Rule("/lock/list", endpoint="lock_list", methods=["GET"]),
+                        Rule("/lock/show", endpoint="lock_show", methods=["GET"]),
+                    ],
+                ),
+            ]
+        )
 
         super(XcuteServer, self).__init__(url_map, logger)
 
     @handle_exceptions
     def on_status(self, req):
         status = self.backend.status()
-        return Response(json.dumps(status), mimetype='application/json')
+        return Response(json.dumps(status), mimetype="application/json")
 
     @handle_exceptions
     def on_job_list(self, req):
-        limit = int_value(req.args.get('limit'), None)
-        prefix = req.args.get('prefix')
-        marker = req.args.get('marker')
-        job_status = req.args.get('status')
-        job_type = req.args.get('type')
-        job_lock = req.args.get('lock')
+        limit = int_value(req.args.get("limit"), None)
+        prefix = req.args.get("prefix")
+        marker = req.args.get("marker")
+        job_status = req.args.get("status")
+        job_type = req.args.get("type")
+        job_lock = req.args.get("lock")
 
         job_infos = self.backend.list_jobs(
-            limit=limit, prefix=prefix, marker=marker,
-            job_status=job_status, job_type=job_type, job_lock=job_lock)
-        return Response(
-            json.dumps(job_infos), mimetype='application/json')
+            limit=limit,
+            prefix=prefix,
+            marker=marker,
+            job_status=job_status,
+            job_type=job_type,
+            job_lock=job_lock,
+        )
+        return Response(json.dumps(job_infos), mimetype="application/json")
 
     @handle_exceptions
     def on_job_create(self, req):
-        job_type = req.args.get('type')
+        job_type = req.args.get("type")
         if not job_type:
-            raise HTTPBadRequest('Missing job type')
+            raise HTTPBadRequest("Missing job type")
         job_class = JOB_TYPES.get(job_type)
         if job_class is None:
-            raise HTTPBadRequest('Unknown job type')
-        put_on_hold_if_locked = boolean_value(
-            req.args.get('put_on_hold_if_locked'))
+            raise HTTPBadRequest("Unknown job type")
+        put_on_hold_if_locked = boolean_value(req.args.get("put_on_hold_if_locked"))
 
-        job_config, lock = job_class.sanitize_config(
-            json.loads(req.data or '{}'))
+        job_config, lock = job_class.sanitize_config(json.loads(req.data or "{}"))
 
         job_id = self.backend.create(
-            job_type, job_config, lock,
-            put_on_hold_if_locked=put_on_hold_if_locked)
+            job_type, job_config, lock, put_on_hold_if_locked=put_on_hold_if_locked
+        )
         job_info = self.backend.get_job_info(job_id)
-        return Response(
-            json.dumps(job_info), mimetype='application/json', status=202)
+        return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     def _get_job_id(self, req):
         """Fetch job ID from request query string."""
-        job_id = req.args.get('id')
+        job_id = req.args.get("id")
         if not job_id:
-            raise HTTPBadRequest('Missing job ID')
+            raise HTTPBadRequest("Missing job ID")
         return job_id
 
     @handle_exceptions
     def on_job_show(self, req):
         job_id = self._get_job_id(req)
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype='application/json')
+        return Response(json.dumps(job_info), mimetype="application/json")
 
     @handle_exceptions
     def on_job_pause(self, req):
         job_id = self._get_job_id(req)
         self.backend.request_pause(job_id)
         job_info = self.backend.get_job_info(job_id)
-        return Response(
-            json.dumps(job_info), mimetype='application/json', status=202)
+        return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
     def on_job_resume(self, req):
         job_id = self._get_job_id(req)
         self.backend.resume(job_id)
         job_info = self.backend.get_job_info(job_id)
-        return Response(
-            json.dumps(job_info), mimetype='application/json', status=202)
+        return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
     def on_job_update(self, req):
         job_id = self._get_job_id(req)
 
         job_info = self.backend.get_job_info(job_id)
-        job_type = job_info['job']['type']
+        job_type = job_info["job"]["type"]
         job_class = JOB_TYPES.get(job_type)
         if job_class is None:
-            raise HTTPBadRequest('Unknown job type')
+            raise HTTPBadRequest("Unknown job type")
 
         job_config, lock = job_class.sanitize_config(
-            job_class.merge_config(job_info['config'],
-                                   json.loads(req.data or '{}')))
-        if lock != job_info['job'].get('lock'):
-            raise ValueError(
-                'New configuration can not change the lock')
+            job_class.merge_config(job_info["config"], json.loads(req.data or "{}"))
+        )
+        if lock != job_info["job"].get("lock"):
+            raise ValueError("New configuration can not change the lock")
 
         self.backend.update_config(job_id, job_config)
-        return Response(
-            json.dumps(job_config), mimetype='application/json', status=202)
+        return Response(json.dumps(job_config), mimetype="application/json", status=202)
 
     @handle_exceptions
     def on_job_delete(self, req):
@@ -179,15 +177,15 @@ class XcuteServer(WerkzeugApp):
     @handle_exceptions
     def on_lock_list(self, req):
         locks = self.backend.list_locks()
-        return Response(json.dumps(locks), mimetype='application/json')
+        return Response(json.dumps(locks), mimetype="application/json")
 
     @handle_exceptions
     def on_lock_show(self, req):
-        lock = req.args.get('lock')
+        lock = req.args.get("lock")
         if not lock:
-            raise HTTPBadRequest('Missing lock')
+            raise HTTPBadRequest("Missing lock")
         lock_info = self.backend.get_lock_info(lock)
-        return Response(json.dumps(lock_info), mimetype='application/json')
+        return Response(json.dumps(lock_info), mimetype="application/json")
 
 
 def create_app(conf):

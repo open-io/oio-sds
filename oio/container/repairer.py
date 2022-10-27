@@ -43,14 +43,13 @@ class ContainerRepairer(Tool):
     @staticmethod
     def string_from_item(item):
         namespace, account, container = item
-        return '%s|%s|%s' % (
-            namespace, account, container)
+        return "%s|%s|%s" % (namespace, account, container)
 
     def _fetch_items_from_containers(self):
         for obj in self.containers:
-            namespace = obj['namespace']
-            account = obj['account']
-            container = obj['container']
+            namespace = obj["namespace"]
+            account = obj["account"]
+            container = obj["container"]
             yield namespace, account, container
 
     def _fetch_items(self):
@@ -60,47 +59,56 @@ class ContainerRepairer(Tool):
         def _empty_generator():
             return
             yield  # pylint: disable=unreachable
+
         return _empty_generator()
 
     def _get_report(self, status, end_time, counters):
-        containers_processed, total_containers_processed, \
-            errors, total_errors = counters
+        (
+            containers_processed,
+            total_containers_processed,
+            errors,
+            total_errors,
+        ) = counters
         time_since_last_report = (end_time - self.last_report) or 0.00001
         total_time = (end_time - self.start_time) or 0.00001
         report = (
-            '%(status)s '
-            'last_report=%(last_report)s %(time_since_last_report).2fs '
-            'containers=%(containers)d %(containers_rate).2f/s '
-            'errors=%(errors)d %(errors_rate).2f%% '
-            'start_time=%(start_time)s %(total_time).2fs '
-            'total_containers='
-            '%(total_containers)d %(total_containers_rate).2f/s '
-            'total_errors=%(total_errors)d %(total_errors_rate).2f%%' % {
-                'status': status,
-                'last_report': datetime.fromtimestamp(
-                    int(self.last_report)).isoformat(),
-                'time_since_last_report': time_since_last_report,
-                'containers': containers_processed,
-                'containers_rate':
-                    containers_processed / time_since_last_report,
-                'errors': errors,
-                'errors_rate': 100 * errors / float(containers_processed or 1),
-                'start_time': datetime.fromtimestamp(
-                    int(self.start_time)).isoformat(),
-                'total_time': total_time,
-                'total_containers': total_containers_processed,
-                'total_containers_rate':
-                    total_containers_processed / total_time,
-                'total_errors': total_errors,
-                'total_errors_rate':
-                    100 * total_errors / float(total_containers_processed or 1)
-                })
+            "%(status)s "
+            "last_report=%(last_report)s %(time_since_last_report).2fs "
+            "containers=%(containers)d %(containers_rate).2f/s "
+            "errors=%(errors)d %(errors_rate).2f%% "
+            "start_time=%(start_time)s %(total_time).2fs "
+            "total_containers="
+            "%(total_containers)d %(total_containers_rate).2f/s "
+            "total_errors=%(total_errors)d %(total_errors_rate).2f%%"
+            % {
+                "status": status,
+                "last_report": datetime.fromtimestamp(
+                    int(self.last_report)
+                ).isoformat(),
+                "time_since_last_report": time_since_last_report,
+                "containers": containers_processed,
+                "containers_rate": containers_processed / time_since_last_report,
+                "errors": errors,
+                "errors_rate": 100 * errors / float(containers_processed or 1),
+                "start_time": datetime.fromtimestamp(int(self.start_time)).isoformat(),
+                "total_time": total_time,
+                "total_containers": total_containers_processed,
+                "total_containers_rate": total_containers_processed / total_time,
+                "total_errors": total_errors,
+                "total_errors_rate": 100
+                * total_errors
+                / float(total_containers_processed or 1),
+            }
+        )
         if self.total_expected_items is not None:
-            progress = 100 * total_containers_processed / \
-                float(self.total_expected_items or 1)
-            report += ' progress=%d/%d %.2f%%' % \
-                (total_containers_processed, self.total_expected_items,
-                 progress)
+            progress = (
+                100 * total_containers_processed / float(self.total_expected_items or 1)
+            )
+            report += " progress=%d/%d %.2f%%" % (
+                total_containers_processed,
+                self.total_expected_items,
+                progress,
+            )
         return report
 
     def create_worker(self, queue_workers, queue_reply):
@@ -112,17 +120,18 @@ class ContainerRepairer(Tool):
 
 
 class ContainerRepairerWorker(ToolWorker):
-
     def __init__(self, tool, queue_workers, queue_reply):
-        super(ContainerRepairerWorker, self).__init__(
-            tool, queue_workers, queue_reply)
+        super(ContainerRepairerWorker, self).__init__(tool, queue_workers, queue_reply)
 
-        self.rebuild_bases = true_value(self.tool.conf.get(
-            'rebuild_bases', self.tool.DEFAULT_REBUILD_BASES))
-        self.sync_bases = true_value(self.tool.conf.get(
-            'sync_bases', self.tool.DEFAULT_SYNC_BASES))
-        self.update_account = true_value(self.tool.conf.get(
-            'update_account', self.tool.DEFAULT_UPDATE_ACCOUNT))
+        self.rebuild_bases = true_value(
+            self.tool.conf.get("rebuild_bases", self.tool.DEFAULT_REBUILD_BASES)
+        )
+        self.sync_bases = true_value(
+            self.tool.conf.get("sync_bases", self.tool.DEFAULT_SYNC_BASES)
+        )
+        self.update_account = true_value(
+            self.tool.conf.get("update_account", self.tool.DEFAULT_UPDATE_ACCOUNT)
+        )
 
         self.admin_client = AdminClient(self.conf, logger=self.logger)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
@@ -131,24 +140,26 @@ class ContainerRepairerWorker(ToolWorker):
     def _process_item(self, item):
         namespace, account, container = item
         if namespace != self.tool.namespace:
-            raise ValueError('Invalid namespace (actual=%s, expected=%s)' % (
-                namespace, self.tool.namespace))
+            raise ValueError(
+                "Invalid namespace (actual=%s, expected=%s)"
+                % (namespace, self.tool.namespace)
+            )
 
         errors = list()
 
         if self.rebuild_bases:
             cid = cid_from_name(account, container)
             for res in self.meta2_database.rebuild(cid):
-                if res['err']:
-                    errors.append('%s: %s' % (res['base'], res['err']))
+                if res["err"]:
+                    errors.append("%s: %s" % (res["base"], res["err"]))
             if errors:
                 raise Exception(errors)
 
         if self.sync_bases:
             data = self.admin_client.election_sync(
-                service_type='meta2', account=account, reference=container)
+                service_type="meta2", account=account, reference=container
+            )
             from_multi_responses(data, excepted_status=(200, 301))
 
         if self.update_account:
-            self.container_client.container_touch(
-                account=account, reference=container)
+            self.container_client.container_touch(account=account, reference=container)

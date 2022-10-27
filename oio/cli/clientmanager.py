@@ -19,9 +19,12 @@ from oio.cli.common.clientmanager import ClientManager as NewClientManager
 class ClientManager(NewClientManager):
     def __init__(self, *args, **kwargs):
         import warnings
-        warnings.simplefilter('once')
+
+        warnings.simplefilter("once")
         warnings.warn(
             "oio.cli.clientmanager.ClientManager is deprecated, "
             "use oio.cli.common.clientmanager.ClientManager",
-            DeprecationWarning, stacklevel=2)
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super(ClientManager, self).__init__(*args, **kwargs)

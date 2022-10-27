@@ -24,19 +24,19 @@ class ProxyStat(HttpStat):
     """
 
     def configure(self):
-        self.stat_conf['path'] = '/v3.0/status'
+        self.stat_conf["path"] = "/v3.0/status"
         super(ProxyStat, self).configure()
 
     def get_stats(self, reqid=None):
         stats = super(ProxyStat, self).get_stats(reqid=reqid)
         # Deal with the legacy format
         for key, val in stats.items():
-            if key.endswith(' ='):
+            if key.endswith(" ="):
                 stats[key[:-2]] = val
                 del stats[key]
         # Keep only "gauge" metrics for the moment
         for key in list(stats):
-            if key.startswith('gauge'):
-                stat_key = 'stat.' + key.split(None, 1)[1]
+            if key.startswith("gauge"):
+                stat_key = "stat." + key.split(None, 1)[1]
                 stats[stat_key] = stats[key]
         return stats

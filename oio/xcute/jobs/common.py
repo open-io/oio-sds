@@ -18,21 +18,21 @@ from oio.xcute.common.job import XcuteJob
 
 
 class XcuteRdirJob(XcuteJob):
-
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
 
     @classmethod
     def sanitize_params(cls, job_params):
-        sanitized_job_params, lock = super(
-            XcuteRdirJob, cls).sanitize_params(job_params)
+        sanitized_job_params, lock = super(XcuteRdirJob, cls).sanitize_params(
+            job_params
+        )
 
-        sanitized_job_params['rdir_fetch_limit'] = int_value(
-            job_params.get('rdir_fetch_limit'),
-            cls.DEFAULT_RDIR_FETCH_LIMIT)
+        sanitized_job_params["rdir_fetch_limit"] = int_value(
+            job_params.get("rdir_fetch_limit"), cls.DEFAULT_RDIR_FETCH_LIMIT
+        )
 
-        sanitized_job_params['rdir_timeout'] = float_value(
-            job_params.get('rdir_timeout'),
-            cls.DEFAULT_RDIR_TIMEOUT)
+        sanitized_job_params["rdir_timeout"] = float_value(
+            job_params.get("rdir_timeout"), cls.DEFAULT_RDIR_TIMEOUT
+        )
 
         return sanitized_job_params, lock

@@ -22,11 +22,11 @@ from oio.api.base import HttpApi
 
 def random_buffer(dictionary, n):
     slot = 512
-    pattern = ''.join(random.choice(dictionary) for _ in range(slot))
+    pattern = "".join(random.choice(dictionary) for _ in range(slot))
     t = []
     while len(t) * slot < n:
         t.append(pattern)
-    return ''.join(t)[:n]
+    return "".join(t)[:n]
 
 
 class CheckService(HttpApi):
@@ -41,8 +41,9 @@ class CheckService(HttpApi):
         super(CheckService, self).__init__(service_type=service_type, **kwargs)
         self.ns = namespace
         self.service_type = service_type
-        self.all_services = ConscienceClient(
-            {"namespace": self.ns}).all_services(self.service_type)
+        self.all_services = ConscienceClient({"namespace": self.ns}).all_services(
+            self.service_type
+        )
         self.all_services_host = []
         for service in self.all_services:
             self.all_services_host.append(service["addr"])
@@ -55,7 +56,8 @@ class CheckService(HttpApi):
     def _direct_request(self, method, url, expected_status=None, **kwargs):
         try:
             resp, body = super(CheckService, self)._direct_request(
-                method, url, **kwargs)
+                method, url, **kwargs
+            )
         except ClientException as exc:
             body = exc.message
             resp = HTTPResponse(status=exc.http_status)
@@ -68,7 +70,7 @@ class CheckService(HttpApi):
         """
         Must make a cycle `PUT/GET/DELETE` on the host
         """
-        raise NotImplementedError('_cycle not implemented')
+        raise NotImplementedError("_cycle not implemented")
 
     def run(self):
         """

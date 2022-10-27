@@ -24,15 +24,15 @@ class LockList(XcuteCommand, Lister):
     List all locks.
     """
 
-    columns = ('Lock', 'Job ID')
+    columns = ("Lock", "Job ID")
 
     def _take_action(self, parsed_args):
         locks = self.xcute.lock_list()
         for lock in locks:
-            yield itemgetter('lock', 'job_id')(lock)
+            yield itemgetter("lock", "job_id")(lock)
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         return self.columns, self._take_action(parsed_args)
 
@@ -44,15 +44,12 @@ class LockShow(XcuteCommand, ShowOne):
 
     def get_parser(self, prog_name):
         parser = super(LockShow, self).get_parser(prog_name)
-        parser.add_argument(
-            'lock',
-            metavar='<lock>',
-            help=("Lock to show"))
+        parser.add_argument("lock", metavar="<lock>", help="Lock to show")
         return parser
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         lock_info = self.xcute.lock_show(parsed_args.lock)
 
-        return [('lock', 'job_id'), itemgetter('lock', 'job_id')(lock_info)]
+        return [("lock", "job_id"), itemgetter("lock", "job_id")(lock_info)]

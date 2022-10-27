@@ -20,8 +20,7 @@ from mock import MagicMock as Mock, patch
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import CHUNK_XATTR_KEYS, read_chunk_metadata
-from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, \
-    OIO_VERSION
+from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
 from oio.common.exceptions import FaultyChunk
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
@@ -31,55 +30,52 @@ from oio.crawler.rawx.filters.indexer import Indexer
 from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
 
-from tests.functional.blob import random_chunk_id, random_buffer, \
-    convert_to_old_chunk
+from tests.functional.blob import random_chunk_id, random_buffer, convert_to_old_chunk
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
 from tests.utils import BaseTestCase, random_id, random_str
 
 
 def enc(my_str):
-    return my_str.encode('utf-8')
+    return my_str.encode("utf-8")
 
 
 class TestBlobIndexer(BaseTestCase):
-
     @classmethod
     def setUpClass(cls):
         super(TestBlobIndexer, cls).setUpClass()
         # Prevent the chunks' rebuilds by the crawlers
-        cls._service('oio-rdir-crawler-1.service', 'stop')
-        cls._service('oio-rawx-crawler-1.service', 'stop', wait=3)
+        cls._service("oio-rdir-crawler-1.service", "stop")
+        cls._service("oio-rawx-crawler-1.service", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service('oio-rdir-crawler-1.service', 'start')
-        cls._service('oio-rawx-crawler-1.service', 'start', wait=1)
+        cls._service("oio-rdir-crawler-1.service", "start")
+        cls._service("oio-rawx-crawler-1.service", "start", wait=1)
         super(TestBlobIndexer, cls).tearDownClass()
 
     def setUp(self):
         super(TestBlobIndexer, self).setUp()
         self.rdir_client = RdirClient(self.conf)
         self.blob_client = BlobClient(self.conf, watchdog=self.watchdog)
-        _, self.rawx_path, rawx_addr, _ = \
-            self.get_service_url('rawx')
-        services = self.conscience.all_services('rawx')
+        _, self.rawx_path, rawx_addr, _ = self.get_service_url("rawx")
+        services = self.conscience.all_services("rawx")
         self.rawx_id = None
         for rawx in services:
-            if rawx_addr == rawx['addr']:
-                self.rawx_id = rawx['tags'].get('tag.service_id', None)
+            if rawx_addr == rawx["addr"]:
+                self.rawx_id = rawx["tags"].get("tag.service_id", None)
         if self.rawx_id is None:
             self.rawx_id = rawx_addr
         app = FilterApp
-        app.app_env['volume_path'] = self.rawx_path
-        app.app_env['volume_id'] = self.rawx_id
-        app.app_env['watchdog'] = self.watchdog
+        app.app_env["volume_path"] = self.rawx_path
+        app.app_env["volume_id"] = self.rawx_id
+        app.app_env["watchdog"] = self.watchdog
         self.indexer = Indexer(app=app, conf=self.conf)
         # clear rawx/rdir
         chunk_files = paths_gen(self.rawx_path)
         for chunk_file in chunk_files:
             os.remove(chunk_file)
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.beanstalkd0.drain_tube("oio-preserved")
 
     def _put_chunk(self):
         account = random_str(16)
@@ -89,43 +85,52 @@ class TestBlobIndexer(BaseTestCase):
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
-            account, container, content_path, content_version, content_id)
+            account, container, content_path, content_version, content_id
+        )
         chunk_id = random_chunk_id()
-        data = random_buffer(string.printable, 100).encode('utf-8')
-        chunk_checksum = get_hasher('blake3')
+        data = random_buffer(string.printable, 100).encode("utf-8")
+        chunk_checksum = get_hasher("blake3")
         chunk_checksum.update(data)
         hex_checksum = chunk_checksum.hexdigest()
         meta = {
-            'full_path': fullpath,
-            'container_id': cid,
-            'content_path': content_path,
-            'version': content_version,
-            'id': content_id,
-            'chunk_method':
-                'ec/algo=liberasurecode_rs_vand,k=6,m=3,cca=blake3',
-            'policy': 'TESTPOLICY',
-            'chunk_hash': hex_checksum.upper(),
-            'oio_version': OIO_VERSION,
-            'chunk_pos': 0,
-            'metachunk_hash': hex_checksum,
-            'metachunk_size': 1024
+            "full_path": fullpath,
+            "container_id": cid,
+            "content_path": content_path,
+            "version": content_version,
+            "id": content_id,
+            "chunk_method": "ec/algo=liberasurecode_rs_vand,k=6,m=3,cca=blake3",
+            "policy": "TESTPOLICY",
+            "chunk_hash": hex_checksum.upper(),
+            "oio_version": OIO_VERSION,
+            "chunk_pos": 0,
+            "metachunk_hash": hex_checksum,
+            "metachunk_size": 1024,
         }
         reqid = request_id()
-        self.blob_client.chunk_put('http://' + self.rawx_id + '/' + chunk_id,
-                                   meta, data, reqid=reqid)
+        self.blob_client.chunk_put(
+            "http://" + self.rawx_id + "/" + chunk_id, meta, data, reqid=reqid
+        )
         # ensure chunk event have been processed
-        self.wait_for_event('oio-preserved', reqid=reqid,
-                            types=(EventTypes.CHUNK_NEW, ))
-        return account, container, cid, content_path, content_version, \
-            content_id, chunk_id
+        self.wait_for_event("oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,))
+        return (
+            account,
+            container,
+            cid,
+            content_path,
+            content_version,
+            content_id,
+            chunk_id,
+        )
 
     def _delete_chunk(self, chunk_id):
         reqid = request_id()
         self.blob_client.chunk_delete(
-            'http://' + self.rawx_id + '/' + chunk_id, reqid=reqid)
+            "http://" + self.rawx_id + "/" + chunk_id, reqid=reqid
+        )
         # ensure chunk event have been processed
-        self.wait_for_event('oio-preserved', reqid=reqid,
-                            types=(EventTypes.CHUNK_DELETED, ))
+        self.wait_for_event(
+            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_DELETED,)
+        )
 
     def _link_chunk(self, target_chunk_id):
         account = random_str(16)
@@ -135,31 +140,41 @@ class TestBlobIndexer(BaseTestCase):
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
-            account, container, content_path, content_version, content_id)
+            account, container, content_path, content_version, content_id
+        )
         reqid = request_id()
         _, link = self.blob_client.chunk_link(
-            'http://' + self.rawx_id + '/' + target_chunk_id, None, fullpath,
-            reqid=reqid)
-        chunk_id = link.split('/')[-1]
+            "http://" + self.rawx_id + "/" + target_chunk_id,
+            None,
+            fullpath,
+            reqid=reqid,
+        )
+        chunk_id = link.split("/")[-1]
         # ensure chunk event have been processed
-        self.wait_for_event('oio-preserved', reqid=reqid,
-                            types=(EventTypes.CHUNK_NEW, ))
-        return account, container, cid, content_path, content_version, \
-            content_id, chunk_id
+        self.wait_for_event("oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,))
+        return (
+            account,
+            container,
+            cid,
+            content_path,
+            content_version,
+            content_id,
+            chunk_id,
+        )
 
     def _chunk_path(self, chunk_id):
-        return self.rawx_path + '/' + chunk_id[:3] + '/' + chunk_id
+        return self.rawx_path + "/" + chunk_id[:3] + "/" + chunk_id
 
     def _index_pass(self, reset_stats=False, callback=None):
         """Simulates crawl_volume() from oio.crawler.rawx.crawler
-           but only calls the process() function of BlobIndexer
+        but only calls the process() function of BlobIndexer
         """
         paths = paths_gen(self.rawx_path)
         if reset_stats:
             # pylint: disable=protected-access
             self.indexer._reset_filter_stats()
         for path in paths:
-            chunk_id = path.rsplit('/', 1)[-1]
+            chunk_id = path.rsplit("/", 1)[-1]
             chunk_env = create_chunk_env(chunk_id, path)
             self.indexer.process(chunk_env, callback)
 
@@ -167,14 +182,21 @@ class TestBlobIndexer(BaseTestCase):
         chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         previous_nb_chunk = len(chunks)
 
-        _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \
-            self._put_chunk()
+        (
+            _,
+            _,
+            expected_cid,
+            _,
+            _,
+            expected_content_id,
+            expected_chunk_id,
+        ) = self._put_chunk()
 
         chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         self.assertEqual(previous_nb_chunk + 1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
@@ -187,7 +209,7 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(previous_nb_chunk + 1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
         self._delete_chunk(expected_chunk_id)
@@ -196,21 +218,31 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(previous_nb_chunk, len(chunks))
 
     def test_indexer_with_old_chunk(self):
-        expected_account, expected_container, expected_cid, \
-            expected_content_path, expected_content_version, \
-            expected_content_id, expected_chunk_id = self._put_chunk()
+        (
+            expected_account,
+            expected_container,
+            expected_cid,
+            expected_content_path,
+            expected_content_version,
+            expected_content_id,
+            expected_chunk_id,
+        ) = self._put_chunk()
 
         chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         self.assertEqual(1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
         convert_to_old_chunk(
-            self._chunk_path(chunk_id), expected_account, expected_container,
-            expected_content_path, expected_content_version,
-            expected_content_id)
+            self._chunk_path(chunk_id),
+            expected_account,
+            expected_container,
+            expected_content_path,
+            expected_content_version,
+            expected_content_id,
+        )
 
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
         self._index_pass()
@@ -222,7 +254,7 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
         self._delete_chunk(expected_chunk_id)
@@ -231,15 +263,22 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(0, len(chunks))
 
     def test_indexer_with_linked_chunk(self):
-        _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \
-            self._put_chunk()
+        (
+            _,
+            _,
+            expected_cid,
+            _,
+            _,
+            expected_content_id,
+            expected_chunk_id,
+        ) = self._put_chunk()
 
         chunks = self.rdir_client.chunk_fetch(self.rawx_id)
         chunks = list(chunks)
         self.assertEqual(1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
@@ -252,11 +291,12 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr['content_id'])
+        self.assertEqual(expected_content_id, descr["content_id"])
         self.assertEqual(expected_chunk_id, chunk_id)
 
-        _, _, linked_cid, _, _, linked_content_id, linked_chunk_id = \
-            self._link_chunk(expected_chunk_id)
+        _, _, linked_cid, _, _, linked_content_id, linked_chunk_id = self._link_chunk(
+            expected_chunk_id
+        )
 
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
         self._index_pass(reset_stats=True)
@@ -271,10 +311,10 @@ class TestBlobIndexer(BaseTestCase):
             cid, chunk_id, descr = chunk
             if chunk_id == expected_chunk_id:
                 self.assertEqual(expected_cid, cid)
-                self.assertEqual(expected_content_id, descr['content_id'])
+                self.assertEqual(expected_content_id, descr["content_id"])
             else:
                 self.assertEqual(linked_cid, cid)
-                self.assertEqual(linked_content_id, descr['content_id'])
+                self.assertEqual(linked_content_id, descr["content_id"])
                 self.assertEqual(linked_chunk_id, chunk_id)
 
         self._delete_chunk(expected_chunk_id)
@@ -283,7 +323,7 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(linked_cid, cid)
-        self.assertEqual(linked_content_id, descr['content_id'])
+        self.assertEqual(linked_content_id, descr["content_id"])
         self.assertEqual(linked_chunk_id, chunk_id)
 
         self._delete_chunk(linked_chunk_id)
@@ -291,7 +331,7 @@ class TestBlobIndexer(BaseTestCase):
         chunks = list(chunks)
         self.assertEqual(0, len(chunks))
 
-    def _write_chunk(self, rawx_path, alias="toto", suffix=''):
+    def _write_chunk(self, rawx_path, alias="toto", suffix=""):
         cname = random_str(8)
         container_id = cid_from_name(self.account, cname)
         content_id = random_id(32)
@@ -306,40 +346,41 @@ class TestBlobIndexer(BaseTestCase):
             chunk_file.write(b"toto")
 
         # pylint: disable=no-member
+        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_hash"], 32 * b"0")
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_hash'], 32 * b'0')
+            chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_id"], enc(chunk_id)
+        )
+        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"0")
+        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_size"], b"4")
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_id'], enc(chunk_id))
+            chunk_path, "user." + CHUNK_XATTR_KEYS["content_policy"], b"TESTPOLICY"
+        )
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_pos'], b'0')
-        xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_size'], b'4')
-        xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_policy'],
-            b'TESTPOLICY')
-        xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_chunkmethod'],
-            b'plain/nb_copy=3')
-        xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_version'], b'1')
+            chunk_path,
+            "user." + CHUNK_XATTR_KEYS["content_chunkmethod"],
+            b"plain/nb_copy=3",
+        )
+        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_version"], b"1")
         # Old (oio-sds < 4.2) extended attributes
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['container_id'],
-            enc(container_id))
+            chunk_path, "user." + CHUNK_XATTR_KEYS["container_id"], enc(container_id)
+        )
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_id'],
-            enc(content_id))
+            chunk_path, "user." + CHUNK_XATTR_KEYS["content_id"], enc(content_id)
+        )
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_path'], enc(alias))
+            chunk_path, "user." + CHUNK_XATTR_KEYS["content_path"], enc(alias)
+        )
         # New (oio-sds >= 4.2) extended attributes
         xattr.setxattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['oio_version'],
-            enc(OIO_VERSION))
+            chunk_path, "user." + CHUNK_XATTR_KEYS["oio_version"], enc(OIO_VERSION)
+        )
         fullpath = encode_fullpath(self.account, cname, alias, 1, content_id)
         xattr.setxattr(
             chunk_path,
-            'user.%s%s' % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, chunk_id),
-            enc(fullpath))
+            "user.%s%s" % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, chunk_id),
+            enc(fullpath),
+        )
 
         return chunk_path, container_id, chunk_id
 
@@ -352,15 +393,14 @@ class TestBlobIndexer(BaseTestCase):
         return None
 
     def _test_index_chunk(self, alias="toto"):
-
         # create a fake chunk
-        chunk_path, container_id, chunk_id = self._write_chunk(
-            self.rawx_path, alias)
+        chunk_path, container_id, chunk_id = self._write_chunk(self.rawx_path, alias)
 
         chunk_env = create_chunk_env(chunk_id, chunk_path)
 
-        with patch('oio.crawler.rawx.filters.indexer.time.time',
-                   Mock(return_value=1234)):
+        with patch(
+            "oio.crawler.rawx.filters.indexer.time.time", Mock(return_value=1234)
+        ):
             self.indexer.update_index(ChunkWrapper(chunk_env))
 
         # check rdir
@@ -368,11 +408,12 @@ class TestBlobIndexer(BaseTestCase):
 
         self.assertIsNotNone(check_value)
 
-        self.assertEqual(check_value['mtime'], 1234)
+        self.assertEqual(check_value["mtime"], 1234)
 
         # index a chunk already indexed
-        with patch('oio.crawler.rawx.filters.indexer.time.time',
-                   Mock(return_value=4567)):
+        with patch(
+            "oio.crawler.rawx.filters.indexer.time.time", Mock(return_value=4567)
+        ):
             self.indexer.update_index(ChunkWrapper(chunk_env))
 
         # check rdir
@@ -380,13 +421,13 @@ class TestBlobIndexer(BaseTestCase):
 
         self.assertIsNotNone(check_value)
 
-        self.assertEqual(check_value['mtime'], 4567)
+        self.assertEqual(check_value["mtime"], 4567)
 
     def test_index_chunk(self):
         return self._test_index_chunk()
 
     def test_index_unicode_chunk(self):
-        return self._test_index_chunk(u'a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
+        return self._test_index_chunk('a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
 
     def test_index_chunk_missing_xattr(self):
         # create a fake chunk
@@ -394,10 +435,8 @@ class TestBlobIndexer(BaseTestCase):
 
         # remove mandatory xattr
         # pylint: disable=no-member
-        xattr.removexattr(
-            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_pos'])
+        xattr.removexattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"])
 
-        with open(chunk_path, 'rb') as chunk_file:
-            self.assertRaises(FaultyChunk, read_chunk_metadata,
-                              chunk_file, chunk_id)
+        with open(chunk_path, "rb") as chunk_file:
+            self.assertRaises(FaultyChunk, read_chunk_metadata, chunk_file, chunk_id)
         os.remove(chunk_path)

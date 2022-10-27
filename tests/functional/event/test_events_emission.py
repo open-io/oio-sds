@@ -30,11 +30,11 @@ REASONABLE_EVENT_DELAY = 3.0
 class TestMeta2EventsEmission(BaseTestCase):
     def setUp(self):
         super(TestMeta2EventsEmission, self).setUp()
-        self.container_name = 'TestEventsEmission%f' % time.time()
+        self.container_name = "TestEventsEmission%f" % time.time()
         self.container_id = cid_from_name(self.account, self.container_name)
         self.container_client = ContainerClient(self.conf)
-        self.storage_api = ObjectStorageApi(self.conf['namespace'])
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.storage_api = ObjectStorageApi(self.conf["namespace"])
+        self.beanstalkd0.drain_tube("oio-preserved")
 
     def wait_for_all_events(self, types, reqid=None):
         pulled_events = dict()
@@ -43,8 +43,11 @@ class TestMeta2EventsEmission(BaseTestCase):
 
         while True:
             event = self.wait_for_event(
-                'oio-preserved', types=types, reqid=reqid,
-                timeout=REASONABLE_EVENT_DELAY)
+                "oio-preserved",
+                types=types,
+                reqid=reqid,
+                timeout=REASONABLE_EVENT_DELAY,
+            )
             if event is None:
                 break
             pulled_events[event.event_type].append(event)
@@ -54,12 +57,13 @@ class TestMeta2EventsEmission(BaseTestCase):
         # Fire up the event
         reqid = request_id()
         self.container_client.container_create(
-            self.account, self.container_name, reqid=reqid)
+            self.account, self.container_name, reqid=reqid
+        )
 
         # Grab all events and filter for the needed event type
         wanted_events = self.wait_for_all_events(
-            [EventTypes.CONTAINER_NEW, EventTypes.ACCOUNT_SERVICES],
-            reqid=reqid)
+            [EventTypes.CONTAINER_NEW, EventTypes.ACCOUNT_SERVICES], reqid=reqid
+        )
 
         container_new_events = wanted_events[EventTypes.CONTAINER_NEW]
         account_services_events = wanted_events[EventTypes.ACCOUNT_SERVICES]
@@ -71,62 +75,76 @@ class TestMeta2EventsEmission(BaseTestCase):
 
         # Basic info
         for event in (container_new_event, account_services_event):
-            self.assertEqual({'ns': self.ns,
-                              'account': self.account,
-                              'user': self.container_name,
-                              'id': self.container_id}, event.url)
+            self.assertEqual(
+                {
+                    "ns": self.ns,
+                    "account": self.account,
+                    "user": self.container_name,
+                    "id": self.container_id,
+                },
+                event.url,
+            )
 
         # Get the peers list and verify it's the same as received
-        raw_dir_info = self.storage_api.directory.list(self.account,
-                                                       self.container_name,
-                                                       cid=self.container_id)
-        raw_dir_info = raw_dir_info['srv']
+        raw_dir_info = self.storage_api.directory.list(
+            self.account, self.container_name, cid=self.container_id
+        )
+        raw_dir_info = raw_dir_info["srv"]
         expected_peers_list = sorted(
-            [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
+            [x.get("host") for x in raw_dir_info if x.get("type") == "meta2"]
         )
         received_peers_list = sorted(
-            [x.get('host') for x in account_services_event.data
-             if x.get('type') == 'meta2']
+            [
+                x.get("host")
+                for x in account_services_event.data
+                if x.get("type") == "meta2"
+            ]
         )
         self.assertListEqual(expected_peers_list, received_peers_list)
 
     def test_container_delete(self):
         # Create the container first
-        self.container_client.container_create(self.account,
-                                               self.container_name)
+        self.container_client.container_create(self.account, self.container_name)
 
         # Get the peers list
-        raw_dir_info = self.storage_api.directory.list(self.account,
-                                                       self.container_name,
-                                                       cid=self.container_id)
-        raw_dir_info = raw_dir_info['srv']
+        raw_dir_info = self.storage_api.directory.list(
+            self.account, self.container_name, cid=self.container_id
+        )
+        raw_dir_info = raw_dir_info["srv"]
         expected_peers_list = sorted(
-            [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
+            [x.get("host") for x in raw_dir_info if x.get("type") == "meta2"]
         )
 
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.beanstalkd0.drain_tube("oio-preserved")
         # Fire up the event
         reqid = request_id()
         self.container_client.container_delete(
-            self.account, self.container_name, reqid=reqid)
+            self.account, self.container_name, reqid=reqid
+        )
 
         # Grab all events and filter for the needed event type
         wanted_events = self.wait_for_all_events(
-            [EventTypes.CONTAINER_DELETED, EventTypes.META2_DELETED],
-            reqid=reqid)
+            [EventTypes.CONTAINER_DELETED, EventTypes.META2_DELETED], reqid=reqid
+        )
         container_deleted_events = wanted_events[EventTypes.CONTAINER_DELETED]
         meta2_deleted_events = wanted_events[EventTypes.META2_DELETED]
         self.assertEqual(1, len(container_deleted_events))
         self.assertEqual(len(expected_peers_list), len(meta2_deleted_events))
 
         # Basic info
-        for event in (container_deleted_events + meta2_deleted_events):
-            self.assertDictEqual({'ns': self.ns,
-                                  'account': self.account,
-                                  'user': self.container_name,
-                                  'id': self.container_id}, event.url)
+        for event in container_deleted_events + meta2_deleted_events:
+            self.assertDictEqual(
+                {
+                    "ns": self.ns,
+                    "account": self.account,
+                    "user": self.container_name,
+                    "id": self.container_id,
+                },
+                event.url,
+            )
 
         # Verify it's the same as received
         received_peers = sorted(
-            [event.data.get("peer") for event in meta2_deleted_events])
+            [event.data.get("peer") for event in meta2_deleted_events]
+        )
         self.assertListEqual(expected_peers_list, received_peers)

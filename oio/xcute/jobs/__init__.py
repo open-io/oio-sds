@@ -28,5 +28,5 @@ JOB_TYPES = {
     RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
     RawxRebuildJob.JOB_TYPE: RawxRebuildJob,
     RdirDecommissionJob.JOB_TYPE: RdirDecommissionJob,
-    TesterJob.JOB_TYPE: TesterJob
+    TesterJob.JOB_TYPE: TesterJob,
 }

@@ -15,8 +15,12 @@
 # License along with this library.
 
 
-from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, \
-    READ_TIMEOUT, HIDDEN_ACCOUNTS
+from oio.common.constants import (
+    REQID_HEADER,
+    CONNECTION_TIMEOUT,
+    READ_TIMEOUT,
+    HIDDEN_ACCOUNTS,
+)
 from oio.common.exceptions import ClientException, OioException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
@@ -26,7 +30,8 @@ from oio.event.filters.base import Filter
 CONTAINER_EVENTS = [
     EventTypes.CONTAINER_STATE,
     EventTypes.CONTAINER_NEW,
-    EventTypes.CONTAINER_DELETED]
+    EventTypes.CONTAINER_DELETED,
+]
 
 
 class AccountUpdateFilter(Filter):
@@ -37,57 +42,69 @@ class AccountUpdateFilter(Filter):
     """
 
     def init(self):
-        self.account = self.app_env['account_client']
-        self.connection_timeout = float(self.conf.get('connection_timeout',
-                                                      CONNECTION_TIMEOUT))
-        self.read_timeout = float(self.conf.get('read_timeout',
-                                                READ_TIMEOUT))
+        self.account = self.app_env["account_client"]
+        self.connection_timeout = float(
+            self.conf.get("connection_timeout", CONNECTION_TIMEOUT)
+        )
+        self.read_timeout = float(self.conf.get("read_timeout", READ_TIMEOUT))
         if not self.account.region:
             raise OioException("Missing region key in namespace conf")
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
-        headers = {
-            REQID_HEADER: event.reqid or request_id('account-update-')
-        }
+        headers = {REQID_HEADER: event.reqid or request_id("account-update-")}
 
         try:
-            url = event.env.get('url', {})
-            account = url.get('account')
+            url = event.env.get("url", {})
+            account = url.get("account")
             if account in HIDDEN_ACCOUNTS:
                 pass
             elif event.event_type in CONTAINER_EVENTS:
-                container = url.get('user')
+                container = url.get("user")
                 mtime = event.when / 1000000.0  # convert to seconds
-                if event.event_type in (EventTypes.CONTAINER_STATE,
-                                        EventTypes.CONTAINER_NEW):
+                if event.event_type in (
+                    EventTypes.CONTAINER_STATE,
+                    EventTypes.CONTAINER_NEW,
+                ):
                     update_kwargs = {}
                     data = event.data
-                    for k1, k2 in (('objects', 'object-count'),
-                                   ('bytes_used', 'bytes-count')):
+                    for k1, k2 in (
+                        ("objects", "object-count"),
+                        ("bytes_used", "bytes-count"),
+                    ):
                         update_kwargs[k1] = data.get(k2, 0)
-                    for k1, k2 in (('objects_details', 'objects-details'),
-                                   ('bytes_details', 'bytes-details')):
+                    for k1, k2 in (
+                        ("objects_details", "objects-details"),
+                        ("bytes_details", "bytes-details"),
+                    ):
                         update_kwargs[k1] = data.get(k2)
-                    update_kwargs['bucket'] = data.get('bucket')
+                    update_kwargs["bucket"] = data.get("bucket")
                     self.account.container_update(
-                        account, container, mtime, **update_kwargs,
+                        account,
+                        container,
+                        mtime,
+                        **update_kwargs,
                         connection_timeout=self.connection_timeout,
-                        read_timeout=self.read_timeout, headers=headers)
+                        read_timeout=self.read_timeout,
+                        headers=headers
+                    )
                 elif event.event_type == EventTypes.CONTAINER_DELETED:
                     self.account.container_delete(
-                        account, container, mtime,
+                        account,
+                        container,
+                        mtime,
                         connection_timeout=self.connection_timeout,
-                        read_timeout=self.read_timeout, headers=headers)
+                        read_timeout=self.read_timeout,
+                        headers=headers,
+                    )
             elif event.event_type == EventTypes.ACCOUNT_SERVICES:
                 if isinstance(event.data, list):
                     # Legacy format: list of services
                     new_services = event.data
                 else:
                     # New format: dictionary with new and deleted services
-                    new_services = event.data.get('services') or list()
-                m2_services = [x for x in new_services
-                               if x.get('type') == 'meta2']
+                    new_services = event.data.get("services") or list()
+                m2_services = [x for x in new_services if x.get("type") == "meta2"]
                 if not m2_services:
                     # No service in charge, container has been deleted.
                     # But we will also receive a CONTAINER_DELETED event,
@@ -98,26 +115,33 @@ class AccountUpdateFilter(Filter):
                         self.account.account_create(
                             account,
                             connection_timeout=self.connection_timeout,
-                            read_timeout=self.read_timeout, headers=headers)
+                            read_timeout=self.read_timeout,
+                            headers=headers,
+                        )
                     except OioTimeout as exc:
                         # The account will be autocreated by the next event,
                         # just warn and continue.
                         self.logger.warning(
-                            'Failed to create account %s (reqid=%s): %s',
-                            account, headers[REQID_HEADER], exc)
+                            "Failed to create account %s (reqid=%s): %s",
+                            account,
+                            headers[REQID_HEADER],
+                            exc,
+                        )
         except OioTimeout as exc:
-            msg = 'account update failure: %s' % str(exc)
+            msg = "account update failure: %s" % str(exc)
             resp = EventError(event=Event(env), body=msg)
             return resp(env, beanstalkd, cb)
         except ClientException as exc:
-            if (exc.http_status == 409
-                    and "No update needed" in exc.message):
+            if exc.http_status == 409 and "No update needed" in exc.message:
                 self.logger.info(
                     "Discarding event %s (job_id=%s, reqid=%s): %s",
-                    event.event_type, event.job_id,
-                    headers[REQID_HEADER], exc.message)
+                    event.event_type,
+                    event.job_id,
+                    headers[REQID_HEADER],
+                    exc.message,
+                )
             else:
-                msg = 'account update failure: %s' % str(exc)
+                msg = "account update failure: %s" % str(exc)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, beanstalkd, cb)
         return self.app(env, beanstalkd, cb)
@@ -129,4 +153,5 @@ def filter_factory(global_conf, **local_conf):
 
     def account_filter(app):
         return AccountUpdateFilter(app, conf)
+
     return account_filter

@@ -20,8 +20,11 @@ from oio.api.base import HttpApi
 from oio.common.constants import HEADER_PREFIX, REQID_HEADER
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
-from oio.common.exceptions import OioNetworkException, OioException, \
-    reraise as oio_reraise
+from oio.common.exceptions import (
+    OioNetworkException,
+    OioException,
+    reraise as oio_reraise,
+)
 from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
@@ -33,10 +36,10 @@ from oio.common.green import sleep
 from oio.common.easy_value import true_value
 from oio.common.green import GreenPile
 
-RDIR_ACCT = '_RDIR'
+RDIR_ACCT = "_RDIR"
 
 # Special target that will match any service from the "known" service list
-JOKER_SVC_TARGET = '__any_slot'
+JOKER_SVC_TARGET = "__any_slot"
 
 # Default rdir replicas for meta2/rawx services
 DEFAULT_RDIR_REPLICAS = 3
@@ -51,16 +54,16 @@ def _build_dict_by_id(ns, all_rdir):
     Build a dictionary of all rdir services indexed by their ID.
     """
     return {
-        _make_id(ns, 'rdir', x['tags'].get('tag.service_id', x['addr'])): x
+        _make_id(ns, "rdir", x["tags"].get("tag.service_id", x["addr"])): x
         for x in all_rdir
     }
 
 
 def _filter_rdir_hosts(allsrv):
     host_list = list()
-    for srv in allsrv.get('srv', {}):
-        if srv['type'] == 'rdir':
-            host_list.append(srv['host'])
+    for srv in allsrv.get("srv", {}):
+        if srv["type"] == "rdir":
+            host_list.append(srv["host"])
     if not host_list:
         raise NotFound("No rdir service found in %s" % (allsrv,))
     return host_list
@@ -69,14 +72,15 @@ def _filter_rdir_hosts(allsrv):
 class RdirDispatcher(object):
     def __init__(self, conf, rdir_client=None, logger=None, **kwargs):
         self.conf = conf
-        self.ns = conf['namespace']
+        self.ns = conf["namespace"]
         self.logger = logger or get_logger(conf)
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         if rdir_client:
             self.rdir = rdir_client
         else:
-            self.rdir = RdirClient(conf, directory_client=self.directory,
-                                   logger=self.logger, **kwargs)
+            self.rdir = RdirClient(
+                conf, directory_client=self.directory, logger=self.logger, **kwargs
+            )
         self._pool_options = None
 
     @property
@@ -92,38 +96,39 @@ class RdirDispatcher(object):
         :rtype: `tuple<list<dict>,list<dict>>`
         """
         all_services = self.cs.all_services(service_type, **kwargs)
-        all_rdir = self.cs.all_services('rdir', True, **kwargs)
+        all_rdir = self.cs.all_services("rdir", True, **kwargs)
         by_id = _build_dict_by_id(self.ns, all_rdir)
 
         for service in all_services:
             try:
-                ref = service.get('tags', {}).get('tag.service_id')
-                resp = self.directory.list(RDIR_ACCT,
-                                           ref or service['addr'],
-                                           service_type='rdir',
-                                           **kwargs)
+                ref = service.get("tags", {}).get("tag.service_id")
+                resp = self.directory.list(
+                    RDIR_ACCT, ref or service["addr"], service_type="rdir", **kwargs
+                )
                 rdir_hosts = _filter_rdir_hosts(resp)
-                service['rdir'] = []
+                service["rdir"] = []
 
                 for el in rdir_hosts:
                     try:
-                        service['rdir'].append(
-                            by_id[_make_id(self.ns, 'rdir', el)])
+                        service["rdir"].append(by_id[_make_id(self.ns, "rdir", el)])
                     except KeyError:
-                        self.logger.warning("rdir %s linked to %s %s seems \
-                                            down",
-                                            el, service_type,
-                                            service['addr'])
+                        self.logger.warning(
+                            "rdir %s linked to %s %s seems                             "
+                            "                down",
+                            el,
+                            service_type,
+                            service["addr"],
+                        )
                         down_svc = {"addr": el, "score": 0, "tags": {}}
-                        service['rdir'].append(down_svc)
-                        by_id[_make_id(self.ns, 'rdir', el)] = down_svc
+                        service["rdir"].append(down_svc)
+                        by_id[_make_id(self.ns, "rdir", el)] = down_svc
 
             except NotFound:
-                self.logger.info("No rdir linked to %s",
-                                 service['addr'])
+                self.logger.info("No rdir linked to %s", service["addr"])
             except OioException as exc:
-                self.logger.warning('Failed to get rdir linked to %s: %s',
-                                    service['addr'], exc)
+                self.logger.warning(
+                    "Failed to get rdir linked to %s: %s", service["addr"], exc
+                )
         return all_services, all_rdir
 
     def get_aggregated_assignments(self, service_type, **kwargs):
@@ -136,21 +141,27 @@ class RdirDispatcher(object):
         managed_svc = {}
 
         for svc in all_services:
-            rdirs = svc.get('rdir', dummy_rdirs)
+            rdirs = svc.get("rdir", dummy_rdirs)
             for rdir in rdirs:
-                rdir_id = rdir['tags'].get('tag.service_id') or \
-                          rdir['addr']
-                svc_id = svc['tags'].get('tag.service_id') or svc['addr']
+                rdir_id = rdir["tags"].get("tag.service_id") or rdir["addr"]
+                svc_id = svc["tags"].get("tag.service_id") or svc["addr"]
                 managed_svc.setdefault(rdir_id, []).append(svc_id)
         # Include rdir services which do not host any database
         for rdir in all_rdir:
-            rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+            rdir_id = rdir["tags"].get("tag.service_id") or rdir["addr"]
             if rdir_id not in managed_svc:
                 managed_svc[rdir_id] = []
         return managed_svc
 
-    def assign_services(self, service_type, max_per_rdir=None, min_dist=None,
-                        service_id=None, reassign=None, **kwargs):
+    def assign_services(
+        self,
+        service_type,
+        max_per_rdir=None,
+        min_dist=None,
+        service_id=None,
+        reassign=None,
+        **kwargs
+    ):
         """
         Assign an rdir service to all `service_type` servers that aren't
         already assigned one.
@@ -172,14 +183,13 @@ class RdirDispatcher(object):
         all_services = self.cs.all_services(service_type, **kwargs)
         if service_id:
             for provider in all_services:
-                provider_id = provider['tags'].get('tag.service_id',
-                                                   provider['addr'])
+                provider_id = provider["tags"].get("tag.service_id", provider["addr"])
                 if service_id == provider_id:
                     break
             else:
-                raise ValueError('%s isn\'t a %s' % (service_id, service_type))
+                raise ValueError("%s isn't a %s" % (service_id, service_type))
             all_services = [provider]
-        all_rdir = self.cs.all_services('rdir', True, **kwargs)
+        all_rdir = self.cs.all_services("rdir", True, **kwargs)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
@@ -187,62 +197,83 @@ class RdirDispatcher(object):
 
         errors = list()
         for provider in all_services:
-            provider_id = provider['tags'].get('tag.service_id',
-                                               provider['addr'])
-            provider['rdir'] = []
+            provider_id = provider["tags"].get("tag.service_id", provider["addr"])
+            provider["rdir"] = []
             rdir_hosts = None
             try:
-                resp = self.directory.list(RDIR_ACCT, provider_id,
-                                           service_type='rdir', **kwargs)
+                resp = self.directory.list(
+                    RDIR_ACCT, provider_id, service_type="rdir", **kwargs
+                )
                 rdir_hosts = _filter_rdir_hosts(resp)
                 for rdir_host in rdir_hosts:
                     try:
-                        rdir = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                        rdir = by_id[_make_id(self.ns, "rdir", rdir_host)]
                         if reassign == rdir_host:
-                            rdir['tags']['stat.opened_db_count'] = \
-                                rdir['tags'].get('stat.opened_db_count', 0) - 1
-                        provider['rdir'].append(rdir)
+                            rdir["tags"]["stat.opened_db_count"] = (
+                                rdir["tags"].get("stat.opened_db_count", 0) - 1
+                            )
+                        provider["rdir"].append(rdir)
                     except KeyError:
-                        self.logger.warning("rdir %s linked to %s %s seems \
-                                            down",
-                                            rdir_host, service_type,
-                                            provider_id)
+                        self.logger.warning(
+                            "rdir %s linked to %s %s seems                             "
+                            "                down",
+                            rdir_host,
+                            service_type,
+                            provider_id,
+                        )
                 if reassign:
-                    raise NotFound('Trick to avoid code duplication')
+                    raise NotFound("Trick to avoid code duplication")
             except NotFound:
                 try:
                     # Check if all known rdir hosts (except the reassign)
                     # are not locked
                     for el in all_rdir:
-                        if rdir_hosts and el['addr'] in rdir_hosts and \
-                           el['addr'] != reassign and el['score'] == 0:
+                        if (
+                            rdir_hosts
+                            and el["addr"] in rdir_hosts
+                            and el["addr"] != reassign
+                            and el["score"] == 0
+                        ):
                             # TODO (LAA) raise exception ?
                             self.logger.warning(
                                 "The service %s is supposed "
-                                "to be kept but has score to 0", el['addr'])
+                                "to be kept but has score to 0",
+                                el["addr"],
+                            )
 
-                    rdirs = self._smart_link_rdir(provider_id, all_rdir,
-                                                  service_type=service_type,
-                                                  max_per_rdir=max_per_rdir,
-                                                  min_dist=min_dist,
-                                                  reassign=reassign,
-                                                  known_hosts=rdir_hosts,
-                                                  **kwargs)
+                    rdirs = self._smart_link_rdir(
+                        provider_id,
+                        all_rdir,
+                        service_type=service_type,
+                        max_per_rdir=max_per_rdir,
+                        min_dist=min_dist,
+                        reassign=reassign,
+                        known_hosts=rdir_hosts,
+                        **kwargs
+                    )
                 except (OioException, ValueError) as exc:
-                    self.logger.warning("Failed to link an rdir to %s %s: %s",
-                                        service_type, provider_id, exc)
+                    self.logger.warning(
+                        "Failed to link an rdir to %s %s: %s",
+                        service_type,
+                        provider_id,
+                        exc,
+                    )
                     errors.append((provider_id, exc))
                     continue
 
-                provider['rdir'] = list()
+                provider["rdir"] = list()
                 for rdir in rdirs:
-                    n_base = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
-                    by_id[rdir]['tags']["stat.opened_db_count"] = n_base + 1
-                    provider['rdir'].append(by_id[rdir])
+                    n_base = by_id[rdir]["tags"].get("stat.opened_db_count", 0)
+                    by_id[rdir]["tags"]["stat.opened_db_count"] = n_base + 1
+                    provider["rdir"].append(by_id[rdir])
             except OioException as exc:
-                self.logger.warning("Failed to check rdir linked to %s %s "
-                                    "(thus won't try to make the link): %s",
-                                    service_type, provider_id, exc)
+                self.logger.warning(
+                    "Failed to check rdir linked to %s %s "
+                    "(thus won't try to make the link): %s",
+                    service_type,
+                    provider_id,
+                    exc,
+                )
                 errors.append((provider_id, exc))
         if errors:
             # group_chunk_errors is flexible enough to accept service addresses
@@ -251,8 +282,7 @@ class RdirDispatcher(object):
                 err, addrs = errors.popitem()
                 oio_reraise(type(err), err, str(addrs))
             else:
-                raise OioException('Several errors encountered: %s' %
-                                   errors)
+                raise OioException("Several errors encountered: %s" % errors)
         return all_services
 
     def assign_all_meta2(self, max_per_rdir=None, **kwargs):
@@ -276,8 +306,9 @@ class RdirDispatcher(object):
         """
         return self.assign_services("rawx", max_per_rdir, **kwargs)
 
-    def _assign_rdir(self, volume_id, assignments,
-                     is_reassign=False, max_attempts=7, **kwargs):
+    def _assign_rdir(
+        self, volume_id, assignments, is_reassign=False, max_attempts=7, **kwargs
+    ):
         """
         Save the assignment in the directory (meta1).
 
@@ -287,9 +318,15 @@ class RdirDispatcher(object):
         """
         for i in range(max_attempts):
             try:
-                self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                                     assignments, autocreate=True,
-                                     replace=is_reassign, **kwargs)
+                self.directory.force(
+                    RDIR_ACCT,
+                    volume_id,
+                    "rdir",
+                    assignments,
+                    autocreate=True,
+                    replace=is_reassign,
+                    **kwargs
+                )
                 break
             except ClientException as ex:
                 # Already done
@@ -297,16 +334,15 @@ class RdirDispatcher(object):
                 if ex.status in done:
                     break
                 if ex.message.startswith(
-                        'META1 error: (SQLITE_CONSTRAINT) '
-                        'UNIQUE constraint failed'):
-                    self.logger.info(
-                        "Ignored exception (already0): %s", ex)
+                    "META1 error: (SQLITE_CONSTRAINT) UNIQUE constraint failed"
+                ):
+                    self.logger.info("Ignored exception (already0): %s", ex)
                     break
                 if ex.message.startswith(
-                        'META1 error: (SQLITE_CONSTRAINT) '
-                        'columns cid, srvtype, seq are not unique'):
-                    self.logger.info(
-                        "Ignored exception (already1): %s", ex)
+                    "META1 error: (SQLITE_CONSTRAINT) "
+                    "columns cid, srvtype, seq are not unique"
+                ):
+                    self.logger.info("Ignored exception (already1): %s", ex)
                     break
                 # Manage several unretriable errors
                 retry = (406, 450, 503, 504)
@@ -319,10 +355,20 @@ class RdirDispatcher(object):
                 # Too many attempts
                 raise
 
-    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
-                         max_attempts=7, service_type='rawx', min_dist=None,
-                         reassign=None, dry_run=False, known_hosts=None,
-                         replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
+    def _smart_link_rdir(
+        self,
+        volume_id,
+        all_rdir,
+        max_per_rdir=None,
+        max_attempts=7,
+        service_type="rawx",
+        min_dist=None,
+        reassign=None,
+        dry_run=False,
+        known_hosts=None,
+        replicas=DEFAULT_RDIR_REPLICAS,
+        **kwargs
+    ):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -333,20 +379,20 @@ class RdirDispatcher(object):
 
         :returns: the list of IDs of all rdir services assigned to volume_id.
         """
-        opened_db = [x['tags'].get('stat.opened_db_count', 0) for x in all_rdir
-                     if x['score'] > 0]
+        opened_db = [
+            x["tags"].get("stat.opened_db_count", 0) for x in all_rdir if x["score"] > 0
+        ]
         if len(opened_db) <= 0:
-            raise ServiceUnavailable(
-                "No valid rdir service found in %s" % self.ns)
+            raise ServiceUnavailable("No valid rdir service found in %s" % self.ns)
         if not max_per_rdir:
             upper_limit = sum(opened_db) / float(len(opened_db))
         else:
             upper_limit = max_per_rdir - 1
-        avoids = [_make_id(self.ns, "rdir", x['tags'].get('tag.service_id',
-                                                          x['addr']))
-                  for x in all_rdir
-                  if x['score'] > 0 and
-                  x['tags'].get('stat.opened_db_count', 0) > upper_limit]
+        avoids = [
+            _make_id(self.ns, "rdir", x["tags"].get("tag.service_id", x["addr"]))
+            for x in all_rdir
+            if x["score"] > 0 and x["tags"].get("stat.opened_db_count", 0) > upper_limit
+        ]
 
         # Build the list of known services. The first one is the meta2 or rawx
         # in need of an rdir (for distance comparison).
@@ -358,61 +404,79 @@ class RdirDispatcher(object):
                 except ValueError:
                     pass
             for host in known_hosts:
-                known_ids.append(_make_id(self.ns, 'rdir', host))
+                known_ids.append(_make_id(self.ns, "rdir", host))
         reassigned_id = None
         if reassign:
-            reassigned_id = _make_id(self.ns, 'rdir', reassign)
+            reassigned_id = _make_id(self.ns, "rdir", reassign)
             avoids.append(reassigned_id)
 
         # First try with a non-empty 'avoids' list.
         try:
-            polled = self._poll_rdir(avoid=avoids, known=known_ids,
-                                     min_dist=min_dist, replicas=replicas,
-                                     **kwargs)
+            polled = self._poll_rdir(
+                avoid=avoids,
+                known=known_ids,
+                min_dist=min_dist,
+                replicas=replicas,
+                **kwargs
+            )
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry with a reduced `avoids`, hoping the next iteration
             # will rebalance.
             avoids = [reassigned_id] if reassign else None
-            polled = self._poll_rdir(avoid=avoids, known=known_ids,
-                                     min_dist=min_dist,
-                                     replicas=replicas, **kwargs)
+            polled = self._poll_rdir(
+                avoid=avoids,
+                known=known_ids,
+                min_dist=min_dist,
+                replicas=replicas,
+                **kwargs
+            )
 
         # Prepare the output list of IDs
-        polled_ids = [p['id'] for p in polled]
+        polled_ids = [p["id"] for p in polled]
         if reassign:
-            polled_ids = polled_ids + [_make_id(self.ns, 'rdir', host)
-                                       for host in known_hosts]
+            polled_ids = polled_ids + [
+                _make_id(self.ns, "rdir", host) for host in known_hosts
+            ]
         if dry_run:
             # No association of the rdir to the rawx
             # No creation in the rdir
             return polled_ids
 
         # Associate the rdir to the rawx
-        all_hosts = [el['addr'] for el in polled]
+        all_hosts = [el["addr"] for el in polled]
         if known_hosts:
             all_hosts = known_hosts + all_hosts
 
         assignments = {
-            'host': ','.join(all_hosts),
-            'type': 'rdir',
-            'seq': 1, 'args': "",
-            'id': ','.join(polled_ids)}
-        self._assign_rdir(volume_id, assignments, is_reassign=bool(reassign),
-                          max_attempts=max_attempts, **kwargs)
+            "host": ",".join(all_hosts),
+            "type": "rdir",
+            "seq": 1,
+            "args": "",
+            "id": ",".join(polled_ids),
+        }
+        self._assign_rdir(
+            volume_id,
+            assignments,
+            is_reassign=bool(reassign),
+            max_attempts=max_attempts,
+            **kwargs
+        )
 
         # Do the creation in the rdir itself
         try:
             self.rdir._clear_cache(volume_id)
             self.rdir.create(volume_id, service_type=service_type, **kwargs)
         except Exception as exc:
-            self.logger.warning("Failed to create database for %s on %s: %s",
-                                volume_id, polled, exc)
+            self.logger.warning(
+                "Failed to create database for %s on %s: %s", volume_id, polled, exc
+            )
         return polled_ids
 
-    def _create_special_pool(self, options=None, force=False,
-                             replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
+    def _create_special_pool(
+        self, options=None, force=False, replicas=DEFAULT_RDIR_REPLICAS, **kwargs
+    ):
         """
         Create the special pool for rdir services.
 
@@ -421,11 +485,21 @@ class RdirDispatcher(object):
         :param replicas: number of rdir services which must be selected.
         """
         self.cs.lb.create_pool(
-            '__rawx_rdir', ((1, JOKER_SVC_TARGET), (replicas, 'rdir')),
-            options=options, force=force, **kwargs)
+            "__rawx_rdir",
+            ((1, JOKER_SVC_TARGET), (replicas, "rdir")),
+            options=options,
+            force=force,
+            **kwargs
+        )
 
-    def _poll_rdir(self, avoid=None, known=None, min_dist=None,
-                   replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
+    def _poll_rdir(
+        self,
+        avoid=None,
+        known=None,
+        min_dist=None,
+        replicas=DEFAULT_RDIR_REPLICAS,
+        **kwargs
+    ):
         """
         Call the special rdir service pool (created if missing).
 
@@ -439,38 +513,38 @@ class RdirDispatcher(object):
         if not known or len(known) > replicas:
             raise ValueError(
                 'There should be at most %d "known" services, but known=%s'
-                % (replicas, known))
+                % (replicas, known)
+            )
 
         options = {}
         if min_dist is not None:
-            options['min_dist'] = min_dist
+            options["min_dist"] = min_dist
         if options != self._pool_options:
             # Options have changed, overwrite the pool.
             self._pool_options = options
-            self._create_special_pool(self._pool_options, force=True,
-                                      replicas=replicas, **kwargs)
+            self._create_special_pool(
+                self._pool_options, force=True, replicas=replicas, **kwargs
+            )
 
         try:
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
-                                **kwargs)
+            svcs = self.cs.poll("__rawx_rdir", avoid=avoid, known=known, **kwargs)
         except ClientException as exc:
             if exc.status != 400:
                 raise
-            self._create_special_pool(self._pool_options,
-                                      replicas=replicas, **kwargs)
-            svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
-                                **kwargs)
-        expected = (replicas - len(known) + 1)
+            self._create_special_pool(self._pool_options, replicas=replicas, **kwargs)
+            svcs = self.cs.poll("__rawx_rdir", avoid=avoid, known=known, **kwargs)
+        expected = replicas - len(known) + 1
         rdir_count = 0
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
-            if 'rdir' in svc['id']:
+            if "rdir" in svc["id"]:
                 rdir_count += 1
         if rdir_count == expected:
             return svcs
         raise ServerException(
             "LB returned incoherent result (expected %d rdir, got %d): %s"
-            % (expected, rdir_count, svcs))
+            % (expected, rdir_count, svcs)
+        )
 
 
 class RdirClient(HttpApi):
@@ -479,24 +553,26 @@ class RdirClient(HttpApi):
     """
 
     base_url = {
-        'rawx': 'rdir',
-        'meta2': 'rdir/meta2',
+        "rawx": "rdir",
+        "meta2": "rdir/meta2",
     }
 
-    def __init__(self, conf, directory_client=None, cache_duration=60.0,
-                 logger=None, **kwargs):
-        super(RdirClient, self).__init__(service_type='rdir', **kwargs)
+    def __init__(
+        self, conf, directory_client=None, cache_duration=60.0, logger=None, **kwargs
+    ):
+        super(RdirClient, self).__init__(service_type="rdir", **kwargs)
         self.conf = conf
         self.directory = directory_client or DirectoryClient(
-            self.conf, logger=logger, **kwargs)
+            self.conf, logger=logger, **kwargs
+        )
         self.logger = logger or self.directory.logger
         self.oioproxy_kwargs = kwargs.copy()
-        self.oioproxy_kwargs['endpoint'] = (
-            self.directory.proxy_scheme + '://' + self.directory.proxy_netloc)
-        self.oioproxy_kwargs['pool_manager'] = self.directory.pool_manager
-        self.admin = AdminClient(
-            self.conf, logger=self.logger, **self.oioproxy_kwargs)
-        self.ns = conf['namespace']
+        self.oioproxy_kwargs["endpoint"] = (
+            self.directory.proxy_scheme + "://" + self.directory.proxy_netloc
+        )
+        self.oioproxy_kwargs["pool_manager"] = self.directory.pool_manager
+        self.admin = AdminClient(self.conf, logger=self.logger, **self.oioproxy_kwargs)
+        self.ns = conf["namespace"]
         self._addr_cache = dict()
         self._cache_duration = cache_duration
         self._cs = None
@@ -505,7 +581,8 @@ class RdirClient(HttpApi):
     def cs(self):
         if not self._cs:
             self._cs = ConscienceClient(
-                self.conf, logger=self.logger, **self.oioproxy_kwargs)
+                self.conf, logger=self.logger, **self.oioproxy_kwargs
+            )
         return self._cs
 
     def _clear_cache(self, volume_id):
@@ -524,62 +601,79 @@ class RdirClient(HttpApi):
         # Not cached or stale, try a direct lookup
         try:
             headers = {REQID_HEADER: reqid or request_id()}
-            resp = self.directory.list(RDIR_ACCT, volume_id,
-                                       service_type='rdir',
-                                       headers=headers)
+            resp = self.directory.list(
+                RDIR_ACCT, volume_id, service_type="rdir", headers=headers
+            )
 
             hosts = _filter_rdir_hosts(resp)
-            cur_hosts = [self.cs.resolve_service_id('rdir', host)
-                         for host in hosts]
+            cur_hosts = [self.cs.resolve_service_id("rdir", host) for host in hosts]
             # Add the list of services to the cache
             self._addr_cache[volume_id] = (
                 cur_hosts,
-                now + self._cache_duration * random.randrange(90, 100) / 100)
+                now + self._cache_duration * random.randrange(90, 100) / 100,
+            )
             return cur_hosts
         except NotFound:
-            raise VolumeException('No rdir assigned to volume %s' % volume_id)
+            raise VolumeException("No rdir assigned to volume %s" % volume_id)
 
     def _get_resolved_rdir_hosts(self, volume_id, rdir_hosts=None, reqid=None):
         if not rdir_hosts:
             rdir_hosts = self._get_rdir_addr(volume_id, reqid=reqid)
         else:
-            rdir_hosts = [self.cs.resolve_service_id('rdir', host)
-                          for host in rdir_hosts]
+            rdir_hosts = [
+                self.cs.resolve_service_id("rdir", host) for host in rdir_hosts
+            ]
         return rdir_hosts
 
-    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx',
-                  rdir_hosts=None):
+    def _make_uri(
+        self, action, volume_id, reqid=None, service_type="rawx", rdir_hosts=None
+    ):
         rdir_hosts = self._get_resolved_rdir_hosts(
-            volume_id, rdir_hosts=rdir_hosts, reqid=reqid)
+            volume_id, rdir_hosts=rdir_hosts, reqid=reqid
+        )
         all_uri = []
         for rdir_host in rdir_hosts:
-            all_uri.append('http://%s/v1/%s/%s' % (
-                rdir_host,
-                self.__class__.base_url[service_type], action))
+            all_uri.append(
+                "http://%s/v1/%s/%s"
+                % (rdir_host, self.__class__.base_url[service_type], action)
+            )
         return all_uri
 
     @ensure_headers
     @ensure_request_id
-    def _rdir_request(self, volume, method, action, create=False, params=None,
-                      service_type='rawx', rdir_hosts=None, **kwargs):
+    def _rdir_request(
+        self,
+        volume,
+        method,
+        action,
+        create=False,
+        params=None,
+        service_type="rawx",
+        rdir_hosts=None,
+        **kwargs
+    ):
         if params is None:
             params = dict()
-        params['vol'] = volume
+        params["vol"] = volume
         if create:
-            params['create'] = '1'
-        all_uri = self._make_uri(action, volume,
-                                 reqid=kwargs['headers'][REQID_HEADER],
-                                 service_type=service_type,
-                                 rdir_hosts=rdir_hosts)
+            params["create"] = "1"
+        all_uri = self._make_uri(
+            action,
+            volume,
+            reqid=kwargs["headers"][REQID_HEADER],
+            service_type=service_type,
+            rdir_hosts=rdir_hosts,
+        )
 
         resp = ""
         body = ""
         errors = list()
-        if method in ('GET', 'HEAD'):
+        if method in ("GET", "HEAD"):
             for uri in all_uri:
                 try:
-                    resp, body = self._direct_request(method, uri,
-                                                      params=params, **kwargs)
+                    resp, body = self._direct_request(
+                        method, uri, params=params, **kwargs
+                    )
 
                     # Why: because there are as much of uri requests as
                     # rawx/meta2 services. When we fetch chunk we do it once
@@ -592,14 +686,12 @@ class RdirClient(HttpApi):
 
             def _local_request(method, uri, params, **kwargs):
                 try:
-                    return self._direct_request(method, uri, params=params,
-                                                **kwargs)
+                    return self._direct_request(method, uri, params=params, **kwargs)
                 except Exception as exc:
                     return (uri, exc)
 
             for uri in all_uri:
-                pile.spawn(_local_request, method, uri, params=params,
-                           **kwargs)
+                pile.spawn(_local_request, method, uri, params=params, **kwargs)
 
             for el in pile:
                 # exception
@@ -610,86 +702,109 @@ class RdirClient(HttpApi):
                     body = el[1]
 
         if errors:
-            errorsStr = [
-                '%s: %s' % (type(err).__name__, err) for (_, err) in errors]
+            errorsStr = ["%s: %s" % (type(err).__name__, err) for (_, err) in errors]
             self.logger.warning(
-                'rdir request[%s][%s]: %i/%i subrequests failed:\n%s' % (
+                "rdir request[%s][%s]: %i/%i subrequests failed:\n%s"
+                % (
                     method,
-                    kwargs['reqid'],
+                    kwargs["reqid"],
                     len(errors),
                     len(all_uri),
-                    '\n'.join(errorsStr)))
+                    "\n".join(errorsStr),
+                )
+            )
             for _, err in errors:
                 if isinstance(err, NotFound):
                     self.logger.warning(
-                        'At least one rdir no longer manages the volume %s, '
-                        'flush the cache of oioproxy to be sure to have '
-                        'the new information', volume)
+                        "At least one rdir no longer manages the volume %s, "
+                        "flush the cache of oioproxy to be sure to have "
+                        "the new information",
+                        volume,
+                    )
                     try:
                         # TODO(ADU): Flush only the cache of rdir assignments
                         self.admin.proxy_flush_cache(high=False, low=True)
                     except Exception as exc:
                         self.logger.exception(
-                            'Failed to flush the cache of oioproxy: %s', exc)
+                            "Failed to flush the cache of oioproxy: %s", exc
+                        )
                     break
             # clear cache if at least one error
             self._clear_cache(volume)
 
             if len(errors) == len(all_uri):  # all requests failed
                 class_type = type(errors[0][1])
-                same_error = all(
-                    isinstance(x, class_type) for (uri, x) in errors)
+                same_error = all(isinstance(x, class_type) for (uri, x) in errors)
                 errors = group_chunk_errors(errors)
                 if same_error:
                     err, addrs = errors.popitem()
-                    oio_reraise(
-                        type(err), err, str(addrs) + " method:" + method)
+                    oio_reraise(type(err), err, str(addrs) + " method:" + method)
                 else:
                     raise OioException(
-                        'Several errors encountered: %s %s' % errors, method)
+                        "Several errors encountered: %s %s" % errors, method
+                    )
 
         return resp, body
 
-    def create(self, volume_id, service_type='rawx', **kwargs):
+    def create(self, volume_id, service_type="rawx", **kwargs):
         """Create the database for `volume_id` on the appropriate rdir"""
-        self._rdir_request(volume_id, 'POST', 'create',
-                           service_type=service_type, **kwargs)
+        self._rdir_request(
+            volume_id, "POST", "create", service_type=service_type, **kwargs
+        )
 
-    def chunk_push(self, volume_id, container_id, content_id, chunk_id,
-                   content_path, content_version,
-                   headers=None, **data):
+    def chunk_push(
+        self,
+        volume_id,
+        container_id,
+        content_id,
+        chunk_id,
+        content_path,
+        content_version,
+        headers=None,
+        **data
+    ):
         """Reference a chunk in the reverse directory"""
         body = {
             # Will be stripped and kept only in the key
-            'chunk_id': chunk_id,
-            'container_id': container_id,
+            "chunk_id": chunk_id,
+            "container_id": container_id,
             # Will remain in the value
-            'content_id': content_id,
-            'path': content_path,
-            'version': int(content_version)
+            "content_id": content_id,
+            "path": content_path,
+            "version": int(content_version),
         }
 
         # Mostly mtime
         for key, value in data.items():
             body[key] = value
 
-        self._rdir_request(volume_id, 'POST', 'push', create=False,
-                           json=body, headers=headers)
+        self._rdir_request(
+            volume_id, "POST", "push", create=False, json=body, headers=headers
+        )
 
-    def chunk_delete(self, volume_id, container_id, content_id, chunk_id,
-                     **kwargs):
+    def chunk_delete(self, volume_id, container_id, content_id, chunk_id, **kwargs):
         """Unreference a chunk from the reverse directory"""
-        body = {'container_id': container_id,
-                'content_id': content_id,
-                'chunk_id': chunk_id}
+        body = {
+            "container_id": container_id,
+            "content_id": content_id,
+            "chunk_id": chunk_id,
+        }
 
-        self._rdir_request(volume_id, 'DELETE', 'delete',
-                           json=body, **kwargs)
+        self._rdir_request(volume_id, "DELETE", "delete", json=body, **kwargs)
 
-    def chunk_fetch(self, volume, limit=1000, rebuild=False,
-                    container_id=None, max_attempts=3,
-                    start_after=None, shuffle=False, full_urls=False,
-                    old_format=False, **kwargs):
+    def chunk_fetch(
+        self,
+        volume,
+        limit=1000,
+        rebuild=False,
+        container_id=None,
+        max_attempts=3,
+        start_after=None,
+        shuffle=False,
+        full_urls=False,
+        old_format=False,
+        **kwargs
+    ):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -710,19 +825,20 @@ class RdirClient(HttpApi):
         :keyword old_format: yield (container, content, chunk and value)
             instead of just (container, chunk and value).
         """
-        req_body = {'limit': limit}
+        req_body = {"limit": limit}
         if rebuild:
-            req_body['rebuild'] = True
+            req_body["rebuild"] = True
         if container_id:
-            req_body['container_id'] = container_id
+            req_body["container_id"] = container_id
         if start_after:
-            req_body['start_after'] = start_after
+            req_body["start_after"] = start_after
 
         while True:
             for i in range(max_attempts):
                 try:
                     resp, resp_body = self._rdir_request(
-                        volume, 'GET', 'fetch', json=req_body, **kwargs)
+                        volume, "GET", "fetch", json=req_body, **kwargs
+                    )
                     break
                 except OioNetworkException:
                     # Monotonic backoff
@@ -732,27 +848,28 @@ class RdirClient(HttpApi):
                     # Too many attempts
                     raise
 
-            truncated = resp.headers.get(HEADER_PREFIX + 'list-truncated')
+            truncated = resp.headers.get(HEADER_PREFIX + "list-truncated")
             if truncated is None:
                 # TODO(adu): Delete when it will no longer be used
                 if not resp_body:
                     break
                 truncated = True
-                req_body['start_after'] = resp_body[-1][0]
+                req_body["start_after"] = resp_body[-1][0]
             else:
                 truncated = true_value(truncated)
                 if truncated:
-                    req_body['start_after'] = resp.headers[
-                        HEADER_PREFIX + 'list-marker']
+                    req_body["start_after"] = resp.headers[
+                        HEADER_PREFIX + "list-marker"
+                    ]
 
             if shuffle:
                 random.shuffle(resp_body)
-            for (key, value) in resp_body:
-                container, chunk = key.split('|')
+            for key, value in resp_body:
+                container, chunk = key.split("|")
                 if full_urls:
-                    chunk = 'http://%s/%s' % (volume, chunk)
+                    chunk = "http://%s/%s" % (volume, chunk)
                 if old_format:
-                    yield container, value['content_id'], chunk, value
+                    yield container, value["content_id"], chunk, value
                 else:
                     yield container, chunk, value
 
@@ -760,8 +877,16 @@ class RdirClient(HttpApi):
                 break
 
     @ensure_request_id
-    def chunk_copy_vol(self, volume_id, sources=None, dests=None,
-                       batch_size=1000, create=True, reqid=None, **kwargs):
+    def chunk_copy_vol(
+        self,
+        volume_id,
+        sources=None,
+        dests=None,
+        batch_size=1000,
+        create=True,
+        reqid=None,
+        **kwargs
+    ):
         """
         Copy all chunks records from volume_id from one rdir to another.
 
@@ -775,67 +900,89 @@ class RdirClient(HttpApi):
         """
         # Make sure to NOT use a destination as a source
         src_rdir_hosts = self._get_resolved_rdir_hosts(
-            volume_id, rdir_hosts=sources, reqid=reqid)
+            volume_id, rdir_hosts=sources, reqid=reqid
+        )
         dests_rdir_hosts = self._get_resolved_rdir_hosts(
-            volume_id, rdir_hosts=dests, reqid=reqid)
-        src_rdir_hosts = [src_rdir_host for src_rdir_host in src_rdir_hosts
-                          if src_rdir_host not in dests_rdir_hosts]
+            volume_id, rdir_hosts=dests, reqid=reqid
+        )
+        src_rdir_hosts = [
+            src_rdir_host
+            for src_rdir_host in src_rdir_hosts
+            if src_rdir_host not in dests_rdir_hosts
+        ]
         if not src_rdir_hosts:
-            raise OioException('No source available')
+            raise OioException("No source available")
         if not dests_rdir_hosts:
-            raise OioException('No destination available')
+            raise OioException("No destination available")
 
         batch = []
-        for cid, chunk, rec in self.chunk_fetch(volume_id,
-                                                rdir_hosts=src_rdir_hosts,
-                                                reqid=reqid, **kwargs):
-            rec['container_id'] = cid
-            rec['chunk_id'] = chunk
+        for cid, chunk, rec in self.chunk_fetch(
+            volume_id, rdir_hosts=src_rdir_hosts, reqid=reqid, **kwargs
+        ):
+            rec["container_id"] = cid
+            rec["chunk_id"] = chunk
             batch.append(rec)
 
             if len(batch) >= batch_size:
-                self._rdir_request(volume_id, 'POST', 'push', create=create,
-                                   json=batch, rdir_hosts=dests_rdir_hosts,
-                                   reqid=reqid, **kwargs)
+                self._rdir_request(
+                    volume_id,
+                    "POST",
+                    "push",
+                    create=create,
+                    json=batch,
+                    rdir_hosts=dests_rdir_hosts,
+                    reqid=reqid,
+                    **kwargs
+                )
                 batch = []
         if batch:
-            self._rdir_request(volume_id, 'POST', 'push', create=create,
-                               json=batch, rdir_hosts=dests_rdir_hosts,
-                               reqid=reqid, **kwargs)
+            self._rdir_request(
+                volume_id,
+                "POST",
+                "push",
+                create=create,
+                json=batch,
+                rdir_hosts=dests_rdir_hosts,
+                reqid=reqid,
+                **kwargs
+            )
 
     def admin_incident_set(self, volume, date, **kwargs):
-        body = {'date': int(float(date))}
-        self._rdir_request(volume, 'POST', 'admin/incident',
-                           json=body, **kwargs)
+        body = {"date": int(float(date))}
+        self._rdir_request(volume, "POST", "admin/incident", json=body, **kwargs)
 
     def admin_incident_get(self, volume, **kwargs):
-        _resp, body = self._rdir_request(volume, 'GET',
-                                         'admin/incident', **kwargs)
-        return body.get('date')
+        _resp, body = self._rdir_request(volume, "GET", "admin/incident", **kwargs)
+        return body.get("date")
 
     def admin_lock(self, volume, who, **kwargs):
-        body = {'who': who}
+        body = {"who": who}
 
-        self._rdir_request(volume, 'POST', 'admin/lock', json=body, **kwargs)
+        self._rdir_request(volume, "POST", "admin/lock", json=body, **kwargs)
 
     def admin_unlock(self, volume, **kwargs):
-        self._rdir_request(volume, 'POST', 'admin/unlock', **kwargs)
+        self._rdir_request(volume, "POST", "admin/unlock", **kwargs)
 
     def admin_show(self, volume, **kwargs):
-        _resp, body = self._rdir_request(volume, 'GET', 'admin/show',
-                                         **kwargs)
+        _resp, body = self._rdir_request(volume, "GET", "admin/show", **kwargs)
         return body
 
-    def admin_clear(self, volume, clear_all=False, before_incident=False,
-                    repair=False, **kwargs):
-        params = {'all': clear_all, 'before_incident': before_incident,
-                  'repair': repair}
+    def admin_clear(
+        self, volume, clear_all=False, before_incident=False, repair=False, **kwargs
+    ):
+        params = {
+            "all": clear_all,
+            "before_incident": before_incident,
+            "repair": repair,
+        }
         _resp, resp_body = self._rdir_request(
-            volume, 'POST', 'admin/clear', params=params, **kwargs)
+            volume, "POST", "admin/clear", params=params, **kwargs
+        )
         return resp_body
 
-    def status(self, volume, max=1000, prefix=None, marker=None,
-               max_attempts=3, **kwargs):
+    def status(
+        self, volume, max=1000, prefix=None, marker=None, max_attempts=3, **kwargs
+    ):
         """
         Get the status of chunks belonging to the specified volume.
 
@@ -851,11 +998,11 @@ class RdirClient(HttpApi):
             this marker
         :type marker: `str`
         """
-        req_params = {'max': max}
+        req_params = {"max": max}
         if prefix:
-            req_params['prefix'] = prefix
+            req_params["prefix"] = prefix
         if marker:
-            req_params['marker'] = marker
+            req_params["marker"] = marker
         chunks = dict()
         containers = dict()
 
@@ -863,7 +1010,8 @@ class RdirClient(HttpApi):
             for i in range(max_attempts):
                 try:
                     _resp, resp_body = self._rdir_request(
-                        volume, 'GET', 'status', params=req_params, **kwargs)
+                        volume, "GET", "status", params=req_params, **kwargs
+                    )
                     break
                 except OioNetworkException:
                     # Monotonic backoff
@@ -873,19 +1021,19 @@ class RdirClient(HttpApi):
                     # Too many attempts
                     raise
 
-            for (key, value) in resp_body.get('chunk', dict()).items():
+            for key, value in resp_body.get("chunk", dict()).items():
                 chunks[key] = chunks.get(key, 0) + value
-            for (cid, info) in resp_body.get('container', dict()).items():
-                for (key, value) in info.items():
-                    containers[cid][key] = containers.setdefault(
-                        cid, dict()).get(key, 0) + value
+            for cid, info in resp_body.get("container", dict()).items():
+                for key, value in info.items():
+                    containers[cid][key] = (
+                        containers.setdefault(cid, dict()).get(key, 0) + value
+                    )
 
-            if not true_value(_resp.headers.get(
-                    HEADER_PREFIX + 'list-truncated')):
+            if not true_value(_resp.headers.get(HEADER_PREFIX + "list-truncated")):
                 break
-            req_params['marker'] = _resp.headers[HEADER_PREFIX + 'list-marker']
+            req_params["marker"] = _resp.headers[HEADER_PREFIX + "list-marker"]
 
-        return {'chunk': chunks, 'container': containers}
+        return {"chunk": chunks, "container": containers}
 
     def meta2_index_create(self, volume_id, **kwargs):
         """
@@ -893,10 +1041,9 @@ class RdirClient(HttpApi):
 
         :param volume_id: The meta2 volume.
         """
-        return self.create(volume_id, service_type='meta2', **kwargs)
+        return self.create(volume_id, service_type="meta2", **kwargs)
 
-    def meta2_index_push(self, volume_id, container_url, container_id, mtime,
-                         **kwargs):
+    def meta2_index_push(self, volume_id, container_url, container_id, mtime, **kwargs):
         """
         Add a newly created container to the list of containers handled
         by the meta2 server in question.
@@ -907,17 +1054,24 @@ class RdirClient(HttpApi):
         :param mtime: The last time it was spotted on this volume.
         :param headers: Optional headers to pass along to the request.
         """
-        body = {'container_url': container_url,
-                'container_id': container_id,
-                'mtime': int(mtime)}
+        body = {
+            "container_url": container_url,
+            "container_id": container_id,
+            "mtime": int(mtime),
+        }
 
         for key, value in kwargs.items():
             body[key] = value
 
-        res = self._rdir_request(volume=volume_id, method='POST',
-                                 action='push', create=False, json=body,
-                                 service_type='meta2',
-                                 **kwargs)
+        res = self._rdir_request(
+            volume=volume_id,
+            method="POST",
+            action="push",
+            create=False,
+            json=body,
+            service_type="meta2",
+            **kwargs
+        )
         return res, body
 
     def _resolve_cid_to_path(self, cid):
@@ -928,14 +1082,11 @@ class RdirClient(HttpApi):
         :return: NS/account/container path.
         """
         resp = self.directory.list(cid=cid)
-        return '{0}/{1}/{2}'.format(
-            self.ns,
-            resp['account'],
-            resp['name']
-        )
+        return "{0}/{1}/{2}".format(self.ns, resp["account"], resp["name"])
 
-    def meta2_index_delete(self, volume_id, container_path=None,
-                           container_id=None, **kwargs):
+    def meta2_index_delete(
+        self, volume_id, container_path=None, container_id=None, **kwargs
+    ):
         """
         Remove a meta2 record from the volume's index. Either the container ID
         or the container path have to be given.
@@ -950,21 +1101,28 @@ class RdirClient(HttpApi):
             _tmp = container_path.rsplit("/")
             container_id = cid_from_name(_tmp[1], _tmp[3])
         elif not container_path and not container_id:
-            raise ValueError("At least the container ID or the container path "
-                             "should be given.")
+            raise ValueError(
+                "At least the container ID or the container path should be given."
+            )
 
-        body = {'container_url': container_path,
-                'container_id': container_id}
+        body = {"container_url": container_path, "container_id": container_id}
 
         for key, value in kwargs.items():
             body[key] = value
 
-        return self._rdir_request(volume=volume_id, method='POST',
-                                  action='delete', create=False, json=body,
-                                  service_type='meta2', **kwargs)
+        return self._rdir_request(
+            volume=volume_id,
+            method="POST",
+            action="delete",
+            create=False,
+            json=body,
+            service_type="meta2",
+            **kwargs
+        )
 
-    def meta2_index_fetch(self, volume_id, prefix=None, marker=None,
-                          limit=4096, **kwargs):
+    def meta2_index_fetch(
+        self, volume_id, prefix=None, marker=None, limit=4096, **kwargs
+    ):
         """
         Fetch specific meta2 records, or a range of records.
 
@@ -980,15 +1138,20 @@ class RdirClient(HttpApi):
         """
         params = {}
         if prefix:
-            params['prefix'] = prefix
+            params["prefix"] = prefix
         if marker:
             # FIXME(ABO): Validate this one.
-            params['marker'] = marker
+            params["marker"] = marker
         if limit:
-            params['limit'] = limit
-        _resp, body = self._rdir_request(volume=volume_id, method='GET',
-                                         action='fetch', json=params,
-                                         service_type='meta2', **kwargs)
+            params["limit"] = limit
+        _resp, body = self._rdir_request(
+            volume=volume_id,
+            method="GET",
+            action="fetch",
+            json=params,
+            service_type="meta2",
+            **kwargs
+        )
         return body
 
     def meta2_index_fetch_all(self, volume_id, **kwargs):
@@ -1001,17 +1164,25 @@ class RdirClient(HttpApi):
         return depaginate(
             self.meta2_index_fetch,
             volume_id=volume_id,
-            listing_key=lambda x: x['records'],
-            truncated_key=lambda x: x['truncated'],
+            listing_key=lambda x: x["records"],
+            truncated_key=lambda x: x["truncated"],
             # The following is only called when the list is truncated
             # So we can assume there are records in the list
-            marker_key=lambda x: x['records'][-1]['container_url'],
+            marker_key=lambda x: x["records"][-1]["container_url"],
             **kwargs
         )
 
     @ensure_request_id
-    def meta2_copy_vol(self, volume_id, sources=None, dests=None,
-                       batch_size=1000, create=True, reqid=None, **kwargs):
+    def meta2_copy_vol(
+        self,
+        volume_id,
+        sources=None,
+        dests=None,
+        batch_size=1000,
+        create=True,
+        reqid=None,
+        **kwargs
+    ):
         """
         Copy all meta2 records from volume_id from one rdir to another.
 
@@ -1025,30 +1196,49 @@ class RdirClient(HttpApi):
         """
         # Make sure to NOT use a destination as a source
         src_rdir_hosts = self._get_resolved_rdir_hosts(
-            volume_id, rdir_hosts=sources, reqid=reqid)
+            volume_id, rdir_hosts=sources, reqid=reqid
+        )
         dests_rdir_hosts = self._get_resolved_rdir_hosts(
-            volume_id, rdir_hosts=dests, reqid=reqid)
-        src_rdir_hosts = [src_rdir_host for src_rdir_host in src_rdir_hosts
-                          if src_rdir_host not in dests_rdir_hosts]
+            volume_id, rdir_hosts=dests, reqid=reqid
+        )
+        src_rdir_hosts = [
+            src_rdir_host
+            for src_rdir_host in src_rdir_hosts
+            if src_rdir_host not in dests_rdir_hosts
+        ]
         if not src_rdir_hosts:
-            raise OioException('No source available')
+            raise OioException("No source available")
         if not dests_rdir_hosts:
-            raise OioException('No destination available')
+            raise OioException("No destination available")
 
         batch = []
-        for rec in self.meta2_index_fetch_all(volume_id,
-                                              rdir_hosts=src_rdir_hosts,
-                                              reqid=reqid, **kwargs):
+        for rec in self.meta2_index_fetch_all(
+            volume_id, rdir_hosts=src_rdir_hosts, reqid=reqid, **kwargs
+        ):
             batch.append(rec)
 
             if len(batch) >= batch_size:
-                self._rdir_request(volume_id, 'POST', 'push', create=create,
-                                   json=batch, service_type='meta2',
-                                   rdir_hosts=dests_rdir_hosts,
-                                   reqid=reqid, **kwargs)
+                self._rdir_request(
+                    volume_id,
+                    "POST",
+                    "push",
+                    create=create,
+                    json=batch,
+                    service_type="meta2",
+                    rdir_hosts=dests_rdir_hosts,
+                    reqid=reqid,
+                    **kwargs
+                )
                 batch = []
         if batch:
-            self._rdir_request(volume_id, 'POST', 'push', create=create,
-                               json=batch, service_type='meta2',
-                               rdir_hosts=dests_rdir_hosts,
-                               reqid=reqid, **kwargs)
+            self._rdir_request(
+                volume_id,
+                "POST",
+                "push",
+                create=create,
+                json=batch,
+                service_type="meta2",
+                rdir_hosts=dests_rdir_hosts,
+                reqid=reqid,
+                **kwargs
+            )

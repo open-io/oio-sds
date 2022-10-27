@@ -17,12 +17,12 @@ from logging import getLogger
 
 LOG = getLogger(__name__)
 
-API_NAME = 'volume'
+API_NAME = "volume"
 
 
 class VolumeClientCli(object):
     def __init__(self, namespace, **kwargs):
-        self.conf = {'namespace': namespace}
+        self.conf = {"namespace": namespace}
         self.conf.update(kwargs)
         self._rdir = None
         self._rdir_lb = None
@@ -31,6 +31,7 @@ class VolumeClientCli(object):
     def volume(self):
         if not self._rdir:
             from oio.rdir.client import RdirClient
+
             self._rdir = RdirClient(self.conf)
         return self._rdir
 
@@ -38,6 +39,7 @@ class VolumeClientCli(object):
     def rdir_lb(self):
         if not self._rdir_lb:
             from oio.rdir.client import RdirDispatcher
+
             self._rdir_lb = RdirDispatcher(self.conf)
         return self._rdir_lb
 
@@ -52,10 +54,10 @@ class VolumeClientCli(object):
 
         info = self.volume.status(volume, **kwargs)
         data = {}
-        containers = info.get('container')
-        data['chunk'] = info.get('chunk')
+        containers = info.get("container")
+        data["chunk"] = info.get("chunk")
         for ct in containers:
-            data['container.%s' % ct] = json.dumps(containers[ct])
+            data["container.%s" % ct] = json.dumps(containers[ct])
         return data
 
     def volume_admin_lock(self, volume, key):
@@ -76,7 +78,5 @@ def make_client(instance):
     :param instance: an instance of ClientManager
     :returns: an instance of VolumeClientCli
     """
-    client = VolumeClientCli(
-        **instance.cli_conf()
-    )
+    client = VolumeClientCli(**instance.cli_conf())
     return client

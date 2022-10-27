@@ -18,7 +18,6 @@ from oio.common.logger import get_logger
 
 
 class Filter(object):
-
     def __init__(self, app, conf, logger=None):
         self.app = app
         self.app_env = app.app_env

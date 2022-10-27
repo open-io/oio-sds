@@ -21,7 +21,7 @@ from oio.conscience.checker.base import BaseChecker
 
 
 class TcpChecker(BaseChecker):
-    checker_type = 'tcp'
+    checker_type = "tcp"
 
     def _configure(self):
         self.addr = (self.host, self.port)
@@ -40,8 +40,13 @@ class TcpChecker(BaseChecker):
         except Exception as err:
             # Avoid spamming the logs
             if self.last_check_success:
-                self.logger.warn('ERROR performing %s check (%s:%d): %s',
-                                 self.checker_type, self.host, self.port, err)
+                self.logger.warn(
+                    "ERROR performing %s check (%s:%d): %s",
+                    self.checker_type,
+                    self.host,
+                    self.port,
+                    err,
+                )
             self.last_check_success = False
         finally:
             if sock:
@@ -51,5 +56,5 @@ class TcpChecker(BaseChecker):
                 except socket.error:
                     pass
             if not self.last_check_success:
-                self.logger.warn('%s check failed', self.name)
+                self.logger.warn("%s check failed", self.name)
             return self.last_check_success

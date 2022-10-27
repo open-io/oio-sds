@@ -19,25 +19,45 @@ from six.moves.urllib_parse import urlparse
 from oio.common.green import patcher
 
 from urllib3 import exceptions as urllibexc
-from oio.common.exceptions import reraise, \
-    OioException, OioNetworkException, OioProtocolError, OioTimeout
+from oio.common.exceptions import (
+    reraise,
+    OioException,
+    OioNetworkException,
+    OioProtocolError,
+    OioTimeout,
+)
 
 
-urllib3 = patcher.import_patched('urllib3.__init__')
+urllib3 = patcher.import_patched("urllib3.__init__")
 
 
 DEFAULT_POOLSIZE = 32
 DEFAULT_RETRIES = 0
 DEFAULT_BACKOFF = 0
 
-URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
-                           'assert_same_host', 'timeout', 'pool_timeout',
-                           'release_conn', 'chunked')
+URLLIB3_REQUESTS_KWARGS = (
+    "fields",
+    "headers",
+    "body",
+    "retries",
+    "redirect",
+    "assert_same_host",
+    "timeout",
+    "pool_timeout",
+    "release_conn",
+    "chunked",
+)
 URLLIB3_POOLMANAGER_KWARGS = (
     # default values overridden by get_pool_manager
-    'pool_connections', 'pool_maxsize', 'max_retries', 'backoff_factor',
+    "pool_connections",
+    "pool_maxsize",
+    "max_retries",
+    "backoff_factor",
     # passed directly to SafePoolManager's init
-    'socket_options', 'source_address', 'cert_reqs', 'ca_certs'
+    "socket_options",
+    "source_address",
+    "cert_reqs",
+    "ca_certs",
 )
 
 
@@ -52,16 +72,17 @@ class SafePoolManager(urllib3.PoolManager):
         Filter out arguments that are not recognized by urllib3,
         then call `urllib3.PoolManager.request`.
         """
-        kwargs2 = {k: v for k, v in kwargs.items()
-                   if k in URLLIB3_REQUESTS_KWARGS}
+        kwargs2 = {k: v for k, v in kwargs.items() if k in URLLIB3_REQUESTS_KWARGS}
         return super(SafePoolManager, self).request(*args, **kwargs2)
 
 
-def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
-                     pool_maxsize=DEFAULT_POOLSIZE,
-                     max_retries=DEFAULT_RETRIES,
-                     backoff_factor=DEFAULT_BACKOFF,
-                     **kwargs):
+def get_pool_manager(
+    pool_connections=DEFAULT_POOLSIZE,
+    pool_maxsize=DEFAULT_POOLSIZE,
+    max_retries=DEFAULT_RETRIES,
+    backoff_factor=DEFAULT_BACKOFF,
+    **kwargs
+):
     """
     Get `urllib3.PoolManager` to manage pools of connections
 
@@ -79,15 +100,19 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     if max_retries == DEFAULT_RETRIES:
         max_retries = urllib3.Retry(0, read=False)
     else:
-        max_retries = urllib3.Retry(total=int(max_retries),
-                                    backoff_factor=float(backoff_factor))
-    kw = {k: v for k, v in kwargs.items()
-          if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
+        max_retries = urllib3.Retry(
+            total=int(max_retries), backoff_factor=float(backoff_factor)
+        )
+    kw = {k: v for k, v in kwargs.items() if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
     pool_connections = int(pool_connections)
     pool_maxsize = int(pool_maxsize)
-    return SafePoolManager(num_pools=pool_connections,
-                           maxsize=pool_maxsize, retries=max_retries,
-                           block=False, **kw)
+    return SafePoolManager(
+        num_pools=pool_connections,
+        maxsize=pool_maxsize,
+        retries=max_retries,
+        block=False,
+        **kw
+    )
 
 
 def oio_exception_from_httperror(exc, reqid=None, url=None):
@@ -97,18 +122,17 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
     """
     extra_dict = dict()
     if reqid:
-        extra_dict['reqid'] = reqid
+        extra_dict["reqid"] = reqid
     if url:
-        extra_dict['host'] = urlparse(url).netloc
-    extra = ', '.join('%s=%s' % x for x in extra_dict.items())
+        extra_dict["host"] = urlparse(url).netloc
+    extra = ", ".join("%s=%s" % x for x in extra_dict.items())
     if isinstance(exc, urllibexc.MaxRetryError):
         if isinstance(exc.reason, urllibexc.NewConnectionError):
             reraise(OioNetworkException, exc.reason, extra)
         if isinstance(exc.reason, urllibexc.TimeoutError):
             reraise(OioTimeout, exc.reason, extra)
         reraise(OioNetworkException, exc, extra)
-    elif isinstance(exc, (urllibexc.ProxyError,
-                          urllibexc.ClosedPoolError)):
+    elif isinstance(exc, (urllibexc.ProxyError, urllibexc.ClosedPoolError)):
         reraise(OioNetworkException, exc, extra)
     elif isinstance(exc, urllibexc.ProtocolError):
         reraise(OioProtocolError, exc, extra)

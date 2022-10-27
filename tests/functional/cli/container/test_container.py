@@ -28,195 +28,202 @@ from tests.utils import random_str
 
 class ContainerTest(CliTestCase):
     """Functional tests for containers."""
+
     NAME = uuid.uuid4().hex
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        opts = cls.get_format_opts(fields=('Name', ))
-        output = cls.openio('container create ' + cls.NAME + opts)
+        opts = cls.get_format_opts(fields=("Name",))
+        output = cls.openio("container create " + cls.NAME + opts)
         cls.CID = cid_from_name(cls.account_from_env(), cls.NAME)
-        cls.assertOutput(cls.NAME + '\n', output)
+        cls.assertOutput(cls.NAME + "\n", output)
 
     @classmethod
     def tearDownClass(cls):
-        output = cls.openio('container delete ' + cls.NAME)
-        cls.assertOutput('', output)
+        output = cls.openio("container delete " + cls.NAME)
+        cls.assertOutput("", output)
         super().tearDownClass()
 
     def setUp(self):
         super(ContainerTest, self).setUp()
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.beanstalkd0.drain_tube("oio-preserved")
 
     def _test_container_show(self, with_cid=False):
-        opts = self.get_format_opts(fields=('container', ))
-        cid_opt = ''
+        opts = self.get_format_opts(fields=("container",))
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        output = self.openio('container show ' + cid_opt + name + opts)
-        self.assertEqual(self.NAME + '\n', output)
+        output = self.openio("container show " + cid_opt + name + opts)
+        self.assertEqual(self.NAME + "\n", output)
 
     def test_bucket_enable_replication(self):
-        cname = 'mybucket-' + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket (and root container)
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('bucket create ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
         # Enable bucket replication before creating the first container
-        self.openio('bucket set --replication yes ' + cname)
+        self.openio("bucket set --replication yes " + cname)
 
-        opts = self.get_format_opts(fields=('account', 'bytes', 'objects',
-                                            BUCKET_PROP_REPLI_ENABLED))
+        opts = self.get_format_opts(
+            fields=("account", "bytes", "objects", BUCKET_PROP_REPLI_ENABLED)
+        )
         # Check if replication is activated for the bucket
-        output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n0\n0\nTrue\n', output)
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(self.account_from_env() + "\n0\n0\nTrue\n", output)
 
         # TODO(FVE): check if replication is activated for the container
         # As of now there is no CLI to check that.
 
     def test_bucket_list(self):
-        cname = 'mybucket-' + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('bucket create ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
         # List buckets
-        opts = self.get_format_opts(fields=('Name',))
-        output = self.openio('bucket list ' + opts)
+        opts = self.get_format_opts(fields=("Name",))
+        output = self.openio("bucket list " + opts)
         self.assertIn(cname, output)
 
     def test_bucket_list_with_versioning(self):
-        cname = 'mybucket-' + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('bucket create ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
         # Create the root container
-        opts = self.get_format_opts(fields=('Name', ))
-        output = self.openio('container create --bucket-name %s %s %s' %
-                             (cname, cname, opts))
-        self.assertOutput(cname + '\n', output)
+        opts = self.get_format_opts(fields=("Name",))
+        output = self.openio(
+            "container create --bucket-name %s %s %s" % (cname, cname, opts)
+        )
+        self.assertOutput(cname + "\n", output)
         # List buckets
-        opts = self.get_format_opts(fields=('Name', 'Versioning'))
+        opts = self.get_format_opts(fields=("Name", "Versioning"))
         opts += " --prefix %s --versioning" % cname
-        output = self.openio('bucket list ' + opts)
+        output = self.openio("bucket list " + opts)
         self.assertIn("Suspended", output)
         # Enable versioning on the root container
-        self.openio('container set --versioning -1 %s' % cname)
+        self.openio("container set --versioning -1 %s" % cname)
         # List buckets
-        output = self.openio('bucket list ' + opts)
+        output = self.openio("bucket list " + opts)
         self.assertIn("Enabled", output)
 
     def test_bucket_show(self):
-        cname = 'mybucket-' + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('bucket create ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
         # Show bucket
-        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
-        output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
+        opts = self.get_format_opts(fields=("account", "bytes", "objects"))
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(self.account_from_env() + "\n0\n0\n", output)
         # Delete bucket
-        opts = self.get_format_opts(fields=('Deleted',))
-        output = self.openio('bucket delete ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Deleted",))
+        output = self.openio("bucket delete " + cname + opts)
+        self.assertEqual("True\n", output)
         # Bucket not found (HTTP 404)
-        self.assertRaises(CommandFailed, self.openio, 'bucket show ' + cname)
+        self.assertRaises(CommandFailed, self.openio, "bucket show " + cname)
 
     def test_bucket_show_with_account_refresh(self):
-        account = 'myaccount-' + random_str(4).lower()
-        cname = 'mybucket-' + random_str(4).lower()
+        account = "myaccount-" + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket (and root container)
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('--oio-account ' + account + ' bucket create '
-                             + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio(
+            "--oio-account " + account + " bucket create " + cname + opts
+        )
+        self.assertEqual("True\n", output)
         # Show bucket
-        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
-        output = self.openio('--oio-account ' + account + ' bucket show '
-                             + cname + opts)
-        self.assertEqual(account + '\n0\n0\n', output)
+        opts = self.get_format_opts(fields=("account", "bytes", "objects"))
+        output = self.openio(
+            "--oio-account " + account + " bucket show " + cname + opts
+        )
+        self.assertEqual(account + "\n0\n0\n", output)
         # Put object
         with tempfile.NamedTemporaryFile() as file_:
-            file_.write(b'test')
+            file_.write(b"test")
             file_.flush()
             output = self.openio(
-                '--oio-account %s object create %s %s --name test' %
-                (account, cname, file_.name))
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_STATE, ))
+                "--oio-account %s object create %s %s --name test"
+                % (account, cname, file_.name)
+            )
+        self.wait_for_event(
+            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        )
         # Show bucket
-        opts = self.get_format_opts(fields=('account', 'bytes', 'containers',
-                                            'objects'))
-        output = self.openio('--oio-account ' + account + ' bucket show '
-                             + cname + opts)
-        self.assertEqual(account + '\n4\n1\n1\n', output)
+        opts = self.get_format_opts(
+            fields=("account", "bytes", "containers", "objects")
+        )
+        output = self.openio(
+            "--oio-account " + account + " bucket show " + cname + opts
+        )
+        self.assertEqual(account + "\n4\n1\n1\n", output)
         # Refresh account
-        output = self.openio('account refresh ' + account)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_STATE, ))
+        output = self.openio("account refresh " + account)
+        self.wait_for_event(
+            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        )
         # show bucket
-        output = self.openio('--oio-account ' + account + ' bucket show '
-                             + cname + opts)
-        self.assertEqual(account + '\n4\n1\n1\n', output)
+        output = self.openio(
+            "--oio-account " + account + " bucket show " + cname + opts
+        )
+        self.assertEqual(account + "\n4\n1\n1\n", output)
 
     def test_bucket_refresh(self):
-        cname = 'mybucket-' + random_str(4).lower()
+        cname = "mybucket-" + random_str(4).lower()
         # Create bucket (and root container)
-        opts = self.get_format_opts(fields=('Created',))
-        output = self.openio('bucket create ' + cname + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
         # Put object
         with tempfile.NamedTemporaryFile() as file_:
-            file_.write(b'test')
+            file_.write(b"test")
             file_.flush()
-            output = self.openio('object create %s %s --name test' %
-                                 (cname, file_.name))
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_STATE, ))
+            output = self.openio(
+                "object create %s %s --name test" % (cname, file_.name)
+            )
+        self.wait_for_event(
+            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        )
         # Show bucket
-        opts = self.get_format_opts(fields=('account', 'bytes', 'containers',
-                                            'objects'))
-        output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n4\n1\n1\n', output)
+        opts = self.get_format_opts(
+            fields=("account", "bytes", "containers", "objects")
+        )
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(self.account_from_env() + "\n4\n1\n1\n", output)
         # Refresh bucket
-        output = self.openio('bucket refresh ' + cname)
+        output = self.openio("bucket refresh " + cname)
         # Show bucket
-        output = self.openio('bucket show ' + cname + opts)
-        self.assertEqual(self.account_from_env() + '\n4\n1\n1\n', output)
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(self.account_from_env() + "\n4\n1\n1\n", output)
 
     def test_max_buckets(self):
-        account = 'myacocunt-' + random_str(4).lower()
+        account = "myacocunt-" + random_str(4).lower()
         # Create bucket
-        opts = self.get_format_opts(fields=('Created',))
-        bname1 = 'mybucket-' + random_str(4).lower()
-        output = self.openio('--account ' + account + ' bucket create '
-                             + bname1 + opts)
-        self.assertEqual('True\n', output)
+        opts = self.get_format_opts(fields=("Created",))
+        bname1 = "mybucket-" + random_str(4).lower()
+        output = self.openio("--account " + account + " bucket create " + bname1 + opts)
+        self.assertEqual("True\n", output)
         # Set max-buckets to 2
-        self.openio('account set ' + account + ' --max-buckets 2')
+        self.openio("account set " + account + " --max-buckets 2")
         # Create second bucket
-        bname2 = 'mybucket-' + random_str(4).lower()
-        output = self.openio('--account ' + account + ' bucket create '
-                             + bname2 + opts)
-        self.assertEqual('True\n', output)
+        bname2 = "mybucket-" + random_str(4).lower()
+        output = self.openio("--account " + account + " bucket create " + bname2 + opts)
+        self.assertEqual("True\n", output)
         # Try to create third bucket
-        bname3 = 'mybucket-' + random_str(4).lower()
-        output = self.openio('--account ' + account + ' bucket create '
-                             + bname3 + opts)
-        self.assertEqual('False\n', output)
+        bname3 = "mybucket-" + random_str(4).lower()
+        output = self.openio("--account " + account + " bucket create " + bname3 + opts)
+        self.assertEqual("False\n", output)
         # Reset max-buckets
-        self.openio('account unset ' + account + ' --max-buckets')
+        self.openio("account unset " + account + " --max-buckets")
         # Try to create third bucket
-        output = self.openio('--account ' + account + ' bucket create '
-                             + bname3 + opts)
-        self.assertEqual('True\n', output)
+        output = self.openio("--account " + account + " bucket create " + bname3 + opts)
+        self.assertEqual("True\n", output)
 
     def test_container_show(self):
         self._test_container_show()
@@ -225,13 +232,13 @@ class ContainerTest(CliTestCase):
         self._test_container_show(with_cid=True)
 
     def _test_container_show_table(self, with_cid=False):
-        opts = self.get_format_opts('table')
-        cid_opt = ''
+        opts = self.get_format_opts("table")
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.openio("container show " + cid_opt + name + opts)
         regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes_usage", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
@@ -243,29 +250,29 @@ class ContainerTest(CliTestCase):
         self._test_container_show_table(with_cid=True)
 
     def test_container_list(self):
-        opts = self.get_format_opts(fields=('Name', ))
-        output = self.openio('container list ' + opts)
+        opts = self.get_format_opts(fields=("Name",))
+        output = self.openio("container list " + opts)
         self.assertIn(self.NAME, output)
 
     def test_unicode_container_list(self):
-        opts = self.get_format_opts(fields=('Name', )) + ' -a ' + self.account
-        cname = u"Intérêts-" + uuid.uuid4().hex
+        opts = self.get_format_opts(fields=("Name",)) + " -a " + self.account
+        cname = "Intérêts-" + uuid.uuid4().hex
         self.storage.container_create(self.account, cname)
-        self.wait_for_event('oio-preserved',
-                            fields={'user': cname},
-                            types=(EventTypes.CONTAINER_NEW, ))
-        output = self.openio('container list ' + opts)
+        self.wait_for_event(
+            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_NEW,)
+        )
+        output = self.openio("container list " + opts)
         self.assertIn(cname, output)
 
     def _test_container_refresh(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        self.openio('container refresh ' + cid_opt + name)
-        opts = self.get_format_opts('json')
-        output = self.openio('container list ' + opts)
+        self.openio("container refresh " + cid_opt + name)
+        opts = self.get_format_opts("json")
+        output = self.openio("container list " + opts)
         containers = self.json_loads(output)
         for container in containers:
             if container["Name"] == self.NAME:
@@ -281,41 +288,41 @@ class ContainerTest(CliTestCase):
         self._test_container_refresh(with_cid=True)
 
     def _test_container_snapshot(self, with_cid=False):
-        self.wait_for_score(('meta2', 'meta1'))
+        self.wait_for_score(("meta2", "meta1"))
         # Please don't ask...
         try:
-            self.openio('election sync meta2 ' + self.NAME)
+            self.openio("election sync meta2 " + self.NAME)
         except Exception:
             pass
         # Snapshot should reply the name of the snapshot on success
-        opts = self.get_format_opts('json')
-        cid_opt = ''
+        opts = self.get_format_opts("json")
+        cid_opt = ""
         cname = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             cname = self.CID
-        output = self.openio('container snapshot ' + cid_opt + cname + opts)
+        output = self.openio("container snapshot " + cid_opt + cname + opts)
         output = self.json_loads(output)[0]
-        self.assertEqual(output['Status'], "OK")
+        self.assertEqual(output["Status"], "OK")
         # Snapshot should reply Missing container on non existent container
-        self.assertRaises(CommandFailed,
-                          self.openio,
-                          ('container snapshot Should_not_exist' + opts))
+        self.assertRaises(
+            CommandFailed, self.openio, ("container snapshot Should_not_exist" + opts)
+        )
         # Use specified name
-        dst_account = 'acct-' + random_str(6)
-        dst_container = cname + '.snapshot-' + random_str(6)
+        dst_account = "acct-" + random_str(6)
+        dst_container = cname + ".snapshot-" + random_str(6)
         opts += " --dst-account " + dst_account
         opts += " --dst-container " + dst_container
-        output = self.openio('container snapshot ' + cid_opt + cname + opts)
+        output = self.openio("container snapshot " + cid_opt + cname + opts)
         output = self.json_loads(output)[0]
-        self.assertEqual(output['Account'], dst_account)
-        self.assertEqual(output['Container'], dst_container)
-        self.assertEqual(output['Status'], "OK")
+        self.assertEqual(output["Account"], dst_account)
+        self.assertEqual(output["Container"], dst_container)
+        self.assertEqual(output["Status"], "OK")
         # Snapshot should reply Container already exists when using already
         #   specified name
-        self.assertRaises(CommandFailed,
-                          self.openio,
-                          ('container snapshot ' + cid_opt + cname + opts))
+        self.assertRaises(
+            CommandFailed, self.openio, ("container snapshot " + cid_opt + cname + opts)
+        )
 
     def test_container_snapshot(self):
         self._test_container_snapshot()
@@ -324,13 +331,13 @@ class ContainerTest(CliTestCase):
         self._test_container_snapshot(with_cid=True)
 
     def _test_container_purge(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        output = self.openio('container purge ' + cid_opt + name)
-        self.assertEqual('', output)
+        output = self.openio("container purge " + cid_opt + name)
+        self.assertEqual("", output)
 
     def test_container_purge(self):
         self._test_container_purge()
@@ -339,23 +346,24 @@ class ContainerTest(CliTestCase):
         self._test_container_purge(with_cid=True)
 
     def _test_container_flush(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
         with tempfile.NamedTemporaryFile(delete=False) as ntf:
-            ntf.write(b'test_exists')
+            ntf.write(b"test_exists")
             ntf.flush()
             obj = ntf.name
             for _ in range(10):
                 obj_name = random_str(6)
-                self.openio('object create ' + self.NAME
-                            + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container flush ' + cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('object list ' + self.NAME)
-        self.assertEqual('\n', output)
+                self.openio(
+                    "object create " + self.NAME + " " + obj + " --name " + obj_name
+                )
+        output = self.openio("container flush " + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("object list " + self.NAME)
+        self.assertEqual("\n", output)
 
     def test_container_flush(self):
         self._test_container_flush()
@@ -364,23 +372,30 @@ class ContainerTest(CliTestCase):
         self._test_container_flush(with_cid=True)
 
     def _test_container_flush_quickly(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
         with tempfile.NamedTemporaryFile(delete=False) as ntf:
-            ntf.write(b'test_exists')
+            ntf.write(b"test_exists")
             ntf.flush()
             obj = ntf.name
             for _ in range(10):
                 obj_name = random_str(6)
-                self.openio('object create ' + cid_opt + name
-                            + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container flush --quickly ' + cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('object list ' + cid_opt + name)
-        self.assertEqual('\n', output)
+                self.openio(
+                    "object create "
+                    + cid_opt
+                    + name
+                    + " "
+                    + obj
+                    + " --name "
+                    + obj_name
+                )
+        output = self.openio("container flush --quickly " + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("object list " + cid_opt + name)
+        self.assertEqual("\n", output)
 
     def test_container_flush_quickly(self):
         self._test_container_flush_quickly()
@@ -389,24 +404,31 @@ class ContainerTest(CliTestCase):
         self._test_container_flush_quickly(with_cid=True)
 
     def _test_container_drain(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
         with tempfile.NamedTemporaryFile() as ntf:
-            ntf.write(b'test_exists')
+            ntf.write(b"test_exists")
             ntf.flush()
             obj = ntf.name
             for _ in range(5):
                 obj_name = random_str(6)
-                self.openio('object create ' + cid_opt + name
-                            + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container drain ' + cid_opt + name)
-        self.assertEqual('', output)
+                self.openio(
+                    "object create "
+                    + cid_opt
+                    + name
+                    + " "
+                    + obj
+                    + " --name "
+                    + obj_name
+                )
+        output = self.openio("container drain " + cid_opt + name)
+        self.assertEqual("", output)
         # Clean container as teardown expect an empty one
-        output = self.openio('container flush ' + cid_opt + name)
-        self.assertEqual('', output)
+        output = self.openio("container flush " + cid_opt + name)
+        self.assertEqual("", output)
 
     def test_container_drain(self):
         self._test_container_drain()
@@ -415,26 +437,24 @@ class ContainerTest(CliTestCase):
         self._test_container_drain(with_cid=True)
 
     def _test_container_set_bucket_name(self, with_cid=False):
-        cid_opt = ' '
+        cid_opt = " "
         name = self.NAME
-        bname = 'mybucket'
+        bname = "mybucket"
         if with_cid:
-            cid_opt = ' --cid '
+            cid_opt = " --cid "
             name = self.CID
-        opts = ' -f json'
-        output = self.openio('container show ' + cid_opt + name + opts)
+        opts = " -f json"
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertNotIn(output, "bucket")
-        output = self.openio('container set --bucket-name '
-                             + bname + cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.openio("container set --bucket-name " + bname + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(output['bucket'], bname)
-        output = self.openio('container unset --bucket-name ' +
-                             cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('container show ' + cid_opt + name + opts)
+        self.assertEqual(output["bucket"], bname)
+        output = self.openio("container unset --bucket-name " + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertNotIn(output, "bucket")
 
@@ -445,26 +465,25 @@ class ContainerTest(CliTestCase):
         self._test_container_set_bucket_name(with_cid=True)
 
     def _test_container_set_status(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        opts = ' -f json'
-        output = self.openio('container show ' + cid_opt + name + opts)
+        opts = " -f json"
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(output['status'], "Enabled")
-        output = self.openio('container set --status frozen ' + cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('container show ' + cid_opt + name + opts)
+        self.assertEqual(output["status"], "Enabled")
+        output = self.openio("container set --status frozen " + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(output['status'], "Frozen")
-        output = self.openio('container set --status enabled ' +
-                             cid_opt + name)
-        self.assertEqual('', output)
-        output = self.openio('container show ' + cid_opt + name + opts)
+        self.assertEqual(output["status"], "Frozen")
+        output = self.openio("container set --status enabled " + cid_opt + name)
+        self.assertEqual("", output)
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(output['status'], "Enabled")
+        self.assertEqual(output["status"], "Enabled")
 
     def test_container_set_status(self):
         self._test_container_set_status()
@@ -473,42 +492,43 @@ class ContainerTest(CliTestCase):
         self._test_container_set_status(with_cid=True)
 
     def _test_container_set_properties(self, with_cid=False):
-        cid_opt = ''
+        cid_opt = ""
         name = self.NAME
         if with_cid:
-            cid_opt = '--cid '
+            cid_opt = "--cid "
             name = self.CID
-        opts = ' -f json'
+        opts = " -f json"
 
-        output = self.openio('container set ' + cid_opt + name +
-                             ' --property test1=1 --property test2=2')
-        self.assertEqual(output, '')
-        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.openio(
+            "container set " + cid_opt + name + " --property test1=1 --property test2=2"
+        )
+        self.assertEqual(output, "")
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(self.NAME, output['container'])
-        self.assertEqual('1', output['meta.test1'])
-        self.assertEqual('2', output['meta.test2'])
+        self.assertEqual(self.NAME, output["container"])
+        self.assertEqual("1", output["meta.test1"])
+        self.assertEqual("2", output["meta.test2"])
 
-        output = self.openio('container set ' + cid_opt + name +
-                             ' --property test3=3')
-        self.assertEqual(output, '')
-        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.openio("container set " + cid_opt + name + " --property test3=3")
+        self.assertEqual(output, "")
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(self.NAME, output['container'])
-        self.assertEqual('1', output['meta.test1'])
-        self.assertEqual('2', output['meta.test2'])
-        self.assertEqual('3', output['meta.test3'])
+        self.assertEqual(self.NAME, output["container"])
+        self.assertEqual("1", output["meta.test1"])
+        self.assertEqual("2", output["meta.test2"])
+        self.assertEqual("3", output["meta.test3"])
 
-        output = self.openio('container set ' + cid_opt + name +
-                             ' --clear --property test4=4')
-        self.assertEqual(output, '')
-        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.openio(
+            "container set " + cid_opt + name + " --clear --property test4=4"
+        )
+        self.assertEqual(output, "")
+        output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertEqual(self.NAME, output['container'])
-        self.assertNotIn('meta.test1', output)
-        self.assertNotIn('meta.test2', output)
-        self.assertNotIn('meta.test3', output)
-        self.assertEqual('4', output['meta.test4'])
+        self.assertEqual(self.NAME, output["container"])
+        self.assertNotIn("meta.test1", output)
+        self.assertNotIn("meta.test2", output)
+        self.assertNotIn("meta.test3", output)
+        self.assertEqual("4", output["meta.test4"])
 
     def test_container_set_properties(self):
         self._test_container_set_properties()
@@ -517,16 +537,15 @@ class ContainerTest(CliTestCase):
         self._test_container_set_properties(with_cid=True)
 
     def test_drain_tube(self):
-        tube = 'oio-test-drain'
+        tube = "oio-test-drain"
         self.beanstalkd0.use(tube)
         tubes = self.beanstalkd0.tubes()
         self.assertIn(tube, tubes)
-        self.beanstalkd0.put('job1')
-        self.beanstalkd0.put('job2')
+        self.beanstalkd0.put("job1")
+        self.beanstalkd0.put("job2")
         stats = self.beanstalkd0.stats_tube(tube)
-        self.assertEqual(stats['current-jobs-ready'], 2)
-        drain = self.openio('events drain --tube ' + tube +
-                            ' --non-interactive')
+        self.assertEqual(stats["current-jobs-ready"], 2)
+        drain = self.openio("events drain --tube " + tube + " --non-interactive")
         stats = self.beanstalkd0.stats_tube(tube)
-        self.assertEqual(stats['current-jobs-ready'], 0)
-        self.assertIn('Drained', drain)
+        self.assertEqual(stats["current-jobs-ready"], 0)
+        self.assertIn("Drained", drain)

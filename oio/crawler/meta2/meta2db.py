@@ -21,7 +21,6 @@ from oio.common.easy_value import debinarize
 
 
 def _meta2db_env_property(field, fetch_value_function=None):
-
     def getter(self):
         value = self.env.get(field, None)
         if value is None and fetch_value_function:
@@ -37,15 +36,13 @@ def _meta2db_env_property(field, fetch_value_function=None):
 
 def _fetch_file_status(meta2db):
     file_status = os.stat(meta2db.path)
-    return {k: getattr(file_status, k) for k in dir(file_status)
-            if k.startswith('st_')}
+    return {k: getattr(file_status, k) for k in dir(file_status) if k.startswith("st_")}
 
 
 def _fetch_system(meta2db):
     meta2db_conn = None
     try:
-        meta2db_conn = sqlite3.connect(f'file:{meta2db.path}?mode=ro',
-                                       uri=True)
+        meta2db_conn = sqlite3.connect(f"file:{meta2db.path}?mode=ro", uri=True)
     except sqlite3.OperationalError:
         # Check if the meta2 database still exists
         try:
@@ -59,7 +56,8 @@ def _fetch_system(meta2db):
         system = dict()
         meta2db_cursor = meta2db_conn.cursor()
         for key, value in meta2db_cursor.execute(
-                'SELECT k, v FROM admin WHERE k LIKE "sys.%"').fetchall():
+            'SELECT k, v FROM admin WHERE k LIKE "sys.%"'
+        ).fetchall():
             system[key] = value
         return debinarize(system)
     finally:
@@ -67,28 +65,25 @@ def _fetch_system(meta2db):
 
 
 class Meta2DB(object):
-
-    path = _meta2db_env_property('path')
-    volume_id = _meta2db_env_property('volume_id')
-    cid = _meta2db_env_property('cid')
-    seq = _meta2db_env_property('seq')
+    path = _meta2db_env_property("path")
+    volume_id = _meta2db_env_property("volume_id")
+    cid = _meta2db_env_property("cid")
+    seq = _meta2db_env_property("seq")
     file_status = _meta2db_env_property(
-        'file_status', fetch_value_function=_fetch_file_status)
-    system = _meta2db_env_property(
-        'admin_table', fetch_value_function=_fetch_system)
+        "file_status", fetch_value_function=_fetch_file_status
+    )
+    system = _meta2db_env_property("admin_table", fetch_value_function=_fetch_system)
 
     def __init__(self, app_env, env):
         self.app_env = app_env
         self.env = env
-        self.api = self.app_env['api']
+        self.api = self.app_env["api"]
 
     def __repr__(self):
-        return "Meta2DB [%s,%s.%s]" % (
-            self.volume_id, self.cid, self.seq)
+        return "Meta2DB [%s,%s.%s]" % (self.volume_id, self.cid, self.seq)
 
 
 class Response(object):
-
     def __init__(self, meta2db, body=None, status=200, **kwargs):
         self.meta2db = meta2db
         self.body = body
@@ -97,19 +92,17 @@ class Response(object):
 
     def __call__(self, env, cb):
         if not self.body:
-            self.body = ''
+            self.body = ""
         cb(self.status, self.body)
 
 
 class Meta2DBException(Response, Exception):
-
     def __init__(self, *args, **kwargs):
         Response.__init__(self, *args, **kwargs)
         Exception.__init__(self, self.status)
 
 
 class StatusMap(object):
-
     def __getitem__(self, key):
         return partial(Meta2DBException, status=key)
 

@@ -48,28 +48,36 @@ class AccountServiceCleaner(object):
         """
         containers = depaginate(
             self.api.account.container_list,
-            listing_key=lambda x: x['listing'],
+            listing_key=lambda x: x["listing"],
             item_key=lambda x: x[0],
-            marker_key=lambda x: x['next_marker'],
-            truncated_key=lambda x: x['truncated'],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
             account=account,
-            region=self.region)
+            region=self.region,
+        )
         for container in containers:
             try:
                 meta = self.api.account.container_show(account, container)
-                mtime = float(meta['mtime'])
+                mtime = float(meta["mtime"])
                 now = time()
                 if now - self.SAFETY_DELAY > mtime:
-                    yield container, meta['mtime'], meta.get('bucket')
+                    yield container, meta["mtime"], meta.get("bucket")
                 else:
                     self.logger.debug(
-                        'Ignore container %s/%s: Modified %f seconds ago',
-                        account, container, now - mtime)
+                        "Ignore container %s/%s: Modified %f seconds ago",
+                        account,
+                        container,
+                        now - mtime,
+                    )
             except Exception as exc:
                 self.success = False
                 self.logger.error(
-                    'Failed to get information about container %s/%s '
-                    '(account service): %s', account, container, exc)
+                    "Failed to get information about container %s/%s "
+                    "(account service): %s",
+                    account,
+                    container,
+                    exc,
+                )
 
     def all_containers_from_region(self):
         """
@@ -77,14 +85,14 @@ class AccountServiceCleaner(object):
         """
         accounts = depaginate(
             self.api.account.account_list,
-            listing_key=lambda x: x['listing'],
-            item_key=lambda x: x['id'],
-            marker_key=lambda x: x['next_marker'],
-            truncated_key=lambda x: x['truncated'],
-            sharding_accounts=True)
+            listing_key=lambda x: x["listing"],
+            item_key=lambda x: x["id"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
+            sharding_accounts=True,
+        )
         for account in accounts:
-            for container, mtime, bucket \
-                    in self.all_containers_from_account(account):
+            for container, mtime, bucket in self.all_containers_from_account(account):
                 yield account, container, mtime, bucket
 
     def container_exists(self, account, container):
@@ -93,20 +101,23 @@ class AccountServiceCleaner(object):
         """
         try:
             _ = self.api.container.container_get_properties(
-                account, container, force_master=True)
+                account, container, force_master=True
+            )
             self.logger.debug(
-                'Container %s/%s still exists (meta2 service)',
-                account, container)
+                "Container %s/%s still exists (meta2 service)", account, container
+            )
             return True
         except NotFound:
-            self.logger.info(
-                'Container %s/%s no longer exists', account, container)
+            self.logger.info("Container %s/%s no longer exists", account, container)
             return False
         except Exception as exc:
             self.success = False
             self.logger.error(
-                'Failed to get information about container %s/%s '
-                '(meta2 service): %s', account, container, exc)
+                "Failed to get information about container %s/%s (meta2 service): %s",
+                account,
+                container,
+                exc,
+            )
             # If in doubt, assume it exists
             return True
 
@@ -117,26 +128,34 @@ class AccountServiceCleaner(object):
         """
         buckets = depaginate(
             self.api.account.bucket_list,
-            listing_key=lambda x: x['listing'],
-            marker_key=lambda x: x['next_marker'],
-            truncated_key=lambda x: x['truncated'],
+            listing_key=lambda x: x["listing"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
             account=account,
-            region=self.region)
+            region=self.region,
+        )
         for bucket in buckets:
             try:
-                mtime = float(bucket['mtime'])
+                mtime = float(bucket["mtime"])
                 now = time()
                 if now - self.SAFETY_DELAY > mtime:
-                    yield bucket['name'], bucket['containers']
+                    yield bucket["name"], bucket["containers"]
                 else:
                     self.logger.debug(
-                        'Ignore bucket %s/%s: Modified %f seconds ago',
-                        account, bucket['name'], now - mtime)
+                        "Ignore bucket %s/%s: Modified %f seconds ago",
+                        account,
+                        bucket["name"],
+                        now - mtime,
+                    )
             except Exception as exc:
                 self.success = False
                 self.logger.error(
-                    'Failed to get information about bucket %s/%s '
-                    '(account service): %s', account, bucket['name'], exc)
+                    "Failed to get information about bucket %s/%s "
+                    "(account service): %s",
+                    account,
+                    bucket["name"],
+                    exc,
+                )
 
     def all_buckets_from_region(self):
         """
@@ -144,10 +163,11 @@ class AccountServiceCleaner(object):
         """
         accounts = depaginate(
             self.api.account.account_list,
-            listing_key=lambda x: x['listing'],
-            item_key=lambda x: x['id'],
-            marker_key=lambda x: x['next_marker'],
-            truncated_key=lambda x: x['truncated'])
+            listing_key=lambda x: x["listing"],
+            item_key=lambda x: x["id"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
+        )
         for account in accounts:
             for bucket, containers in self.all_buckets_from_account(account):
                 yield account, bucket, containers
@@ -159,18 +179,20 @@ class AccountServiceCleaner(object):
         try:
             _ = self.api.bucket.bucket_show(bucket, account=account)
             self.logger.debug(
-                'Bucket %s/%s still exists (account service)',
-                account, bucket)
+                "Bucket %s/%s still exists (account service)", account, bucket
+            )
             return True
         except NotFound:
-            self.logger.info(
-                'Bucket %s/%s no longer exists', account, bucket)
+            self.logger.info("Bucket %s/%s no longer exists", account, bucket)
             return False
         except Exception as exc:
             self.success = False
             self.logger.error(
-                'Failed to get information about bucket %s/%s '
-                '(account service): %s', account, bucket, exc)
+                "Failed to get information about bucket %s/%s (account service): %s",
+                account,
+                bucket,
+                exc,
+            )
             # If in doubt, assume it exists
             return True
 
@@ -183,21 +205,28 @@ class AccountServiceCleaner(object):
             if account == owner:
                 return True
             self.logger.warning(
-                'Failed to get information about bucket %s/%s '
-                '(account service): The account is not the owner',
-                account, bucket)
+                "Failed to get information about bucket %s/%s "
+                "(account service): The account is not the owner",
+                account,
+                bucket,
+            )
             return False
         except NotFound:
             self.logger.warning(
-                'Failed to get information about bucket %s/%s '
-                '(account service): No owner',
-                account, bucket)
+                "Failed to get information about bucket %s/%s "
+                "(account service): No owner",
+                account,
+                bucket,
+            )
             return False
         except Exception as exc:
             self.success = False
             self.logger.error(
-                'Failed to get information about bucket %s/%s '
-                '(account service): %s', account, bucket, exc)
+                "Failed to get information about bucket %s/%s (account service): %s",
+                account,
+                bucket,
+                exc,
+            )
             # If in doubt, assume account is not the owner
             return False
 
@@ -208,13 +237,16 @@ class AccountServiceCleaner(object):
         try:
             if not self.dry_run:
                 self.api.bucket.bucket_delete(bucket, account)
-            self.logger.info('Delete bucket %s/%s', account, bucket)
+            self.logger.info("Delete bucket %s/%s", account, bucket)
             self.deleted_buckets += 1
         except Exception as exc:
             self.success = False
             self.logger.error(
-                'Failed to delete bucket %s/%s (account service): %s',
-                account, bucket, exc)
+                "Failed to delete bucket %s/%s (account service): %s",
+                account,
+                bucket,
+                exc,
+            )
 
     def delete_container(self, account, container, dtime, bucket=None):
         """
@@ -226,20 +258,23 @@ class AccountServiceCleaner(object):
             if not self.dry_run:
                 self.api.account.container_delete(account, container, dtime)
             self.logger.info(
-                'Delete container %s/%s (account service)',
-                account, container)
+                "Delete container %s/%s (account service)", account, container
+            )
             self.deleted_containers += 1
         except Exception as exc:
             self.success = False
             self.logger.error(
-                'Failed to delete container %s/%s (account service): %s',
-                account, container, exc)
+                "Failed to delete container %s/%s (account service): %s",
+                account,
+                container,
+                exc,
+            )
             return
 
         if not bucket:
             return
         if account.startswith(SHARDING_ACCOUNT_PREFIX):
-            account = account[len(SHARDING_ACCOUNT_PREFIX):]
+            account = account[len(SHARDING_ACCOUNT_PREFIX) :]
         if self.bucket_exists(account, bucket):
             return
         if not self.is_owner(account, bucket):
@@ -252,9 +287,8 @@ class AccountServiceCleaner(object):
         Start processing.
         """
         # Clean containers
-        for account, container, mtime, bucket \
-                in self.all_containers_from_region():
-            self.logger.debug('Processing container %s/%s', account, container)
+        for account, container, mtime, bucket in self.all_containers_from_region():
+            self.logger.debug("Processing container %s/%s", account, container)
             if self.container_exists(account, container):
                 continue
             # Use a dtime as close to the retrieved mtime as possible
@@ -264,14 +298,17 @@ class AccountServiceCleaner(object):
 
         # Clean buckets
         for account, bucket, containers in self.all_buckets_from_region():
-            self.logger.debug('Processing bucket %s/%s', account, bucket)
+            self.logger.debug("Processing bucket %s/%s", account, bucket)
             if containers > 0:
                 continue
             if self.container_exists(account, bucket):
                 self.logger.warning(
-                    'Bucket %s/%s does not know of a container, '
-                    'but the root container exists: '
-                    'we should refresh the bucket', account, bucket)
+                    "Bucket %s/%s does not know of a container, "
+                    "but the root container exists: "
+                    "we should refresh the bucket",
+                    account,
+                    bucket,
+                )
             else:
                 self.delete_bucket(account, bucket)
 

@@ -20,7 +20,8 @@ import time
 TIMESTAMP_FORMAT = "%016.05f"
 
 
-def cmp(x, y): return (x > y) - (x < y)
+def cmp(x, y):
+    return (x > y) - (x < y)
 
 
 class Timestamp(object):

@@ -32,10 +32,12 @@ def catch_service_errors(func):
 
     :raises `ServiceBusy`: in case of a Redis service error
     """
-    redis_exc_mod = importlib.import_module('redis.exceptions')
-    error_types = (redis_exc_mod.ConnectionError,
-                   redis_exc_mod.InvalidResponse,
-                   redis_exc_mod.TimeoutError)
+    redis_exc_mod = importlib.import_module("redis.exceptions")
+    error_types = (
+        redis_exc_mod.ConnectionError,
+        redis_exc_mod.InvalidResponse,
+        redis_exc_mod.TimeoutError,
+    )
 
     @wraps(func)
     def catch_service_errors_wrapper(*args, **kwargs):
@@ -45,6 +47,7 @@ def catch_service_errors(func):
         # why we catch several types here.
         except error_types as err:
             raise ServiceBusy(message=str(err))
+
     return catch_service_errors_wrapper
 
 
@@ -53,40 +56,40 @@ def catch_io_errors(func):
     Catch some write-after-close errors raised as ValueError, transform
     them to ServiceBusy.
     """
+
     @wraps(func)
     def catch_io_errors_wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except ValueError as err:
-            if 'I/O operation on closed file' in str(err):
+            if "I/O operation on closed file" in str(err):
                 # Here we are lying a little: the service is probably not
                 # too busy, it's just that some internal connection has
                 # reached a timeout.
                 msg = str(err) + " (socket_timeout too short?)"
                 raise ServiceBusy(message=msg)
             raise
+
     return catch_io_errors_wrapper
 
 
 class RedisConnection(object):
-
     # Imported from redis-py, for compatibility with pre 2.10.6 versions.
     URL_QUERY_ARGUMENT_PARSERS = {
-        'socket_timeout': float,
-        'socket_connect_timeout': float,
-        'socket_keepalive': true_value,
-        'retry_on_timeout': true_value,
-        'max_connections': int,
-        'health_check_interval': int,
+        "socket_timeout": float,
+        "socket_connect_timeout": float,
+        "socket_keepalive": true_value,
+        "retry_on_timeout": true_value,
+        "max_connections": int,
+        "health_check_interval": int,
     }
     EXTRA_ARGUMENT_PARSERS = {
-        'db': int,  # Redis database number
+        "db": int,  # Redis database number
     }
 
-    def __init__(self, host=None, sentinel_hosts=None,
-                 sentinel_name=None, **kwargs):
-        self.__redis_mod = importlib.import_module('redis')
-        self.__redis_sentinel_mod = importlib.import_module('redis.sentinel')
+    def __init__(self, host=None, sentinel_hosts=None, sentinel_name=None, **kwargs):
+        self.__redis_mod = importlib.import_module("redis")
+        self.__redis_sentinel_mod = importlib.import_module("redis.sentinel")
 
         self._conn = None
         self._host = None
@@ -97,7 +100,7 @@ class RedisConnection(object):
         self._conn_kwargs = self._filter_conn_kwargs(kwargs)
 
         if host:
-            self._host, self._port = host.rsplit(':', 1)
+            self._host, self._port = host.rsplit(":", 1)
             self._port = int(self._port)
             return
 
@@ -105,15 +108,17 @@ class RedisConnection(object):
             raise ValueError("missing parameter 'sentinel_name'")
 
         if isinstance(sentinel_hosts, string_types):
-            sentinel_hosts = sentinel_hosts.split(',')
-        self._sentinel_hosts = [(h, int(p)) for h, p, in (hp.rsplit(':', 1)
-                                for hp in sentinel_hosts)]
+            sentinel_hosts = sentinel_hosts.split(",")
+        self._sentinel_hosts = [
+            (h, int(p)) for h, p, in (hp.rsplit(":", 1) for hp in sentinel_hosts)
+        ]
         self._sentinel_name = sentinel_name
         self._sentinel_conn_kwargs = self._filter_sentinel_conn_kwargs(kwargs)
         self._sentinel = self.__redis_sentinel_mod.Sentinel(
             self._sentinel_hosts,
             sentinel_kwargs=self._sentinel_conn_kwargs,
-            **self._conn_kwargs)
+            **self._conn_kwargs
+        )
 
     def _filter_conn_kwargs(self, conn_kwargs):
         """
@@ -122,23 +127,27 @@ class RedisConnection(object):
         """
         if conn_kwargs is None:
             return None
-        if hasattr(self.__redis_mod.connection, 'URL_QUERY_ARGUMENT_PARSERS'):
+        if hasattr(self.__redis_mod.connection, "URL_QUERY_ARGUMENT_PARSERS"):
             parsers = self.__redis_mod.connection.URL_QUERY_ARGUMENT_PARSERS
         else:
             parsers = self.URL_QUERY_ARGUMENT_PARSERS
         # We don't want to monkey patch the class' dictionary, hence the copy
         all_parsers = self.__class__.EXTRA_ARGUMENT_PARSERS.copy()
         all_parsers.update(parsers)
-        return {k: all_parsers[k](v)
-                for k, v in conn_kwargs.items()
-                if k in all_parsers}
+        return {
+            k: all_parsers[k](v) for k, v in conn_kwargs.items() if k in all_parsers
+        }
 
     def _filter_sentinel_conn_kwargs(self, sentinel_conn_kwargs):
         if sentinel_conn_kwargs is None:
             return None
         return self._filter_conn_kwargs(
-            {k[9:]: v for k, v in sentinel_conn_kwargs.items()
-             if k.startswith('sentinel_')})
+            {
+                k[9:]: v
+                for k, v in sentinel_conn_kwargs.items()
+                if k.startswith("sentinel_")
+            }
+        )
 
     @property
     def conn(self):
@@ -147,8 +156,8 @@ class RedisConnection(object):
             return self._sentinel.master_for(self._sentinel_name)
         if not self._conn:
             self._conn = self.__redis_mod.StrictRedis(
-                host=self._host, port=self._port,
-                **self._conn_kwargs)
+                host=self._host, port=self._port, **self._conn_kwargs
+            )
         return self._conn
 
     @property
@@ -171,12 +180,11 @@ class RedisConnection(object):
         """Register a LUA script and return Script object."""
         return self.conn.register_script(script)
 
-    def acquire_lock_with_timeout(self, lockname, acquire_timeout=10,
-                                  lock_timeout=10):
+    def acquire_lock_with_timeout(self, lockname, acquire_timeout=10, lock_timeout=10):
         """Acquire a lock :lockname:"""
         conn = self.conn
         identifier = str(uuid.uuid4())
-        lockname = 'lock:' + lockname
+        lockname = "lock:" + lockname
         lock_timeout = int(math.ceil(lock_timeout))
         end = time() + acquire_timeout
 
@@ -187,20 +195,20 @@ class RedisConnection(object):
             elif not conn.ttl(lockname):
                 conn.expire(lockname, lock_timeout)
 
-            sleep(.001)
+            sleep(0.001)
         return False
 
     def release_lock(self, lockname, identifier):
         """Release a previously acquired Lock"""
         conn = self.conn
         pipe = conn.pipeline(True)
-        lockname = 'lock:' + lockname
+        lockname = "lock:" + lockname
 
         while True:
             try:
                 pipe.watch(lockname)
                 cur_id = pipe.get(lockname)
-                if cur_id and cur_id.decode('utf-8') == identifier:
+                if cur_id and cur_id.decode("utf-8") == identifier:
                     pipe.multi()
                     pipe.delete(lockname)
                     pipe.execute()

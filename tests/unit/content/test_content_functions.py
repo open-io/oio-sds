@@ -17,22 +17,44 @@
 import unittest
 
 from oio.common import exceptions
-from oio.content.content import compare_chunk_quality, \
-    ensure_better_chunk_qualities, Chunk
+from oio.content.content import (
+    compare_chunk_quality,
+    ensure_better_chunk_qualities,
+    Chunk,
+)
 
 
-CRAPPY = {u'expected_dist': 2, u'warn_dist': 1, u'final_dist': 1,
-          u'expected_slot': u'rawx-odd', u'final_slot': u'rawx'}
-PERFECT = {u'expected_dist': 2, u'warn_dist': 1, u'final_dist': 2,
-           u'expected_slot': u'rawx-odd', u'final_slot': u'rawx-odd'}
-SMALL_DIST = {u'expected_dist': 2, u'warn_dist': 1, u'final_dist': 1,
-              u'expected_slot': u'rawx-odd', u'final_slot': u'rawx-odd'}
-WRONG_SLOT = {u'expected_dist': 2, u'warn_dist': 1, u'final_dist': 2,
-              u'expected_slot': u'rawx-odd', u'final_slot': u'rawx'}
+CRAPPY = {
+    "expected_dist": 2,
+    "warn_dist": 1,
+    "final_dist": 1,
+    "expected_slot": "rawx-odd",
+    "final_slot": "rawx",
+}
+PERFECT = {
+    "expected_dist": 2,
+    "warn_dist": 1,
+    "final_dist": 2,
+    "expected_slot": "rawx-odd",
+    "final_slot": "rawx-odd",
+}
+SMALL_DIST = {
+    "expected_dist": 2,
+    "warn_dist": 1,
+    "final_dist": 1,
+    "expected_slot": "rawx-odd",
+    "final_slot": "rawx-odd",
+}
+WRONG_SLOT = {
+    "expected_dist": 2,
+    "warn_dist": 1,
+    "final_dist": 2,
+    "expected_slot": "rawx-odd",
+    "final_slot": "rawx",
+}
 
 
 class TestContentFunctions(unittest.TestCase):
-
     def test_compare_chunk_quality_better(self):
         self.assertGreater(compare_chunk_quality(CRAPPY, PERFECT), 0)
         self.assertGreater(compare_chunk_quality(CRAPPY, SMALL_DIST), 0)
@@ -56,21 +78,24 @@ class TestContentFunctions(unittest.TestCase):
     def test_ensure_better_quality(self):
         chunk0_data = {
             "url": "http://127.0.0.1:6010/AABBCC",
-            "pos": "0", "size": 0,
+            "pos": "0",
+            "size": 0,
             "hash": "00000000000000000000000000000000",
-            'quality': CRAPPY
+            "quality": CRAPPY,
         }
         chunk1_data = {
             "url": "http://127.0.0.2:6010/AABBDD",
-            "pos": "0", "size": 0,
+            "pos": "0",
+            "size": 0,
             "hash": "00000000000000000000000000000000",
-            'quality': SMALL_DIST
+            "quality": SMALL_DIST,
         }
         chunk2_data = {
             "url": "http://127.0.0.3:6010/AABBEE",
-            "pos": "0", "size": 0,
+            "pos": "0",
+            "size": 0,
             "hash": "00000000000000000000000000000000",
-            'quality': PERFECT
+            "quality": PERFECT,
         }
         chunk0 = Chunk(chunk0_data)
         chunk1 = Chunk(chunk1_data)
@@ -82,31 +107,41 @@ class TestContentFunctions(unittest.TestCase):
         ensure_better_chunk_qualities([chunk1], {chunk2.url: chunk2.quality})
 
         # Not OK, improvement is 1, threshold is 2
-        self.assertRaises(exceptions.SpareChunkException,
-                          ensure_better_chunk_qualities,
-                          [chunk0], {chunk1.url: chunk1.quality},
-                          threshold=2)
-        self.assertRaises(exceptions.SpareChunkException,
-                          ensure_better_chunk_qualities,
-                          [chunk1], {chunk2.url: chunk2.quality},
-                          threshold=2)
+        self.assertRaises(
+            exceptions.SpareChunkException,
+            ensure_better_chunk_qualities,
+            [chunk0],
+            {chunk1.url: chunk1.quality},
+            threshold=2,
+        )
+        self.assertRaises(
+            exceptions.SpareChunkException,
+            ensure_better_chunk_qualities,
+            [chunk1],
+            {chunk2.url: chunk2.quality},
+            threshold=2,
+        )
 
         # OK, far better quality
-        ensure_better_chunk_qualities([chunk0], {chunk2.url: chunk2.quality},
-                                      threshold=2)
+        ensure_better_chunk_qualities(
+            [chunk0], {chunk2.url: chunk2.quality}, threshold=2
+        )
 
     def test_ensure_better_quality_same(self):
         chunk_data = {
             "url": "http://127.0.0.1:6010/AABBCC",
-            "pos": "0", "size": 0,
+            "pos": "0",
+            "size": 0,
             "hash": "00000000000000000000000000000000",
-            'quality': CRAPPY
+            "quality": CRAPPY,
         }
         chunk = Chunk(chunk_data)
 
-        self.assertRaises(exceptions.SpareChunkException,
-                          ensure_better_chunk_qualities,
-                          [chunk], {chunk.url: chunk.quality})
+        self.assertRaises(
+            exceptions.SpareChunkException,
+            ensure_better_chunk_qualities,
+            [chunk],
+            {chunk.url: chunk.quality},
+        )
         # threshold=0 -> accept no improvement
-        ensure_better_chunk_qualities([chunk], {chunk.url: chunk.quality},
-                                      threshold=0)
+        ensure_better_chunk_qualities([chunk], {chunk.url: chunk.quality}, threshold=0)

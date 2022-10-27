@@ -27,9 +27,11 @@ def generate_balanced_test_input(sites, hosts, volumes, score=90):
     for i in range(1, sites + 1):
         for j in range(1, hosts + 1):
             for k in range(1, volumes + 1):
-                print("192.168.%d.%d:62%02d site%d.host%d.vol%d %d site%d" % (
-                    i, j, k, i, j, k, score, i))
+                print(
+                    "192.168.%d.%d:62%02d site%d.host%d.vol%d %d site%d"
+                    % (i, j, k, i, j, k, score, i)
+                )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     generate_balanced_test_input(*[int(x) for x in sys.argv[1:4]])

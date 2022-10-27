@@ -21,10 +21,11 @@ from oio.common.utils import cid_from_name, monotonic_time
 
 def set_cache_perfdata(key):
     """Save performance data of the wrapped call."""
+
     def _set_cache_perfdata(func):
         @wraps(func)
         def set_cache_perfdata_wrapper(*args, **kwargs):
-            perfdata = kwargs.get('perfdata', None)
+            perfdata = kwargs.get("perfdata", None)
             if perfdata is None:
                 return func(*args, **kwargs)
 
@@ -33,30 +34,31 @@ def set_cache_perfdata(key):
                 return func(*args, **kwargs)
             finally:
                 req_end = monotonic_time()
-                perfdata.setdefault('cache', dict())[key] = req_end - req_start
+                perfdata.setdefault("cache", dict())[key] = req_end - req_start
 
         return set_cache_perfdata_wrapper
+
     return _set_cache_perfdata
 
 
 def aggregate_cache_perfdata(perfdata):
     """Aggregate cache-related performance data."""
-    cache = perfdata.get('cache')
+    cache = perfdata.get("cache")
     if cache:
-        total = sum(v for k, v in cache.items()
-                    if k != 'overall')
-        cache['overall'] = total
+        total = sum(v for k, v in cache.items() if k != "overall")
+        cache["overall"] = total
 
 
 def _get_container_metadata_cache_key(account=None, reference=None, cid=None):
     cid = cid or cid_from_name(account, reference)
     cid = cid.upper()
-    return '/'.join(("meta", cid))
+    return "/".join(("meta", cid))
 
 
-@set_cache_perfdata('getcontainermeta')
-def get_cached_container_metadata(account=None, reference=None, cid=None,
-                                  cache=None, **kwargs):
+@set_cache_perfdata("getcontainermeta")
+def get_cached_container_metadata(
+    account=None, reference=None, cid=None, cache=None, **kwargs
+):
     """
     Get the container metadata from the cache (if there is one)
     """
@@ -64,14 +66,15 @@ def get_cached_container_metadata(account=None, reference=None, cid=None,
         return None
 
     cache_key = _get_container_metadata_cache_key(
-        account=account, reference=reference, cid=cid)
+        account=account, reference=reference, cid=cid
+    )
     return cache.get(cache_key)
 
 
-@set_cache_perfdata('setcontainermeta')
-def set_cached_container_metadata(container_meta,
-                                  account=None, reference=None, cid=None,
-                                  cache=None, **kwargs):
+@set_cache_perfdata("setcontainermeta")
+def set_cached_container_metadata(
+    container_meta, account=None, reference=None, cid=None, cache=None, **kwargs
+):
     """
     Set the object metadata and location in the cache (if there is one)
     """
@@ -82,13 +85,15 @@ def set_cached_container_metadata(container_meta,
         return
 
     cache_key = _get_container_metadata_cache_key(
-        account=account, reference=reference, cid=cid)
+        account=account, reference=reference, cid=cid
+    )
     cache[cache_key] = container_meta
 
 
-@set_cache_perfdata('delcontainermeta')
-def del_cached_container_metadata(account=None, reference=None, cid=None,
-                                  cache=None, **kwargs):
+@set_cache_perfdata("delcontainermeta")
+def del_cached_container_metadata(
+    account=None, reference=None, cid=None, cache=None, **kwargs
+):
     """
     Delete the object metadata and location from the cache (if there is one)
     """
@@ -96,26 +101,33 @@ def del_cached_container_metadata(account=None, reference=None, cid=None,
         return
 
     cache_key = _get_container_metadata_cache_key(
-        account=account, reference=reference, cid=cid)
+        account=account, reference=reference, cid=cid
+    )
     try:
         del cache[cache_key]
     except KeyError:
         pass
 
 
-def _get_object_metadata_cache_key(account=None, reference=None, path=None,
-                                   cid=None):
+def _get_object_metadata_cache_key(account=None, reference=None, path=None, cid=None):
     if not path:
-        raise ValueError('Missing object name to use the cache')
+        raise ValueError("Missing object name to use the cache")
     cid = cid or cid_from_name(account, reference)
     cid = cid.upper()
-    return '/'.join(("meta", cid, path))
+    return "/".join(("meta", cid, path))
 
 
-@set_cache_perfdata('getobjmeta')
-def get_cached_object_metadata(account=None, reference=None, path=None,
-                               cid=None, version=None, properties=False,
-                               cache=None, **kwargs):
+@set_cache_perfdata("getobjmeta")
+def get_cached_object_metadata(
+    account=None,
+    reference=None,
+    path=None,
+    cid=None,
+    version=None,
+    properties=False,
+    cache=None,
+    **kwargs
+):
     """
     Get the object metadata and location from the cache (if there is one)
     """
@@ -124,29 +136,38 @@ def get_cached_object_metadata(account=None, reference=None, path=None,
         return None, None
 
     cache_key = _get_object_metadata_cache_key(
-        account=account, reference=reference, path=path, cid=cid)
+        account=account, reference=reference, path=path, cid=cid
+    )
     cache_value = cache.get(cache_key)
     if cache_value is None:
         return None, None
 
-    content_meta = cache_value.get('meta')
+    content_meta = cache_value.get("meta")
     if content_meta is None:
         return None, None
     if properties:
-        content_properties = cache_value.get('properties')
+        content_properties = cache_value.get("properties")
         if content_properties is None:
             return None, None
         content_meta = content_meta.copy()
-        content_meta['properties'] = content_properties
-    content_chunks = cache_value.get('chunks')
+        content_meta["properties"] = content_properties
+    content_chunks = cache_value.get("chunks")
     return content_meta, content_chunks
 
 
-@set_cache_perfdata('setobjmeta')
-def set_cached_object_metadata(content_meta, content_chunks,
-                               account=None, reference=None, path=None,
-                               cid=None, version=None, properties=False,
-                               cache=None, **kwargs):
+@set_cache_perfdata("setobjmeta")
+def set_cached_object_metadata(
+    content_meta,
+    content_chunks,
+    account=None,
+    reference=None,
+    path=None,
+    cid=None,
+    version=None,
+    properties=False,
+    cache=None,
+    **kwargs
+):
     """
     Set the object metadata and location in the cache (if there is one)
     """
@@ -159,27 +180,35 @@ def set_cached_object_metadata(content_meta, content_chunks,
     cache_value = dict()
     content_meta = content_meta.copy()
     if properties:
-        cache_value['properties'] = content_meta['properties']
-    content_meta['properties'] = dict()
-    cache_value['meta'] = content_meta
+        cache_value["properties"] = content_meta["properties"]
+    content_meta["properties"] = dict()
+    cache_value["meta"] = content_meta
     if content_chunks is not None:
         downsized_chunks = list()
         # The scores will be refreshed on reading
         # There is therefore no reason to lose space for this information
         for chunk in content_chunks:
             downsized_chunk = chunk.copy()
-            downsized_chunk.pop('score', None)
+            downsized_chunk.pop("score", None)
             downsized_chunks.append(downsized_chunk)
-        cache_value['chunks'] = downsized_chunks
+        cache_value["chunks"] = downsized_chunks
 
     cache_key = _get_object_metadata_cache_key(
-        account=account, reference=reference, path=path, cid=cid)
+        account=account, reference=reference, path=path, cid=cid
+    )
     cache[cache_key] = cache_value
 
 
-@set_cache_perfdata('delobjmeta')
-def del_cached_object_metadata(account=None, reference=None, path=None,
-                               cid=None, version=None, cache=None, **kwargs):
+@set_cache_perfdata("delobjmeta")
+def del_cached_object_metadata(
+    account=None,
+    reference=None,
+    path=None,
+    cid=None,
+    version=None,
+    cache=None,
+    **kwargs
+):
     """
     Delete the object metadata and location from the cache (if there is one)
     """
@@ -187,7 +216,8 @@ def del_cached_object_metadata(account=None, reference=None, path=None,
         return
 
     cache_key = _get_object_metadata_cache_key(
-        account=account, reference=reference, path=path, cid=cid)
+        account=account, reference=reference, path=path, cid=cid
+    )
     try:
         del cache[cache_key]
     except KeyError:

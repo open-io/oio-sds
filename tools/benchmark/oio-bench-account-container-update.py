@@ -57,15 +57,16 @@ def create_loop(api, prefix, results):
 
     # Loop on all other shards
     while True:
-        name = prefix + '%2F' + str(iteration % SHARDS)
+        name = prefix + "%2F" + str(iteration % SHARDS)
         mtime = time.time()
         iteration += 1
         # Poor man's random
         objects = int(mtime) % iteration
         bytes_used = objects * 42
         try:
-            api.container_update(ACCOUNT, name, mtime, objects, bytes_used,
-                                 bucket=prefix)
+            api.container_update(
+                ACCOUNT, name, mtime, objects, bytes_used, bucket=prefix
+            )
             results.put(name)
             sleep(0)
         except Exception as err:
@@ -77,10 +78,12 @@ def main(myid, queue, concurrency, delay=5.0, duration=DURATION):
     created = list()
     results = LightQueue(concurrency * 10)
     pool = GreenPool(concurrency)
-    api = AccountClient({'namespace': NS}, pool_maxsize=concurrency+1)
+    api = AccountClient({"namespace": NS}, pool_maxsize=concurrency + 1)
     now = start = checkpoint = time.time()
-    pool.starmap(create_loop, [(api, 'buck-%d-%d' % (myid, n), results)
-                               for n in range(concurrency)])
+    pool.starmap(
+        create_loop,
+        [(api, "buck-%d-%d" % (myid, n), results) for n in range(concurrency)],
+    )
     while now - start < duration:
         try:
             res = results.get(timeout=delay)
@@ -89,9 +92,10 @@ def main(myid, queue, concurrency, delay=5.0, duration=DURATION):
         except Empty:
             pass
         if now - checkpoint > delay:
-            print("Proc %d: %d updates in %fs, %f updates per second." % (
-                  myid, counter, now - checkpoint,
-                  counter / (now - checkpoint)))
+            print(
+                "Proc %d: %d updates in %fs, %f updates per second."
+                % (myid, counter, now - checkpoint, counter / (now - checkpoint))
+            )
             counter = 0
             checkpoint = now
         now = time.time()
@@ -101,26 +105,28 @@ def main(myid, queue, concurrency, delay=5.0, duration=DURATION):
         created.append(results.get(block=False))
     end = time.time()
     rate = len(created) / (end - start)
-    print("Proc %d: end. %d updates in %fs, %f updates per second." % (
-          myid, len(created), end - start, rate))
+    print(
+        "Proc %d: end. %d updates in %fs, %f updates per second."
+        % (myid, len(created), end - start, rate)
+    )
     time.sleep(2)
     print("Proc %d: cleaning..." % myid)
     dtime = time.time()
     # Do not delete twice (or an exception is raised)
     uniq_ct = set(created)
-    for _ in pool.starmap(api.container_delete,
-                          [(ACCOUNT, n, dtime) for n in uniq_ct]):
+    for _ in pool.starmap(api.container_delete, [(ACCOUNT, n, dtime) for n in uniq_ct]):
         pass
     pool.waitall()
     queue.put(rate)
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import os
     import sys
+
     if len(sys.argv) > 1:
-        if sys.argv[1] in ('-h', '-help', '--help'):
+        if sys.argv[1] in ("-h", "-help", "--help"):
             print(__doc__ % sys.argv[0])
             sys.exit(1)
         else:
@@ -128,19 +134,18 @@ if __name__ == '__main__':
     else:
         N_PROC = 1
     COROS = 10
-    NS = os.getenv('OIO_NS', 'OPENIO')
-    ACCOUNT = os.getenv('OIO_ACCOUNT', 'benchmark')
+    NS = os.getenv("OIO_NS", "OPENIO")
+    ACCOUNT = os.getenv("OIO_ACCOUNT", "benchmark")
     QUEUE = multiprocessing.Queue()
     PROCESSES = list()
     for sub in range(N_PROC):
-        PROCESSES.append(multiprocessing.Process(
-            target=main, args=(sub, QUEUE, COROS)))
+        PROCESSES.append(multiprocessing.Process(target=main, args=(sub, QUEUE, COROS)))
     for proc in PROCESSES:
         proc.start()
     RATE = 0
     try:
         for proc in PROCESSES:
-            RATE += QUEUE.get(timeout=DURATION*2)
+            RATE += QUEUE.get(timeout=DURATION * 2)
     except Empty:
         pass
     for proc in PROCESSES:

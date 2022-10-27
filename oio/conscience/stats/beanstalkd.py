@@ -23,12 +23,12 @@ class BeanstalkdStat(BaseStat):
     """Collect statistics about beanstalkd services."""
 
     stat_keys = {
-        'current-tubes': 'stat.tubes',
-        'current-jobs-buried': 'stat.jobs_buried',
-        'current-jobs-delayed': 'stat.jobs_delayed',
-        'current-jobs-ready': 'stat.jobs_ready',
-        'current-jobs-reserved': 'stat.jobs_reserved',
-        'current-jobs-urgent': 'stat.jobs_urgent',
+        "current-tubes": "stat.tubes",
+        "current-jobs-buried": "stat.jobs_buried",
+        "current-jobs-delayed": "stat.jobs_delayed",
+        "current-jobs-ready": "stat.jobs_ready",
+        "current-jobs-reserved": "stat.jobs_reserved",
+        "current-jobs-urgent": "stat.jobs_urgent",
     }
 
     def __init__(self, *args, **kwargs):
@@ -39,16 +39,17 @@ class BeanstalkdStat(BaseStat):
 
     def configure(self):
         super(BeanstalkdStat, self).configure()
-        for k in ('host', 'port'):
+        for k in ("host", "port"):
             if k not in self.stat_conf:
                 raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k)
+                    'Missing field "%s" in configuration' % k
+                )
 
     @property
     def beanstalkd(self):
         if self._beanstalkd is None:
-            host = self.stat_conf['host']
-            port = int(self.stat_conf['port'])
+            host = self.stat_conf["host"]
+            port = int(self.stat_conf["port"])
             self._beanstalkd = Beanstalk(host, port)
         return self._beanstalkd
 
@@ -60,11 +61,18 @@ class BeanstalkdStat(BaseStat):
                 stats[skey] = all_stats[bkey]
         except ConnectionError as err:
             self.logger.warn(
-                'ERROR connection lost to beanstalkd (%s:%d) %s',
-                self._host, self._port, err)
+                "ERROR connection lost to beanstalkd (%s:%d) %s",
+                self._host,
+                self._port,
+                err,
+            )
             self._beanstalkd = None
         except Exception as err:
-            self.logger.warn('ERROR performing beanstalkd check (%s:%s): %s',
-                             self._host, self._port, err)
+            self.logger.warn(
+                "ERROR performing beanstalkd check (%s:%s): %s",
+                self._host,
+                self._port,
+                err,
+            )
         finally:
             return stats

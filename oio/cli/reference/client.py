@@ -19,12 +19,11 @@ from oio.directory.client import DirectoryClient
 
 LOG = getLogger(__name__)
 
-API_NAME = 'reference'
+API_NAME = "reference"
 
 
 def make_client(instance):
     client = DirectoryClient(
-        {"namespace": instance.namespace},
-        endpoint=instance.get_endpoint()
+        {"namespace": instance.namespace}, endpoint=instance.get_endpoint()
     )
     return client

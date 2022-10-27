@@ -30,4 +30,5 @@ def filter_factory(global_conf, **local_conf):
 
     def log_filter(app):
         return LoggerFilter(app, conf)
+
     return log_filter

@@ -24,17 +24,17 @@ from oio.common.easy_value import convert_size
 class TestLogger(unittest.TestCase):
     def test_get_logger(self):
         sio = StringIO()
-        logger = logging.getLogger('test')
+        logger = logging.getLogger("test")
         logger.addHandler(logging.StreamHandler(sio))
-        logger = get_logger(None, 'test')
-        logger.warning('msg1')
-        self.assertEqual(sio.getvalue(), 'msg1\n')
-        logger.debug('msg2')
-        self.assertEqual(sio.getvalue(), 'msg1\n')
-        conf = {'log_level': 'DEBUG'}
-        logger = get_logger(conf, 'test')
-        logger.debug('msg3')
-        self.assertEqual(sio.getvalue(), 'msg1\nmsg3\n')
+        logger = get_logger(None, "test")
+        logger.warning("msg1")
+        self.assertEqual(sio.getvalue(), "msg1\n")
+        logger.debug("msg2")
+        self.assertEqual(sio.getvalue(), "msg1\n")
+        conf = {"log_level": "DEBUG"}
+        logger = get_logger(conf, "test")
+        logger.debug("msg3")
+        self.assertEqual(sio.getvalue(), "msg1\nmsg3\n")
 
     def test_convert_size(self):
         size = convert_size(0)

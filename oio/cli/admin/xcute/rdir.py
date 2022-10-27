@@ -32,49 +32,49 @@ class RdirDecommission(SingleServiceCommandMixin, XcuteCommand, ShowOne):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--service_type',
+            "--service_type",
             choices=["all"] + RdirDecommissionJob.ALLOWED_SERVICE_TYPES,
             default="all",
-            help='Which hosted service type to work on.')
+            help="Which hosted service type to work on.",
+        )
         parser.add_argument(
-            '--min-dist',
-            metavar='<N>',
+            "--min-dist",
+            metavar="<N>",
             type=int,
-            help=("Minimum required distance between any service and "
-                  "its assigned rdir service."))
+            help=(
+                "Minimum required distance between any service and "
+                "its assigned rdir service."
+            ),
+        )
         parser.add_argument(
-            '--replicas',
-            metavar='<N>',
+            "--replicas",
+            metavar="<N>",
             type=int,
             default=RdirDecommissionJob.DEFAULT_REPLICAS,
-            help="Number of rdir replicas per hosted service.")
+            help="Number of rdir replicas per hosted service.",
+        )
         parser.add_argument(
-            '--dry-run', action='store_true',
-            help='Display actions but do nothing.')
+            "--dry-run", action="store_true", help="Display actions but do nothing."
+        )
 
         return parser
 
     def get_job_config(self, parsed_args):
         job_params = {
-            'service_id': parsed_args.service,
-            'dry_run': parsed_args.dry_run,
-            'min_dist': parsed_args.min_dist,
-            'replicas': parsed_args.replicas
+            "service_id": parsed_args.service,
+            "dry_run": parsed_args.dry_run,
+            "min_dist": parsed_args.min_dist,
+            "replicas": parsed_args.replicas,
         }
         if parsed_args.service_type == "all":
-            job_params['service_types'] = \
-                RdirDecommissionJob.ALLOWED_SERVICE_TYPES
+            job_params["service_types"] = RdirDecommissionJob.ALLOWED_SERVICE_TYPES
         else:
-            job_params['service_types'] = [parsed_args.service_type]
-        return {
-            'params': job_params
-        }
+            job_params["service_types"] = [parsed_args.service_type]
+        return {"params": job_params}
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         job_config = self.get_job_config(parsed_args)
-        job_info = self.xcute.job_create(
-            self.JOB_CLASS.JOB_TYPE, job_config=job_config)
-        return zip(*sorted(
-            flat_dict_from_dict(parsed_args, job_info).items()))
+        job_info = self.xcute.job_create(self.JOB_CLASS.JOB_TYPE, job_config=job_config)
+        return zip(*sorted(flat_dict_from_dict(parsed_args, job_info).items()))

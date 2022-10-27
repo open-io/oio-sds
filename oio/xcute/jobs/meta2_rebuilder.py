@@ -23,50 +23,50 @@ from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class Meta2RebuildTask(XcuteTask):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(Meta2RebuildTask, self).__init__(
-            conf, job_params, logger=logger, watchdog=watchdog)
+            conf, job_params, logger=logger, watchdog=watchdog
+        )
 
-        self.meta2_id = job_params['service_id']
+        self.meta2_id = job_params["service_id"]
 
         self.meta2 = Meta2Database(conf, logger=logger)
 
     def process(self, task_id, task_payload, reqid=None):
-        container_id = task_payload['container_id']
+        container_id = task_payload["container_id"]
 
         rebuilt = self.meta2.rebuild(container_id, reqid=reqid)
 
         resp = Counter()
 
         for res in rebuilt:
-            if res['err'] is not None:
-                resp['errors'] += 1
+            if res["err"] is not None:
+                resp["errors"] += 1
 
                 continue
 
-            resp['rebuilt_seq'] += 1
+            resp["rebuilt_seq"] += 1
 
         return resp
 
 
 class Meta2RebuildJob(XcuteRdirJob):
-
-    JOB_TYPE = 'meta2-rebuild'
+    JOB_TYPE = "meta2-rebuild"
     TASK_CLASS = Meta2RebuildTask
 
     @classmethod
     def sanitize_params(cls, job_params):
-        sanitized_job_params, _ = super(
-            Meta2RebuildJob, cls).sanitize_params(job_params)
+        sanitized_job_params, _ = super(Meta2RebuildJob, cls).sanitize_params(
+            job_params
+        )
 
         # specific configuration
-        service_id = job_params.get('service_id')
+        service_id = job_params.get("service_id")
         if not service_id:
-            raise ValueError('Missing service ID')
-        sanitized_job_params['service_id'] = service_id
+            raise ValueError("Missing service ID")
+        sanitized_job_params["service_id"] = service_id
 
-        return sanitized_job_params, 'meta2'
+        return sanitized_job_params, "meta2"
 
     def __init__(self, conf, logger=None):
         super(Meta2RebuildJob, self).__init__(conf, logger=logger)
@@ -93,15 +93,15 @@ class Meta2RebuildJob(XcuteRdirJob):
         yield marker, remaining
 
     def _containers_from_rdir(self, job_params, marker):
-        service_id = job_params['service_id']
-        rdir_fetch_limit = job_params['rdir_fetch_limit']
-        rdir_timeout = job_params['rdir_timeout']
+        service_id = job_params["service_id"]
+        rdir_fetch_limit = job_params["rdir_fetch_limit"]
+        rdir_timeout = job_params["rdir_timeout"]
 
         containers = self.rdir_client.meta2_index_fetch_all(
-            service_id, marker=marker, timeout=rdir_timeout,
-            limit=rdir_fetch_limit)
+            service_id, marker=marker, timeout=rdir_timeout, limit=rdir_fetch_limit
+        )
         for container_info in containers:
-            container_url = container_info['container_url']
-            container_id = container_info['container_id']
+            container_url = container_info["container_url"]
+            container_id = container_info["container_id"]
 
             yield container_url, container_id

@@ -19,47 +19,47 @@ from tests.functional.cli import CliTestCase
 
 
 class ServiceListTest(CliTestCase):
-
     def test_meta2_list_containers(self):
         container = random_str(16)
         self.storage.container_create(self.account, container)
         output = self.storage.directory.list(self.account, container)
         meta2s = []
-        for srv in output['srv']:
-            if srv['type'] == 'meta2':
-                meta2s.append(srv['host'])
+        for srv in output["srv"]:
+            if srv["type"] == "meta2":
+                meta2s.append(srv["host"])
 
         opts = self.get_format_opts()
-        fullname = self.account + '/' + container
+        fullname = self.account + "/" + container
         for meta2 in meta2s:
             output = self.openio_admin(
-                'meta2 list containers  %s %s --oio-account %s'
-                % (meta2, opts, self.account))
-            self.assertIn(fullname, output.split('\n'))
+                "meta2 list containers  %s %s --oio-account %s"
+                % (meta2, opts, self.account)
+            )
+            self.assertIn(fullname, output.split("\n"))
 
         output = self.storage.container_delete(self.account, container)
         for meta2 in meta2s:
             output = self.openio_admin(
-                'meta2 list containers %s %s --oio-account %s'
-                % (meta2, opts, self.account))
-            self.assertNotIn(fullname, output.split('\n'))
+                "meta2 list containers %s %s --oio-account %s"
+                % (meta2, opts, self.account)
+            )
+            self.assertNotIn(fullname, output.split("\n"))
 
     def test_rawx_list_containers(self):
         container = random_str(16)
         obj = random_str(16)
-        self.storage.object_create(self.account, container,
-                                   data='test data', obj_name=obj)
+        self.storage.object_create(
+            self.account, container, data="test data", obj_name=obj
+        )
         output = self.storage.object_locate(self.account, container, obj)
-        opts = self.get_format_opts(fields=['Name'])
-        fullname = '/'.join((self.account, container))
-        rawx_list = [x['url'][7:-65] for x in output[1]]
+        opts = self.get_format_opts(fields=["Name"])
+        fullname = "/".join((self.account, container))
+        rawx_list = [x["url"][7:-65] for x in output[1]]
         for rawx in rawx_list:
-            output = self.openio_admin('rawx list containers %s %s'
-                                       % (rawx, opts))
-            self.assertIn(fullname, output.split('\n'))
+            output = self.openio_admin("rawx list containers %s %s" % (rawx, opts))
+            self.assertIn(fullname, output.split("\n"))
 
         self.storage.object_delete(self.account, container, obj)
         for rawx in rawx_list:
-            output = self.openio_admin('rawx list containers %s %s'
-                                       % (rawx, opts))
-            self.assertNotIn(fullname, output.split('\n'))
+            output = self.openio_admin("rawx list containers %s %s" % (rawx, opts))
+            self.assertNotIn(fullname, output.split("\n"))

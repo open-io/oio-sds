@@ -31,23 +31,21 @@ class Meta2Rebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--bases-per-second', type=int,
-            help='Max bases per second. '
-                 '(default=%d)'
-                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
+            "--bases-per-second",
+            type=int,
+            help="Max bases per second. (default=%d)"
+            % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND,
+        )
 
         return parser
 
     def get_job_config(self, parsed_args):
         job_params = {
-            'service_id': parsed_args.service,
-            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
-            'rdir_timeout': parsed_args.rdir_timeout,
+            "service_id": parsed_args.service,
+            "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
+            "rdir_timeout": parsed_args.rdir_timeout,
         }
-        return {
-            'tasks_per_second': parsed_args.bases_per_second,
-            'params': job_params
-        }
+        return {"tasks_per_second": parsed_args.bases_per_second, "params": job_params}
 
 
 class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
@@ -62,25 +60,22 @@ class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--bases-per-second', type=int,
-            help='Max bases per second. '
-                 '(default=%d)'
-                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
+            "--bases-per-second",
+            type=int,
+            help="Max bases per second. (default=%d)"
+            % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND,
+        )
         parser.add_argument(
-            '--dst',
-            metavar='<service_id>',
-            help='ID of the destination meta2.')
+            "--dst", metavar="<service_id>", help="ID of the destination meta2."
+        )
 
         return parser
 
     def get_job_config(self, parsed_args):
         job_params = {
-            'service_id': parsed_args.service,
-            'dst': parsed_args.dst,
-            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
-            'rdir_timeout': parsed_args.rdir_timeout,
+            "service_id": parsed_args.service,
+            "dst": parsed_args.dst,
+            "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
+            "rdir_timeout": parsed_args.rdir_timeout,
         }
-        return {
-            'tasks_per_second': parsed_args.bases_per_second,
-            'params': job_params
-        }
+        return {"tasks_per_second": parsed_args.bases_per_second, "params": job_params}

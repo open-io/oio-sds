@@ -16,14 +16,26 @@
 
 from urllib.parse import urlencode
 
-from oio.common.constants import ADMIN_HEADER, \
-    TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT, REGION_HEADER, REQID_HEADER, \
-    STRLEN_REQID, HTTP_CONTENT_TYPE_JSON
+from oio.common.constants import (
+    ADMIN_HEADER,
+    TIMEOUT_HEADER,
+    PERFDATA_HEADER,
+    FORCEMASTER_HEADER,
+    CONNECTION_TIMEOUT,
+    READ_TIMEOUT,
+    REGION_HEADER,
+    REQID_HEADER,
+    STRLEN_REQID,
+    HTTP_CONTENT_TYPE_JSON,
+)
 from oio.common.easy_value import true_value
 from oio.common.exceptions import OioException, from_response
-from oio.common.http_urllib3 import urllib3, get_pool_manager, \
-    oio_exception_from_httperror, URLLIB3_REQUESTS_KWARGS
+from oio.common.http_urllib3 import (
+    urllib3,
+    get_pool_manager,
+    oio_exception_from_httperror,
+    URLLIB3_REQUESTS_KWARGS,
+)
 from oio.common.json import json as jsonlib
 from oio.common.logger import get_logger
 from oio.common.utils import deadline_to_timeout, monotonic_time
@@ -35,9 +47,15 @@ class HttpApi(object):
     towards the same endpoint, with a pool of connections.
     """
 
-    def __init__(self, endpoint=None, pool_manager=None,
-                 connection='keep-alive', service_type='unknown',
-                 service_name=None, **kwargs):
+    def __init__(
+        self,
+        endpoint=None,
+        pool_manager=None,
+        connection="keep-alive",
+        service_type="unknown",
+        service_name=None,
+        **kwargs
+    ):
         """
         :param pool_manager: an optional pool manager that will be reused
         :type pool_manager: `urllib3.PoolManager`
@@ -60,21 +78,31 @@ class HttpApi(object):
             pool_manager = get_pool_manager(**kwargs)
         self.pool_manager = pool_manager
 
-        self.admin_mode = true_value(kwargs.get('admin_mode', False))
-        self.force_master = true_value(kwargs.get('force_master', False))
+        self.admin_mode = true_value(kwargs.get("admin_mode", False))
+        self.force_master = true_value(kwargs.get("force_master", False))
         self.connection = connection
         self.service_type = service_type
         self.service_name = service_name or service_type
 
     def __logger(self):
         """Try to get a logger from a child class, or create one."""
-        if not hasattr(self, 'logger'):
-            setattr(self, 'logger', get_logger(None, self.__class__.__name__))
-        return getattr(self, 'logger')
+        if not hasattr(self, "logger"):
+            setattr(self, "logger", get_logger(None, self.__class__.__name__))
+        return getattr(self, "logger")
 
-    def _direct_request(self, method, url, headers=None, data=None, json=None,
-                        params=None, admin_mode=False, pool_manager=None,
-                        force_master=False, **kwargs):
+    def _direct_request(
+        self,
+        method,
+        url,
+        headers=None,
+        data=None,
+        json=None,
+        params=None,
+        admin_mode=False,
+        pool_manager=None,
+        force_master=False,
+        **kwargs
+    ):
         """
         Make an HTTP request.
 
@@ -109,8 +137,7 @@ class HttpApi(object):
         code >= 400
         """
         # Filter arguments that are not recognized by Requests
-        out_kwargs = {k: v for k, v in kwargs.items()
-                      if k in URLLIB3_REQUESTS_KWARGS}
+        out_kwargs = {k: v for k, v in kwargs.items() if k in URLLIB3_REQUESTS_KWARGS}
 
         # Ensure headers are all strings
         if headers:
@@ -118,28 +145,29 @@ class HttpApi(object):
         else:
             out_headers = dict()
         if self.admin_mode or admin_mode:
-            out_headers[ADMIN_HEADER] = '1'
+            out_headers[ADMIN_HEADER] = "1"
         if self.force_master or force_master:
-            out_headers[FORCEMASTER_HEADER] = '1'
+            out_headers[FORCEMASTER_HEADER] = "1"
 
         # Look for a request deadline, deduce the timeout from it.
-        if kwargs.get('deadline', None) is not None:
-            to = deadline_to_timeout(kwargs['deadline'], True)
-            to = min(to, kwargs.get('read_timeout', to))
-            out_kwargs['timeout'] = urllib3.Timeout(
-                connect=kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
-                read=to)
+        if kwargs.get("deadline", None) is not None:
+            to = deadline_to_timeout(kwargs["deadline"], True)
+            to = min(to, kwargs.get("read_timeout", to))
+            out_kwargs["timeout"] = urllib3.Timeout(
+                connect=kwargs.get("connection_timeout", CONNECTION_TIMEOUT), read=to
+            )
             # Shorten the deadline by 1% to compensate for the time spent
             # connecting and reading response.
             out_headers[TIMEOUT_HEADER] = int(to * 990000.0)
 
         # Ensure there is a timeout
-        if 'timeout' not in out_kwargs:
-            out_kwargs['timeout'] = urllib3.Timeout(
-                connect=kwargs.get('connection_timeout', CONNECTION_TIMEOUT),
-                read=kwargs.get('read_timeout', READ_TIMEOUT))
+        if "timeout" not in out_kwargs:
+            out_kwargs["timeout"] = urllib3.Timeout(
+                connect=kwargs.get("connection_timeout", CONNECTION_TIMEOUT),
+                read=kwargs.get("read_timeout", READ_TIMEOUT),
+            )
         if TIMEOUT_HEADER not in out_headers:
-            to = out_kwargs['timeout']
+            to = out_kwargs["timeout"]
             if isinstance(to, urllib3.Timeout):
                 to = to.read_timeout
             else:
@@ -147,35 +175,33 @@ class HttpApi(object):
             out_headers[TIMEOUT_HEADER] = int(to * 1000000.0)
 
         # Look for a region
-        if kwargs.get('region') is not None:
-            out_headers[REGION_HEADER] = str(kwargs['region'])
+        if kwargs.get("region") is not None:
+            out_headers[REGION_HEADER] = str(kwargs["region"])
 
         # Look for a request ID
-        if 'reqid' in kwargs:
-            out_headers[REQID_HEADER] = str(kwargs['reqid'])
+        if "reqid" in kwargs:
+            out_headers[REQID_HEADER] = str(kwargs["reqid"])
 
-        if len(out_headers.get(REQID_HEADER, '')) > STRLEN_REQID:
-            out_headers[REQID_HEADER] = \
-                out_headers[REQID_HEADER][:STRLEN_REQID]
-            self.__logger().warn('Request ID truncated to %d characters',
-                                 STRLEN_REQID)
+        if len(out_headers.get(REQID_HEADER, "")) > STRLEN_REQID:
+            out_headers[REQID_HEADER] = out_headers[REQID_HEADER][:STRLEN_REQID]
+            self.__logger().warn("Request ID truncated to %d characters", STRLEN_REQID)
 
         # Convert json and add Content-Type
         if json:
             out_headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
-            data = jsonlib.dumps(json, separators=(',', ':'))
+            data = jsonlib.dumps(json, separators=(",", ":"))
 
         # Trigger performance measurements
-        perfdata = kwargs.get('perfdata', None)
+        perfdata = kwargs.get("perfdata", None)
         if perfdata is not None:
-            out_headers[PERFDATA_HEADER] = 'enabled'
+            out_headers[PERFDATA_HEADER] = "enabled"
 
         # Explicitly keep or close the connection
-        if 'Connection' not in out_headers:
-            out_headers['Connection'] = self.connection
+        if "Connection" not in out_headers:
+            out_headers["Connection"] = self.connection
 
-        out_kwargs['headers'] = out_headers
-        out_kwargs['body'] = data
+        out_kwargs["headers"] = out_headers
+        out_kwargs["body"] = data
 
         # Add query string
         if params:
@@ -183,11 +209,11 @@ class HttpApi(object):
             for key, value in params.items():
                 if value is not None:
                     if isinstance(value, str):
-                        value = str(value).encode('utf-8')
+                        value = str(value).encode("utf-8")
                     out_param.append((key, value))
             encoded_args = urlencode(out_param)
             if encoded_args:
-                url += '?' + encoded_args
+                url += "?" + encoded_args
 
         if not pool_manager:
             pool_manager = self.pool_manager
@@ -198,35 +224,32 @@ class HttpApi(object):
             resp = pool_manager.request(method, url, **out_kwargs)
             if perfdata is not None:
                 request_end = monotonic_time()
-                service_perfdata = perfdata.setdefault(
-                    self.service_name, {})
+                service_perfdata = perfdata.setdefault(self.service_name, {})
                 duration = request_end - request_start
-                service_perfdata['overall'] = service_perfdata.get(
-                    'overall', 0.0) + duration
-                if duration > service_perfdata.get('MAX', 0.0):
-                    service_perfdata['MAX'] = duration
-                service_perfdata['requests'] = \
-                    service_perfdata.get('requests', 0) + 1
+                service_perfdata["overall"] = (
+                    service_perfdata.get("overall", 0.0) + duration
+                )
+                if duration > service_perfdata.get("MAX", 0.0):
+                    service_perfdata["MAX"] = duration
+                service_perfdata["requests"] = service_perfdata.get("requests", 0) + 1
             body = resp.data
-            if body and resp.headers.get('Content-Type') \
-                    == HTTP_CONTENT_TYPE_JSON:
+            if body and resp.headers.get("Content-Type") == HTTP_CONTENT_TYPE_JSON:
                 try:
-                    body = jsonlib.loads(body.decode('utf-8'))
+                    body = jsonlib.loads(body.decode("utf-8"))
                 except (UnicodeDecodeError, ValueError) as exc:
-                    self.__logger().warn(
-                        "Response body isn't decodable JSON: %s", body)
-                    raise OioException(
-                        "Response body isn't decodable JSON") from exc
+                    self.__logger().warn("Response body isn't decodable JSON: %s", body)
+                    raise OioException("Response body isn't decodable JSON") from exc
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
                 service_perfdata = perfdata[self.service_name]
-                for header_val in resp.headers[PERFDATA_HEADER].split(','):
-                    kv = header_val.split('=', 1)
-                    service_perfdata[kv[0]] = service_perfdata.get(
-                        kv[0], 0.0) + float(kv[1]) / 1000000.0
+                for header_val in resp.headers[PERFDATA_HEADER].split(","):
+                    kv = header_val.split("=", 1)
+                    service_perfdata[kv[0]] = (
+                        service_perfdata.get(kv[0], 0.0) + float(kv[1]) / 1000000.0
+                    )
         except urllib3.exceptions.HTTPError as exc:
-            oio_exception_from_httperror(exc,
-                                         reqid=out_headers.get(REQID_HEADER),
-                                         url=url)
+            oio_exception_from_httperror(
+                exc, reqid=out_headers.get(REQID_HEADER), url=url
+            )
 
         if resp.status >= 400:
             raise from_response(resp, body)
@@ -264,8 +287,9 @@ class HttpApi(object):
         """
         if not endpoint:
             if not self.endpoint:
-                raise ValueError('Endpoint not set in function call '
-                                 'nor in class constructor')
+                raise ValueError(
+                    "Endpoint not set in function call nor in class constructor"
+                )
             endpoint = self.endpoint
-        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
+        url = "/".join([endpoint.rstrip("/"), url.lstrip("/")])
         return self._direct_request(method, url, **kwargs)

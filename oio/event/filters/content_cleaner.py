@@ -27,56 +27,63 @@ class ContentReaperFilter(Filter):
     """Filter that deletes chunks on content deletion events"""
 
     def init(self):
-        kwargs = {k: v for k, v in self.conf.items()
-                  if k in URLLIB3_POOLMANAGER_KWARGS}
-        self.blob_client = BlobClient(self.conf, logger=self.logger,
-                                      watchdog=self.app_env['watchdog'],
-                                      **kwargs)
-        self.chunk_concurrency = int_value(self.conf.get('concurrency'), 3)
-        self.chunk_timeout = float_value(self.conf.get('timeout'), None)
+        kwargs = {k: v for k, v in self.conf.items() if k in URLLIB3_POOLMANAGER_KWARGS}
+        self.blob_client = BlobClient(
+            self.conf, logger=self.logger, watchdog=self.app_env["watchdog"], **kwargs
+        )
+        self.chunk_concurrency = int_value(self.conf.get("concurrency"), 3)
+        self.chunk_timeout = float_value(self.conf.get("timeout"), None)
         if not self.chunk_timeout:
-            connection_timeout = float_value(
-                self.conf.get('connection_timeout'), 1.0)
-            read_timeout = float_value(self.conf.get('read_timeout'), 5.0)
+            connection_timeout = float_value(self.conf.get("connection_timeout"), 1.0)
+            read_timeout = float_value(self.conf.get("read_timeout"), 5.0)
             self.chunk_timeout = urllib3.Timeout(
-                    connect=connection_timeout,
-                    read=read_timeout)
+                connect=connection_timeout, read=read_timeout
+            )
 
     def _process_rawx(self, url, chunks, reqid):
-        cid = url.get('id')
-        headers = {REQID_HEADER: reqid,
-                   'Connection': 'close'}
+        cid = url.get("id")
+        headers = {REQID_HEADER: reqid, "Connection": "close"}
 
         resps = self.blob_client.chunk_delete_many(
-            chunks, cid=cid, headers=headers,
-            concurrency=self.chunk_concurrency, timeout=self.chunk_timeout)
+            chunks,
+            cid=cid,
+            headers=headers,
+            concurrency=self.chunk_concurrency,
+            timeout=self.chunk_timeout,
+        )
         for resp in resps:
             if isinstance(resp, Exception):
                 self.logger.warn(
-                    'failed to delete chunk %s (%s)',
-                    resp.chunk.get('real_url', resp.chunk['url']), resp)
+                    "failed to delete chunk %s (%s)",
+                    resp.chunk.get("real_url", resp.chunk["url"]),
+                    resp,
+                )
             elif resp.status not in (204, 404):
                 self.logger.warn(
-                    'failed to delete chunk %s (HTTP %s)',
-                    resp.chunk.get('real_url', resp.chunk['url']), resp.status)
+                    "failed to delete chunk %s (HTTP %s)",
+                    resp.chunk.get("real_url", resp.chunk["url"]),
+                    resp.status,
+                )
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
-        if event.event_type == EventTypes.CONTENT_DELETED or \
-                event.event_type == EventTypes.CONTENT_DRAINED:
-            url = event.env.get('url')
+        if (
+            event.event_type == EventTypes.CONTENT_DELETED
+            or event.event_type == EventTypes.CONTENT_DRAINED
+        ):
+            url = event.env.get("url")
             chunks = []
             content_headers = []
 
             for item in event.data:
-                if item.get('type') == 'chunks':
+                if item.get("type") == "chunks":
                     # The event contains "id" whereas the API uses "url".
-                    item['url'] = item['id']
+                    item["url"] = item["id"]
                     chunks.append(item)
-                if item.get("type") == 'contents_headers':
+                if item.get("type") == "contents_headers":
                     content_headers.append(item)
             if chunks:
-                reqid = event.reqid or request_id('content-cleaner-')
+                reqid = event.reqid or request_id("content-cleaner-")
                 self._process_rawx(url, chunks, reqid)
                 return self.app(env, beanstalkd, cb)
 
@@ -89,4 +96,5 @@ def filter_factory(global_conf, **local_conf):
 
     def reaper_filter(app):
         return ContentReaperFilter(app, conf)
+
     return reaper_filter

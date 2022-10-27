@@ -24,29 +24,28 @@ class ItemRepairTest(CliTestCase):
 
     def setUp(self):
         super(ItemRepairTest, self).setUp()
-        if int(self.conf.get('container_replicas', 1)) < 3:
-            self.skipTest('Container replication must be enabled')
+        if int(self.conf.get("container_replicas", 1)) < 3:
+            self.skipTest("Container replication must be enabled")
 
     def get_peers(self, container):
         output = self.storage.directory.list(self.account, container)
-        meta2s = [srv['host'] for srv in output['srv']
-                  if srv['type'] == 'meta2']
+        meta2s = [srv["host"] for srv in output["srv"] if srv["type"] == "meta2"]
         return meta2s
 
     def get_volume(self, peer):
-        meta2s = self.conf['services'].get('meta2', [])
+        meta2s = self.conf["services"].get("meta2", [])
         for meta2 in meta2s:
-            svcid = meta2.get('service_id', meta2['addr'])
+            svcid = meta2.get("service_id", meta2["addr"])
             if svcid == peer:
-                return meta2['path']
+                return meta2["path"]
 
     def sqldiff(self, path1, path2):
-        return execute('sqldiff %s %s' % (path1, path2))
+        return execute("sqldiff %s %s" % (path1, path2))
 
     def get_path(self, peer, container):
-        cid = self.storage.directory.list(self.account, container)['cid']
-        base_path = cid[:3] + '/' + cid + '.1.meta2'
-        return '/'.join([self.get_volume(peer), base_path])
+        cid = self.storage.directory.list(self.account, container)["cid"]
+        base_path = cid[:3] + "/" + cid + ".1.meta2"
+        return "/".join([self.get_volume(peer), base_path])
 
     def test_repair_one_missing_base(self):
         container = random_str(16)
@@ -57,11 +56,11 @@ class ItemRepairTest(CliTestCase):
         path = self.get_path(removed_peer, container)
         os.remove(path)
         self.assertRaises(OSError, os.stat, path)
-        output = self.openio_admin('container repair %s %s --oio-account %s'
-                                   % (container, opts, self.account)).strip()
+        output = self.openio_admin(
+            "container repair %s %s --oio-account %s" % (container, opts, self.account)
+        ).strip()
 
-        expected_output = ('|'.join([self.ns, self.account, container])
-                           + ' OK None')
+        expected_output = "|".join([self.ns, self.account, container]) + " OK None"
         self.assertOutput(expected_output, output)
         os.stat(path)
         for peer in peers:
@@ -70,4 +69,4 @@ class ItemRepairTest(CliTestCase):
                 break
 
         new_path = self.get_path(new_peer, container)
-        self.assertOutput('', self.sqldiff(path, new_path))
+        self.assertOutput("", self.sqldiff(path, new_path))

@@ -20,20 +20,20 @@ from cliff import command, lister, show
 
 from oio.common.logger import get_logger
 
-LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR']
+LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR"]
 
 
 def make_logger_args_parser():
     """Create an ArgumentParser for logger configuration."""
     log_parser = argparse.ArgumentParser(add_help=False)
-    log_parser.add_argument('--log-level', choices=LOG_LEVELS,
-                            help="Log level")
-    log_parser.add_argument('--log-syslog-prefix', help="Syslog prefix")
-    log_parser.add_argument('--log-facility', help="Log facility")
-    log_parser.add_argument('--log-format', help="Log format")
-    log_parser.add_argument('--log-address', help="Log address")
-    log_parser.add_argument('-q', '--quiet', action='store_true',
-                            help="Don't print logs on console")
+    log_parser.add_argument("--log-level", choices=LOG_LEVELS, help="Log level")
+    log_parser.add_argument("--log-syslog-prefix", help="Syslog prefix")
+    log_parser.add_argument("--log-facility", help="Log facility")
+    log_parser.add_argument("--log-format", help="Log format")
+    log_parser.add_argument("--log-address", help="Log address")
+    log_parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Don't print logs on console"
+    )
 
     return log_parser
 
@@ -42,17 +42,17 @@ def get_logger_from_args(args, default_conf=None):
     """Build a Logger instance from parsed args."""
     conf = default_conf or {}
     if args.log_level is not None:
-        conf['log_level'] = args.log_level
+        conf["log_level"] = args.log_level
     if args.log_facility is not None:
-        conf['log_facility'] = args.log_facility
+        conf["log_facility"] = args.log_facility
     if args.log_format is not None:
-        conf['log_format'] = args.log_format
+        conf["log_format"] = args.log_format
     if args.log_address is not None:
-        conf['log_address'] = args.log_address
+        conf["log_address"] = args.log_address
     if args.log_syslog_prefix is not None:
-        conf['syslog_prefix'] = args.log_syslog_prefix
+        conf["syslog_prefix"] = args.log_syslog_prefix
 
-    return get_logger(conf, 'log', not args.quiet)
+    return get_logger(conf, "log", not args.quiet)
 
 
 def add_common_parser_options(parser):
@@ -60,53 +60,75 @@ def add_common_parser_options(parser):
     Add optional parameters common to all openio CLIs to parser.
     """
     parser.add_argument(
-        "--admin-flag", "--admin",
-        dest='admin_mode',
-        action='store_true',
-        help="Add 'admin mode' flag to all requests to oio-proxy.")
+        "--admin-flag",
+        "--admin",
+        dest="admin_mode",
+        action="store_true",
+        help="Add 'admin mode' flag to all requests to oio-proxy.",
+    )
     parser.add_argument(
-        '-a', '--account', '--oio-account',
-        metavar='<account>',
-        dest='account',
-        default=os.environ.get('OIO_ACCOUNT', ''),
-        help='Account name (Env: OIO_ACCOUNT).')
+        "-a",
+        "--account",
+        "--oio-account",
+        metavar="<account>",
+        dest="account",
+        default=os.environ.get("OIO_ACCOUNT", ""),
+        help="Account name (Env: OIO_ACCOUNT).",
+    )
     parser.add_argument(
-        '--ns', '--oio-ns',
-        metavar='<namespace>',
-        dest='ns',
-        default=os.environ.get('OIO_NS', ''),
-        help='Namespace name (Env: OIO_NS).')
+        "--ns",
+        "--oio-ns",
+        metavar="<namespace>",
+        dest="ns",
+        default=os.environ.get("OIO_NS", ""),
+        help="Namespace name (Env: OIO_NS).",
+    )
     parser.add_argument(
-        '--oio-proxy', '--oio-proxyd-url',
-        metavar='<proxy-url>',
-        dest='proxyd_url',
-        default=os.environ.get('OIO_PROXYD_URL', ''),
-        help='URL of an oio-proxy service (Env: OIO_PROXYD_URL).')
+        "--oio-proxy",
+        "--oio-proxyd-url",
+        metavar="<proxy-url>",
+        dest="proxyd_url",
+        default=os.environ.get("OIO_PROXYD_URL", ""),
+        help="URL of an oio-proxy service (Env: OIO_PROXYD_URL).",
+    )
     parser.add_argument(
-        '--account-url', '--oio-account-url',
-        metavar='<account-url>',
-        dest='account_url',
-        default=os.environ.get('OIO_ACCOUNT_URL', None),
-        help='URL of an account service (Env: OIO_ACCOUNT_URL).')
+        "--account-url",
+        "--oio-account-url",
+        metavar="<account-url>",
+        dest="account_url",
+        default=os.environ.get("OIO_ACCOUNT_URL", None),
+        help="URL of an account service (Env: OIO_ACCOUNT_URL).",
+    )
     parser.add_argument(
-        '--request-id', '--req-id',
-        metavar='<request-id>',
-        help=('Set a request ID. Maximum 63 characters. '
-              'For looping commands, a suffix may be appended.'))
+        "--request-id",
+        "--req-id",
+        metavar="<request-id>",
+        help=(
+            "Set a request ID. Maximum 63 characters. "
+            "For looping commands, a suffix may be appended."
+        ),
+    )
 
     parser.add_argument(
         "--profile",
-        help=("Profile code, save profiling data in the specified file. "
-              "'%%(pid)s' in the name will be replaced by the PID."))
+        help=(
+            "Profile code, save profiling data in the specified file. "
+            "'%%(pid)s' in the name will be replaced by the PID."
+        ),
+    )
     parser.add_argument(
         "--profiler",
-        default='cProfile',
-        help=("Which profiler to use (default: cProfile, "
-              "supported: yappi, cProfile, profile)."))
+        default="cProfile",
+        help=(
+            "Which profiler to use (default: cProfile, "
+            "supported: yappi, cProfile, profile)."
+        ),
+    )
     parser.add_argument(
         "--profile-early",
-        action='store_true',
-        help=("Start profiling early, before subcommand loading."))
+        action="store_true",
+        help="Start profiling early, before subcommand loading.",
+    )
 
 
 def flat_dict_from_dict(parsed_args, dict_):
@@ -128,14 +150,14 @@ def flat_dict_from_dict(parsed_args, dict_):
     flat_dict = dict()
     for key, value in dict_.items():
         if not isinstance(value, dict):
-            if isinstance(value, list) and parsed_args.formatter == 'table':
-                value = '\n'.join(value)
+            if isinstance(value, list) and parsed_args.formatter == "table":
+                value = "\n".join(value)
             flat_dict[key] = value
             continue
 
         _flat_dict = flat_dict_from_dict(parsed_args, value)
         for _key, _value in _flat_dict.items():
-            flat_dict[key + '.' + _key] = _value
+            flat_dict[key + "." + _key] = _value
     return flat_dict
 
 

@@ -19,7 +19,6 @@ from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBOk, Meta2DBError
 
 
 class Handler(object):
-
     def __init__(self, app, conf):
         self.app = app
         self.app_env = app.app_env
@@ -36,13 +35,12 @@ class Handler(object):
             return res(env, cb)
         except StopServe:
             self.logger.info(
-                'Container %s not handled: the process is stopping',
-                meta2db.cid)
-            res = Meta2DBError(meta2db, body='Process is stopping')
+                "Container %s not handled: the process is stopping", meta2db.cid
+            )
+            res = Meta2DBError(meta2db, body="Process is stopping")
         except Exception as err:
-            self.logger.exception(
-                'Container %s not handled: %s', meta2db.cid, err)
-            res = Meta2DBError(meta2db, body='An error occurred')
+            self.logger.exception("Container %s not handled: %s", meta2db.cid, err)
+            res = Meta2DBError(meta2db, body="An error occurred")
         return res(env, cb)
 
     def get_stats(self):

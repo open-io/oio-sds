@@ -35,10 +35,16 @@ class ProxyClient(HttpApi):
 
     _slot_time = 0.5
 
-    def __init__(self, conf, request_prefix="",
-                 no_ns_in_url=False, endpoint=None,
-                 request_attempts=REQUEST_ATTEMPTS,
-                 logger=None, **kwargs):
+    def __init__(
+        self,
+        conf,
+        request_prefix="",
+        no_ns_in_url=False,
+        endpoint=None,
+        request_attempts=REQUEST_ATTEMPTS,
+        logger=None,
+        **kwargs,
+    ):
         """
         :param request_prefix: text to insert in between endpoint and
             requested URL
@@ -54,46 +60,47 @@ class ProxyClient(HttpApi):
         assert request_attempts > 0
 
         validate_service_conf(conf)
-        self.ns = conf.get('namespace')
+        self.ns = conf.get("namespace")
         self.conf = conf
         self.logger = logger or get_logger(conf)
 
         # Look for an endpoint in the application configuration
         if not endpoint:
-            endpoint = self.conf.get('proxyd_url', None)
+            endpoint = self.conf.get("proxyd_url", None)
         # Look for an endpoint in the namespace configuration
         if not endpoint:
             ns_conf = load_namespace_conf(self.ns)
-            endpoint = ns_conf.get('proxy')
+            endpoint = ns_conf.get("proxy")
 
         # Historically, the endpoint did not contain any scheme
-        self.proxy_scheme = 'http'
-        split_endpoint = endpoint.split('://', 1)
+        self.proxy_scheme = "http"
+        split_endpoint = endpoint.split("://", 1)
         if len(split_endpoint) > 1:
             self.proxy_scheme = split_endpoint[0]
         self.proxy_netloc = split_endpoint[-1]
 
         ep_parts = []
-        ep_parts.append(self.proxy_scheme + ':/')
+        ep_parts.append(self.proxy_scheme + ":/")
         ep_parts.append(self.proxy_netloc)
         ep_parts.append("v3.0")
         if not no_ns_in_url:
             ep_parts.append(self.ns)
         if request_prefix:
-            ep_parts.append(request_prefix.lstrip('/'))
+            ep_parts.append(request_prefix.lstrip("/"))
 
         self._request_attempts = request_attempts
 
         super(ProxyClient, self).__init__(
-            endpoint='/'.join(ep_parts), service_type='proxy', **kwargs)
+            endpoint="/".join(ep_parts), service_type="proxy", **kwargs
+        )
 
-    def _direct_request(self, method, url, headers=None, request_attempts=None,
-                        **kwargs):
+    def _direct_request(
+        self, method, url, headers=None, request_attempts=None, **kwargs
+    ):
         if not request_attempts:
             request_attempts = self._request_attempts
         if request_attempts <= 0:
-            raise OioException(
-                f"Negative request attempts: {request_attempts}")
+            raise OioException(f"Negative request attempts: {request_attempts}")
         if kwargs.get("autocreate"):
             if not headers:
                 headers = {}
@@ -106,14 +113,15 @@ class ProxyClient(HttpApi):
         for i in range(request_attempts):
             try:
                 return super(ProxyClient, self)._direct_request(
-                    method, url, headers=headers, **kwargs)
+                    method, url, headers=headers, **kwargs
+                )
             except ServiceBusy:
                 if i >= request_attempts - 1:
                     raise
                 # retry with exponential backoff
                 ProxyClient._exp_sleep(i + 1)
             except Conflict:
-                if i > 0 and method == 'POST':
+                if i > 0 and method == "POST":
                     # We were retrying a POST operation, it's highly probable
                     # that the original operation succeeded after we timed
                     # out. So we consider this a success and don't raise

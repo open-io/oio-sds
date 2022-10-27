@@ -18,11 +18,13 @@ from oio.conscience.checker.tcp import TcpChecker
 
 class Asn1PingChecker(TcpChecker):
     """Connect a TCP socket, then send a ping request with ASN.1 protocol."""
-    checker_type = 'asn1'
+
+    checker_type = "asn1"
 
     asn1_ping_req = (
-        b'\x00\x00\x0000.\x80 80863FD712DC4234D7BA684CE2DEC00A' +
-        b'\x81\x08REQ_PING\xa3\x00')
+        b"\x00\x00\x0000.\x80 80863FD712DC4234D7BA684CE2DEC00A"
+        + b"\x81\x08REQ_PING\xa3\x00"
+    )
 
     def _communicate(self, sock):
         sock.sendall(self.asn1_ping_req)

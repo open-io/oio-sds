@@ -24,7 +24,6 @@ from tests.functional.cli import CliTestCase
 
 
 class ServiceRebuildTest(CliTestCase):
-
     @classmethod
     def setUpClass(cls):
         super(ServiceRebuildTest, cls).setUpClass()
@@ -32,19 +31,21 @@ class ServiceRebuildTest(CliTestCase):
 
     def _wait_events(self, account, container, obj_name):
         self.wait_for_event(
-            'oio-preserved',
-            fields={'account': account, 'user': container, 'path': obj_name},
-            types=(EventTypes.CONTENT_NEW, ))
+            "oio-preserved",
+            fields={"account": account, "user": container, "path": obj_name},
+            types=(EventTypes.CONTENT_NEW,),
+        )
         self.wait_for_event(
-            'oio-preserved',
-            fields={'account': account, 'user': container},
-            types=(EventTypes.CONTAINER_STATE, ))
+            "oio-preserved",
+            fields={"account": account, "user": container},
+            types=(EventTypes.CONTAINER_STATE,),
+        )
 
     def create_object(self, account, container, obj_name):
         self.api.object_create(
-            account, container, obj_name=obj_name, data='test_service_rebuild')
-        obj_meta, obj_chunks = self.api.object_locate(
-            account, container, obj_name)
+            account, container, obj_name=obj_name, data="test_service_rebuild"
+        )
+        obj_meta, obj_chunks = self.api.object_locate(account, container, obj_name)
         self._wait_events(account, container, obj_name)
         return obj_meta, obj_chunks
 
@@ -55,32 +56,32 @@ class ServiceRebuildTest(CliTestCase):
         self.create_object(account, container, obj_name)
 
         # Create a container only in account service
-        self.api.account.container_update(
-            account, container, time.time(), 0, 0)
+        self.api.account.container_update(account, container, time.time(), 0, 0)
 
         account_info = self.api.account_show(account)
-        self.assertEqual(0, account_info['bytes'])
-        self.assertEqual(0, account_info['objects'])
+        self.assertEqual(0, account_info["bytes"])
+        self.assertEqual(0, account_info["objects"])
         containers_list = self.api.container_list(account)
         self.assertEqual(1, len(containers_list))
         self.assertEqual(container, containers_list[0][0])
         self.assertEqual(0, containers_list[0][1])
         self.assertEqual(0, containers_list[0][2])
 
-        opts = self.get_opts(['Entry', 'Status'])
-        output = self.openio_admin('account-service rebuild %s' % opts)
-        entries = output.rstrip('\n').split('\n')
+        opts = self.get_opts(["Entry", "Status"])
+        output = self.openio_admin("account-service rebuild %s" % opts)
+        entries = output.rstrip("\n").split("\n")
         self.assertIn("%s|%s OK" % (self.ns, account), entries)
         self.assertIn("%s|%s|%s OK" % (self.ns, account, container), entries)
 
         self.wait_for_event(
-            'oio-preserved',
-            fields={'account': account, 'user': container},
-            types=(EventTypes.CONTAINER_STATE, ))
+            "oio-preserved",
+            fields={"account": account, "user": container},
+            types=(EventTypes.CONTAINER_STATE,),
+        )
 
         account_info = self.api.account_show(account)
-        self.assertEqual(20, account_info['bytes'])
-        self.assertEqual(1, account_info['objects'])
+        self.assertEqual(20, account_info["bytes"])
+        self.assertEqual(1, account_info["objects"])
         containers_list = self.api.container_list(account)
         self.assertEqual(1, len(containers_list))
         self.assertEqual(container, containers_list[0][0])

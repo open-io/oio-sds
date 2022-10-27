@@ -22,20 +22,25 @@ class BucketClient(ServiceClient):
 
     def __init__(self, conf, region=None, **kwargs):
         super(BucketClient, self).__init__(
-            'account', conf, service_name='bucket-service',
-            request_prefix='v1.0/bucket', **kwargs)
+            "account",
+            conf,
+            service_name="bucket-service",
+            request_prefix="v1.0/bucket",
+            **kwargs
+        )
         # Some requests don't need the region,
         # let the requests fail if the region is needed
-        self.region = load_namespace_conf(
-            conf['namespace'], failsafe=True).get('ns.region', region)
+        self.region = load_namespace_conf(conf["namespace"], failsafe=True).get(
+            "ns.region", region
+        )
 
     def bucket_request(self, bucket, *args, region=None, **kwargs):
-        params = kwargs.setdefault('params', {})
+        params = kwargs.setdefault("params", {})
         if bucket:
-            params['id'] = bucket
+            params["id"] = bucket
         region = region or self.region
         if region:
-            params['region'] = region
+            params["region"] = region
         return self.service_request(*args, **kwargs)
 
     def bucket_create(self, bucket, account, **kwargs):
@@ -43,9 +48,10 @@ class BucketClient(ServiceClient):
         Create a new bucket with the specified name in the account service.
         No container linked to this bucket is created.
         """
-        params = {'account': account}
+        params = {"account": account}
         resp, _body = self.bucket_request(
-            bucket, 'PUT', 'create', params=params, **kwargs)
+            bucket, "PUT", "create", params=params, **kwargs
+        )
         return resp.status == 201
 
     def bucket_delete(self, bucket, account, force=None, **kwargs):
@@ -53,11 +59,12 @@ class BucketClient(ServiceClient):
         Delete the specified bucket in the account service.
         No container linked to this bucket is deleted.
         """
-        params = {'account': account}
+        params = {"account": account}
         if force is not None:
-            params['force'] = force
+            params["force"] = force
         _resp, _body = self.bucket_request(
-            bucket, 'POST', 'delete', params=params, **kwargs)
+            bucket, "POST", "delete", params=params, **kwargs
+        )
 
     def bucket_show(self, bucket, account=None, check_owner=None, **kwargs):
         """
@@ -65,15 +72,17 @@ class BucketClient(ServiceClient):
         """
         params = {}
         if account:
-            params['account'] = account
+            params["account"] = account
         if check_owner is not None:
-            params['check_owner'] = check_owner
+            params["check_owner"] = check_owner
         _resp, body = self.bucket_request(
-            bucket, 'GET', 'show', params=params, **kwargs)
+            bucket, "GET", "show", params=params, **kwargs
+        )
         return body
 
-    def bucket_update(self, bucket, metadata, to_delete, account=None,
-                      check_owner=None, **kwargs):
+    def bucket_update(
+        self, bucket, metadata, to_delete, account=None, check_owner=None, **kwargs
+    ):
         """
         Update metadata of the specified bucket.
 
@@ -84,13 +93,17 @@ class BucketClient(ServiceClient):
         """
         params = {}
         if account:
-            params['account'] = account
+            params["account"] = account
         if check_owner is not None:
-            params['check_owner'] = check_owner
+            params["check_owner"] = check_owner
         _resp, _body = self.bucket_request(
-            bucket, 'PUT', 'update',
+            bucket,
+            "PUT",
+            "update",
             json={"metadata": metadata, "to_delete": to_delete},
-            params=params, **kwargs)
+            params=params,
+            **kwargs
+        )
 
     def bucket_refresh(self, bucket, account=None, check_owner=None, **kwargs):
         """
@@ -99,32 +112,34 @@ class BucketClient(ServiceClient):
         """
         params = {}
         if account:
-            params['account'] = account
+            params["account"] = account
         if check_owner is not None:
-            params['check_owner'] = check_owner
+            params["check_owner"] = check_owner
         _resp, _body = self.bucket_request(
-            bucket, 'POST', 'refresh', params=params, **kwargs)
+            bucket, "POST", "refresh", params=params, **kwargs
+        )
 
     def bucket_reserve(self, bucket, account, **kwargs):
         """
         Reserve the bucket name during bucket creation.
         """
-        params = {'account': account}
+        params = {"account": account}
         _resp, _body = self.bucket_request(
-            bucket, 'PUT', 'reserve', params=params, **kwargs)
+            bucket, "PUT", "reserve", params=params, **kwargs
+        )
 
     def bucket_release(self, bucket, account, **kwargs):
         """
         Release the bucket reservration after success.
         """
-        params = {'account': account}
+        params = {"account": account}
         _resp, _body = self.bucket_request(
-            bucket, 'POST', 'release', params=params, **kwargs)
+            bucket, "POST", "release", params=params, **kwargs
+        )
 
     def bucket_get_owner(self, bucket, **kwargs):
         """
         Get the bucket owner.
         """
-        _resp, body = self.bucket_request(
-            bucket, 'GET', 'get-owner', **kwargs)
+        _resp, body = self.bucket_request(bucket, "GET", "get-owner", **kwargs)
         return body

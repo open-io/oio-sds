@@ -23,14 +23,13 @@ from oio.event.beanstalk import Beanstalk
 class EventClient(object):
     def __init__(self, conf, **kwargs):
         self.ns_conf = load_namespace_conf(conf["namespace"])
-        self.queue_url = self.ns_conf['event-agent'].split(';')
+        self.queue_url = self.ns_conf["event-agent"].split(";")
         self._beanstalk = None
 
     @property
     def beanstalk(self):
         if not self._beanstalk:
-            self._beanstalk = Beanstalk.from_url(
-                random.choice(self.queue_url))
+            self._beanstalk = Beanstalk.from_url(random.choice(self.queue_url))
         return self._beanstalk
 
     def exhume(self, limit=1000, tube=None):
@@ -47,5 +46,5 @@ class EventClient(object):
         return self.beanstalk.tubes()
 
     def stats(self, tube=None):
-        tube = tube or 'oio'
+        tube = tube or "oio"
         return self.beanstalk.stats_tube(tube)

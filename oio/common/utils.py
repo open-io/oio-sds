@@ -26,6 +26,7 @@ from blake3 import blake3
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
 from getpass import getuser
+
 # from math import sqrt
 from random import getrandbits
 from io import RawIOBase
@@ -42,28 +43,29 @@ from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
 
 try:
     import multiprocessing
+
     CPU_COUNT = multiprocessing.cpu_count() or 1
 except (ImportError, NotImplementedError):
     CPU_COUNT = 1
 
 
-utf8_decoder = getdecoder('utf-8')
-utf8_encoder = getencoder('utf-8')
+utf8_decoder = getdecoder("utf-8")
+utf8_encoder = getencoder("utf-8")
 
 CUSTOM_HASHER = {
-    'blake3': blake3,
+    "blake3": blake3,
     # 'xxhash': xxhash3_128
 }
 
 
-def quote(value, safe='/'):
+def quote(value, safe="/"):
     if isinstance(value, text_type):
-        (value, _len) = utf8_encoder(value, 'replace')
-    (valid_utf8_str, _len) = utf8_decoder(value, 'replace')
-    return _quote(valid_utf8_str.encode('utf-8'), safe)
+        (value, _len) = utf8_encoder(value, "replace")
+    (valid_utf8_str, _len) = utf8_decoder(value, "replace")
+    return _quote(valid_utf8_str.encode("utf-8"), safe)
 
 
-def encode(input, codec='utf-8'):
+def encode(input, codec="utf-8"):
     """Recursively encode a list of dictionaries"""
     if isinstance(input, dict):
         return {key: encode(value, codec) for key, value in input.items()}
@@ -88,21 +90,24 @@ def drop_privileges(user):
         try:
             user_entry = pwd.getpwnam(user)
         except KeyError as exc:
-            raise OioException("User %s does not exist (%s). Are you running "
-                               "your namespace with another user name?" %
-                               (user, exc))
+            raise OioException(
+                "User %s does not exist (%s). Are you running "
+                "your namespace with another user name?" % (user, exc)
+            )
         try:
             os.setgid(user_entry[3])
             os.setuid(user_entry[2])
         except OSError as exc:
-            raise OioException("Failed to switch uid to %s or gid to %s: %s" %
-                               (user_entry[2], user_entry[3], exc))
-        os.environ['HOME'] = user_entry[5]
+            raise OioException(
+                "Failed to switch uid to %s or gid to %s: %s"
+                % (user_entry[2], user_entry[3], exc)
+            )
+        os.environ["HOME"] = user_entry[5]
         try:
             os.setsid()
         except OSError:
             pass
-    os.chdir('/')
+    os.chdir("/")
     os.umask(0o22)
 
 
@@ -168,7 +173,7 @@ class RingBuffer(list):
 
     def __index(self, key):
         if not self._count:
-            raise IndexError('list index out of range')
+            raise IndexError("list index out of range")
         if isinstance(key, slice):
             start = (key.start + self._zero) % self._count
             stop = key.stop or (self._count + 1)
@@ -190,7 +195,7 @@ class RingBuffer(list):
         return super(RingBuffer, self).__setitem__(self.__index(key), value)
 
     def __delitem__(self, key):
-        raise TypeError('Delete impossible in RingBuffer')
+        raise TypeError("Delete impossible in RingBuffer")
 
     def __iter__(self):
         for i in range(0, self._count):
@@ -201,10 +206,10 @@ def cid_from_name(account, ref):
     """
     Compute a container ID from an account and a reference name.
     """
-    hash_ = hashlib.new('sha256')
-    for v in [account, '\0', ref]:
+    hash_ = hashlib.new("sha256")
+    for v in [account, "\0", ref]:
         if isinstance(v, text_type):
-            v = v.encode('utf-8')
+            v = v.encode("utf-8")
         hash_.update(v)
     return hash_.hexdigest().upper()
 
@@ -237,7 +242,7 @@ def fix_ranges(ranges, length):
     return result
 
 
-def request_id(prefix=''):
+def request_id(prefix=""):
     """
     Build a 128-bit request id string.
 
@@ -245,8 +250,7 @@ def request_id(prefix=''):
     """
     pref_bits = min(112, len(prefix) * 4)
     rand_bits = 112 - pref_bits
-    return "%s%04X%0*X" % (prefix, os.getpid(),
-                           rand_bits // 4, getrandbits(rand_bits))
+    return "%s%04X%0*X" % (prefix, os.getpid(), rand_bits // 4, getrandbits(rand_bits))
 
 
 class GeneratorIO(RawIOBase):
@@ -287,7 +291,7 @@ class GeneratorIO(RawIOBase):
     def readinto(self, b):  # pylint: disable=invalid-name
         read_len = len(b)
         read_data = self.read(read_len)
-        b[0:len(read_data)] = read_data
+        b[0 : len(read_data)] = read_data
         return len(read_data)
 
     def __iter__(self):
@@ -311,9 +315,17 @@ def group_chunk_errors(chunk_err_iter):
     return errors
 
 
-def depaginate(func, item_key=None, listing_key=None, marker_key=None,
-               version_marker_key=None, truncated_key=None, attempts=1,
-               *args, **kwargs):
+def depaginate(
+    func,
+    item_key=None,
+    listing_key=None,
+    marker_key=None,
+    version_marker_key=None,
+    truncated_key=None,
+    attempts=1,
+    *args,
+    **kwargs
+):
     """
     Yield items from the lists returned by the repetitive calls
     to `func(*args, **kwargs)`. For each call (except the first),
@@ -334,14 +346,17 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
         # pylint: disable=function-redefined, missing-docstring
         def item_key(item):
             return item
+
     if not listing_key:
         # pylint: disable=function-redefined, missing-docstring
         def listing_key(listing):
             return listing
+
     if not marker_key:
         # pylint: disable=function-redefined, missing-docstring
         def marker_key(listing):
             return listing[-1]
+
     if not truncated_key:
         # pylint: disable=function-redefined, missing-docstring
         def truncated_key(listing):
@@ -359,9 +374,9 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
         yield item_key(item)
 
     while truncated_key(raw_listing):
-        kwargs['marker'] = marker_key(raw_listing)
+        kwargs["marker"] = marker_key(raw_listing)
         if version_marker_key:
-            kwargs['version_marker'] = version_marker_key(raw_listing)
+            kwargs["version_marker"] = version_marker_key(raw_listing)
         for i in range(attempts):
             try:
                 raw_listing = func(*args, **kwargs)
@@ -388,13 +403,10 @@ def monotonic_time():
     if __MONOTONIC_TIME is None:
         # Taken from https://stackoverflow.com/a/1205762
         class timespec(ctypes.Structure):
-            _fields_ = [
-                ('tv_sec', ctypes.c_long),
-                ('tv_nsec', ctypes.c_long)
-            ]
+            _fields_ = [("tv_sec", ctypes.c_long), ("tv_nsec", ctypes.c_long)]
 
         try:
-            librt = ctypes.CDLL('librt.so.1', use_errno=True)
+            librt = ctypes.CDLL("librt.so.1", use_errno=True)
             clock_gettime = librt.clock_gettime
             clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
 
@@ -409,8 +421,8 @@ def monotonic_time():
         except OSError as exc:
             from sys import stderr
             from time import time
-            print("Failed to load clock_gettime(): %s" % exc,
-                  file=stderr)
+
+            print("Failed to load clock_gettime(): %s" % exc, file=stderr)
             __MONOTONIC_TIME = time
 
     return __MONOTONIC_TIME()
@@ -436,9 +448,9 @@ def set_deadline_from_read_timeout(kwargs, force=False):
     Compute a deadline from a read timeout, and set it in a keyword
     argument dictionary if there is none (or `force` is set).
     """
-    to = kwargs.get('read_timeout')
-    if to is not None and (force or 'deadline' not in kwargs):
-        kwargs['deadline'] = timeout_to_deadline(to)
+    to = kwargs.get("read_timeout")
+    if to is not None and (force or "deadline" not in kwargs):
+        kwargs["deadline"] = timeout_to_deadline(to)
 
 
 def lower_dict_keys(mydict):
@@ -454,11 +466,11 @@ def lower_dict_keys(mydict):
         del mydict[k]
 
 
-def compute_perfdata_stats(perfdata, prefix='upload.'):
+def compute_perfdata_stats(perfdata, prefix="upload."):
     """
     Compute extra statistics from a dictionary of performance data.
     """
-    rawx_perfdata = perfdata.get('rawx')
+    rawx_perfdata = perfdata.get("rawx")
     if not rawx_perfdata:
         return
     count = 0
@@ -476,19 +488,20 @@ def compute_perfdata_stats(perfdata, prefix='upload.'):
     count = count or 1
     avg = tot / count
     # sdev = sqrt(stot / count - avg ** 2)
-    rawx_perfdata[prefix + 'AVG'] = avg
+    rawx_perfdata[prefix + "AVG"] = avg
     # rawx_perfdata[prefix + 'SD'] = sdev
     # rawx_perfdata[prefix + 'RSD'] = sdev / (avg or 1)
-    rawx_perfdata[prefix + 'MAX'] = max_
+    rawx_perfdata[prefix + "MAX"] = max_
 
 
-def get_virtualenv_dir(subdir=''):
+def get_virtualenv_dir(subdir=""):
     """
     Get the virtualenv directory if the code is run in a virtualenv.
     """
     # Get venv prefix...
-    if hasattr(sys, 'real_prefix') or (
-            hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+    if hasattr(sys, "real_prefix") or (
+        hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+    ):
         # In virtualenv, the venv prefix is sys.prefix
         return os.path.normpath(os.path.join(sys.prefix, subdir))
     return None
@@ -499,7 +512,7 @@ def CDLL(name, **kwargs):
     Do the same as ctypes.CDLL, but first try in the virtualenv directory
     if the code is run in a virtualenv.
     """
-    virtualenv_dir = get_virtualenv_dir(subdir='lib')
+    virtualenv_dir = get_virtualenv_dir(subdir="lib")
     if virtualenv_dir:
         # First try with the virtualenv directory
         try:
@@ -520,18 +533,18 @@ def parse_conn_str(conn_str):
     ('redis', '10.0.1.27:666,10.0.1.25:667', {'opt1': 'val1', 'opt2': '5'})
     """
     scheme, netloc, _, _, query, _ = urlparse(conn_str)
-    kwargs = {k: ','.join(v) for k, v in parse_qs(query).items()}
+    kwargs = {k: ",".join(v) for k, v in parse_qs(query).items()}
     return scheme, netloc, kwargs
 
 
-def compute_chunk_id(cid, path, version, position, policy, hash_algo='sha256'):
+def compute_chunk_id(cid, path, version, position, policy, hash_algo="sha256"):
     """
     Compute the predictable chunk ID for the specified object version,
     position and policy.
     """
     base = cid + path + str(version) + str(position) + policy
     hash_ = get_hasher(hash_algo)
-    hash_.update(base.encode('utf-8'))
+    hash_.update(base.encode("utf-8"))
     return hash_.hexdigest().upper()
 
 
@@ -550,7 +563,7 @@ class FakeChecksum(object):
         pass
 
 
-def get_hasher(algorithm='blake3'):
+def get_hasher(algorithm="blake3"):
     """
     Same hashlib.new, but supports other algorithms like 'blake3'.
     Passing None as the algorithm name will return a fake checksum object
@@ -558,8 +571,8 @@ def get_hasher(algorithm='blake3'):
 
     :raises ValueError: if the algorithm is not supported.
     """
-    if not algorithm or algorithm.lower() == 'none':
-        return FakeChecksum('')
+    if not algorithm or algorithm.lower() == "none":
+        return FakeChecksum("")
     if algorithm in CUSTOM_HASHER:
         return CUSTOM_HASHER[algorithm]()
     return hashlib.new(algorithm)
@@ -572,8 +585,7 @@ def is_chunk_id_valid(chunk_id):
         - should not end with pending or corrupt suffixes
     Return True if valid, False otherwise
     """
-    if len(chunk_id) < MIN_STRLEN_CHUNKID or \
-            len(chunk_id) > MAX_STRLEN_CHUNKID:
+    if len(chunk_id) < MIN_STRLEN_CHUNKID or len(chunk_id) > MAX_STRLEN_CHUNKID:
         return False
     # This (by nature) also check the suffixes
     if not is_hexa(chunk_id):

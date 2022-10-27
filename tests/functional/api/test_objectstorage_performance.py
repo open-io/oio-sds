@@ -20,11 +20,10 @@ from oio.common.utils import monotonic_time
 from tests.utils import random_str, BaseTestCase
 
 
-TEST_DATA = b'\0' * 4096
+TEST_DATA = b"\0" * 4096
 
 
 class TestObjectStorageApiPerformance(BaseTestCase):
-
     def setUp(self):
         super(TestObjectStorageApiPerformance, self).setUp()
         self.api = self.storage
@@ -38,70 +37,96 @@ class TestObjectStorageApiPerformance(BaseTestCase):
                 self.api.object_delete(self.account, ct, name)
                 self.containers.add(ct)
             except Exception:
-                logging.exception("Failed to delete %s/%s/%s//%s",
-                                  self.ns, self.account, ct, name)
+                logging.exception(
+                    "Failed to delete %s/%s/%s//%s", self.ns, self.account, ct, name
+                )
         for ct in self.containers:
             try:
                 self.api.container_delete(self.account, ct)
             except Exception:
-                logging.exception('Failed to delete %s/%s/%s',
-                                  self.ns, self.account, ct)
+                logging.exception(
+                    "Failed to delete %s/%s/%s", self.ns, self.account, ct
+                )
 
     def test_object_create_32_blake3_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo='blake3',
-                                   object_checksum_algo='blake3')
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo="blake3",
+                object_checksum_algo="blake3",
+            )
             self.created.append((container, obj))
 
     def test_object_create_32_md5_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo='md5',
-                                   object_checksum_algo='md5')
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo="md5",
+                object_checksum_algo="md5",
+            )
             self.created.append((container, obj))
 
     def test_object_create_32_no_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo=None,
-                                   object_checksum_algo=None)
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo=None,
+                object_checksum_algo=None,
+            )
             self.created.append((container, obj))
 
     def test_object_create_32_blake3_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo='blake3')
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo="blake3",
+            )
             self.created.append((container, obj))
 
     def test_object_create_32_md5_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo='md5')
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo="md5",
+            )
             self.created.append((container, obj))
 
     def test_object_create_32_no_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
-            self.api.object_create(self.account, container,
-                                   obj_name=obj, data=TEST_DATA,
-                                   chunk_checksum_algo=None)
+            self.api.object_create(
+                self.account,
+                container,
+                obj_name=obj,
+                data=TEST_DATA,
+                chunk_checksum_algo=None,
+            )
             self.created.append((container, obj))
 
     def test_object_list_empty_container(self):

@@ -29,22 +29,33 @@ from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
 from oio.api.io import MetachunkPreparer, LinkHandler
 from oio.api.replication import ReplicatedWriteHandler
-from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
-    depaginate, set_deadline_from_read_timeout, compute_perfdata_stats
+from oio.common.utils import (
+    cid_from_name,
+    GeneratorIO,
+    monotonic_time,
+    depaginate,
+    set_deadline_from_read_timeout,
+    compute_perfdata_stats,
+)
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
-from oio.common.decorators import ensure_headers, ensure_request_id, \
-    ensure_request_id2
+from oio.common.decorators import ensure_headers, ensure_request_id, ensure_request_id2
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION, HEADER_PREFIX, TIMEOUT_KEYS, \
-    SHARDING_ACCOUNT_PREFIX
-from oio.common.decorators import handle_account_not_found, \
-    handle_container_not_found, handle_object_not_found, patch_kwargs
-from oio.common.storage_functions import _sort_chunks, fetch_stream, \
-    fetch_stream_ec
+from oio.common.constants import (
+    OIO_VERSION,
+    HEADER_PREFIX,
+    TIMEOUT_KEYS,
+    SHARDING_ACCOUNT_PREFIX,
+)
+from oio.common.decorators import (
+    handle_account_not_found,
+    handle_container_not_found,
+    handle_object_not_found,
+    patch_kwargs,
+)
+from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
-from oio.common.cache import del_cached_object_metadata, \
-    aggregate_cache_perfdata
+from oio.common.cache import del_cached_object_metadata, aggregate_cache_perfdata
 
 
 class ObjectStorageApi(object):
@@ -62,9 +73,17 @@ class ObjectStorageApi(object):
         - `read_timeout`: `float`
         - `write_timeout`: `float`
     """
-    EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
-                      'chunk_buffer_min', 'chunk_buffer_max',
-                      'cache', 'object_checksum_algo', 'tls', 'watchdog')
+
+    EXTRA_KEYWORDS = (
+        "chunk_checksum_algo",
+        "autocreate",
+        "chunk_buffer_min",
+        "chunk_buffer_max",
+        "cache",
+        "object_checksum_algo",
+        "tls",
+        "watchdog",
+    )
 
     def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """
@@ -97,24 +116,27 @@ class ObjectStorageApi(object):
         conf = {"namespace": self.namespace}
         self.logger = logger or get_logger(conf)
         self.perfdata = perfdata
-        self._global_kwargs = {tok: float_value(tov, None)
-                               for tok, tov in kwargs.items()
-                               if tok in TIMEOUT_KEYS}
-        self._global_kwargs['autocreate'] = True
+        self._global_kwargs = {
+            tok: float_value(tov, None)
+            for tok, tov in kwargs.items()
+            if tok in TIMEOUT_KEYS
+        }
+        self._global_kwargs["autocreate"] = True
         if self.perfdata is not None:
-            self._global_kwargs['perfdata'] = self.perfdata
+            self._global_kwargs["perfdata"] = self.perfdata
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
         # The watchdog is required at several places. Unfortunately, our only
         # "context" is the kwargs parameter we pass everywhere.
-        self._watchdog = self._global_kwargs.get('watchdog', None)
+        self._watchdog = self._global_kwargs.get("watchdog", None)
         if not self._watchdog:
             # This will create and start one.
-            self._global_kwargs['watchdog'] = self.watchdog
+            self._global_kwargs["watchdog"] = self.watchdog
         self.logger.debug("Global API parameters: %s", self._global_kwargs)
 
         from oio.container.client import ContainerClient
+
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 
         self._init_kwargs = kwargs
@@ -122,10 +144,8 @@ class ObjectStorageApi(object):
         if "pool_manager" not in self._init_kwargs:
             self._init_kwargs["pool_manager"] = self.container.pool_manager
         # In AccountClient, "endpoint" is the account service, not the proxy
-        self._acct_kwargs["proxy_endpoint"] = \
-            self._acct_kwargs.pop("endpoint", None)
-        self._acct_kwargs['endpoint'] = \
-            self._acct_kwargs.pop('account_endpoint', None)
+        self._acct_kwargs["proxy_endpoint"] = self._acct_kwargs.pop("endpoint", None)
+        self._acct_kwargs["endpoint"] = self._acct_kwargs.pop("account_endpoint", None)
         self._account_client = None
         self._account_metrics_client = None
         self._bucket_client = None
@@ -144,25 +164,26 @@ class ObjectStorageApi(object):
         """
         if self._account_client is None:
             from oio.account.client import AccountClient
-            self._account_client = AccountClient({"namespace": self.namespace},
-                                                 logger=self.logger,
-                                                 **self._acct_kwargs)
+
+            self._account_client = AccountClient(
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
             # Share the connection pool
-            self._acct_kwargs['pool_manager'] = \
-                self._account_client.pool_manager
+            self._acct_kwargs["pool_manager"] = self._account_client.pool_manager
         return self._account_client
 
     @property
     def account_metrics(self):
         if self._account_metrics_client is None:
             from oio.account.client import MetricsClient
+
             self._account_metrics_client = MetricsClient(
-                {"namespace": self.namespace},
-                logger=self.logger,
-                **self._acct_kwargs)
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
             # Share the connection pool
-            self._acct_kwargs['pool_manager'] = \
-                self._account_metrics_client.pool_manager
+            self._acct_kwargs[
+                "pool_manager"
+            ] = self._account_metrics_client.pool_manager
         return self._account_metrics_client
 
     @property
@@ -174,12 +195,12 @@ class ObjectStorageApi(object):
         """
         if self._bucket_client is None:
             from oio.account.bucket_client import BucketClient
-            self._bucket_client = BucketClient({"namespace": self.namespace},
-                                               logger=self.logger,
-                                               **self._acct_kwargs)
+
+            self._bucket_client = BucketClient(
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
             # Share the connection pool
-            self._acct_kwargs['pool_manager'] = \
-                self._bucket_client.pool_manager
+            self._acct_kwargs["pool_manager"] = self._bucket_client.pool_manager
         return self._bucket_client
 
     @property
@@ -191,12 +212,12 @@ class ObjectStorageApi(object):
         """
         if self._iam_client is None:
             from oio.account.iam_client import IamClient
-            self._iam_client = IamClient({"namespace": self.namespace},
-                                         logger=self.logger,
-                                         **self._acct_kwargs)
+
+            self._iam_client = IamClient(
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
             # Share the connection pool
-            self._acct_kwargs['pool_manager'] = \
-                self._iam_client.pool_manager
+            self._acct_kwargs["pool_manager"] = self._iam_client.pool_manager
         return self._iam_client
 
     @property
@@ -208,11 +229,15 @@ class ObjectStorageApi(object):
         """
         if self._blob_client is None:
             from oio.blob.client import BlobClient
+
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
-                conf={"namespace": self.namespace}, logger=self.logger,
-                connection_pool=connection_pool, perfdata=self.perfdata,
-                watchdog=self.watchdog)
+                conf={"namespace": self.namespace},
+                logger=self.logger,
+                connection_pool=connection_pool,
+                perfdata=self.perfdata,
+                watchdog=self.watchdog,
+            )
         return self._blob_client
 
     @property
@@ -224,6 +249,7 @@ class ObjectStorageApi(object):
         """
         if self._conscience_client is None:
             from oio.conscience.client import ConscienceClient
+
             self._conscience_client = ConscienceClient(
                 conf={"namespace": self.namespace},
                 logger=self.logger,
@@ -241,10 +267,9 @@ class ObjectStorageApi(object):
         """
         if self._directory_client is None:
             from oio.directory.client import DirectoryClient
+
             self._directory_client = DirectoryClient(
-                {"namespace": self.namespace},
-                logger=self.logger,
-                **self._init_kwargs
+                {"namespace": self.namespace}, logger=self.logger, **self._init_kwargs
             )
         return self._directory_client
 
@@ -255,11 +280,12 @@ class ObjectStorageApi(object):
     def proxy_client(self):
         if self._proxy_client is None:
             from oio.common.client import ProxyClient
+
             conf = self.container.conf
             pool_manager = self.container.pool_manager
             self._proxy_client = ProxyClient(
-                conf, pool_manager=pool_manager, no_ns_in_url=True,
-                logger=self.logger)
+                conf, pool_manager=pool_manager, no_ns_in_url=True, logger=self.logger
+            )
         return self._proxy_client
 
     @property
@@ -269,6 +295,7 @@ class ObjectStorageApi(object):
         """
         if self._watchdog is None:
             from oio.common.green import get_watchdog
+
             self._watchdog = get_watchdog(called_from_main_application=True)
         return self._watchdog
 
@@ -311,9 +338,16 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def account_list(self, limit=None, marker=None, end_marker=None,
-                     prefix=None, stats=None, sharding_accounts=None,
-                     **kwargs):
+    def account_list(
+        self,
+        limit=None,
+        marker=None,
+        end_marker=None,
+        prefix=None,
+        stats=None,
+        sharding_accounts=None,
+        **kwargs
+    ):
         """
         List known accounts (except if requested, the sharding accounts
         are excluded).
@@ -341,9 +375,15 @@ class ObjectStorageApi(object):
             creation time and modification time, etc.).
         """
         resp = self.account.account_list(
-            limit=limit, marker=marker, end_marker=end_marker, prefix=prefix,
-            stats=stats, sharding_accounts=sharding_accounts, **kwargs)
-        return resp['listing']
+            limit=limit,
+            marker=marker,
+            end_marker=end_marker,
+            prefix=prefix,
+            stats=stats,
+            sharding_accounts=sharding_accounts,
+            **kwargs
+        )
+        return resp["listing"]
 
     @handle_account_not_found
     @patch_kwargs
@@ -356,8 +396,8 @@ class ObjectStorageApi(object):
         res = self.account.account_show(account, **kwargs)
         # Deal with the previous protocol which
         # returned 'metadata' instead of 'properties'.
-        props = res.pop('metadata', dict())
-        res.setdefault('properties', dict()).update(props)
+        props = res.pop("metadata", dict())
+        res.setdefault("properties", dict()).update(props)
         return res
 
     @handle_account_not_found
@@ -375,8 +415,7 @@ class ObjectStorageApi(object):
         """
         Delete some properties from the specified account.
         """
-        self.account.account_update(account, None,
-                                    list(properties), **kwargs)
+        self.account.account_update(account, None, list(properties), **kwargs)
 
     @patch_kwargs
     @ensure_headers
@@ -384,13 +423,14 @@ class ObjectStorageApi(object):
     def resolve_cid(self, cid, **kwargs):
         """Resolve a CID into account and container names."""
         md = self.directory.list(cid=cid, **kwargs)
-        return md.get('account'), md.get('name')
+        return md.get("account"), md.get("name")
 
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_create(self, account, container, properties=None,
-                         region=None, **kwargs):
+    def container_create(
+        self, account, container, properties=None, region=None, **kwargs
+    ):
         """
         Create a container.
 
@@ -406,7 +446,8 @@ class ObjectStorageApi(object):
                   False if it already exists
         """
         return self.container.container_create(
-            account, container, properties=properties, region=region, **kwargs)
+            account, container, properties=properties, region=region, **kwargs
+        )
 
     @handle_container_not_found
     @patch_kwargs
@@ -422,13 +463,15 @@ class ObjectStorageApi(object):
         :type container: `str`
         """
         self.container.container_touch(
-            account, container, recompute=recompute, **kwargs)
+            account, container, recompute=recompute, **kwargs
+        )
 
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_create_many(self, account, containers, properties=None,
-                              region=None, **kwargs):
+    def container_create_many(
+        self, account, containers, properties=None, region=None, **kwargs
+    ):
         """
         Create Many containers
 
@@ -442,8 +485,8 @@ class ObjectStorageApi(object):
         :type region: str
         """
         return self.container.container_create_many(
-            account, containers, properties=properties, region=region,
-            **kwargs)
+            account, containers, properties=properties, region=region, **kwargs
+        )
 
     @handle_container_not_found
     @patch_kwargs
@@ -479,22 +522,21 @@ class ObjectStorageApi(object):
         if fast:
             truncated = True
             while truncated:
-                resp = self.container.container_flush(account, container,
-                                                      **kwargs)
-                truncated = resp['truncated']
+                resp = self.container.container_flush(account, container, **kwargs)
+                truncated = resp["truncated"]
             return
 
         while True:
             # No need to keep a marker: we are deleting objects
             resp = self.object_list(account, container, **kwargs)
-            if not resp['objects']:
+            if not resp["objects"]:
                 break
-            objects = [obj['name'] for obj in resp['objects']]
-            deleted = self.object_delete_many(
-                account, container, objects, **kwargs)
+            objects = [obj["name"] for obj in resp["objects"]]
+            deleted = self.object_delete_many(account, container, objects, **kwargs)
             if not any(x[1] for x in deleted):
                 raise exc.OioException(
-                    'None of the %d objects could be deleted' % len(deleted))
+                    "None of the %d objects could be deleted" % len(deleted)
+                )
 
     @handle_container_not_found
     @patch_kwargs
@@ -515,15 +557,16 @@ class ObjectStorageApi(object):
         """
         resp = {}
         hdrs, _ = self.container.container_drain(account, container, **kwargs)
-        resp['truncated'] = true_value(hdrs.get(HEADER_PREFIX + 'truncated'))
+        resp["truncated"] = true_value(hdrs.get(HEADER_PREFIX + "truncated"))
         return resp
 
     @handle_account_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_list(self, account, limit=None, marker=None,
-                       end_marker=None, prefix=None, **kwargs):
+    def container_list(
+        self, account, limit=None, marker=None, end_marker=None, prefix=None, **kwargs
+    ):
         """
         Get the list of containers of an account.
 
@@ -549,11 +592,14 @@ class ObjectStorageApi(object):
             is a prefix or 0 if the item is actually a container,
             and modification time.
         """
-        resp = self.account.container_list(account, limit=limit,
-                                           marker=marker,
-                                           end_marker=end_marker,
-                                           prefix=prefix,
-                                           **kwargs)
+        resp = self.account.container_list(
+            account,
+            limit=limit,
+            marker=marker,
+            end_marker=end_marker,
+            prefix=prefix,
+            **kwargs
+        )
         return resp["listing"]
 
     @handle_container_not_found
@@ -577,8 +623,9 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_snapshot(self, account, container, dst_account,
-                           dst_container, batch_size=100, **kwargs):
+    def container_snapshot(
+        self, account, container, dst_account, dst_container, batch_size=100, **kwargs
+    ):
         """
         Take a snapshot of a container.
 
@@ -605,60 +652,79 @@ class ObjectStorageApi(object):
         try:
             self.container.container_freeze(account, container, **kwargs)
             self.container.container_snapshot(
-                account, container, dst_account, dst_container, **kwargs)
+                account, container, dst_account, dst_container, **kwargs
+            )
             obj_gen = depaginate(
                 self.object_list,
-                listing_key=lambda x: x['objects'],
-                marker_key=lambda x: x.get('next_marker'),
-                version_marker_key=lambda x: x.get('next_version_marker'),
-                truncated_key=lambda x: x['truncated'],
+                listing_key=lambda x: x["objects"],
+                marker_key=lambda x: x.get("next_marker"),
+                version_marker_key=lambda x: x.get("next_version_marker"),
+                truncated_key=lambda x: x["truncated"],
                 account=dst_account,
                 container=dst_container,
                 properties=False,
                 versions=True,
-                **kwargs)
+                **kwargs
+            )
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
                 obj_meta, chunks = self.object_locate(
-                    account, container, obj["name"], version=obj['version'],
-                    **kwargs)
+                    account, container, obj["name"], version=obj["version"], **kwargs
+                )
                 fullpath = encode_fullpath(
-                    dst_account, dst_container, obj['name'], obj['version'],
-                    obj['content'])
-                storage_method = STORAGE_METHODS.load(obj['chunk_method'])
-                chunks_by_pos = _sort_chunks(chunks, storage_method.ec,
-                                             logger=self.logger)
+                    dst_account,
+                    dst_container,
+                    obj["name"],
+                    obj["version"],
+                    obj["content"],
+                )
+                storage_method = STORAGE_METHODS.load(obj["chunk_method"])
+                chunks_by_pos = _sort_chunks(
+                    chunks, storage_method.ec, logger=self.logger
+                )
                 handler = LinkHandler(
-                    fullpath, chunks_by_pos, storage_method,
-                    self.blob_client, policy=obj_meta['policy'],
-                    **kwargs)
+                    fullpath,
+                    chunks_by_pos,
+                    storage_method,
+                    self.blob_client,
+                    policy=obj_meta["policy"],
+                    **kwargs
+                )
                 try:
                     chunks_copies = handler.link()
                 except exc.UnfinishedUploadException as ex:
                     self.logger.warning(
-                        'Failed to upload all data (%s), deleting chunks',
-                        ex.exception)
-                    kwargs['cid'] = obj['container_id']
-                    self._delete_orphan_chunks(
-                        ex.chunks_already_uploaded, **kwargs)
+                        "Failed to upload all data (%s), deleting chunks", ex.exception
+                    )
+                    kwargs["cid"] = obj["container_id"]
+                    self._delete_orphan_chunks(ex.chunks_already_uploaded, **kwargs)
                     ex.reraise()
                 t_beans, c_beans = self._prepare_meta2_raw_update(
-                    chunks, chunks_copies, obj['content'])
+                    chunks, chunks_copies, obj["content"]
+                )
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
                 if len(target_beans) > batch_size:
                     self.container.container_raw_update(
-                        target_beans, copy_beans,
-                        dst_account, dst_container,
-                        frozen=True, **kwargs)
+                        target_beans,
+                        copy_beans,
+                        dst_account,
+                        dst_container,
+                        frozen=True,
+                        **kwargs
+                    )
                     target_beans = []
                     copy_beans = []
             if target_beans:
                 self.container.container_raw_update(
-                    target_beans, copy_beans,
-                    dst_account, dst_container,
-                    frozen=True, **kwargs)
+                    target_beans,
+                    copy_beans,
+                    dst_account,
+                    dst_container,
+                    frozen=True,
+                    **kwargs
+                )
             self.container.container_touch(dst_account, dst_container)
         finally:
             self.container.container_enable(account, container, **kwargs)
@@ -667,8 +733,7 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_get_properties(self, account, container, properties=None,
-                                 **kwargs):
+    def container_get_properties(self, account, container, properties=None, **kwargs):
         """
         Get information about a container (user and system properties).
 
@@ -681,16 +746,17 @@ class ObjectStorageApi(object):
             containing respectively a `dict` of user properties and
             a `dict` of system properties.
         """
-        return self.container.container_get_properties(account, container,
-                                                       properties=properties,
-                                                       **kwargs)
+        return self.container.container_get_properties(
+            account, container, properties=properties, **kwargs
+        )
 
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_set_properties(self, account, container, properties=None,
-                                 clear=False, **kwargs):
+    def container_set_properties(
+        self, account, container, properties=None, clear=False, **kwargs
+    ):
         """
         Set properties on a container.
 
@@ -705,15 +771,14 @@ class ObjectStorageApi(object):
         :keyword system: dictionary of system properties to set
         """
         return self.container.container_set_properties(
-            account, container, properties,
-            clear=clear, **kwargs)
+            account, container, properties, clear=clear, **kwargs
+        )
 
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_del_properties(self, account, container, properties,
-                                 **kwargs):
+    def container_del_properties(self, account, container, properties, **kwargs):
         """
         Delete properties of a container.
 
@@ -725,16 +790,17 @@ class ObjectStorageApi(object):
         :type properties: `list`
         """
         return self.container.container_del_properties(
-            account, container, properties, **kwargs)
+            account, container, properties, **kwargs
+        )
 
-    def _delete_exceeding_versions(self, account, container, obj,
-                                   versions, maxvers, **kwargs):
+    def _delete_exceeding_versions(
+        self, account, container, obj, versions, maxvers, **kwargs
+    ):
         if not versions:
             return
         exceeding_versions = versions[maxvers:]
         for version in exceeding_versions:
-            self.object_delete(account, container, obj, version=version,
-                               **kwargs)
+            self.object_delete(account, container, obj, version=version, **kwargs)
 
     @handle_container_not_found
     @patch_kwargs
@@ -743,10 +809,10 @@ class ObjectStorageApi(object):
     def container_purge(self, account, container, maxvers=None, **kwargs):
         if maxvers is None:
             props = self.container_get_properties(account, container, **kwargs)
-            maxvers = props['system'].get('sys.m2.policy.version', None)
+            maxvers = props["system"].get("sys.m2.policy.version", None)
             if maxvers is None:
-                _, data = self.proxy_client._request('GET', "config")
-                maxvers = data['meta2.max_versions']
+                _, data = self.proxy_client._request("GET", "config")
+                maxvers = data["meta2.max_versions"]
         maxvers = int(maxvers)
         if maxvers < 0:
             return
@@ -757,25 +823,27 @@ class ObjectStorageApi(object):
         versions = []
         objs = depaginate(
             self.object_list,
-            listing_key=lambda x: x['objects'],
-            marker_key=lambda x: x.get('next_marker'),
-            version_marker_key=lambda x: x.get('next_version_marker'),
-            truncated_key=lambda x: x['truncated'],
+            listing_key=lambda x: x["objects"],
+            marker_key=lambda x: x.get("next_marker"),
+            version_marker_key=lambda x: x.get("next_version_marker"),
+            truncated_key=lambda x: x["truncated"],
             account=account,
             container=container,
             versions=True,
-            **kwargs)
+            **kwargs
+        )
         for obj in objs:
-            if obj['name'] != last_object_name:
+            if obj["name"] != last_object_name:
                 self._delete_exceeding_versions(
-                    account, container, last_object_name, versions,
-                    maxvers, **kwargs)
-                last_object_name = obj['name']
+                    account, container, last_object_name, versions, maxvers, **kwargs
+                )
+                last_object_name = obj["name"]
                 versions.clear()
-            if not obj['deleted']:
-                versions.append(obj['version'])
+            if not obj["deleted"]:
+                versions.append(obj["version"])
         self._delete_exceeding_versions(
-            account, container, last_object_name, versions, maxvers, **kwargs)
+            account, container, last_object_name, versions, maxvers, **kwargs
+        )
 
     def object_create(self, account, container, *args, **kwargs):
         """
@@ -783,19 +851,31 @@ class ObjectStorageApi(object):
 
         :returns: `list` of chunks, size and hash of what has been uploaded
         """
-        ul_chunks, ul_bytes, obj_checksum, _ = \
-            self.object_create_ext(account, container, *args, **kwargs)
+        ul_chunks, ul_bytes, obj_checksum, _ = self.object_create_ext(
+            account, container, *args, **kwargs
+        )
         return ul_chunks, ul_bytes, obj_checksum
 
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id2(prefix="create-")
-    def object_create_ext(self, account, container, file_or_path=None,
-                          data=None, etag=None, obj_name=None, mime_type=None,
-                          policy=None, key_file=None,
-                          append=False, properties=None,
-                          properties_callback=None, **kwargs):
+    def object_create_ext(
+        self,
+        account,
+        container,
+        file_or_path=None,
+        data=None,
+        etag=None,
+        obj_name=None,
+        mime_type=None,
+        policy=None,
+        key_file=None,
+        append=False,
+        properties=None,
+        properties_callback=None,
+        **kwargs
+    ):
         """
         Create an object or append data to object in *container* of *account*
         with data taken from either *data* (`str` or `generator`) or
@@ -856,8 +936,7 @@ class ObjectStorageApi(object):
             # We are asked to read from a file path or a file-like object
             if isinstance(file_or_path, string_types):
                 if not os.path.exists(file_or_path):
-                    raise exc.FileNotFound("File '%s' not found." %
-                                           file_or_path)
+                    raise exc.FileNotFound("File '%s' not found." % file_or_path)
                 file_name = os.path.basename(file_or_path)
             else:
                 try:
@@ -869,7 +948,7 @@ class ObjectStorageApi(object):
             # We are asked to read from a buffer or an iterator
             if isinstance(src, string_types):
                 try:
-                    src = src.encode('utf-8')
+                    src = src.encode("utf-8")
                 except UnicodeDecodeError:
                     # src is already encoded
                     pass
@@ -879,25 +958,38 @@ class ObjectStorageApi(object):
                 src = GeneratorIO(src, sub_generator=PY2)
 
         if not obj_name:
-            raise exc.MissingName(
-                "No name for the object has been specified"
-            )
+            raise exc.MissingName("No name for the object has been specified")
 
-        sysmeta = {'mime_type': mime_type,
-                   'etag': etag}
-        if isinstance(src, BytesIO) or hasattr(src, 'read'):
+        sysmeta = {"mime_type": mime_type, "etag": etag}
+        if isinstance(src, BytesIO) or hasattr(src, "read"):
             return self._object_create(
-                account, container, obj_name, src, sysmeta,
-                properties=properties, policy=policy, key_file=key_file,
-                append=append, properties_callback=properties_callback,
-                **kwargs)
+                account,
+                container,
+                obj_name,
+                src,
+                sysmeta,
+                properties=properties,
+                policy=policy,
+                key_file=key_file,
+                append=append,
+                properties_callback=properties_callback,
+                **kwargs
+            )
         else:
-            with open(src, 'rb') as srcf:
+            with open(src, "rb") as srcf:
                 return self._object_create(
-                    account, container, obj_name, srcf, sysmeta,
-                    properties=properties, policy=policy,
-                    key_file=key_file, append=append,
-                    properties_callback=properties_callback, **kwargs)
+                    account,
+                    container,
+                    obj_name,
+                    srcf,
+                    sysmeta,
+                    properties=properties,
+                    policy=policy,
+                    key_file=key_file,
+                    append=append,
+                    properties_callback=properties_callback,
+                    **kwargs
+                )
 
     @handle_object_not_found
     @patch_kwargs
@@ -920,28 +1012,33 @@ class ObjectStorageApi(object):
 
         :returns: `list` of chunks, size, hash and metadata of object
         """
-        meta, stream = self.object_fetch(
-            account, container, obj, **kwargs)
+        meta, stream = self.object_fetch(account, container, obj, **kwargs)
         # Before we started generating predictable chunk IDs, it was possible
         # to change to the same policy: it just renewed all chunks and updated
         # the modification time.
         # Now that we generate predictable chunk IDs, we must change something
         # in the object description in order to get a different set of chunks
         # (we don't want to change the object version).
-        if meta['policy'] == policy:
+        if meta["policy"] == policy:
             del stream
             raise exc.Conflict(
-                'The object is already using the %s storage policy' % policy)
-        kwargs['version'] = meta['version']
+                "The object is already using the %s storage policy" % policy
+            )
+        kwargs["version"] = meta["version"]
         return self.object_create_ext(
-            account, container, obj_name=meta['name'],
-            data=stream, policy=policy, change_policy=True, **kwargs)
+            account,
+            container,
+            obj_name=meta["name"],
+            data=stream,
+            policy=policy,
+            change_policy=True,
+            **kwargs
+        )
 
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_touch(self, account, container, obj,
-                     version=None, **kwargs):
+    def object_touch(self, account, container, obj, version=None, **kwargs):
         """
         Trigger a notification about an object
         (as if it just had been created).
@@ -953,14 +1050,12 @@ class ObjectStorageApi(object):
         :param obj: name of the object to touch
         :type obj: `str`
         """
-        self.container.content_touch(account, container, obj,
-                                     version=version, **kwargs)
+        self.container.content_touch(account, container, obj, version=version, **kwargs)
 
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_drain(self, account, container, obj,
-                     version=None, **kwargs):
+    def object_drain(self, account, container, obj, version=None, **kwargs):
         """
         Remove all the chunks of a content, but keep all the metadata.
 
@@ -970,15 +1065,15 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param obj: name of the object to drain
         """
-        self.container.content_drain(account, container, obj,
-                                     version=version, **kwargs)
+        self.container.content_drain(account, container, obj, version=version, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_delete(self, account, container, obj,
-                      version=None, bypass_governance=None, **kwargs):
+    def object_delete(
+        self, account, container, obj, version=None, bypass_governance=None, **kwargs
+    ):
         """
         Delete an object from a container. If versioning is enabled and no
         version is specified, the object will be marked as deleted but not
@@ -993,8 +1088,13 @@ class ObjectStorageApi(object):
         :returns: True on success
         """
         return self.container.content_delete(
-            account, container, obj, version=version,
-            bypass_governance=bypass_governance, **kwargs)
+            account,
+            container,
+            obj,
+            version=version,
+            bypass_governance=bypass_governance,
+            **kwargs
+        )
 
     @patch_kwargs
     @ensure_headers
@@ -1008,15 +1108,15 @@ class ObjectStorageApi(object):
             a boolean telling if the object has been successfully deleted
         :rtype: `list` of `tuple`
         """
-        return self.container.content_delete_many(
-            account, container, objs, **kwargs)
+        return self.container.content_delete_many(account, container, objs, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_truncate(self, account, container, obj,
-                        version=None, size=None, **kwargs):
+    def object_truncate(
+        self, account, container, obj, version=None, size=None, **kwargs
+    ):
         """
         Truncate object at specified size. Only shrink is supported.
         A download may occur if size is not on chunk boundaries.
@@ -1030,44 +1130,63 @@ class ObjectStorageApi(object):
 
         # code copied from object_fetch (should be factorized !)
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version,
-            properties=False, **kwargs)
-        chunk_method = meta['chunk_method']
+            account, container, obj, version=version, properties=False, **kwargs
+        )
+        chunk_method = meta["chunk_method"]
         storage_method = STORAGE_METHODS.load(chunk_method)
-        chunks = _sort_chunks(raw_chunks, storage_method.ec,
-                              logger=self.logger)
+        chunks = _sort_chunks(raw_chunks, storage_method.ec, logger=self.logger)
 
         for pos in sorted(chunks.keys()):
             chunk = chunks[pos][0]
-            if (size >= chunk['offset']
-                    and size <= chunk['offset'] + chunk['size']):
+            if size >= chunk["offset"] and size <= chunk["offset"] + chunk["size"]:
                 break
         else:
             raise exc.OioException("No chunk found at position %d" % size)
 
-        if chunk['offset'] != size:
+        if chunk["offset"] != size:
             # retrieve partial chunk
-            ret = self.object_fetch(account, container, obj,
-                                    version=version,
-                                    ranges=[(chunk['offset'], size - 1)])
+            ret = self.object_fetch(
+                account,
+                container,
+                obj,
+                version=version,
+                ranges=[(chunk["offset"], size - 1)],
+            )
             # TODO implement a proper object_update
-            pos = int(chunk['pos'].split('.')[0])
-            self.object_create(account, container, obj_name=obj,
-                               data=ret[1], meta_pos=pos,
-                               content_id=meta['id'])
+            pos = int(chunk["pos"].split(".")[0])
+            self.object_create(
+                account,
+                container,
+                obj_name=obj,
+                data=ret[1],
+                meta_pos=pos,
+                content_id=meta["id"],
+            )
 
-        return self.container.content_truncate(account, container, obj,
-                                               version=version, size=size,
-                                               **kwargs)
+        return self.container.content_truncate(
+            account, container, obj, version=version, size=size, **kwargs
+        )
 
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_list(self, account, container, limit=None, marker=None,
-                    version_marker=None, end_marker=None, prefix=None,
-                    delimiter=None, properties=False, versions=False,
-                    deleted=False, chunks=False, **kwargs):
+    def object_list(
+        self,
+        account,
+        container,
+        limit=None,
+        marker=None,
+        version_marker=None,
+        end_marker=None,
+        prefix=None,
+        delimiter=None,
+        properties=False,
+        versions=False,
+        deleted=False,
+        chunks=False,
+        **kwargs
+    ):
         """
         Lists objects inside a container.
 
@@ -1086,58 +1205,77 @@ class ObjectStorageApi(object):
             page of results (in case the listing was truncated)
         """
         hdrs, resp_body = self.container.content_list(
-            account, container, limit=limit, marker=marker,
-            version_marker=version_marker, end_marker=end_marker,
-            prefix=prefix, delimiter=delimiter, properties=properties,
-            versions=versions, deleted=deleted, chunks=chunks, **kwargs)
+            account,
+            container,
+            limit=limit,
+            marker=marker,
+            version_marker=version_marker,
+            end_marker=end_marker,
+            prefix=prefix,
+            delimiter=delimiter,
+            properties=properties,
+            versions=versions,
+            deleted=deleted,
+            chunks=chunks,
+            **kwargs
+        )
 
-        for obj in resp_body['objects']:
+        for obj in resp_body["objects"]:
             try:
-                obj['chunk_method'] = obj['chunk-method']
-                del obj['chunk-method']
+                obj["chunk_method"] = obj["chunk-method"]
+                del obj["chunk-method"]
             except KeyError:
-                obj['chunk_method'] = None
+                obj["chunk_method"] = None
             try:
-                obj['mime_type'] = obj['mime-type']
-                del obj['mime-type']
+                obj["mime_type"] = obj["mime-type"]
+                del obj["mime-type"]
             except KeyError:
-                obj['mime_type'] = None
+                obj["mime_type"] = None
 
         if versions:
             previous_name = None
-            for obj in resp_body['objects']:
-                if obj['name'] == previous_name:
-                    obj['is_latest'] = False
+            for obj in resp_body["objects"]:
+                if obj["name"] == previous_name:
+                    obj["is_latest"] = False
                     continue
-                if (previous_name is None and marker and version_marker
-                        and marker == obj['name']):
+                if (
+                    previous_name is None
+                    and marker
+                    and version_marker
+                    and marker == obj["name"]
+                ):
                     # FIXME(ADU): We could determine this in meta2 service
                     _, sub = self.container.content_list(
-                        account, container, prefix=obj['name'], limit=1,
-                        deleted=True, **kwargs)
-                    if (sub['objects'] and
-                            sub['objects'][0]['name'] == obj['name'] and
-                            sub['objects'][0]['version'] == obj['version']):
-                        obj['is_latest'] = True
+                        account,
+                        container,
+                        prefix=obj["name"],
+                        limit=1,
+                        deleted=True,
+                        **kwargs
+                    )
+                    if (
+                        sub["objects"]
+                        and sub["objects"][0]["name"] == obj["name"]
+                        and sub["objects"][0]["version"] == obj["version"]
+                    ):
+                        obj["is_latest"] = True
                     else:
-                        obj['is_latest'] = False
+                        obj["is_latest"] = False
                 else:
-                    obj['is_latest'] = True
-                previous_name = obj['name']
+                    obj["is_latest"] = True
+                previous_name = obj["name"]
         else:
-            for obj in resp_body['objects']:
-                obj['is_latest'] = True
+            for obj in resp_body["objects"]:
+                obj["is_latest"] = True
 
-        resp_body['truncated'] = true_value(
-            hdrs.get(HEADER_PREFIX + 'list-truncated'))
-        marker_header = HEADER_PREFIX + 'list-marker'
+        resp_body["truncated"] = true_value(hdrs.get(HEADER_PREFIX + "list-truncated"))
+        marker_header = HEADER_PREFIX + "list-marker"
         if marker_header in hdrs:
-            resp_body['next_marker'] = unquote(hdrs.get(marker_header))
-        version_marker_header = HEADER_PREFIX + 'list-version-marker'
+            resp_body["next_marker"] = unquote(hdrs.get(marker_header))
+        version_marker_header = HEADER_PREFIX + "list-version-marker"
         if version_marker_header in hdrs:
-            resp_body['next_version_marker'] = unquote(hdrs.get(
-                version_marker_header))
-        perfdata = kwargs.get('perfdata')
+            resp_body["next_version_marker"] = unquote(hdrs.get(version_marker_header))
+        perfdata = kwargs.get("perfdata")
         if perfdata is not None:
             aggregate_cache_perfdata(perfdata)
         return resp_body
@@ -1146,9 +1284,16 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_locate(self, account, container, obj,
-                      version=None, chunk_info=False, properties=True,
-                      **kwargs):
+    def object_locate(
+        self,
+        account,
+        container,
+        obj,
+        version=None,
+        chunk_info=False,
+        properties=True,
+        **kwargs
+    ):
         """
         Get a description of the object along with the list of its chunks.
 
@@ -1167,21 +1312,21 @@ class ObjectStorageApi(object):
             and chunk `list` as second element
         """
         obj_meta, chunks = self.container.content_locate(
-            account, container, obj, properties=properties,
-            version=version, **kwargs)
+            account, container, obj, properties=properties, version=version, **kwargs
+        )
 
         # FIXME(FVE): converting to float does not sort properly
         # the chunks of the same metachunk
         def _fetch_ext_info(chunks_):
-            for chunk in sorted(chunks_, key=lambda x: float(x['pos'])):
+            for chunk in sorted(chunks_, key=lambda x: float(x["pos"])):
                 try:
-                    ext_info = self.blob_client.chunk_head(
-                        chunk['url'], **kwargs)
-                    for key in ('chunk_size', 'chunk_hash', 'full_path'):
+                    ext_info = self.blob_client.chunk_head(chunk["url"], **kwargs)
+                    for key in ("chunk_size", "chunk_hash", "full_path"):
                         chunk[key] = ext_info.get(key)
                 except exc.OioException as err:
-                    chunk['error'] = str(err)
+                    chunk["error"] = str(err)
                 yield chunk
+
         if not chunk_info:
             return obj_meta, chunks
         return obj_meta, _fetch_ext_info(chunks)
@@ -1189,65 +1334,91 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_link(self, target_account, target_container, target_obj,
-                    link_account, link_container, link_obj,
-                    target_version=None, target_content_id=None,
-                    link_content_id=None, properties_directive='COPY',
-                    **kwargs):
+    def object_link(
+        self,
+        target_account,
+        target_container,
+        target_obj,
+        link_account,
+        link_container,
+        link_obj,
+        target_version=None,
+        target_content_id=None,
+        link_content_id=None,
+        properties_directive="COPY",
+        **kwargs
+    ):
         """
         Make a shallow copy of an object.
         Works across accounts and across containers.
         """
         target_meta, chunks = self.object_locate(
-            target_account, target_container, target_obj,
-            version=target_version, content=target_content_id, **kwargs)
+            target_account,
+            target_container,
+            target_obj,
+            version=target_version,
+            content=target_content_id,
+            **kwargs
+        )
         link_meta, handler, _ = self._object_prepare(
-            link_account, link_container, link_obj, None, dict(),
-            content_id=link_content_id, policy=target_meta['policy'],
-            link=True, **kwargs)
-        link_meta['chunk_method'] = target_meta['chunk_method']
-        link_meta['length'] = target_meta['length']
-        link_meta['hash'] = target_meta['hash']
-        link_meta['hash_method'] = target_meta['hash_method']
-        link_meta['mime_type'] = target_meta['mime_type']
-        link_meta['properties'] = target_meta['properties']
+            link_account,
+            link_container,
+            link_obj,
+            None,
+            dict(),
+            content_id=link_content_id,
+            policy=target_meta["policy"],
+            link=True,
+            **kwargs
+        )
+        link_meta["chunk_method"] = target_meta["chunk_method"]
+        link_meta["length"] = target_meta["length"]
+        link_meta["hash"] = target_meta["hash"]
+        link_meta["hash_method"] = target_meta["hash_method"]
+        link_meta["mime_type"] = target_meta["mime_type"]
+        link_meta["properties"] = target_meta["properties"]
 
-        chunks_by_pos = _sort_chunks(chunks, handler.storage_method.ec,
-                                     logger=self.logger)
+        chunks_by_pos = _sort_chunks(
+            chunks, handler.storage_method.ec, logger=self.logger
+        )
         handler._load_chunk_prep(chunks_by_pos)
         try:
             chunks_copies = handler.link()
         except exc.UnfinishedUploadException as ex:
             self.logger.warning(
-                'Failed to upload all data (%s), deleting chunks',
-                ex.exception)
-            kwargs['cid'] = link_meta['container_id']
-            self._delete_orphan_chunks(
-                ex.chunks_already_uploaded, **kwargs)
+                "Failed to upload all data (%s), deleting chunks", ex.exception
+            )
+            kwargs["cid"] = link_meta["container_id"]
+            self._delete_orphan_chunks(ex.chunks_already_uploaded, **kwargs)
             ex.reraise()
 
-        data = {'chunks': chunks_copies,
-                'properties': link_meta['properties'] or {}}
-        if properties_directive == 'REPLACE':
-            if 'properties' in kwargs:
-                data['properties'] = kwargs['properties']
+        data = {"chunks": chunks_copies, "properties": link_meta["properties"] or {}}
+        if properties_directive == "REPLACE":
+            if "properties" in kwargs:
+                data["properties"] = kwargs["properties"]
             else:
-                data['properties'] = {}
+                data["properties"] = {}
 
         try:
             self.container.content_create(
-                link_account, link_container, link_obj,
-                version=link_meta['version'], content_id=link_meta['id'],
-                data=data, size=link_meta['length'],
-                checksum=link_meta['hash'], stgpol=link_meta['policy'],
-                mime_type=link_meta['mime_type'],
-                chunk_method=link_meta['chunk_method'], **kwargs)
+                link_account,
+                link_container,
+                link_obj,
+                version=link_meta["version"],
+                content_id=link_meta["id"],
+                data=data,
+                size=link_meta["length"],
+                checksum=link_meta["hash"],
+                stgpol=link_meta["policy"],
+                mime_type=link_meta["mime_type"],
+                chunk_method=link_meta["chunk_method"],
+                **kwargs
+            )
         except (exc.BadRequest, exc.Forbidden) as ex:
             # Only delete chunk if the request really failed.
             # If the request was successful in the background, keep the chunks.
-            self.logger.warning(
-                'Failed to commit to meta2 (%s), deleting chunks', ex)
-            kwargs['cid'] = link_meta['container_id']
+            self.logger.warning("Failed to commit to meta2 (%s), deleting chunks", ex)
+            kwargs["cid"] = link_meta["container_id"]
             self._delete_orphan_chunks(chunks_copies, **kwargs)
             raise
         return link_meta
@@ -1255,43 +1426,52 @@ class ObjectStorageApi(object):
     @staticmethod
     def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
-        perfdata_rawx = perfdata.setdefault('rawx', dict())
+        perfdata_rawx = perfdata.setdefault("rawx", dict())
         size = 0
         for dat in stream:
-            if 'ttfb' not in perfdata:
-                perfdata['ttfb'] = monotonic_time() - req_start
+            if "ttfb" not in perfdata:
+                perfdata["ttfb"] = monotonic_time() - req_start
             yield dat
             size += len(dat)
         req_end = monotonic_time()
-        perfdata['ttlb'] = req_end - req_start
-        perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
-            + req_end - download_start
-        if 'ec.segments' in perfdata_rawx:
-            perfdata_rawx['ec.persegment'] = \
-                perfdata_rawx['ec.total'] / perfdata_rawx['ec.segments']
-        perfdata['data_size'] = size
-        perfdata['throughput'] = size / perfdata['ttlb']
-        compute_perfdata_stats(perfdata, 'connect.')
-        compute_perfdata_stats(perfdata, 'sendheaders.')
-        compute_perfdata_stats(perfdata, 'ttfb.')
-        compute_perfdata_stats(perfdata, 'download.')
+        perfdata["ttlb"] = req_end - req_start
+        perfdata_rawx["overall"] = (
+            perfdata_rawx.get("overall", 0.0) + req_end - download_start
+        )
+        if "ec.segments" in perfdata_rawx:
+            perfdata_rawx["ec.persegment"] = (
+                perfdata_rawx["ec.total"] / perfdata_rawx["ec.segments"]
+            )
+        perfdata["data_size"] = size
+        perfdata["throughput"] = size / perfdata["ttlb"]
+        compute_perfdata_stats(perfdata, "connect.")
+        compute_perfdata_stats(perfdata, "sendheaders.")
+        compute_perfdata_stats(perfdata, "ttfb.")
+        compute_perfdata_stats(perfdata, "download.")
         aggregate_cache_perfdata(perfdata)
 
-    def _object_fetch_impl(self, account, container, obj,
-                           version=None, ranges=None, key_file=None,
-                           **kwargs):
+    def _object_fetch_impl(
+        self,
+        account,
+        container,
+        obj,
+        version=None,
+        ranges=None,
+        key_file=None,
+        **kwargs
+    ):
         """
         Actual implementation of object fetch logic.
         """
-        perfdata = kwargs.get('perfdata', None)
+        perfdata = kwargs.get("perfdata", None)
         if perfdata is not None:
             req_start = monotonic_time()
 
         # Check cid format
-        cid_arg = kwargs.get('cid')
+        cid_arg = kwargs.get("cid")
         if cid_arg is not None:
             cid_arg = cid_arg.upper()
-            cid_seq = cid_arg.split('.', 1)
+            cid_seq = cid_arg.split(".", 1)
             try:
                 int(cid_seq[0], 16)
                 if len(cid_seq) > 1:
@@ -1300,15 +1480,14 @@ class ObjectStorageApi(object):
                 raise exc.OioException("Invalid cid: " + cid_arg)
 
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version, **kwargs)
-        chunk_method = meta['chunk_method']
+            account, container, obj, version=version, **kwargs
+        )
+        chunk_method = meta["chunk_method"]
         storage_method = STORAGE_METHODS.load(chunk_method)
-        chunks = _sort_chunks(raw_chunks, storage_method.ec,
-                              logger=self.logger)
-        meta['container_id'] = (
-            cid_arg or cid_from_name(account, container).upper())
-        meta['ns'] = self.namespace
-        kwargs['logger'] = self.logger
+        chunks = _sort_chunks(raw_chunks, storage_method.ec, logger=self.logger)
+        meta["container_id"] = cid_arg or cid_from_name(account, container).upper()
+        meta["ns"] = self.namespace
+        kwargs["logger"] = self.logger
         if perfdata is not None:
             download_start = monotonic_time()
         if storage_method.ec:
@@ -1317,8 +1496,7 @@ class ObjectStorageApi(object):
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
 
         if perfdata is not None:
-            stream = self._ttfb_wrapper(
-                stream, req_start, download_start, perfdata)
+            stream = self._ttfb_wrapper(stream, req_start, download_start, perfdata)
 
         return meta, stream
 
@@ -1326,8 +1504,16 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_fetch(self, account, container, obj, version=None, ranges=None,
-                     key_file=None, **kwargs):
+    def object_fetch(
+        self,
+        account,
+        container,
+        obj,
+        version=None,
+        ranges=None,
+        key_file=None,
+        **kwargs
+    ):
         """
         Download an object.
 
@@ -1353,9 +1539,14 @@ class ObjectStorageApi(object):
         """
         # Fetch object metadata (possibly from cache) and object stream.
         meta, stream = self._object_fetch_impl(
-            account, container, obj,
-            version=version, ranges=ranges, key_file=key_file,
-            **kwargs)
+            account,
+            container,
+            obj,
+            version=version,
+            ranges=ranges,
+            key_file=key_file,
+            **kwargs
+        )
 
         def _data_error_wrapper(buggy_stream):
             blocks = 0
@@ -1366,29 +1557,39 @@ class ObjectStorageApi(object):
             except exc.UnrecoverableContent:
                 # Maybe we got this error because the cached object
                 # metadata was stale.
-                cache = kwargs.get('cache', None)
+                cache = kwargs.get("cache", None)
                 if cache is None:
                     # No cache configured: nothing more to do.
                     raise
                 # Clear the cache
                 del_cached_object_metadata(
-                    account=account, reference=container, path=obj,
-                    version=version, **kwargs)
+                    account=account,
+                    reference=container,
+                    path=obj,
+                    version=version,
+                    **kwargs
+                )
                 if blocks >= 1:
                     # The first blocks of data were already sent to the
                     # caller, we cannot start again.
                     raise
                 # Retry the request without reading from the cache.
                 new_meta, new_stream = self._object_fetch_impl(
-                    account, container, obj,
-                    version=version, ranges=ranges, key_file=key_file,
-                    **kwargs)
+                    account,
+                    container,
+                    obj,
+                    version=version,
+                    ranges=ranges,
+                    key_file=key_file,
+                    **kwargs
+                )
                 # Hack the metadata dictionary which has already been
                 # returned to the caller.
                 meta.update(new_meta)
                 # Send data from the new stream.
                 for dat in new_stream:
                     yield dat
+
         return meta, _data_error_wrapper(stream)
 
     @handle_object_not_found
@@ -1420,8 +1621,7 @@ class ObjectStorageApi(object):
              'mime_type': 'application/octet-stream',
              'name': 'Makefile'}
         """
-        return self.container.content_get_properties(
-            account, container, obj, **kwargs)
+        return self.container.content_get_properties(account, container, obj, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1436,17 +1636,20 @@ class ObjectStorageApi(object):
             for consistency with `container_get_properties`.
         """
         # stacklevel=5 because we are using 3 decorators
-        warnings.warn("You'd better use object_get_properties()",
-                      DeprecationWarning, stacklevel=5)
+        warnings.warn(
+            "You'd better use object_get_properties()", DeprecationWarning, stacklevel=5
+        )
         return self.container.content_get_properties(
-            account, container, obj, version=version, **kwargs)
+            account, container, obj, version=version, **kwargs
+        )
 
     @handle_object_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_set_properties(self, account, container, obj, properties,
-                              version=None, clear=False, **kwargs):
+    def object_set_properties(
+        self, account, container, obj, properties, version=None, clear=False, **kwargs
+    ):
         """
         Set properties on an object.
 
@@ -1456,15 +1659,22 @@ class ObjectStorageApi(object):
         :param properties: dictionary of properties
         """
         return self.container.content_set_properties(
-            account, container, obj, version=version,
-            properties={'properties': properties}, clear=clear, **kwargs)
+            account,
+            container,
+            obj,
+            version=version,
+            properties={"properties": properties},
+            clear=clear,
+            **kwargs
+        )
 
     @handle_object_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_del_properties(self, account, container, obj, properties,
-                              version=None, **kwargs):
+    def object_del_properties(
+        self, account, container, obj, properties, version=None, **kwargs
+    ):
         """
         Delete some properties from an object.
 
@@ -1473,109 +1683,143 @@ class ObjectStorageApi(object):
         :returns: True if the property has been deleted (or was missing)
         """
         return self.container.content_del_properties(
-            account, container, obj, properties=properties,
-            version=version, **kwargs)
+            account, container, obj, properties=properties, version=version, **kwargs
+        )
 
     def _object_upload(self, ul_handler, **kwargs):
         """Upload data to rawx, measure time it takes."""
-        perfdata = kwargs.get('perfdata', None)
+        perfdata = kwargs.get("perfdata", None)
         if perfdata is not None:
             upload_start = monotonic_time()
         ul_chunks, ul_bytes, obj_checksum = ul_handler.stream()
         if perfdata is not None:
             upload_end = monotonic_time()
-            perfdata_rawx = perfdata.setdefault('rawx', dict())
-            perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
-                + upload_end - upload_start
-            perfdata['data_size'] = ul_bytes
-            perfdata['throughput'] = ul_bytes / (upload_end - upload_start)
-            compute_perfdata_stats(perfdata, 'connect.')
-            compute_perfdata_stats(perfdata, 'sendheaders.')
-            compute_perfdata_stats(perfdata, 'upload.')
+            perfdata_rawx = perfdata.setdefault("rawx", dict())
+            perfdata_rawx["overall"] = (
+                perfdata_rawx.get("overall", 0.0) + upload_end - upload_start
+            )
+            perfdata["data_size"] = ul_bytes
+            perfdata["throughput"] = ul_bytes / (upload_end - upload_start)
+            compute_perfdata_stats(perfdata, "connect.")
+            compute_perfdata_stats(perfdata, "sendheaders.")
+            compute_perfdata_stats(perfdata, "upload.")
             aggregate_cache_perfdata(perfdata)
         return ul_chunks, ul_bytes, obj_checksum
 
-    def _object_prepare(self, account, container, obj_name, source,
-                        sysmeta, policy=None,
-                        key_file=None, link=False, **kwargs):
+    def _object_prepare(
+        self,
+        account,
+        container,
+        obj_name,
+        source,
+        sysmeta,
+        policy=None,
+        key_file=None,
+        link=False,
+        **kwargs
+    ):
         """Call content/prepare, initialize chunk uploaders."""
         chunk_prep = MetachunkPreparer(
-            self.container, account, container, obj_name,
-            policy=policy, **kwargs)
+            self.container, account, container, obj_name, policy=policy, **kwargs
+        )
         obj_meta = chunk_prep.obj_meta
         obj_meta.update(sysmeta)
-        obj_meta['content_path'] = obj_name
-        obj_meta['container_id'] = cid_from_name(account, container).upper()
-        obj_meta['ns'] = self.namespace
-        obj_meta['full_path'] = encode_fullpath(
-            account, container, obj_name, obj_meta['version'], obj_meta['id'])
-        obj_meta['oio_version'] = (obj_meta.get('oio_version')
-                                   or OIO_VERSION)
+        obj_meta["content_path"] = obj_name
+        obj_meta["container_id"] = cid_from_name(account, container).upper()
+        obj_meta["ns"] = self.namespace
+        obj_meta["full_path"] = encode_fullpath(
+            account, container, obj_name, obj_meta["version"], obj_meta["id"]
+        )
+        obj_meta["oio_version"] = obj_meta.get("oio_version") or OIO_VERSION
 
-        storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
+        storage_method = STORAGE_METHODS.load(obj_meta["chunk_method"])
         if link:
             if not policy:
-                policy = obj_meta['policy']
+                policy = obj_meta["policy"]
             handler = LinkHandler(
-                obj_meta['full_path'], None, storage_method,
-                self.blob_client, policy=policy, **kwargs)
+                obj_meta["full_path"],
+                None,
+                storage_method,
+                self.blob_client,
+                policy=policy,
+                **kwargs
+            )
             return obj_meta, handler, None
 
         if storage_method.ec:
             write_handler_cls = ECWriteHandler
         else:
             write_handler_cls = ReplicatedWriteHandler
-        kwargs['logger'] = self.logger
+        kwargs["logger"] = self.logger
         handler = write_handler_cls(
-            source, obj_meta, chunk_prep, storage_method, **kwargs)
+            source, obj_meta, chunk_prep, storage_method, **kwargs
+        )
 
         return obj_meta, handler, chunk_prep
 
-    def _object_create(self, account, container, obj_name, source,
-                       sysmeta, properties=None, properties_callback=None,
-                       policy=None, key_file=None, **kwargs):
-        if kwargs.get('restore_drained'):
-            obj_meta = self.object_get_properties(account, container, obj_name,
-                                                  **kwargs)
-            kwargs['version'] = obj_meta['version']
+    def _object_create(
+        self,
+        account,
+        container,
+        obj_name,
+        source,
+        sysmeta,
+        properties=None,
+        properties_callback=None,
+        policy=None,
+        key_file=None,
+        **kwargs
+    ):
+        if kwargs.get("restore_drained"):
+            obj_meta = self.object_get_properties(
+                account, container, obj_name, **kwargs
+            )
+            kwargs["version"] = obj_meta["version"]
             # Check that object is drained. If it is not drained, do nothing,
             # otherwise chunks could be deleted during upload to come because
             # of the same version.
-            if obj_meta['chunk_method'] != 'drained':
-                obj_meta['status'] = "Skipped"
-                return None, obj_meta['size'], obj_meta['hash'], obj_meta
+            if obj_meta["chunk_method"] != "drained":
+                obj_meta["status"] = "Skipped"
+                return None, obj_meta["size"], obj_meta["hash"], obj_meta
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
-            account, container, obj_name, source, sysmeta,
-            policy=policy, key_file=key_file,
-            **kwargs)
+            account,
+            container,
+            obj_name,
+            source,
+            sysmeta,
+            policy=policy,
+            key_file=key_file,
+            **kwargs
+        )
 
         # XXX content_id and version are necessary to update an existing object
-        kwargs['content_id'] = obj_meta['id']
-        kwargs['version'] = obj_meta['version']
+        kwargs["content_id"] = obj_meta["id"]
+        kwargs["version"] = obj_meta["version"]
 
         try:
             ul_chunks, ul_bytes, obj_checksum = self._object_upload(
-                ul_handler, **kwargs)
+                ul_handler, **kwargs
+            )
         except exc.OioException as ex:
-            self.logger.warning(
-                'Failed to upload all data (%s), deleting chunks', ex)
-            kwargs['cid'] = obj_meta.get('container_id')
-            self._delete_orphan_chunks(
-                chunk_prep.all_chunks_so_far(), **kwargs)
+            self.logger.warning("Failed to upload all data (%s), deleting chunks", ex)
+            kwargs["cid"] = obj_meta.get("container_id")
+            self._delete_orphan_chunks(chunk_prep.all_chunks_so_far(), **kwargs)
             raise
 
         try:
-            trailing_props = (properties_callback()
-                              if properties_callback else {})
+            trailing_props = properties_callback() if properties_callback else {}
             if not isinstance(trailing_props, dict):
-                raise TypeError("The trailing properties callback "
-                                "should return a dictionary")
+                raise TypeError(
+                    "The trailing properties callback should return a dictionary"
+                )
         except Exception as err:
             self.logger.warning(
                 "Failed to commit to call the trailing properties callback "
-                "(%s), deleting chunks", err)
-            kwargs['cid'] = obj_meta.get('container_id')
+                "(%s), deleting chunks",
+                err,
+            )
+            kwargs["cid"] = obj_meta.get("container_id")
             self._delete_orphan_chunks(ul_chunks, **kwargs)
             raise
 
@@ -1586,18 +1830,19 @@ class ObjectStorageApi(object):
         # upload of the chunks. If the ETag is provided in trailing
         # properties, remove it, because it is not saved at the same place as
         # other object properties.
-        etag = trailing_props.pop('etag', obj_meta.get('etag'))
+        etag = trailing_props.pop("etag", obj_meta.get("etag"))
         if etag and obj_checksum and etag.lower() != obj_checksum.lower():
             raise exc.EtagMismatch(
-                "given etag %s != computed %s" % (etag, obj_checksum))
-        obj_meta['etag'] = obj_checksum or etag
+                "given etag %s != computed %s" % (etag, obj_checksum)
+            )
+        obj_meta["etag"] = obj_checksum or etag
 
         # obj_meta['properties'] contains special properties
         # describing the quality of selected chunks.
         if properties:
-            obj_meta['properties'].update(properties)
+            obj_meta["properties"].update(properties)
         if trailing_props:
-            obj_meta['properties'].update(trailing_props)
+            obj_meta["properties"].update(trailing_props)
 
         # If we are here, we know that the metadata server is fine
         # (it provided us with chunk addresses) and the client is still
@@ -1605,25 +1850,33 @@ class ObjectStorageApi(object):
         # postpone the deadline.
         set_deadline_from_read_timeout(kwargs, force=True)
 
-        data = {'chunks': ul_chunks, 'properties': obj_meta['properties'],
-                'container_properties': kwargs.get('container_properties')}
+        data = {
+            "chunks": ul_chunks,
+            "properties": obj_meta["properties"],
+            "container_properties": kwargs.get("container_properties"),
+        }
         try:
             # FIXME: we may just pass **obj_meta
             self.container.content_create(
-                account, container, obj_name, size=ul_bytes,
-                checksum=obj_checksum, data=data,
-                stgpol=obj_meta['policy'], mime_type=obj_meta['mime_type'],
-                chunk_method=obj_meta['chunk_method'],
-                **kwargs)
+                account,
+                container,
+                obj_name,
+                size=ul_bytes,
+                checksum=obj_checksum,
+                data=data,
+                stgpol=obj_meta["policy"],
+                mime_type=obj_meta["mime_type"],
+                chunk_method=obj_meta["chunk_method"],
+                **kwargs
+            )
         except (exc.BadRequest, exc.Forbidden) as ex:
             # Only delete chunk if the request really failed.
             # If the request was successful in the background, keep the chunks.
-            self.logger.warning(
-                'Failed to commit to meta2 (%s), deleting chunks', ex)
-            kwargs['cid'] = obj_meta['container_id']
+            self.logger.warning("Failed to commit to meta2 (%s), deleting chunks", ex)
+            kwargs["cid"] = obj_meta["container_id"]
             self._delete_orphan_chunks(ul_chunks, **kwargs)
             raise
-        obj_meta['status'] = 'Ok'
+        obj_meta["status"] = "Ok"
         return ul_chunks, ul_bytes, obj_checksum, obj_meta
 
     def _delete_orphan_chunks(self, chunks, cid, **kwargs):
@@ -1632,12 +1885,16 @@ class ObjectStorageApi(object):
         for resp in del_resps:
             if isinstance(resp, Exception):
                 self.logger.warning(
-                    'failed to delete chunk %s (%s)',
-                    resp.chunk.get('real_url', resp.chunk['url']), resp)
+                    "failed to delete chunk %s (%s)",
+                    resp.chunk.get("real_url", resp.chunk["url"]),
+                    resp,
+                )
             elif resp.status not in (204, 404):
                 self.logger.warning(
-                    'failed to delete chunk %s (HTTP %s)',
-                    resp.chunk.get('real_url', resp.chunk['url']), resp.status)
+                    "failed to delete chunk %s (HTTP %s)",
+                    resp.chunk.get("real_url", resp.chunk["url"]),
+                    resp.status,
+                )
 
     @handle_container_not_found
     @patch_kwargs
@@ -1651,8 +1908,7 @@ class ObjectStorageApi(object):
         """
         for i in range(attempts):
             try:
-                self.account.container_reset(account, container, time.time(),
-                                             **kwargs)
+                self.account.container_reset(account, container, time.time(), **kwargs)
                 break
             except exc.Conflict:
                 if i >= attempts - 1:
@@ -1663,8 +1919,7 @@ class ObjectStorageApi(object):
             if err.status != 406 and err.status != 431:
                 raise
             # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
-            self.account.container_delete(account, container, time.time(),
-                                          **kwargs)
+            self.account.container_delete(account, container, time.time(), **kwargs)
 
     @handle_account_not_found
     @patch_kwargs
@@ -1681,11 +1936,12 @@ class ObjectStorageApi(object):
         if account is None:
             accounts = depaginate(
                 self.account.account_list,
-                listing_key=lambda x: x['listing'],
-                item_key=lambda x: x['id'],
-                marker_key=lambda x: x['next_marker'],
-                truncated_key=lambda x: x['truncated'],
-                **kwargs)
+                listing_key=lambda x: x["listing"],
+                item_key=lambda x: x["id"],
+                marker_key=lambda x: x["next_marker"],
+                truncated_key=lambda x: x["truncated"],
+                **kwargs
+            )
         else:
             accounts = [account]
 
@@ -1694,21 +1950,20 @@ class ObjectStorageApi(object):
                 self.account.account_refresh(account, **kwargs)
 
                 if container_refresh:
-                    accounts_to_refresh = (
-                        account, SHARDING_ACCOUNT_PREFIX + account)
+                    accounts_to_refresh = (account, SHARDING_ACCOUNT_PREFIX + account)
                     for sub_account in accounts_to_refresh:
                         containers = depaginate(
                             self.account.container_list,
-                            listing_key=lambda x: x['listing'],
+                            listing_key=lambda x: x["listing"],
                             item_key=lambda x: x[0],
-                            marker_key=lambda x: x['next_marker'],
-                            truncated_key=lambda x: x['truncated'],
+                            marker_key=lambda x: x["next_marker"],
+                            truncated_key=lambda x: x["truncated"],
                             account=sub_account,
-                            **kwargs)
+                            **kwargs
+                        )
                         for container in containers:
                             try:
-                                self.container_refresh(
-                                    sub_account, container, **kwargs)
+                                self.container_refresh(sub_account, container, **kwargs)
                             except exc.NoSuchContainer:
                                 # container remove in the meantime
                                 pass
@@ -1734,7 +1989,7 @@ class ObjectStorageApi(object):
         :rtype: `str`
         :returns: `num_chars` randomly taken from `dictionary`
         """
-        return ''.join(random.choice(dictionary) for _ in range(num_chars))
+        return "".join(random.choice(dictionary) for _ in range(num_chars))
 
     def _link_chunks(self, targets, fullpath, **kwargs):
         """
@@ -1748,9 +2003,10 @@ class ObjectStorageApi(object):
         # TODO(FVE): use a GreenPool to parallelize
         for chunk in targets:
             _, new_chunk_url = self.blob_client.chunk_link(
-                chunk['url'], None, fullpath, **kwargs)
+                chunk["url"], None, fullpath, **kwargs
+            )
             new_chunk = chunk.copy()
-            new_chunk['url'] = new_chunk_url
+            new_chunk["url"] = new_chunk_url
             new_chunks.append(new_chunk)
         return new_chunks
 
@@ -1768,7 +2024,7 @@ class ObjectStorageApi(object):
         # We need to sort the chunks so the meta2 can optimize the update.
         # We could let the meta2 do the sorting but it's easier to do it here.
         def sort_key(chunk):
-            return chunk['id']
+            return chunk["id"]
 
         targets_beans.sort(key=sort_key)
         copies_beans.sort(key=sort_key)
@@ -1779,12 +2035,14 @@ class ObjectStorageApi(object):
         """
         Prepare a dictionary to be used as a chunk "bean" (in meta2 sense).
         """
-        return {"type": "chunk",
-                "id": meta['url'],
-                "hash": meta['hash'],
-                "size": int(meta["size"]),
-                "pos": meta["pos"],
-                "content": content}
+        return {
+            "type": "chunk",
+            "id": meta["url"],
+            "hash": meta["hash"],
+            "size": int(meta["size"]),
+            "pos": meta["pos"],
+            "content": content,
+        }
 
     def object_head(self, account, container, obj, trust_level=0, **kwargs):
         """
@@ -1802,13 +2060,11 @@ class ObjectStorageApi(object):
             elif trust_level == 1:
                 raise NotImplementedError()
             elif trust_level == 2:
-                _, chunks = self.object_locate(account, container, obj,
-                                               **kwargs)
+                _, chunks = self.object_locate(account, container, obj, **kwargs)
                 for chunk in chunks:
-                    self.blob_client.chunk_head(chunk['url'])
+                    self.blob_client.chunk_head(chunk["url"])
             else:
-                raise ValueError(
-                    '`trust_level` must be between 0 and 2')
+                raise ValueError("`trust_level` must be between 0 and 2")
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
             return False
         return True

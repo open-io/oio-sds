@@ -30,7 +30,7 @@ from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 
-RawxService = namedtuple('RawxService', ('status', 'last_time'))
+RawxService = namedtuple("RawxService", ("status", "last_time"))
 
 
 class RdirWorker(object):
@@ -38,8 +38,9 @@ class RdirWorker(object):
     Blob indexer worker responsible for a single volume.
     """
 
-    def __init__(self, conf, volume_path, logger=None, pool_manager=None,
-                 watchdog=None):
+    def __init__(
+        self, conf, volume_path, logger=None, pool_manager=None, watchdog=None
+    ):
         """
         Initializes an RdirWorker.
 
@@ -55,23 +56,22 @@ class RdirWorker(object):
             self.volume_path = volume_path
             self.volume_id = volume_id
         if not self.volume_path:
-            raise exc.ConfigurationException('No volume specified for crawler')
+            raise exc.ConfigurationException("No volume specified for crawler")
         self.running = True
 
         self.wait_random_time_before_starting = boolean_value(
-            self.conf.get('wait_random_time_before_starting'), False)
-        self.scans_interval = int_value(self.conf.get('interval'), 1800)
-        self.report_interval = int_value(self.conf.get('report_interval'), 300)
-        self.max_chunks_per_second = int_value(
-            conf.get('chunks_per_second'), 30)
-        self.conscience_cache = int_value(self.conf.get('conscience_cache'),
-                                          30)
-        self.hash_width = self.conf.get('hash_width')
+            self.conf.get("wait_random_time_before_starting"), False
+        )
+        self.scans_interval = int_value(self.conf.get("interval"), 1800)
+        self.report_interval = int_value(self.conf.get("report_interval"), 300)
+        self.max_chunks_per_second = int_value(conf.get("chunks_per_second"), 30)
+        self.conscience_cache = int_value(self.conf.get("conscience_cache"), 30)
+        self.hash_width = self.conf.get("hash_width")
         if not self.hash_width:
-            raise exc.ConfigurationException('No hash_width specified')
-        self.hash_depth = self.conf.get('hash_depth')
+            raise exc.ConfigurationException("No hash_width specified")
+        self.hash_depth = self.conf.get("hash_depth")
         if not self.hash_depth:
-            raise exc.ConfigurationException('No hash_depth specified')
+            raise exc.ConfigurationException("No hash_depth specified")
 
         self.passes = 0
         self.errors = 0
@@ -84,13 +84,15 @@ class RdirWorker(object):
 
         if not pool_manager:
             pool_manager = get_pool_manager(pool_connections=10)
-        self.index_client = RdirClient(conf, logger=self.logger,
-                                       pool_manager=pool_manager)
-        self.conscience_client = ConscienceClient(self.conf,
-                                                  logger=self.logger,
-                                                  pool_manager=pool_manager)
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
-                                            watchdog=watchdog)
+        self.index_client = RdirClient(
+            conf, logger=self.logger, pool_manager=pool_manager
+        )
+        self.conscience_client = ConscienceClient(
+            self.conf, logger=self.logger, pool_manager=pool_manager
+        )
+        self.chunk_operator = ChunkOperator(
+            self.conf, logger=self.logger, watchdog=watchdog
+        )
 
     def _check_rawx_up(self):
         now = time.time()
@@ -101,16 +103,17 @@ class RdirWorker(object):
 
         status = True
         try:
-            data = self.conscience_client.all_services('rawx')
+            data = self.conscience_client.all_services("rawx")
             # Check that all rawx are UP
             # If one is down, the chunk may be still rebuildable in the future
             for srv in data:
-                tags = srv['tags']
-                addr = srv['addr']
-                up = tags.pop('tag.up', 'n/a')
+                tags = srv["tags"]
+                addr = srv["addr"]
+                up = tags.pop("tag.up", "n/a")
                 if not up:
-                    self.logger.debug('service %s is down, rebuild may not'
-                                      'be possible', addr)
+                    self.logger.debug(
+                        "service %s is down, rebuild may notbe possible", addr
+                    )
                     status = False
                     break
         except exc.OioException:
@@ -129,48 +132,62 @@ class RdirWorker(object):
             return
         since_last_rprt = (now - self.last_report_time) or 0.00001
 
-        self.logger.info('%s volume_id=%s pass=%d repaired=%d errors=%d '
-                         'unrecoverable=%d orphans=%d chunks=%d '
-                         'rate_since_last_report=%.2f/s',
-                         tag, self.volume_id,
-                         self.passes, self.repaired, self.errors,
-                         self.unrecoverable_content,
-                         self.orphans,
-                         self.scanned_since_last_report,
-                         self.scanned_since_last_report / since_last_rprt)
+        self.logger.info(
+            "%s volume_id=%s pass=%d repaired=%d errors=%d "
+            "unrecoverable=%d orphans=%d chunks=%d "
+            "rate_since_last_report=%.2f/s",
+            tag,
+            self.volume_id,
+            self.passes,
+            self.repaired,
+            self.errors,
+            self.unrecoverable_content,
+            self.orphans,
+            self.scanned_since_last_report,
+            self.scanned_since_last_report / since_last_rprt,
+        )
         self.last_report_time = now
         self.scanned_since_last_report = 0
 
     def error(self, container_id, chunk_id, msg, reqid=None):
         self.logger.error(
-            'volume_id=%s container_id=%s chunk_id=%s request_id=%s %s',
-            self.volume_id, container_id, chunk_id, reqid, msg)
+            "volume_id=%s container_id=%s chunk_id=%s request_id=%s %s",
+            self.volume_id,
+            container_id,
+            chunk_id,
+            reqid,
+            msg,
+        )
 
     def _build_chunk_path(self, chunk_id):
         chunk_path = self.volume_path
 
         for i in range(int(self.hash_depth)):
-            start = chunk_id[i * int(self.hash_width):]
-            chunk_path = '{}/{}'.format(chunk_path,
-                                        start[:int(self.hash_width)])
+            start = chunk_id[i * int(self.hash_width) :]
+            chunk_path = "{}/{}".format(chunk_path, start[: int(self.hash_width)])
 
-        chunk_path = '{}/{}'.format(chunk_path, chunk_id)
+        chunk_path = "{}/{}".format(chunk_path, chunk_id)
 
         return chunk_path
 
     def _rebuild_chunk(self, container_id, chunk_id, value, reqid):
         try:
             self.chunk_operator.rebuild(
-                container_id, value['content_id'], chunk_id,
-                rawx_id=self.volume_id, path=value['path'],
-                version=value['version'], reqid=reqid)
+                container_id,
+                value["content_id"],
+                chunk_id,
+                rawx_id=self.volume_id,
+                path=value["path"],
+                version=value["version"],
+                reqid=reqid,
+            )
             self.repaired += 1
         except exc.OioException as err:
             self.errors += 1
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
                 if self._check_rawx_up():
-                    error = '%(err)s, action required' % {'err': str(err)}
+                    error = "%(err)s, action required" % {"err": str(err)}
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
                 # Note for later: if it an orphan chunk, we should tag it and
@@ -178,13 +195,11 @@ class RdirWorker(object):
                 # responsible for those tagged chunks.
                 self.orphans += 1
             else:
-                error = '%(err)s, not possible to get list of rawx' \
-                    % {'err': str(err)}
+                error = "%(err)s, not possible to get list of rawx" % {"err": str(err)}
                 self.error(container_id, chunk_id, error, reqid=reqid)
 
     def process_entry(self, container_id, chunk_id, value, reqid):
-        self.logger.debug("current chunk_id=%s volume_id=%s",
-                          chunk_id, self.volume_id)
+        self.logger.debug("current chunk_id=%s volume_id=%s", chunk_id, self.volume_id)
 
         chunk_path = self._build_chunk_path(chunk_id)
 
@@ -195,7 +210,7 @@ class RdirWorker(object):
 
     def crawl_volume(self):
         self.passes += 1
-        self.report('starting', force=True)
+        self.report("starting", force=True)
         # reset crawler stats
         self.errors = 0
         self.orphans = 0
@@ -211,25 +226,28 @@ class RdirWorker(object):
                     self.logger.info("Stop asked")
                     break
 
-                reqid = request_id('rdir-crawler-')
+                reqid = request_id("rdir-crawler-")
                 try:
                     self.process_entry(container_id, chunk_id, value, reqid)
                 except exc.OioException as err:
-                    self.error(container_id, chunk_id,
-                               'failed to process, err={}'.format(err),
-                               reqid=reqid)
+                    self.error(
+                        container_id,
+                        chunk_id,
+                        "failed to process, err={}".format(err),
+                        reqid=reqid,
+                    )
 
-                last_scan_time = ratelimit(
-                    last_scan_time, self.max_chunks_per_second)
+                last_scan_time = ratelimit(last_scan_time, self.max_chunks_per_second)
 
-                self.report('running')
+                self.report("running")
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:
-            self.logger.debug('Service busy or not available: %s', err)
+            self.logger.debug("Service busy or not available: %s", err)
         except exc.OioException as err:
-            self.logger.exception('Failed to crawl volume_id=%s, err=%s',
-                                  self.volume_id, err)
+            self.logger.exception(
+                "Failed to crawl volume_id=%s, err=%s", self.volume_id, err
+            )
 
-        self.report('ended', force=True)
+        self.report("ended", force=True)
 
     def _wait_next_iteration(self, start_crawl):
         crawling_duration = time.time() - start_crawl
@@ -240,8 +258,11 @@ class RdirWorker(object):
                     return
                 time.sleep(1)
         else:
-            self.logger.warning('Crawling duration=%.2f for volume_id=%s is '
-                                'high', crawling_duration, self.volume_id)
+            self.logger.warning(
+                "Crawling duration=%.2f for volume_id=%s is high",
+                crawling_duration,
+                self.volume_id,
+            )
 
     def run(self, *args, **kwargs):
         """
@@ -249,8 +270,9 @@ class RdirWorker(object):
         """
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
-            self.logger.info('Waiting %d seconds before starting',
-                             waiting_time_to_start)
+            self.logger.info(
+                "Waiting %d seconds before starting", waiting_time_to_start
+            )
             for _ in range(waiting_time_to_start):
                 if not self.running:
                     return
@@ -278,11 +300,12 @@ class RdirCrawler(Daemon):
         self.logger = get_logger(conf)
         if not conf.get("volume_list"):
             raise exc.OioException("No rawx volumes provided to index!")
-        self.volumes = [x.strip() for x in conf.get('volume_list').split(',')]
+        self.volumes = [x.strip() for x in conf.get("volume_list").split(",")]
         self.watchdog = get_watchdog(called_from_main_application=True)
         self.pool = ContextPool(len(self.volumes))
-        self.volume_workers = [RdirWorker(conf, x, watchdog=self.watchdog)
-                               for x in self.volumes]
+        self.volume_workers = [
+            RdirWorker(conf, x, watchdog=self.watchdog) for x in self.volumes
+        ]
 
     def run(self, *args, **kwargs):
         self.logger.info("Started rdir crawler service")

@@ -18,12 +18,11 @@ from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 
 
 class Logger(Filter):
-
-    NAME = 'Logger'
+    NAME = "Logger"
 
     def init(self):
         self.successes = 0
-        self.volume_id = self.app_env['volume_id']
+        self.volume_id = self.app_env["volume_id"]
 
     def process(self, env, cb):
         chunk = ChunkWrapper(env)
@@ -33,7 +32,7 @@ class Logger(Filter):
 
     def _get_filter_stats(self):
         return {
-            'successes': self.successes,
+            "successes": self.successes,
         }
 
     def _reset_filter_stats(self):
@@ -46,4 +45,5 @@ def filter_factory(global_conf, **local_conf):
 
     def logger_filter(app):
         return Logger(app, conf)
+
     return logger_filter

@@ -21,82 +21,81 @@ from oio.common.easy_value import int_value
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
-EXCEPTIONS = [exc.BadRequest,
-              exc.Forbidden,
-              exc.NotFound,
-              exc.MethodNotAllowed,
-              exc.Conflict,
-              exc.ClientPreconditionFailed,
-              exc.TooLarge,
-              exc.UnsatisfiableRange,
-              exc.ServiceBusy]
+EXCEPTIONS = [
+    exc.BadRequest,
+    exc.Forbidden,
+    exc.NotFound,
+    exc.MethodNotAllowed,
+    exc.Conflict,
+    exc.ClientPreconditionFailed,
+    exc.TooLarge,
+    exc.UnsatisfiableRange,
+    exc.ServiceBusy,
+]
 
 
 class TesterTask(XcuteTask):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         super(TesterTask, self).__init__(
-            conf, job_params, logger=logger, watchdog=watchdog)
+            conf, job_params, logger=logger, watchdog=watchdog
+        )
 
-        self.error_percentage = job_params['error_percentage']
+        self.error_percentage = job_params["error_percentage"]
 
     def process(self, task_id, task_payload, reqid=None):
-        msg = task_payload['msg']
+        msg = task_payload["msg"]
 
-        self.logger.info('[reqid=%s] Hello: %s', reqid, msg)
+        self.logger.info("[reqid=%s] Hello: %s", reqid, msg)
 
-        if self.error_percentage \
-                and random.randrange(100) < self.error_percentage:
+        if self.error_percentage and random.randrange(100) < self.error_percentage:
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()
 
-        return {'counter': len(msg)}
+        return {"counter": len(msg)}
 
 
 class TesterJob(XcuteJob):
-
-    JOB_TYPE = 'tester'
+    JOB_TYPE = "tester"
     TASK_CLASS = TesterTask
 
     DEFAULT_START = 0
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
-    DEFAULT_LOCK = 'tester_lock'
+    DEFAULT_LOCK = "tester_lock"
 
     @classmethod
     def sanitize_params(cls, job_params):
-        sanitized_job_params, _ = super(
-            TesterJob, cls).sanitize_params(job_params)
+        sanitized_job_params, _ = super(TesterJob, cls).sanitize_params(job_params)
 
-        sanitized_job_params['start'] = int_value(
-            job_params.get('start'), cls.DEFAULT_START)
+        sanitized_job_params["start"] = int_value(
+            job_params.get("start"), cls.DEFAULT_START
+        )
 
-        sanitized_job_params['end'] = int_value(
-            job_params.get('end'), cls.DEFAULT_END)
+        sanitized_job_params["end"] = int_value(job_params.get("end"), cls.DEFAULT_END)
 
-        sanitized_job_params['error_percentage'] = int_value(
-            job_params.get('error_percentage'),
-            cls.DEFAULT_ERROR_PERCENTAGE)
+        sanitized_job_params["error_percentage"] = int_value(
+            job_params.get("error_percentage"), cls.DEFAULT_ERROR_PERCENTAGE
+        )
 
-        return sanitized_job_params, job_params.get('lock', cls.DEFAULT_LOCK)
+        return sanitized_job_params, job_params.get("lock", cls.DEFAULT_LOCK)
 
     def get_tasks(self, job_params, marker=None):
-        start = job_params['start']
-        end = job_params['end']
+        start = job_params["start"]
+        end = job_params["end"]
 
         if marker:
             start = int(marker) + 1
 
         for i in range(start, end):
             task_id = str(i)
-            task_payload = {'msg': 'World %d' % i}
+            task_payload = {"msg": "World %d" % i}
 
             yield (task_id, task_payload)
 
     def get_total_tasks(self, job_params, marker=None):
-        start = job_params['start']
+        start = job_params["start"]
         if marker is not None:
             start = int(marker) + 1
-        end = job_params['end']
+        end = job_params["end"]
 
         yield (str(end - 1), end - start)

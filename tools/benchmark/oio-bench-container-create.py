@@ -35,7 +35,7 @@ def create_loop(prefix):
         name = prefix + str(iteration)
         iteration += 1
         try:
-            API.container_create('benchmark', name)
+            API.container_create("benchmark", name)
             RESULTS.put(name)
             sleep(0)
         except Exception as err:
@@ -46,13 +46,15 @@ def main(threads, delay=2.0, duration=30.0):
     counter = 0
     created = list()
     now = start = checkpoint = time.time()
-    POOL.starmap(create_loop, [('%d-' % n, ) for n in range(threads)])
+    POOL.starmap(create_loop, [("%d-" % n,) for n in range(threads)])
     while now - start < duration:
         res = RESULTS.get()
         counter += 1
         if now - checkpoint > delay:
-            print("%d containers in %fs, %f containers per second." % (
-                  counter, now - checkpoint, counter / (now - checkpoint)))
+            print(
+                "%d containers in %fs, %f containers per second."
+                % (counter, now - checkpoint, counter / (now - checkpoint))
+            )
             counter = 0
             checkpoint = now
         created.append(res)
@@ -63,21 +65,23 @@ def main(threads, delay=2.0, duration=30.0):
         created.append(RESULTS.get(block=False))
     end = time.time()
     rate = len(created) / (end - start)
-    print("End. %d containers created in %fs, %f containers per second." % (
-          len(created), end - start, rate))
+    print(
+        "End. %d containers created in %fs, %f containers per second."
+        % (len(created), end - start, rate)
+    )
     print("Cleaning...")
-    for _ in POOL.starmap(API.container_delete,
-                          [('benchmark', n) for n in created]):
+    for _ in POOL.starmap(API.container_delete, [("benchmark", n) for n in created]):
         pass
     POOL.waitall()
     return rate
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import os
     import sys
+
     THREADS = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    API = ObjectStorageApi(os.getenv('OIO_NS', 'OPENIO'))
+    API = ObjectStorageApi(os.getenv("OIO_NS", "OPENIO"))
     RESULTS = LightQueue(THREADS * 10)
     POOL = GreenPool(THREADS)
     main(THREADS)

@@ -23,7 +23,7 @@ import beanstalkc
 def dump_buried(host, port):
     beanstalk = beanstalkc.Connection(host=host, port=int(port))
 
-    beanstalk.use('oio')
+    beanstalk.use("oio")
 
     while True:
         job = beanstalk.peek_buried()
@@ -36,5 +36,5 @@ def dump_buried(host, port):
 
 
 if __name__ == "__main__":
-    host, port = sys.argv[1].split(':')
+    host, port = sys.argv[1].split(":")
     dump_buried(host, port)

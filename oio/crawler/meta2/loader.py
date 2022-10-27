@@ -17,27 +17,25 @@ from oio.event import loader
 
 
 class _Handler(loader._Handler):
-    egg_protocols = ['oio.crawler.meta2.handler_factory']
-    config_prefixes = ['pipeline']
+    egg_protocols = ["oio.crawler.meta2.handler_factory"]
+    config_prefixes = ["pipeline"]
 
 
 HANDLER = _Handler()
 
 
 class _Filter(loader._Filter):
-    egg_protocols = ['oio.crawler.meta2.filter_factory']
+    egg_protocols = ["oio.crawler.meta2.filter_factory"]
 
 
 FILTER = _Filter()
 
 
 class ConfigLoader(loader.ConfigLoader):
-
     HANDLER = HANDLER
     FILTER = FILTER
 
 
 def loadpipeline(path, global_conf=None, **kwargs):
     config_loader = ConfigLoader(path)
-    return loader.loadhandler(
-        config_loader, 'main', global_conf, **kwargs)
+    return loader.loadhandler(config_loader, "main", global_conf, **kwargs)

@@ -31,7 +31,7 @@ DUMMY_QUAL = {
     "final_slot": "rawx",
     "cur_items": "9.9.3.1",
     "hard_max_items": "9.9.3.1",
-    "soft_max_items": "9.9.3.1"
+    "soft_max_items": "9.9.3.1",
 }
 DUMMY_QUAL_JSON = (
     '{"expected_dist":2,"final_dist":2,'
@@ -49,74 +49,109 @@ class ContainerClientTest(unittest.TestCase):
         self.fake_account_endpoint = "http://1.2.3.4:8080"
         self.watchdog = get_watchdog(called_from_main_application=True)
         self.api = FakeStorageApi(
-            "NS", endpoint=self.fake_endpoint,
+            "NS",
+            endpoint=self.fake_endpoint,
             account_endpoint=self.fake_account_endpoint,
-            watchdog=self.watchdog)
+            watchdog=self.watchdog,
+        )
         self.account = "test_container_client"
         self.container = "fake_container"
 
     def test_content_create_busy_retry(self):
         # Several attempts, service still busy
-        with patch('oio.api.base.HttpApi._direct_request',
-                   Mock(side_effect=ServiceBusy(""))):
+        with patch(
+            "oio.api.base.HttpApi._direct_request", Mock(side_effect=ServiceBusy(""))
+        ):
             self.assertRaises(
                 ServiceBusy,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={},
-                request_attempts=3)
+                self.account,
+                self.container,
+                "test",
+                size=1,
+                data={},
+                request_attempts=3,
+            )
 
         # Conflict error at first attempt
-        with patch('oio.api.base.HttpApi._direct_request',
-                   Mock(side_effect=Conflict(""))):
+        with patch(
+            "oio.api.base.HttpApi._direct_request", Mock(side_effect=Conflict(""))
+        ):
             self.assertRaises(
                 Conflict,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={},
-                request_attempts=3)
+                self.account,
+                self.container,
+                "test",
+                size=1,
+                data={},
+                request_attempts=3,
+            )
 
         # Service busy followed by Conflict: operation probably
         # finished in background after the proxy timed out
-        with patch('oio.api.base.HttpApi._direct_request',
-                   Mock(side_effect=[ServiceBusy(), Conflict("")])):
+        with patch(
+            "oio.api.base.HttpApi._direct_request",
+            Mock(side_effect=[ServiceBusy(), Conflict("")]),
+        ):
             self.api.container.content_create(
-                self.account, self.container, "test", size=1, data={},
-                request_attempts=3)
+                self.account,
+                self.container,
+                "test",
+                size=1,
+                data={},
+                request_attempts=3,
+            )
 
     def test_content_create_busy_noretry(self):
         # Conflict error + no retry configured -> no retry issued
-        with patch('oio.api.base.HttpApi._direct_request',
-                   Mock(side_effect=[Conflict(""), ServiceBusy("")])):
+        with patch(
+            "oio.api.base.HttpApi._direct_request",
+            Mock(side_effect=[Conflict(""), ServiceBusy("")]),
+        ):
             self.assertRaises(
                 Conflict,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={})
+                self.account,
+                self.container,
+                "test",
+                size=1,
+                data={},
+            )
 
         # Service busy + no retry configured -> no retry must be done
         # and the Conflict side effect is not used.
-        with patch('oio.api.base.HttpApi._direct_request',
-                   Mock(side_effect=[ServiceBusy(), Conflict("")])):
+        with patch(
+            "oio.api.base.HttpApi._direct_request",
+            Mock(side_effect=[ServiceBusy(), Conflict("")]),
+        ):
             self.assertRaises(
                 ServiceBusy,
                 self.api.container.content_create,
-                self.account, self.container, "test", size=1, data={})
+                self.account,
+                self.container,
+                "test",
+                size=1,
+                data={},
+            )
 
-    def _gen_chunk_qual(self, host='127.0.0.1:6021'):
-        key = '%shttp://%s/%s' % (CHUNK_SYSMETA_PREFIX, host, random_id(64))
+    def _gen_chunk_qual(self, host="127.0.0.1:6021"):
+        key = "%shttp://%s/%s" % (CHUNK_SYSMETA_PREFIX, host, random_id(64))
         return key, DUMMY_QUAL_JSON
 
     def test_extract_chunk_qualities(self):
         properties = dict()
-        properties.update((self._gen_chunk_qual(), ))
-        properties.update((self._gen_chunk_qual('127.0.0.2:6022'), ))
-        properties.update((self._gen_chunk_qual('127.0.0.3:6023'), ))
+        properties.update((self._gen_chunk_qual(),))
+        properties.update((self._gen_chunk_qual("127.0.0.2:6022"),))
+        properties.update((self._gen_chunk_qual("127.0.0.3:6023"),))
         keys = list(properties.keys())  # PY3: make a list from the view
-        properties.update({'a': 'b'})
+        properties.update({"a": "b"})
 
         quals = extract_chunk_qualities(properties)
 
-        self.assertNotIn('a', quals)
+        self.assertNotIn("a", quals)
         for key in keys:
-            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX):], quals)
+            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX) :], quals)
         for val in quals.values():
             self.assertDictEqual(DUMMY_QUAL, val)
 
@@ -124,15 +159,15 @@ class ContainerClientTest(unittest.TestCase):
         properties = list()
         keys = list()
         for i in range(1, 4):
-            key, val = self._gen_chunk_qual('127.0.0.%d:602%d' % (i, i))
-            properties.append({'key': key, 'value': val})
+            key, val = self._gen_chunk_qual("127.0.0.%d:602%d" % (i, i))
+            properties.append({"key": key, "value": val})
             keys.append(key)
-        properties.append({'key': 'a', 'value': 'b'})
+        properties.append({"key": "a", "value": "b"})
 
         quals = extract_chunk_qualities(properties, raw=True)
 
-        self.assertNotIn('a', quals)
+        self.assertNotIn("a", quals)
         for key in keys:
-            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX):], quals)
+            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX) :], quals)
         for val in quals.values():
             self.assertDictEqual(DUMMY_QUAL, val)

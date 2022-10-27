@@ -19,7 +19,6 @@ from oio.common.utils import cid_from_name
 
 
 class CommandMixin(object):
-
     @property
     def watchdog(self):
         """Get a reference to the main Watchdog instance."""
@@ -39,10 +38,10 @@ class AccountCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'accounts',
-            nargs='*',
-            metavar='<account_name>',
-            help='Name of the account to work on.'
+            "accounts",
+            nargs="*",
+            metavar="<account_name>",
+            help="Name of the account to work on.",
         )
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -57,15 +56,15 @@ class ContainerCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'containers',
-            nargs='+',
-            metavar='<container_name>',
-            help='Name of the container to work on.'
+            "containers",
+            nargs="+",
+            metavar="<container_name>",
+            help="Name of the container to work on.",
         )
         parser.add_argument(
-            '--cid',
-            action='store_true',
-            dest='is_cid',
+            "--cid",
+            action="store_true",
+            dest="is_cid",
             help="Interpret <container_name> as a container ID",
         )
 
@@ -79,8 +78,9 @@ class ContainerCommandMixin(CommandMixin):
                 account = None
                 container_name = None
                 if not no_name:
-                    account, container_name = \
-                        app.client_manager.storage.resolve_cid(container_id)
+                    account, container_name = app.client_manager.storage.resolve_cid(
+                        container_id
+                    )
                 if no_id:
                     container_id = None
                 containers.append((account, container_name, container_id))
@@ -104,39 +104,45 @@ class ObjectCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'container',
-            metavar='<container_name>',
-            nargs='?',
-            help=("Name or cid of the container to interact with.\n" +
-                  "Optional if --auto is specified.")
+            "container",
+            metavar="<container_name>",
+            nargs="?",
+            help=(
+                "Name or cid of the container to interact with.\n"
+                + "Optional if --auto is specified."
+            ),
         )
         parser.add_argument(
-            'objects',
-            metavar='<object_name>',
-            nargs='*',
-            help='Name of the object to work on.'
+            "objects",
+            metavar="<object_name>",
+            nargs="*",
+            help="Name of the object to work on.",
         )
         parser.add_argument(
-            '--object-version',
-            metavar='<version>',
-            help=("Version of the object to work on. Can be used when only "
-                  "one object is specified on command line.")
+            "--object-version",
+            metavar="<version>",
+            help=(
+                "Version of the object to work on. Can be used when only "
+                "one object is specified on command line."
+            ),
         )
         parser.add_argument(
-            '--auto',
+            "--auto",
             action="store_true",
-            help=("Auto-generate the container name according to the " +
-                  "'flat_*' namespace parameters (<container> is ignored)."),
+            help=(
+                "Auto-generate the container name according to the "
+                + "'flat_*' namespace parameters (<container> is ignored)."
+            ),
         )
         parser.add_argument(
-            '--flat-bits',
+            "--flat-bits",
             type=int,
             help="Number of bits for flat-NS computation",
         )
         parser.add_argument(
-            '--cid',
-            action='store_true',
-            dest='is_cid',
+            "--cid",
+            action="store_true",
+            dest="is_cid",
             help="Interpret <container_name> as a container ID",
         )
 
@@ -144,8 +150,10 @@ class ObjectCommandMixin(CommandMixin):
     def check_and_load_parsed_args(self, app, parsed_args):
         if not parsed_args.container and not parsed_args.auto:
             from argparse import ArgumentError
-            raise ArgumentError(parsed_args.container,
-                                "Missing value for container_name or --auto")
+
+            raise ArgumentError(
+                parsed_args.container, "Missing value for container_name or --auto"
+            )
         # If we are generating the container name automatically,
         # the first object name is in the container variable.
         if parsed_args.auto:
@@ -153,7 +161,8 @@ class ObjectCommandMixin(CommandMixin):
             parsed_args.container = None
         if not parsed_args.objects:
             from argparse import ArgumentError
-            raise ArgumentError(None, 'Missing value for object_name')
+
+            raise ArgumentError(None, "Missing value for object_name")
         if parsed_args.flat_bits:
             app.client_manager.flatns_set_bits(parsed_args.flat_bits)
 
@@ -169,16 +178,15 @@ class ObjectCommandMixin(CommandMixin):
                 objects.append((ct, obj, parsed_args.object_version))
         else:
             if parsed_args.is_cid:
-                account, container = \
-                    app.client_manager.storage.resolve_cid(
-                        parsed_args.container)
+                account, container = app.client_manager.storage.resolve_cid(
+                    parsed_args.container
+                )
             else:
                 account = app.options.account
                 container = parsed_args.container
             containers.add(container)
             for obj in parsed_args.objects:
-                objects.append(
-                    (container, obj, parsed_args.object_version))
+                objects.append((container, obj, parsed_args.object_version))
         return account, containers, objects
 
 
@@ -189,10 +197,10 @@ class ChunkCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'chunks',
-            metavar='<chunk_url>',
-            nargs='+',
-            help='URL of the chunk to work on.'
+            "chunks",
+            metavar="<chunk_url>",
+            nargs="+",
+            help="URL of the chunk to work on.",
         )
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -206,9 +214,9 @@ class SingleServiceCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            help=("ID of the service to work on."),
+            "service",
+            metavar="<service_id>",
+            help="ID of the service to work on.",
         )
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -224,11 +232,12 @@ class MultipleServicesCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'services',
-            nargs='*',
-            metavar='<service_id>',
-            help=("ID of the service to work on. "
-                  "If no service is specified, work on all."),
+            "services",
+            nargs="*",
+            metavar="<service_id>",
+            help=(
+                "ID of the service to work on. If no service is specified, work on all."
+            ),
         )
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -237,8 +246,9 @@ class MultipleServicesCommandMixin(CommandMixin):
         """
         if not parsed_args.services:
             parsed_args.services = [
-                s['id'] for s in app.client_manager.conscience.all_services(
-                    self.service_type)]
+                s["id"]
+                for s in app.client_manager.conscience.all_services(self.service_type)
+            ]
 
 
 class ProxyCommandMixin(CommandMixin):
@@ -248,11 +258,10 @@ class ProxyCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            nargs='?',
-            help=("ID of the proxy to work on. "
-                  "If not specified, use the local one."),
+            "service",
+            metavar="<service_id>",
+            nargs="?",
+            help="ID of the proxy to work on. If not specified, use the local one.",
         )
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -270,34 +279,40 @@ class ToolCommandMixin(CommandMixin):
 
     def patch_parser(self, parser):
         parser.add_argument(
-            '--report-interval', type=int,
-            help='Report interval in seconds. '
-                 '(default=%d)'
-                 % self.tool_class.DEFAULT_REPORT_INTERVAL)
+            "--report-interval",
+            type=int,
+            help="Report interval in seconds. (default=%d)"
+            % self.tool_class.DEFAULT_REPORT_INTERVAL,
+        )
         parser.add_argument(
-            '--items-per-second', type=int,
-            help='Max items per second. '
-                 '(default=%d)'
-                 % self.tool_class.DEFAULT_ITEM_PER_SECOND)
+            "--items-per-second",
+            type=int,
+            help="Max items per second. (default=%d)"
+            % self.tool_class.DEFAULT_ITEM_PER_SECOND,
+        )
         if self.distributed:  # distributed
-            distributed_tube_help = """
+            distributed_tube_help = (
+                """
 The beanstalkd tube to use to send the items to rebuild. (default=%s)
-""" % self.tool_class.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
-            parser.add_argument(
-                '--distributed-tube',
-                help=distributed_tube_help)
+"""
+                % self.tool_class.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
+            )
+            parser.add_argument("--distributed-tube", help=distributed_tube_help)
         else:  # local
             parser.add_argument(
-                '--concurrency', type=int,
-                help='Number of coroutines to spawn. '
-                     '(default=%d)' % self.tool_class.DEFAULT_CONCURRENCY)
+                "--concurrency",
+                type=int,
+                help="Number of coroutines to spawn. (default=%d)"
+                % self.tool_class.DEFAULT_CONCURRENCY,
+            )
 
     def check_and_load_parsed_args(self, app, parsed_args):
         self.tool_conf.update(app.client_manager.client_conf)
-        self.tool_conf['report_interval'] = parsed_args.report_interval
-        self.tool_conf['items_per_second'] = parsed_args.items_per_second
+        self.tool_conf["report_interval"] = parsed_args.report_interval
+        self.tool_conf["items_per_second"] = parsed_args.items_per_second
         if self.distributed:  # distributed
-            self.tool_conf['distributed_beanstalkd_worker_tube'] = \
-                parsed_args.distributed_tube
+            self.tool_conf[
+                "distributed_beanstalkd_worker_tube"
+            ] = parsed_args.distributed_tube
         else:  # local
-            self.tool_conf['concurrency'] = parsed_args.concurrency
+            self.tool_conf["concurrency"] = parsed_args.concurrency

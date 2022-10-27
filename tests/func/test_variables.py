@@ -23,10 +23,10 @@ from hashlib import md5
 
 def test_gen_variables(path):
     with open(path + "/Variables.md") as fo:
-        committed = md5(fo.read().encode('utf-8')).hexdigest()
-    subprocess.check_call(['./confgen.py', 'github', './conf.json'], cwd=path)
+        committed = md5(fo.read().encode("utf-8")).hexdigest()
+    subprocess.check_call(["./confgen.py", "github", "./conf.json"], cwd=path)
     with open(path + "/Variables.md") as fo:
-        generated = md5(fo.read().encode('utf-8')).hexdigest()
+        generated = md5(fo.read().encode("utf-8")).hexdigest()
 
     assert committed == generated, "Variables.md is not up-to-date"
 

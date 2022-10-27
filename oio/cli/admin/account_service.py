@@ -30,29 +30,36 @@ class AccountServiceClean(ShowOne):
     def get_parser(self, prog_name):
         parser = super(AccountServiceClean, self).get_parser(prog_name)
         parser.add_argument(
-            '--no-dry-run',
-            dest='dry_run',
+            "--no-dry-run",
+            dest="dry_run",
             default=True,
-            action='store_false',
-            help='Report action that should be taken')
+            action="store_false",
+            help="Report action that should be taken",
+        )
         return parser
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
+        self.logger.debug("take_action(%s)", parsed_args)
 
         if not parsed_args.dry_run:
             input_text = input(
-                'Please note that this command will delete data in '
-                'the account service.\nAre you sure you want to continue? '
-                '[No/yes] ')
-            if input_text.lower() != 'yes':
-                return (('success', 'deleted-containers', 'released-buckets'),
-                        ('Aborted', 0, 0))
+                "Please note that this command will delete data in "
+                "the account service.\nAre you sure you want to continue? "
+                "[No/yes] "
+            )
+            if input_text.lower() != "yes":
+                return (
+                    ("success", "deleted-containers", "released-buckets"),
+                    ("Aborted", 0, 0),
+                )
 
         cleaner = AccountServiceCleaner(
-            self.app.client_manager.namespace, dry_run=parsed_args.dry_run,
-            logger=self.logger)
+            self.app.client_manager.namespace,
+            dry_run=parsed_args.dry_run,
+            logger=self.logger,
+        )
         self.success = cleaner.run()
-        return (('success', 'deleted-containers', 'deleted-buckets'),
-                (self.success, cleaner.deleted_containers,
-                 cleaner.deleted_buckets))
+        return (
+            ("success", "deleted-containers", "deleted-buckets"),
+            (self.success, cleaner.deleted_containers, cleaner.deleted_buckets),
+        )

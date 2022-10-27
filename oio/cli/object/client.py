@@ -19,7 +19,7 @@ from oio.api.object_storage import ObjectStorageApi
 
 LOG = getLogger(__name__)
 
-API_NAME = 'storage'
+API_NAME = "storage"
 
 
 def make_client(instance):
@@ -27,6 +27,6 @@ def make_client(instance):
         endpoint=instance.get_endpoint(),
         namespace=instance.namespace,
         admin_mode=instance.admin_mode,
-        perfdata=instance.cli_conf().get('perfdata')
+        perfdata=instance.cli_conf().get("perfdata"),
     )
     return client

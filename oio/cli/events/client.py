@@ -18,7 +18,7 @@ from oio.event.client import EventClient
 
 LOG = getLogger(__name__)
 
-API_NAME = 'event'
+API_NAME = "event"
 
 
 def make_client(instance):
@@ -29,7 +29,5 @@ def make_client(instance):
     :param instance: an instance of ClientManager
     :returns: an instance of EventClient
     """
-    client = EventClient(
-        instance.cli_conf()
-    )
+    client = EventClient(instance.cli_conf())
     return client

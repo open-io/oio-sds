@@ -19,9 +19,7 @@ from oio.conscience.stats.http import HttpStat
 class RdirStat(HttpStat):
     """Specialization of HttpStat for rdir services"""
 
-    renamed_keys = {
-        'stat.service_id': 'tag.service_id'
-    }
+    renamed_keys = {"stat.service_id": "tag.service_id"}
 
     def get_stats(self, reqid=None):
         stats = super(RdirStat, self).get_stats(reqid=reqid)

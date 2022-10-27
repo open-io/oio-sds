@@ -20,39 +20,40 @@ from tests.functional.cli import CliTestCase, CommandFailed
 
 class ReferenceTest(CliTestCase):
     """Functional tests for references."""
+
     NAME = uuid.uuid4().hex
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        opts = cls.get_opts(['Name'])
-        output = cls.openio('reference create ' + cls.NAME + opts)
-        cls.assertOutput(cls.NAME + '\n', output)
+        opts = cls.get_opts(["Name"])
+        output = cls.openio("reference create " + cls.NAME + opts)
+        cls.assertOutput(cls.NAME + "\n", output)
 
     @classmethod
     def tearDownClass(cls):
-        output = cls.openio('reference delete ' + cls.NAME)
-        cls.assertOutput('', output)
+        output = cls.openio("reference delete " + cls.NAME)
+        cls.assertOutput("", output)
         super().tearDownClass()
 
     def test_reference_show(self):
-        opts = self.get_opts(['name'])
-        output = self.openio('reference show ' + self.NAME + opts)
-        self.assertEqual(self.NAME + '\n', output)
+        opts = self.get_opts(["name"])
+        output = self.openio("reference show " + self.NAME + opts)
+        self.assertEqual(self.NAME + "\n", output)
 
     def test_reference_properties(self):
         key = uuid.uuid4().hex
         value = uuid.uuid4().hex
         output = self.openio(
-            'reference set ' + self.NAME + ' --property ' + key + '=' + value)
-        self.assertOutput('', output)
-        opts = self.get_opts(['meta.' + key])
-        output = self.openio(
-            'reference show ' + self.NAME + opts)
-        self.assertEqual(value + '\n', output)
+            "reference set " + self.NAME + " --property " + key + "=" + value
+        )
+        self.assertOutput("", output)
+        opts = self.get_opts(["meta." + key])
+        output = self.openio("reference show " + self.NAME + opts)
+        self.assertEqual(value + "\n", output)
 
-        output = self.openio(
-            'reference unset ' + self.NAME + ' --property ' + key)
-        self.assertOutput('', output)
+        output = self.openio("reference unset " + self.NAME + " --property " + key)
+        self.assertOutput("", output)
         self.assertRaises(
-            CommandFailed, self.openio, 'reference show ' + self.NAME + opts)
+            CommandFailed, self.openio, "reference show " + self.NAME + opts
+        )

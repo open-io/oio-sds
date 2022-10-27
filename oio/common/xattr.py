@@ -17,8 +17,11 @@
 from __future__ import absolute_import
 import errno
 
-from oio.common.constants import CHUNK_XATTR_KEYS, \
-    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
+from oio.common.constants import (
+    CHUNK_XATTR_KEYS,
+    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
+    OIO_VERSION,
+)
 from oio.common.easy_value import debinarize
 
 
@@ -41,16 +44,15 @@ def read_user_xattr(fd):
     try:
         it = xattr.get_all(fd)
     except IOError as err:
-        for code in ('ENOTSUP', 'EOPNOTSUPP', 'ENOENT'):
+        for code in ("ENOTSUP", "EOPNOTSUPP", "ENOENT"):
             if hasattr(errno, code) and err.errno == getattr(errno, code):
                 raise err
 
-    meta = debinarize({k[5:]: v for k, v in it if k.startswith(b'user.')})
+    meta = debinarize({k[5:]: v for k, v in it if k.startswith(b"user.")})
     return meta
 
 
-def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
-                       xattr_to_remove=None):
+def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False, xattr_to_remove=None):
     """
     Insert new fullpath extended attributes, remove deprecated ones.
 
@@ -65,23 +67,30 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
     for chunk_id, new_fullpath in new_fullpaths.items():
         xattr.setxattr(
             fd,
-            'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
-            new_fullpath.encode('utf-8'))
+            "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
+            new_fullpath.encode("utf-8"),
+        )
 
     if xattr_to_remove:
         for key in xattr_to_remove:
             try:
-                xattr.removexattr(fd, 'user.' + key)
+                xattr.removexattr(fd, "user." + key)
             except IOError:
                 pass
 
     if remove_old_xattr:
-        for key in ['chunk_id', 'container_id', 'content_path',
-                    'content_version', 'content_id']:
+        for key in [
+            "chunk_id",
+            "container_id",
+            "content_path",
+            "content_version",
+            "content_id",
+        ]:
             try:
-                xattr.removexattr(fd, 'user.' + CHUNK_XATTR_KEYS[key])
+                xattr.removexattr(fd, "user." + CHUNK_XATTR_KEYS[key])
             except IOError:
                 pass
 
-        xattr.setxattr(fd, 'user.' + CHUNK_XATTR_KEYS['oio_version'],
-                       OIO_VERSION.encode('utf-8'))
+        xattr.setxattr(
+            fd, "user." + CHUNK_XATTR_KEYS["oio_version"], OIO_VERSION.encode("utf-8")
+        )

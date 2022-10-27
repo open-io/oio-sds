@@ -24,8 +24,8 @@ from subprocess import PIPE, Popen
 CONF = "/proc/sys/kernel/core_pattern"
 
 MATCH = {
-    '%p': r'\d+',
-    '%E': r'[A-Za-z0-9!-_]+',
+    "%p": r"\d+",
+    "%E": r"[A-Za-z0-9!-_]+",
 }
 
 
@@ -35,12 +35,12 @@ class Core(object):
         self.dir, self.pattern = os.path.split(self.core_pattern)
         if self.dir == "" or self.dir[0] != "/":
             raise Exception("Only absolute path is supported")
-        if self.pattern.find('%E') + 2 < len(self.pattern):
-            raise Exception('%E must be last part of core_pattern')
+        if self.pattern.find("%E") + 2 < len(self.pattern):
+            raise Exception("%E must be last part of core_pattern")
 
         for k, v in MATCH.items():
             self.pattern = self.pattern.replace(k, v)
-        self.pattern = '^' + self.pattern + '$'
+        self.pattern = "^" + self.pattern + "$"
 
     def vars(self):
         print(CONF, "=", self.core_pattern)
@@ -56,14 +56,21 @@ class Core(object):
 
     def parse(self, item):
         print("Parsing item", item)
-        path = item[item.find('!'):]
-        path = path.replace('!', '/')
+        path = item[item.find("!") :]
+        path = path.replace("!", "/")
         if not os.path.isfile(path):
             raise Exception("File not found")
 
         for exc in ["thread apply all bt", "bt full"]:
-            cmd = ['gdb', '-ex', exc, '--batch', path,
-                   '-c', os.path.join(self.dir, item)]
+            cmd = [
+                "gdb",
+                "-ex",
+                exc,
+                "--batch",
+                path,
+                "-c",
+                os.path.join(self.dir, item),
+            ]
             ret = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
             out, err = ret.communicate()
             print(out)

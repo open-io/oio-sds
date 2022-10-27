@@ -22,16 +22,18 @@ def encode_fullpath(account, container, path, version, content_id):
         if not v:
             raise ValueError("Can't encode fullpath: missing %s" % k)
     if isinstance(account, text_type):
-        account = account.encode('utf-8')
+        account = account.encode("utf-8")
     if isinstance(container, text_type):
-        container = container.encode('utf-8')
+        container = container.encode("utf-8")
     if isinstance(path, text_type):
-        path = path.encode('utf-8')
-    return '{0}/{1}/{2}/{3}/{4}'.format(quote(account, ''),
-                                        quote(container, ''),
-                                        quote(path, ''),
-                                        quote(str(version), ''),
-                                        quote(content_id, ''))
+        path = path.encode("utf-8")
+    return "{0}/{1}/{2}/{3}/{4}".format(
+        quote(account, ""),
+        quote(container, ""),
+        quote(path, ""),
+        quote(str(version), ""),
+        quote(content_id, ""),
+    )
 
 
 def decode_fullpath(fullpath):
@@ -41,7 +43,7 @@ def decode_fullpath(fullpath):
     :raises: ValueError if the string has invalid format.
     :returns: account, container, path, version and content ID.
     """
-    fp = fullpath.split('/')
+    fp = fullpath.split("/")
     if len(fp) != 5:
         raise ValueError("fullpath: invalid format")
     decoded = list()
@@ -53,14 +55,16 @@ def decode_fullpath(fullpath):
 def encode_old_fullpath(account, container, path, version):
     if not account or not container or not path or not version:
         raise ValueError("Can't encode old fullpath")
-    return '{0}/{1}/{2}/{3}'.format(quote_plus(account, ''),
-                                    quote_plus(container, ''),
-                                    quote_plus(path, ''),
-                                    quote_plus(str(version), ''))
+    return "{0}/{1}/{2}/{3}".format(
+        quote_plus(account, ""),
+        quote_plus(container, ""),
+        quote_plus(path, ""),
+        quote_plus(str(version), ""),
+    )
 
 
 def decode_old_fullpath(fullpath):
-    fp = fullpath.split('/')
+    fp = fullpath.split("/")
     if len(fp) != 4:
         raise ValueError("old fullpath: Wrong format")
     decoded = list()

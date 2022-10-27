@@ -20,8 +20,7 @@ import os
 
 from oio.common import exceptions
 from oio.common.utils import cid_from_name, request_id
-from oio.crawler.integrity import Checker, Target, \
-    DEFAULT_DEPTH, IRREPARABLE_PREFIX
+from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH, IRREPARABLE_PREFIX
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 
@@ -29,34 +28,39 @@ from tests.utils import BaseTestCase, random_str
 class TestIntegrityCrawler(BaseTestCase):
     def setUp(self):
         super(TestIntegrityCrawler, self).setUp()
-        self.container = 'ct-' + random_str(8)
-        self.obj = 'obj-' + random_str(8)
-        self.account = 'test-integrity-' + random_str(8)
-        self.beanstalkd0.drain_tube('oio-preserved')
+        self.container = "ct-" + random_str(8)
+        self.obj = "obj-" + random_str(8)
+        self.account = "test-integrity-" + random_str(8)
+        self.beanstalkd0.drain_tube("oio-preserved")
         reqid = request_id()
         self.storage.object_create(
-            self.account, self.container, obj_name=self.obj, data="chunk",
-            reqid=reqid)
+            self.account, self.container, obj_name=self.obj, data="chunk", reqid=reqid
+        )
         _, self.rebuild_file = tempfile.mkstemp()
         self.checker = Checker(self.ns, rebuild_file=self.rebuild_file)
         self.meta, chunks = self.storage.object_locate(
-            self.account, self.container, self.obj)
+            self.account, self.container, self.obj
+        )
         self.chunk = chunks[0]
         self.irreparable = len(chunks) == 1
-        self.storage.blob_client.chunk_delete(self.chunk['real_url'])
-        self.wait_for_event('oio-preserved', reqid=reqid,
-                            fields={'account': self.account,
-                                    'user': self.container},
-                            types=[EventTypes.CONTAINER_STATE])
+        self.storage.blob_client.chunk_delete(self.chunk["real_url"])
+        self.wait_for_event(
+            "oio-preserved",
+            reqid=reqid,
+            fields={"account": self.account, "user": self.container},
+            types=[EventTypes.CONTAINER_STATE],
+        )
 
     def tearDown(self):
         super(TestIntegrityCrawler, self).tearDown()
         os.remove(self.rebuild_file)
         self.storage.container_flush(self.account, self.container)
         self.storage.container_delete(self.account, self.container)
-        self.wait_for_event('oio-preserved',
-                            types=[EventTypes.CONTAINER_DELETED],
-                            fields={'user': self.container})
+        self.wait_for_event(
+            "oio-preserved",
+            types=[EventTypes.CONTAINER_DELETED],
+            fields={"user": self.container},
+        )
         try:
             self.storage.account_delete(self.account)
         except exceptions.Conflict:
@@ -66,10 +70,17 @@ class TestIntegrityCrawler(BaseTestCase):
         try:
             line = next(fileinput.input(self.rebuild_file)).strip()
             cid = cid_from_name(self.account, self.container)
-            expected = '|'.join([cid, self.meta['id'], self.meta['name'],
-                                 self.meta['version'], self.chunk['url']])
+            expected = "|".join(
+                [
+                    cid,
+                    self.meta["id"],
+                    self.meta["name"],
+                    self.meta["version"],
+                    self.chunk["url"],
+                ]
+            )
             if self.irreparable:
-                expected = IRREPARABLE_PREFIX + '|' + expected
+                expected = IRREPARABLE_PREFIX + "|" + expected
             self.assertEqual(expected, line)
         finally:
             fileinput.close()
@@ -82,17 +93,19 @@ class TestIntegrityCrawler(BaseTestCase):
         self._verify_rebuilder_input()
 
     def test_container_rebuilder_output(self):
-        self.checker.check(Target(self.account, container=self.container),
-                           recurse=DEFAULT_DEPTH)
+        self.checker.check(
+            Target(self.account, container=self.container), recurse=DEFAULT_DEPTH
+        )
         for _ in self.checker.run():
             pass
         self.checker.fd.flush()
         self._verify_rebuilder_input()
 
     def test_object_rebuilder_output(self):
-        self.checker.check(Target(self.account, container=self.container,
-                                  obj=self.obj),
-                           recurse=DEFAULT_DEPTH)
+        self.checker.check(
+            Target(self.account, container=self.container, obj=self.obj),
+            recurse=DEFAULT_DEPTH,
+        )
         for _ in self.checker.run():
             pass
         self.checker.fd.flush()
@@ -104,8 +117,13 @@ class TestIntegrityCrawler(BaseTestCase):
         the right number of confirmations.
         """
         self.checker.required_confirmations = 2
-        tgt = Target(self.account, container=self.container, obj=self.obj,
-                     content_id=self.meta['id'], version=self.meta['version'])
+        tgt = Target(
+            self.account,
+            container=self.container,
+            obj=self.obj,
+            content_id=self.meta["id"],
+            version=self.meta["version"],
+        )
         self.checker.check(tgt, recurse=DEFAULT_DEPTH)
         for _ in self.checker.run():
             pass

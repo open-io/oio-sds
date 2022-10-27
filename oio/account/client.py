@@ -23,27 +23,31 @@ class AccountClient(ServiceClient):
 
     def __init__(self, conf, **kwargs):
         super(AccountClient, self).__init__(
-            'account', conf, service_name='account-service',
-            request_prefix='v1.0/account', **kwargs)
+            "account",
+            conf,
+            service_name="account-service",
+            request_prefix="v1.0/account",
+            **kwargs
+        )
         # Some requests don't need the region,
         # let the requests fail if the region is needed
-        self.region = load_namespace_conf(
-            conf['namespace'], failsafe=True).get('ns.region')
+        self.region = load_namespace_conf(conf["namespace"], failsafe=True).get(
+            "ns.region"
+        )
 
     def account_request(self, account, *args, **kwargs):
-        params = kwargs.setdefault('params', {})
+        params = kwargs.setdefault("params", {})
         if account:
-            params['id'] = account
+            params["id"] = account
         return self.service_request(*args, **kwargs)
 
-    def container_request(self, account, container, *args, region=None,
-                          **kwargs):
-        params = kwargs.setdefault('params', {})
+    def container_request(self, account, container, *args, region=None, **kwargs):
+        params = kwargs.setdefault("params", {})
         if container:
-            params['container'] = container
+            params["container"] = container
         region = region or self.region
         if region:
-            params['region'] = region
+            params["region"] = region
         return self.account_request(account, *args, **kwargs)
 
     def account_create(self, account, **kwargs):
@@ -54,7 +58,7 @@ class AccountClient(ServiceClient):
         :type account: `str`
         :returns: `True` if the account has been created
         """
-        resp, _body = self.account_request(account, 'PUT', 'create', **kwargs)
+        resp, _body = self.account_request(account, "PUT", "create", **kwargs)
         return resp.status == 201
 
     def account_delete(self, account, **kwargs):
@@ -64,11 +68,18 @@ class AccountClient(ServiceClient):
         :param account: name of the account to delete
         :type account: `str`
         """
-        self.account_request(account, 'POST', 'delete', **kwargs)
+        self.account_request(account, "POST", "delete", **kwargs)
 
-    def account_list(self, limit=None, marker=None, end_marker=None,
-                     prefix=None, stats=None, sharding_accounts=None,
-                     **kwargs):
+    def account_list(
+        self,
+        limit=None,
+        marker=None,
+        end_marker=None,
+        prefix=None,
+        stats=None,
+        sharding_accounts=None,
+        **kwargs
+    ):
         """
         List known accounts (except if requested, the sharding accounts
         are excluded).
@@ -96,22 +107,21 @@ class AccountClient(ServiceClient):
             creation time and modification time, etc.).
         """
         params = {
-            'limit': limit,
-            'marker': marker,
-            'end_marker': end_marker,
-            'prefix': prefix,
-            'stats': stats,
-            'sharding_accounts': sharding_accounts,
+            "limit": limit,
+            "marker": marker,
+            "end_marker": end_marker,
+            "prefix": prefix,
+            "stats": stats,
+            "sharding_accounts": sharding_accounts,
         }
-        _resp, body = self.account_request(
-            None, 'GET', 'list', params=params, **kwargs)
+        _resp, body = self.account_request(None, "GET", "list", params=params, **kwargs)
         return body
 
     def account_show(self, account, **kwargs):
         """
         Get information about an account.
         """
-        _resp, body = self.account_request(account, 'GET', 'show', **kwargs)
+        _resp, body = self.account_request(account, "GET", "show", **kwargs)
         return body
 
     def account_update(self, account, metadata, to_delete, **kwargs):
@@ -124,11 +134,23 @@ class AccountClient(ServiceClient):
         :type to_delete: `list`
         """
         self.account_request(
-            account, 'PUT', 'update',
-            json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
+            account,
+            "PUT",
+            "update",
+            json={"metadata": metadata, "to_delete": to_delete},
+            **kwargs
+        )
 
-    def bucket_list(self, account, limit=None, marker=None, end_marker=None,
-                    prefix=None, region=None, **kwargs):
+    def bucket_list(
+        self,
+        account,
+        limit=None,
+        marker=None,
+        end_marker=None,
+        prefix=None,
+        region=None,
+        **kwargs
+    ):
         """
         Get the list of buckets of an account.
 
@@ -153,19 +175,28 @@ class AccountClient(ServiceClient):
             number of objects, number of bytes, modification time, etc.).
         """
         params = {
-            'limit': limit,
-            'marker': marker,
-            'end_marker': end_marker,
-            'prefix': prefix,
-            'region': region,
+            "limit": limit,
+            "marker": marker,
+            "end_marker": end_marker,
+            "prefix": prefix,
+            "region": region,
         }
-        _resp, body = self.account_request(account, 'GET', 'buckets',
-                                           params=params, **kwargs)
+        _resp, body = self.account_request(
+            account, "GET", "buckets", params=params, **kwargs
+        )
         return body
 
-    def container_list(self, account, limit=None, marker=None,
-                       end_marker=None, prefix=None, region=None, bucket=None,
-                       **kwargs):
+    def container_list(
+        self,
+        account,
+        limit=None,
+        marker=None,
+        end_marker=None,
+        prefix=None,
+        region=None,
+        bucket=None,
+        **kwargs
+    ):
         """
         Get the list of containers of an account.
 
@@ -192,15 +223,16 @@ class AccountClient(ServiceClient):
             and modification time).
         """
         params = {
-            'limit': limit,
-            'marker': marker,
-            'end_marker': end_marker,
-            'prefix': prefix,
-            'region': region,
-            'bucket': bucket,
+            "limit": limit,
+            "marker": marker,
+            "end_marker": end_marker,
+            "prefix": prefix,
+            "region": region,
+            "bucket": bucket,
         }
-        _resp, body = self.account_request(account, 'GET', 'containers',
-                                           params=params, **kwargs)
+        _resp, body = self.account_request(
+            account, "GET", "containers", params=params, **kwargs
+        )
         return body
 
     def container_show(self, account, container, **kwargs):
@@ -208,12 +240,22 @@ class AccountClient(ServiceClient):
         Get information about a container.
         """
         _resp, body = self.container_request(
-            account, container, 'GET', 'container/show', **kwargs)
+            account, container, "GET", "container/show", **kwargs
+        )
         return body
 
-    def container_update(self, account, container, mtime, objects, bytes_used,
-                         objects_details=None, bytes_details=None, bucket=None,
-                         **kwargs):
+    def container_update(
+        self,
+        account,
+        container,
+        mtime,
+        objects,
+        bytes_used,
+        objects_details=None,
+        bytes_details=None,
+        bucket=None,
+        **kwargs
+    ):
         """
         Update account with container-related metadata.
 
@@ -236,20 +278,16 @@ class AccountClient(ServiceClient):
         :param bucket: bucket name to which the container belongs
         :type bucket: `str`
         """
-        data = {
-            'mtime': mtime,
-            'objects': objects,
-            'bytes': bytes_used
-        }
+        data = {"mtime": mtime, "objects": objects, "bytes": bytes_used}
         if objects_details:
-            data['objects-details'] = objects_details
+            data["objects-details"] = objects_details
         if bytes_details:
-            data['bytes-details'] = bytes_details
+            data["bytes-details"] = bytes_details
         if bucket:
-            data['bucket'] = bucket
+            data["bucket"] = bucket
         _resp, body = self.container_request(
-            account, container, 'PUT', 'container/update', json=data,
-            **kwargs)
+            account, container, "PUT", "container/update", json=data, **kwargs
+        )
         return body
 
     def container_reset(self, account, container, mtime, **kwargs):
@@ -263,12 +301,10 @@ class AccountClient(ServiceClient):
         :param mtime: modification time
         :type mtime: `float` or `str`
         """
-        data = {
-            'mtime': mtime
-        }
+        data = {"mtime": mtime}
         self.container_request(
-            account, container, 'PUT', 'container/reset', json=data,
-            **kwargs)
+            account, container, "PUT", "container/reset", json=data, **kwargs
+        )
 
     def container_delete(self, account, container, dtime, **kwargs):
         """
@@ -281,12 +317,10 @@ class AccountClient(ServiceClient):
         :param dtime: deletion time (in second)
         :type dtime: `float` or `str`
         """
-        data = {
-            'dtime': dtime
-        }
+        data = {"dtime": dtime}
         self.container_request(
-            account, container, 'POST', 'container/delete', json=data,
-            **kwargs)
+            account, container, "POST", "container/delete", json=data, **kwargs
+        )
 
     def account_refresh(self, account, **kwargs):
         """
@@ -295,7 +329,7 @@ class AccountClient(ServiceClient):
         :param account: name of the account to refresh
         :type account: `str`
         """
-        self.account_request(account, 'POST', 'refresh', **kwargs)
+        self.account_request(account, "POST", "refresh", **kwargs)
 
     def account_flush(self, account, **kwargs):
         """
@@ -304,25 +338,26 @@ class AccountClient(ServiceClient):
         :param account: name of the account to flush
         :type account: `str`
         """
-        self.account_request(account, 'POST', 'flush', **kwargs)
+        self.account_request(account, "POST", "flush", **kwargs)
 
 
 class MetricsClient(ServiceClient):
     """Simple client API for metrics from the account service."""
+
     def __init__(self, conf, **kwargs):
         super(MetricsClient, self).__init__(
-            'account', conf, service_name='account-service',
-            request_prefix='', **kwargs)
+            "account", conf, service_name="account-service", request_prefix="", **kwargs
+        )
 
     def account_metrics(self, **kwargs):
         """
         Metrics of an account.
         """
-        _, body = self.service_request('GET', 'metrics', **kwargs)
+        _, body = self.service_request("GET", "metrics", **kwargs)
         return body
 
     def metrics_recompute(self, **kwargs):
         """
         Recompute all metrics.
         """
-        self.service_request('POST', 'metrics/recompute', **kwargs)
+        self.service_request("POST", "metrics/recompute", **kwargs)

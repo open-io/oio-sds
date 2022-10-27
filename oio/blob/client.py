@@ -24,11 +24,20 @@ from six.moves.urllib_parse import unquote
 from time import mktime
 
 from oio.common.logger import get_logger
-from oio.common.http_urllib3 import get_pool_manager, \
-    oio_exception_from_httperror, urllib3
+from oio.common.http_urllib3 import (
+    get_pool_manager,
+    oio_exception_from_httperror,
+    urllib3,
+)
 from oio.common import exceptions as exc, utils
-from oio.common.constants import CHUNK_HEADERS, CHUNK_XATTR_KEYS_OPTIONAL, \
-    FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER, CHECKHASH_HEADER
+from oio.common.constants import (
+    CHUNK_HEADERS,
+    CHUNK_XATTR_KEYS_OPTIONAL,
+    FETCHXATTR_HEADER,
+    OIO_VERSION,
+    REQID_HEADER,
+    CHECKHASH_HEADER,
+)
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter
@@ -56,7 +65,7 @@ def extract_headers_meta(headers, check=True):
     missing = list()
     for mkey, hkey in CHUNK_HEADERS.items():
         try:
-            if mkey == 'full_path':
+            if mkey == "full_path":
                 meta[mkey] = headers[hkey]
             else:
                 meta[mkey] = unquote(headers[hkey])
@@ -65,34 +74,41 @@ def extract_headers_meta(headers, check=True):
                 missing.append(exc.MissingAttribute(mkey))
     if check and missing:
         raise exc.FaultyChunk(*missing)
-    mtime = meta.get('chunk_mtime')
+    mtime = meta.get("chunk_mtime")
     if mtime:
-        meta['chunk_mtime'] = mktime(parsedate(mtime))
+        meta["chunk_mtime"] = mktime(parsedate(mtime))
     return meta
 
 
 def update_rawx_perfdata(func):
     @wraps(func)
     def _update_rawx_perfdata(self, *args, **kwargs):
-        perfdata = kwargs.get('perfdata') or self.perfdata
+        perfdata = kwargs.get("perfdata") or self.perfdata
         if perfdata is not None:
             req_start = utils.monotonic_time()
         res = func(self, *args, **kwargs)
         if perfdata is not None:
             req_end = utils.monotonic_time()
-            perfdata_rawx = perfdata.setdefault('rawx', dict())
-            overall = perfdata_rawx.get('overall', 0.0) + req_end - req_start
-            perfdata_rawx['overall'] = overall
+            perfdata_rawx = perfdata.setdefault("rawx", dict())
+            overall = perfdata_rawx.get("overall", 0.0) + req_end - req_start
+            perfdata_rawx["overall"] = overall
         return res
+
     return _update_rawx_perfdata
 
 
 class BlobClient(object):
     """A low-level client to rawx services."""
 
-    def __init__(self, conf=None, perfdata=None,
-                 logger=None, connection_pool=None,
-                 watchdog=None, **kwargs):
+    def __init__(
+        self,
+        conf=None,
+        perfdata=None,
+        logger=None,
+        connection_pool=None,
+        watchdog=None,
+        **kwargs
+    ):
         self.conf = conf
         self.perfdata = perfdata
         self.watchdog = watchdog
@@ -103,48 +119,55 @@ class BlobClient(object):
         # FIXME(FVE): we do not target the same set of services,
         # we should use a separate connection pool for rawx services.
         self.http_pool = connection_pool or get_pool_manager(**kwargs)
-        self.conscience_client = ConscienceClient(conf, logger=self.logger,
-                                                  pool_manager=self.http_pool)
+        self.conscience_client = ConscienceClient(
+            conf, logger=self.logger, pool_manager=self.http_pool
+        )
 
     def resolve_url(self, url):
-        return self.conscience_client.resolve_url('rawx', url)
+        return self.conscience_client.resolve_url("rawx", url)
 
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_put(self, url, meta, data, **kwargs):
-        if not hasattr(data, 'read'):
+        if not hasattr(data, "read"):
             data = utils.GeneratorIO(data, sub_generator=False)
-        chunk = {'url': self.resolve_url(url), 'pos': meta['chunk_pos']}
+        chunk = {"url": self.resolve_url(url), "pos": meta["chunk_pos"]}
         # FIXME: ugly
-        chunk_method = meta.get('chunk_method',
-                                meta.get('content_chunkmethod'))
+        chunk_method = meta.get("chunk_method", meta.get("content_chunkmethod"))
         storage_method = STORAGE_METHODS.load(chunk_method)
         fake_checksum = utils.FakeChecksum("Don't care")
         writer = ReplicatedMetachunkWriter(
-            meta, [chunk], fake_checksum,
-            storage_method, quorum=1, perfdata=self.perfdata,
-            logger=self.logger, watchdog=self.watchdog, **kwargs)
+            meta,
+            [chunk],
+            fake_checksum,
+            storage_method,
+            quorum=1,
+            perfdata=self.perfdata,
+            logger=self.logger,
+            watchdog=self.watchdog,
+            **kwargs
+        )
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
 
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_delete(self, url, **kwargs):
-        resp = self._request('DELETE', url, **kwargs)
+        resp = self._request("DELETE", url, **kwargs)
         if resp.status != 204:
             raise exc.from_response(resp)
         return resp
 
     @ensure_request_id
-    def chunk_delete_many(self, chunks, cid=None,
-                          concurrency=PARALLEL_CHUNKS_DELETE,
-                          **kwargs):
+    def chunk_delete_many(
+        self, chunks, cid=None, concurrency=PARALLEL_CHUNKS_DELETE, **kwargs
+    ):
         """
         :rtype: `list` of either `urllib3.response.HTTPResponse`
             or `urllib3.exceptions.HTTPError`, with an extra "chunk"
             attribute.
         """
-        headers = kwargs.pop('headers', None)
+        headers = kwargs.pop("headers", None)
         # Actually this is not needed since ensure_request_id always sets it
         if headers is None:
             headers = dict()
@@ -152,12 +175,11 @@ class BlobClient(object):
             headers = headers.copy()
         if cid is not None:
             # This is only to get a nice access log
-            headers['X-oio-chunk-meta-container-id'] = cid
+            headers["X-oio-chunk-meta-container-id"] = cid
 
         def __delete_chunk(chunk_):
             try:
-                resp = self._request(
-                    "DELETE", chunk_['url'], headers=headers, **kwargs)
+                resp = self._request("DELETE", chunk_["url"], headers=headers, **kwargs)
                 resp.chunk = chunk_
                 return resp
             except urllib3.exceptions.HTTPError as ex:
@@ -173,8 +195,7 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_get(self, url, check_headers=True, verify_checksum=False,
-                  **kwargs):
+    def chunk_get(self, url, check_headers=True, verify_checksum=False, **kwargs):
         """
         :keyword check_headers: when True (the default), raise FaultyChunk
             if a mandatory response header is missing.
@@ -186,9 +207,13 @@ class BlobClient(object):
             to the chunk's data.
         """
         url = self.resolve_url(url)
-        reader = ChunkReader([{'url': url}], None,
-                             verify_checksum=verify_checksum,
-                             watchdog=self.watchdog, **kwargs)
+        reader = ChunkReader(
+            [{"url": url}],
+            None,
+            verify_checksum=verify_checksum,
+            watchdog=self.watchdog,
+            **kwargs
+        )
         # This must be done now if we want to access headers
         stream = reader.stream()
         headers = extract_headers_meta(reader.headers, check=check_headers)
@@ -207,8 +232,8 @@ class BlobClient(object):
             checksum of the chunk.
         :returns: a `dict` with chunk metadata (empty when xattr is False).
         """
-        _xattr = bool(kwargs.get('xattr', True))
-        headers = kwargs.pop('headers', None)
+        _xattr = bool(kwargs.get("xattr", True))
+        headers = kwargs.pop("headers", None)
         # Actually this is not needed since ensure_request_id always sets it
         if headers is None:
             headers = dict()
@@ -219,11 +244,9 @@ class BlobClient(object):
             headers[CHECKHASH_HEADER] = True
 
         try:
-            resp = self._request(
-                'HEAD', url, headers=headers, **kwargs)
+            resp = self._request("HEAD", url, headers=headers, **kwargs)
         except urllib3.exceptions.HTTPError as ex:
-            oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER],
-                                         url=url)
+            oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER], url=url)
         if resp.status == 200:
             if not _xattr:
                 return dict()
@@ -233,58 +256,63 @@ class BlobClient(object):
 
     @update_rawx_perfdata
     @ensure_request_id
-    def chunk_copy(self, from_url, to_url, chunk_id=None, fullpath=None,
-                   cid=None, path=None, version=None, content_id=None,
-                   **kwargs):
+    def chunk_copy(
+        self,
+        from_url,
+        to_url,
+        chunk_id=None,
+        fullpath=None,
+        cid=None,
+        path=None,
+        version=None,
+        content_id=None,
+        **kwargs
+    ):
         stream = None
         # Check source headers only when new fullpath is not provided
-        kwargs['check_headers'] = not bool(fullpath)
+        kwargs["check_headers"] = not bool(fullpath)
         try:
-            meta, stream = self.chunk_get(from_url, verify_checksum=True,
-                                          **kwargs)
-            meta['oio_version'] = OIO_VERSION
-            meta['chunk_id'] = chunk_id or to_url.split('/')[-1]
-            meta['full_path'] = fullpath or meta['full_path']
-            meta['container_id'] = cid or meta.get('container_id')
-            meta['content_path'] = path or meta.get('content_path')
+            meta, stream = self.chunk_get(from_url, verify_checksum=True, **kwargs)
+            meta["oio_version"] = OIO_VERSION
+            meta["chunk_id"] = chunk_id or to_url.split("/")[-1]
+            meta["full_path"] = fullpath or meta["full_path"]
+            meta["container_id"] = cid or meta.get("container_id")
+            meta["content_path"] = path or meta.get("content_path")
             # FIXME: the original keys are the good ones.
             # ReplicatedMetachunkWriter should be modified to accept them.
-            meta['version'] = version or meta.get('content_version')
-            meta['id'] = content_id or meta.get('content_id')
-            meta['chunk_method'] = meta['content_chunkmethod']
-            meta['policy'] = meta['content_policy']
+            meta["version"] = version or meta.get("content_version")
+            meta["id"] = content_id or meta.get("content_id")
+            meta["chunk_method"] = meta["content_chunkmethod"]
+            meta["policy"] = meta["content_policy"]
 
             # md5 was the default before we started saving this information
-            _, chunk_params = parse_chunk_method(meta['chunk_method'])
-            chunk_checksum_algo = chunk_params.get('cca')
-            chunk_hash = meta.get('chunk_hash')
+            _, chunk_params = parse_chunk_method(meta["chunk_method"])
+            chunk_checksum_algo = chunk_params.get("cca")
+            chunk_hash = meta.get("chunk_hash")
             if not chunk_checksum_algo and chunk_hash:
-                chunk_checksum_algo = \
-                    'md5' if len(chunk_hash) == 32 else 'blake3'
-            kwargs.pop('chunk_checksum_algo', None)
+                chunk_checksum_algo = "md5" if len(chunk_hash) == 32 else "blake3"
+            kwargs.pop("chunk_checksum_algo", None)
 
             bytes_transferred, chunk_hash = self.chunk_put(
-                to_url, meta, stream, chunk_checksum_algo=chunk_checksum_algo,
-                **kwargs)
+                to_url, meta, stream, chunk_checksum_algo=chunk_checksum_algo, **kwargs
+            )
         finally:
             if stream:
                 stream.close()
         try:
-            expected_chunk_size = meta.get('chunk_size')
+            expected_chunk_size = meta.get("chunk_size")
             if expected_chunk_size is not None:
                 expected_chunk_size = int(expected_chunk_size)
                 if bytes_transferred != expected_chunk_size:
-                    raise exc.ChunkException(
-                        'Size isn\'t the same for the copied chunk')
+                    raise exc.ChunkException("Size isn't the same for the copied chunk")
 
-            expected_chunk_hash = meta.get('chunk_hash')
+            expected_chunk_hash = meta.get("chunk_hash")
             if expected_chunk_hash is not None:
                 expected_chunk_hash = expected_chunk_hash.upper()
                 chunk_hash = chunk_hash.upper()
                 if chunk_hash != expected_chunk_hash:
                     # Should never happen, the hash is checked by the rawx
-                    raise exc.ChunkException(
-                        'Hash isn\'t the same for the copied chunk')
+                    raise exc.ChunkException("Hash isn't the same for the copied chunk")
         except exc.ChunkException:
             # rollback
             self.chunk_delete(to_url, **kwargs)
@@ -295,42 +323,42 @@ class BlobClient(object):
         Generate new chunk URLs, by replacing the last `random_hex`
         characters of the original URLs by random hexadecimal digits.
         """
-        maxlen = len(chunk) - chunk.rfind('/') - 1
+        maxlen = len(chunk) - chunk.rfind("/") - 1
         random_hex = min(random_hex, maxlen)
-        rnd = ''.join(random.choice('0123456789ABCDEF')
-                      for _ in range(random_hex))
+        rnd = "".join(random.choice("0123456789ABCDEF") for _ in range(random_hex))
         return chunk[:-random_hex] + rnd
 
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_link(self, target, link, fullpath, headers=None,
-                   write_timeout=None, **kwargs):
+    def chunk_link(
+        self, target, link, fullpath, headers=None, write_timeout=None, **kwargs
+    ):
         hdrs = headers.copy()
         if link is None:
             link = self._generate_fullchunk_copy(target, **kwargs)
-        elif not link.startswith('http://'):
-            offset = target.rfind('/')
+        elif not link.startswith("http://"):
+            offset = target.rfind("/")
             maxlen = len(target) - offset - 1
-            link = target[:offset + 1] + link[:maxlen]
-        hdrs['Destination'] = link
-        hdrs[CHUNK_HEADERS['full_path']] = fullpath
+            link = target[: offset + 1] + link[:maxlen]
+        hdrs["Destination"] = link
+        hdrs[CHUNK_HEADERS["full_path"]] = fullpath
         if write_timeout is not None:
-            kwargs['read_timeout'] = write_timeout
-        resp = self._request('COPY', target, headers=hdrs, **kwargs)
+            kwargs["read_timeout"] = write_timeout
+        resp = self._request("COPY", target, headers=hdrs, **kwargs)
         if resp.status != 201:
             raise exc.ChunkException(resp.status)
         return resp, link
 
-    def _request(self, method, url,
-                 connection_timeout=None, read_timeout=None, **kwargs):
-        if 'timeout' not in kwargs:
+    def _request(
+        self, method, url, connection_timeout=None, read_timeout=None, **kwargs
+    ):
+        if "timeout" not in kwargs:
             if connection_timeout is None:
                 connection_timeout = CONNECTION_TIMEOUT
             if read_timeout is None:
                 read_timeout = CHUNK_TIMEOUT
-            kwargs['timeout'] = urllib3.Timeout(
-                connect=connection_timeout,
-                read=read_timeout)
-        return self.http_pool.request(
-            method, self.resolve_url(url), **kwargs)
+            kwargs["timeout"] = urllib3.Timeout(
+                connect=connection_timeout, read=read_timeout
+            )
+        return self.http_pool.request(method, self.resolve_url(url), **kwargs)

@@ -17,13 +17,15 @@
 import unittest
 
 from datetime import datetime, timedelta
-from oio.common.green import ratelimit_function_curr_rate, \
-    ratelimit_function_next_rate, ratelimit_validate_policy, \
-    ratelimit_policy_from_string
+from oio.common.green import (
+    ratelimit_function_curr_rate,
+    ratelimit_function_next_rate,
+    ratelimit_validate_policy,
+    ratelimit_policy_from_string,
+)
 
 
 class RatelimiterTest(unittest.TestCase):
-
     def test_pol_validate_good(self):
         """
         Test validation of a good policy partition
@@ -67,19 +69,23 @@ class RatelimiterTest(unittest.TestCase):
 
         curr_date = datetime(2018, 1, 1, hour=0, minute=1)
         self.assertEqual(
-            8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
+            8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol)
+        )
 
         curr_date = datetime(2018, 1, 1, hour=11)
         self.assertEqual(
-            5, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
+            5, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol)
+        )
 
         curr_date = datetime(2018, 1, 1, hour=6)
         self.assertEqual(
-            10, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
+            10, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol)
+        )
 
         curr_date = datetime(2018, 1, 1, hour=22)
         self.assertEqual(
-            8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol))
+            8, ratelimit_function_curr_rate(curr_date=curr_date, policy=pol)
+        )
 
     def test_curr_rate_uniform_policy(self):
         """
@@ -92,14 +98,12 @@ class RatelimiterTest(unittest.TestCase):
 
         curr_date = datetime(2018, 1, 1, hour=11)
         self.assertEqual(
-            ratelimit_function_curr_rate(curr_date=curr_date, policy=pol),
-            3
+            ratelimit_function_curr_rate(curr_date=curr_date, policy=pol), 3
         )
 
         curr_date = datetime(2018, 1, 1, hour=0)
         self.assertEqual(
-            ratelimit_function_curr_rate(curr_date=curr_date, policy=pol),
-            3
+            ratelimit_function_curr_rate(curr_date=curr_date, policy=pol), 3
         )
 
     def test_next_rate(self):
@@ -120,7 +124,7 @@ class RatelimiterTest(unittest.TestCase):
         expected = [
             (timedelta(0), 10),  # whole day
         ]
-        parsed = ratelimit_policy_from_string('10')
+        parsed = ratelimit_policy_from_string("10")
         self.assertListEqual(expected, parsed)
 
     def test_policy_parsing_ok_several(self):
@@ -132,15 +136,17 @@ class RatelimiterTest(unittest.TestCase):
             (timedelta(0, 72000), 8),  # 20h00 to 0h30
         ]
         parsed = ratelimit_policy_from_string(
-            "0h30:10;6h45:2;15h30:3;9h45:5;20h00:8")  # unordered
+            "0h30:10;6h45:2;15h30:3;9h45:5;20h00:8"
+        )  # unordered
         self.assertListEqual(expected, parsed)
 
     def test_policy_parsing_invalid(self):
         self.assertRaises(
-            ValueError, ratelimit_policy_from_string, "0h30:10;6h45;9h45:5")
+            ValueError, ratelimit_policy_from_string, "0h30:10;6h45;9h45:5"
+        )
         self.assertRaises(
-            ValueError,
-            ratelimit_policy_from_string,
-            "0h30:10;6h45:1.5;9h45:5")
+            ValueError, ratelimit_policy_from_string, "0h30:10;6h45:1.5;9h45:5"
+        )
         self.assertRaises(
-            ValueError, ratelimit_policy_from_string, "0h30:10;6:2;9h45:5")
+            ValueError, ratelimit_policy_from_string, "0h30:10;6:2;9h45:5"
+        )

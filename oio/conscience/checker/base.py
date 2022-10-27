@@ -23,28 +23,34 @@ from oio.common.easy_value import float_value
 
 class BaseChecker(object):
     """Base class for all service checkers"""
-    checker_type = 'checker'
+
+    checker_type = "checker"
 
     def __init__(self, agent, checker_conf, logger):
         self.agent = agent
         self.checker_conf = checker_conf
         self.logger = logger
-        self.timeout = float_value(checker_conf.get('timeout'), 5.0)
-        self.rise = checker_conf['rise']
-        self.fall = checker_conf['fall']
+        self.timeout = float_value(checker_conf.get("timeout"), 5.0)
+        self.rise = checker_conf["rise"]
+        self.fall = checker_conf["fall"]
         self.results = RingBuffer(max([self.rise, self.fall]))
-        self.name = checker_conf.get('name')
-        self.srv_type = agent.service['type']
+        self.name = checker_conf.get("name")
+        self.srv_type = agent.service["type"]
         self.last_result = None
 
-        for k in ('host', 'port'):
+        for k in ("host", "port"):
             if k not in self.checker_conf:
                 raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k)
-        self.host = self.checker_conf['host']
-        self.port = self.checker_conf['port']
-        self.name = '%s|%s|%s|%s' % \
-            (self.srv_type, self.checker_type, self.host, self.port)
+                    'Missing field "%s" in configuration' % k
+                )
+        self.host = self.checker_conf["host"]
+        self.port = self.checker_conf["port"]
+        self.name = "%s|%s|%s|%s" % (
+            self.srv_type,
+            self.checker_type,
+            self.host,
+            self.port,
+        )
         self.last_check_success = True
 
         self._configure()
@@ -60,28 +66,28 @@ class BaseChecker(object):
             with Timeout(self.timeout):
                 result = self._check(reqid=reqid)
         except Timeout as err:
-            self.logger.warn('check timed out (%s)', err)
+            self.logger.warn("check timed out (%s)", err)
         except Exception as err:
-            self.logger.warn('check failed: %s', str(err))
+            self.logger.warn("check failed: %s", str(err))
 
         if self.last_result is None:
             self.last_result = result
             for _i in range(0, self.results.size):
                 self.results.append(result)
-            self.logger.info('%s first check returned %s', self.name, result)
+            self.logger.info("%s first check returned %s", self.name, result)
 
         self.results.append(result)
-        if not any(self.results[-self.fall:]):
+        if not any(self.results[-self.fall :]):
             if self.last_result:
                 self.logger.info(
-                    '%s status is now down after %d failures', self.name,
-                    self.fall)
+                    "%s status is now down after %d failures", self.name, self.fall
+                )
                 self.last_result = False
-        if all(self.results[-self.rise:]):
+        if all(self.results[-self.rise :]):
             if not self.last_result:
                 self.logger.info(
-                    '%s status is now up after %d successes', self.name,
-                    self.rise)
+                    "%s status is now up after %d successes", self.name, self.rise
+                )
                 self.last_result = True
         return self.last_result
 

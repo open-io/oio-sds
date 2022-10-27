@@ -21,23 +21,24 @@ from shutil import move
 from oio.api.io import READ_CHUNK_SIZE
 from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
-from oio.common.constants import CHUNK_SUFFIX_CORRUPT, \
-    CHUNK_QUARANTINE_FOLDER_NAME
+from oio.common.constants import CHUNK_SUFFIX_CORRUPT, CHUNK_QUARANTINE_FOLDER_NAME
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.green import time
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point, get_hasher
 from oio.conscience.client import ConscienceClient
 from oio.crawler.common.base import Filter
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, \
-    RawxCrawlerNotFound
+from oio.crawler.rawx.chunk_wrapper import (
+    ChunkWrapper,
+    RawxCrawlerError,
+    RawxCrawlerNotFound,
+)
 
-RawxService = namedtuple('RawxService', ('status', 'last_time'))
+RawxService = namedtuple("RawxService", ("status", "last_time"))
 
 
 class Checksum(Filter):
-
-    NAME = 'Checksum'
+    NAME = "Checksum"
 
     def init(self):
         self.successes = 0
@@ -45,27 +46,31 @@ class Checksum(Filter):
         self.errors = 0
         self.unrecoverable_content = 0
 
-        self.conscience_cache = int_value(self.conf.get('conscience_cache'),
-                                          30)
+        self.conscience_cache = int_value(self.conf.get("conscience_cache"), 30)
         self.quarantine_mountpoint = boolean_value(
-            self.conf.get('quarantine_mountpoint'), True)
-        self.volume_path = self.app_env['volume_path']
-        self.volume_id = self.app_env['volume_id']
+            self.conf.get("quarantine_mountpoint"), True
+        )
+        self.volume_path = self.app_env["volume_path"]
+        self.volume_id = self.app_env["volume_id"]
         if self.quarantine_mountpoint:
-            self.quarantine_path = '%s/%s-%s' % (
+            self.quarantine_path = "%s/%s-%s" % (
                 find_mount_point(self.volume_path),
-                CHUNK_QUARANTINE_FOLDER_NAME, self.volume_id)
+                CHUNK_QUARANTINE_FOLDER_NAME,
+                self.volume_id,
+            )
         else:
-            self.quarantine_path = '%s/%s-%s' % (self.volume_path,
-                                                 CHUNK_QUARANTINE_FOLDER_NAME,
-                                                 self.volume_id)
+            self.quarantine_path = "%s/%s-%s" % (
+                self.volume_path,
+                CHUNK_QUARANTINE_FOLDER_NAME,
+                self.volume_id,
+            )
 
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
-                                            watchdog=self.app_env['watchdog'])
+        self.chunk_operator = ChunkOperator(
+            self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
+        )
         self._rawx_service = RawxService(status=False, last_time=0)
 
-        self.conscience_client = ConscienceClient(
-            self.conf, logger=self.logger)
+        self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
 
     def _check_rawx_up(self):
         now = time.time()
@@ -76,16 +81,17 @@ class Checksum(Filter):
 
         status = True
         try:
-            data = self.conscience_client.all_services('rawx')
+            data = self.conscience_client.all_services("rawx")
             # Check that all rawx are UP
             # If one is down, the chunk may be still rebuildable in the future
             for srv in data:
-                tags = srv['tags']
-                addr = srv['addr']
-                up = tags.pop('tag.up', 'n/a')
+                tags = srv["tags"]
+                addr = srv["addr"]
+                up = tags.pop("tag.up", "n/a")
                 if not up:
-                    self.logger.debug('service %s is down, rebuild may not '
-                                      'be possible', addr)
+                    self.logger.debug(
+                        "service %s is down, rebuild may not be possible", addr
+                    )
                     status = False
                     break
         except exc.OioException:
@@ -95,9 +101,8 @@ class Checksum(Filter):
         return status
 
     @staticmethod
-    def _get_file_hash(chunk_path, chunk_checksum_algo,
-                       buf_size=READ_CHUNK_SIZE):
-        with open(chunk_path, 'rb') as chunk_file:
+    def _get_file_hash(chunk_path, chunk_checksum_algo, buf_size=READ_CHUNK_SIZE):
+        with open(chunk_path, "rb") as chunk_file:
             hasher = get_hasher(chunk_checksum_algo)
             while True:
                 data = chunk_file.read(buf_size)
@@ -108,47 +113,57 @@ class Checksum(Filter):
 
     def error(self, chunk, container_id, msg):
         self.logger.error(
-            'volume_id=%(volume_id)s '
-            'container_id=%(container_id)s '
-            'chunk_id=%(chunk_id)s '
-            '%(error)s' % {
-                'volume_id': self.volume_id,
-                'container_id': container_id,
-                'chunk_id': chunk.chunk_id,
-                'error': msg
+            "volume_id=%(volume_id)s "
+            "container_id=%(container_id)s "
+            "chunk_id=%(chunk_id)s "
+            "%(error)s"
+            % {
+                "volume_id": self.volume_id,
+                "container_id": container_id,
+                "chunk_id": chunk.chunk_id,
+                "error": msg,
             }
         )
 
     def _rebuild_chunk(self, chunk):
-
         # Prepare quarantine folder
         try:
             if not isdir(self.quarantine_path):
                 makedirs(self.quarantine_path)
-            new_chunk_path = '%s/%s%s' % (self.quarantine_path,
-                                          chunk.chunk_id,
-                                          CHUNK_SUFFIX_CORRUPT)
-            self.logger.warning('moving chunk_id=%s to quarantine %s',
-                                chunk.chunk_id, self.quarantine_path)
+            new_chunk_path = "%s/%s%s" % (
+                self.quarantine_path,
+                chunk.chunk_id,
+                CHUNK_SUFFIX_CORRUPT,
+            )
+            self.logger.warning(
+                "moving chunk_id=%s to quarantine %s",
+                chunk.chunk_id,
+                self.quarantine_path,
+            )
         except Exception as err:
-            self.logger.error("Error while moving the chunk to quarantine: %s",
-                              str(err))
+            self.logger.error(
+                "Error while moving the chunk to quarantine: %s", str(err)
+            )
             # The quarantine folder can not be created (permission denied ?),
             # a suffix is added but the chunk remains in the same folder
-            new_chunk_path = '%s%s' % (chunk.chunk_path, CHUNK_SUFFIX_CORRUPT)
+            new_chunk_path = "%s%s" % (chunk.chunk_path, CHUNK_SUFFIX_CORRUPT)
 
         # Move chunk to quarantine (and/or add its corrupted suffix)
         move(chunk.chunk_path, new_chunk_path)
 
-        container_id = chunk.meta['container_id']
+        container_id = chunk.meta["container_id"]
         try:
-            self.chunk_operator.rebuild(container_id, chunk.meta['content_id'],
-                                        chunk.chunk_id,
-                                        rawx_id=self.volume_id)
+            self.chunk_operator.rebuild(
+                container_id,
+                chunk.meta["content_id"],
+                chunk.chunk_id,
+                rawx_id=self.volume_id,
+            )
 
             # Rebuilt OK, corrupted chunk can be removed
-            self.logger.warning('removing corrupted chunk_id=%s '
-                                'from quarantine', chunk.chunk_id)
+            self.logger.warning(
+                "removing corrupted chunk_id=%s from quarantine", chunk.chunk_id
+            )
             remove(new_chunk_path)
             self.recovered_chunk += 1
 
@@ -160,53 +175,60 @@ class Checksum(Filter):
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
                 if self._check_rawx_up():
-                    error_msg = '%(err)s, action required!' % {'err': str(err)}
+                    error_msg = "%(err)s, action required!" % {"err": str(err)}
                     self.error(chunk, container_id, error_msg)
             else:
-                error_msg = '%(err)s, not possible to get list of rawx' \
-                    % {'err': str(err)}
+                error_msg = "%(err)s, not possible to get list of rawx" % {
+                    "err": str(err)
+                }
                 self.logger.error(chunk, container_id, error_msg)
 
     def process(self, env, cb):
         chunk = ChunkWrapper(env)
-        chunk_hash = chunk.meta['chunk_hash'].upper()
+        chunk_hash = chunk.meta["chunk_hash"].upper()
 
-        _, chunk_params = parse_chunk_method(chunk.meta['content_chunkmethod'])
-        chunk_checksum_algo = chunk_params.get('cca')
+        _, chunk_params = parse_chunk_method(chunk.meta["content_chunkmethod"])
+        chunk_checksum_algo = chunk_params.get("cca")
         # md5 was the default before we started saving this information
         if not chunk_checksum_algo:
-            chunk_checksum_algo = \
-                'md5' if len(chunk_hash) == 32 else 'blake3'
+            chunk_checksum_algo = "md5" if len(chunk_hash) == 32 else "blake3"
         try:
-            file_hash = self._get_file_hash(chunk.chunk_path,
-                                            chunk_checksum_algo)
+            file_hash = self._get_file_hash(chunk.chunk_path, chunk_checksum_algo)
 
-            self.logger.debug('chunk_hash=%s file_hash=%s algo=%s',
-                              chunk_hash, file_hash, chunk_checksum_algo)
+            self.logger.debug(
+                "chunk_hash=%s file_hash=%s algo=%s",
+                chunk_hash,
+                file_hash,
+                chunk_checksum_algo,
+            )
             if chunk_hash != file_hash:
-                self.logger.warning('hash different volume_id=%s '
-                                    'chunk_id=%s', self.volume_id,
-                                    chunk.chunk_id)
+                self.logger.warning(
+                    "hash different volume_id=%s chunk_id=%s",
+                    self.volume_id,
+                    chunk.chunk_id,
+                )
                 self._rebuild_chunk(chunk)
             else:
                 self.successes += 1
         except FileNotFoundError:
             resp = RawxCrawlerNotFound(
-                body=f'chunk_id={chunk.chunk_id} no longer exists')
+                body=f"chunk_id={chunk.chunk_id} no longer exists"
+            )
             return resp(env, cb)
         except exc.OioException as err:
-            resp = RawxCrawlerError(chunk=chunk, body='while parsing '
-                                    'chunk_id=%s, err=%s' % {
-                                        chunk.chunk_id, str(err)})
+            resp = RawxCrawlerError(
+                chunk=chunk,
+                body="while parsing chunk_id=%s, err=%s" % {chunk.chunk_id, str(err)},
+            )
             return resp(env, cb)
         return self.app(env, cb)
 
     def _get_filter_stats(self):
         return {
-            'successes': self.successes,
-            'recovered_chunk': self.recovered_chunk,
-            'errors': self.errors,
-            'unrecoverable_content': self.unrecoverable_content
+            "successes": self.successes,
+            "recovered_chunk": self.recovered_chunk,
+            "errors": self.errors,
+            "unrecoverable_content": self.unrecoverable_content,
         }
 
     def _reset_filter_stats(self):
@@ -222,4 +244,5 @@ def filter_factory(global_conf, **local_conf):
 
     def checksum_filter(app):
         return Checksum(app, conf)
+
     return checksum_filter

@@ -28,24 +28,24 @@ class HttpStat(BaseStat):
     """Fetch stats using HTTP, expects one stat per line"""
 
     def configure(self):
-        self.parser = self.stat_conf.get('parser', 'lines')
-        self.path = self.stat_conf['path'].lstrip('/')
-        self.host = self.stat_conf['host']
-        self.port = self.stat_conf['port']
-        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
-        if self.parser == 'json':
+        self.parser = self.stat_conf.get("parser", "lines")
+        self.path = self.stat_conf["path"].lstrip("/")
+        self.host = self.stat_conf["host"]
+        self.port = self.stat_conf["port"]
+        self.url = "%s:%s/%s" % (self.host, self.port, self.path)
+        if self.parser == "json":
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
         else:
             # default to lines parser (rawx style)
             self._parse_func = self._parse_stats_lines
-        self.timeout = float_value(self.stat_conf.get('timeout'), 10.0)
+        self.timeout = float_value(self.stat_conf.get("timeout"), 10.0)
 
     @staticmethod
     def _parse_stats_lines(body):
         """Converts each line to a dictionary entry"""
         if isinstance(body, binary_type):
-            body = body.decode('utf-8')
+            body = body.decode("utf-8")
         data = {}
         for line in body.splitlines():
             parts = line.rsplit(None, 1)
@@ -68,12 +68,12 @@ class HttpStat(BaseStat):
     def _parse_stats_json(body):
         """Prefix each entry with 'stat.'"""
         if isinstance(body, binary_type):
-            body = body.decode('utf-8')
+            body = body.decode("utf-8")
         body = json.loads(body)
-        uuid = body.pop('uuid', None)
-        res = {'stat.' + k: body[k] for k in body.keys()}
+        uuid = body.pop("uuid", None)
+        res = {"stat." + k: body[k] for k in body.keys()}
         if uuid:
-            res['tag.uuid'] = uuid
+            res["tag.uuid"] = uuid
         return res
 
     def get_stats(self, reqid=None):
@@ -86,8 +86,10 @@ class HttpStat(BaseStat):
             try:
                 with OioTimeout(self.timeout):
                     resp = self.agent.pool_manager.request(
-                        'GET', self.url, headers={'Connection': 'close',
-                                                  REQID_HEADER: reqid})
+                        "GET",
+                        self.url,
+                        headers={"Connection": "close", REQID_HEADER: reqid},
+                    )
             except Timeout as toe:
                 raise Exception(str(toe))
             if resp.status == 200:

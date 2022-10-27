@@ -27,8 +27,7 @@ class LbClient(ProxyClient):
     """Simple load balancer client"""
 
     def __init__(self, conf, **kwargs):
-        super(LbClient, self).__init__(
-            conf, request_prefix="/lb", **kwargs)
+        super(LbClient, self).__init__(conf, request_prefix="/lb", **kwargs)
 
     def next_instances(self, pool, size=None, **kwargs):
         """
@@ -37,19 +36,18 @@ class LbClient(ProxyClient):
         :keyword size: number of services to get
         :type size: `int`
         """
-        params = {'type': pool}
+        params = {"type": pool}
         if size is not None:
-            params['size'] = size
-        resp, body = self._request('GET', '/choose', params=params, **kwargs)
+            params["size"] = size
+        resp, body = self._request("GET", "/choose", params=params, **kwargs)
         if resp.status == 200:
             return body
         else:
-            raise OioException(
-                'ERROR while getting next instance %s' % pool)
+            raise OioException("ERROR while getting next instance %s" % pool)
 
     def next_instance(self, pool, **kwargs):
         """Get the next service instance from the specified pool"""
-        kwargs.pop('size', None)
+        kwargs.pop("size", None)
         return self.next_instances(pool, size=1, **kwargs)[0]
 
     def poll(self, pool, **kwargs):
@@ -61,11 +59,12 @@ class LbClient(ProxyClient):
         :keyword known: service IDs that are already known
         :type known: `list`
         """
-        params = {'pool': pool}
+        params = {"pool": pool}
         ibody = dict()
         ibody.update(kwargs)
-        resp, obody = self._request('POST', '/poll', params=params,
-                                    data=json.dumps(ibody))
+        resp, obody = self._request(
+            "POST", "/poll", params=params, data=json.dumps(ibody)
+        )
         if resp.status == 200:
             return obody
         else:
@@ -83,12 +82,15 @@ class LbClient(ProxyClient):
         :type options: `dict`
         :exception Conflict: if a pool with same name already exists
         """
-        stargets = ";".join(','.join(str(y) for y in x) for x in targets)
-        ibody = {'targets': stargets, 'options': options}
-        _, _ = self._request('POST', "/create_pool",
-                             params={'name': pool, 'force': str(force)},
-                             data=json.dumps(ibody),
-                             **kwargs)
+        stargets = ";".join(",".join(str(y) for y in x) for x in targets)
+        ibody = {"targets": stargets, "options": options}
+        _, _ = self._request(
+            "POST",
+            "/create_pool",
+            params={"name": pool, "force": str(force)},
+            data=json.dumps(ibody),
+            **kwargs
+        )
 
 
 class ConscienceClient(ProxyClient):
@@ -96,7 +98,8 @@ class ConscienceClient(ProxyClient):
 
     def __init__(self, conf, service_id_max_age=60, **kwargs):
         super(ConscienceClient, self).__init__(
-            conf, request_prefix="/conscience", **kwargs)
+            conf, request_prefix="/conscience", **kwargs
+        )
         self._lb_kwargs = dict(kwargs)
         self._lb_kwargs.pop("pool_manager", None)
         self._lb = None
@@ -107,8 +110,9 @@ class ConscienceClient(ProxyClient):
     def lb(self):
         """Get an instance of LbClient."""
         if self._lb is None:
-            self._lb = LbClient(self.conf, pool_manager=self.pool_manager,
-                                **self._lb_kwargs)
+            self._lb = LbClient(
+                self.conf, pool_manager=self.pool_manager, **self._lb_kwargs
+            )
         return self._lb
 
     def next_instances(self, pool, **kwargs):
@@ -151,64 +155,62 @@ class ConscienceClient(ProxyClient):
             - 'score' (`int`),
             - 'tags' (`dict`).
         """
-        params = {'type': service_type}
+        params = {"type": service_type}
         if full:
-            params['full'] = '1'
-        resp, body = self._request('GET', '/list', params=params, **kwargs)
+            params["full"] = "1"
+        resp, body = self._request("GET", "/list", params=params, **kwargs)
         if resp.status == 200:
             # TODO(FVE): do that in the proxy
             for srv in body:
-                if 'id' not in srv:
-                    srv_id = srv['tags'].get('tag.service_id', srv['addr'])
-                    srv['id'] = srv_id
+                if "id" not in srv:
+                    srv_id = srv["tags"].get("tag.service_id", srv["addr"])
+                    srv["id"] = srv_id
             return body
         else:
-            raise OioException("failed to get list of %s services: %s"
-                               % (service_type, resp.text))
+            raise OioException(
+                "failed to get list of %s services: %s" % (service_type, resp.text)
+            )
 
     def local_services(self):
-        url = self.endpoint.replace('conscience', 'local/list')
-        resp, body = self._direct_request('GET', url)
+        url = self.endpoint.replace("conscience", "local/list")
+        resp, body = self._direct_request("GET", url)
         if resp.status == 200:
             return body
         else:
-            raise OioException("failed to get list of local services: %s" %
-                               resp.text)
+            raise OioException("failed to get list of local services: %s" % resp.text)
 
     def service_types(self, **kwargs):
         """
         Get the list of service types known by Conscience.
         """
-        params = {'what': 'types'}
-        resp, body = self._request('GET', '/info', params=params, **kwargs)
+        params = {"what": "types"}
+        resp, body = self._request("GET", "/info", params=params, **kwargs)
         if resp.status == 200:
             return body
         else:
-            raise OioException("ERROR while getting services types: %s" %
-                               resp.text)
+            raise OioException("ERROR while getting services types: %s" % resp.text)
 
-    def get_service_definition(self, srv_type, srv_id,
-                               score=None, tags=None):
+    def get_service_definition(self, srv_type, srv_id, score=None, tags=None):
         service_definition = dict()
-        service_definition['ns'] = self.ns
-        service_definition['type'] = srv_type
-        service_definition['addr'] = srv_id
+        service_definition["ns"] = self.ns
+        service_definition["type"] = srv_type
+        service_definition["addr"] = srv_id
         if score is not None:
-            service_definition['score'] = score
+            service_definition["score"] = score
         if tags is not None:
-            service_definition['tags'] = tags
+            service_definition["tags"] = tags
         return service_definition
 
     def register(self, service_definitions, **kwargs):
         data = json.dumps(service_definitions)
-        resp, body = self._request('POST', '/register', data=data, **kwargs)
+        resp, body = self._request("POST", "/register", data=data, **kwargs)
 
     def deregister(self, service_definitions, **kwargs):
         data = json.dumps(service_definitions)
-        resp, body = self._request('POST', '/deregister', data=data, **kwargs)
+        resp, body = self._request("POST", "/deregister", data=data, **kwargs)
 
     def info(self):
-        resp, body = self._request("GET", '/info')
+        resp, body = self._request("GET", "/info")
         return body
 
     def lock_score(self, srv_or_list, **kwargs):
@@ -221,9 +223,7 @@ class ConscienceClient(ProxyClient):
             - 'score': optional, the score to set the service to.
         :type srv_or_list: `dict` or list of `dict`.
         """
-        _, body = self._request('POST', '/lock',
-                                data=json.dumps(srv_or_list),
-                                **kwargs)
+        _, body = self._request("POST", "/lock", data=json.dumps(srv_or_list), **kwargs)
         return body
 
     def unlock_score(self, srv_or_list, **kwargs):
@@ -235,26 +235,26 @@ class ConscienceClient(ProxyClient):
             - 'type': the service type,
         :type srv_or_list: `dict` or list of `dict`.
         """
-        self._request('POST', '/unlock', data=json.dumps(srv_or_list),
-                      **kwargs)
+        self._request("POST", "/unlock", data=json.dumps(srv_or_list), **kwargs)
 
     def flush(self, srv_type):
-        resp, body = self._request('POST', '/flush',
-                                   params={'type': srv_type})
+        resp, body = self._request("POST", "/flush", params={"type": srv_type})
 
     def resolve(self, srv_type, service_id, **kwargs):
-        resp, body = self._request('GET', '/resolve',
-                                   params={'type': srv_type,
-                                           'service_id': service_id},
-                                   **kwargs)
+        resp, body = self._request(
+            "GET",
+            "/resolve",
+            params={"type": srv_type, "service_id": service_id},
+            **kwargs
+        )
         if resp.status == 200:
             return body
         else:
-            raise OioException("failed to resolve servie id %s: %s" %
-                               (service_id, resp.text))
+            raise OioException(
+                "failed to resolve servie id %s: %s" % (service_id, resp.text)
+            )
 
-    def resolve_service_id(self, service_type, service_id,
-                           check_format=True, **kwargs):
+    def resolve_service_id(self, service_type, service_id, check_format=True, **kwargs):
         """
         :returns: Service address corresponding to the service ID
         """
@@ -265,16 +265,13 @@ class ConscienceClient(ProxyClient):
                 return service_id
 
         cached_service_id = self._service_ids.get(service_id)
-        if cached_service_id \
-                and (time.time() - cached_service_id['mtime']
-                     < self._service_id_max_age):
-            return cached_service_id['addr']
-        result = self.resolve(
-            srv_type=service_type, service_id=service_id,
-            **kwargs)
-        service_addr = result['addr']
-        self._service_ids[service_id] = {'addr': service_addr,
-                                         'mtime': time.time()}
+        if cached_service_id and (
+            time.time() - cached_service_id["mtime"] < self._service_id_max_age
+        ):
+            return cached_service_id["addr"]
+        result = self.resolve(srv_type=service_type, service_id=service_id, **kwargs)
+        service_addr = result["addr"]
+        self._service_ids[service_id] = {"addr": service_addr, "mtime": time.time()}
         return service_addr
 
     def resolve_url(self, service_type, url, **kwargs):
@@ -282,7 +279,7 @@ class ConscienceClient(ProxyClient):
         :returns: Resolved URL of a service using a service ID
         """
         # FIXME(mb): some tests don't put scheme, should fix tests
-        if not url.startswith('http://'):
+        if not url.startswith("http://"):
             url = "http://" + url
 
         parsed = urlparse(url)
@@ -290,7 +287,15 @@ class ConscienceClient(ProxyClient):
             return url
 
         service_addr = self.resolve_service_id(
-            service_type, parsed.hostname, check_format=False,
-            **kwargs)
-        return urlunparse((parsed.scheme, service_addr, parsed.path,
-                           parsed.params, parsed.query, parsed.fragment))
+            service_type, parsed.hostname, check_format=False, **kwargs
+        )
+        return urlunparse(
+            (
+                parsed.scheme,
+                service_addr,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )

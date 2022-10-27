@@ -37,6 +37,7 @@ def strtoll(val, base=10):
 
 class ContainerBuilder(object):
     """Base class for container name builders."""
+
     def __init__(self, **_kwargs):
         pass
 
@@ -70,26 +71,27 @@ class HashedContainerBuilder(ContainerBuilder):
         # Maximum number of bits of the hexadecimal representation
         bitlength = (((self.bits - 1) // 4) + 1) * 4
         # Maximum value of the hexadecimal representation
-        self.mask = (2 ** bitlength) - (2 ** (bitlength - self.bits))
+        self.mask = (2**bitlength) - (2 ** (bitlength - self.bits))
 
     def __str__(self):
-        return '{0}(bits={1},offset={2},size={3})'.format(
-                self.__class__.__name__, self.bits, self.offset, self.size)
+        return "{0}(bits={1},offset={2},size={3})".format(
+            self.__class__.__name__, self.bits, self.offset, self.size
+        )
 
     def __call__(self, path):
         if self.lib is None:
-            self.lib = CDLL('liboiocore.so.0')
+            self.lib = CDLL("liboiocore.so.0")
             self.func = self.lib.oio_str_autocontainer
             self.func.argtypes = [c_char_p, c_uint, c_char_p, c_uint]
             self.func.restype = c_char_p
 
-        src = path[self.offset:].encode('utf-8')
+        src = path[self.offset :].encode("utf-8")
         srclen = len(src)
         if self.size and self.size < len(src):
             srclen = self.size
         tmp = create_string_buffer(65)
         out = self.func(src, srclen, tmp, self.bits)
-        return out.decode('utf-8')
+        return out.decode("utf-8")
 
     def verify(self, name):
         """Verify that `name` is an autocontainer"""
@@ -110,8 +112,15 @@ class AutocontainerBuilder(ContainerBuilder):
     "video/ABC/DEF/xxxxxxxxxFEDCBAxxxxxxxxxx_nomdufichier"
     """
 
-    def __init__(self, offset=0, size=None, mask=0xFFFFFFFFFF0000FF,
-                 base=16, con_format="%016X", **_kwargs):
+    def __init__(
+        self,
+        offset=0,
+        size=None,
+        mask=0xFFFFFFFFFF0000FF,
+        base=16,
+        con_format="%016X",
+        **_kwargs
+    ):
         self.offset = offset
         self.size = size
         self.mask = mask
@@ -120,9 +129,9 @@ class AutocontainerBuilder(ContainerBuilder):
 
     def __call__(self, path):
         if self.size:
-            flat_path = path[self.offset:self.offset+self.size]
+            flat_path = path[self.offset : self.offset + self.size]
         else:
-            flat_path = path[self.offset:]
+            flat_path = path[self.offset :]
         flat_path = flat_path.replace("/", "")
         int_part = strtoll(flat_path)
         return self.format % (int_part & self.mask)
@@ -141,6 +150,7 @@ class NoMatchFound(ValueError):
     Exception raised when none of the configured patterns match
     the input object name.
     """
+
     pass
 
 
@@ -156,7 +166,7 @@ class RegexContainerBuilder(object):
 
     def __init__(self, patterns, builder=ContainerBuilder, **kwargs):
         if isinstance(patterns, string_types):
-            patterns = (patterns, )
+            patterns = (patterns,)
         if not patterns:
             raise ValueError("You must provide at least one pattern")
         self.patterns = list()
@@ -164,8 +174,7 @@ class RegexContainerBuilder(object):
             if not isinstance(pattern, Pattern):
                 pattern = re.compile(pattern)
                 if pattern.groups < 1:
-                    raise ValueError(
-                        "Expression %s does not contain any capture group")
+                    raise ValueError("Expression %s does not contain any capture group")
             self.patterns.append(pattern)
         self.builder = builder(**kwargs)
 
@@ -173,10 +182,10 @@ class RegexContainerBuilder(object):
         for pattern in self.patterns:
             match = pattern.search(path)
             if match:
-                return self.builder(''.join([x for x in match.groups()
-                                             if x is not None]))
-        raise NoMatchFound(
-            "'%s' does not match any configured patterns" % path)
+                return self.builder(
+                    "".join([x for x in match.groups() if x is not None])
+                )
+        raise NoMatchFound("'%s' does not match any configured patterns" % path)
 
     def alternatives(self, path):
         """
@@ -187,8 +196,9 @@ class RegexContainerBuilder(object):
         for pattern in self.patterns:
             match = pattern.search(path)
             if match:
-                yield self.builder(''.join([x for x in match.groups()
-                                            if x is not None]))
+                yield self.builder(
+                    "".join([x for x in match.groups() if x is not None])
+                )
         return
 
     def verify(self, name):

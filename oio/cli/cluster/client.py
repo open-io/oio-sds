@@ -18,11 +18,9 @@ from oio.conscience.client import ConscienceClient
 
 LOG = getLogger(__name__)
 
-API_NAME = 'cluster'
+API_NAME = "cluster"
 
 
 def make_client(instance):
-    client = ConscienceClient(
-        instance.cli_conf()
-    )
+    client = ConscienceClient(instance.cli_conf())
     return client

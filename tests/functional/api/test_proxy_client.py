@@ -20,20 +20,21 @@ from oio.common.exceptions import ServiceBusy, OioException
 
 
 class TestProxyClient(BaseTestCase):
-
     def setUp(self):
         super(TestProxyClient, self).setUp()
-        self.proxy_client = ProxyClient({"namespace": self.ns},
-                                        request_attempts=2)
+        self.proxy_client = ProxyClient({"namespace": self.ns}, request_attempts=2)
 
     def test_error_503(self):
         self.proxy_client.pool_manager.request = Mock(
-            return_value=urllib3.HTTPResponse(status=503,
-                                              reason="Service busy"))
-        self.assertRaises(ServiceBusy,
-                          self.proxy_client._direct_request, "GET", "test")
+            return_value=urllib3.HTTPResponse(status=503, reason="Service busy")
+        )
+        self.assertRaises(ServiceBusy, self.proxy_client._direct_request, "GET", "test")
 
     def test_negative_requests_attempts(self):
-        self.assertRaises(OioException,
-                          self.proxy_client._direct_request, "GET", "test",
-                          request_attempts=-1)
+        self.assertRaises(
+            OioException,
+            self.proxy_client._direct_request,
+            "GET",
+            "test",
+            request_attempts=-1,
+        )

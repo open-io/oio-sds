@@ -23,27 +23,25 @@ class MetaStat(HttpStat):
     Expects one stat per line
     """
 
-    config_keys = {
-        'service_id': 'tag.service_id'
-    }
+    config_keys = {"service_id": "tag.service_id"}
 
     def configure(self):
         super(MetaStat, self).configure()
-        self.uri = '/forward/stats'
-        service_id = '%s:%s' % (self.stat_conf.get('host'),
-                                self.stat_conf.get('port'))
-        self.params = {'id': service_id}
+        self.uri = "/forward/stats"
+        service_id = "%s:%s" % (self.stat_conf.get("host"), self.stat_conf.get("port"))
+        self.params = {"id": service_id}
 
     def get_stats(self, reqid=None):
         resp, _body = self.agent.proxy_client._request(
-            'POST', self.uri, params=self.params, reqid=reqid, retries=False)
+            "POST", self.uri, params=self.params, reqid=reqid, retries=False
+        )
         stats = self._parse_stats_lines(resp.data)
         output = dict()
         for key in stats:
-            if key.startswith('gauge'):
-                stat_key = 'stat.' + key.split(None, 1)[1]
+            if key.startswith("gauge"):
+                stat_key = "stat." + key.split(None, 1)[1]
                 output[stat_key] = stats[key]
-            if key.startswith('config'):
+            if key.startswith("config"):
                 config_type = key.split(None, 1)[1]
                 config_key = self.config_keys.get(config_type)
                 if config_key is not None:

@@ -26,8 +26,9 @@ class TestRdirClient(unittest.TestCase):
     def setUp(self):
         super(TestRdirClient, self).setUp()
         self.namespace = "dummy"
-        self.rdir_client = RdirClient({'namespace': self.namespace},
-                                      endpoint='127.0.0.0:6000')
+        self.rdir_client = RdirClient(
+            {"namespace": self.namespace}, endpoint="127.0.0.0:6000"
+        )
         self.rdir_client._get_rdir_addr = Mock(return_value=["0.1.2.3:4567"])
         self.container_id_1 = random_id(64)
         self.container_id_2 = random_id(64)
@@ -49,24 +50,27 @@ class TestRdirClient(unittest.TestCase):
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s" %
-                         (self.container_id_1,
-                          self.chunk_id_1), {'mtime': 10}],
-                        ["%s|%s" %
-                         (self.container_id_2,
-                          self.chunk_id_2), {'mtime': 20}],
-                    ]
+                        [
+                            "%s|%s" % (self.container_id_1, self.chunk_id_1),
+                            {"mtime": 10},
+                        ],
+                        [
+                            "%s|%s" % (self.container_id_2, self.chunk_id_2),
+                            {"mtime": 20},
+                        ],
+                    ],
                 ),
-                (FakeResponse(204), None)
-            ])
+                (FakeResponse(204), None),
+            ]
+        )
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
         items = list(gen)
         self.assertEqual(
-            items[0], (self.container_id_1,
-                       self.chunk_id_1, {'mtime': 10}))
+            items[0], (self.container_id_1, self.chunk_id_1, {"mtime": 10})
+        )
         self.assertEqual(
-            items[1], (self.container_id_2,
-                       self.chunk_id_2, {'mtime': 20}))
+            items[1], (self.container_id_2, self.chunk_id_2, {"mtime": 20})
+        )
         self.assertEqual(2, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 2)
 
@@ -76,35 +80,39 @@ class TestRdirClient(unittest.TestCase):
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s" %
-                         (self.container_id_1,
-                          self.chunk_id_1), {'mtime': 10}],
-                        ["%s|%s" %
-                         (self.container_id_2,
-                          self.chunk_id_2), {'mtime': 20}],
-                    ]
+                        [
+                            "%s|%s" % (self.container_id_1, self.chunk_id_1),
+                            {"mtime": 10},
+                        ],
+                        [
+                            "%s|%s" % (self.container_id_2, self.chunk_id_2),
+                            {"mtime": 20},
+                        ],
+                    ],
                 ),
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s" %
-                         (self.container_id_3,
-                          self.chunk_id_3), {'mtime': 30}],
-                    ]
+                        [
+                            "%s|%s" % (self.container_id_3, self.chunk_id_3),
+                            {"mtime": 30},
+                        ],
+                    ],
                 ),
-                (FakeResponse(204), None)
-            ])
+                (FakeResponse(204), None),
+            ]
+        )
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
         items = list(gen)
         self.assertEqual(
-            items[0], (self.container_id_1,
-                       self.chunk_id_1, {'mtime': 10}))
+            items[0], (self.container_id_1, self.chunk_id_1, {"mtime": 10})
+        )
         self.assertEqual(
-            items[1], (self.container_id_2,
-                       self.chunk_id_2, {'mtime': 20}))
+            items[1], (self.container_id_2, self.chunk_id_2, {"mtime": 20})
+        )
         self.assertEqual(
-            items[2], (self.container_id_3,
-                       self.chunk_id_3, {'mtime': 30}))
+            items[2], (self.container_id_3, self.chunk_id_3, {"mtime": 30})
+        )
         self.assertEqual(3, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 3)
 
@@ -117,8 +125,9 @@ class TestRdirMeta2Client(unittest.TestCase):
         self.container_url = "OPENIO/testing/test1"
         self.container_id = "random833999id"
         self.mtime = 2874884.47
-        self.rdir_client = RdirClient({'namespace': self.namespace},
-                                      endpoint='127.0.0.0:6000')
+        self.rdir_client = RdirClient(
+            {"namespace": self.namespace}, endpoint="127.0.0.0:6000"
+        )
 
     def tearDown(self):
         super(TestRdirMeta2Client, self).tearDown()
@@ -126,64 +135,67 @@ class TestRdirMeta2Client(unittest.TestCase):
 
     def test_volume_create(self):
         # We should normally receive an HTTPResponse with an empty body
-        self.rdir_client._rdir_request = Mock(side_effect=(None, ''))
+        self.rdir_client._rdir_request = Mock(side_effect=(None, ""))
         self.rdir_client.meta2_index_create(self.volid)
         self.rdir_client._rdir_request.assert_called_once_with(
-            self.volid, 'POST', 'create', service_type='meta2')
+            self.volid, "POST", "create", service_type="meta2"
+        )
         del self.rdir_client._rdir_request
 
     def test_volume_fetch(self):
         self.rdir_client._rdir_request = Mock(
-            return_value=(None, {"records": [], "truncated": False}))
+            return_value=(None, {"records": [], "truncated": False})
+        )
         expected_args = {
-            'volume': self.volid,
-            'method': 'GET',
-            'action': 'fetch',
-            'json': {
-                'prefix': self.container_url,
-                'limit': 4096,
+            "volume": self.volid,
+            "method": "GET",
+            "action": "fetch",
+            "json": {
+                "prefix": self.container_url,
+                "limit": 4096,
             },
-            'service_type': 'meta2'
+            "service_type": "meta2",
         }
-        self.rdir_client.meta2_index_fetch(self.volid,
-                                           prefix=self.container_url)
+        self.rdir_client.meta2_index_fetch(self.volid, prefix=self.container_url)
         self.rdir_client._rdir_request.assert_called_once_with(**expected_args)
         del self.rdir_client._rdir_request
 
     def test_volume_push(self):
-        self.rdir_client._rdir_request = Mock(side_effect=(None, ''))
+        self.rdir_client._rdir_request = Mock(side_effect=(None, ""))
         expected_args = {
-            'volume': self.volid,
-            'method': 'POST',
-            'action': 'push',
-            'create': False,
-            'json': {
-                'container_url': self.container_url,
-                'container_id': self.container_id,
-                'mtime': int(self.mtime),
+            "volume": self.volid,
+            "method": "POST",
+            "action": "push",
+            "create": False,
+            "json": {
+                "container_url": self.container_url,
+                "container_id": self.container_id,
+                "mtime": int(self.mtime),
             },
-            'service_type': 'meta2'
+            "service_type": "meta2",
         }
 
-        self.rdir_client.meta2_index_push(self.volid, self.container_url,
-                                          self.container_id, self.mtime)
+        self.rdir_client.meta2_index_push(
+            self.volid, self.container_url, self.container_id, self.mtime
+        )
         self.rdir_client._rdir_request.assert_called_once_with(**expected_args)
         del self.rdir_client._rdir_request
 
     def test_volume_delete(self):
-        self.rdir_client._rdir_request = Mock(side_effect=(None, ''))
+        self.rdir_client._rdir_request = Mock(side_effect=(None, ""))
         expected_args = {
-            'volume': self.volid,
-            'method': 'POST',
-            'action': 'delete',
-            'create': False,
-            'json': {
-                'container_url': self.container_url,
-                'container_id': self.container_id,
+            "volume": self.volid,
+            "method": "POST",
+            "action": "delete",
+            "create": False,
+            "json": {
+                "container_url": self.container_url,
+                "container_id": self.container_id,
             },
-            'service_type': 'meta2'
+            "service_type": "meta2",
         }
-        self.rdir_client.meta2_index_delete(self.volid, self.container_url,
-                                            self.container_id)
+        self.rdir_client.meta2_index_delete(
+            self.volid, self.container_url, self.container_id
+        )
         self.rdir_client._rdir_request.assert_called_once_with(**expected_args)
         del self.rdir_client._rdir_request

@@ -34,13 +34,13 @@ class Daemon(object):
         self.logger = get_logger(conf)
 
     def run(self, *args, **kwargs):
-        raise NotImplementedError('run not implemented')
+        raise NotImplementedError("run not implemented")
 
     def stop(self):
         pass
 
     def start(self, **kwargs):
-        drop_privileges(self.conf.get('user', 'openio'))
+        drop_privileges(self.conf.get("user", "openio"))
         redirect_stdio(self.logger)
 
         def kill_children():
@@ -70,13 +70,11 @@ class Daemon(object):
 def run_daemon(klass, conf_file, section_name=None, **kwargs):
     eventlet_hubs.use_hub(get_hub())
     if section_name is None:
-        section_name = sub(r'([a-z])([A-Z])', r'\1-\2', klass.__name__).lower()
-    conf = read_conf(
-        conf_file, section_name, use_yaml=kwargs.pop('use_yaml', False))
-    logger = get_logger(
-        conf, section_name, verbose=kwargs.pop('verbose', False))
+        section_name = sub(r"([a-z])([A-Z])", r"\1-\2", klass.__name__).lower()
+    conf = read_conf(conf_file, section_name, use_yaml=kwargs.pop("use_yaml", False))
+    logger = get_logger(conf, section_name, verbose=kwargs.pop("verbose", False))
     try:
         klass(conf, conf_file=conf_file).start(**kwargs)
     except KeyboardInterrupt:
-        logger.info('User interrupt')
-    logger.info('Daemon exited')
+        logger.info("User interrupt")
+    logger.info("Daemon exited")

@@ -23,31 +23,34 @@ from oio.directory.client import DirectoryClient
 from oio.common.configuration import load_namespace_conf
 
 
-def cmp(x, y): return(x > y) - (x < y)
+def cmp(x, y):
+    return (x > y) - (x < y)
 
 
 class CheckMeta2(CheckService):
-
     account_name = "_meta2_probe"
 
     def __init__(self, namespace, **kwargs):
-        ep_parts = ["http:/",
-                    load_namespace_conf(namespace).get('proxy'),
-                    "v3.0",
-                    namespace,
-                    "content"]
+        ep_parts = [
+            "http:/",
+            load_namespace_conf(namespace).get("proxy"),
+            "v3.0",
+            namespace,
+            "content",
+        ]
 
-        super(CheckMeta2, self).__init__(namespace, "meta2",
-                                         endpoint="/".join(ep_parts), **kwargs)
+        super(CheckMeta2, self).__init__(
+            namespace, "meta2", endpoint="/".join(ep_parts), **kwargs
+        )
 
         self.account = AccountClient({"namespace": self.ns})
         self.container = ContainerClient({"namespace": self.ns})
         self.directory = DirectoryClient({"namespace": self.ns})
-        self.reference = random_buffer('0123456789ABCDEF', 64)
+        self.reference = random_buffer("0123456789ABCDEF", 64)
 
     def _get_params(self):
-        path = random_buffer('0123456789ABCDEF', 64)
-        return {'acct': self.account_name, 'ref': self.reference, 'path': path}
+        path = random_buffer("0123456789ABCDEF", 64)
+        return {"acct": self.account_name, "ref": self.reference, "path": path}
 
     def _compare_chunks(self, chunks1, chunks2):
         def light_chunks(chunks):
@@ -58,6 +61,7 @@ class CheckMeta2(CheckService):
                 new_chunk["hash"] = chunk["hash"]
                 new_chunks.append(new_chunk)
             return new_chunks
+
         try:
             chunks1 = light_chunks(chunks1)
             chunks1.sort()
@@ -69,55 +73,76 @@ class CheckMeta2(CheckService):
 
     def _cycle(self, meta2_host):
         self.directory.unlink(
-            account=self.account_name, reference=self.reference,
-            service_type=self.service_type)
-        service = {"host": meta2_host, "type": self.service_type, "args": "",
-                   "seq": 1}
+            account=self.account_name,
+            reference=self.reference,
+            service_type=self.service_type,
+        )
+        service = {"host": meta2_host, "type": self.service_type, "args": "", "seq": 1}
         self.directory.force(
-            account=self.account_name, reference=self.reference,
-            service_type=self.service_type, services=service)
+            account=self.account_name,
+            reference=self.reference,
+            service_type=self.service_type,
+            services=service,
+        )
 
         params = self._get_params()
         global_success = True
 
         _, body, success = self._request(
-            "GET", "/locate", params=params, expected_status=404)
+            "GET", "/locate", params=params, expected_status=404
+        )
         global_success &= success
-        headers = {'X-oio-action-mode': 'autocreate'}
+        headers = {"X-oio-action-mode": "autocreate"}
         _, body, success = self._request(
-            "POST", "/prepare", params=params, headers=headers,
-            json={"size": "1024"}, expected_status=200)
+            "POST",
+            "/prepare",
+            params=params,
+            headers=headers,
+            json={"size": "1024"},
+            expected_status=200,
+        )
         global_success &= success
         chunks = body
         _, body, success = self._request(
-            "GET", "/locate", params=params, expected_status=404)
+            "GET", "/locate", params=params, expected_status=404
+        )
         global_success &= success
         headers = {"x-oio-content-meta-length": "1024"}
         _, _, success = self._request(
-            "POST", "/create", params=params, headers=headers, json=chunks,
-            expected_status=204)
+            "POST",
+            "/create",
+            params=params,
+            headers=headers,
+            json=chunks,
+            expected_status=204,
+        )
         global_success &= success
         _, body, success = self._request(
-            "GET", "/locate", params=params, expected_status=200)
+            "GET", "/locate", params=params, expected_status=200
+        )
         global_success &= success
         success = self._compare_chunks(chunks, body)
         global_success &= success
         _, _, success = self._request(
-            "POST", "/delete", params=params, expected_status=204)
+            "POST", "/delete", params=params, expected_status=204
+        )
         global_success &= success
         _, body, success = self._request(
-            "GET", "/locate", params=params, expected_status=404)
+            "GET", "/locate", params=params, expected_status=404
+        )
         global_success &= success
 
         return global_success
 
     def run(self):
         try:
-            self.container.container_create(account=self.account_name,
-                                            reference=self.reference)
+            self.container.container_create(
+                account=self.account_name, reference=self.reference
+            )
             super(CheckMeta2, self).run()
-            self.container.container_delete(account=self.account_name,
-                                            reference=self.reference)
+            self.container.container_delete(
+                account=self.account_name, reference=self.reference
+            )
             sleep(1)
             self.account.account_delete(self.account_name)
         except Exception as exc:

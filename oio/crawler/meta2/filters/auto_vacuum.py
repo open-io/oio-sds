@@ -29,29 +29,36 @@ class AutomaticVacuum(Filter):
     Trigger the vacuum for given container.
     """
 
-    NAME = 'AutomaticVacuum'
+    NAME = "AutomaticVacuum"
     DEFAULT_MIN_WAITING_TIME_AFTER_LAST_MODIFICATION = 30
     DEFAULT_SOFT_MAX_UNUSED_PAGES_RATIO = 0.1
     DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO = 0.2
 
     def init(self):
         self.min_waiting_time_after_last_modification = int_value(
-            self.conf.get('min_waiting_time_after_last_modification'),
-            AutomaticVacuum.DEFAULT_MIN_WAITING_TIME_AFTER_LAST_MODIFICATION)
+            self.conf.get("min_waiting_time_after_last_modification"),
+            AutomaticVacuum.DEFAULT_MIN_WAITING_TIME_AFTER_LAST_MODIFICATION,
+        )
         self.soft_max_unused_pages_ratio = float_value(
-            self.conf.get('soft_max_unused_pages_ratio'),
-            AutomaticVacuum.DEFAULT_SOFT_MAX_UNUSED_PAGES_RATIO)
+            self.conf.get("soft_max_unused_pages_ratio"),
+            AutomaticVacuum.DEFAULT_SOFT_MAX_UNUSED_PAGES_RATIO,
+        )
         self.hard_max_unused_pages_ratio = float_value(
-            self.conf.get('hard_max_unused_pages_ratio'),
-            AutomaticVacuum.DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO)
+            self.conf.get("hard_max_unused_pages_ratio"),
+            AutomaticVacuum.DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO,
+        )
 
         if self.hard_max_unused_pages_ratio < self.soft_max_unused_pages_ratio:
-            raise ValueError('Hard max unused pages ratio should be greater '
-                             'than soft max unused pages ratio')
+            raise ValueError(
+                "Hard max unused pages ratio should be greater "
+                "than soft max unused pages ratio"
+            )
 
         self.admin = AdminClient(
-            self.conf, logger=self.logger,
-            pool_manager=self.app_env['api'].container.pool_manager)
+            self.conf,
+            logger=self.logger,
+            pool_manager=self.app_env["api"].container.pool_manager,
+        )
 
         self.skipped = 0
         self.successes = 0
@@ -66,8 +73,7 @@ class AutomaticVacuum(Filter):
         """
         meta2db_conn = None
         try:
-            meta2db_conn = sqlite3.connect(f'file:{meta2db.path}?mode=ro',
-                                           uri=True)
+            meta2db_conn = sqlite3.connect(f"file:{meta2db.path}?mode=ro", uri=True)
         except sqlite3.OperationalError:
             # Check if the meta2 database still exists
             try:
@@ -80,9 +86,11 @@ class AutomaticVacuum(Filter):
         try:
             meta2db_cursor = meta2db_conn.cursor()
             unused_pages = meta2db_cursor.execute(
-                'PRAGMA main.freelist_count').fetchall()[0][0]
-            page_count = meta2db_cursor.execute(
-                'PRAGMA main.page_count').fetchall()[0][0]
+                "PRAGMA main.freelist_count"
+            ).fetchall()[0][0]
+            page_count = meta2db_cursor.execute("PRAGMA main.page_count").fetchall()[0][
+                0
+            ]
             return page_count, unused_pages
         finally:
             meta2db_conn.close()
@@ -102,53 +110,61 @@ class AutomaticVacuum(Filter):
             if unused_pages_ratio >= self.hard_max_unused_pages_ratio:
                 skip = False
             elif unused_pages_ratio >= self.soft_max_unused_pages_ratio:
-                meta2db_mtime = meta2db.file_status['st_mtime']
-                if (time.time() - meta2db_mtime
-                        > self.min_waiting_time_after_last_modification):
+                meta2db_mtime = meta2db.file_status["st_mtime"]
+                if (
+                    time.time() - meta2db_mtime
+                    > self.min_waiting_time_after_last_modification
+                ):
                     skip = False
                 else:
                     self.logger.info(
-                        'Push back the vacuum to hope to trigger it '
-                        'when the container %s will no longer be used',
-                        meta2db.cid)
+                        "Push back the vacuum to hope to trigger it "
+                        "when the container %s will no longer be used",
+                        meta2db.cid,
+                    )
             if skip:
                 self.skipped += 1
                 return self.app(env, cb)
 
             self.logger.info(
-                'Triggering the vacuum on container %s '
-                'with %.2f%% unused pages',
-                meta2db.cid, unused_pages_ratio * 100)
-            self.admin.vacuum_base('meta2', cid=meta2db.cid)
+                "Triggering the vacuum on container %s with %.2f%% unused pages",
+                meta2db.cid,
+                unused_pages_ratio * 100,
+            )
+            self.admin.vacuum_base("meta2", cid=meta2db.cid)
             self.successes += 1
 
             # The meta2 database size has changed, delete the cache
             meta2db.file_status = None
             return self.app(env, cb)
         except (FileNotFoundError, NotFound):
-            self.logger.info('Container %s no longer exists', meta2db.cid)
+            self.logger.info("Container %s no longer exists", meta2db.cid)
             # The meta2 database no longer exists, delete the cache
             meta2db.file_status = None
             meta2db.system = None
             resp = Meta2DBNotFound(
-                meta2db,
-                body=f'Container {meta2db.cid} no longer exists')
+                meta2db, body=f"Container {meta2db.cid} no longer exists"
+            )
             return resp(env, cb)
         except Exception as exc:
-            self.logger.exception('Failed to process %s for the container %s',
-                                  self.NAME, meta2db.cid)
+            self.logger.exception(
+                "Failed to process %s for the container %s", self.NAME, meta2db.cid
+            )
             self.errors += 1
             resp = Meta2DBError(
                 meta2db,
-                body=f'Failed to process {self.NAME} '
-                     f'for the container {meta2db.cid}: {exc}')
+                body=(
+                    f"Failed to process {self.NAME} "
+                    f"for the container {meta2db.cid}: {exc}"
+                ),
+            )
             return resp(env, cb)
 
     def _get_filter_stats(self):
         return {
-            'skipped': self.skipped,
-            'successes': self.successes,
-            'errors': self.errors
+            "skipped": self.skipped,
+            "successes": self.successes,
+            "errors": self.errors,
         }
 
     def _reset_filter_stats(self):
@@ -163,4 +179,5 @@ def filter_factory(global_conf, **local_conf):
 
     def auto_vacuum_filter(app):
         return AutomaticVacuum(app, conf)
+
     return auto_vacuum_filter

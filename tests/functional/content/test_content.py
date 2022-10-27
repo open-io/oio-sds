@@ -33,14 +33,14 @@ from oio.content.ec import ECContent
 from tests.utils import BaseTestCase, ec, strange_paths
 
 
-def hash_stream(stream, algorithm='blake3'):
+def hash_stream(stream, algorithm="blake3"):
     checksum = get_hasher(algorithm=algorithm)
     for data in stream:
         checksum.update(data)
     return checksum.hexdigest().upper()
 
 
-def hash_data(data, algorithm='blake3'):
+def hash_data(data, algorithm="blake3"):
     checksum = get_hasher(algorithm=algorithm)
     checksum.update(data)
     return checksum.hexdigest().upper()
@@ -54,28 +54,29 @@ class TestContentFactory(BaseTestCase):
     def setUp(self):
         super(TestContentFactory, self).setUp()
 
-        self.wait_for_score(('meta2', ))
-        self.chunk_size = self.conf['chunk_size']
+        self.wait_for_score(("meta2",))
+        self.chunk_size = self.conf["chunk_size"]
         self.gridconf = {"namespace": self.ns}
-        self.content_factory = ContentFactory(self.gridconf,
-                                              watchdog=self.watchdog)
+        self.content_factory = ContentFactory(self.gridconf, watchdog=self.watchdog)
         self.container_name = "TestContentFactory%f" % time.time()
         self.blob_client = self.content_factory.blob_client
         self.container_client = ContainerClient(self.gridconf)
-        self.container_client.container_create(account=self.account,
-                                               reference=self.container_name)
-        self.container_id = cid_from_name(self.account,
-                                          self.container_name).upper()
+        self.container_client.container_create(
+            account=self.account, reference=self.container_name
+        )
+        self.container_id = cid_from_name(self.account, self.container_name).upper()
         self.stgpol = "SINGLE"
         self.stgpol_twocopies = "TWOCOPIES"
         self.stgpol_threecopies = "THREECOPIES"
         self.stgpol_ec = "EC"
 
     def tearDown(self):
-        self.content_factory.container_client.content_locate = \
+        self.content_factory.container_client.content_locate = (
             ContainerClient.content_locate
-        self.content_factory.container_client.content_prepare = \
+        )
+        self.content_factory.container_client.content_prepare = (
             ContainerClient.content_prepare
+        )
         super(TestContentFactory, self).tearDown()
 
     def test_get_ec(self):
@@ -96,34 +97,52 @@ class TestContentFactory(BaseTestCase):
         chunks = [
             {
                 "url": "http://127.0.0.1:6012/A0A0",
-                "pos": "0.0", "size": 512,
-                "hash": "E7D4E4AD460971CA2E3141F2102308D4"},
+                "pos": "0.0",
+                "size": 512,
+                "hash": "E7D4E4AD460971CA2E3141F2102308D4",
+            },
             {
                 "url": "http://127.0.0.1:6010/A01",
-                "pos": "0.1", "size": 146,
-                "hash": "760AB5DA7C51A3654F1CA622687CD6C3"},
+                "pos": "0.1",
+                "size": 146,
+                "hash": "760AB5DA7C51A3654F1CA622687CD6C3",
+            },
             {
                 "url": "http://127.0.0.1:6011/A00",
-                "pos": "0.2", "size": 512,
-                "hash": "B1D08B86B8CAA90A2092CCA0DF9201DB"},
+                "pos": "0.2",
+                "size": 512,
+                "hash": "B1D08B86B8CAA90A2092CCA0DF9201DB",
+            },
             {
                 "url": "http://127.0.0.1:6013/A0A1",
-                "pos": "0.3", "size": 512,
-                "hash": "DA9D7F72AEEA5791565724424CE45C16"}
+                "pos": "0.3",
+                "size": 512,
+                "hash": "DA9D7F72AEEA5791565724424CE45C16",
+            },
         ]
         self.content_factory.container_client.content_locate = Mock(
-            return_value=(meta, chunks))
-        c = self.content_factory.get("xxx_container_id", "xxx_content_id",
-                                     account=self.account,
-                                     container_name=self.container_name)
+            return_value=(meta, chunks)
+        )
+        c = self.content_factory.get(
+            "xxx_container_id",
+            "xxx_content_id",
+            account=self.account,
+            container_name=self.container_name,
+        )
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
-        self.assertEqual(c.full_path,
-                         encode_fullpath(self.account, self.container_name,
-                                         "tox.ini", meta['version'],
-                                         meta['id']))
+        self.assertEqual(
+            c.full_path,
+            encode_fullpath(
+                self.account,
+                self.container_name,
+                "tox.ini",
+                meta["version"],
+                meta["id"],
+            ),
+        )
         self.assertEqual(c.version, "1450176946676289")
         # TODO test storage method
         self.assertEqual(len(c.chunks), 4)
@@ -150,35 +169,50 @@ class TestContentFactory(BaseTestCase):
         chunks = [
             {
                 "url": "http://127.0.0.1:6010/A0",
-                "pos": "0", "size": 658,
-                "hash": "E952A419957A6E405BFC53EC65483F73"},
+                "pos": "0",
+                "size": 658,
+                "hash": "E952A419957A6E405BFC53EC65483F73",
+            },
             {
                 "url": "http://127.0.0.1:6011/A1",
-                "pos": "0", "size": 658,
-                "hash": "E952A419957A6E405BFC53EC65483F73"}
+                "pos": "0",
+                "size": 658,
+                "hash": "E952A419957A6E405BFC53EC65483F73",
+            },
         ]
         self.content_factory.container_client.content_locate = Mock(
-            return_value=(meta, chunks))
-        c = self.content_factory.get("xxx_container_id", "xxx_content_id",
-                                     account=self.account,
-                                     container_name=self.container_name)
+            return_value=(meta, chunks)
+        )
+        c = self.content_factory.get(
+            "xxx_container_id",
+            "xxx_content_id",
+            account=self.account,
+            container_name=self.container_name,
+        )
         self.assertEqual(type(c), PlainContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
-        self.assertEqual(c.full_path,
-                         encode_fullpath(self.account, self.container_name,
-                                         "tox.ini", meta['version'],
-                                         meta['id']))
+        self.assertEqual(
+            c.full_path,
+            encode_fullpath(
+                self.account,
+                self.container_name,
+                "tox.ini",
+                meta["version"],
+                meta["id"],
+            ),
+        )
         # TODO test storage_method
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
 
     def test_get_unknown_content(self):
-        self.assertRaises(ContentNotFound, self.content_factory.get,
-                          self.container_id, "1234")
+        self.assertRaises(
+            ContentNotFound, self.content_factory.get, self.container_id, "1234"
+        )
 
     def test_new_ec(self):
         meta = {
@@ -198,27 +232,40 @@ class TestContentFactory(BaseTestCase):
         chunks = [
             {
                 "url": "http://127.0.0.1:6010/0_p1",
-                "pos": "0.3", "size": 1048576,
-                "hash": "00000000000000000000000000000000"},
+                "pos": "0.3",
+                "size": 1048576,
+                "hash": "00000000000000000000000000000000",
+            },
             {
                 "url": "http://127.0.0.1:6011/0_p0",
-                "pos": "0.2", "size": 1048576,
-                "hash": "00000000000000000000000000000000"},
+                "pos": "0.2",
+                "size": 1048576,
+                "hash": "00000000000000000000000000000000",
+            },
             {
                 "url": "http://127.0.0.1:6016/0_1",
-                "pos": "0.1", "size": 1048576,
-                "hash": "00000000000000000000000000000000"},
+                "pos": "0.1",
+                "size": 1048576,
+                "hash": "00000000000000000000000000000000",
+            },
             {
                 "url": "http://127.0.0.1:6017/0_0",
-                "pos": "0.0", "size": 1048576,
-                "hash": "00000000000000000000000000000000"}
+                "pos": "0.0",
+                "size": 1048576,
+                "hash": "00000000000000000000000000000000",
+            },
         ]
         self.content_factory.container_client.content_prepare = Mock(
-            return_value=(meta, chunks))
-        c = self.content_factory.new("xxx_container_id", "titi",
-                                     1000, self.stgpol_ec,
-                                     account=self.account,
-                                     container_name=self.container_name)
+            return_value=(meta, chunks)
+        )
+        c = self.content_factory.new(
+            "xxx_container_id",
+            "titi",
+            1000,
+            self.stgpol_ec,
+            account=self.account,
+            container_name=self.container_name,
+        )
         self.assertEqual(type(c), ECContent)
         self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
         self.assertEqual(c.length, 1000)
@@ -231,19 +278,30 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[2].raw(), chunks[1])
         self.assertEqual(c.chunks[3].raw(), chunks[0])
 
-    def _new_content(self, stgpol, data, path="titi", account=None,
-                     container_name=None, mime_type=None, properties=None):
-        old_content = self.content_factory.new(self.container_id, path,
-                                               len(data), stgpol,
-                                               account=account,
-                                               container_name=container_name)
+    def _new_content(
+        self,
+        stgpol,
+        data,
+        path="titi",
+        account=None,
+        container_name=None,
+        mime_type=None,
+        properties=None,
+    ):
+        old_content = self.content_factory.new(
+            self.container_id,
+            path,
+            len(data),
+            stgpol,
+            account=account,
+            container_name=container_name,
+        )
         if properties:
             old_content.properties = properties
         if mime_type:
             old_content.mime_type = mime_type
         old_content.create(BytesIO(data))
-        return self.content_factory.get(self.container_id,
-                                        old_content.content_id)
+        return self.content_factory.get(self.container_id, old_content.content_id)
 
     def _test_move_chunk(self, policy):
         data = random_data(self.chunk_size)
@@ -257,8 +315,9 @@ class TestContentFactory(BaseTestCase):
         chunk_hash = hash_stream(chunk_stream)
         new_chunk = content.move_chunk(chunk_id, service_id=chunk_host)
 
-        content_updated = self.content_factory.get(self.container_id,
-                                                   content.content_id)
+        content_updated = self.content_factory.get(
+            self.container_id, content.content_id
+        )
 
         hosts = []
         for c in content_updated.chunks.filter(metapos=0):
@@ -266,13 +325,13 @@ class TestContentFactory(BaseTestCase):
             self.assertNotEqual(c.url, chunk_url)
             hosts.append(c.host)
 
-        new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(
-            new_chunk["url"])
+        new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(new_chunk["url"])
         new_chunk_hash = hash_stream(new_chunk_stream)
 
         self.assertEqual(new_chunk_hash, chunk_hash)
-        self.assertGreaterEqual(new_chunk_meta['chunk_mtime'],
-                                chunk_meta['chunk_mtime'])
+        self.assertGreaterEqual(
+            new_chunk_meta["chunk_mtime"], chunk_meta["chunk_mtime"]
+        )
 
         del chunk_meta["chunk_id"]
         del new_chunk_meta["chunk_id"]
@@ -302,16 +361,21 @@ class TestContentFactory(BaseTestCase):
             content = self._new_content(self.stgpol, b"nobody cares", cname)
             answers[cname] = content
 
-        _, listing = self.container_client.content_list(self.account,
-                                                        self.container_name)
+        _, listing = self.container_client.content_list(
+            self.account, self.container_name
+        )
         obj_set = {k["name"] for k in listing["objects"]}
         try:
             # Ensure the saved path is the one we gave the object
             for cname in answers:
                 self.assertEqual(cname, answers[cname].path)
                 fullpath = encode_fullpath(
-                    self.account, self.container_name, cname,
-                    answers[cname].version, answers[cname].content_id)
+                    self.account,
+                    self.container_name,
+                    cname,
+                    answers[cname].version,
+                    answers[cname].content_id,
+                )
                 self.assertEqual(answers[cname].full_path, fullpath)
             # Ensure all objects appear in listing
             for cname in strange_paths:

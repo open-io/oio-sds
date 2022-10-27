@@ -27,9 +27,10 @@ from six.moves.configparser import SafeConfigParser
 
 def parse_options(parser=None):
     if parser is None:
-        parser = OptionParser(usage='%prog CONFIGURATION_FILE [options]')
-    parser.add_option('-v', '--verbose', default=False,
-                      action='store_true', help='verbose output')
+        parser = OptionParser(usage="%prog CONFIGURATION_FILE [options]")
+    parser.add_option(
+        "-v", "--verbose", default=False, action="store_true", help="verbose output"
+    )
 
     options, args = parser.parse_args(args=None)
 
@@ -65,17 +66,16 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
         sys.exit(1)
     if section_name:
         if parser.has_section(section_name):
-
             # if log_format is set, extract it from the parser
             # to prevent to expand variables which can, in case of
             # log_format throw a ConfigParser.InterpolationMissingOptionError
             log_format = {}
-            for option in ('log_format', 'access_log_format'):
+            for option in ("log_format", "access_log_format"):
                 if not parser.has_option(section_name, option):
                     continue
                 log_format[option] = parser.get(section_name, option, raw=True)
                 # don't use remove_options because it can fail without reason
-                parser.set(section_name, option, '')
+                parser.set(section_name, option, "")
 
             conf = dict(parser.items(section_name))
 
@@ -83,23 +83,21 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
             conf.update(log_format)
 
         else:
-            print('Unable to find section %s in config %s' % (section_name,
-                                                              conf_path))
+            print("Unable to find section %s in config %s" % (section_name, conf_path))
             exit(1)
     else:
         conf = {}
         for section in parser.sections():
-
             # if log_format is set, extract it from the parser
             # to prevent to expand variables which can, in case of
             # log_format throw a ConfigParser.InterpolationMissingOptionError
             log_format = {}
-            for option in ('log_format', 'access_log_format'):
+            for option in ("log_format", "access_log_format"):
                 if not parser.has_option(section, option):
                     continue
                 log_format[option] = parser.get(section, option, raw=True)
                 # don't use remove_options because it can fail without reason
-                parser.set(section, option, '')
+                parser.set(section, option, "")
 
             conf.update({section: dict(parser.items(section))})
 
@@ -110,13 +108,13 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
 
 
 def parse_config(conf_path):
-    with open(conf_path, 'r') as f:
+    with open(conf_path, "r") as f:
         conf = yaml.load(f, Loader=yaml.Loader)
     return conf
 
 
 def validate_service_conf(conf):
-    ns = conf.get('namespace')
+    ns = conf.get("namespace")
     if not ns:
         raise InvalidServiceConfigError()
 
@@ -125,10 +123,10 @@ def _config_paths():
     """
     Yield paths to potential namespace configuration files.
     """
-    yield '/etc/oio/sds.conf', True
-    for conf_path in glob('/etc/oio/sds.conf.d/*'):
+    yield "/etc/oio/sds.conf", True
+    for conf_path in glob("/etc/oio/sds.conf.d/*"):
         yield conf_path, True
-    yield path.expandvars('${HOME}/.oio/sds.conf'), False
+    yield path.expandvars("${HOME}/.oio/sds.conf"), False
 
 
 # Keep namespace configurations, avoid loading files everytime
@@ -146,8 +144,9 @@ class NamespaceConfiguration(dict):
         self.files = files
 
     def __missing__(self, key):
-        raise Exception("'%s' not found in configuration files:\n%s" % (
-            key, '\n'.join(self.files)))
+        raise Exception(
+            "'%s' not found in configuration files:\n%s" % (key, "\n".join(self.files))
+        )
 
 
 def load_namespace_conf(namespace, failsafe=False, fresh=False):
@@ -176,17 +175,21 @@ def load_namespace_conf(namespace, failsafe=False, fresh=False):
 
     conf = NamespaceConfiguration(loaded_files, namespace=namespace)
     if not loaded_files:
-        print('Unable to read namespace config. We tried %s' % (
-              [x for x in _config_paths()]))
+        print(
+            "Unable to read namespace config. We tried %s"
+            % ([x for x in _config_paths()])
+        )
     else:
         import logging
+
         logging.info("Configuration loaded from %s", repr(loaded_files))
         if not parser.has_section(namespace):
-            print('Unable to find [%s] section in any of %s' % (
-                  namespace, loaded_files))
+            print(
+                "Unable to find [%s] section in any of %s" % (namespace, loaded_files)
+            )
         else:
             conf.update(parser.items(namespace))
-            proxy = conf.get('proxy')
+            proxy = conf.get("proxy")
             if not proxy:
                 print("Missing field proxy in namespace config")
             else:
@@ -217,10 +220,11 @@ def set_namespace_options(namespace, options, remove=None):
         actual_confs.extend(fdone)
     if not actual_confs:
         raise ValueError(
-            "Could not read configuration from any of %s" % potential_confs)
+            "Could not read configuration from any of %s" % potential_confs
+        )
 
     if not parser.has_section(namespace):
-        print('Namespace %s was not found in %s' % (namespace, actual_confs))
+        print("Namespace %s was not found in %s" % (namespace, actual_confs))
         parser.add_section(namespace)
     for key, val in options.items():
         parser.set(namespace, key, str(val))
@@ -228,6 +232,6 @@ def set_namespace_options(namespace, options, remove=None):
         for key in remove:
             parser.remove_option(namespace, key)
 
-    with open(actual_confs[-1], 'w') as outfile:
+    with open(actual_confs[-1], "w") as outfile:
         parser.write(outfile)
     return dict(parser.items(namespace))

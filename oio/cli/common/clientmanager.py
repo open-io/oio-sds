@@ -51,18 +51,18 @@ class ClientManager(object):
         self._logger = None
         self._pool_manager = None
 
-        LOG.setLevel(getLogger('').getEffectiveLevel())
-        LOG.debug('Using parameters %s', self._options)
-        self._options['log_level'] = getLevelName(LOG.getEffectiveLevel())
+        LOG.setLevel(getLogger("").getEffectiveLevel())
+        LOG.debug("Using parameters %s", self._options)
+        self._options["log_level"] = getLevelName(LOG.getEffectiveLevel())
 
     @property
     def client_conf(self):
         """Dict to be passed as first parameter to all *Client classes."""
         if not self._client_conf:
             self._client_conf = {
-                'namespace': self.namespace,
-                'proxyd_url': self.get_endpoint(),
-                'account_url': self.get_service_endpoint('account')
+                "namespace": self.namespace,
+                "proxyd_url": self.get_endpoint(),
+                "account_url": self.get_service_endpoint("account"),
             }
         return self._client_conf
 
@@ -71,6 +71,7 @@ class ClientManager(object):
         """Dict holding what's in local configuration files."""
         if not self._sds_conf:
             from oio.common.configuration import load_namespace_conf
+
             self._sds_conf = load_namespace_conf(self.namespace, failsafe=True)
         return self._sds_conf
 
@@ -78,60 +79,66 @@ class ClientManager(object):
     def namespace(self):
         """Name of the namespace set on the CLI or environment."""
         if not self._namespace:
-            ns = self._options.get('namespace', None)
+            ns = self._options.get("namespace", None)
             if not ns:
                 from oio.common.exceptions import CommandError
-                msg = 'Set a namespace with --ns, OIO_NS\n'
-                raise CommandError('Missing parameter: \n%s' % msg)
+
+                msg = "Set a namespace with --ns, OIO_NS\n"
+                raise CommandError("Missing parameter: \n%s" % msg)
             self._namespace = ns
         return self._namespace
 
     @property
     def admin_mode(self):
         if not self._admin_mode:
-            self._admin_mode = self._options.get('admin_mode')
+            self._admin_mode = self._options.get("admin_mode")
         return self._admin_mode
 
     @property
     def account_client(self):
         if self._account_client is None:
             from oio.account.client import AccountClient
+
             self._account_client = AccountClient(
-                self.client_conf, pool_manager=self.pool_manager,
-                logger=self.logger)
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
         return self._account_client
 
     @property
     def xcute_client(self):
         if self._xcute_client is None:
             from oio.xcute.client import XcuteClient
+
             self._xcute_client = XcuteClient(
-                self.client_conf, pool_manager=self.pool_manager,
-                logger=self.logger)
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
         return self._xcute_client
 
     @property
     def admin(self):
         if self._admin_client is None:
             from oio.directory.admin import AdminClient
+
             self._admin_client = AdminClient(
-                self.client_conf, pool_manager=self.pool_manager,
-                logger=self.logger)
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
         return self._admin_client
 
     @property
     def conscience(self):
         if self._conscience_client is None:
             from oio.conscience.client import ConscienceClient
+
             self._conscience_client = ConscienceClient(
-                self.client_conf, pool_manager=self.pool_manager,
-                logger=self.logger)
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
         return self._conscience_client
 
     @property
     def logger(self):
         if self._logger is None:
             from oio.common.logger import get_logger
+
             self._logger = get_logger(self._options, __name__)
         return self._logger
 
@@ -139,19 +146,23 @@ class ClientManager(object):
     def rdir(self):
         if self._rdir_client is None:
             from oio.rdir.client import RdirClient
+
             self._rdir_client = RdirClient(
-                self.client_conf, pool_manager=self.pool_manager,
-                logger=self.logger)
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
         return self._rdir_client
 
     @property
     def rdir_dispatcher(self):
         if self._rdir_dispatcher is None:
             from oio.rdir.client import RdirDispatcher
+
             self._rdir_dispatcher = RdirDispatcher(
-                self.client_conf, rdir_client=self.rdir,
+                self.client_conf,
+                rdir_client=self.rdir,
                 pool_manager=self.pool_manager,
-                logger=self.logger)
+                logger=self.logger,
+            )
         return self._rdir_dispatcher
 
     @property
@@ -161,11 +172,13 @@ class ClientManager(object):
         """
         if self._storage is None:
             from oio.api.object_storage import ObjectStorageApi
+
             self._storage = ObjectStorageApi(
                 self.namespace,
                 endpoint=self.get_endpoint(),
-                account_endpoint=self.get_service_endpoint('account'),
-                pool_manager=self.pool_manager)
+                account_endpoint=self.get_service_endpoint("account"),
+                pool_manager=self.pool_manager,
+            )
         return self._storage
 
     def flatns_set_bits(self, bits):
@@ -176,29 +189,32 @@ class ClientManager(object):
         if self._flatns_manager is not None:
             return self._flatns_manager
         from oio.common.autocontainer import HashedContainerBuilder
-        options = self.nsinfo['options']
+
+        options = self.nsinfo["options"]
         bitlength, offset, size = None, 0, None
         try:
-            bitlength = int(self._flatns_bits or options['flat_bitlength'])
+            bitlength = int(self._flatns_bits or options["flat_bitlength"])
         except Exception:
             from oio.common.exceptions import ConfigurationException
-            raise ConfigurationException(
-                    "Namespace not configured for autocontainers")
+
+            raise ConfigurationException("Namespace not configured for autocontainers")
         try:
-            if 'flat_hash_offset' in options:
-                offset = int(options['flat_hash_offset'])
-            if 'flat_hash_size' in options:
-                size = int(options['flat_hash_size'])
+            if "flat_hash_offset" in options:
+                offset = int(options["flat_hash_offset"])
+            if "flat_hash_size" in options:
+                size = int(options["flat_hash_size"])
         except Exception:
             raise Exception("Invalid autocontainer config: offset/size")
         self._flatns_manager = HashedContainerBuilder(
-            offset=offset, size=size, bits=bitlength)
+            offset=offset, size=size, bits=bitlength
+        )
         return self._flatns_manager
 
     @property
     def pool_manager(self):
         if self._pool_manager is None:
             from oio.common.http_urllib3 import get_pool_manager
+
             # get_pool_manager already filters arguments it cares about
             self._pool_manager = get_pool_manager(**self._options)
         return self._pool_manager
@@ -206,8 +222,9 @@ class ClientManager(object):
     @property
     def meta1_digits(self):
         if self._meta1_digits is None:
-            m1d = (self.sds_conf.get("ns.meta1_digits") or
-                   self.sds_conf.get("meta1_digits"))
+            m1d = self.sds_conf.get("ns.meta1_digits") or self.sds_conf.get(
+                "meta1_digits"
+            )
             if m1d:
                 self._meta1_digits = int(m1d)
             else:
@@ -224,38 +241,40 @@ class ClientManager(object):
     @property
     def account(self):
         if not self._account:
-            account_name = self._options.get('account_name', None)
+            account_name = self._options.get("account_name", None)
             if not account_name:
                 from oio.common.exceptions import CommandError
-                msg = 'Set an account name with --account, OIO_ACCOUNT\n'
-                raise CommandError('Missing parameter: \n%s' % msg)
+
+                msg = "Set an account name with --account, OIO_ACCOUNT\n"
+                raise CommandError("Missing parameter: \n%s" % msg)
             self._account = account_name
         return self._account
 
     def get_endpoint(self):
-        if 'proxyd_url' not in self._options:
-            proxy_netloc = self.sds_conf.get('proxy', None)
+        if "proxyd_url" not in self._options:
+            proxy_netloc = self.sds_conf.get("proxy", None)
             if proxy_netloc:
-                self._options['proxyd_url'] = 'http://%s' % proxy_netloc
+                self._options["proxyd_url"] = "http://%s" % proxy_netloc
             else:
                 from oio.common.exceptions import CommandError
+
                 msg = """ Set a proxyd URL with --oio-proxy,
                           OIO_PROXY_URL\n """
-                raise CommandError('Missing parameter(s): \n%s' % msg)
+                raise CommandError("Missing parameter(s): \n%s" % msg)
         # TODO: for the moment always return the proxyd URL
-        return self._options['proxyd_url']
+        return self._options["proxyd_url"]
 
     def get_service_endpoint(self, service_type):
         key = f"{service_type}_url"
         if key not in self._options:
             service_endpoint = self.sds_conf.get(service_type, None)
             if service_endpoint:
-                scheme = 'http'
-                split_endpoint = service_endpoint.split('://', 1)
+                scheme = "http"
+                split_endpoint = service_endpoint.split("://", 1)
                 if len(split_endpoint) > 1:
                     scheme = split_endpoint[0]
                 netloc = split_endpoint[-1]
-                service_endpoint = '://'.join((scheme, netloc))
+                service_endpoint = "://".join((scheme, netloc))
             else:
                 service_endpoint = None
             self._options[key] = service_endpoint
@@ -281,14 +300,8 @@ def get_plugin_module(module_name):
     __import__(module_name)
     module = sys.modules[module_name]
 
-    client_cache = ClientCache(
-        getattr(module, 'make_client', None)
-    )
+    client_cache = ClientCache(getattr(module, "make_client", None))
 
-    setattr(
-        ClientManager,
-        module.API_NAME,
-        client_cache
-    )
+    setattr(ClientManager, module.API_NAME, client_cache)
 
     return module

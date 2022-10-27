@@ -43,11 +43,10 @@ class Rebuilder(object):
         # pylint: disable=no-member
         self.conf = conf
         self.logger = logger or get_logger(conf)
-        self.namespace = conf['namespace']
+        self.namespace = conf["namespace"]
         self.volume = volume
         self.input_file = input_file
-        self.concurrency = int_value(conf.get('concurrency'),
-                                     self.DEFAULT_CONCURRENCY)
+        self.concurrency = int_value(conf.get("concurrency"), self.DEFAULT_CONCURRENCY)
         self.success = True
         # exit gracefully
         self.running = True
@@ -63,17 +62,17 @@ class Rebuilder(object):
         self.lock_report = threading.Lock()
         self.start_time = 0
         self.last_report = 0
-        self.report_interval = int_value(conf.get('report_interval'),
-                                         self.DEFAULT_REPORT_INTERVAL)
+        self.report_interval = int_value(
+            conf.get("report_interval"), self.DEFAULT_REPORT_INTERVAL
+        )
 
     def exit_gracefully(self, signum, frame):
-        self.logger.info(
-            'Stop sending and wait for all results already sent')
+        self.logger.info("Stop sending and wait for all results already sent")
         self.running = False
 
     def rebuilder_pass(self, **kwargs):
         self.start_time = self.last_report = time.time()
-        self.log_report('START', force=True)
+        self.log_report("START", force=True)
 
         workers = list()
         with ContextPool(self.concurrency + 1) as pool:
@@ -86,8 +85,9 @@ class Rebuilder(object):
             for i in range(self.concurrency):
                 worker = self._create_worker(**kwargs)
                 workers.append(worker)
-                pool.spawn(worker.rebuilder_pass, i, queue,
-                           retry_queue=rqueue, **kwargs)
+                pool.spawn(
+                    worker.rebuilder_pass, i, queue, retry_queue=rqueue, **kwargs
+                )
 
             # fill the queue (with the main thread)
 
@@ -103,7 +103,7 @@ class Rebuilder(object):
             # block until the retry queue is empty
             rqueue.join()
 
-        self.log_report('DONE', force=True)
+        self.log_report("DONE", force=True)
         return self.success and self.total_errors == 0
 
     def _create_worker(self, **kwargs):
@@ -136,19 +136,22 @@ class Rebuilder(object):
         """
         raise NotImplementedError()
 
-    def _update_processed_without_lock(self, info, error=None, increment=1,
-                                       **kwargs):
+    def _update_processed_without_lock(self, info, error=None, increment=1, **kwargs):
         self.items_processed += increment
         if error is not None:
             self.errors += 1
 
     def update_processed(self, item, info, error=None, increment=1, **kwargs):
         if error is not None:
-            self.logger.error('ERROR while rebuilding %s: %s',
-                              self._item_to_string(item, **kwargs), error)
+            self.logger.error(
+                "ERROR while rebuilding %s: %s",
+                self._item_to_string(item, **kwargs),
+                error,
+            )
         with self.lock_counters:
-            self._update_processed_without_lock(info, error=error,
-                                                increment=increment, **kwargs)
+            self._update_processed_without_lock(
+                info, error=error, increment=increment, **kwargs
+            )
 
     def _update_totals_without_lock(self, **kwargs):
         items_processed = self.items_processed
@@ -157,8 +160,7 @@ class Rebuilder(object):
         errors = self.errors
         self.errors = 0
         self.total_errors += errors
-        return items_processed, errors, self.total_items_processed, \
-            self.total_errors
+        return items_processed, errors, self.total_items_processed, self.total_errors
 
     def update_totals(self, **kwargs):
         with self.lock_counters:
@@ -169,13 +171,13 @@ class Rebuilder(object):
 
     def log_report(self, status, force=False, **kwargs):
         end_time = time.time()
-        if (force and self.lock_report.acquire()) \
-            or (end_time - self.last_report >= self.report_interval
-                and self.lock_report.acquire(False)):
+        if (force and self.lock_report.acquire()) or (
+            end_time - self.last_report >= self.report_interval
+            and self.lock_report.acquire(False)
+        ):
             try:
                 counters = self.update_totals()
-                self.logger.info(
-                    self._get_report(status, end_time, counters, **kwargs))
+                self.logger.info(self._get_report(status, end_time, counters, **kwargs))
                 self.last_report = end_time
             finally:
                 self.lock_report.release()
@@ -195,16 +197,16 @@ class RebuilderWorker(object):
         self.volume = rebuilder.volume
         self.items_run_time = 0
         self.max_items_per_second = int_value(
-            rebuilder.conf.get('items_per_second'),
-            self.rebuilder.DEFAULT_ITEM_PER_SECOND)
-        self.random_wait = rebuilder.conf.get('random_wait')
+            rebuilder.conf.get("items_per_second"),
+            self.rebuilder.DEFAULT_ITEM_PER_SECOND,
+        )
+        self.random_wait = rebuilder.conf.get("random_wait")
 
     def update_processed(self, item, info, error=None, **kwargs):
-        return self.rebuilder.update_processed(item, info, error=error,
-                                               **kwargs)
+        return self.rebuilder.update_processed(item, info, error=error, **kwargs)
 
     def log_report(self, **kwargs):
-        return self.rebuilder.log_report('RUN', **kwargs)
+        return self.rebuilder.log_report("RUN", **kwargs)
 
     def rebuilder_pass(self, num, queue, retry_queue=None, **kwargs):
         while True:
@@ -216,7 +218,8 @@ class RebuilderWorker(object):
             except exceptions.RetryLater as exc:
                 if retry_queue:
                     self.logger.warn(
-                        "Putting an item in the retry queue: %s", exc.args[1])
+                        "Putting an item in the retry queue: %s", exc.args[1]
+                    )
                     retry_queue.put(exc.args[0])
                 else:
                     err = str(exc)
@@ -227,8 +230,9 @@ class RebuilderWorker(object):
             self.update_processed(item, info, error=err, **kwargs)
             self.log_report(**kwargs)
 
-            self.items_run_time = ratelimit(self.items_run_time,
-                                            self.max_items_per_second)
+            self.items_run_time = ratelimit(
+                self.items_run_time, self.max_items_per_second
+            )
             if self.random_wait:
                 eventlet.sleep(random.randint(0, self.random_wait) / 1.0e6)
 

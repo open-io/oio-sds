@@ -47,49 +47,54 @@ class ServiceWatcher(object):
         self.conf = conf
         self.running = False
 
-        for k in ['host', 'port', 'type']:
+        for k in ["host", "port", "type"]:
             if k not in service:
-                raise Exception(
-                    'Missing field "%s" in service configuration' % k)
-        self.name = '%s|%s|%s' % \
-            (service['type'], service['host'], service['port'])
+                raise Exception('Missing field "%s" in service configuration' % k)
+        self.name = "%s|%s|%s" % (service["type"], service["host"], service["port"])
 
         self.service = service
 
-        self.rise = int_value(self._load_item_config('rise'), 1)
-        self.fall = int_value(self._load_item_config('fall'), 1)
-        self.check_interval = float_value(
-            self._load_item_config('check_interval'), 1)
+        self.rise = int_value(self._load_item_config("rise"), 1)
+        self.fall = int_value(self._load_item_config("fall"), 1)
+        self.check_interval = float_value(self._load_item_config("check_interval"), 1)
         self.deregister_on_exit = true_value(
-            self._load_item_config('deregister_on_exit', False))
+            self._load_item_config("deregister_on_exit", False)
+        )
 
         self.logger = get_logger(self.conf)
         self.pool_manager = get_pool_manager()
-        self.cs = ConscienceClient(self.conf, pool_manager=self.pool_manager,
-                                   logger=self.logger)
+        self.cs = ConscienceClient(
+            self.conf, pool_manager=self.pool_manager, logger=self.logger
+        )
         # Pre-configured generic client to oio-proxy,
         # to be used by specialized stats getters.
-        self.proxy_client = ProxyClient(self.conf,
-                                        pool_manager=self.pool_manager,
-                                        no_ns_in_url=True, logger=self.logger)
+        self.proxy_client = ProxyClient(
+            self.conf,
+            pool_manager=self.pool_manager,
+            no_ns_in_url=True,
+            logger=self.logger,
+        )
         self.last_status = False
         self.status = False
         self.failed = False
         self.service_definition = {
-            'ns': self.conf['namespace'],
-            'type': self.service['type'],
-            'addr': '%s:%s' % (self.service['host'], self.service['port']),
-            'score': 0,
-            'tags': {}}
-        if self.service.get('slots', None):
-            self.service_definition['tags']['tag.slots'] = \
-                ','.join(self.service['slots'])
-        for name, tag in (('location', 'tag.loc'),
-                          ('service_id', 'tag.service_id'),
-                          ('tls', 'tag.tls')):
+            "ns": self.conf["namespace"],
+            "type": self.service["type"],
+            "addr": "%s:%s" % (self.service["host"], self.service["port"]),
+            "score": 0,
+            "tags": {},
+        }
+        if self.service.get("slots", None):
+            self.service_definition["tags"]["tag.slots"] = ",".join(
+                self.service["slots"]
+            )
+        for name, tag in (
+            ("location", "tag.loc"),
+            ("service_id", "tag.service_id"),
+            ("tls", "tag.tls"),
+        ):
             if self.service.get(name):
-                self.service_definition['tags'][tag] = \
-                    self.service[name]
+                self.service_definition["tags"][tag] = self.service[name]
 
         self.service_checks = list()
         self.service_stats = list()
@@ -114,7 +119,7 @@ class ServiceWatcher(object):
                 self.last_status = False
                 self.register()
             except Exception as e:
-                self.logger.warning('Failed to register service: %s', e)
+                self.logger.warning("Failed to register service: %s", e)
         self.running = False
 
     def check(self, reqid=None):
@@ -134,13 +139,14 @@ class ServiceWatcher(object):
         try:
             for stat in collectors:
                 stats = stat.get_stats(reqid=reqid)
-                self.service_definition['tags'].update(stats)
+                self.service_definition["tags"].update(stats)
         except Exception as ex:
             self.logger.debug(
                 "get_stats error: %s, skipping %s (reqid=%s)",
                 ex,
                 [type(col).__name__ for col in collectors] or "<nothing>",
-                reqid)
+                reqid,
+            )
             self.status = False
 
     def register(self, reqid=None):
@@ -157,13 +163,15 @@ class ServiceWatcher(object):
             self.last_status = self.status
 
         # Use a boolean so we can easily convert it to a number in conscience
-        self.service_definition['tags']['tag.up'] = self.status
+        self.service_definition["tags"]["tag.up"] = self.status
         try:
-            self.cs.register(self.service_definition,
-                             retries=False, reqid=reqid)
+            self.cs.register(self.service_definition, retries=False, reqid=reqid)
         except OioException as rqe:
-            self.logger.warning("Failed to register service %s: %s",
-                                self.service_definition["addr"], rqe)
+            self.logger.warning(
+                "Failed to register service %s: %s",
+                self.service_definition["addr"],
+                rqe,
+            )
 
     def watch(self):
         try:
@@ -181,35 +189,40 @@ class ServiceWatcher(object):
             self.logger.info('watcher "%s" stopped', self.name)
 
     def init_checkers(self, service):
-        for check in service['checks']:
-            check['host'] = check.get('host') or service['host']
-            check['port'] = check.get('port') or service['port']
-            check['name'] = check.get('name') or "%s|%s|%s" % \
-                (check['type'], check['host'], check['port'])
-            check['rise'] = check.get('rise') or self.rise
-            check['fall'] = check.get('fall') or self.fall
+        for check in service["checks"]:
+            check["host"] = check.get("host") or service["host"]
+            check["port"] = check.get("port") or service["port"]
+            check["name"] = check.get("name") or "%s|%s|%s" % (
+                check["type"],
+                check["host"],
+                check["port"],
+            )
+            check["rise"] = check.get("rise") or self.rise
+            check["fall"] = check.get("fall") or self.fall
 
-            check['type'] = check.get('type') or 'unknown'
-            service_check_class = CHECKERS_MODULES.get(check['type'])
+            check["type"] = check.get("type") or "unknown"
+            service_check_class = CHECKERS_MODULES.get(check["type"])
             if not service_check_class:
                 raise Exception(
-                    'Invalid check type "%s", valid types: %s' %
-                    (check['type'], ', '.join(CHECKERS_MODULES.keys())))
+                    'Invalid check type "%s", valid types: %s'
+                    % (check["type"], ", ".join(CHECKERS_MODULES.keys()))
+                )
             service_check = service_check_class(self, check, self.logger)
             self.service_checks.append(service_check)
 
     def init_stats(self, service):
         """Initialize service stat fetchers"""
         self.service_stats[:] = []
-        for stat in service['stats']:
-            stat.setdefault('host', service['host'])
-            stat.setdefault('port', service['port'])
-            stat.setdefault('path', "")
-            service_stat_class = STATS_MODULES.get(stat['type'], None)
+        for stat in service["stats"]:
+            stat.setdefault("host", service["host"])
+            stat.setdefault("port", service["port"])
+            stat.setdefault("path", "")
+            service_stat_class = STATS_MODULES.get(stat["type"], None)
             if not service_stat_class:
                 raise Exception(
-                    'Invalid stat type "%s", valid types: %s' %
-                    (stat['type'], ', '.join(STATS_MODULES.keys())))
+                    'Invalid stat type "%s", valid types: %s'
+                    % (stat["type"], ", ".join(STATS_MODULES.keys()))
+                )
             service_stat = service_stat_class(self, stat, self.logger)
             self.service_stats.append(service_stat)
 
@@ -222,14 +235,14 @@ class ConscienceAgent(Daemon):
         self.logger = get_logger(conf)
         self.load_services()
         self.check_for_conflicts()
-        self.init_watchers(self.conf['services'])
+        self.init_watchers(self.conf["services"])
 
     def stop(self):
         self.running = False
 
     def run(self, *args, **kwargs):
         try:
-            self.logger.info('conscience agent: starting')
+            self.logger.info("conscience agent: starting")
 
             pool = GreenPool(len(self.watchers))
             for watcher in self.watchers:
@@ -247,10 +260,10 @@ class ConscienceAgent(Daemon):
                         pool.spawn(new_w.start)
 
         except Exception as err:
-            self.logger.error('ERROR in main loop %s', err)
+            self.logger.error("ERROR in main loop %s", err)
             raise
         finally:
-            self.logger.warning('conscience agent: stopping')
+            self.logger.warning("conscience agent: stopping")
             self.running = False
             self.stop_watchers()
 
@@ -260,8 +273,10 @@ class ConscienceAgent(Daemon):
             try:
                 watchers.append(ServiceWatcher(self.conf, conf))
             except Exception:
-                self.logger.exception("Failed to load configuration from %s",
-                                      conf.get('cfgfile', 'main config file'))
+                self.logger.exception(
+                    "Failed to load configuration from %s",
+                    conf.get("cfgfile", "main config file"),
+                )
         self.watchers = watchers
 
     def stop_watchers(self):
@@ -269,47 +284,52 @@ class ConscienceAgent(Daemon):
             watcher.stop()
 
     def load_services(self):
-        include_dir = self.conf.get('include_dir')
-        self.conf['services'] = self.conf.get('services') or {}
+        include_dir = self.conf.get("include_dir")
+        self.conf["services"] = self.conf.get("services") or {}
         if include_dir:
             include_dir = os.path.expanduser(include_dir)
 
-            cfgfiles = [f for d in include_dir.split(':')
-                        for f in glob.glob(d + "/*")
-                        if re.match(r'.+\.(json|yml|yaml)$', f)]
+            cfgfiles = [
+                f
+                for d in include_dir.split(":")
+                for f in glob.glob(d + "/*")
+                if re.match(r".+\.(json|yml|yaml)$", f)
+            ]
             for cfgfile in cfgfiles:
                 name = os.path.basename(cfgfile)
                 name = os.path.splitext(name)[0]
                 config = parse_config(cfgfile)
                 if not config:
-                    self.logger.warning('Ignoring empty config file %s',
-                                        cfgfile)
+                    self.logger.warning("Ignoring empty config file %s", cfgfile)
                     continue
                 if not isinstance(config, dict):
                     raise TypeError(
-                        'Expecting YAML dictionary for the config file %s',
-                        cfgfile)
-                self.conf['services'][name] = config
-                self.conf['services'][name]['cfgfile'] = cfgfile
+                        "Expecting YAML dictionary for the config file %s", cfgfile
+                    )
+                self.conf["services"][name] = config
+                self.conf["services"][name]["cfgfile"] = cfgfile
 
     def check_for_conflicts(self):
         per_sock = dict()
-        for name, desc in self.conf['services'].items():
-            hostport = ':'.join((desc['host'], str(desc.get('port', 80))))
+        for name, desc in self.conf["services"].items():
+            hostport = ":".join((desc["host"], str(desc.get("port", 80))))
             per_sock.setdefault(hostport, list()).append((name, desc))
 
         for hostport, services in per_sock.items():
             if len(services) > 1:
-                conflicting = ['%s (%s)' % (name, desc['type'])
-                               for name, desc in services]
+                conflicting = [
+                    "%s (%s)" % (name, desc["type"]) for name, desc in services
+                ]
                 self.logger.error(
-                    ("The following services are configured with the same "
-                     "endpoint (%s): %s. Please fix the configuration. "
-                     "Until then, they won't be updated."),
-                    hostport, ', '.join(conflicting))
+                    "The following services are configured with the same "
+                    "endpoint (%s): %s. Please fix the configuration. "
+                    "Until then, they won't be updated.",
+                    hostport,
+                    ", ".join(conflicting),
+                )
                 for name, _ in services:
-                    del self.conf['services'][name]
+                    del self.conf["services"][name]
 
 
-CHECKERS_MODULES = load_modules('oio.conscience.checker')
-STATS_MODULES = load_modules('oio.conscience.stats')
+CHECKERS_MODULES = load_modules("oio.conscience.checker")
+STATS_MODULES = load_modules("oio.conscience.stats")

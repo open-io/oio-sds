@@ -19,24 +19,25 @@ from tests.functional.cli import CliTestCase
 
 class ElectionTest(CliTestCase):
     """Functional tests for containers."""
+
     NAME = uuid.uuid4().hex
 
     @classmethod
     def setUpClass(cls):
-        cls.openio('container create ' + cls.NAME)
+        cls.openio("container create " + cls.NAME)
 
     @classmethod
     def tearDownClass(cls):
-        cls.openio('container delete ' + cls.NAME)
+        cls.openio("container delete " + cls.NAME)
 
     def test_election_leave(self):
-        self.openio('election leave meta2 ' + self.NAME)
+        self.openio("election leave meta2 " + self.NAME)
 
     def test_election_ping(self):
-        self.openio('election ping meta2 ' + self.NAME)
+        self.openio("election ping meta2 " + self.NAME)
 
     def test_election_status(self):
-        self.openio('election status --timeout 45.0 meta2 ' + self.NAME)
+        self.openio("election status --timeout 45.0 meta2 " + self.NAME)
 
     def test_election_debug(self):
-        self.openio('election debug meta2 ' + self.NAME)
+        self.openio("election debug meta2 " + self.NAME)

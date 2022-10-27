@@ -41,18 +41,19 @@ class Meta2Rebuilder(Tool):
         # rawx/rdir
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(
-            self.conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
+            self.conf.get("rdir_fetch_limit"), self.DEFAULT_RDIR_FETCH_LIMIT
+        )
 
     @staticmethod
     def string_from_item(item):
         namespace, container_id = item
-        return '%s|%s' % (namespace, container_id)
+        return "%s|%s" % (namespace, container_id)
 
     def _fetch_items_from_input_file(self):
-        with open(self.input_file, 'r') as ifile:
+        with open(self.input_file, "r") as ifile:
             for line in ifile:
                 stripped = line.strip()
-                if not stripped or stripped.startswith('#'):
+                if not stripped or stripped.startswith("#"):
                     continue
 
                 container_id = stripped
@@ -61,7 +62,7 @@ class Meta2Rebuilder(Tool):
     def _fetch_items_from_meta2_id(self):
         containers = self.rdir_client.meta2_index_fetch_all(self.meta2_id)
         for container in containers:
-            yield self.namespace, container['container_id']
+            yield self.namespace, container["container_id"]
 
     def _fetch_items(self):
         if self.input_file:
@@ -72,47 +73,56 @@ class Meta2Rebuilder(Tool):
         def _empty_generator():
             return
             yield  # pylint: disable=unreachable
+
         return _empty_generator()
 
     def _get_report(self, status, end_time, counters):
-        references_processed, total_references_processed, \
-            errors, total_errors = counters
+        (
+            references_processed,
+            total_references_processed,
+            errors,
+            total_errors,
+        ) = counters
         time_since_last_report = (end_time - self.last_report) or 0.00001
         total_time = (end_time - self.start_time) or 0.00001
         report = (
-            '%(status)s '
-            'last_report=%(last_report)s %(time_since_last_report).2fs '
-            'references=%(references)d %(references_rate).2f/s '
-            'errors=%(errors)d %(errors_rate).2f%% '
-            'start_time=%(start_time)s %(total_time).2fs '
-            'total_references='
-            '%(total_references)d %(total_references_rate).2f/s '
-            'total_errors=%(total_errors)d %(total_errors_rate).2f%%' % {
-                'status': status,
-                'last_report': datetime.fromtimestamp(
-                    int(self.last_report)).isoformat(),
-                'time_since_last_report': time_since_last_report,
-                'references': references_processed,
-                'references_rate':
-                    references_processed / time_since_last_report,
-                'errors': errors,
-                'errors_rate': 100 * errors / float(references_processed or 1),
-                'start_time': datetime.fromtimestamp(
-                    int(self.start_time)).isoformat(),
-                'total_time': total_time,
-                'total_references': total_references_processed,
-                'total_references_rate':
-                    total_references_processed / total_time,
-                'total_errors': total_errors,
-                'total_errors_rate':
-                    100 * total_errors / float(total_references_processed or 1)
-                })
+            "%(status)s "
+            "last_report=%(last_report)s %(time_since_last_report).2fs "
+            "references=%(references)d %(references_rate).2f/s "
+            "errors=%(errors)d %(errors_rate).2f%% "
+            "start_time=%(start_time)s %(total_time).2fs "
+            "total_references="
+            "%(total_references)d %(total_references_rate).2f/s "
+            "total_errors=%(total_errors)d %(total_errors_rate).2f%%"
+            % {
+                "status": status,
+                "last_report": datetime.fromtimestamp(
+                    int(self.last_report)
+                ).isoformat(),
+                "time_since_last_report": time_since_last_report,
+                "references": references_processed,
+                "references_rate": references_processed / time_since_last_report,
+                "errors": errors,
+                "errors_rate": 100 * errors / float(references_processed or 1),
+                "start_time": datetime.fromtimestamp(int(self.start_time)).isoformat(),
+                "total_time": total_time,
+                "total_references": total_references_processed,
+                "total_references_rate": total_references_processed / total_time,
+                "total_errors": total_errors,
+                "total_errors_rate": 100
+                * total_errors
+                / float(total_references_processed or 1),
+            }
+        )
         if self.total_expected_items is not None:
-            progress = 100 * total_references_processed / \
-                float(self.total_expected_items or 1)
-            report += ' progress=%d/%d %.2f%%' % \
-                (total_references_processed, self.total_expected_items,
-                 progress)
+            progress = (
+                100 * total_references_processed / float(self.total_expected_items or 1)
+            )
+            report += " progress=%d/%d %.2f%%" % (
+                total_references_processed,
+                self.total_expected_items,
+                progress,
+            )
         return report
 
     def create_worker(self, queue_workers, queue_reply):
@@ -123,10 +133,8 @@ class Meta2Rebuilder(Tool):
 
 
 class ContentRepairerWorker(ToolWorker):
-
     def __init__(self, tool, queue_workers, queue_reply):
-        super(ContentRepairerWorker, self).__init__(
-            tool, queue_workers, queue_reply)
+        super(ContentRepairerWorker, self).__init__(tool, queue_workers, queue_reply)
 
         self.admin_client = AdminClient(self.conf, logger=self.logger)
         self.meta2_database = Meta2Database(self.conf, logger=self.logger)
@@ -134,17 +142,18 @@ class ContentRepairerWorker(ToolWorker):
     def _process_item(self, item):
         namespace, container_id = item
         if namespace != self.tool.namespace:
-            raise ValueError('Invalid namespace (actual=%s, expected=%s)' % (
-                namespace, self.tool.namespace))
+            raise ValueError(
+                "Invalid namespace (actual=%s, expected=%s)"
+                % (namespace, self.tool.namespace)
+            )
 
-        self.logger.debug('Rebuilding %s', self.tool.string_from_item(item))
+        self.logger.debug("Rebuilding %s", self.tool.string_from_item(item))
         errors = list()
         for res in self.meta2_database.rebuild(container_id):
-            if res['err']:
-                errors.append('%s: %s' % (res['base'], res['err']))
+            if res["err"]:
+                errors.append("%s: %s" % (res["base"], res["err"]))
         if errors:
             raise Exception(errors)
 
-        data = self.admin_client.election_sync(
-            service_type='meta2', cid=container_id)
+        data = self.admin_client.election_sync(service_type="meta2", cid=container_id)
         from_multi_responses(data, excepted_status=(200, 301))

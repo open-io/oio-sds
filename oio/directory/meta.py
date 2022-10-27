@@ -19,17 +19,23 @@ from collections import defaultdict
 from oio.directory.admin import AdminClient
 from oio.rdir.client import RdirClient
 from oio.conscience.client import ConscienceClient
-from oio.common.exceptions import OioException, ServiceBusy, \
-    from_multi_responses
+from oio.common.exceptions import OioException, ServiceBusy, from_multi_responses
 from oio.common.logger import get_logger
 
 
 class MetaMapping(object):
     """Represents the content of the meta_n0 database"""
 
-    def __init__(self, conf, service_types,
-                 admin_client=None, conscience_client=None, logger=None,
-                 rdir_client=None, **kwargs):
+    def __init__(
+        self,
+        conf,
+        service_types,
+        admin_client=None,
+        conscience_client=None,
+        logger=None,
+        rdir_client=None,
+        **kwargs
+    ):
         self.conf = conf
         self._admin = admin_client
         self._conscience = conscience_client
@@ -68,7 +74,7 @@ class MetaMapping(object):
         for svc_type in self.services_by_service_type.keys():
             self.services_by_service_type[svc_type].clear()
             for svc in self.conscience.all_services(svc_type):
-                service_id = svc["tags"].get('tag.service_id', None)
+                service_id = svc["tags"].get("tag.service_id", None)
                 if service_id:
                     self.services_by_service_type[svc_type][service_id] = svc
                 else:
@@ -79,15 +85,14 @@ class MetaMapping(object):
         len_base = len(base)
         if len_base > 64:
             try:
-                if base[64] != '.':
+                if base[64] != ".":
                     raise ValueError()
                 seq = int(base[65:])
                 return (base[:64], seq)
             except ValueError:
-                raise ValueError('Bad format for the base name: %s'
-                                 % base)
+                raise ValueError("Bad format for the base name: %s" % base)
         else:
-            return (base.ljust(64, '0'), None)
+            return (base.ljust(64, "0"), None)
 
     def _get_old_peers_by_base(self, base):
         raise NotImplementedError()
@@ -114,25 +119,25 @@ class MetaMapping(object):
                 for svc_to in new_peers:
                     this_peer_ok = False
                     for svc_from in old_peers:
-                        self.logger.info("Copying base %s from %s to %s",
-                                         base, svc_from, svc_to)
+                        self.logger.info(
+                            "Copying base %s from %s to %s", base, svc_from, svc_to
+                        )
                         try:
                             self.admin.copy_base_from(
-                                service_type, cid=cid,
-                                svc_from=svc_from, svc_to=svc_to)
+                                service_type, cid=cid, svc_from=svc_from, svc_to=svc_to
+                            )
                             this_peer_ok = True
                             break
                         except OioException:
                             self.logger.warn(
-                                "Failed to copy base %s to %s",
-                                base, svc_to)
+                                "Failed to copy base %s to %s", base, svc_to
+                            )
                     if not this_peer_ok:
                         all_peers_ok = False
                 if all_peers_ok:
                     moved_ok.append(base)
             except ServiceBusy:
-                self.logger.warn('Failed to set peers to %s for base %s',
-                                 peers, base)
+                self.logger.warn("Failed to set peers to %s for base %s", peers, base)
         return moved_ok
 
     def _apply_link_services(self, moved_ok, **kwargs):
@@ -156,29 +161,35 @@ class MetaMapping(object):
                     from_multi_responses(data)
                 except OioException as exc:
                     self.logger.warn(
-                        "Failed to reset the election before deleting of "
-                        "%s: %s",
-                        cid, exc)
+                        "Failed to reset the election before deleting of %s: %s",
+                        cid,
+                        exc,
+                    )
                 try:
                     data = self.admin.remove_base(
-                        service_type, cid=cid, service_id=no_longer_used)
+                        service_type, cid=cid, service_id=no_longer_used
+                    )
                     from_multi_responses(data)
                 except OioException as exc:
                     self.logger.warning(
                         "Failed to remove the base %s (%s): %s",
-                        cid, no_longer_used.join(','), exc)
+                        cid,
+                        no_longer_used.join(","),
+                        exc,
+                    )
             try:
                 data = self.admin.election_leave(service_type, cid=cid)
                 from_multi_responses(data)
                 election = self.admin.election_status(service_type, cid=cid)
-                for svc, status in election['peers'].items():
-                    if status['status']['status'] not in (200, 303):
+                for svc, status in election["peers"].items():
+                    if status["status"]["status"] not in (200, 303):
                         self.logger.warning(
-                            "Election not started for %s: %s", svc, status)
+                            "Election not started for %s: %s", svc, status
+                        )
             except OioException as exc:
                 self.logger.warning(
-                    "Failed to get election status for base %s: %s",
-                    cid, exc)
+                    "Failed to get election status for base %s: %s", cid, exc
+                )
 
     def apply(self, moved=None, **kwargs):
         """
