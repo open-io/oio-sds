@@ -3504,3 +3504,95 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         self._create_container_versioning(source)
         self._upload_expected_combine1()
         self._check_and_apply(source, nothing_to_match=True)
+
+
+class TestLifecycleConformExpiredDelete(TestLifecycleConform):
+
+    def setUp(self):
+        super(TestLifecycleConformExpiredDelete, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 3
+
+        self.end_source = """
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Expiration>
+                        <ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>
+                    </Expiration>
+                </Rule>
+            </LifecycleConfiguration>"""
+
+    def test_expired_delete_marker_true(self):
+
+        """
+        Add some versions of object, add delete marker
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is sent to expire delete marker
+        """
+        # ['prefix']
+        source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>"""
+        source = f'{source} {self.end_source }'
+
+        self._create_container_versioning(source)
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = 'documents/' + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, path=self.data_long, random_length=6)
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(self.account, self.container,
+                                       el['name'], version=el['version'])
+
+            objects = self.api.object_list(self.account, self.container,
+                                           deleted=True, versions=True)
+            self.to_match_markers = objects['objects']
+        self._check_and_apply(source, nothing_to_match=True)
+
+    def test_expired_delete_marker_false(self):
+        """ Add some versions of object, add delete marker then
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is sent to expire delete marker
+        """
+        # ['prefix']
+        source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>"""
+        self.end_source = """
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Expiration>
+                        <ExpiredObjectDeleteMarker>false</ExpiredObjectDeleteMarker>
+                    </Expiration>
+                </Rule>
+            </LifecycleConfiguration>"""
+
+        source = f'{source} {self.end_source }'
+
+        self._create_container_versioning(source)
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = 'documents/' + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, path=self.data_long, random_length=6)
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(self.account, self.container,
+                                       el['name'], version=el['version'])
+
+            objects = self.api.object_list(self.account, self.container,
+                                           deleted=True, versions=True)
+            self.not_to_match = objects['objects']
+        self._check_and_apply(source, nothing_to_match=True)
