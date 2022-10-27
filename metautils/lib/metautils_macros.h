@@ -144,6 +144,7 @@ License along with this library.
 #define NAME_MSGKEY_PREFIX_SHARED_PROPERTY "SP:"
 
 #define NAME_MSGKEY_INCR_OFFSET        "OFFSET"
+#define NAME_MSGKEY_ACTION_TYPE        "ACTION_TYPE"
 
 enum {
 	SCORE_UNSET = -2,

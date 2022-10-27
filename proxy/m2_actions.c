@@ -5109,10 +5109,13 @@ action_m2_container_lifecycle_apply(struct req_args_s *args, struct json_object 
 {
 	GError *err = NULL;
 	gchar *offset = NULL;
+
+	const gchar *action_type = OPT("action_type");
+
 	oio_ext_allow_long_timeout(TRUE);
 
 	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_APPLY_LIFECYCLE(args->url, args->rq->body,
+		return m2v2_remote_pack_APPLY_LIFECYCLE(args->url, action_type, args->rq->body,
 				DL());
 	};
 	err = _resolve_meta2(args, CLIENT_SPECIFIED, _pack, &offset,

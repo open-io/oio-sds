@@ -21,6 +21,8 @@ from oio.common.logger import get_logger
 LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
 
+LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
+
 
 class ContainerLifecycle(object):
     def __init__(self, api, account, container, logger=None):
@@ -80,6 +82,12 @@ class ContainerLifecycle(object):
             json_str = str(self)
         self.api.container_set_properties(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: json_str}
+        )
+
+    def _processed_sql_condition(self):
+        return (
+            f"( al.alias||al.version||{LIFECYCLE_SPECIAL_KEY_TAG} "
+            "NOT IN (SELECT alias||version||key FROM properties))"
         )
 
     def build_sql_query(
@@ -208,7 +216,11 @@ class ContainerLifecycle(object):
     def create_noncurrent_view(self, rule, formated_time=None, **kwargs):
         rule_filter = RuleFilter(rule)
         # Create forced on meta2 side
-        _query = "VIEW noncurrent_view AS SELECT * FROM aliases AS al"
+        _query = (
+            "VIEW noncurrent_view AS SELECT *, "
+            "ROW_NUMBER() OVER (PARTITION BY al.alias) AS row_id FROM aliases"
+            " AS al"
+        )
 
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
@@ -326,17 +338,23 @@ class ContainerLifecycle(object):
             )
         return _query
 
-    def noncurrent_query(self):
+    def noncurrent_query(self, noncurrent_versions):
         """
         Deal with non current versions
         """
+
+        #
+        if noncurrent_versions is None:
+            noncurrent_versions = 0
         # SELECT is forced on meta2 side
         query = (
-            " ,cv.nb_versions,"
+            f" , (cv.nb_versions - 1 - {noncurrent_versions}) AS"
+            " noncurrent_nb_candidates,"
             " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
-            " AS count FROM noncurrent_view AS al"
+            " AS count, row_id FROM noncurrent_view AS al"
             " INNER JOIN current_view AS cv ON "
-            " al.alias=cv.alias"
+            " al.alias=cv.alias WHERE ((row_id <= noncurrent_nb_candidates)"
+            f" AND {self._processed_sql_condition()})"
         )
         return query
 

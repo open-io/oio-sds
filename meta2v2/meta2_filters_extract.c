@@ -511,3 +511,15 @@ meta2_filter_extract_suffix(struct gridd_filter_ctx_s *ctx,
 	EXTRACT_OPT(NAME_MSGKEY_SUFFIX);
 	return FILTER_OK;
 }
+
+
+int
+meta2_filter_extract_lifecycle_action_params(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_ACTION_TYPE);
+	return FILTER_OK;
+}

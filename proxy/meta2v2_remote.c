@@ -737,11 +737,14 @@ m2v2_remote_pack_CREATE_LIFECYCLE_VIEWS(struct oio_url_s *url, GByteArray *param
 }
 
 GByteArray*
-m2v2_remote_pack_APPLY_LIFECYCLE(struct oio_url_s *url, GByteArray *params,
+m2v2_remote_pack_APPLY_LIFECYCLE(struct oio_url_s *url, const gchar* action_type, GByteArray *params,
 		gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_APPLY_LIFECYCLE, url,
 			NULL, dl);
+	if (action_type) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_ACTION_TYPE, action_type);
+	}
 	if (params) {
 		metautils_message_set_BODY(msg, params->data,
 				params->len);

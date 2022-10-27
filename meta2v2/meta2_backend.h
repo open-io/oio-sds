@@ -314,4 +314,9 @@ GError* meta2_backend_create_lifecycle_views(struct meta2_backend_s *m2b,
 GError* meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, json_object *params, guint32 *incr_offset);
 
+/** Select objects that match filter and send events for non current actions */
+GError*
+meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jparams, guint32 *incr_offset);
+
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/
