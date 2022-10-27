@@ -48,9 +48,9 @@ def make_proxy_url(action, **kwargs):
 
 def leave_all(**kwargs):
     url = make_proxy_url('admin/leave', **kwargs)
-    info = (kwargs['srv'] + ' ' +
-            kwargs.get('cid', '%s/%s' % (kwargs.get('acct'),
-                                         kwargs.get('ref'))))
+    info = (
+        kwargs['srv'] + ' ' + kwargs.get(
+            'cid', '%s/%s' % (kwargs.get('acct'), kwargs.get('ref'))))
 
     ret = http.request('POST', url)
     if ret.status != 200:
@@ -63,9 +63,9 @@ def leave_all(**kwargs):
 
 def check_master(**kwargs):
     url = make_proxy_url('admin/status', **kwargs)
-    info = (kwargs['srv'] + ' ' +
-            kwargs.get('cid', '%s/%s' % (kwargs.get('acct'),
-                                         kwargs.get('ref'))))
+    info = (
+        kwargs['srv'] + ' ' + kwargs.get(
+            'cid', '%s/%s' % (kwargs.get('acct'), kwargs.get('ref'))))
 
     ret = http.request('POST', url)
     if ret.status != 200:
@@ -93,36 +93,36 @@ def main():
             "in its paths of directories."
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument(
-            "--verbose", "-v",
-            dest='flag_verbose', action='store_true', default=False,
-            help="Enable the verbose mode")
+        "--verbose", "-v",
+        dest='flag_verbose', action='store_true', default=False,
+        help="Enable the verbose mode")
     parser.add_argument(
-            "--type", '-t',
-            dest="type", action='append', default=[],
-            choices=all_types,
-            help="Service(s) to check. Default: all of them.")
+        "--type", '-t',
+        dest="type", action='append', default=[],
+        choices=all_types,
+        help="Service(s) to check. Default: all of them.")
     parser.add_argument(
-            "--cid",
-            dest="flag_cid", action="store_true",
-            help="Specify the list of tokens are CID (id of containers) "
-                 "intead of reference names.")
+        "--cid",
+        dest="flag_cid", action="store_true",
+        help="Specify the list of tokens are CID (id of containers) "
+        "intead of reference names.")
     parser.add_argument(
-            "--fix", "-x",
-            dest="flag_fix", action="store_true",
-            help="USE THIS AT YOUR OWN RISK. "
-                 "Attempt to come back to a single-master status")
+        "--fix", "-x",
+        dest="flag_fix", action="store_true",
+        help="USE THIS AT YOUR OWN RISK. "
+        "Attempt to come back to a single-master status")
     parser.add_argument(
-            "--oio-account",
-            dest="account", type=str, default=getenv('OIO_ACCOUNT'),
-            help="Specify an account instead of the OIO_ACCOUNT env var."
-                 " (useless with --cid)")
+        "--oio-account",
+        dest="account", type=str, default=getenv('OIO_ACCOUNT'),
+        help="Specify an account instead of the OIO_ACCOUNT env var."
+        " (useless with --cid)")
     parser.add_argument(
-            "--oio-ns",
-            dest="ns", type=str, default=getenv('OIO_NS'),
-            help="Specify a namespace instead on the OIO_NS env var.")
+        "--oio-ns",
+        dest="ns", type=str, default=getenv('OIO_NS'),
+        help="Specify a namespace instead on the OIO_NS env var.")
     parser.add_argument(
-            "container_or_cid", metavar='<CONTAINER_OR_CID>',
-            nargs='+', help="Items to check")
+        "container_or_cid", metavar='<CONTAINER_OR_CID>',
+        nargs='+', help="Items to check")
     args = parser.parse_args()
 
     if not args.ns:

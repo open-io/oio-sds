@@ -153,12 +153,12 @@ class Struct(object):
         self.order = 999
 
     def __repr__(self):
-        l = list()
-        l.append('<Struct name="'+str(self.name)+'">')
+        repr_list = list()
+        repr_list.append('<Struct name="' + str(self.name) + '">')
         for f in self.fields:
-            l.append('\t'+repr(f))
-        l.append("</Struct>")
-        return "\n".join(l)
+            repr_list.append("\t" + repr(f))
+        repr_list.append("</Struct>")
+        return "\n".join(repr_list)
 
     def field(self, f, mandatory=True, unique=False):
         f.set_index(len(self.fields))
@@ -185,12 +185,12 @@ class Struct(object):
         return [str(f.name) for f in self.fields]
 
     def get_fk_names(self):
-        l = list()
+        target_names = list()
         for fk in self.fk_incoming:
-            l.append(str(fk.target_name))
+            target_names.append(str(fk.target_name))
         for fk in self.fk_outgoing:
-            l.append(str(fk.base_name))
-        return l
+            target_names.append(str(fk.base_name))
+        return target_names
 
     def set_order(self, o):
         self.order = o
