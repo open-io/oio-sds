@@ -4287,7 +4287,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
 	const gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
-			"COUNT(*) AS nb_versions, MAX(al.version) FROM versioned_view AS al";
+			"nb_versions FROM versioned_view AS al";
 
 	const gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
 			"nb_versions FROM marker_view AS al";
@@ -4385,7 +4385,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		// Manage current version and delete markers
 		if (versioning != 0) {
 			deleted = sqlite3_column_int64(stmt, 3);
-			nb_version = sqlite3_column_int64(stmt, 6);
+			nb_version = sqlite3_column_int64(stmt, 5);
 
 			if (deleted == 1) {
 				if (nb_version > 1) {
