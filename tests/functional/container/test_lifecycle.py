@@ -463,10 +463,22 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                             view_queries["versioned_view"] = vesioned_view
                             view_queries["noncurrent_view"] = noncurrent_view
 
-                            queries["base"] = lc.build_sql_query(
-                                rule, non_current_days_in_sec, None, False, True
-                            )
-                            queries["marker"] = lc.markers_query()
+                            if delete_marker:
+                                queries["base"] = lc.build_sql_query(
+                                    rule,
+                                    non_current_days_in_sec,
+                                    None,
+                                    False,
+                                    True,
+                                    True,
+                                )
+                                queries["marker"] = lc.markers_query()
+
+                            else:
+                                queries["base"] = lc.build_sql_query(
+                                    rule, non_current_days_in_sec, None, False, True
+                                )
+                                # queries["marker"] = el.filter.markers_query()
 
                     else:  # non versioned
                         if days is not None:
@@ -2552,3 +2564,188 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
             self.api.object_delete(self.account, self.container, name)
 
         self._check_and_apply(source)
+
+
+class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
+    def setUp(self):
+        super(TestLifecycleNonCurrentVersionExpiration, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 4
+        self.newer_non_current_versions = 1
+        self.action = "NoncurrentVersionExpiration"
+        self.action_config = {
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1,
+                "NewerNoncurrentVersions": self.newer_non_current_versions,
+            }
+        }
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+
+    def tearDown(self):
+        super(TestLifecycleNonCurrentVersionExpiration, self).tearDown()
+
+    def _upload_expected_combine1(self):
+        # match only n non current versions per object
+        self.numbr_match = 2
+        total_count_expected = 0
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match.append(obj_meta)
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                if i < self.expected_to_cycle:
+                    self.to_match.append(obj_meta)
+                    total_count_expected += 1
+                else:
+                    # non current to retain
+                    self.not_to_match_versions.append(obj_meta)
+
+                if i == self.number_of_versions - 1:  # current version
+                    self.not_to_match_versions.append(obj_meta)
+        return total_count_expected
+
+    def test_cycle_zero_newer_non_current(self):
+        # ['prefix', 'greater']
+        # Total versions per object is 4: one current and 0 newer non currnet
+        # So 3 versions to match
+        self.newer_non_current_versions = 0
+
+        self.not_to_match_versions = []
+
+        self.expected_to_cycle = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+
+        val = self.conditions["prefix"]
+        greater = self.conditions["greater"]
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{
+                        "Prefix":"""
+            f'"{val}"'
+            """, "ObjectSizeGreaterThan":"""
+            f"{greater}"
+            """         }
+                    }
+                }
+            }"""
+        )
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        self._upload_expected_combine1()
+        self._check_and_apply(source)
+
+    def test_cycle_several_newer_non_current(self):
+        # ['prefix', 'greater']
+        # Total versions per object is 4: one current and 3 newer
+        # So no version to cycle
+        self.newer_non_current_versions = 3
+        self.action_config = {
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1,
+                "NewerNoncurrentVersions": self.newer_non_current_versions,
+            }
+        }
+
+        val = self.conditions["prefix"]
+        greater = self.conditions["greater"]
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{
+                        "Prefix":"""
+            f'"{val}"'
+            """, "ObjectSizeGreaterThan":"""
+            f"{greater}"
+            """         }
+                    }
+                }
+            }"""
+        )
+
+        self.not_to_match_versions = []
+
+        self.expected_to_cycle = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        self._upload_expected_combine1()
+        self._check_and_apply(source, nothing_to_match=True)
+
+    def test_cycle_also_several_newer_non_current(self):
+        # ['prefix', 'greater']
+        # Total versions per object is 4: one current and 4 newer
+        # So no version to cycle
+        self.newer_non_current_versions = 4
+
+        self.action_config = {
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1,
+                "NewerNoncurrentVersions": self.newer_non_current_versions,
+            }
+        }
+
+        val = self.conditions["prefix"]
+        greater = self.conditions["greater"]
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{
+                        "Prefix":"""
+            f'"{val}"'
+            """, "ObjectSizeGreaterThan":"""
+            f"{greater}"
+            """         }
+                    }
+                }
+            }"""
+        )
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        self._upload_expected_combine1()
+        self._check_and_apply(source, nothing_to_match=True)
