@@ -16,6 +16,7 @@
 
 import random
 import time
+from datetime import datetime, timedelta
 
 from mock import patch
 
@@ -3300,3 +3301,94 @@ class TestLifecycleConformTransition(TestLifecycleConformExpiration):
 
     def tearDown(self):
         super(TestLifecycleConformTransition, self).tearDown()
+
+
+class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
+    def setUp(self):
+        super(TestLifecycleConformExpirationDate, self).setUp()
+        self.action = "Expiration"
+        now = time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        self.end_source = (
+            """</And>
+                        </Filter>
+                        <Status>Enabled</Status>
+                        <Expiration>
+                            <Date>"""
+            f"{now}"
+            """</Date>
+                        </Expiration>
+                    </Rule>
+                </LifecycleConfiguration>"""
+        )
+
+    def tearDown(self):
+        super(TestLifecycleConformExpirationDate, self).tearDown()
+
+    def test_non_expired_object(self):
+        """
+        Date of expiration not reached, objects shouldn't expire
+        """
+        # ['prefix', 'tag2']
+        now = datetime.now()
+        next_time = now + timedelta(days=1)
+        next_day = next_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        self.end_source = (
+            """</And>
+                        </Filter>
+                        <Status>Enabled</Status>
+                        <Expiration>
+                            <Date>"""
+            f"{next_day}"
+            """</Date>
+                        </Expiration>
+                    </Rule>
+                </LifecycleConfiguration>"""
+        )
+
+        source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <And>"""
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        val = self.conditions["prefix"]
+        source = f"{source}<Prefix>{val}"
+        source = f"{source}</Prefix>"
+
+        key = list(self.conditions["tag2"].keys())[0]
+        val = self.conditions["tag2"][key]
+        source = f"{source}<Tag><Key>{key}</Key><Value>{val}"
+        source = f"{source}</Value></Tag>"
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        source = f"{source} {self.end_source }"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self._create_container_versioning(source)
+
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+        self._check_and_apply(source, nothing_to_match=True)
