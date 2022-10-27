@@ -373,12 +373,6 @@ struct polling_ctx_s
 	 * strictly meet the requirements. */
 	gboolean check_distance : 8;
 
-	/* Shall we check the "popularity" of locations when picking
-	 * a new item? This is useful to ensure a good balancing on
-	 * platforms where there is less locations than targets
-	 * (for the specified distance). */
-	gboolean check_popularity : 8;
-
 	/* Maximum achievable distance between selected services. */
 	guint16 max_dist;
 
@@ -855,7 +849,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 				ctx->check_distance? distance : 1))
 			return NULL;
 		// Check the item has not been chosen too much already
-		if (ctx->check_popularity && _item_is_too_popular(ctx, loc, slot))
+		if (_item_is_too_popular(ctx, loc, slot))
 			return NULL;
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
@@ -1176,7 +1170,6 @@ _local__patch(struct oio_lb_pool_s *self,
 		.next_polled = polled,
 		.n_targets = count_targets,
 		.check_distance = TRUE,
-		.check_popularity = TRUE,
 		.max_dist = max_dist,
 		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
