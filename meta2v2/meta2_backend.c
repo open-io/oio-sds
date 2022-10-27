@@ -3897,6 +3897,11 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	char *current_view_create = NULL, *marker_view_create = NULL,
 		*noncurrent_view_create = NULL, *versioned_view_create = NULL;
 
+	int non_current_days = 0, non_current_versions = 0;
+	int batch_size = 0, last_action = 0;
+
+	gboolean found_match = FALSE;
+
 	struct json_object *jversioned_view = NULL, *jmarker_view = NULL,
 			*jnoncurrent_view = NULL, *jcurrent_view = NULL,
 			*jpolicy = NULL, *jnoncurrent_versions = NULL,
@@ -3964,6 +3969,18 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	if (jpolicy) {
 		policy = g_strdup(json_object_get_string(jpolicy));
 	}
+	if (jnoncurrent_days) {
+		non_current_days = json_object_get_int(jnoncurrent_days);
+	}
+	if (jnoncurrent_versions) {
+		non_current_versions = json_object_get_int(jnoncurrent_versions);
+	}
+	if (jbatch_size) {
+		batch_size = json_object_get_int(jbatch_size);
+	}
+	if (jlast_action) {
+		last_action = json_object_get_int(jlast_action);
+	}
 
 	gchar *full_query = g_strdup_printf("%s %s", base_query, query);
 	GRID_ERROR("metadata : action:%s full:%s base:%s %s prio:%s", action,\
@@ -4025,12 +4042,15 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_WARN("Failed to apply query %s %s", full_query, sqlite3_errmsg(sq3->db));
 	}
-	guint32 count_rows = 0;
+	guint32 count_rows = 0, count_versions = 0;
+	gint32 count_objects = 0;
+	gchar *object_name_to_process = NULL;
 	gint64 deleted = 0, nb_version = 0;
 	//gint64 now = oio_ext_real_time();
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gint64 timestamp_start = oio_ext_real_time();
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
+		found_match = TRUE;
 		// Expiration and Transtion
 		if (current_action) {
 			// Manage current version and delete markers
@@ -4077,7 +4097,74 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 			count_rows++;
 		}
 		else if (non_current_action) {
+			// NoncurrentExpiration and NoncurrentTransition
+			gint64 version = sqlite3_column_int64(stmt, 1);
+			gint64 mtime = sqlite3_column_int64(stmt, 5);
+			int nb_versions = sqlite3_column_int64(stmt, 6);
+			guint32 count_match = sqlite3_column_int64(stmt, 7);
 
+			count_rows++;
+			GRID_ERROR("count_rows %d", count_rows);
+			// retain current version + non_current_versions
+			if (nb_versions <= non_current_versions + 1) {
+				continue;
+			}
+
+			if (count_versions == 0) {
+				object_name_to_process = g_strdup(object_name);
+				count_versions++;
+				count_objects++;
+			} else if (g_strcmp0(object_name_to_process, object_name)==0) {
+				// new version same object
+				count_versions++;
+			} else {
+				// new object
+				count_versions = 1;
+				g_free(object_name_to_process);
+				object_name_to_process = g_strdup(object_name);
+				count_objects++;
+			}
+
+			if (count_objects > batch_size) {
+				count_rows--;
+				break;
+			}
+
+			guint32 delta = nb_versions - non_current_versions - 1;
+			if (count_versions > delta)
+			{
+				continue;
+			}
+
+			if (count_versions >= count_match) {
+				continue;
+			}
+			GRID_ERROR("noncurrent  %s %"G_GINT64_FORMAT " \
+				%"G_GINT64_FORMAT "  versions %d non current days %d nb versions %d",
+					object_name, version, mtime, non_current_versions, non_current_days, nb_versions);
+
+			GRID_ERROR("before event  %s  count_versions=%d %"G_GINT64_FORMAT " %"G_GINT64_FORMAT,
+					object_name,count_versions, version, mtime);
+			GString *event = oio_event__create_with_id(
+					"storage.lifecycle.action", url, oio_ext_get_reqid());
+			g_string_append(event, ",\"data\":{");
+			append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+			append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+			append_str(event, "object", object_name);
+			append_int64(event, "version", version);
+			append_int64(event, "mtime", mtime);
+			append_str(event, "action", g_strdup(action));
+			if (policy) {
+				append_str(event, "policy", g_strdup(policy));
+			}
+
+			g_string_append(event, "}}");
+			oio_events_queue__send(
+				m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+
+			gint64 timestamp_end = oio_ext_real_time();
+			GRID_ERROR("event prepare & send timing:%"G_GINT64_FORMAT,
+					timestamp_end - timestamp_start);
 		}
 		else {
 			GRID_WARN("Not supported lifecycle action  %s", action);
@@ -4098,6 +4185,16 @@ meta2_backend_apply_rule_lifecycle(struct meta2_backend_s *m2b,
 
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
+	if (last_action && (!found_match)) {
+		// remove copy
+		char *copy_path = g_strdup_printf("%s", sq3->path_inline);
+		if (remove(copy_path)) {
+			GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+					errno, strerror(errno));
+		}
+		g_free(copy_path);
+	}
+
 end:
 	return err;
 }
