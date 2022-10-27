@@ -272,7 +272,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 data = {}
                 data["action"] = action
                 data["suffix"] = "lifecycle"
-                if offset == 0 and key_query == "base":
+                if offset == 0 and (key_query == "base" or key_query == "marker"):
                     create_views_data = {}
                     create_views_data["suffix"] = "lifecycle"
                     for key, val in view_queries.items():
@@ -312,7 +312,6 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 count = int(resp.getheader("x-oio-count", 0))
                 offset += count
                 count_events = 0
-
                 if action in ("Expiration", "Transition"):
                     exptected_events = count * self.expected_to_cycle
                 else:
@@ -327,9 +326,15 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     self.assertEqual(event.data["account"], self.account)
                     self.assertEqual(event.data["container"], self.container)
 
-                    elements_to_match = (
-                        self.to_match if key_query == "base" else self.to_match_markers
-                    )
+                    elements_to_match = ()
+
+                    if (
+                        key_query == "marker"
+                        or len(self.to_match_markers[rule_id][action_type]) > 0
+                    ):
+                        elements_to_match = self.to_match_markers[rule_id][action_type]
+                    else:
+                        elements_to_match = self.to_match[rule_id][action_type]
 
                     [found, elem_to_remove] = self._check_event(
                         elements_to_match, event
@@ -445,7 +450,6 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                             delete_marker_view = lc.create_common_views(
                                 "marker_view",
                                 rule,
-                                non_current_days_in_sec,
                                 deleted=True,
                             )
                             vesioned_view = lc.create_common_views(
@@ -464,17 +468,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                             view_queries["noncurrent_view"] = noncurrent_view
 
                             if delete_marker:
-                                queries["base"] = lc.build_sql_query(
-                                    rule,
-                                    non_current_days_in_sec,
-                                    None,
-                                    False,
-                                    True,
-                                    True,
-                                )
                                 queries["marker"] = lc.markers_query()
-
-                            else:
+                            if delete_marker is None:
                                 queries["base"] = lc.build_sql_query(
                                     rule, non_current_days_in_sec, None, False, True
                                 )
@@ -2748,4 +2743,115 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         if self.versioning_enabled:
             self.helper.enable_versioning()
         self._upload_expected_combine1()
+        self._check_and_apply(source, nothing_to_match=True)
+
+
+class TestLifecycleConformExpiredDelete(TestLifecycleConform):
+    def setUp(self):
+        super(TestLifecycleConformExpiredDelete, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 3
+        self.action = "Expiration"
+        self.action_config = {"Expiration": {"ExpiredObjectDeleteMarker": True}}
+
+    def test_expired_delete_marker_true(self):
+        """
+        Add some versions of object, add delete marker
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is sent to expire delete marker
+        """
+        # ['prefix']
+        prefix = "documents/"
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{
+                        "Prefix":"""
+            f'"{prefix}"'
+            """         }
+                    }
+                }
+            }"""
+        )
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = prefix + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(
+                    self.account, self.container, el["name"], version=el["version"]
+                )
+
+            objects = self.api.object_list(
+                self.account, self.container, deleted=True, versions=True
+            )
+            self.to_match_markers = objects["objects"]
+        self._check_and_apply(source, nothing_to_match=True)
+
+    def test_expired_delete_marker_false(self):
+        """Add some versions of object, add delete marker then
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is not sent as ExpiredObjectDeleteMarker is false
+        """
+        # ['prefix']
+        prefix = "documents/"
+        self.action_config = {"Expiration": {"ExpiredObjectDeleteMarker": False}}
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{
+                        "Prefix":"""
+            f'"{prefix}"'
+            """         }
+                    }
+                }
+            }"""
+        )
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = prefix + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(
+                    self.account, self.container, el["name"], version=el["version"]
+                )
+
+            objects = self.api.object_list(
+                self.account, self.container, deleted=True, versions=True
+            )
+            self.not_to_match = objects["objects"]
         self._check_and_apply(source, nothing_to_match=True)

@@ -332,10 +332,11 @@ class ContainerLifecycle(object):
             # Condition shouldn't occur
             # (days or date is present except in case of
             # expired delete marker)
-            raise ValueError(
-                "Configuration needs days or date in filter %s",
-                str(self),
-            )
+            if not deleted:
+                raise ValueError(
+                    "Configuration needs days or date in filter %s",
+                    str(self),
+                )
         return _query
 
     def noncurrent_query(self, noncurrent_versions):
