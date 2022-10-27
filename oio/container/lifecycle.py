@@ -347,7 +347,9 @@ class LifecycleRule(object):
             transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
-            elif type(transition.filter) is not action_filter_type:
+            elif action_filter_type == DeletedMarkerActionFilter:
+                pass
+            elif type(transition.filter) != action_filter_type:
                 raise ValueError("'Date' and 'Days' in the same Rule")
             transitions.append(transition)
         if transitions:
@@ -364,7 +366,13 @@ class LifecycleRule(object):
                     reverse=True,
                 )
             if expiration:
-                if action_filter_type == DateActionFilter:
+                if type(expiration.filter) == DeletedMarkerActionFilter:
+                    if filter_.greater or filter_.lesser or filter_.tags:
+                        raise ValueError(
+                            "ExpiredDeleteMarker not supported "
+                            "with tags or size filters"
+                        )
+                elif action_filter_type == DateActionFilter:
                     if expiration.filter.date <= transitions[0].filter.date:
                         raise ValueError(
                             "'Date' in the Expiration action "
@@ -1002,6 +1010,35 @@ class DaysActionFilter(LifecycleActionFilter):
         return float(obj_meta["mtime"]) + self.days * 86400 < now
 
 
+class DeletedMarkerActionFilter(LifecycleActionFilter):
+    """
+    Cleanup delete marker as soon as they become the only version.
+    """
+
+    def __init__(self, delete_marker, **kwargs):
+        super(DeletedMarkerActionFilter, self).__init__(**kwargs)
+        self.expired_object_deleted_marker = delete_marker
+
+    @classmethod
+    def from_element(cls, delete_marker, **kwargs):
+        try:
+            delete_marker_text = delete_marker.text.lower()
+            if delete_marker_text not in ("false", "true"):
+                raise ValueError("The ExpiredObjectDeleteMarker must be a boolean")
+            delete_marker_bool = delete_marker_text == "true"
+        except ValueError:
+            raise ValueError("The ExpiredObjectDeleteMarker must be a boolean")
+        return cls(delete_marker_bool, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        delete_marker_elt = etree.Element("ExpiredObjectDeleteMarker")
+        delete_marker_elt.text = str(self.expired_object_deleted_marker)
+        return delete_marker_elt
+
+    def match(self, obj_meta, **kwargs):
+        return int(obj_meta["deleted"]) == 1
+
+
 class NoncurrentDaysActionFilter(DaysActionFilter):
     def __init__(self, days, **kwargs):
         super(DaysActionFilter, self).__init__(**kwargs)
@@ -1140,15 +1177,37 @@ class Expiration(LifecycleAction):
             date_elt = expiration_elt.findall(tag("Date"), nsmap)[-1]
         except IndexError:
             date_elt = None
+        try:
+            expired_delete_marker_elt = expiration_elt.findall(
+                tag("ExpiredObjectDeleteMarker"), nsmap
+            )[-1]
+        except IndexError:
+            expired_delete_marker_elt = None
 
-        if days_elt is not None and date_elt is not None:
+        if days_elt is None and date_elt is None and expired_delete_marker_elt is None:
+            raise ValueError(
+                "Missing 'Days' or 'Date' 'ExpiredObjectDeleteMarker' element "
+                "in Expiration action"
+            )
+        elif days_elt is not None and date_elt is not None:
             raise ValueError("'Days' and 'Date' in same Expiration action")
+        elif days_elt is not None and expired_delete_marker_elt is not None:
+            raise ValueError(
+                "'Days' and 'ExpiredObjectDeleteMarker' in "
+                "same Expirationaction action"
+            )
+        elif days_elt is not None and expired_delete_marker_elt is not None:
+            raise ValueError(
+                "'Days' and 'ExpiredObjectDeleteMarker' in " "same Expiration action"
+            )
         if days_elt is not None:
             action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
         elif date_elt is not None:
             action_filter = DateActionFilter.from_element(date_elt, **kwargs)
-        if action_filter is None:
-            raise ValueError("Empty Expiration action")
+        elif expired_delete_marker_elt is not None:
+            action_filter = DeletedMarkerActionFilter.from_element(
+                expired_delete_marker_elt, **kwargs
+            )
         return cls(action_filter, **kwargs)
 
     def _to_element_tree(self, **kwargs):
