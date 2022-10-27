@@ -4041,8 +4041,10 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
 
-	struct json_object *jpolicy = NULL, *jnoncurrent_versions = NULL,
-			*jnoncurrent_days = NULL, *jbatch_size = NULL,
+	int batch_size = 0, last_action = 0;
+	gboolean found_match = FALSE;
+
+	struct json_object *jpolicy = NULL, *jbatch_size = NULL,
 			*jlast_action = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
@@ -4052,8 +4054,6 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 		{"policy",   &jpolicy,  	json_type_string, 0},
 		{"batch_size",   &jbatch_size,  	json_type_int, 0},
 		{"last_action",   &jlast_action,  	json_type_int, 0},
-		{"newerNoncurrentDays",&jnoncurrent_days, json_type_int, 0},
-		{"newerNoncurrentVersions",&jnoncurrent_versions, json_type_int, 0},
 		{NULL,      NULL,     0,             0}
 	};
 
@@ -4076,6 +4076,16 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 	if(!suffix  || !*suffix) {
 		err = BADREQ("Invalid suffix for lifecycle copy");
 		goto end;
+	}
+
+	if (jpolicy) {
+		policy = json_object_get_string(jpolicy);
+	}
+	if (jbatch_size) {
+		batch_size = json_object_get_int(jbatch_size);
+	}
+	if (jlast_action) {
+		last_action = json_object_get_int(jlast_action);
 	}
 
 	gchar *full_query = g_strdup_printf("%s %s", base_query, query);
@@ -4114,10 +4124,13 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto close;
 	}
-	guint32 count_rows = 0;
+	guint32 count_rows = 0, count_versions = 0;
+	gint32 count_objects = 0;
+	gchar *object_name_to_process = NULL;
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
+		found_match = TRUE;
 		// Expiration and Transition
 		if (current_action) {
 			// Manage current version and delete markers
@@ -4158,7 +4171,48 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 			count_rows++;
 		}
 		else if (non_current_action) {
+			// NoncurrentExpiration and NoncurrentTransition
+			gint64 version = sqlite3_column_int64(stmt, 1);
+			gint64 mtime = sqlite3_column_int64(stmt, 4);
 
+			if (count_versions == 0) {
+				object_name_to_process = g_strdup(object_name);
+				count_versions++;
+				count_objects++;
+			} else if (g_strcmp0(object_name_to_process, object_name)==0) {
+				// new version same object
+				count_versions++;
+			} else {
+				// new object
+				count_versions = 1;
+				g_free(object_name_to_process);
+				object_name_to_process = g_strdup(object_name);
+				count_objects++;
+			}
+
+			if (count_objects > batch_size) {
+				count_rows--;
+				break;
+			}
+
+			count_rows++;
+
+			GString *event = oio_event__create_with_id(
+					"storage.lifecycle.action", url, oio_ext_get_reqid());
+			g_string_append(event, ",\"data\":{");
+			append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+			append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+			append_str(event, "object", object_name);
+			append_int64(event, "version", version);
+			append_int64(event, "mtime", mtime);
+			append_str(event, "action", g_strdup(action));
+			if (policy) {
+				append_str(event, "policy", g_strdup(policy));
+			}
+
+			g_string_append(event, "}}");
+			oio_events_queue__send(
+				m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
 		}
 		else {
 			GRID_WARN("Not supported lifecycle action  %s", action);
@@ -4173,7 +4227,15 @@ meta2_backend_prepare_lifecycle(struct meta2_backend_s *m2b,
 
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
-	g_free(full_query);
+	if (last_action && (!found_match)) {
+		// remove copy
+		char *copy_path = g_strdup_printf("%s", sq3->path_inline);
+		if (remove(copy_path)) {
+			GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+					errno, strerror(errno));
+		}
+		g_free(copy_path);
+	}
 end:
 	return err;
 }
