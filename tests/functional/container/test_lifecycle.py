@@ -30,6 +30,7 @@ from oio.container.lifecycle import (
     NoncurrentVersionTransition,
     DateActionFilter,
     DaysActionFilter,
+    DeletedMarkerActionFilter,
 )
 from oio.common.exceptions import NoSuchObject
 from oio.common.client import ProxyClient
@@ -1620,6 +1621,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 days = act.filter.days
             elif type(act.filter) is DateActionFilter:
                 date = act.filter.date
+            elif type(act.filter) is DeletedMarkerActionFilter:
+                delete_marker = act.filter.expired_object_deleted_marker
         elif isinstance(act, Transition):
             if type(act.filter) is DaysActionFilter:
                 days = act.filter.days
@@ -1827,10 +1830,22 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         view_queries["versioned_view"] = vesioned_view
                         view_queries["noncurrent_view"] = noncurrent_view
 
-                        queries["base"] = el.filter.to_sql_query(
-                            non_current_days_in_sec, None, False, True
-                        )
-                        queries["marker"] = el.filter.markers_query()
+                        if type(act.filter) is DeletedMarkerActionFilter:
+                            if act.filter.expired_object_deleted_marker:
+                                queries["base"] = el.filter.to_sql_query(
+                                    non_current_days_in_sec, None, False, True, True
+                                )
+                                queries["marker"] = el.filter.markers_query()
+                            else:
+                                print(
+                                    "Skip Expiration with delete marker set " "to false"
+                                )
+                                continue
+                        else:
+                            queries["base"] = el.filter.to_sql_query(
+                                non_current_days_in_sec, None, False, True
+                            )
+                            queries["marker"] = el.filter.markers_query()
                 else:  # non versioned
                     if days is not None:
                         days_in_sec = 0 * days
@@ -3791,4 +3806,100 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
 
         self._create_container_versioning(source)
         self._upload_expected_combine1()
+        self._check_and_apply(source, nothing_to_match=True)
+
+
+class TestLifecycleConformExpiredDelete(TestLifecycleConform):
+    def setUp(self):
+        super(TestLifecycleConformExpiredDelete, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 3
+
+        self.end_source = """
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Expiration>
+                        <ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker>
+                    </Expiration>
+                </Rule>
+            </LifecycleConfiguration>"""
+
+    def test_expired_delete_marker_true(self):
+        """
+        Add some versions of object, add delete marker
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is sent to expire delete marker
+        """
+        # ['prefix']
+        source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>"""
+        source = f"{source} {self.end_source }"
+
+        self._create_container_versioning(source)
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = "documents/" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(
+                    self.account, self.container, el["name"], version=el["version"]
+                )
+
+            objects = self.api.object_list(
+                self.account, self.container, deleted=True, versions=True
+            )
+            self.to_match_markers = objects["objects"]
+        self._check_and_apply(source, nothing_to_match=True)
+
+    def test_expired_delete_marker_false(self):
+        """Add some versions of object, add delete marker then
+        remove all previous versions
+        The only remaining version is the delete marker
+        Check that event is sent to expire delete marker
+        """
+        # ['prefix']
+        source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>"""
+        self.end_source = """
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Expiration>
+                        <ExpiredObjectDeleteMarker>false</ExpiredObjectDeleteMarker>
+                    </Expiration>
+                </Rule>
+            </LifecycleConfiguration>"""
+
+        source = f"{source} {self.end_source }"
+
+        self._create_container_versioning(source)
+        self.number_match = 1
+        for j in range(self.number_match):
+            name = "documents/" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+            for el in self.not_to_match:
+                self.api.object_delete(
+                    self.account, self.container, el["name"], version=el["version"]
+                )
+
+            objects = self.api.object_list(
+                self.account, self.container, deleted=True, versions=True
+            )
+            self.not_to_match = objects["objects"]
         self._check_and_apply(source, nothing_to_match=True)
