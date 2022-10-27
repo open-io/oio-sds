@@ -1,4 +1,5 @@
 beanstalkc3
+black
 codecov
 coverage
 fixtures>=1.4.0
@@ -8,4 +9,5 @@ gcovr
 mock>=1.0
 nose
 nose-timer
+pylint
 testtools

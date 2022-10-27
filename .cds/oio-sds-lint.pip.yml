@@ -1,0 +1,28 @@
+version: v1.0
+name: oio-sds-lint
+jobs:
+- job: Run coding style tests
+  steps:
+
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+        
+      - name: Install dependencies
+        script:
+          - eval $(worker key install --env-git proj-ssh-openio)
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt update
+          - apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
+          - virtualenv -p /usr/bin/python3 $HOME/venv
+          - . $HOME/venv/bin/activate
+          - pip install -r requirements.txt -r test-requirements.txt
+
+      - name: Run coding style tests
+        script:
+          - . $HOME/venv/bin/activate
+          - black --check --diff --quiet --exclude "/(venv|\.local)/" --config pyproject.toml "oio" "tests" "tools" "bin"
+          - pylint --rcfile=.pylintrc --exit-zero -E "oio" "tests" "tools" "bin"
+          - flake8 --config .flake8 --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
+
+  requirements:
+      - model: ubuntu-focal

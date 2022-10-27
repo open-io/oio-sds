@@ -17,6 +17,12 @@ workflow:
         - variable: cds.triggered_by.username
           operator: ne
           value: "cds.scheduler"
+  
+  tests-lint:
+    pipeline: oio-sds-lint
+    application: oio-sds
+    depends_on:
+      - root
 
   tests-single:
     pipeline: oio-sds-test-functional
@@ -108,6 +114,7 @@ workflow:
     depends_on:
       - tests-cli
       - tests-fast
+      - tests-lint
       - tests-single
       - tests-3copies
       - tests-ec
