@@ -273,12 +273,20 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 data["action"] = action
                 data["suffix"] = "lifecycle"
                 if offset == 0 and key_query == "base":
+                    create_views_data = {}
+                    create_views_data["suffix"] = "lifecycle"
                     for key, val in view_queries.items():
-                        data[key] = val
+                        create_views_data[key] = val
+                    resp, body = self.proxy_client._request(
+                        "POST",
+                        "/container/lifecycle/views/create",
+                        params=params,
+                        json=create_views_data,
+                        **kwargs,
+                    )
+                if key_query == "marker":
+                    data["is_markers"] = 1
                 data["query"] = sql_query
-                # force checks non_current_days
-                data["newerNoncurrentDays"] = 0
-                data["newerNoncurrentVersions"] = newer_non_current_versions
                 data["policy"] = policy
                 data["batch_size"] = self.batch_size
                 if last_rule_action:
@@ -416,7 +424,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                                 non_current_days_in_sec
                             )
                             current_view = lc.create_common_views(
-                                "current_view", non_current_days_in_sec
+                                "current_view", rule, non_current_days_in_sec
                             )
 
                             view_queries["noncurrent_view"] = noncurrent_view
@@ -425,14 +433,20 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         # versioning for Expiration/Transition
                         else:
                             delete_marker_view = lc.create_common_views(
-                                "marker_view", non_current_days_in_sec, deleted=True
+                                "marker_view",
+                                rule,
+                                non_current_days_in_sec,
+                                deleted=True,
                             )
                             vesioned_view = lc.create_common_views(
-                                "versioned_view", non_current_days_in_sec, deleted=False
+                                "versioned_view",
+                                rule,
+                                non_current_days_in_sec,
+                                deleted=False,
                             )
 
                             noncurrent_view = lc.create_noncurrent_view(
-                                non_current_days_in_sec
+                                rule, non_current_days_in_sec
                             )
 
                             view_queries["marker_view"] = delete_marker_view
@@ -2278,3 +2292,253 @@ class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
                 self.not_to_match.append(obj_meta)
 
         self._check_and_apply(source, nothing_to_match=True)
+
+
+class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
+    def setUp(self):
+        super(TestLifecycleConformExpirationVersioning, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 3
+
+    # Current version is delete marker but there are other versions
+    # No action to do
+    def test_delete_marker_1(self):
+        # ['greater', 'tag2']
+
+        greater = self.conditions["greater"]
+
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":
+                        {"""
+            """"ObjectSizeGreaterThan":"""
+            f"{greater},"
+            """"Tags":["""
+            f"{json.dumps(self.conditions['tag2'])}"
+            """]
+                        }
+                    }
+                }
+            }"""
+        )
+
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        greater = self.conditions["greater"]
+        key = list(self.conditions["tag2"].keys())[0]
+        val = self.conditions["tag2"][key]
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(4),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match.append(obj_meta)
+
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, obj_meta["name"])
+
+        self._check_and_apply(source, True)
+
+    # Current version is delete marker and is only the version
+    # action remove delete marker
+    def test_delete_marker_2(self):
+        self.number_match = 2
+        # ['greater', 'tag2']
+
+        greater = self.conditions["greater"]
+
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":
+                        {"""
+            """"ObjectSizeGreaterThan":"""
+            f"{greater},"
+            """"Tags":["""
+            f"{json.dumps(self.conditions['tag2'])}"
+            """]
+                        }
+                    }
+                }
+            }"""
+        )
+
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        greater = self.conditions["greater"]
+        key = list(self.conditions["tag2"].keys())[0]
+        val = self.conditions["tag2"][key]
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(4),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match.append(obj_meta)
+        delete_markers = []
+        names = []
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            names.append(name)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+
+        time.sleep(0.1)
+        for el in self.not_to_match:
+            self.api.object_delete(
+                self.account, self.container, el["name"], el["version"]
+            )
+        for name in names:
+            objects = self.api.object_list(
+                self.account, self.container, prefix=name, deleted=True, versions=True
+            )
+            delete_markers.append(objects["objects"][0])
+
+        self.to_match_markers = delete_markers
+        self._check_and_apply(source, nothing_to_match=True)
+
+    # Create some objects where:
+    # current version matchs the filter but not the only version => match
+    # current version doesn't match but some previous matchs => no match
+    # current version is delete marker but not the only version => no match
+    # current version doesn' match and there is a delete marker => no match
+    # current version is delete maker and the olny version => match
+    def test_mix_current_versions_and_markers(self):
+        # ['prefix', 'tag1']
+
+        prefix = self.conditions["prefix"]
+
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":
+                        {"""
+            """"Prefix":"""
+            f'"{prefix}",'
+            """"Tags":["""
+            f"{json.dumps(self.conditions['tag1'])}"
+            """]
+                        }
+                    }
+                }
+            }"""
+        )
+
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                # Insert delete marker but not the last version for 1 object
+                if j == 0 and i == 0:
+                    time.sleep(0.01)
+                    self.api.object_delete(self.account, self.container, name)
+                if i == self.number_of_versions - 1:
+                    self.to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+
+        names = []
+        # the last version a delete marker, and not the only version
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "2" + random_str(5)
+            names.append(name)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+
+                self.not_to_match.append(obj_meta)
+            self.api.object_delete(self.account, self.container, name)
+
+        self._check_and_apply(source)
