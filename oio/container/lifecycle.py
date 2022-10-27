@@ -185,7 +185,9 @@ class ContainerLifecycle(object):
                 _query = f"{_query}{_time_cond}"
             elif date is not None:
                 _time_cond = (
-                    f" (({date}) < (CAST " f"(strftime('%s', 'now') AS INTEGER )))"
+                    f" ((CAST "
+                    f"(strftime('%s', '{date}') AS INTEGER )) < (CAST "
+                    f"(strftime('%s', 'now') AS INTEGER )))"
                 )
                 _query = f"{_query}{_time_cond}"
             else:
@@ -202,6 +204,150 @@ class ContainerLifecycle(object):
         if non_current or versioned:
             _query = f"{_query} GROUP BY al.alias"
         return _query
+
+    def create_noncurrent_view(self, rule, formated_time=None, **kwargs):
+        rule_filter = RuleFilter(rule)
+        # Create forced on meta2 side
+        _query = "VIEW noncurrent_view AS SELECT * FROM aliases AS al"
+
+        _slo_cond = (
+            " LEFT JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
+            " INNER JOIN contents ct ON al.content = ct.id "
+        )
+
+        _lesser = ""
+        # bypass size when dealing with delete marker
+        if rule_filter.lesser is not None:
+            _lesser = (
+                f" AND "
+                f"((ct.size <{rule_filter.lesser} AND pr.value IS NULL) OR "
+                f"pr.value < {rule_filter.lesser})"
+            )
+
+        _greater = ""
+        # bypass size when dealing with delete marker
+        if rule_filter.greater is not None:
+            _greater = (
+                f" AND "
+                f"((ct.size >{rule_filter.greater} AND pr.value IS NULL) OR "
+                f"pr.value > {rule_filter.greater}) "
+            )
+
+        if len(rule_filter.tags) > 0:
+            _base_tag = (
+                " INNER JOIN properties pr2 ON al.alias="
+                "pr2.alias AND al.version=pr2.version "
+            )
+
+            _tags = f" AND pr2.key='{TAGGING_KEY}'"
+            for el in rule_filter.tags:
+                ((k, v),) = el.items()
+                _tag_key_cond = (
+                    " AND CAST(pr2.value as nvarchar(10000))"
+                    f" LIKE '%<Tag><Key>{k}</Key>"
+                )
+                _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
+                _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
+
+            if _tags:
+                _query = f"{_query}{_base_tag}{_tags}"
+
+        if _lesser or _greater:
+            _query = f"{_query}{_slo_cond}"
+            if _lesser:
+                _query = f"{_query}{_lesser}"
+            if _greater:
+                _query = f"{_query}{_greater}"
+
+        if rule_filter.prefix is not None or formated_time is not None:
+            _query = f"{_query} WHERE ("
+
+        if rule_filter.prefix is not None:
+            _prefix_cond = "( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+            _query = f"{_query}{_prefix_cond}"
+
+        if rule_filter.prefix is not None and formated_time is not None:
+            _query = f"{_query}  AND "
+        if formated_time is not None:
+            _time_cond = (
+                f" ((al.mtime + {formated_time}) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER )))"
+            )
+            _query = f"{_query}{_time_cond}"
+        # close WHERE clause
+        if rule_filter.prefix is not None or formated_time is not None:
+            _query = f"{_query} )"
+        _query = f"{_query} ORDER BY al.version ASC"
+        return _query
+
+    def create_common_views(
+        self, view_name, rule, formated_time=None, date=None, deleted=None, **kwargs
+    ):
+        if not view_name:
+            raise ValueError("Lifecycle views, empty view name!")
+        rule_filter = RuleFilter(rule)
+        # CREATE forced on meta2 side
+        _query = (
+            f"VIEW {view_name} AS SELECT *, "
+            "COUNT(*) AS nb_versions from aliases AS al"
+        )
+        _query = f"{_query} GROUP BY al.alias HAVING MAX(al.version)"
+
+        if deleted is not None:
+            if deleted:
+                _query = f"{_query} AND (al.deleted=1)"
+            else:
+                _query = f"{_query} AND (al.deleted=0)"
+
+        if rule_filter.prefix is not None:
+            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+            _query = f"{_query}{_prefix_cond}"
+        if formated_time is not None:
+            _time_cond = (
+                f" AND ( (al.mtime + {formated_time}) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER )))"
+            )
+            _query = f"{_query}{_time_cond}"
+        elif date is not None:
+            _time_cond = (
+                f" AND ( (CAST "
+                f"(strftime('%s', '{date}') AS INTEGER )) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER )))"
+            )
+            _query = f"{_query}{_time_cond}"
+        else:
+            # Condition shouldn't occur
+            # (days or date is present except in case of
+            # expired delete marker)
+            raise ValueError(
+                "Configuration needs days or date in filter %s",
+                str(self),
+            )
+        return _query
+
+    def noncurrent_query(self):
+        """
+        Deal with non current versions
+        """
+        # SELECT is forced on meta2 side
+        query = (
+            " ,cv.nb_versions,"
+            " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
+            " AS count FROM noncurrent_view AS al"
+            " INNER JOIN current_view AS cv ON "
+            " al.alias=cv.alias"
+        )
+        return query
+
+    def markers_query(self):
+        """
+        Get expired delete markers
+        """
+
+        # SELECT is forced on meta2 side
+        query = " WHERE nb_versions=1"
+        return query
 
 
 class RuleFilter(object):

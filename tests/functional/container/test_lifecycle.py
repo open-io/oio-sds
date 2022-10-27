@@ -17,6 +17,7 @@
 import json
 import random
 import time
+from datetime import datetime, timedelta, timezone
 
 from oio.common.client import ProxyClient
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_LIFECYCLE_TOPIC, KafkaConsumer
@@ -2197,3 +2198,83 @@ class TestLifecycleConformTransition(TestLifecycleConformExpiration):
 
     def tearDown(self):
         super(TestLifecycleConformTransition, self).tearDown()
+
+
+class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
+    def setUp(self):
+        super(TestLifecycleConformExpirationDate, self).setUp()
+        self.action = "Expiration"
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        self.action_config = {"Expiration": {"Date": f"{now_str}"}}
+
+    def tearDown(self):
+        super(TestLifecycleConformExpirationDate, self).tearDown()
+
+    def test_non_expired_object(self):
+        # ["prefix", "tag1"], but date is not reached
+        now = datetime.now()
+        next_time = now + timedelta(days=1)
+        next_day = next_time.strftime("%Y-%m-%dT%H:%M:%S.%f %z")[:-3]
+        self.action_config = {"Expiration": {"Date": f"{next_day}"}}
+
+        prefix = self.conditions["prefix"]
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+
+        source = (
+            """
+            {"Rules":
+                {"rule1":
+                    {"Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":
+                        {"Prefix":"""
+            f'"{prefix}"'
+            """, "Tags":["""
+            f"{json.dumps(self.conditions['tag1'])}"
+            """]}
+                    }
+                }
+            }"""
+        )
+
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + "0" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+
+                self.not_to_match.append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = self.prefix + str(j) + "1" + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match.append(obj_meta)
+
+        self._check_and_apply(source, nothing_to_match=True)
