@@ -56,7 +56,7 @@ from oio.common.decorators import (
 from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
 from oio.common.cache import del_cached_object_metadata, aggregate_cache_perfdata
-from oio.container.client import pop_chunk_qualities
+from oio.content.quality import pop_chunk_qualities
 
 
 class ObjectStorageApi(object):

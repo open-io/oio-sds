@@ -19,7 +19,7 @@ from mock import MagicMock as Mock, patch
 
 from oio.common.exceptions import Conflict, ServiceBusy
 from oio.common.green import get_watchdog
-from oio.container.client import CHUNK_SYSMETA_PREFIX, pop_chunk_qualities
+from oio.content.quality import CHUNK_SYSMETA_PREFIX, pop_chunk_qualities
 from tests.unit.api import FakeStorageApi
 from tests.utils import random_id
 

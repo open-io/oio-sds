@@ -28,6 +28,7 @@ from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.utils import request_id
+from oio.content.quality import max_items_margin
 
 
 class TestPerfectibleContent(BaseTestCase):
@@ -36,6 +37,7 @@ class TestPerfectibleContent(BaseTestCase):
         self.api = ObjectStorageApi(
             self.ns, endpoint=self.uri, pool_manager=self.http_pool
         )
+        self.nb_rawx = len(self.conf["services"]["rawx"])
 
     def tearDown(self):
         super(TestPerfectibleContent, self).tearDown()
@@ -236,22 +238,6 @@ class TestPerfectibleContent(BaseTestCase):
         # Check symbolic link does exist.
         self.assertTrue(self._is_symlink(abs_link))
 
-    # TODO(FVE): move this in oio.container.client
-    # And maybe change the input and output formats
-    @staticmethod
-    def _items_in_excess(current, target):
-        """
-        Returns the number of items in excess (if any) and at which level.
-
-        Level 0 is the storage device, level 3 is usually the datacenter.
-        """
-        cur = [int(x) for x in current.split(".", 4)]
-        tgt = [int(x) for x in target.split(".", 4)]
-        for idx in range(0, 4):
-            if cur[idx] > tgt[idx]:
-                return cur[idx] - tgt[idx], 3 - idx
-        return 0, None
-
     def test_prepare_not_enough_rawx(self):
         """
         Ensure the new "hard_max_items" parameter works as expected.
@@ -277,26 +263,47 @@ class TestPerfectibleContent(BaseTestCase):
         meta, _chunks = self.api.container.content_prepare(
             self.account, "whatever", "whatever", size=1, stgpol="JUSTENOUGH"
         )
-        soft_excess = []
+        soft_margins = []
+        hard_margins = []
         for key, qual in meta["properties"].items():
             quality = json.loads(qual)
             self.assertIn("cur_items", quality)
             self.assertIn("hard_max_items", quality)
             self.assertIn("soft_max_items", quality)
-            self.assertEqual(
-                0,
-                self._items_in_excess(quality["cur_items"], quality["hard_max_items"])[
-                    0
-                ],
-            )
-            soft_excess.append(
-                self._items_in_excess(quality["cur_items"], quality["soft_max_items"])[
-                    0
-                ]
-            )
+            hard_margins.append(max_items_margin(quality, key="hard_max_items"))
+            soft_margins.append(max_items_margin(quality))
+
+        # Make sure all chunks respect the hard limit: aka no chunk has a negative
+        # margin with "hard_max_items".
+        self.assertGreaterEqual(min(hard_margins), 0)
         # Make sure at least one chunk is misplaced (which is supposed to be
-        # the case with the JUSTENOUGH pool)
-        self.assertGreater(max(soft_excess), 0)
+        # the case with the JUSTENOUGH pool): aka at least one chunk
+        # has a negative margin with "soft_max_items".
+        self.assertGreater(0, min(soft_margins))
+
+    def test_create_just_enough_rawx(self):
+        """
+        Make sure we can select services in a tight situation (not enough
+        servers to ensure a distance greater than 1), and that a symlink
+        is created in this situation.
+        """
+        if self.nb_rawx < 9:
+            self.skipTest("need at least 9 rawx to run")
+
+        # Upload an object.
+        container = self._random_user()
+        reqid = request_id("perfectible-")
+        chunks, _, _ = self.api.object_create(
+            self.account,
+            container,
+            obj_name="perfectible",
+            data=b"whatever",
+            policy="JUSTENOUGH",
+            headers={REQID_HEADER: reqid},
+        )
+
+        # Check that at least one chunk has a non optimal placement.
+        self._check_symlinks(chunks)
 
 
 class TestPerfectibleLocalContent(TestPerfectibleContent):

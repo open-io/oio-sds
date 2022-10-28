@@ -54,22 +54,6 @@ SYSMETA_KEYS = (
     "size",
     "version",
 )
-CHUNK_SYSMETA_PREFIX = "__OIO_CHUNK__"
-NB_LOCATION_LEVELS = 4
-
-
-def pop_chunk_qualities(properties):
-    """
-    Pop chunk quality information from a dictionary of properties.
-
-    :param properties: properties dict.
-    """
-    qualities = {}
-    for k, _ in list(properties.items()):
-        if k.startswith(CHUNK_SYSMETA_PREFIX):
-            qualities[k[len(CHUNK_SYSMETA_PREFIX) :]] = json.loads(properties.pop(k))
-
-    return qualities
 
 
 def extract_content_headers_meta(headers):

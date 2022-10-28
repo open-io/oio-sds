@@ -17,11 +17,8 @@
 import unittest
 
 from oio.common import exceptions
-from oio.content.content import (
-    compare_chunk_quality,
-    ensure_better_chunk_qualities,
-    Chunk,
-)
+from oio.content.content import Chunk
+from oio.content.quality import compare_chunk_quality, ensure_better_chunk_qualities
 
 CRAPPY = {
     "expected_dist": 2,
