@@ -14,14 +14,56 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from typing import Any, Mapping
+
 from oio.common import exceptions as exc
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
-from oio.container.client import ContainerClient, extract_chunk_qualities
+from oio.container.client import (
+    ContainerClient,
+    extract_chunk_qualities,
+    NB_LOCATION_LEVELS,
+)
 from oio.common.constants import OIO_VERSION
 from oio.common.exceptions import UnrecoverableContent
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_functions import _get_weighted_random_score
+
+
+def max_items_to_int(max_items: str) -> int:
+    """
+    Transform a ".+_max_items" string into a comparable integer.
+
+    These strings are in the form A.B.C.D, with A representing a number
+    of services per datacenter and D representing a number of services per
+    storage drive.
+
+    A lower number represents a better selection (fewer services per location).
+    """
+    return sum(
+        256**x * int(y)
+        for x, y in enumerate(
+            max_items.split(".", NB_LOCATION_LEVELS)[0:NB_LOCATION_LEVELS]
+        )
+    )
+
+
+def max_items_margin(quality: Mapping[str, Any]) -> int:
+    """
+    Compute an improvement margin for the number of services per location.
+
+    :param quality: a dict representing the quality of a service selection
+    :returns: an integer telling how far from the target is the number of
+        services per location. If positive, the selection is better than
+        expected, if negative, it can be improved.
+    """
+    if "cur_items" not in quality or "soft_max_items" not in quality:
+        return 0  # Cannot compare
+    target = max_items_to_int(quality["soft_max_items"])
+    if target == 0:
+        return 0  # Not configured (legacy configuration?)
+    cur = max_items_to_int(quality["cur_items"])
+    return target - cur
 
 
 def compare_chunk_quality(current, candidate):
@@ -35,6 +77,14 @@ def compare_chunk_quality(current, candidate):
 
     # Compare distance between chunks.
     balance += candidate.get("final_dist", 1) - current.get("final_dist", 1)
+
+    # Compare the number of services per location
+    current_margin = max_items_margin(current)
+    candidate_margin = max_items_margin(candidate)
+    if candidate_margin > current_margin:
+        balance += 1
+    elif candidate_margin < current_margin:
+        balance -= 1
 
     # Compare use of fallback mechanisms.
     expected_slot = current.get("expected_slot")

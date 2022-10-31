@@ -775,6 +775,9 @@ template_service_pools = """
 #
 # "hard_max_items" is the absolute maximum number of items to select for
 # each location level. This can be defined in place of "min_dist".
+# Example: 12.6.3.1 meaning 12 per DC, 6 per rack, 3 per server, 1 per drive.
+# Notice that the last number is always 1 internally (cannot select 2 services
+# on the same drive unless we mess with service location strings).
 #
 # "soft_max_items" is the number of services per location level that is
 # considered too much for an optimal placement. When surpassed, an extra

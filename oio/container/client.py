@@ -55,6 +55,7 @@ SYSMETA_KEYS = (
     "version",
 )
 CHUNK_SYSMETA_PREFIX = "__OIO_CHUNK__"
+NB_LOCATION_LEVELS = 4
 
 
 def extract_chunk_qualities(properties, raw=False):

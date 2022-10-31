@@ -1,5 +1,5 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of
-# OpenIO Software Defined Storage
+# Copyright (C) 2018-2019 OpenIO SAS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@ from oio.content.content import (
     Chunk,
 )
 
-
 CRAPPY = {
     "expected_dist": 2,
     "warn_dist": 1,
@@ -31,12 +30,27 @@ CRAPPY = {
     "expected_slot": "rawx-odd",
     "final_slot": "rawx",
 }
+
+OKAYISH = {
+    "expected_dist": 2,
+    "warn_dist": 1,
+    "final_dist": 1,
+    "expected_slot": "rawx-odd",
+    "final_slot": "rawx-odd",
+    "cur_items": "9.3.3.1",
+    "hard_max_items": "9.5.3.1",
+    "soft_max_items": "9.3.3.1",
+}
+
 PERFECT = {
     "expected_dist": 2,
     "warn_dist": 1,
     "final_dist": 2,
     "expected_slot": "rawx-odd",
     "final_slot": "rawx-odd",
+    "cur_items": "9.3.2.1",
+    "hard_max_items": "9.5.3.1",
+    "soft_max_items": "9.3.3.1",
 }
 SMALL_DIST = {
     "expected_dist": 2,
@@ -61,9 +75,12 @@ class TestContentFunctions(unittest.TestCase):
         self.assertGreater(compare_chunk_quality(CRAPPY, WRONG_SLOT), 0)
         self.assertGreater(compare_chunk_quality(SMALL_DIST, PERFECT), 0)
         self.assertGreater(compare_chunk_quality(WRONG_SLOT, PERFECT), 0)
+        self.assertGreater(compare_chunk_quality(OKAYISH, PERFECT), 0)
+        self.assertGreater(compare_chunk_quality(CRAPPY, OKAYISH), 0)
 
     def test_compare_chunk_quality_same(self):
         self.assertEqual(0, compare_chunk_quality(CRAPPY, CRAPPY))
+        self.assertEqual(0, compare_chunk_quality(OKAYISH, OKAYISH))
         self.assertEqual(0, compare_chunk_quality(PERFECT, PERFECT))
         self.assertEqual(0, compare_chunk_quality(SMALL_DIST, SMALL_DIST))
         self.assertEqual(0, compare_chunk_quality(WRONG_SLOT, WRONG_SLOT))
@@ -74,6 +91,8 @@ class TestContentFunctions(unittest.TestCase):
         self.assertLess(compare_chunk_quality(WRONG_SLOT, CRAPPY), 0)
         self.assertLess(compare_chunk_quality(PERFECT, SMALL_DIST), 0)
         self.assertLess(compare_chunk_quality(PERFECT, WRONG_SLOT), 0)
+        self.assertLess(compare_chunk_quality(PERFECT, OKAYISH), 0)
+        self.assertLess(compare_chunk_quality(OKAYISH, CRAPPY), 0)
 
     def test_ensure_better_quality(self):
         chunk0_data = {
@@ -114,17 +133,18 @@ class TestContentFunctions(unittest.TestCase):
             {chunk1.url: chunk1.quality},
             threshold=2,
         )
+        # Not OK, improvement is 2 (warn_dist and cur_items), threshold is 3
         self.assertRaises(
             exceptions.SpareChunkException,
             ensure_better_chunk_qualities,
             [chunk1],
             {chunk2.url: chunk2.quality},
-            threshold=2,
+            threshold=3,
         )
 
         # OK, far better quality
         ensure_better_chunk_qualities(
-            [chunk0], {chunk2.url: chunk2.quality}, threshold=2
+            [chunk0], {chunk2.url: chunk2.quality}, threshold=3
         )
 
     def test_ensure_better_quality_same(self):
