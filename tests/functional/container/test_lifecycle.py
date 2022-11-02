@@ -205,8 +205,7 @@ class TestContainerLifecycle(BaseClassLifeCycle):
 
         self.lifecycle.load()
 
-        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
-
+        [sorted_current_rules, _, _, _] = self.lifecycle.order_rules(False)
         actions_order = list()
         for k, v in sorted_current_rules.items():
             action = v[1]
@@ -258,8 +257,7 @@ class TestContainerLifecycle(BaseClassLifeCycle):
 
         self.lifecycle.load()
 
-        [sorted_current_rules, _, _] = self.lifecycle.order_rules(False)
-
+        [sorted_current_rules, _, _, _] = self.lifecycle.order_rules(False)
         actions_order = list()
         for k, v in sorted_current_rules.items():
             action = v[1]
@@ -326,12 +324,15 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         objects = self.api.object_list(
             self.account, self.container, deleted=True, versions=True
         )
+        try:
+            for obj in objects["objects"]:
+                self.api.object_delete(
+                    self.account, self.container, obj["name"], obj["version"]
+                )
+            self.api.container_delete(self.account, self.container, force=True)
+        except Exception:
+            self.logger.warning("Exception during cleaning %s", self.container)
 
-        for obj in objects["objects"]:
-            self.api.object_delete(
-                self.account, self.container, obj["name"], obj["version"]
-            )
-        self.api.container_delete(self.account, self.container, force=True)
         super(TestLifecycleConform, self).tearDown()
 
     def _init_match_rules(self):

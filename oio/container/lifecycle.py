@@ -139,9 +139,6 @@ class ContainerLifecycle(object):
             nb_filters += 1
         if rule_filter.greater is not None:
             nb_filters += 1
-        if nb_filters == 0:
-            # No filter condition is equivalent to empty filter
-            return _query
 
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
@@ -403,6 +400,37 @@ class ContainerLifecycle(object):
         query = " WHERE nb_versions=1"
         return query
 
+    def abort_incomplete_query(self, rule, formated_days=None, **kwargs):
+        # Beginning of query will be force by meta2 code to avoid
+        # update or delete queries
+        rule_filter = RuleFilter(rule)
+        _query = " "
+
+        _upload_finished_cond = (
+            " INNER JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND"
+            " pr.key='x-object-sysmeta-s3api-has-content-type'"
+            " AND CAST(pr.value AS TEXT)='no'"
+        )
+
+        _query = f"{_query}{_upload_finished_cond}"
+
+        _query = f"{_query} WHERE ("
+        # Time condition is always present via DaysaAfterInitiation
+        _time_cond = (
+            f" ((al.mtime + {formated_days}) < (CAST "
+            f"(strftime('%s', 'now') AS INTEGER )))"
+        )
+        _query = f"{_query}{_time_cond}"
+        _query = f"{_query} AND {self._processed_sql_condition()} "
+
+        if rule_filter.prefix is not None:
+            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+            _query = f"{_query}{_prefix_cond}"
+        _query = f"{_query} )"
+
+        return _query
+
     def order_rules(self, versioned=False):
         """
         Rules Ordering
@@ -410,10 +438,12 @@ class ContainerLifecycle(object):
         current_rules = dict()
         non_current_rules = dict()
         delete_marker_rules = dict()
+        abort_incomplete_mpu_rules = dict()
 
         id_current = 0
         id_non_current = 0
         id_delete_marker = 0
+        id_abort_incomplete_mpu = 0
         if self.conf_json is None:
             return [{}, {}, {}]
 
@@ -422,6 +452,8 @@ class ContainerLifecycle(object):
             transitions = rule.get("Transitions", ())
             noncurrent_expiration = rule.get("NoncurrentVersionExpiration")
             noncurrent_transitions = rule.get("NoncurrentVersionTransitions", ())
+            abort_incomplete_mpu = rule.get("AbortIncompleteMultipartUpload")
+
             if noncurrent_expiration:
                 non_current_rules[id_non_current] = (
                     rule_id,
@@ -461,6 +493,15 @@ class ContainerLifecycle(object):
                     rule,
                 )
                 id_non_current = id_non_current + 1
+
+            if abort_incomplete_mpu:
+                abort_incomplete_mpu_rules[id_abort_incomplete_mpu] = (
+                    rule_id,
+                    "AbortIncompleteMultipartUpload",
+                    abort_incomplete_mpu,
+                    rule,
+                )
+                id_abort_incomplete_mpu += 1
 
         def order_current_action(act, versioned):
             if versioned:
@@ -509,6 +550,7 @@ class ContainerLifecycle(object):
             sorted_current_rules,
             sorted_noncurrent_rules,
             delete_marker_rules,
+            abort_incomplete_mpu,
         ]
 
         return ordered_rules
