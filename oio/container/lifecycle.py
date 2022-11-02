@@ -121,9 +121,6 @@ class ContainerLifecycle(object):
             nb_filters += 1
         if rule_filter.greater is not None:
             nb_filters += 1
-        if nb_filters == 0:
-            # No filter condition is equivalent to empty filter
-            return _query
 
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
@@ -370,6 +367,37 @@ class ContainerLifecycle(object):
         # SELECT is forced on meta2 side
         query = " WHERE nb_versions=1"
         return query
+
+    def abort_incomplete_query(self, rule, formated_days=None, **kwargs):
+        # Beginning of query will be force by meta2 code to avoid
+        # update or delete queries
+        rule_filter = RuleFilter(rule)
+        _query = " "
+
+        _upload_finished_cond = (
+            " INNER JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND"
+            " pr.key='x-object-sysmeta-s3api-has-content-type'"
+            " AND CAST(pr.value AS TEXT)='no'"
+        )
+
+        _query = f"{_query}{_upload_finished_cond}"
+
+        _query = f"{_query} WHERE ("
+        # Time condition is always present via DaysaAfterInitiation
+        _time_cond = (
+            f" ((al.mtime + {formated_days}) < (CAST "
+            f"(strftime('%s', 'now') AS INTEGER )))"
+        )
+        _query = f"{_query}{_time_cond}"
+        _query = f"{_query} AND {self._processed_sql_condition()} "
+
+        if rule_filter.prefix is not None:
+            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+            _query = f"{_query}{_prefix_cond}"
+        _query = f"{_query} )"
+
+        return _query
 
 
 class RuleFilter(object):

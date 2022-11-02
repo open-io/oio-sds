@@ -4408,8 +4408,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gboolean current_action = (g_strcmp0(action, "Expiration") \
 			== 0 || g_strcmp0(action, "Transition") == 0);
 
+	gboolean abort_incomplete_mpu = (g_strcmp0(action, "AbortIncompleteMultipartUpload") == 0);
 
-	if (!current_action) {
+	if (!current_action && !abort_incomplete_mpu) {
 		g_prefix_error(&err, "Bad action: %s", action);
 		goto end;
 	}
