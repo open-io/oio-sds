@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -78,7 +78,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 	return err;
 }
 
-void
+GError *
 peers_restore(gchar **targets, struct sqlx_name_s *name,
 		GByteArray *dump, gint64 deadline)
 {
@@ -86,12 +86,18 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 
 	if (!targets || !targets[0]) {
 		g_byte_array_unref(dump);
-		return ;
+		return SYSERR("RESTORE failed [%s][%s]: no target to restore on",
+				name->base, name->type);
 	}
 
 	GByteArray *encoded = _pack_RESTORE(name, dump, deadline);
-	struct gridd_client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
+	struct gridd_client_s **clients = gridd_client_create_many(
+			targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
+	if (!clients) {
+		return SYSERR("RESTORE: failed to create replication clients, "
+				"see service logs for more information.");
+	}
 
 	gridd_clients_set_timeout_cnx(clients,
 			oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
@@ -104,10 +110,10 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 	gridd_clients_free(clients);
 
 	if (err) {
-		GRID_WARN("RESTORE failed [%s][%s] : (%d) %s", name->base, name->type,
-				err->code, err->message);
-		g_clear_error(&err);
+		g_prefix_error(&err, "RESTORE failed [%s][%s]: (%d) %s",
+				name->base, name->type, err->code, err->message);
 	}
+	return err;
 }
 
 GError *

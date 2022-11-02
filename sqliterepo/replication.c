@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -313,6 +313,11 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	struct gridd_client_s **clients =
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
+	if (!clients) {
+		return SYSERR(
+			"Failed to create replication clients, "
+			"see service logs for more information.");
+	}
 
 	gridd_clients_set_timeout_cnx(clients,
 			oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
@@ -335,7 +340,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 					// terminated. We Just store the SLAVE's address.
 					// XXX Why do the resync in case of a PIPEFROM (understand
 					// as 'pipe from the peer') ? The current host is MASTER
-					// it is the refernce for several others bases, and
+					// it is the reference for several others bases, and
 					// whatever the remote problem on *that* peer, the it
 					// is MASTER because the election succeeded, and we won't
 					// restart a whole election
@@ -517,9 +522,14 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 
 	// Now send it to the SLAVES
 	NAME2CONST(n, ctx->sq3->name);
-	peers_restore(peers, &n, dump, oio_ext_get_deadline());
-	GRID_INFO("RESTORED on SLAVES [%s][%s] reqid=%s",
-			ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
+	err = peers_restore(peers, &n, dump, oio_ext_get_deadline());
+	if (err) {
+		GRID_ERROR("%s reqid=%s", err->message, oio_ext_get_reqid());
+		g_clear_error(&err);
+	} else {
+		GRID_INFO("RESTORED on SLAVES [%s][%s] reqid=%s",
+				ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
+	}
 }
 
 static void

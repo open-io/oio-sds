@@ -128,7 +128,7 @@ GByteArray* sqlx_encode_TableSequence(struct TableSequence *tabseq,
 
 // replication handy functions -------------------------------------------------
 
-void peers_restore(gchar **targets, struct sqlx_name_s *name,
+GError * peers_restore(gchar **targets, struct sqlx_name_s *name,
 		GByteArray *dump, gint64 deadline);
 
 GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
