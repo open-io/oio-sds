@@ -23,7 +23,7 @@ try:
 except ImportError:
     from xml.etree import cElementTree as etree
 
-from oio.common.exceptions import OioException
+from oio.common.exceptions import NotFound, OioException
 from oio.common.logger import get_logger
 from oio.common.utils import depaginate
 from oio.common.easy_value import true_value
@@ -151,7 +151,6 @@ class ContainerLifecycle(object):
         if root_ns is None:
             tree.attrib["xmlns"] = XMLNS_S3
             return self.load_xml(etree.tostring(tree))
-
         if tree.tag != tag("LifecycleConfiguration"):
             raise ValueError(
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" % tree.tag
@@ -168,6 +167,15 @@ class ContainerLifecycle(object):
             lifecycle_elt.append(rule_elt)
 
         return lifecycle_elt
+
+    def _is_delete_incomplete_action(self):
+        for rule in self.rules:
+            if rule.enabled:
+                for act in rule.actions:
+                    if type(act) is AbortIncompleteMultipartUpload:
+                        return True
+
+        return False
 
     def __str__(self):
         return etree.tostring(self._to_element_tree()).decode("utf-8")
@@ -215,10 +223,12 @@ class ContainerLifecycle(object):
         current_rules = dict()
         non_current_rules = dict()
         delete_marker_rules = dict()
+        abort_incomplete_mpu_rules = dict()
 
         id_current = 0
         id_non_current = 0
         id_delete_marker = 0
+        id_incomplete_mpu = 0
         for rule in self.rules:
             for act in rule.actions:
                 if isinstance(act, NoncurrentVersionExpiration) or isinstance(
@@ -233,8 +243,9 @@ class ContainerLifecycle(object):
                     else:
                         current_rules[id_current] = (rule, act)
                         id_current = id_current + 1
-                else:  # TODO(AbortIncompleteMultipartUpload)
-                    raise ValueError("Unsupported action %s for rule %s", act, rule)
+                else:
+                    abort_incomplete_mpu_rules[id_incomplete_mpu] = (rule, act)
+                    id_incomplete_mpu = id_incomplete_mpu + 1
 
         def order_current_action(act, versioned):
             if versioned:
@@ -274,6 +285,14 @@ class ContainerLifecycle(object):
         sorted_noncurrent_rules = dict(
             sorted(
                 non_current_rules.items(),
+                key=lambda item: (item[1][1].filter.days,),
+                reverse=False,
+            )
+        )
+
+        sorted_abort_incomplete_mpu_rules = dict(
+            sorted(
+                abort_incomplete_mpu_rules.items(),
                 key=lambda item: (
                     item[1][1].filter.days,
                     order_noncurrent_action(item[1][1]),
@@ -287,6 +306,7 @@ class ContainerLifecycle(object):
             sorted_current_rules,
             sorted_noncurrent_rules,
             delete_marker_rules,
+            sorted_abort_incomplete_mpu_rules,
         ]
         return ordered_rules
 
@@ -350,6 +370,21 @@ class ContainerLifecycle(object):
         results = self.process_container(self.container, **kwargs)
         for res in results:
             yield res
+        if self._is_delete_incomplete_action():
+            # +segments container:
+            mpu_container = self.container + "+segments"
+
+            # check if container + segments exists
+            try:
+                self.api.container.container_get_properties(
+                    self.account, mpu_container, force_master=True
+                )
+            except NotFound:
+                self.logger.warning("AbortIncompleteMultiPartUpload can't apply")
+                return False
+            results = self.process_container(mpu_container, **kwargs)
+            for res in results:
+                yield res
 
         self.processed_versions = None
 
@@ -426,6 +461,19 @@ class LifecycleRule(object):
         except IndexError:
             expiration = None
             action_filter_type = None
+
+        try:
+            abortIncompleteMpu = AbortIncompleteMultipartUpload.from_element(
+                rule_elt.findall(tag("AbortIncompleteMultipartUpload"), nsmap)[-1],
+                **kwargs,
+            )
+            action_filter_type = type(abortIncompleteMpu.filter)
+            actions.append(abortIncompleteMpu)
+        except IndexError:
+            abortIncompleteMpu = None
+            if action_filter_type is None:
+                action_filter_type = None
+
         transitions = list()
         for transition_elt in rule_elt.findall(tag("Transition"), nsmap):
             transition = Transition.from_element(transition_elt, **kwargs)
@@ -578,6 +626,15 @@ class LifecycleRule(object):
         results = list()
         if self.enabled and self.match(obj_meta):
             for action in self.actions:
+                if type(action) is AbortIncompleteMultipartUpload and not (
+                    obj_meta["container"]
+                ).endswith("+segments"):
+                    continue
+
+                if type(action) is not AbortIncompleteMultipartUpload and (
+                    obj_meta["container"]
+                ).endswith("+segments"):
+                    continue
                 try:
                     res = action.apply(obj_meta, **kwargs)
                     results.append((action.__class__.__name__, res))
@@ -978,6 +1035,35 @@ class LifecycleRuleFilter(object):
         query = " WHERE nb_versions=1"
         return query
 
+    def abort_incomplete_query(self, formated_days=None, **kwargs):
+        # Beginning of query will be force by meta2 code to avoid
+        # update or delete queries
+
+        _query = " "
+
+        _upload_finished_cond = (
+            " INNER JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND"
+            " pr.key='x-object-sysmeta-s3api-has-content-type'"
+            " AND CAST(pr.value AS TEXT)='no'"
+        )
+
+        _query = f"{_query}{_upload_finished_cond}"
+
+        if self.prefix is not None:
+            _query = f"{_query} WHERE ("
+            _prefix_cond = "( al.alias LIKE '" f"{self.prefix}" "%')"
+            _query = f"{_query}{_prefix_cond}"
+            _query = f"{_query}  AND "
+            _time_cond = (
+                f" ((al.mtime + {formated_days}) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER )))"
+            )
+            _query = f"{_query}{_time_cond}"
+            _query = f"{_query} )"
+
+        return _query
+
     def __str__(self):
         return etree.tostring(self._to_element_tree()).decode("utf-8")
 
@@ -1103,6 +1189,18 @@ class DaysActionFilter(LifecycleActionFilter):
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
         return float(obj_meta["mtime"]) + self.days * 86400 < now
+
+
+class DaysAfterInitiationActionFilter(DaysActionFilter):
+    """
+    Specify the number of days after mpu initiation
+    when the specific rule action takes effect.
+    """
+
+    def _to_element_tree(self, **kwargs):
+        days_elt = etree.Element("DaysAfterInitiation")
+        days_elt.text = str(self.days)
+        return days_elt
 
 
 class DeletedMarkerActionFilter(LifecycleActionFilter):
@@ -1247,8 +1345,59 @@ class LifecycleAction(LifecycleActionFilter):
         raise NotImplementedError
 
 
-# TODO(AbortIncompleteMultipartUpload):
-# implement AbortIncompleteMultipartUpload
+class AbortIncompleteMultipartUpload(LifecycleAction):
+    """Abort incomplete multipart upload"""
+
+    @classmethod
+    def from_element(cls, abortincompletempu_elt, **kwargs):
+        """
+        Load the AbortIncompleteMultipartUpload from an XML element
+        :type abortincompletempu_elt: `lxml.etree.Element`
+        """
+        nsmap = abortincompletempu_elt.nsmap
+        try:
+            days_elt = abortincompletempu_elt.findall(
+                tag("DaysAfterInitiation"), nsmap
+            )[-1]
+        except IndexError:
+            raise ValueError("No DaysAfterInitiation field")
+
+        action_filter = DaysAfterInitiationActionFilter.from_element(days_elt, **kwargs)
+        return cls(action_filter, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        exp_elt = etree.Element("AbortIncompleteMultipartUpload")
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        exp_elt.append(filter_elt)
+        return exp_elt
+
+    def match(self, obj_meta, **kwargs):
+        status = super(AbortIncompleteMultipartUpload, self).match(obj_meta, **kwargs)
+        if status:
+            current_obj = self.lifecycle.api.object_get_properties(
+                self.lifecycle.account, obj_meta["container"], obj_meta["name"]
+            )
+            is_incomplete = current_obj.get("properties", {}).get(
+                "x-object-sysmeta-s3api-has-content-type", None
+            )
+            if is_incomplete:
+                return True
+        else:
+            return False
+
+    def apply(self, obj_meta, version=None, **kwargs):
+        if self.match(obj_meta, **kwargs):
+            list_parts = self.lifecycle.api.list_objects(
+                self.lifecycle.account, obj_meta["container"], prefix=obj_meta["name"]
+            )
+            res = None
+            for part in list_parts:
+                res = self.lifecycle.api.object_delete(
+                    self.lifecycle.account, obj_meta["container"], part
+                )
+            return "Deleted" if res else "Kept"
+
+        return "Kept"
 
 
 class Expiration(LifecycleAction):
