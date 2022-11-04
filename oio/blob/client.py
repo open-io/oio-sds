@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -155,6 +155,14 @@ class BlobClient(object):
     def chunk_delete(self, url, **kwargs):
         resp = self._request("DELETE", url, **kwargs)
         if resp.status != 204:
+            raise exc.from_response(resp)
+        return resp
+
+    @update_rawx_perfdata
+    @ensure_request_id
+    def chunk_post(self, url, headers, **kwargs):
+        resp = self._request("POST", url, headers=headers, **kwargs)
+        if resp.status != 200:
             raise exc.from_response(resp)
         return resp
 
