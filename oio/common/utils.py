@@ -111,13 +111,24 @@ def drop_privileges(user):
     os.umask(0o22)
 
 
-def paths_gen(volume_path):
+def paths_gen(volume_path, excluded_dirs=None):
     """
     Yield paths of all regular files under `volume_path`.
+
+    :param volume_path: path of the volume to explore
+    :type volume_path: str
+    :param excluded_dirs: contains excluded dirs
+    :type excluded_dirs: tuple
     """
-    for root, _dirs, files in os.walk(volume_path):
-        for name in files:
-            yield os.path.join(root, name)
+    # Get absolute path of the volume path
+    volume_abs_path = os.path.abspath(volume_path)
+    for root, dirs, files in os.walk(volume_abs_path):
+        if excluded_dirs is not None and volume_abs_path == root:
+            # Remove directory listed in excluded dir
+            # Only done if the root dir is the volume path
+            dirs[:] = [dir for dir in dirs if dir not in excluded_dirs]
+        for file in files:
+            yield os.path.join(root, file)
 
 
 def statfs(volume):

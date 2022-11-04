@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,11 +17,12 @@
 from oio.blob.utils import read_chunk_metadata
 
 
-def create_chunk_env(chunk_id, chunk_path):
+def create_chunk_env(chunk_id, chunk_path, chunk_symlink_path=None):
     """Usefull to create ChunkWrapper dict for rawx crawler filters"""
     chunk_env = {}
     chunk_env["chunk_id"] = chunk_id
     chunk_env["chunk_path"] = chunk_path
+    chunk_env["chunk_symlink_path"] = chunk_symlink_path
     with open(chunk_path, "rb") as chunk_file:
         chunk_env["meta"], _ = read_chunk_metadata(chunk_file, chunk_id)
     return chunk_env

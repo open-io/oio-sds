@@ -34,7 +34,7 @@ import sys
 import argparse
 from collections import namedtuple
 import shutil
-
+from os.path import join
 
 template_redis = """
 daemonize no
@@ -340,6 +340,31 @@ drain_limit_per_pass = 100000
 
 [filter:logger]
 use = egg:oio#logger
+"""
+
+template_placement_improver_crawler_service = """
+[placement-improver-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${RAWX_VOLUMES}
+
+wait_random_time_before_starting = True
+interval = 300
+report_interval = 75
+scanned_per_second = 10
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = logger changelocation
+
+[filter:logger]
+use = egg:oio#logger
+
+[filter:changelocation]
+use = egg:oio#changelocation
 """
 
 template_rdir_crawler_service = """
@@ -1026,6 +1051,25 @@ WantedBy=${PARENT}
 template_systemd_service_meta2_crawler = """
 [Unit]
 Description=[OpenIO] Service meta2 crawler
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
+template_systemd_service_placement_improver_crawler = """
+[Unit]
+Description=[OpenIO] Service placement improver crawler
 After=network.target
 PartOf=${PARENT}
 OioGroup=${NS},localhost,${SRVTYPE}
@@ -2223,7 +2267,30 @@ def generate(options):
         register_service(
             env, template_systemd_service_rawx_crawler, crawler_target, False
         )
-
+        # oio-placement-improver-crawler
+        env.update(
+            {
+                "RAWX_VOLUMES": ",".join(rawx_volumes),
+                "SRVTYPE": "placement-improver-crawler",
+                "EXE": "oio-placement-improver-crawler",
+                "GROUPTYPE": "crawler",
+                "SRVNUM": "1",
+            }
+        )
+        # first the conf
+        tpl = Template(template_placement_improver_crawler_service)
+        to_write = tpl.safe_substitute(env)
+        path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
+        with open(path, "w+") as f:
+            f.write(to_write)
+        # then the gridinit conf
+        tpl = Template(template_systemd_service_placement_improver_crawler)
+        register_service(
+            env,
+            template_systemd_service_placement_improver_crawler,
+            crawler_target,
+            False,
+        )
     # redis
     if options.get(ALLOW_REDIS):
         redis_server = shutil.which("redis-server")

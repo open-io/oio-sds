@@ -36,8 +36,10 @@ def _rawx_env_property(field):
 
 
 class ChunkWrapper(object):
+
     chunk_id = _rawx_env_property("chunk_id")
     chunk_path = _rawx_env_property("chunk_path")
+    chunk_symlink_path = _rawx_env_property("chunk_symlink_path")
     meta = _rawx_env_property("meta")
 
     def __init__(self, env):
@@ -66,17 +68,35 @@ class RawxCrawlerResponse(object):
 
 
 class RawxCrawlerResponseException(RawxCrawlerResponse, Exception):
+    """
+    Rawx crawler ResponseException
+    """
+
     def __init__(self, *args, **kwargs):
-        RawxCrawlerResponse.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         Exception.__init__(self, self.status)
 
 
+class PlacementImproverCrawlerResponseException(RawxCrawlerResponseException):
+    """
+    Placement Imporver Crawler ResponseException
+    """
+
+
 class StatusMap(object):
+    def __init__(self, cls=RawxCrawlerResponseException) -> None:
+        self.cls = cls
+
     def __getitem__(self, key):
-        return partial(RawxCrawlerResponseException, status=key)
+        return partial(self.cls, status=key)
 
 
 status_map = StatusMap()
 RawxCrawlerOk = status_map[200]
 RawxCrawlerNotFound = status_map[404]
 RawxCrawlerError = status_map[500]
+
+status_map_bis = StatusMap(cls=PlacementImproverCrawlerResponseException)
+PlacementImproverCrawlerError = status_map_bis[500]
+PlacementImproverCrawlerChunkNotFound = status_map[404]
+PlacementImproverCrawlerOk = status_map[200]

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,38 +12,36 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
+import os
 from oio.blob.utils import read_chunk_metadata
-from oio.common import exceptions as exc
 from oio.common.utils import is_chunk_id_valid
-from oio.crawler.common.crawler import Crawler, CrawlerWorker
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, is_success, is_error
+from oio.common import exceptions as exc
+from oio.crawler.rawx.crawler import RawxCrawler, RawxWorker
 
 
-class RawxWorker(CrawlerWorker):
+class PlacementImproverWorker(RawxWorker):
     """
-    Rawx Worker responsible for a single volume.
+    Chunk placement improver Worker used to relocate chunks identified as
+    misplaced into a rawx(volume).
     """
 
-    SERVICE_TYPE = "rawx"
-    EXCLUDED_DIRS = ("non_optimal_placement",)
+    WORKING_DIR = "non_optimal_placement"
+    EXCLUDED_DIRS = None
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
-        super(RawxWorker, self).__init__(
-            conf, volume_path, logger=logger, api=api, **kwargs
-        )
+        """
+        Worker used to call Placement imporver crawler pipeline
 
-    def cb(self, status, msg):
-        if is_success(status):
-            pass
-        elif is_error(status):
-            self.logger.warning(
-                "Rawx volume_id=%s handling failure: %s", self.volume_id, msg
-            )
-        else:
-            self.logger.warning(
-                "Rawx volume_id=%s status=%d msg=%s", self.volume_id, status, msg
-            )
+        :param conf: configuraton
+        :type conf: dict
+        :param volume_path: rawx volume crawl
+        :type volume_path: str
+        :param logger: Crawler logger, defaults to None
+        :type logger: Logger, optional
+        :param api: _description_, defaults to None
+        :type api: _type_, optional
+        """
+        super().__init__(conf, volume_path, logger, api, **kwargs)
 
     def _is_chunk_valid(self, chunk):
         """
@@ -52,6 +50,9 @@ class RawxWorker(CrawlerWorker):
         :param chunk: chunk representation
         :type chunk: ChunkWrapper
         """
+        # Resolve the real chunk path which is initially a symbolic link
+        chunk.chunk_symlink_path = chunk.chunk_path
+        chunk.chunk_path = os.path.realpath(chunk.chunk_symlink_path)
         try:
             if not is_chunk_id_valid(chunk.chunk_id):
                 self.logger.info("Skip not valid chunk path %s", chunk.chunk_path)
@@ -63,6 +64,9 @@ class RawxWorker(CrawlerWorker):
                 chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
         except FileNotFoundError:
             self.logger.info("chunk_id=%s no longer exists", chunk.chunk_id)
+            # unlink the symbolic link
+            os.unlink(chunk.chunk_symlink_path)
+            self.logger.info("symbolic link=%s removed", chunk.chunk_path)
             return False
         except (exc.MissingAttribute, exc.FaultyChunk):
             self.errors += 1
@@ -70,36 +74,19 @@ class RawxWorker(CrawlerWorker):
             return False
         return True
 
-    def process_path(self, path):
 
-        chunk = ChunkWrapper({})
-        chunk.chunk_id = path.rsplit("/", 1)[-1]
-        chunk.chunk_path = path
-
-        # Check chunk validity
-        if not self._is_chunk_valid(chunk):
-            return False
-
-        try:
-            self.pipeline(chunk.env, self.cb)
-            self.successes += 1
-        except Exception:
-            self.errors += 1
-            self.logger.exception("Failed to apply pipeline")
-        self.scanned_since_last_report += 1
-
-        return True
-
-
-class RawxCrawler(Crawler):
-    SERVICE_TYPE = "rawx"
+class PlacementImproverCrawler(RawxCrawler):
+    """
+    Crawler that handles all workers used to relocate misplaced chunks
+    """
 
     def __init__(self, conf, conf_file=None, **kwargs):
-        super(RawxCrawler, self).__init__(conf, conf_file=conf_file, **kwargs)
+        super().__init__(conf, conf_file=conf_file, **kwargs)
 
     def _init_volume_workers(self):
+        # Here the volumes in which to find potential chunks misplaced
         self.volume_workers = [
-            RawxWorker(
+            PlacementImproverWorker(
                 self.conf,
                 volume,
                 logger=self.logger,

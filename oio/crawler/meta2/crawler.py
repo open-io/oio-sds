@@ -27,7 +27,9 @@ class Meta2Worker(CrawlerWorker):
     SERVICE_TYPE = "meta2"
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
-        super(Meta2Worker, self).__init__(conf, volume_path, **kwargs)
+        super(Meta2Worker, self).__init__(
+            conf, volume_path, logger=logger, api=api, **kwargs
+        )
 
     def cb(self, status, msg):
         if 500 <= status <= 599:

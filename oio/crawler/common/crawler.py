@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import random
-
+from random import randint
+from os.path import join
 from oio import ObjectStorageApi
 from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
@@ -25,8 +25,15 @@ from oio.common.logger import get_logger
 from oio.common.utils import paths_gen
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
+from oio.crawler.placement_improver.loader import (
+    loadpipeline as placement_improver_loadpipeline,
+)
 
-LOAD_PIPELINES = {"rawx": rawx_loadpipeline, "meta2": meta2_loadpipeline}
+LOAD_PIPELINES = {
+    "RawxWorker": rawx_loadpipeline,
+    "Meta2Worker": meta2_loadpipeline,
+    "PlacementImproverWorker": placement_improver_loadpipeline,
+}
 
 
 class CrawlerWorker(object):
@@ -35,6 +42,8 @@ class CrawlerWorker(object):
     """
 
     SERVICE_TYPE = None
+    WORKING_DIR = ""
+    EXCLUDED_DIRS = None
 
     def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
         """
@@ -47,7 +56,7 @@ class CrawlerWorker(object):
         self.volume = volume_path
         self.logger = logger or get_logger(self.conf)
         self.running = True
-
+        self.working_dir = self.WORKING_DIR
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
         )
@@ -75,9 +84,10 @@ class CrawlerWorker(object):
         self.app_env["volume_path"] = self.volume
         self.app_env["volume_id"] = self.volume_id
         self.app_env["watchdog"] = watchdog
-
-        self.pipeline = LOAD_PIPELINES[self.SERVICE_TYPE](
-            conf.get("conf_file"), global_conf=self.conf, app=self
+        self.app_env["working_dir"] = self.working_dir
+        # Loading pipeline
+        self.pipeline = LOAD_PIPELINES[type(self).__name__](
+            self.conf.get("conf_file"), global_conf=self.conf, app=self
         )
 
     def cb(self, status, msg):
@@ -140,7 +150,9 @@ class CrawlerWorker(object):
         Crawl volume, and apply filters on every database.
         """
         self.passes += 1
-        paths = paths_gen(self.volume)
+        # EXCLUDED_DIRS can be used to avoid scanning the non optimal
+        # placement folder for rawx crawler
+        paths = paths_gen(join(self.volume, self.WORKING_DIR), self.EXCLUDED_DIRS)
 
         self.report("starting", force=True)
         self.start_time = time.time()
@@ -168,7 +180,7 @@ class CrawlerWorker(object):
 
     def run(self):
         if self.wait_random_time_before_starting:
-            waiting_time_to_start = random.randint(0, self.scans_interval)
+            waiting_time_to_start = randint(0, self.scans_interval)
             self.logger.info("Wait %d secondes before starting", waiting_time_to_start)
             for _ in range(waiting_time_to_start):
                 if not self.running:
