@@ -46,6 +46,7 @@ build
 
 # IDE
 .idea
+.vscode/
 tags
 
 # cmake
