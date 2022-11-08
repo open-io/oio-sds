@@ -19,7 +19,7 @@ from six import text_type
 from six.moves.urllib_parse import quote
 
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
-from oio.content.quality import max_items_margin
+from oio.content.quality import location_constraint_margin
 
 
 _TOKEN = r"[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+"
@@ -133,8 +133,8 @@ def headers_from_object_metadata(metadata, chunk_url):
         ):
             headers[CHUNK_HEADERS["non_optimal_placement"]] = True
 
-        # Check with soft_max_items (new way!)
-        if max_items_margin(qual) < 0:
+        # Check with fair_location_constraint (new way!)
+        if location_constraint_margin(qual) < 0:
             headers[CHUNK_HEADERS["non_optimal_placement"]] = True
     except KeyError:
         # Ignore if there is no qualities.

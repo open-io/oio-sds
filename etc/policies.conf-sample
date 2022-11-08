@@ -1,0 +1,40 @@
+[STORAGE_POLICY]
+# Storage policy definitions
+# ---------------------------
+#
+# The first word is the service pool to use,
+# the second word is the data security to use.
+
+SINGLE=NONE:NONE
+TWOCOPIES=rawx2:DUPONETWO
+THREECOPIES=rawx3:DUPONETHREE
+17COPIES=rawx17:DUP17
+EC=NONE:EC
+EC21=NONE:EC21
+ECX21=NONE:ECX21
+
+JUSTENOUGH=justenoughrawx:EC
+NOTENOUGH=notenoughrawx:EC
+
+[DATA_SECURITY]
+# Data security definitions
+# --------------------------
+#
+# The first word is the kind of data security ("plain" or "ec"),
+# after the '/' are the parameters of the data security.
+
+DUPONETWO=plain/min_dist=1,nb_copy=2
+DUPONETHREE=plain/max_dist=2,min_dist=1,nb_copy=3
+DUP17=plain/min_dist=1,nb_copy=17
+
+EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
+EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=0
+ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
+
+# List of possible values for the "algo" parameter of "ec" data security:
+# "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
+# "jerasure_rs_cauchy"     EC_BACKEND_JERASURE_RS_CAUCHY
+# "flat_xor_hd"            EC_BACKEND_FLAT_XOR_HD
+# "isa_l_rs_vand"          EC_BACKEND_ISA_L_RS_VAND
+# "shss"                   EC_BACKEND_SHSS
+# "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND

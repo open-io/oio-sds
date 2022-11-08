@@ -343,11 +343,11 @@ struct oio_lb_pool_LOCAL_s
 	gboolean nearby_mode : 16;
 
 	/* Absolute maximum number of services to select per location level. */
-	guint8 hard_max_items[OIO_LB_LOC_LEVELS];
+	guint8 strict_max_items[OIO_LB_LOC_LEVELS];
 
 	/* Number of services per location level that will trigger, when surpassed,
 	 * a placement improvement. */
-	guint8 soft_max_items[OIO_LB_LOC_LEVELS];
+	guint8 fair_max_items[OIO_LB_LOC_LEVELS];
 };
 
 struct polling_ctx_s
@@ -387,11 +387,11 @@ struct polling_ctx_s
 	guint16 min_dist;
 
 	/* Absolute maximum number of services to select per location level. */
-	const guint8 *hard_max_items;
+	const guint8 *strict_max_items;
 
 	/* Number of services per location level that will trigger, when surpassed,
 	 * a placement improvement. */
-	const guint8 *soft_max_items;
+	const guint8 *fair_max_items;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -672,7 +672,7 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 				g_datalist_id_get_data(ctx->counters + level, key));
 		popularity_by_level[level] = (guint8) MIN(popularity, 255);
 		// Maximum number of elements with this location that we can take
-		guint32 max = ctx->hard_max_items[level];
+		guint32 max = ctx->strict_max_items[level];
 		if (max == 0) {
 			// We are considering a subtree of services. Compute the proportion
 			// this subtree represents compared to the whole cluster, and
@@ -876,9 +876,9 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
-	/* If ctx->hard_max_items is zero, max_by_level will be computed by
+	/* If ctx->strict_max_items is zero, max_by_level will be computed by
 	 * _item_is_too_popular(), otherwise it will be a copy of
-	 * ctx->hard_max_items. */
+	 * ctx->strict_max_items. */
 	guint8 max_by_level[OIO_LB_LOC_LEVELS] = {0};
 	guint8 pop_by_level[OIO_LB_LOC_LEVELS] = {0};
 
@@ -908,7 +908,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 
 	memcpy(selected->cur_items_by_level, pop_by_level, sizeof(pop_by_level));
 	memcpy(selected->max_items_by_level, max_by_level, sizeof(max_by_level));
-	memcpy(selected->warn_items_by_level, ctx->soft_max_items,
+	memcpy(selected->warn_items_by_level, ctx->fair_max_items,
 			OIO_LB_LOC_LEVELS * sizeof(guint8));
 	// Add the service we are currently accepting
 	for (int j = 0; j < OIO_LB_LOC_LEVELS; selected->cur_items_by_level[j++] += 1);
@@ -1231,8 +1231,8 @@ _local__patch(struct oio_lb_pool_s *self,
 		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)oio_lb_selected_item_free),
-		.hard_max_items = lb->hard_max_items,
-		.soft_max_items = lb->soft_max_items,
+		.strict_max_items = lb->strict_max_items,
+		.fair_max_items = lb->fair_max_items,
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1262,7 +1262,7 @@ _local__patch(struct oio_lb_pool_s *self,
 				reached_dist = dist;
 		} else {
 			GString *max_items = g_string_sized_new(32);
-			_print_items_tab(max_items, lb->hard_max_items);
+			_print_items_tab(max_items, lb->strict_max_items);
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(
 					CODE_POLICY_NOT_SATISFIABLE,
@@ -1271,7 +1271,7 @@ _local__patch(struct oio_lb_pool_s *self,
 					"%u known services, "
 					"%u services in slot, "
 					"min_dist=%u, "
-					"hard_max_items=%s",
+					"strict_location_constraint=%s",
 					*ptarget,
 					count, count_targets - count_known_targets,
 					count_known_targets,
@@ -1450,9 +1450,9 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
 		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else if (!strcmp(key, OIO_LB_OPT_HARD_MAX)) {
-		_max_items_to_tab(value, lb->hard_max_items);
+		_max_items_to_tab(value, lb->strict_max_items);
 	} else if (!strcmp(key, OIO_LB_OPT_SOFT_MAX)) {
-		_max_items_to_tab(value, lb->soft_max_items);
+		_max_items_to_tab(value, lb->fair_max_items);
 	} else {
 		GRID_WARN("Invalid pool option: %s", key);
 	}
@@ -2371,13 +2371,13 @@ oio_selected_item_quality_to_json(GString *inout,
 	g_string_append_c(qual, '"');
 
 	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_quote(qual, "hard_max_items");
+	oio_str_gstring_append_json_quote(qual, "strict_location_constraint");
 	g_string_append(qual, ":\"");
 	_print_items_tab(qual, sel->max_items_by_level);
 	g_string_append_c(qual, '"');
 
 	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_quote(qual, "soft_max_items");
+	oio_str_gstring_append_json_quote(qual, "fair_location_constraint");
 	g_string_append(qual, ":\"");
 	_print_items_tab(qual, sel->warn_items_by_level);
 	g_string_append_c(qual, '"');

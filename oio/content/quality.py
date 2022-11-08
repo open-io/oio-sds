@@ -38,9 +38,9 @@ def pop_chunk_qualities(properties):
     return qualities
 
 
-def max_items_to_int(max_items: str) -> int:
+def location_constraint_to_int(max_items: str) -> int:
     """
-    Transform a ".+_max_items" string into a comparable integer.
+    Transform a ".+_location_constraint" string into a comparable integer.
 
     These strings are in the form A.B.C.D, with A representing a number
     of services per datacenter and D representing a number of services per
@@ -56,22 +56,24 @@ def max_items_to_int(max_items: str) -> int:
     )
 
 
-def max_items_margin(quality: Mapping[str, Any], key: str = "soft_max_items") -> int:
+def location_constraint_margin(
+    quality: Mapping[str, Any], key: str = "fair_location_constraint"
+) -> int:
     """
     Compute an improvement margin for the number of services per location.
 
     :param quality: a dict representing the quality of a service selection
-    :param key: max_items quality to be compared with.
+    :param key: quality name to be compared with.
     :returns: an integer telling how far from the target is the number of
         services per location. If positive, the selection is better than
         expected, if negative, it can be improved.
     """
     if "cur_items" not in quality or key not in quality:
         return 0  # Cannot compare
-    target = max_items_to_int(quality[key])
+    target = location_constraint_to_int(quality[key])
     if target == 0:
         return 0  # Not configured (legacy configuration?)
-    cur = max_items_to_int(quality["cur_items"])
+    cur = location_constraint_to_int(quality["cur_items"])
     return target - cur
 
 
@@ -88,8 +90,8 @@ def compare_chunk_quality(current, candidate):
     balance += candidate.get("final_dist", 1) - current.get("final_dist", 1)
 
     # Compare the number of services per location
-    current_margin = max_items_margin(current)
-    candidate_margin = max_items_margin(candidate)
+    current_margin = location_constraint_margin(current)
+    candidate_margin = location_constraint_margin(candidate)
     if candidate_margin > current_margin:
         balance += 1
     elif candidate_margin < current_margin:

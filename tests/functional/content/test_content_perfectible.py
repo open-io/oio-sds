@@ -28,7 +28,7 @@ from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.utils import request_id
-from oio.content.quality import max_items_margin
+from oio.content.quality import location_constraint_margin
 
 
 class TestPerfectibleContent(BaseTestCase):
@@ -240,7 +240,7 @@ class TestPerfectibleContent(BaseTestCase):
 
     def test_prepare_not_enough_rawx(self):
         """
-        Ensure the new "hard_max_items" parameter works as expected.
+        Ensure the new "strict_location_constraint" parameter works as expected.
         """
         self._aggregate_rawx_by_place()
         self.assertRaises(
@@ -264,21 +264,23 @@ class TestPerfectibleContent(BaseTestCase):
             self.account, "whatever", "whatever", size=1, stgpol="JUSTENOUGH"
         )
         soft_margins = []
-        hard_margins = []
+        strict_margins = []
         for key, qual in meta["properties"].items():
             quality = json.loads(qual)
             self.assertIn("cur_items", quality)
-            self.assertIn("hard_max_items", quality)
-            self.assertIn("soft_max_items", quality)
-            hard_margins.append(max_items_margin(quality, key="hard_max_items"))
-            soft_margins.append(max_items_margin(quality))
+            self.assertIn("strict_location_constraint", quality)
+            self.assertIn("fair_location_constraint", quality)
+            strict_margins.append(
+                location_constraint_margin(quality, key="strict_location_constraint")
+            )
+            soft_margins.append(location_constraint_margin(quality))
 
-        # Make sure all chunks respect the hard limit: aka no chunk has a negative
-        # margin with "hard_max_items".
-        self.assertGreaterEqual(min(hard_margins), 0)
+        # Make sure all chunks respect the strict limit: aka no chunk has a negative
+        # margin with "strict_location_constraint".
+        self.assertGreaterEqual(min(strict_margins), 0)
         # Make sure at least one chunk is misplaced (which is supposed to be
         # the case with the JUSTENOUGH pool): aka at least one chunk
-        # has a negative margin with "soft_max_items".
+        # has a negative margin with "fair_location_constraint".
         self.assertGreater(0, min(soft_margins))
 
     def test_create_just_enough_rawx(self):

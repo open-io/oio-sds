@@ -1,0 +1,101 @@
+# Service pools declarations
+# ----------------------------
+#
+# Pools are automatically created if not defined in configuration,
+# according to storage policy or service update policy rules.
+#
+# "targets" is a ';'-separated list.
+# Each target is a ','-separated list of:
+# - the number of services to pick,
+# - the name of a slot where to pick the services,
+# - the name of a slot where to pick services if there is
+#   not enough in the previous slot
+# - and so on...
+#
+# "strict_location_constraint" is the absolute maximum number of items to select for
+# each location level. This can be defined in place of "min_dist".
+# Example: 12.6.3.1 meaning 12 per DC, 6 per rack, 3 per server, 1 per drive.
+# Notice that the last number is always 1 internally (cannot select 2 services
+# on the same drive unless we mess with service location strings).
+#
+# "fair_location_constraint" is the number of services per location level that is
+# considered too much for an optimal placement. When surpassed, an extra
+# metadata will be saved in order to trigger a placement improvement.
+# This can be defined in place of "warn_dist".
+#
+# "nearby_mode" is a boolean telling to find services close to each other.
+#
+# "min_dist" is the absolute minimum distance between services returned
+# by the pool. It defaults to 1, which is the minimum. If you set it too
+# high, there is a risk the pool fails to find a service set matching
+# all the criteria.
+#
+# "max_dist" is the distance between services that the pool will try to
+# ensure. This option defaults to 4, which is the maximum. If you know
+# that all the services are close together, you can reduce this number
+# to accelerate the research.
+#
+# "warn_dist" is the distance between services at which the pool will emit
+# a warning, for further improvement.
+#
+
+[pool:meta1]
+targets=1,meta1
+
+[pool:meta2]
+targets=1,meta2
+
+#[pool:rdir]
+#targets=1,rawx;1,rdir
+
+[pool:account]
+targets=1,account
+
+[pool:fastrawx3]
+# Pick 3 SSD rawx, or any rawx if SSD is not available
+targets=3,rawx-ssd,rawx
+
+[pool:rawxevenodd]
+# Pick one "even" and one "odd" rawx
+targets=1,rawx-even;1,rawx-odd
+
+[pool:rawx2]
+# As with rawxevenodd, but with permissive fallback on any rawx
+targets=1,rawx-even,rawx;1,rawx-odd,rawx
+warn_dist=0
+
+[pool:rawx3]
+# Try to pick one "even" and one "odd" rawx, and a generic one
+targets=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+# If we change max_dist to 3, we need to update test_content_perfectible.py
+max_dist=2
+warn_dist=0
+
+[pool:zonedrawx3]
+# Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
+targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
+
+[pool:rawx3nearby]
+targets=3,rawx
+nearby_mode=true
+warn_dist=0
+
+[pool:rawx3faraway]
+targets=3,rawx
+min_dist=2
+warn_dist=2
+
+# Special pools for placement tests
+[pool:justenoughrawx]
+targets=9,rawx
+min_dist=1
+warn_dist=0
+strict_location_constraint=9.9.3.1
+fair_location_constraint=9.9.2.1
+
+[pool:notenoughrawx]
+targets=9,rawx
+min_dist=1
+warn_dist=0
+strict_location_constraint=9.9.2.1
+fair_location_constraint=9.9.2.1

@@ -35,8 +35,8 @@ OKAYISH = {
     "expected_slot": "rawx-odd",
     "final_slot": "rawx-odd",
     "cur_items": "9.3.3.1",
-    "hard_max_items": "9.5.3.1",
-    "soft_max_items": "9.3.3.1",
+    "strict_location_constraint": "9.5.3.1",
+    "fair_location_constraint": "9.3.3.1",
 }
 
 PERFECT = {
@@ -46,8 +46,8 @@ PERFECT = {
     "expected_slot": "rawx-odd",
     "final_slot": "rawx-odd",
     "cur_items": "9.3.2.1",
-    "hard_max_items": "9.5.3.1",
-    "soft_max_items": "9.3.3.1",
+    "strict_location_constraint": "9.5.3.1",
+    "fair_location_constraint": "9.3.3.1",
 }
 SMALL_DIST = {
     "expected_dist": 2,

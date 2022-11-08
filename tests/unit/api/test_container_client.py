@@ -30,16 +30,16 @@ DUMMY_QUAL = {
     "expected_dist": 2,
     "final_slot": "rawx",
     "cur_items": "9.9.3.1",
-    "hard_max_items": "9.9.3.1",
-    "soft_max_items": "9.9.3.1",
+    "strict_location_constraint": "9.9.3.1",
+    "fair_location_constraint": "9.9.3.1",
 }
 DUMMY_QUAL_JSON = (
     '{"expected_dist":2,"final_dist":2,'
     '"warn_dist":1,"expected_slot":"rawx-odd",'
     '"final_slot":"rawx",'
     '"cur_items":"9.9.3.1",'
-    '"hard_max_items":"9.9.3.1",'
-    '"soft_max_items":"9.9.3.1"}'
+    '"strict_location_constraint":"9.9.3.1",'
+    '"fair_location_constraint":"9.9.3.1"}'
 )
 
 
