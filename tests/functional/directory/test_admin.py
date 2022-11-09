@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 import random
 import os
+from oio.common.utils import cid_from_name
 
 from tests.utils import BaseTestCase, random_str
 
@@ -118,3 +119,97 @@ class TestAdmin(BaseTestCase):
                     props["system"]["version:main.admin"],
                 )
             self.assertIn("sys.last_vacuum", nprops["system"])
+
+    def test_copy_local(self):
+        cid = cid_from_name(self.account, self.container)
+        status = self.admin.election_status(
+            "meta2", account=self.account, reference=self.container
+        )
+        slaves = status.get("slaves", [])
+        master = status.get("master", "")
+        if slaves:
+            self.peer_to_use = slaves[0]
+        elif master:
+            self.peer_to_use = master
+        else:
+            raise Exception("missing peer for test")
+
+        # Test with empty suffix
+        incomplete_params = {
+            "service_type": "meta2",
+            "cid": cid,
+            "svc_from": self.peer_to_use,
+        }
+        self.assertRaises(ValueError, self.admin.copy_base_local, **incomplete_params)
+
+        # Test with provided suffix
+        right_params = {
+            "service_type": "meta2",
+            "cid": cid,
+            "svc_from": self.peer_to_use,
+            "suffix": "suffix1",
+        }
+        self.admin.copy_base_local(**right_params)
+
+        # Try removing bad suffix
+        bad_params = {
+            "service_type": "meta2",
+            "cid": cid,
+            "service_id": self.peer_to_use,
+            "suffix": "badsuffix",
+        }
+        status = self.admin.remove_base(**bad_params)
+        expected = {
+            self.peer_to_use: {
+                "body": "",
+                "status": {
+                    "message": "sqlite3_open error: (errno=2 No "
+                    "such file or directory) (rc=14) "
+                    "SQLITE_CANTOPEN",
+                    "status": 431,
+                },
+            }
+        }
+        self.assertEqual(status, expected)
+
+        # Check copy doesn't exist neither on master nor on other slave
+        # This applies only when several peers are present
+        peers_no_copy = ()
+        if len(slaves) > 1:
+            peers_no_copy = slaves[1:]
+            peers_no_copy.append(master)
+
+            for peer in peers_no_copy:
+                # Check removing bad suffix
+                params = {
+                    "service_type": "meta2",
+                    "cid": cid,
+                    "service_id": peer,
+                    "suffix": "suffix1",
+                }
+                status = self.admin.remove_base(**params)
+                expected = {
+                    peer: {
+                        "body": "",
+                        "status": {
+                            "message": "sqlite3_open error: (errno=2 No "
+                            "such file or directory) (rc=14) "
+                            "SQLITE_CANTOPEN",
+                            "status": 431,
+                        },
+                    }
+                }
+                self.assertEqual(status, expected)
+
+        # Check local copy exists at last step by removing it successfully
+        params = {
+            "service_type": "meta2",
+            "cid": cid,
+            "service_id": self.peer_to_use,
+            "suffix": "suffix1",
+        }
+        status = self.admin.remove_base(**params)
+        expected = {
+            self.peer_to_use: {"status": {"status": 200, "message": "OK"}, "body": ""}
+        }
+        self.assertEqual(status, expected)

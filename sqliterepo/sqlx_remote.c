@@ -185,6 +185,16 @@ sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source,
 }
 
 GByteArray*
+sqlx_pack_LOCAL_COPY(const struct sqlx_name_s *name, const gchar *source,
+		 const gchar *suffix, gint64 deadline)
+{
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_LOCAL_COPY, NULL, name, deadline);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SUFFIX, suffix);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
 sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, NULL, name, deadline);

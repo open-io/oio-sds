@@ -139,4 +139,7 @@ typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg
 GError * peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		gint check_type, peer_dump_cb, gpointer cb_arg, gint64 deadline);
 
+GByteArray* sqlx_pack_LOCAL_COPY(const struct sqlx_name_s *name, const gchar *source,
+		const gchar *suffix, gint64 deadline);
+
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_h*/

@@ -1222,6 +1222,54 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+_handler_LOCAL_COPY(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo UNUSED, gpointer ignored UNUSED)
+{
+	GError *err;
+	gchar source[64];
+	gchar suffix[LIMIT_LENGTH_BASESUFFIX]= {'\0'};
+	struct sqlx_name_inline_s name;
+	NAME2CONST(n0, name);
+
+	err = _load_sqlx_name(reply, &name, NULL);
+	if (err != NULL) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	EXTRACT_STRING2(NAME_MSGKEY_SUFFIX, suffix, TRUE);
+	if (!*suffix) {
+		reply->send_error(0, BADREQ("Missing suffix for local copy"));
+		return TRUE;
+	}
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	err = sqlx_repository_open_and_lock(repo, &n0,
+			SQLX_OPEN_LOCAL, &sq3, NULL);
+	if (err != NULL) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+	gchar *copy_path = g_strdup_printf("%s.%s",sq3->path_inline, suffix);
+	err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+	if (err != NULL) {
+		g_prefix_error(&err, "Failed to make local copy of %s to %s: ",
+				sq3->path_inline, copy_path);
+		g_free(copy_path);
+		reply->send_error(0, err);
+		return TRUE;
+	}
+	g_free(copy_path);
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
+	EXTRACT_STRING("SRC", source);
+	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
+
+	reply->send_reply(CODE_FINAL_OK, "OK");
+
+	return TRUE;
+}
+
+static gboolean
 _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
@@ -2110,6 +2158,8 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_INFO,    (hook) sqlx_dispatch_all, _handler_INFO},
 		{NAME_MSGNAME_SQLX_LEANIFY, (hook) sqlx_dispatch_all, _handler_LEANIFY},
 		{NAME_MSGNAME_SQLX_BALM,    (hook) sqlx_dispatch_all, _handler_BALM},
+
+		{NAME_MSGNAME_SQLX_LOCAL_COPY,    (hook) sqlx_dispatch_all, _handler_LOCAL_COPY},
 
 		{NULL, NULL, NULL}
 	};

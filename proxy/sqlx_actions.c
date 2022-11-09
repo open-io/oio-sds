@@ -130,10 +130,11 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		return _reply_format_error(args,
 				BADREQ("Action argument must be an object"));
 
-	struct json_object *jto = NULL, *jfrom = NULL;
+	struct json_object *jto = NULL, *jfrom = NULL, *jlocal=NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"to",   &jto,  json_type_string, 1},
+		{"to",   &jto,  json_type_string, 0},
 		{"from", &jfrom, json_type_string, 0},
+		{"local", &jlocal, json_type_int, 0},
 		{NULL, NULL, 0, 0},
 	};
 
@@ -141,13 +142,17 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	if (err)
 		return _reply_format_error(args, err);
 
+	gint32 local_copy = json_object_get_int(jlocal);
+
 	const gchar *to = json_object_get_string(jto);
-	if (!metautils_url_valid_for_connect(to))
+	if (!local_copy && !metautils_url_valid_for_connect(to))
 		return _reply_format_error(args, BADREQ("Invalid target URL"));
 	const gchar *from = NULL;
+
+	const gchar *init_suffix = NULL;
 	if (jfrom) {
 		from = json_object_get_string(jfrom);
-		if (!metautils_url_valid_for_connect(to))
+		if (!metautils_url_valid_for_connect(from))
 			return _reply_format_error(args, BADREQ("Invalid source URL"));
 	}
 
@@ -159,7 +164,11 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 
 	gint64 seq = 1;
 	enum http_rc_e rc;
-	CLIENT_CTX2(ctx, args, dirtype, seq, SUFFIX(), CLIENT_PREFER_NONE,
+	if (!local_copy) {
+		init_suffix = SUFFIX();
+	}
+
+	CLIENT_CTX2(ctx, args, dirtype, seq, init_suffix, CLIENT_PREFER_NONE,
 			NULL, NULL);
 	if (!from) {
 		/* No source, locate services from directory and use DB_PIPETO. */
@@ -170,12 +179,19 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		}
 		rc = _sqlx_action_noreturn_TAIL(args, &ctx, _pack);
 	} else {
-		/* Source service provided, use DB_PIPEFROM. */
 		NAME2CONST(n, ctx.name);
-		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from, -1, DL());
-		err = gridd_client_exec(to,
-				oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
-				encoded);
+		if (local_copy) {
+			GByteArray *encoded = sqlx_pack_LOCAL_COPY(&n, from, SUFFIX(), DL());
+			err = gridd_client_exec(from,
+					oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
+					encoded);
+		} else {
+			/* Source service provided, use DB_PIPEFROM. */
+			GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from, -1, DL());
+			err = gridd_client_exec(to,
+					oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
+					encoded);
+		}
 		if (err) {
 			rc = _reply_common_error(args, err);
 		} else {

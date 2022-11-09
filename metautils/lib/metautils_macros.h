@@ -116,6 +116,7 @@ License along with this library.
 #define NAME_MSGKEY_VERSIONMARKER      "VER_MRK"
 #define NAME_MSGKEY_NEXTVERSIONMARKER  "VER_MRK_NXT"
 #define NAME_MSGKEY_QUEUE_URL          "QUEUE"
+#define NAME_MSGKEY_SUFFIX             "SUFFIX"
 
 #define NS_STATE_VALUE_MASTER     "master"
 #define NS_STATE_VALUE_SLAVE      "slave"

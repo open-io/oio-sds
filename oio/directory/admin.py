@@ -249,6 +249,22 @@ class AdminClient(ProxyClient):
         self._request("POST", "/copy", params=params, json={"to": svc_to}, **kwargs)
 
     @loc_params
+    def copy_base_local(self, params, svc_from, **kwargs):
+        """
+        Make a local copy of database using SYSCALL api.
+
+        :param svc_from: id of the source service.
+        :param suffix: suffix appended to name of local copy.
+        """
+        suffix = params.get("suffix", None)
+        if not suffix:
+            raise ValueError("Missing suffix for local copy")
+
+        # Force local parameter to make a local copy
+        data = {"from": svc_from, "local": 1}
+        self._request("POST", "/copy", params=params, json=data, **kwargs)
+
+    @loc_params
     def remove_base(self, params, **kwargs):
         """
         Remove specific base.
