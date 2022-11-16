@@ -19,6 +19,7 @@ from datetime import datetime
 
 from mock import MagicMock as Mock, patch
 from nose.plugins.attrib import attr
+from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
 
 from oio.billing.agent import BillingAgent
 from oio.common.constants import M2_PROP_BUCKET_NAME
@@ -63,6 +64,8 @@ class TestBillingAgent(BaseTestCase):
         # Storage classes
         "storage_class.GLACIER": "SINGLE,TWOCOPIES",
         "storage_class.STANDARD": "THREECOPIES,EC",
+        "ns.region": "LOCALHOST",
+        "ranking_size": 2,
     }
 
     def setUp(self):
@@ -448,63 +451,44 @@ class TestBillingAgent(BaseTestCase):
         )
 
     def test_scan(self):
-        # Buckets with data
-        for _ in range(3):
-            account_name = self.CONF["reseller_prefix"] + random_id(8)
+        top_objects = []
+        top_bytes = []
+
+        def _create_container(prefix="", data="test", nb_objects=0):
+            account_name = prefix + random_id(8)
             bucket_name = random_id(16).lower()
             self.storage.container_create(
-                account_name, bucket_name, system={M2_PROP_BUCKET_NAME: bucket_name}
-            )
-            reqid = request_id()
-            self.storage.object_create(
                 account_name,
                 bucket_name,
-                obj_name=random_id(8),
-                data="test",
-                reqid=reqid,
+                system={M2_PROP_BUCKET_NAME: bucket_name},
             )
-            self.wait_for_event(
-                "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
+            self.bucket.bucket_create(bucket_name, account_name)
+            for _ in range(nb_objects):
+                reqid = request_id()
+                self.storage.object_create(
+                    account_name,
+                    bucket_name,
+                    obj_name=random_id(8),
+                    data=data,
+                    reqid=reqid,
+                )
+                self.wait_for_event(
+                    "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
+                )
+            top_objects.append((bucket_name, nb_objects))
+            top_bytes.append((bucket_name, len(data) * nb_objects))
+
+        # Buckets with data
+        for i in range(3):
+            _create_container(
+                self.CONF["reseller_prefix"], data="content", nb_objects=i * 2
             )
         # Bucket without reseller prefix
-        account_name = random_id(8)
-        bucket_name = random_id(16).lower()
-        self.storage.container_create(
-            account_name, bucket_name, system={M2_PROP_BUCKET_NAME: bucket_name}
-        )
-        reqid = request_id()
-        self.storage.object_create(
-            account_name, bucket_name, obj_name=random_id(8), data="test", reqid=reqid
-        )
-        self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-        )
+        _create_container(data="data", nb_objects=1)
         # Bucket without data
-        account_name = self.CONF["reseller_prefix"] + random_id(8)
-        bucket_name = random_id(16).lower()
-        self.storage.container_create(
-            account_name, bucket_name, system={M2_PROP_BUCKET_NAME: bucket_name}
-        )
-        reqid = request_id()
-        self.storage.object_create(
-            account_name, bucket_name, obj_name=random_id(8), data="", reqid=reqid
-        )
-        self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-        )
+        _create_container(self.CONF["reseller_prefix"], data="", nb_objects=1)
         # Bucket without object
-        account_name = self.CONF["reseller_prefix"] + random_id(8)
-        bucket_name = random_id(16).lower()
-        reqid = request_id()
-        self.storage.container_create(
-            account_name,
-            bucket_name,
-            system={M2_PROP_BUCKET_NAME: bucket_name},
-            reqid=reqid,
-        )
-        self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_NEW,)
-        )
+        _create_container(self.CONF["reseller_prefix"], data="", nb_objects=0)
 
         buckets = self.agent.backend.list_all_buckets()
         nb_buckets = 0
@@ -517,14 +501,29 @@ class TestBillingAgent(BaseTestCase):
                 continue
             nb_sent_buckets += 1
 
+        self.assertEqual(6, nb_buckets)
+
+        top_bytes.sort(reverse=True, key=lambda x: x[1])
+        top_objects.sort(reverse=True, key=lambda x: x[1])
+
         channel = FakeChannel()
         with patch(
             "oio.billing.agent.BillingAgent._amqp_connect",
             Mock(return_value=(FakeConnection(), channel)),
         ) as mock_amqp_connect:
-            self.agent.scan()
-            mock_amqp_connect.assert_called_once()
-        self.assertEqual(1, self.agent.passes)
+            with patch(
+                "oio.account.backend_fdb.AccountBackendFdb.update_rankings",
+                Mock(return_value=None),
+            ) as mock_backend_update:
+                self.agent.scan()
+                mock_amqp_connect.assert_called_once()
+                self.assertEqual(1, self.agent.passes)
+                mock_backend_update.assert_called_once_with(
+                    {
+                        BYTES_FIELD: {"LOCALHOST": top_bytes[:2]},
+                        OBJECTS_FIELD: {"LOCALHOST": top_objects[:2]},
+                    }
+                )
         self.assertEqual(0, self.agent.errors)
         self.assertEqual(nb_sent_buckets, self.agent.buckets)
         self.assertEqual(nb_buckets - nb_sent_buckets, self.agent.ignored)

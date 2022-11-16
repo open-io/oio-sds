@@ -52,6 +52,7 @@ class Account(WerkzeugApp):
         self.url_map = Map(
             [
                 Rule("/status", endpoint="status", methods=["GET"]),
+                Rule("/rankings", endpoint="rankings", methods=["GET"]),
                 Rule("/metrics", endpoint="metrics", methods=["GET"]),
                 Rule(
                     "/metrics/recompute", endpoint="metrics_recompute", methods=["POST"]
@@ -272,6 +273,59 @@ class Account(WerkzeugApp):
     def on_metrics(self, req, **kwargs):
         output_type = req.args.get("format")
         raw = self.backend.info_metrics(output_type, **kwargs)
+        if output_type == "prometheus":
+            return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
+        else:
+            return Response(
+                json.dumps(raw, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+            )
+
+    # ACCT{{
+    # GET /rankings
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get all available information about buckets rankings.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /rankings HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn
+    #    Date: Thu, 30 Jun 2022 08:23:08 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 142
+    #
+    #    {
+    #      "last_updated": ,
+    #      "bytes": {
+    #        "REGION": [
+    #           {"name": "bucket1", "value": 123}
+    #          ],
+    #      },
+    #      "objects": {
+    #        "REGION": [
+    #           {"name": "bucket1", "value": 123}
+    #          ],
+    #        },
+    #      }
+    #    }
+    #
+    # }}ACCT
+    @force_master
+    def on_rankings(self, req, **kwargs):
+        output_type = req.args.get("format")
+        raw = self.backend.info_rankings(output_type, **kwargs)
         if output_type == "prometheus":
             return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
         else:

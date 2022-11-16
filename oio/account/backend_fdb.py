@@ -44,6 +44,7 @@ REGION_FIELD = "region"
 REGIONS_FIELD = "regions"
 CTIME_FIELD = "ctime"
 MTIME_FIELD = "mtime"
+LAST_UPDATE_FIELD = "last-update"
 COUNTERS_FIELDS = (
     BYTES_FIELD,
     OBJECTS_FIELD,
@@ -123,6 +124,8 @@ class AccountBackendFdb(object):
     BUCKET_RESERVE_PREFIX = "s3bucket"
     # Stats & metric prefix
     METRICS_PREFIX = "metrics"
+    # Rankings prefix
+    RANKINGS_PREFIX = "rankings"
 
     # Timeout for bucket reservation
     DEFAULT_BUCKET_RESERVATION_TIMEOUT = 30
@@ -179,6 +182,9 @@ class AccountBackendFdb(object):
             self.metrics_space = self.namespace.create_or_open(
                 self.db, self.metrics_prefix
             )
+            self.rankings_space = self.namespace.create_or_open(
+                self.db, self.rankings_prefix
+            )
         except Exception as exc:
             self.logger.warning("Directory create exception %s", exc)
             raise
@@ -212,6 +218,7 @@ class AccountBackendFdb(object):
         )
         self.metadata_prefix = conf.get("metadata_prefix", self.METADATA_PREFIX)
         self.metrics_prefix = conf.get("metrics_prefix", self.METRICS_PREFIX)
+        self.rankings_prefix = conf.get("rankings_prefix", self.RANKINGS_PREFIX)
         self.reserve_bucket_prefix = conf.get(
             "reserve_bucket_prefix", self.BUCKET_RESERVE_PREFIX
         )
@@ -378,7 +385,7 @@ class AccountBackendFdb(object):
                 raise Forbidden(f"Key {key} cannot be changed")
             tr.clear(space.pack((key,)))
 
-    # Status/metrics ----------------------------------------------------------
+    # Status/metrics/rankings -------------------------------------------------
 
     @catch_service_errors
     def status(self, **kwargs):
@@ -544,6 +551,85 @@ class AccountBackendFdb(object):
                             self.metrics_space.pack((key, counter_key)),
                             counter_value,
                         )
+
+    def _rankings_to_prometheus_format(self, rankings):
+        prom_output = []
+        prom_output.append(f"obsto_last_update {rankings[LAST_UPDATE_FIELD]}")
+        for field in (BYTES_FIELD, OBJECTS_FIELD):
+
+            for region, region_rankings in rankings[field].items():
+                for entry in region_rankings:
+                    prom_output.append(
+                        f"obsto_{field}{{region={region},bucket={entry['name']}}}"
+                        f" {entry['value']}"
+                    )
+        return "\n".join(prom_output)
+
+    @catch_service_errors
+    def info_rankings(self, output_type, **kwargs):
+        """
+        Get all available information about buckets rankings.
+        """
+        rankings = self._info_rankings(self.db, readonly=True)
+        if output_type == "prometheus":
+            return self._rankings_to_prometheus_format(rankings)
+        else:
+            return rankings
+
+    @fdb.transactional
+    @use_snapshot_reads
+    def _info_rankings(self, tr):
+        """
+        [transactional] Get all available information about rankings.
+        """
+        rankings_range = self.rankings_space.range()
+        iterator = tr.get_range(
+            rankings_range.start,
+            rankings_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all,
+        )
+        rankings = {LAST_UPDATE_FIELD: None, OBJECTS_FIELD: {}, BYTES_FIELD: {}}
+        for key, value in iterator:
+            field, *key = self.rankings_space.unpack(key)
+            if field == LAST_UPDATE_FIELD:
+                rankings[field] = self._timestamp_value_to_timestamp(value)
+                continue
+            if field not in (BYTES_FIELD, OBJECTS_FIELD):
+                self.logger.warning(f"Field '{field}' is not supported")
+                continue
+            region, bucket = key
+            region_rankings = rankings[field].setdefault(region, [])
+            region_rankings.append(
+                {"name": bucket, "value": self._counter_value_to_counter(value)}
+            )
+        return rankings
+
+    def update_rankings(self, rankings):
+        """
+        Update rankings
+        """
+        self._update_rankings(self.db, rankings)
+
+    @fdb.transactional
+    def _update_rankings(self, tr, global_rankings):
+
+        # Reset rankings
+        rankings_range = self.rankings_space.range()
+        tr.clear_range(rankings_range.start, rankings_range.stop)
+
+        for field in (BYTES_FIELD, OBJECTS_FIELD):
+            if field not in global_rankings:
+                self.logger.warning(f"Field '{field}' is missing")
+                continue
+
+            region_rankings = global_rankings[field]
+            for region, rankings in region_rankings.items():
+                for bucket, value in rankings:
+                    key = (field, region, bucket)
+                    self._set_counter(tr, self.rankings_space.pack(key), value)
+
+        now = self._get_timestamp()
+        self._set_timestamp(tr, self.rankings_space.pack((LAST_UPDATE_FIELD,)), now)
 
     # Account -----------------------------------------------------------------
 

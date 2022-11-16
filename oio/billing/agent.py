@@ -12,6 +12,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from datetime import datetime
+from functools import reduce
 import random
 import re
 import signal
@@ -19,12 +21,11 @@ import ssl
 import sys
 import time
 import uuid
-from datetime import datetime
 
 import pika
 from pika.exchange_type import ExchangeType
 
-from oio.account.backend_fdb import AccountBackendFdb
+from oio.account.backend_fdb import AccountBackendFdb, BYTES_FIELD, OBJECTS_FIELD
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import MalformedBucket
 from oio.common.json import json
@@ -44,6 +45,7 @@ class BillingAgent(object):
     DEFAULT_PUBLISHER_ID = "ceilometer.polling"
     DEFAULT_COUNTER_NAME = "storage.bucket.objects.size"
     DEFAULT_BATCH_SIZE = 50
+    DEFAULT_RANKING_SIZE = 10
 
     DEFAULT_AMQP_URL = "amqp://guest:guest@localhost:5672/"
     DEFAULT_AMQP_EXCHANGE = "swift"
@@ -75,6 +77,9 @@ class BillingAgent(object):
         self.counter_name = self.conf.get("counter_name", self.DEFAULT_COUNTER_NAME)
         self.batch_size = int_value(
             self.conf.get("batch_size"), self.DEFAULT_BATCH_SIZE
+        )
+        self.ranking_size = int_value(
+            self.conf.get("ranking_size"), self.DEFAULT_RANKING_SIZE
         )
 
         self.amqp_url = self.conf.get("amqp_url", self.DEFAULT_AMQP_URL)
@@ -161,6 +166,8 @@ class BillingAgent(object):
         self.ignored = 0
         self.buckets = 0
         self.messages = 0
+        self.per_objects_ranking = {}
+        self.per_size_ranking = {}
 
     def _report(self, tag, now):
         """
@@ -339,6 +346,33 @@ class BillingAgent(object):
         return bucket_bytes, [
             storage_class_stat[key] for key in sorted(storage_class_stat.keys())
         ]
+
+    def _update_ranking(self, ranking, value):
+        last = ranking[-1] if len(ranking) == self.ranking_size else None
+        if last and value[1] <= last[1]:
+            return
+        insert_idx = len(ranking)
+        for i, entry in enumerate(ranking):
+            if entry[1] <= value[1]:
+                insert_idx = i
+                break
+        ranking.insert(insert_idx, value)
+        if len(ranking) > self.ranking_size:
+            ranking.pop(-1)
+
+    def rank_sample(self, sample):
+        metadata = sample["resource_metadata"]
+        region = metadata["region_name"]
+        bucket_name = metadata["bucket_name"]
+        stats = metadata["storage_class_stat"]
+        bytes_used = metadata["counter_volume"]
+        object_count = reduce(lambda a, b: a + b, [e["object_count"] for e in stats])
+
+        objects_ranking = self.per_objects_ranking.setdefault(region, [])
+        size_ranking = self.per_size_ranking.setdefault(region, [])
+
+        self._update_ranking(objects_ranking, (bucket_name, object_count))
+        self._update_ranking(size_ranking, (bucket_name, bytes_used))
 
     def bucket_to_sample(self, bucket):
         """
@@ -522,6 +556,7 @@ class BillingAgent(object):
                     sample = self.bucket_to_sample(bucket)
                     if sample:
                         self.buckets += 1
+                        self.rank_sample(sample)
                         samples.append(sample)
                         if len(samples) >= self.batch_size:
                             try:
@@ -543,6 +578,13 @@ class BillingAgent(object):
                 except Exception:
                     self.errors += 1
                     self.logger.exception("Failed to send the last message")
+                # Publish rankings
+                self.backend.update_rankings(
+                    {
+                        BYTES_FIELD: self.per_size_ranking,
+                        OBJECTS_FIELD: self.per_objects_ranking,
+                    }
+                )
                 self.report("ended", force=True)
         finally:
             if channel.is_open:

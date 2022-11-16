@@ -882,6 +882,17 @@ class TestIamServer(TestAccountServerBase):
         self.assertEqual(resp.status_code, 204)
 
 
+class TestAccountRankings(TestAccountServerBase):
+    def setUp(self):
+        super(TestAccountRankings, self).setUp()
+
+    def test_rankings(self):
+        resp = self.app.get("/rankings")
+        self.assertEqual(200, resp.status_code)
+        resp = self.json_loads(resp.data)
+        self.assertDictEqual({"last-update": None, "bytes": {}, "objects": {}}, resp)
+
+
 class TestAccountMetrics(TestAccountServerBase):
     """
     Test account-related features of the account service.

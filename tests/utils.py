@@ -28,6 +28,7 @@ from urllib.parse import urlencode
 
 import yaml
 import testtools
+from oio.account.bucket_client import BucketClient
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
@@ -251,6 +252,7 @@ class CommonTestCase(testtools.TestCase):
         self._logger = None
         self._storage_api = None
         self._watchdog = None
+        self._bucket = None
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
         # Namespace configuration as it was when the test started
@@ -304,6 +306,12 @@ class CommonTestCase(testtools.TestCase):
         if not self._beanstalkd0:
             self._beanstalkd0 = Beanstalk.from_url(self.conf["main_queue_url"])
         return self._beanstalkd0
+
+    @property
+    def bucket(self):
+        if not self._bucket:
+            self._bucket = BucketClient(self.conf)
+        return self._bucket
 
     @property
     def storage(self):
