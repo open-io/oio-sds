@@ -737,7 +737,11 @@ class LifecycleRuleFilter(object):
 
     def create_noncurrent_view(self, formated_time=None, **kwargs):
         # Create forced on meta2 side
-        _query = "VIEW noncurrent_view AS SELECT * FROM aliases AS al"
+        _query = (
+            "VIEW noncurrent_view AS SELECT *, "
+            "ROW_NUMBER() OVER (PARTITION BY al.alias) AS row_id FROM aliases"
+            " AS al"
+        )
 
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
@@ -860,17 +864,22 @@ class LifecycleRuleFilter(object):
             )
         return _query
 
-    def noncurrent_query(self):
+    def noncurrent_query(self, noncurrent_versions):
         """
         Deal with non current versions
         """
+
+        #
+        if noncurrent_versions is None:
+            noncurrent_versions = 0
         # SELECT is forced on meta2 side
         query = (
-            " ,cv.nb_versions,"
+            f" , (cv.nb_versions - 1 - {noncurrent_versions}) AS"
+            " noncurrent_nb_candidates,"
             " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
-            " AS count FROM noncurrent_view AS al"
+            " AS count, row_id FROM noncurrent_view AS al"
             " INNER JOIN current_view AS cv ON "
-            " al.alias=cv.alias"
+            " al.alias=cv.alias WHERE row_id <= noncurrent_nb_candidates"
         )
         return query
 

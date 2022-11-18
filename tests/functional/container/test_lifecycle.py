@@ -1809,7 +1809,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
 
                         view_queries["noncurrent_view"] = noncurrent_view
                         view_queries["current_view"] = current_view
-                        queries["base"] = el.filter.noncurrent_query()
+                        queries["base"] = el.filter.noncurrent_query(
+                            newer_non_current_versions)
                     # versioning for Expiration/Transition
                     else:
                         delete_marker_view = el.filter.create_common_views(
