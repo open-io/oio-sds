@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,15 +16,13 @@
 
 import ssl
 
-from six import text_type
-from six.moves.urllib_parse import quote
+from urllib.parse import quote
 
 from oio.common.green import (
     socket,
     HTTPConnection,
     HTTPSConnection,
     HTTPResponse,
-    _UNKNOWN,
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time
@@ -33,51 +31,23 @@ logger = get_logger({}, __name__)
 
 
 class CustomHTTPResponse(HTTPResponse):
-    def __init__(self, sock, debuglevel=0, strict=0, method=None, url=None):
+    def __init__(self, sock, *args, **kwargs):
+        super().__init__(sock, *args, **kwargs)
         self.sock = sock
-        try:
-            self._actual_socket = sock.fd._sock
-        except AttributeError:
-            try:
-                self._actual_socket = sock.fd
-            except AttributeError:
-                # SSL doesn't expose fd
-                self._actual_socket = None
-
-        self.fp = sock.makefile("rb")
-        self.debuglevel = debuglevel
-        self.strict = strict
-        self._method = method
-
-        self.headers = self.msg = None
-
-        self.version = _UNKNOWN
-        self.status = _UNKNOWN
-        self.reason = _UNKNOWN
-        self.chunked = _UNKNOWN
-        self.chunk_left = _UNKNOWN
-        self.length = _UNKNOWN
-        self.will_close = _UNKNOWN
 
     def read(self, amount=None):
         try:
-            return HTTPResponse.read(self, amount)
+            return super().read(amount)
         except (ValueError, AttributeError) as err:
             # We have seen that in production but could not reproduce.
             # This message will help us track the error further.
             if "no attribute 'recv'" in str(err) or "Read on closed" in str(err):
-                raise IOError("reading socket after close")
-            else:
-                raise
-
-    def force_close(self):
-        if self._actual_socket:
-            self._actual_socket.close()
-        self._actual_socket = None
-        self.close()
+                raise IOError("reading socket after close") from err
+            raise
 
     def close(self):
-        HTTPResponse.close(self)
+        if not self.isclosed():
+            super().close()
         if self.sock:
             try:
                 # Prevent long CLOSE_WAIT state
@@ -85,14 +55,13 @@ class CustomHTTPResponse(HTTPResponse):
             except socket.error:
                 pass
         self.sock = None
-        self._actual_socket = None
 
 
 class CustomHttpConnection(HTTPConnection):
     response_class = CustomHTTPResponse
 
     def connect(self):
-        conn = HTTPConnection.connect(self)
+        conn = super().connect()
         self.set_nodelay(True)
         return conn
 
@@ -111,14 +80,11 @@ class CustomHttpConnection(HTTPConnection):
         )
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
-        self._method = method
         self._path = url
-        return HTTPConnection.putrequest(
-            self, method, url, skip_host, skip_accept_encoding
-        )
+        return super().putrequest(method, url, skip_host, skip_accept_encoding)
 
     def getresponse(self):
-        response = HTTPConnection.getresponse(self)
+        response = super().getresponse()
         logger.debug("HTTP %s %s:%s %s", self._method, self.host, self.port, self._path)
         return response
 
@@ -127,7 +93,7 @@ class CustomHttpsConnection(HTTPSConnection):
     response_class = CustomHTTPResponse
 
     def connect(self):
-        conn = HTTPSConnection.connect(self)
+        conn = super().connect()
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return conn
 
@@ -138,14 +104,11 @@ class CustomHttpsConnection(HTTPSConnection):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1 if enabled else 0)
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
-        self._method = method
         self._path = url
-        return HTTPSConnection.putrequest(
-            self, method, url, skip_host, skip_accept_encoding
-        )
+        return super().putrequest(method, url, skip_host, skip_accept_encoding)
 
     def getresponse(self):
-        response = HTTPSConnection.getresponse(self)
+        response = super().getresponse()
         logger.debug(
             "HTTPS %s %s:%s %s", self._method, self.host, self.port, self._path
         )
@@ -162,11 +125,11 @@ def http_connect(
     perfdata=None,
     perfdata_suffix=None,
 ):
-    if isinstance(path, text_type):
+    if isinstance(path, str):
         try:
             path = path.encode("utf-8")
-        except UnicodeError as e:
-            logger.exception("ERROR encoding to UTF-8: %s", text_type(e))
+        except UnicodeError as uerr:
+            logger.exception("ERROR encoding to UTF-8: %s", uerr)
     if path.startswith(b"/"):
         path = quote(path)
     else:
