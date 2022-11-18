@@ -4042,7 +4042,6 @@ meta2_backend_create_lifecycle_views(struct meta2_backend_s *m2b,
 	if (jcurrent_view) {
 		current_view_create = json_object_get_string(jcurrent_view);
 	}
-
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4431,15 +4430,15 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 	guint32 count_rows = 0, count_versions = 0;
 	gint32 count_objects = 0;
-	gchar *object_name_to_process = NULL;
-
+	gchar object_name_to_process[1025] = {0};
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
 		gint64 mtime = sqlite3_column_int64(stmt, 4);
 
 		if (count_versions == 0) {
-			object_name_to_process = g_strdup(object_name);
+			g_snprintf(object_name_to_process, sizeof(object_name_to_process),
+					"%s", object_name);
 			count_versions++;
 			count_objects++;
 		} else if (g_strcmp0(object_name_to_process, object_name)==0) {
@@ -4448,13 +4447,12 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		} else {
 			// new object
 			count_versions = 1;
-			g_free(object_name_to_process);
-			object_name_to_process = g_strdup(object_name);
+			g_snprintf(object_name_to_process, sizeof(object_name_to_process),
+					"%s", object_name);
 			count_objects++;
 		}
 
 		if (count_objects > batch_size) {
-			count_rows--;
 			break;
 		}
 
