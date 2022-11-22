@@ -1238,6 +1238,12 @@ _local__patch(struct oio_lb_pool_s *self,
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_init(&ctx.counters[level]);
 	}
+	// If the locations are already known, update the counters
+	if (ctx.polled) {
+		for (const oio_location_t *loc = ctx.polled; *loc; loc++) {
+			_level_datalist_incr_loc(ctx.counters, *loc);
+		}
+	}
 
 	g_rw_lock_reader_lock(&lb->world->lock);
 	gchar *unmatched_targets[count_targets+1];
