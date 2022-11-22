@@ -30,6 +30,7 @@ from oio.container.lifecycle import (
     NoncurrentVersionTransition,
     DateActionFilter,
     DaysActionFilter,
+    NoncurrentCountActionFilter,
     DeletedMarkerActionFilter,
 )
 from oio.common.exceptions import NoSuchObject
@@ -1510,9 +1511,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
     def setUp(self):
         super(TestLifecycleConform, self).setUp()
         self.batch_size = 2
-        self.to_match = []
-        self.not_to_match = []
-        self.to_match_markers = []
+        self.to_match = {}
+        self.not_to_match = {}
+        self.to_match_markers = {}
         self.lifecycle = ContainerLifecycle(self.api, self.account, self.container)
         self.proxy_client = ProxyClient(
             self.conf, pool_manager=self.api.container.pool_manager, logger=self.logger
@@ -1538,7 +1539,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
 
         self.versioning_enabled = False
         self.number_of_versions = 1
-        self.expected_to_cycle = 1
+        self.expected_to_cycle = {}
 
         self.end_source = """</And>
                     </Filter>
@@ -1554,6 +1555,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
             <TagSet><Tag><Key>excluded-key</Key><Value>value1</Value></Tag>
             </Tagset></Tagging>"""
 
+        # dict to store rules and actions
+        self.rules = {}
+
     def tearDown(self):
         objects = self.api.object_list(
             self.account, self.container, deleted=True, versions=True
@@ -1565,6 +1569,16 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
             )
         self.api.container_delete(self.account, self.container, force=True)
         super(TestLifecycleConform, self).tearDown()
+
+    def _init_match_rules(self):
+        for rule, actions in self.rules.items():
+            self.to_match[rule] = {}
+            self.not_to_match[rule] = {}
+            self.to_match_markers[rule] = {}
+            for action in actions:
+                self.to_match[rule][action] = []
+                self.not_to_match[rule][action] = []
+                self.to_match_markers[rule][action] = []
 
     def _create_container_versioning(self, lifecycle_source):
         self.api.container_create(
@@ -1634,6 +1648,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 days = act.filter.days
             elif type(act.filter) == DaysActionFilter:
                 date = act.filter.date
+            elif type(act.filter) == NoncurrentCountActionFilter:
+                days = act.filter.days
             else:
                 raise ValueError(
                     "Unsopported filter %s for action %s", type(act.filter), act
@@ -1648,6 +1664,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         newer_non_current_versions,
         policy,
         last_rule_action,
+        rule_id,
     ):
         for key_query, val_query in queries.items():
             offset = 0
@@ -1662,7 +1679,6 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     sql_query = (
                         f"{sql_query} limit {self.batch_size} " f" offset {offset} "
                     )
-
                 kwargs = {}
                 params = {"cid": self.cid, "service_id": self.peer_to_use}
                 data = {}
@@ -1680,7 +1696,10 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         json=create_views_data,
                         **kwargs,
                     )
+                    self.assertEqual(resp.status, 204)
+
                 data["query"] = sql_query
+                data["query_set_tag"] = val_query
                 # force checks non_current_days
                 data["newerNoncurrentDays"] = 0
                 data["newerNoncurrentVersions"] = newer_non_current_versions
@@ -1698,14 +1717,15 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     json=data,
                     **kwargs,
                 )
+                self.assertEqual(resp.status, 204)
                 count = int(resp.getheader("x-oio-count"))
                 offset += count
                 count_events = 0
 
                 if action in ("Expiration", "Transition"):
-                    exptected_events = count * self.expected_to_cycle
+                    exptected_events = count * self.expected_to_cycle[rule_id][action]
                 else:
-                    exptected_events = self.expected_to_cycle
+                    exptected_events = self.expected_to_cycle[rule_id][action]
 
                 while count_events < exptected_events:
                     event = self.wait_for_kafka_event(
@@ -1717,7 +1737,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     self.assertEqual(event.data["container"], self.container)
 
                     elements_to_match = (
-                        self.to_match if key_query == "base" else self.to_match_markers
+                        self.to_match[rule_id][action]
+                        if key_query == "base"
+                        else self.to_match_markers[rule_id][action]
                     )
 
                     [found, elem_to_remove] = self._check_event(
@@ -1728,9 +1750,10 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         print("elements_to_match:", elements_to_match)
                         print("event.data:", event.data)
                     self.assertEqual(found, True)
+
                     list_of_bool = [
                         True
-                        for elem in self.not_to_match
+                        for elem in self.not_to_match[rule_id][action]
                         if event.data["object"]
                         and event.data["version"] in elem.values()
                     ]
@@ -1755,6 +1778,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         count_rules = 0
         count_actions = 0
         for el in lc.rules:
+            rule_id = el.id
             for act in el.actions:
                 # Force expiration for test
                 days_in_sec = None
@@ -1810,7 +1834,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         view_queries["noncurrent_view"] = noncurrent_view
                         view_queries["current_view"] = current_view
                         queries["base"] = el.filter.noncurrent_query(
-                            newer_non_current_versions)
+                            newer_non_current_versions
+                        )
+
                     # versioning for Expiration/Transition
                     else:
                         delete_marker_view = el.filter.create_common_views(
@@ -1861,11 +1887,12 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     newer_non_current_versions,
                     policy,
                     last_rule_action,
+                    rule_id,
                 )
 
-            count_actions += 1
-            self.assertEqual(len(self.to_match), 0)
-            self.assertEqual(len(self.to_match_markers), 0)
+                count_actions += 1
+                self.assertEqual(len(self.to_match[rule_id][action]), 0)
+                self.assertEqual(len(self.to_match_markers[rule_id][action]), 0)
         count_rules += 1
 
 
@@ -1873,6 +1900,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
     def setUp(self):
         super(TestLifecycleConformExpiration, self).setUp()
         self.action = "Expiration"
+        self.rule_id = "rule1"
+        self.begin_source = (
+            """<LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <And>"""
+        )
+
         self.end_source = """</And>
                     </Filter>
                     <Status>Enabled</Status>
@@ -1882,14 +1920,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 </Rule>
             </LifecycleConfiguration>"""
 
-    def tearDown(self):
-        super(TestLifecycleConformExpiration, self).tearDown()
+        self.rules[self.rule_id] = {}
+        self.rules[self.rule_id][self.action] = []
+        self._init_match_rules()
 
-    def test_apply_prefix(self):
-        source = """
+        self.source_prefix = (
+            """
             <LifecycleConfiguration>
                 <Rule>
-                    <ID>rule1</ID>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
                     <Filter>
                         <Prefix>a/</Prefix>
                     </Filter>
@@ -1900,107 +1941,27 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 </Rule>
             </LifecycleConfiguration>
             """
-        self._create_container_versioning(source)
+        )
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule_id] = {}
+        self.expected_to_cycle[self.rule_id][self.action] = 1
+
+    def tearDown(self):
+        super(TestLifecycleConformExpiration, self).tearDown()
+
+    def test_apply_prefix(self):
+
+        self._create_container_versioning(self.source_prefix)
 
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/")
-            self.to_match.append(obj_meta)
+            self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/")
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
-        self._check_and_apply(source)
-
-    def test_apply_prefix_and_greater(self):
-        data_short = "some data"
-        data_long = "some data and more"
-        middle = (len(data_short) + len(data_long)) // 2
-
-        source = (
-            """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>
-                        <Prefix>a/</Prefix>
-                        <ObjectSizeGreaterThan>"""
-            f"{middle}"
-            """</ObjectSizeGreaterThan>
-                        </And>
-                    </Filter>
-                    <Status>Enabled</Status>
-                    <Expiration>
-                        <Days>10</Days>
-                    </Expiration>
-                </Rule>
-            </LifecycleConfiguration>"""
-        )
-
-        self._create_container_versioning(source)
-
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(prefix="a/", data=data_long)
-            self.to_match.append(obj_meta)
-
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(prefix="a/", data=data_short)
-            self.not_to_match.append(obj_meta)
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(prefix="b/", data=data_short)
-            self.not_to_match.append(obj_meta)
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(prefix="b/", data=data_long)
-            self.not_to_match.append(obj_meta)
-        self._check_and_apply(source)
-
-    def test_apply_prefix_and_lesser(self):
-        data_short = "some data"
-        data_long = "some data and more"
-        middle = (len(data_short) + len(data_long)) // 2
-
-        source = (
-            """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>
-                            <Prefix>a/</Prefix>
-                            <ObjectSizeLessThan>"""
-            f"{middle}"
-            """
-                            </ObjectSizeLessThan>
-                        </And>
-                    </Filter>
-                    <Status>Enabled</Status>
-                    <Expiration>
-                        <Days>10</Days>
-                    </Expiration>
-                </Rule>
-            </LifecycleConfiguration>"""
-        )
-
-        self._create_container_versioning(source)
-
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(prefix="a/", data=data_long)
-            self.not_to_match.append(obj_meta)
-
-        for _ in range(self.number_match):
-            obj_meta = self._upload_something(prefix="a/", data=data_short)
-            self.to_match.append(obj_meta)
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(prefix="b/", data=data_short)
-            self.not_to_match.append(obj_meta)
-
-        for _ in range(self.number_not_match):
-            obj_meta = self._upload_something(prefix="b/", data=data_long)
-            self.not_to_match.append(obj_meta)
-
-        self._check_and_apply(source)
+        self._check_and_apply(self.source_prefix)
 
     def _upload_expected_combine1(self):
         for _ in range(self.number_not_match):
@@ -2009,7 +1970,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_short, random_length=5
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_match):
             name = self.prefix + random_str(5)
@@ -2018,17 +1979,13 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     name=name, data=self.data_long, random_length=6
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
     def test_combine1(self):
         # ["prefix", "greater"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
+
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
         greater = self.conditions["greater"]
         source = f"{source}<ObjectSizeGreaterThan>{greater}"
@@ -2043,13 +2000,8 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
 
     def test_combine2(self):
         # ["prefix", "lesser"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         lesser = self.conditions["lesser"]
@@ -2066,7 +2018,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     name=name, data=self.data_middle, random_length=4
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2075,29 +2027,24 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     name=name, data=self.data_short, random_length=5
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "2" + random_str(5)
             obj_meta = self._upload_something(
                 name=name, data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine3(self):
         # ["prefix", "tag1"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2124,7 +2071,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2135,22 +2082,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine4(self):
         # [prefix, tag1, tag2]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2184,7 +2126,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2195,22 +2137,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine5(self):
         # ["prefix", "tag1", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2251,7 +2188,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "j" + random_str(5)
@@ -2262,22 +2199,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine6(self):
         # ["prefix", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         key = list(self.conditions["tag2"].keys())[0]
@@ -2310,7 +2242,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2321,21 +2253,16 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine7(self):
         # ["prefix", "greater", "lesser", "tag1"])
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
+        source = f"{self.begin_source}<Prefix>{val}"
         source = f"{source}</Prefix>"
 
         greater = self.conditions["greater"]
@@ -2362,7 +2289,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_middle, random_length=4
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = "not-prefix-" + str(j) + random_str(5)
@@ -2370,7 +2297,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_short, random_length=5
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = "not-prefix-" + str(j) + random_str(5)
@@ -2378,7 +2305,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_long, random_length=6
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = "not-prefix-" + str(j) + random_str(5)
@@ -2389,7 +2316,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = "not-prefix-" + str(j) + random_str(5)
@@ -2400,7 +2327,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2409,7 +2336,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2417,7 +2344,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 data=self.data_middle,
                 random_length=4,
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2425,7 +2352,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 data=self.data_short,
                 random_length=5,
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2433,7 +2360,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 data=self.data_long,
                 random_length=6,
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2442,7 +2369,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=4,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2451,7 +2378,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2460,7 +2387,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2468,7 +2395,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 data=self.data_middle,
                 random_length=4,
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2476,13 +2403,13 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 data=self.data_short,
                 random_length=5,
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=self.prefix + random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = self.prefix + str(j) + random_str(5)
@@ -2494,7 +2421,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2503,7 +2430,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2512,19 +2439,14 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine8(self):
         # ["greater', 'lesser"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         lesser = self.conditions["lesser"]
@@ -2541,33 +2463,28 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     name=name, data=self.data_middle, random_length=4
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_short, random_length=5
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
         self._check_and_apply(source)
 
     def test_combine9(self):
         # ["greater", "lesser", "tag1"])
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         lesser = self.conditions["lesser"]
@@ -2588,19 +2505,19 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_middle, random_length=4
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(5), data=self.data_short, random_length=5
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
                 prefix=random_str(6), data=self.data_long, random_length=6
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -2612,7 +2529,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2621,7 +2538,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2630,22 +2547,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine10(self):
         # ["greater", "tag2"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         key = list(self.conditions["tag2"].keys())[0]
@@ -2668,7 +2580,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -2680,22 +2592,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine11(self):
         # ["greater", "tag1", "tag2"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2725,7 +2632,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2734,7 +2641,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -2746,22 +2653,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine12(self):
         # ["greater", "tag1", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2798,7 +2700,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2807,7 +2709,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -2819,22 +2721,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine13(self):
         # ["greater", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
+        source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
         source = f"{source}</ObjectSizeGreaterThan>"
 
         key = list(self.conditions["tag2"].keys())[0]
@@ -2863,7 +2760,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2872,7 +2769,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=5,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -2884,22 +2781,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine14(self):
         # ["lesser", "tag1"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         lesser = self.conditions["lesser"]
-        source = f"{source}<ObjectSizeLessThan>{lesser}"
+        source = f"{self.begin_source}<ObjectSizeLessThan>{lesser}"
         source = f"{source}</ObjectSizeLessThan>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -2924,7 +2816,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -2936,7 +2828,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2945,7 +2837,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "2" + random_str(5)
@@ -2956,22 +2848,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine15(self):
         # ["lesser", "tag1", "tag2"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         lesser = self.conditions["lesser"]
-        source = f"{source}<ObjectSizeLessThan>{lesser}"
+        source = f"{self.begin_source}<ObjectSizeLessThan>{lesser}"
         source = f"{source}</ObjectSizeLessThan>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -3004,7 +2891,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3016,7 +2903,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "2" + random_str(5)
@@ -3026,7 +2913,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "3" + random_str(5)
@@ -3036,22 +2923,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine16(self):
         # ["lesser", "tag1", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         lesser = self.conditions["lesser"]
-        source = f"{source}<ObjectSizeLessThan>{lesser}"
+        source = f"{self.begin_source}<ObjectSizeLessThan>{lesser}"
         source = f"{source}</ObjectSizeLessThan>"
 
         key = list(self.conditions["tag1"].keys())[0]
@@ -3091,7 +2973,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3103,7 +2985,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3112,7 +2994,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3121,22 +3003,17 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine17(self):
         # ["lesser", "tag2", "tag3"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         lesser = self.conditions["lesser"]
-        source = f"{source}<ObjectSizeLessThan>{lesser}"
+        source = f"{self.begin_source}<ObjectSizeLessThan>{lesser}"
         source = f"{source}</ObjectSizeLessThan>"
 
         key = list(self.conditions["tag2"].keys())[0]
@@ -3168,7 +3045,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3180,7 +3057,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3189,7 +3066,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3198,23 +3075,18 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
     def test_combine18(self):
         # ["tag1", "tag2"]
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         key = list(self.conditions["tag1"].keys())[0]
         val = self.conditions["tag1"][key]
-        source = f"{source}<Tag><Key>{key}</Key><Value>{val}"
+        source = f"{self.begin_source}<Tag><Key>{key}</Key><Value>{val}"
         source = f"{source}</Value></Tag>"
         tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
         tag_set = f"{tag_set}</Value></Tag>"
@@ -3241,7 +3113,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3250,24 +3122,19 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.assertIsNot(len(self.to_match), 0)
 
         self._check_and_apply(source)
 
     def test_combine19(self):
         # ["tag1", "tag2", "tag3"])
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
         key = list(self.conditions["tag1"].keys())[0]
         val = self.conditions["tag1"][key]
-        source = f"{source}<Tag><Key>{key}</Key><Value>{val}"
+        source = f"{self.begin_source}<Tag><Key>{key}</Key><Value>{val}"
         source = f"{source}</Value></Tag>"
 
         tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
@@ -3302,7 +3169,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     properties={TAGGING_KEY: tag_set},
                 )
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3311,7 +3178,7 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 random_length=6,
                 properties={TAGGING_KEY: self.not_match_tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -3329,6 +3196,34 @@ class TestLifecycleConformTransition(TestLifecycleConformExpiration):
                         </Transition>
                     </Rule>
                 </LifecycleConfiguration>"""
+
+        self.source_prefix = (
+            """
+            <LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <Prefix>a/</Prefix>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Transition>
+                        <Days>10</Days>
+                        <StorageClass>STANDARD_IA</StorageClass>
+                    </Transition>
+                </Rule>
+            </LifecycleConfiguration>
+            """
+        )
+
+        self.rules[self.rule_id] = {}
+        self.rules[self.rule_id][self.action] = []
+
+        self._init_match_rules()
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule_id] = {}
+        self.expected_to_cycle[self.rule_id][self.action] = 1
 
     def tearDown(self):
         super(TestLifecycleConformTransition, self).tearDown()
@@ -3410,7 +3305,7 @@ class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -3421,7 +3316,7 @@ class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
         self._check_and_apply(source, nothing_to_match=True)
 
 
@@ -3467,7 +3362,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = str(j) + random_str(5)
@@ -3478,7 +3373,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, obj_meta["name"])
 
         self._check_and_apply(source, True)
@@ -3488,11 +3383,15 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
     def test_delete_marker_2(self):
         self.number_match = 2
         # ['greater', 'tag2']
-        source = """<LifecycleConfiguration>
+        source = (
+            """<LifecycleConfiguration>
                 <Rule>
-                    <ID>rule1</ID>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
                     <Filter>
                         <And>"""
+        )
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
@@ -3519,7 +3418,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                 random_length=5,
                 properties={TAGGING_KEY: tag_set},
             )
-            self.not_to_match.append(obj_meta)
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
         delete_markers = []
         names = []
         for j in range(self.number_match):
@@ -3532,11 +3431,11 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, name)
 
         time.sleep(0.1)
-        for el in self.not_to_match:
+        for el in self.not_to_match[self.rule_id][self.action]:
             self.api.object_delete(
                 self.account, self.container, el["name"], el["version"]
             )
@@ -3546,7 +3445,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
             )
             delete_markers.append(objects["objects"][0])
 
-        self.to_match_markers = delete_markers
+        self.to_match_markers[self.rule_id][self.action] = delete_markers
         self._check_and_apply(source, nothing_to_match=True)
 
     # Create some objects where:
@@ -3594,7 +3493,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                     time.sleep(0.01)
                     self.api.object_delete(self.account, self.container, name)
                 if i == self.number_of_versions - 1:
-                    self.to_match.append(obj_meta)
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -3605,7 +3504,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                     random_length=6,
                     properties={TAGGING_KEY: self.not_match_tag_set},
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
 
         names = []
         # the last version a delete marker, and not the only version
@@ -3620,7 +3519,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                     properties={TAGGING_KEY: tag_set},
                 )
 
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, name)
 
         self._check_and_apply(source)
@@ -3632,7 +3531,19 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         self.versioning_enabled = True
         self.number_of_versions = 4
         self.newer_non_current_versions = 1
+        self.rule_id = "rule1"
         self.action = "NoncurrentVersionExpiration"
+
+        self.begin_source = (
+            """<LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <And>"""
+        )
+        self.source = ""
         self.end_source = (
             """</And>
                     </Filter>
@@ -3648,9 +3559,16 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         )
 
         self.not_to_match_versions = []
-        self.expected_to_cycle = (
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule_id] = {}
+        self.expected_to_cycle[self.rule_id][self.action] = (
             self.number_of_versions - self.newer_non_current_versions - 1
         )
+
+        self.rules[self.rule_id] = {}
+        self.rules[self.rule_id][self.action] = []
+
+        self._init_match_rules()
 
     def tearDown(self):
         super(TestLifecycleNonCurrentVersionExpiration, self).tearDown()
@@ -3665,15 +3583,15 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_short, random_length=5
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
         for j in range(self.number_match):
             name = self.prefix + str(j) + random_str(5)
             for i in range(self.number_of_versions):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_long, random_length=6
                 )
-                if i < self.expected_to_cycle:
-                    self.to_match.append(obj_meta)
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
                     total_count_expected += 1
                 else:
                     # non current to retain
@@ -3683,26 +3601,525 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
                     self.not_to_match_versions.append(obj_meta)
         return total_count_expected
 
-    def test_cycle_versions(self):
+    def test_cycle_versions_combine1(self):
         # ['prefix', 'greater']
         # match only 2 non current versions per object
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
-        source = f"{source}</Prefix>"
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
-        source = f"{source}</ObjectSizeGreaterThan>"
-        source = f"{source} {self.end_source }"
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_source }"
 
-        self.expected_to_cycle = 2  # 2 version per object (1 object per batch)
-        self._create_container_versioning(source)
+        self.expected_to_cycle[self.rule_id][
+            self.action
+        ] = 2  # 2 version per object (1 object per batch)
+        self._create_container_versioning(self.source)
         self._upload_expected_combine1()
-        self._check_and_apply(source)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine2(self):
+        # ["prefix", "lesser"]
+        # match only 2 non current versions per object
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        lesser = self.conditions["lesser"]
+        self.source = f"{self.source}<ObjectSizeLessThan>{lesser}"
+        self.source = f"{self.source}</ObjectSizeLessThan>"
+
+        self.source = f"{self.source} {self.end_source }"
+
+        # 2 version per object (1 object per batch)
+        self.expected_to_cycle[self.rule_id][self.action] = 2
+        self._create_container_versioning(self.source)
+        self.numbr_match = 2
+        total_count_expected = 0
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=5
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=6
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                    total_count_expected += 1
+                else:
+                    # non current to retain
+                    self.not_to_match_versions.append(obj_meta)
+
+                if i == self.number_of_versions - 1:  # current version
+                    self.not_to_match_versions.append(obj_meta)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine3(self):
+        # ["prefix", "tag1"]
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        self.source = f"{self.source} {self.end_source }"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self._create_container_versioning(self.source)
+
+        self.expected_to_cycle[self.rule_id][self.action] = 2
+        self._create_container_versioning(self.source)
+        self.numbr_match = 2
+        total_count_expected = 0
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=5,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                    total_count_expected += 1
+                else:
+                    # non current to retain
+                    self.not_to_match_versions.append(obj_meta)
+
+                if i == self.number_of_versions - 1:  # current version
+                    self.not_to_match_versions.append(obj_meta)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine4(self):
+        # [prefix, tag1, tag2]
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        key = list(self.conditions["tag2"].keys())[0]
+        val = self.conditions["tag2"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        self.source = f"{self.source} {self.end_source }"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self._create_container_versioning(self.source)
+
+        self.expected_to_cycle[self.rule_id][self.action] = 2
+        self._create_container_versioning(self.source)
+        self.numbr_match = 2
+        total_count_expected = 0
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=5,
+                    properties={TAGGING_KEY: self.not_match_tag_set},
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                    total_count_expected += 1
+                else:
+                    # non current to retain
+                    self.not_to_match_versions.append(obj_meta)
+
+                if i == self.number_of_versions - 1:  # current version
+                    self.not_to_match_versions.append(obj_meta)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine7(self):
+        # ["prefix", "greater", "lesser", "tag1"])
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+
+        lesser = self.conditions["lesser"]
+        self.source = f"{self.source}<ObjectSizeLessThan>{lesser}"
+        self.source = f"{self.source}</ObjectSizeLessThan>"
+
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+        self.source = f"{self.source} {self.end_source }"
+
+        self._create_container_versioning(self.source)
+
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_middle, random_length=4
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_not_match):
+            name = "not-prefix-" + str(j) + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_short,
+                    random_length=5,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(6),
+                data=self.data_long,
+                random_length=6,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_middle,
+                random_length=4,
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_short,
+                random_length=5,
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(6),
+                data=self.data_long,
+                random_length=6,
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_middle,
+                random_length=4,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(5),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix="not-prefix-" + random_str(6),
+                data=self.data_long,
+                random_length=6,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=self.prefix + random_str(5),
+                data=self.data_middle,
+                random_length=4,
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=self.prefix + random_str(5),
+                data=self.data_short,
+                random_length=5,
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=self.prefix + random_str(6), data=self.data_long, random_length=6
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=self.prefix + random_str(5),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=self.prefix + random_str(6),
+                data=self.data_long,
+                random_length=6,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine8(self):
+        # ["greater', 'lesser"]
+
+        greater = self.conditions["greater"]
+        self.source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+
+        lesser = self.conditions["lesser"]
+        self.source = f"{self.source}<ObjectSizeLessThan>{lesser}"
+        self.source = f"{self.source}</ObjectSizeLessThan>"
+        self.source = f"{self.source} {self.end_source }"
+
+        self._create_container_versioning(self.source)
+
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_middle, random_length=4
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(5), data=self.data_short, random_length=5
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(6), data=self.data_long, random_length=6
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine9(self):
+        # ["greater", "lesser", "tag1"])
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        greater = self.conditions["greater"]
+        self.source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+
+        lesser = self.conditions["lesser"]
+        self.source = f"{self.source}<ObjectSizeLessThan>{lesser}"
+        self.source = f"{self.source}</ObjectSizeLessThan>"
+
+        key = list(self.conditions["tag1"].keys())[0]
+        val = self.conditions["tag1"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+        self.source = f"{self.source} {self.end_source }"
+
+        self._create_container_versioning(self.source)
+
+        for _ in range(self.number_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(5), data=self.data_middle, random_length=4
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(5), data=self.data_short, random_length=5
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(6), data=self.data_long, random_length=6
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_middle,
+                    random_length=4,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(5),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(6),
+                data=self.data_long,
+                random_length=6,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        self._check_and_apply(self.source)
+
+    def test_cycle_versions_combine10(self):
+        # ["greater", "tag2"]
+        tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+             <TagSet>"""
+
+        greater = self.conditions["greater"]
+        self.source = f"{self.begin_source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+
+        key = list(self.conditions["tag2"].keys())[0]
+        val = self.conditions["tag2"][key]
+        self.source = f"{self.source}<Tag><Key>{key}</Key><Value>{val}"
+        self.source = f"{self.source}</Value></Tag>"
+        tag_set = f"{tag_set}<Tag><Key>{key}</Key><Value>{val}"
+        tag_set = f"{tag_set}</Value></Tag>"
+
+        self.source = f"{self.source} {self.end_source }"
+
+        tag_set = f"{tag_set} " """</TagSet></Tagging>"""
+
+        self._create_container_versioning(self.source)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(
+                prefix=random_str(4),
+                data=self.data_short,
+                random_length=5,
+                properties={TAGGING_KEY: tag_set},
+            )
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        for j in range(self.number_match):
+            name = str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name,
+                    data=self.data_long,
+                    random_length=6,
+                    properties={TAGGING_KEY: tag_set},
+                )
+                if i < self.expected_to_cycle[self.rule_id][self.action]:
+                    self.to_match[self.rule_id][self.action].append(obj_meta)
+
+        self._check_and_apply(self.source)
 
     def test_cycle_zero_newer_non_current(self):
         # ['prefix', 'greater']
@@ -3725,25 +4142,21 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
 
         self.not_to_match_versions = []
 
-        self.expected_to_cycle = (
+        self.expected_to_cycle[self.rule_id][self.action] = (
             self.number_of_versions - self.newer_non_current_versions - 1
         )
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
-        val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
-        source = f"{source}</Prefix>"
-        greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
-        source = f"{source}</ObjectSizeGreaterThan>"
-        source = f"{source} {self.end_source }"
 
-        self._create_container_versioning(source)
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_source }"
+
+        self._create_container_versioning(self.source)
         self._upload_expected_combine1()
-        self._check_and_apply(source)
+        self._check_and_apply(self.source)
 
     def test_cycle_several_newer_non_current(self):
         # ['prefix', 'greater']
@@ -3766,25 +4179,21 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
 
         self.not_to_match_versions = []
 
-        self.expected_to_cycle = (
+        self.expected_to_cycle[self.rule_id][self.action] = (
             self.number_of_versions - self.newer_non_current_versions - 1
         )
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <And>"""
-        val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
-        source = f"{source}</Prefix>"
-        greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
-        source = f"{source}</ObjectSizeGreaterThan>"
-        source = f"{source} {self.end_source }"
 
-        self._create_container_versioning(source)
+        val = self.conditions["prefix"]
+        self.source = f"{self.begin_source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_source }"
+
+        self._create_container_versioning(self.source)
         self._upload_expected_combine1()
-        self._check_and_apply(source, nothing_to_match=True)
+        self._check_and_apply(self.source, nothing_to_match=True)
 
     def test_cycle_also_several_newer_non_current(self):
         # ['prefix', 'greater']
@@ -3807,25 +4216,25 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
 
         self.not_to_match_versions = []
 
-        self.expected_to_cycle = (
+        self.expected_to_cycle[self.rule_id][self.action] = (
             self.number_of_versions - self.newer_non_current_versions - 1
         )
-        source = """<LifecycleConfiguration>
+        self.source = """<LifecycleConfiguration>
                 <Rule>
                     <ID>rule1</ID>
                     <Filter>
                         <And>"""
         val = self.conditions["prefix"]
-        source = f"{source}<Prefix>{val}"
-        source = f"{source}</Prefix>"
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
         greater = self.conditions["greater"]
-        source = f"{source}<ObjectSizeGreaterThan>{greater}"
-        source = f"{source}</ObjectSizeGreaterThan>"
-        source = f"{source} {self.end_source }"
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_source }"
 
-        self._create_container_versioning(source)
+        self._create_container_versioning(self.source)
         self._upload_expected_combine1()
-        self._check_and_apply(source, nothing_to_match=True)
+        self._check_and_apply(self.source, nothing_to_match=True)
 
 
 class TestLifecycleConformExpiredDelete(TestLifecycleConform):
@@ -3833,6 +4242,17 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
         super(TestLifecycleConformExpiredDelete, self).setUp()
         self.versioning_enabled = True
         self.number_of_versions = 3
+        self.rule_id = "rule1"
+        self.action = "Expiration"
+        self.begin_source = (
+            """<LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <Prefix>documents/</Prefix>"""
+        )
 
         self.end_source = """
                     </Filter>
@@ -3843,8 +4263,15 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
                 </Rule>
             </LifecycleConfiguration>"""
 
-    def test_expired_delete_marker_true(self):
+        self.rules[self.rule_id] = {}
+        self.rules[self.rule_id][self.action] = []
+        self._init_match_rules()
 
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule_id] = {}
+        self.expected_to_cycle[self.rule_id][self.action] = 1
+
+    def test_expired_delete_marker_true(self):
         """
         Add some versions of object, add delete marker
         remove all previous versions
@@ -3852,12 +4279,8 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
         Check that event is sent to expire delete marker
         """
         # ['prefix']
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <Prefix>documents/</Prefix>"""
-        source = f"{source} {self.end_source }"
+
+        source = f"{self.begin_source} {self.end_source }"
 
         self._create_container_versioning(source)
         self.number_match = 1
@@ -3867,9 +4290,9 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_long, random_length=6
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, name)
-            for el in self.not_to_match:
+            for el in self.not_to_match[self.rule_id][self.action]:
                 self.api.object_delete(
                     self.account, self.container, el["name"], version=el["version"]
                 )
@@ -3877,7 +4300,7 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
             objects = self.api.object_list(
                 self.account, self.container, deleted=True, versions=True
             )
-            self.to_match_markers = objects["objects"]
+            self.to_match_markers[self.rule_id][self.action] = objects["objects"]
         self._check_and_apply(source, nothing_to_match=True)
 
     def test_expired_delete_marker_false(self):
@@ -3887,11 +4310,6 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
         Check that event is sent to expire delete marker
         """
         # ['prefix']
-        source = """<LifecycleConfiguration>
-                <Rule>
-                    <ID>rule1</ID>
-                    <Filter>
-                        <Prefix>documents/</Prefix>"""
         self.end_source = """
                     </Filter>
                     <Status>Enabled</Status>
@@ -3901,7 +4319,7 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
                 </Rule>
             </LifecycleConfiguration>"""
 
-        source = f"{source} {self.end_source }"
+        source = f"{self.begin_source} {self.end_source }"
 
         self._create_container_versioning(source)
         self.number_match = 1
@@ -3911,9 +4329,9 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_long, random_length=6
                 )
-                self.not_to_match.append(obj_meta)
+                self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, name)
-            for el in self.not_to_match:
+            for el in self.not_to_match[self.rule_id][self.action]:
                 self.api.object_delete(
                     self.account, self.container, el["name"], version=el["version"]
                 )
@@ -3921,5 +4339,370 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
             objects = self.api.object_list(
                 self.account, self.container, deleted=True, versions=True
             )
-            self.not_to_match = objects["objects"]
+            self.not_to_match[self.rule_id][self.action] = objects["objects"]
         self._check_and_apply(source, nothing_to_match=True)
+
+
+class TestLifecycleNonCurrentVersionConflict(TestLifecycleConform):
+
+    """
+    Test two conflict rules and verify that events are sent one by
+    predominant rule
+    """
+
+    def setUp(self):
+        super(TestLifecycleNonCurrentVersionConflict, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 4
+        self.newer_non_current_versions = 1
+        self.action1 = "NoncurrentVersionExpiration"
+        self.action2 = "NoncurrentVersionTransition"
+
+        self.source = ""
+        self.end_rule1 = (
+            """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <NoncurrentVersionExpiration>
+                        <NoncurrentDays>1</NoncurrentDays>
+                        <NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
+            """</NewerNoncurrentVersions>
+                    </NoncurrentVersionExpiration>
+                </Rule>
+            """
+        )
+        self.end_rule2 = (
+            """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <NoncurrentVersionTransition>
+                        <NoncurrentDays>1</NoncurrentDays>
+                        <NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
+            """</NewerNoncurrentVersions>
+                        <StorageClass>STANDARD</StorageClass>
+                    </NoncurrentVersionTransition>
+                </Rule>
+            """
+        )
+        self.rule1 = "rule1"
+        self.rule2 = "rule2"
+        self.rules = {
+            self.rule1: {self.action1},
+            self.rule2: {self.action2},
+        }
+
+        self._init_match_rules()
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle[self.rule1] = {}
+        self.expected_to_cycle[self.rule2] = {}
+
+        self.expected_to_cycle[self.rule1][self.action1] = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+        self.expected_to_cycle[self.rule2][self.action2] = 0
+
+    def tearDown(self):
+        super(TestLifecycleConform, self).tearDown()
+
+    def _upload_expected_combine1(self):
+        # match only n non current versions per object
+        self.numbr_match = 2
+        total_count_expected = 0
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for _ in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule1][self.action1].append(obj_meta)
+        for j in range(self.number_match):
+            name = self.prefix + str(j) + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                if i < self.expected_to_cycle[self.rule1][self.action1]:
+                    self.to_match[self.rule1][self.action1].append(obj_meta)
+                    total_count_expected += 1
+                else:
+                    # non current to retain
+                    self.not_to_match_versions.append(obj_meta)
+
+                if i == self.number_of_versions - 1:  # current version
+                    self.not_to_match_versions.append(obj_meta)
+
+        # nothing to match for rule2
+        self.to_match[self.rule2][self.action2] = []
+        return total_count_expected
+
+    def test_conflict_noncurrent(self):
+        # ["prefix", "greater"]
+        # match only 2 non current versions per object
+        # As the rules conflit:check that  Expiration sends events but
+        # Transitions doesn't
+        self.source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <And>"""
+        val = self.conditions["prefix"]
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule1 }"
+
+        # Second Rule that conclicts
+        self.source = (
+            f"{self.source} "
+            """
+                <Rule>
+                    <ID>rule2</ID>
+                    <Filter>
+                        <And>"""
+        )
+
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule2 }"
+        self.source = f"{self.source} </LifecycleConfiguration>"
+
+        # 2 version per object (1 object per batch)
+        self.expected_to_cycle[self.rule1][self.action1] = 2
+        self.expected_to_cycle[self.rule2][self.action2] = 0  #
+        self._create_container_versioning(self.source)
+        self._upload_expected_combine1()
+        self._check_and_apply(self.source)
+
+
+class TestLifecycleExpirationConflict(TestLifecycleConform):
+
+    """
+    Test two conflict rules Expiraton/Trainsition and verify that events are sent one by
+    predominant rule
+    """
+
+    def setUp(self):
+        super(TestLifecycleExpirationConflict, self).setUp()
+        self.versioning_enabled = True
+        self.action1 = "Expiration"
+        self.action2 = "Transition"
+
+        self.source = ""
+        self.end_rule1 = """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Expiration>
+                        <Days>1</Days>
+                    </Expiration>
+                </Rule>
+            """
+        self.end_rule2 = """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Transition>
+                        <Days>1</Days>
+                        <StorageClass>STANDARD</StorageClass>
+                    </Transition>
+                </Rule>
+            """
+        self.rule1 = "rule1"
+        self.rule2 = "rule2"
+        self.rules = {
+            self.rule1: {self.action1},
+            self.rule2: {self.action2},
+        }
+
+        self._init_match_rules()
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule1] = {}
+        self.expected_to_cycle[self.rule2] = {}
+        self.expected_to_cycle[self.rule1][self.action1] = 1
+        self.expected_to_cycle[self.rule2][self.action2] = 0
+
+    def tearDown(self):
+        super(TestLifecycleConform, self).tearDown()
+
+    def _upload_expected_combine1(self):
+        # match only n non current versions per object
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule1][self.action1].append(obj_meta)
+
+        for _ in range(self.number_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match[self.rule1][self.action1].append(obj_meta)
+
+        # nothing to match for rule2
+        self.to_match[self.rule2][self.action2] = []
+
+    def test_conflict_current(self):
+        # ["prefix", "greater"]
+        # match only 2 non current versions per object
+        # As the rules conflit:check that  Expiration sends events but
+        # Transitions doesn't
+        self.source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <And>"""
+        val = self.conditions["prefix"]
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule1 }"
+
+        # Second Rule that conclicts
+        self.source = (
+            f"{self.source} "
+            """
+                <Rule>
+                    <ID>rule2</ID>
+                    <Filter>
+                        <And>"""
+        )
+
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule2 }"
+        self.source = f"{self.source} </LifecycleConfiguration>"
+
+        self._create_container_versioning(self.source)
+        self._upload_expected_combine1()
+        self._check_and_apply(self.source)
+
+
+class TestLifecycleTransitionConflict(TestLifecycleConform):
+
+    """
+    Test two conflict rules Expiraton/Transtion and verify that events are sent one by
+    predominant rule
+    """
+
+    def setUp(self):
+        super(TestLifecycleTransitionConflict, self).setUp()
+        self.versioning_enabled = True
+        self.action1 = "Transition"
+        self.action2 = "Transition"
+
+        self.source = ""
+        self.end_rule1 = """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Transition>
+                        <Days>1</Days>
+                        <StorageClass>STANDARD</StorageClass>
+                    </Transition>
+                </Rule>
+            """
+        self.end_rule2 = """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Transition>
+                        <Days>1</Days>
+                        <StorageClass>ARCHIVE</StorageClass>
+                    </Transition>
+                </Rule>
+            """
+        self.rule1 = "rule1"
+        self.rule2 = "rule2"
+        self.rules = {
+            self.rule1: {self.action1},
+            self.rule2: {self.action2},
+        }
+
+        self._init_match_rules()
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle[self.rule1] = {}
+        self.expected_to_cycle[self.rule2] = {}
+
+    def tearDown(self):
+        super(TestLifecycleTransitionConflict, self).tearDown()
+
+    def _upload_expected_combine1(self):
+        # match only n non current versions per object
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule1][self.action1].append(obj_meta)
+
+        for _ in range(self.number_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                if i == self.number_of_versions - 1:
+                    self.to_match[self.rule1][self.action1].append(obj_meta)
+
+        # nothing to match for rule2
+        self.to_match[self.rule2][self.action2] = []
+
+    def test_conflict_current(self):
+        # ["prefix", "greater"]
+        # match only 2 non current versions per object
+        # As the rules conflit:check that  Expiration sends events but
+        # Transitions doesn't
+        self.source = """<LifecycleConfiguration>
+                <Rule>
+                    <ID>rule1</ID>
+                    <Filter>
+                        <And>"""
+        val = self.conditions["prefix"]
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule1 }"
+
+        # Second Rule that conclicts
+        self.source = (
+            f"{self.source} "
+            """
+                <Rule>
+                    <ID>rule2</ID>
+                    <Filter>
+                        <And>"""
+        )
+
+        self.source = f"{self.source}<Prefix>{val}"
+        self.source = f"{self.source}</Prefix>"
+        greater = self.conditions["greater"]
+        self.source = f"{self.source}<ObjectSizeGreaterThan>{greater}"
+        self.source = f"{self.source}</ObjectSizeGreaterThan>"
+        self.source = f"{self.source} {self.end_rule2 }"
+        self.source = f"{self.source} </LifecycleConfiguration>"
+
+        self.expected_to_cycle[self.rule1][self.action1] = 1  # 1 current per object
+        self.expected_to_cycle[self.rule2][self.action2] = 0
+        self._create_container_versioning(self.source)
+        self._upload_expected_combine1()
+        self._check_and_apply(self.source)

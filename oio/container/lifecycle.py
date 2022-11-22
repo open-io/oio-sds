@@ -34,6 +34,8 @@ LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
 XMLNS_S3 = "http://s3.amazonaws.com/doc/2006-03-01/"
 
+LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
+
 
 def iso8601_to_int(when):
     # The documentation says that "the time is always midnight UTC".
@@ -602,6 +604,12 @@ class LifecycleRuleFilter(object):
 
         return filter_elt
 
+    def _processed_sql_condition(self):
+        return (
+            f"( al.alias||al.version||{LIFECYCLE_SPECIAL_KEY_TAG} "
+            "NOT IN (SELECT alias||version||key FROM properties))"
+        )
+
     def to_sql_query(
         self,
         formated_days=None,
@@ -730,7 +738,9 @@ class LifecycleRuleFilter(object):
 
         # close WHERE clause
         if self.prefix is not None or time_flag:
+            _query = f"{_query} AND {self._processed_sql_condition()}"
             _query = f"{_query} )"
+
         if non_current or versioned:
             _query = f"{_query} GROUP BY al.alias"
         return _query
@@ -879,7 +889,8 @@ class LifecycleRuleFilter(object):
             " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
             " AS count, row_id FROM noncurrent_view AS al"
             " INNER JOIN current_view AS cv ON "
-            " al.alias=cv.alias WHERE row_id <= noncurrent_nb_candidates"
+            " al.alias=cv.alias WHERE ((row_id <= noncurrent_nb_candidates)"
+            f" AND {self._processed_sql_condition()})"
         )
         return query
 
@@ -889,7 +900,10 @@ class LifecycleRuleFilter(object):
         """
 
         # SELECT is forced on meta2 side
-        query = " FROM marker_view AS al WHERE nb_versions=1"
+        query = (
+            f" FROM marker_view AS al WHERE (nb_versions=1 AND "
+            f"{self._processed_sql_condition()})"
+        )
         return query
 
     def __str__(self):
