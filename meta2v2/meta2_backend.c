@@ -4103,8 +4103,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 {
 	GError *err = NULL;
 	gchar *full_query = NULL;
+	gchar *full_query_set_tag = NULL;
+	gchar *base_set_adapted_tags= NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
+	struct sqlx_repctx_s *repctx = NULL, *repctx_clean = NULL;
 
 	gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
 	gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
@@ -4112,20 +4114,30 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
 			"nb_versions FROM marker_view AS al";
+	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
-	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL;
-	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
+	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
+		*query_set_tag = NULL, *rule_id = NULL;
+	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
+		*jquery_set_tag = NULL;
 	int is_markers = 0;
-	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jis_markers = NULL;
+	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
+		*jrule_id = NULL, *jis_markers = NULL;
+
+	gboolean found_match = FALSE;
+
+	gchar *query_update_properties = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix",  &jsuffix,   json_type_string, 1},
 		{"action",  &jaction,   json_type_string, 1},
 		{"query",   &jquery,    json_type_string, 1},
 		{"is_markers",   &jis_markers,    json_type_int, 0},
-		{"policy",   &jpolicy,          json_type_string, 0},
+		{"query_set_tag",   &jquery_set_tag,    json_type_string, 0},
+		{"policy",   &jpolicy,  	json_type_string, 0},
 		{"batch_size",   &jbatch_size,  	json_type_int, 0},
 		{"last_action",   &jlast_action,  	json_type_int, 0},
+		{"rule_id",   &jrule_id,  	json_type_string, 0},
 		{NULL,      NULL,     0,             0}
 	};
 
@@ -4154,8 +4166,19 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (jpolicy) {
 		policy = json_object_get_string(jpolicy);
 	}
+	if (jquery_set_tag) {
+		query_set_tag = json_object_get_string(jquery_set_tag);
+	}
+	if (jrule_id) {
+		rule_id = json_object_get_string(jrule_id);
+	}
 
 
+	gchar *offest_key = NULL;
+	if (query_set_tag) {
+		base_set_adapted_tags = g_strdup_printf( \
+			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
+			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4173,11 +4196,14 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 	if (versioning == 0) {
 		full_query = g_strdup_printf("%s %s", base_query, query);
+		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 	} else {
 		if (is_markers) {
 			full_query = g_strdup_printf("%s %s", base_query_marker , query);
+			full_query_set_tag = g_strdup_printf("%s %s", base_query_marker, query_set_tag);
 		} else {
 			full_query = g_strdup_printf("%s %s", base_query_versioned, query);
+			full_query_set_tag = g_strdup_printf("%s %s", base_query_versioned, query_set_tag);
 		}
 	}
 
@@ -4201,6 +4227,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
+		found_match = TRUE;
 		// Expiration and Transition
 		// Manage current version and delete markers
 		if (versioning != 0) {
@@ -4233,7 +4260,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		if (policy && *policy) {
 			append_str(event, "policy", g_strdup(policy));
 		}
-
+		if (rule_id) {
+			append_str(event, "rule_id", g_strdup(rule_id));
+		}
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
@@ -4245,11 +4274,24 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
-
+	err = sqlx_transaction_begin(sq3, &repctx_clean);
+	if (full_query_set_tag && (!found_match)) {
+		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
+		rc = sqlx_exec(sq3->db, query_update_properties);
+		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
+					sqlite3_errmsg(sq3->db));
+			goto close;
+		}
+	}
+	err = sqlx_transaction_end(repctx_clean, err);
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
 	g_free(full_query);
+	g_free(full_query_set_tag);
+	g_free(query_update_properties);
+	g_free(base_set_adapted_tags);
 	return err;
 }
 
@@ -4260,21 +4302,29 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 {
 	GError *err = NULL;
 	gchar *full_query = NULL;
+	gchar *base_set_adapted_tags= NULL;
+	gchar *full_query_set_tag = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
+	struct sqlx_repctx_s *repctx = NULL, *repctx_clean = NULL;
 
 	gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime ";
+	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
-	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL;
-	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL;
+	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
+		*query_set_tag = NULL, *rule_id = NULL;
+	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
+		*jquery_set_tag = NULL;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL;
 
 	int batch_size = 0;
+	gboolean found_match = FALSE;
+	gchar *query_update_properties = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix",  &jsuffix,   json_type_string, 1},
 		{"action",  &jaction,   json_type_string, 1},
 		{"query",   &jquery,    json_type_string, 1},
+		{"query_set_tag",   &jquery_set_tag,    json_type_string, 0},
 		{"policy",   &jpolicy,          json_type_string, 0},
 		{"batch_size",   &jbatch_size,  	json_type_int, 0},
 		{"last_action",   &jlast_action,  	json_type_int, 0},
@@ -4307,6 +4357,12 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jbatch_size) {
 		batch_size = json_object_get_int(jbatch_size);
 	}
+	gchar *offest_key = NULL;
+	if (query_set_tag) {
+		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
+		base_set_adapted_tags = g_strdup_printf( \
+			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
+			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
@@ -4346,6 +4402,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gchar object_name_to_process[1025] = {0};
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
+		found_match = TRUE;
 		gint64 version = sqlite3_column_int64(stmt, 1);
 		gint64 mtime = sqlite3_column_int64(stmt, 4);
 
@@ -4383,7 +4440,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		if (policy) {
 			append_str(event, "policy", g_strdup(policy));
 		}
-
+		if (rule_id) {
+			append_str(event, "rule_id", g_strdup(rule_id));
+		}
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
@@ -4394,10 +4453,24 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
+	err = sqlx_transaction_begin(sq3, &repctx_clean);
+	if (full_query_set_tag && (!found_match)) {
+		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
+		rc = sqlx_exec(sq3->db, query_update_properties);
+		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
+					sqlite3_errmsg(sq3->db));
+			goto close;
+		}
+	}
+	err = sqlx_transaction_end(repctx_clean, err);
 
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
 	g_free(full_query);
+	g_free(full_query_set_tag);
+	g_free(query_update_properties);
+	g_free(base_set_adapted_tags);
 	return err;
 }
