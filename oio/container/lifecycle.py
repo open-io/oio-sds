@@ -222,7 +222,9 @@ class ContainerLifecycle(object):
 
         # close WHERE clause
         if rule_filter.prefix is not None or time_flag:
+            _query = f"{_query} AND {self._processed_sql_condition()}"
             _query = f"{_query} )"
+
         if non_current or versioned:
             _query = f"{_query} GROUP BY al.alias"
         return _query
