@@ -256,6 +256,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	TRIGGER_LEGAL_HOLD_NAME ";"
 #define DROP_TRIGGER_RETAIN_UNTIL "DROP TRIGGER IF EXISTS "\
 	TRIGGER_RETAIN_UNTIL_NAME ";"
+
+// Lifecycle tag
+// Special key tag used to know the processed objects by any previous lifecycle
+// rule
+#define LIFECYCLE_SPECIAL_KEY_TAG "__processed_lifecycle"
+
 /* -------------------------------------------------------------------------- */
 
 # define NAME_MSGNAME_M2V2_CREATE             "M2_CREATE"
