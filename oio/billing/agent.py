@@ -365,7 +365,7 @@ class BillingAgent(object):
         region = metadata["region_name"]
         bucket_name = metadata["bucket_name"]
         stats = metadata["storage_class_stat"]
-        bytes_used = metadata["counter_volume"]
+        bytes_used = sample["counter_volume"]
         object_count = reduce(lambda a, b: a + b, [e["object_count"] for e in stats])
 
         objects_ranking = self.per_objects_ranking.setdefault(region, [])
