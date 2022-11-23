@@ -598,7 +598,7 @@ class BillingAgent(object):
         """
         if self.wait_random_time_before_starting:
             waiting_time_to_start = random.randint(0, self.scans_interval)
-            self.logger.info("Wait %d secondes before starting", waiting_time_to_start)
+            self.logger.debug("Wait %d seconds before starting", waiting_time_to_start)
             for _ in range(waiting_time_to_start):
                 if not self.running:
                     return

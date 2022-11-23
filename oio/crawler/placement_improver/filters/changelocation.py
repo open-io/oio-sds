@@ -100,7 +100,7 @@ class Changelocation(Filter):
             check_quality=True,
             reqid=reqid,
         )
-        self.logger.info("Chunk moved to %s", rawx_dict["url"])
+        self.logger.debug("Chunk moved to %s", rawx_dict["url"])
         # Incrementing the counter of chunks relocated
         self.relocated_chunk += 1
 

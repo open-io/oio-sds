@@ -35,6 +35,8 @@ LOAD_PIPELINES = {
     "PlacementImproverWorker": placement_improver_loadpipeline,
 }
 
+TAGS_TO_DEBUG = ["starting"]
+
 
 class CrawlerWorker(object):
     """
@@ -105,7 +107,9 @@ class CrawlerWorker(object):
         elapsed = (now - self.start_time) or 0.00001
         total = self.successes + self.errors
         since_last_rprt = (now - self.last_report_time) or 0.00001
-        self.logger.info(
+
+        logger = self.logger.debug if tag in TAGS_TO_DEBUG else self.logger.info
+        logger(
             "%(tag)s "
             "volume_id=%(volume_id)s "
             "elapsed=%(elapsed).02f "
@@ -127,7 +131,7 @@ class CrawlerWorker(object):
         )
 
         for filter_name, stats in self.pipeline.get_stats().items():
-            self.logger.info(
+            logger(
                 "%(tag)s volume_id=%(volume_id)s filter=%(filter)s %(stats)s",
                 {
                     "tag": tag,
@@ -181,7 +185,7 @@ class CrawlerWorker(object):
     def run(self):
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
-            self.logger.info("Wait %d secondes before starting", waiting_time_to_start)
+            self.logger.debug("Wait %d seconds before starting", waiting_time_to_start)
             for _ in range(waiting_time_to_start):
                 if not self.running:
                     return

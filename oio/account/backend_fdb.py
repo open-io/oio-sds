@@ -2563,7 +2563,7 @@ class AccountBackendFdb(object):
         delay = time.time() - (rtime + self.bucket_reservation_timeout)
         if delay > 0:
             self.logger.info(
-                "Reservation has expired (delay: %f secondes), "
+                "Reservation has expired (delay: %f seconds), "
                 "but since no one else has reserved the bucket %s, "
                 "the request is accepted",
                 delay,

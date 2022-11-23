@@ -144,7 +144,7 @@ class Content(object):
                     bal = ensure_better_chunk_qualities(chunks_broken, quals)
                 break
             except (exc.ClientException, exc.SpareChunkException) as err:
-                self.logger.warning(
+                self.logger.debug(
                     "Failed to find spare chunk (attempt %d/%d): %s",
                     attempt + 1,
                     max_attempts,
@@ -162,7 +162,7 @@ class Content(object):
             url_list.append(chunk["id"])
 
         if check_quality:
-            self.logger.info(
+            self.logger.debug(
                 "Found %d spare chunks, that will improve metachunk quality by %d",
                 len(url_list),
                 bal,

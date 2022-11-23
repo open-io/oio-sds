@@ -55,7 +55,7 @@ class PlacementImproverWorker(RawxWorker):
         chunk.chunk_path = os.path.realpath(chunk.chunk_symlink_path)
         try:
             if not is_chunk_id_valid(chunk.chunk_id):
-                self.logger.info("Skip not valid chunk path %s", chunk.chunk_path)
+                self.logger.warning("Skip not valid chunk path %s", chunk.chunk_path)
                 self.invalid_paths += 1
                 return False
             with open(chunk.chunk_path, "rb") as chunk_file:
@@ -63,10 +63,10 @@ class PlacementImproverWorker(RawxWorker):
                 # process of all filters
                 chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
         except FileNotFoundError:
-            self.logger.info("chunk_id=%s no longer exists", chunk.chunk_id)
+            self.logger.info("chunk_id=%s no longer exists, deleting", chunk.chunk_id)
             # unlink the symbolic link
             os.unlink(chunk.chunk_symlink_path)
-            self.logger.info("symbolic link=%s removed", chunk.chunk_path)
+            self.logger.debug("symbolic link=%s removed", chunk.chunk_path)
             return False
         except (exc.MissingAttribute, exc.FaultyChunk):
             self.errors += 1
