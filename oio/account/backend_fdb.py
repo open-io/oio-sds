@@ -443,13 +443,17 @@ class AccountBackendFdb(object):
                 if counter.endswith("-details"):
                     counter = counter[:-8]
                     for policy, policy_value in counter_value.items():
+                        # Prometheus does not like hyphens
                         prom_output.append(
-                            f'obsto_{counter}{{region="{region}",'
-                            f'policy="{policy}"}} {policy_value}'
+                            f"obsto_{counter.replace('-', '_')}"
+                            f'{{region="{region}",policy="{policy}"}} '
+                            f"{policy_value}"
                         )
                 else:
+                    # Prometheus does not like hyphens
                     prom_output.append(
-                        f'obsto_{counter}{{region="{region}"}} {counter_value}'
+                        f'obsto_{counter.replace("-", "_")}{{region="{region}"}} '
+                        f"{counter_value}"
                     )
         return "\n".join(prom_output)
 
@@ -556,11 +560,12 @@ class AccountBackendFdb(object):
         prom_output = []
         prom_output.append(f"obsto_last_update {rankings[LAST_UPDATE_FIELD]}")
         for field in (BYTES_FIELD, OBJECTS_FIELD):
-
             for region, region_rankings in rankings[field].items():
                 for entry in region_rankings:
+                    # Prometheus does not like hyphens
                     prom_output.append(
-                        f"obsto_{field}{{region={region},bucket={entry['name']}}}"
+                        f"obsto_{field.replace('-', '_')}"
+                        f"{{region={region},bucket={entry['name']}}}"
                         f" {entry['value']}"
                     )
         return "\n".join(prom_output)
