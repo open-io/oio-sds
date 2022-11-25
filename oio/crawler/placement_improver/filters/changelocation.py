@@ -134,9 +134,7 @@ class Changelocation(Filter):
         :type cb: function
         """
         chunkwrapper = ChunkWrapper(env)
-        # Getting the container/content id from chunk metadata
-        container_id = chunkwrapper.meta["container_id"]
-        content_id = chunkwrapper.meta["content_id"]
+
         # Getting a request id for chunk placement improvement
         reqid = request_id("placementImprover-")
         try:
@@ -161,8 +159,10 @@ class Changelocation(Filter):
         try:
             # Getting Content object
             content = self.content_factory.get(
-                container_id=container_id,
-                content_id=content_id,
+                container_id=chunkwrapper.meta["container_id"],
+                content_id=chunkwrapper.meta["content_id"],
+                path=chunkwrapper.meta["content_path"],
+                version=chunkwrapper.meta["content_version"],
                 reqid=reqid,
             )
             self._move_chunk(chunkwrapper, content, reqid)
