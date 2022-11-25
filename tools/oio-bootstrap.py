@@ -523,30 +523,6 @@ AllowOverride none
 </VirtualHost>
 """
 
-template_wsgi_service_descr = """
-conf = {'key_file': '${KEY_FILE}'}
-from oio.${SRVTYPE}.app import create_app
-application = create_app(conf)
-"""
-
-template_wsgi_service_coverage_start = """
-import atexit
-import os
-import coverage
-
-cov = coverage.coverage(data_file='@CMAKE_BINARY_DIR@/.coverage.wsgi',
-                        data_suffix=True, concurrency="thread")
-cov.start()
-"""
-
-template_wsgi_service_coverage_stop = """
-def save_coverage():
-    cov.stop()
-    cov.save()
-
-atexit.register(save_coverage)
-"""
-
 template_meta_watch = """
 host: ${IP}
 port: ${PORT}
@@ -1550,6 +1526,26 @@ Environment=HOME=${HOME}
 WantedBy=${PARENT}
 """
 
+template_systemd_rabbitmq_to_beanstalkd = """
+[Unit]
+Description=[OpenIO] Forward messages from RabbitMQ to Beanstalkd
+After=oio-meta2-1.service
+PartOf=${PARENT}
+OioGroup=${NS},localhost,event
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} --ns ${NS} --workers 2
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
 
 HOME = str(os.environ["HOME"])
 OIODIR = HOME + "/.oio"
@@ -1686,10 +1682,6 @@ def mkdir_noerror(d):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise e
-
-
-def type2exe(t):
-    return "oio-" + str(t) + "-server"
 
 
 def generate(options):
@@ -1892,7 +1884,9 @@ def generate(options):
             parent.deps.append(targets[name].systemd_name)
         return targets[name]
 
-    def register_service(env, template_name, target, add_service_to_conf=True):
+    def register_service(
+        env, template_name, target, add_service_to_conf=True, coverage_wrapper=""
+    ):
         env.update(
             {
                 "PREFIX": systemd_prefix,
@@ -1911,6 +1905,8 @@ def generate(options):
             add_service(env)
         if "EXE" in env:
             env["EXE"] = shutil.which(env["EXE"])
+            if COVERAGE and env["EXE"]:
+                env["EXE"] = coverage_wrapper + env["EXE"]
         if target:
             target.deps.append(service_name)
         service_path = "{}/{}".format(env["SYSTEMDDIR"], service_name)
@@ -2050,6 +2046,20 @@ def generate(options):
     # If a RabbitMQ endpoint is configured, configure it only for meta2
     if "endpoint" in options["rabbitmq"]:
         ENV.update({"EVENT_CNXSTRING_M2": options["rabbitmq"]["endpoint"]})
+        env = subenv(
+            {
+                "SRVNUM": 1,
+                "SRVTYPE": "event-forwarder",
+                "EXE": "oio-rabbitmq-to-beanstalkd",
+            }
+        )
+        rabbitmq_target = register_target("rabbitmq-to-beanstalkd", root_target)
+        register_service(
+            env,
+            template_systemd_rabbitmq_to_beanstalkd,
+            rabbitmq_target,
+            coverage_wrapper=shutil.which("coverage") + " run -p ",
+        )
     else:
         ENV.update({"EVENT_CNXSTRING_M2": ENV["EVENT_CNXSTRING"]})
 
@@ -2622,14 +2632,6 @@ def merge_config(base, inc):
 
 def main():
     if COVERAGE:
-        global template_wsgi_service_descr
-        template_wsgi_service_descr = "".join(
-            [
-                template_wsgi_service_coverage_start,
-                template_wsgi_service_descr,
-                template_wsgi_service_coverage_stop,
-            ]
-        )
         global template_systemd_rawx_command_options
         template_systemd_rawx_command_options = (
             "-test.coverprofile "

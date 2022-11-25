@@ -45,6 +45,8 @@ class TestCrawlerPathGen(BaseTestCase):
 
     def setUp(self):
         super(TestCrawlerPathGen, self).setUp()
+        if "event-forwarder" in self.conf["services"]:
+            self.skipTest("Cannot run when events go to RabbitMQ before Beanstalkd")
         self.api = self.storage
         self.beanstalkd0.wait_until_empty("oio")
         services = self.conscience.all_services("rawx")

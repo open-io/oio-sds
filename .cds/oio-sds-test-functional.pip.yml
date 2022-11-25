@@ -46,6 +46,7 @@ jobs:
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
           rm -rf fdb-packages
+          rabbitmq-plugins enable rabbitmq_management
 
       - name: Run functional tests
         script:

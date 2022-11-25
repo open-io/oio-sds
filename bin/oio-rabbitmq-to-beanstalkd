@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+# Copyright (C) 2022 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import os
+
+from oio.common.logger import get_logger
+from oio.event.amqp_consumer import (
+    AmqpConsumerWorker,
+    AmqpConsumerPool,
+    RejectMessage,
+    RetryLater,
+)
+from oio.event.beanstalk import BeanstalkError, InvalidResponse, ResponseError
+from oio.event.client import EventClient
+
+
+class MessageToBeanstalkd(AmqpConsumerWorker):
+    """
+    Read messages from RabbitMQ, forward them to Beanstalkd
+    (the one configured for OpenIO's event agent).
+    """
+
+    ERR_MSG = "Failed to forward message to beanstalkd"
+
+    def __init__(self, *args, evt_conf=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.evt_client = EventClient(conf=evt_conf)
+        self.tube = evt_conf.get("tube", "oio")
+
+    def pre_run(self):
+        self.evt_client.beanstalk.use(self.tube)
+
+    def post_connect(self):
+        # This queue has probably already been declared by meta2 processes,
+        # but it's considered good practice to redeclare it.
+        self._channel.queue_declare(
+            self.queue_name,
+            durable=True,
+        )
+        self._channel.queue_bind(
+            exchange=self.queue_name,
+            queue=self.queue_name,
+            routing_key="#",  # Everything
+        )
+
+    def process_message(self, message, properties):
+        decoded = message.decode("utf-8")
+        try:
+            self.evt_client.beanstalk.put(decoded)
+        except (InvalidResponse, ResponseError) as err:
+            self.logger.warning(self.ERR_MSG + " (rejecting it): %s", err)
+            raise RejectMessage from err
+        except BeanstalkError as err:
+            self.logger.info(
+                self.ERR_MSG + " (will retry): %s",
+                err,
+            )
+            raise RetryLater from err
+        except Exception as exc:
+            self.logger.exception(self.ERR_MSG)
+            raise RejectMessage from exc
+
+
+def make_arg_parser():
+    descr = """
+    Read messages from RabbitMQ, forward them to Beanstalkd.
+    """
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument(
+        "--dest-tube",
+        default="oio",
+        help="Name of the Beanstalkd tube to send messages to (default is 'oio')",
+    )
+    parser.add_argument(
+        "--endpoint",
+        default="amqp://guest:guest@127.0.0.1:5672/%2F",
+        help="Endpoint of the RabbitMQ server (default is 127.0.0.1:5672)",
+    )
+    parser.add_argument(
+        "--input-queue",
+        default="oio",
+        help=(
+            "Name of the RabbitMQ queue (and exchange) to read messages from "
+            "(default is 'oio')"
+        ),
+    )
+    parser.add_argument(
+        "--namespace",
+        "--ns",
+        default=os.environ.get("OIO_NS", "OPENIO"),
+        help="Namespace name",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="Number of worker processes (0 is automatic)",
+    )
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    logger = get_logger(None, verbose=args.verbose)
+    pool = AmqpConsumerPool(
+        args.endpoint,
+        args.input_queue,
+        MessageToBeanstalkd,
+        logger=logger,
+        processes=args.workers,
+        evt_conf={"namespace": args.namespace, "tube": args.dest_tube},
+    )
+    pool.run()
+
+
+if __name__ == "__main__":
+    main()

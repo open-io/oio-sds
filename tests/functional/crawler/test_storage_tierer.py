@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import time
 
-from mock import MagicMock as Mock
 import mock
 
 from oio import ObjectStorageApi
@@ -44,6 +43,7 @@ class TestStorageTierer(BaseTestCase):
         }
         self.api.container = ContainerClient(self.gridconf)
         self._populate()
+        self.beanstalkd0.wait_until_empty("oio", initial_delay=0.5)
 
     def _populate(self):
         self.container_0_name = "container_empty"
@@ -84,7 +84,7 @@ class TestStorageTierer(BaseTestCase):
         super(TestStorageTierer, self).tearDown()
 
     def test_iter_container_list(self):
-        worker = StorageTiererWorker(self.gridconf, Mock())
+        worker = StorageTiererWorker(self.gridconf, self.logger)
         actual = [x[0] for x in self.api.container_list(self.test_account)]
         if len(actual) < 3:
             print("Slow event propagation!")
@@ -96,7 +96,7 @@ class TestStorageTierer(BaseTestCase):
 
     def test_iter_content_list_outdated_threshold_0(self):
         self.gridconf["outdated_threshold"] = 0
-        worker = StorageTiererWorker(self.gridconf, Mock())
+        worker = StorageTiererWorker(self.gridconf, self.logger)
         gen = worker._list_contents()
         self.assertEqual(
             (
@@ -129,7 +129,7 @@ class TestStorageTierer(BaseTestCase):
 
     def test_iter_content_list_outdated_threshold_9999999999(self):
         self.gridconf["outdated_threshold"] = 9999999999
-        worker = StorageTiererWorker(self.gridconf, Mock())
+        worker = StorageTiererWorker(self.gridconf, self.logger)
         gen = worker._list_contents()
         self.assertRaises(StopIteration, next, gen)
 
@@ -140,7 +140,7 @@ class TestStorageTierer(BaseTestCase):
         self._new_object(self.container_2_name, "titi", "TWOCOPIES")
 
         self.gridconf["outdated_threshold"] = 2
-        worker = StorageTiererWorker(self.gridconf, Mock())
+        worker = StorageTiererWorker(self.gridconf, self.logger)
         with mock.patch(
             "oio.crawler.storage_tierer.time.time", mock.MagicMock(return_value=now)
         ):
@@ -176,7 +176,7 @@ class TestStorageTierer(BaseTestCase):
 
     def test_iter_content_list_skip_good_policy(self):
         self.gridconf["new_policy"] = "SINGLE"
-        worker = StorageTiererWorker(self.gridconf, Mock())
+        worker = StorageTiererWorker(self.gridconf, self.logger)
         gen = worker._list_contents()
         self.assertEqual(
             (
