@@ -333,6 +333,35 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
+template_lifecycle_crawler_service = """
+[lifecycle-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${META2_VOLUMES}
+
+working_dir = ${LIFECYCLEDIR}
+
+wait_random_time_before_starting = True
+interval = 1200
+report_interval = 300
+scanned_per_second = 10
+
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = logger lifecycle
+
+[filter:lifecycle]
+use = egg:oio#lifecycle
+lifecycle_batch_size = 5000
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
 template_meta2_indexer_service = """
 [meta2-indexer]
 namespace = ${NS}
@@ -1211,6 +1240,25 @@ ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
+template_systemd_service_lifecycle_crawler = """
+[Unit]
+Description=[OpenIO] Service lifecycle crawler
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
 
 [Install]
 WantedBy=${PARENT}
@@ -2555,6 +2603,29 @@ def generate(options):
                 options["meta2"].get(SVC_PARAMS, ""),
                 service_id=options["with_service_id"],
             )
+
+    # oio-lifecycle-crawler
+    _tmp_env = subenv(
+        {
+            "META2_VOLUMES": ",".join(meta2_volumes),
+            "SRVTYPE": "lifecycle-crawler",
+            "SRVNUM": "1",
+            "GROUPTYPE": "crawler",
+            "EXE": "oio-lifecycle-crawler",
+        }
+    )
+
+    crawler_target = register_target("crawler", root_target)
+
+    # first the conf
+    tpl = Template(template_lifecycle_crawler_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf".format(**_tmp_env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+    register_service(
+        _tmp_env, template_systemd_service_lifecycle_crawler, crawler_target, False
+    )
 
     # oio-meta2-indexer
     _tmp_env = subenv(
