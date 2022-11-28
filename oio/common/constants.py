@@ -236,3 +236,7 @@ M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
 HTTP_CONTENT_TYPE_BINARY = "application/octet-stream"
 HTTP_CONTENT_TYPE_JSON = "application/json"
 HTTP_CONTENT_TYPE_TEXT = "text/plain"
+
+# Constants for lifecycle crawler
+MULTIUPLOAD_SUFFIX = "+segments"
+VERSIONING_PROPERTY_KEY = "X-Container-Sysmeta-Versions-Enabled"
