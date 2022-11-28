@@ -29,12 +29,14 @@ from oio.common.green import get_watchdog, GreenPool, time
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
+from oio.crawler.lifecycle.loader import loadpipeline as lifecycle_loadpipeline
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
 
 LOAD_PIPELINES = {
     "rawx": rawx_loadpipeline,
     "meta2": meta2_loadpipeline,
+    "LifecycleWorker": lifecycle_loadpipeline,
 }
 
 TAGS_TO_DEBUG = ("starting",)
