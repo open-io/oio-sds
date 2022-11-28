@@ -159,6 +159,8 @@ int sqlx_admin_has(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 void sqlx_admin_set_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
 gboolean sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
+gboolean sqlx_admin_set_str_all_keys_with_prefix(struct sqlx_sqlite3_s *sq3,
+		const gchar *prefix, const gchar *value);
 
 gboolean sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
 gboolean sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);

@@ -2967,9 +2967,11 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gchar *src_suffix = g_strdup_printf("sharding-%s-%s", timestamp, index);
 	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
-	gchar *shard_properties[18] = {
+	gchar *shard_properties[22] = {
 		M2V2_ADMIN_SIZE, "0",
+		M2V2_ADMIN_SIZE".", "",  // delete size for all policies
 		M2V2_ADMIN_OBJ_COUNT, "0",
+		M2V2_ADMIN_OBJ_COUNT".", "",  // delete count for all policies
 		M2V2_ADMIN_SHARD_COUNT, "0",
 		M2V2_ADMIN_SHARDING_STATE, state,
 		M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp,

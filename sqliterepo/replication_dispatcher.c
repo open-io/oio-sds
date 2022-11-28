@@ -504,12 +504,23 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, peers);
 			/* Update base name */
 			sqlx_admin_set_str(sq3, SQLX_ADMIN_BASENAME, name->base);
-			/* Update properties */
+			/* Update properties
+			 * If a property is suffixed by ".", then all properties prefixed by
+			 * this will be updated/deleted.
+			 */
 			for (gchar **p=properties; !err && *p && *(p+1); p+=2) {
 				if (oio_str_is_set(*(p+1))) {
-					sqlx_admin_set_str(sq3, *p, *(p+1));
+					if (g_str_has_suffix(*p, ".")) {
+						sqlx_admin_set_str_all_keys_with_prefix(sq3, *p, *(p+1));
+					} else {
+						sqlx_admin_set_str(sq3, *p, *(p+1));
+					}
 				} else {
-					sqlx_admin_del(sq3, *p);
+					if (g_str_has_suffix(*p, ".")) {
+						sqlx_admin_del_all_keys_with_prefix(sq3, *p, NULL, NULL);
+					} else {
+						sqlx_admin_del(sq3, *p);
+					}
 				}
 			}
 			sqlx_admin_save_lazy(sq3);

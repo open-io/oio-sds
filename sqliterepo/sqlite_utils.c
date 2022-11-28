@@ -116,6 +116,22 @@ end:
 #endif
 
 gboolean
+sqlx_admin_set_str_all_keys_with_prefix(struct sqlx_sqlite3_s *sq3,
+		const gchar *prefix, const gchar *value)
+{
+	gboolean runner(gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
+		if (v->flag_deleted)
+			return FALSE;
+		if (g_str_has_prefix(k, prefix)) {
+			return sqlx_admin_set_str(sq3, k, value);
+		}
+		return FALSE;
+	}
+	g_tree_foreach(sq3->admin, (GTraverseFunc)runner, NULL);
+	return TRUE;
+}
+
+gboolean
 sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 {
 	v = v ?: "";
