@@ -23,6 +23,11 @@ workflow:
     application: oio-sds
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-single:
     pipeline: oio-sds-test-functional
@@ -114,7 +119,6 @@ workflow:
     depends_on:
       - tests-cli
       - tests-fast
-      - tests-lint
       - tests-single
       - tests-3copies
       - tests-ec
@@ -123,6 +127,13 @@ workflow:
       - tests-mover
     when:
       - success
+
+  ready-for-merge:
+    application: oio-sds
+    depends_on:
+      - coverage
+      - tests-lint
+    pipeline: oio-sds-ready-for-merge
 
   mirror:
     pipeline: oio-sds-mirror
