@@ -15,6 +15,7 @@
 # License along with this library.
 
 import os
+import re
 import time
 import simplejson as json
 from pathlib import Path
@@ -52,6 +53,12 @@ class TestAccountServerBase(BaseTestCase):
         self.acct_app.backend.db.clear_range(b"\x00", b"\xfe")
         self.app = Client(self.acct_app, Response)
 
+    def tearDown(self):
+        # Done in teardown to cover every possible modification to metrics done by tests
+        # Eg: tests adding s3 specific metrics.
+        self._check_metrics_format_prom()
+        return super().tearDown()
+
     @classmethod
     def _monkey_patch(cls):
         import eventlet
@@ -67,6 +74,19 @@ class TestAccountServerBase(BaseTestCase):
 
     def _delete_account(self, account_id):
         self.app.post("/v1.0/account/delete", query_string={"id": account_id})
+
+    def _check_metrics_format_prom(self):
+        """
+        This method ensures that each metric key respects the prometheus format.
+        """
+        resp_prom = self.app.get("/metrics?format=prometheus")
+        lines = resp_prom.data.decode("utf-8").splitlines()
+        # https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+        pattern = re.compile("[a-zA-Z_:][a-zA-Z0-9_:]*")
+        for line in lines:
+            # Extract the key
+            key = line.split(" ")[0].split("{")[0]
+            self.assertIsNotNone(re.fullmatch(pattern, key))
 
 
 class TestAccountServer(TestAccountServerBase):
