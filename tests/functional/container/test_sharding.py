@@ -61,6 +61,8 @@ class TestSharding(BaseTestCase):
         self.objects_properties = {}
         self.object_lock = False
 
+        self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
+
     def tearDown(self):
         for cname, created in self.created.items():
             try:
@@ -101,7 +103,7 @@ class TestSharding(BaseTestCase):
         else:
             self.created[cname] = set()
 
-    def _get_objet_count(self, cname):
+    def _get_object_count(self, cname):
         if self.versioning_enabled:
             count = 0
             for _, versions in self.created[cname].items():
@@ -128,7 +130,7 @@ class TestSharding(BaseTestCase):
         if cname.endswith("+segments"):
             self.assertEqual(0, stats["objects"])
         else:
-            self.assertEqual(self._get_objet_count(cname), stats["objects"])
+            self.assertEqual(self._get_object_count(cname), stats["objects"])
         self.assertEqual(self._get_byte_count(cname), stats["bytes"])
 
     def _add_objects(
@@ -204,7 +206,7 @@ class TestSharding(BaseTestCase):
                 types=(EventTypes.CONTAINER_STATE,),
             )
             stats = self.storage.bucket.bucket_show(cname, account=self.account)
-            self.assertEqual(self._get_objet_count(cname), stats["objects"])
+            self.assertEqual(self._get_object_count(cname), stats["objects"])
 
     def _check_objects(self, cname):
         # Check the objects list
