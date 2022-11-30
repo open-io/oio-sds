@@ -1,3 +1,23 @@
 version: v1.0
 name: oio-sds-root
 jobs:
+  - job: Update dependency cache
+    steps:
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+      - name: Download nonstandard dependencies
+        script: |+
+          #!/bin/bash
+          set -x
+          . .cds/versions
+          fdbtag="fdb-${FDB_VERSION}"
+          if ! worker cache pull $fdbtag
+          then
+            mkdir fdb-packages
+            cd fdb-packages
+            wget -q \
+              https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb \
+              https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb
+            cd ..
+            worker cache push $fdbtag fdb-packages
+          fi

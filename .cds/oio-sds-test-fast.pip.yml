@@ -39,12 +39,13 @@ jobs:
           EOF
           . $HOME/oiovenv/bin/activate
           pip install --upgrade pip setuptools virtualenv tox -r test-requirements.txt
-          wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
-          wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb
-          dpkg -i foundationdb-clients_${FDB_VERSION}-1_amd64.deb foundationdb-server_${FDB_VERSION}-1_amd64.deb
+
+          fdbtag="fdb-${FDB_VERSION}"
+          worker cache pull $fdbtag
+          dpkg -i fdb-packages/*.deb
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
-          rm -f foundationdb*.deb
+          rm -rf fdb-packages
 
       - name: Run fast tests
         script:
