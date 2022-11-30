@@ -21,7 +21,7 @@ jobs:
         script: |+
           #!/bin/bash
           exec &> >(tee -a package-20.04.log)
-          trap 'worker upload --tag=focal package-20.04.log' EXIT
+          trap 'worker upload package-20.04.log' EXIT
           cat $0
           set -x
           set -e

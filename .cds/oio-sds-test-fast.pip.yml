@@ -68,8 +68,8 @@ jobs:
       - name: Save coverage and test information
         script:
           - . $HOME/oiovenv/bin/activate
-          - 'worker upload --tag="{{.cds.version}}" {{.cds.workspace}}/.coverage.build {{.cds.workspace}}/.coverage.unit'
-          - '[ ! -f nosetests-*.xml ] || worker upload --tag="{{.cds.version}}" nosetests-*.xml'
+          - 'worker upload {{.cds.workspace}}/.coverage.build {{.cds.workspace}}/.coverage.unit'
+          - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
 
     requirements:
       - model: Ubuntu-20.04-VM-b2-07

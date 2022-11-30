@@ -59,14 +59,14 @@ jobs:
         always_executed: true
         optional: true
         script:
-          - '[ -f everything.log ] && mv everything.log everything.{{.cds.env.TEST_SUITE}}.log && worker upload --tag="{{.cds.version}}" everything.{{.cds.env.TEST_SUITE}}.log || true'
+          - '[ -f everything.log ] && mv everything.log everything.{{.cds.env.TEST_SUITE}}.log && worker upload everything.{{.cds.env.TEST_SUITE}}.log || true'
 
       - name: Save coverage and test information
         script:
           - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
           - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
-          - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
-          - '[ ! -f nosetests-*.xml ] || worker upload --tag="{{.cds.version}}" nosetests-*.xml'
+          - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
+          - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
 
     requirements:
         - model: '{{ .cds.env.MODEL}}'

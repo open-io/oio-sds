@@ -66,7 +66,7 @@ jobs:
       - name: Aggregate C coverage statistics
         script:
           - cd {{.cds.workspace}}
-          - worker download --tag="{{.cds.version}}" --pattern="cmake_coverage.*"
+          - worker download --pattern="cmake_coverage.*"
           - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
           - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
           - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
@@ -82,7 +82,7 @@ jobs:
           - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_percent)"' coverage-report-c.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"functional\"} \(.tests.Python.functional)"' test-report-py.json >>coverage-summary.openmetrics
           - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"unit\"} \(.tests.Python.unit)"' test-report-py.json >>coverage-summary.openmetrics
-          - worker upload --tag='{{.cds.version}}' coverage-summary.openmetrics
+          - worker upload coverage-summary.openmetrics
           - mkdir coverage
           - mv coverage-report-c coverage-report-py coverage-summary.openmetrics coverage/
           - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
