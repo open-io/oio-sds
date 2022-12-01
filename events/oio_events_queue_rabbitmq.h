@@ -23,7 +23,7 @@ struct oio_events_queue_s;
 /* Creates an event queue based on RabbitMQ, with the default maximum number
  * of events "not yet acknowledged". */
 GError * oio_events_queue_factory__create_rabbitmq(
-		const char *endpoint, const char *tube,
+		const char *endpoint, const char *queue_name, const char *tube,
 		const char *exchange_name, const char *exchange_type,
 		struct oio_events_queue_s **out);
 

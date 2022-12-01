@@ -142,6 +142,8 @@ rabbitmq_declare_queue(struct rabbitmq_s *rabbitmq,
 {
 	GError *err = NULL;
 	if (!(err = rabbitmq_connect(rabbitmq))) {
+		GRID_INFO("RabbitMQ declaring queue %s (durable=%d)",
+				queue_name, durable);
 		amqp_queue_declare(rabbitmq->conn, rabbitmq->channel,
 				amqp_cstring_bytes(queue_name),
 				passive, durable, exclusive, auto_delete,
@@ -162,6 +164,10 @@ rabbitmq_bind_queue(struct rabbitmq_s *rabbitmq,
 {
 	GError *err = NULL;
 	if (!(err = rabbitmq_connect(rabbitmq))) {
+		GRID_INFO(
+				"RabbitMQ binding queue %s to exchange %s with routing key %s",
+				queue_name, (char*)rabbitmq->exchange.bytes, routing_key
+		);
 		amqp_queue_bind(rabbitmq->conn, rabbitmq->channel,
 				amqp_cstring_bytes(queue_name), rabbitmq->exchange,
 				amqp_cstring_bytes(routing_key),

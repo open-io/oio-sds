@@ -55,6 +55,7 @@ _q_destroy(struct oio_events_queue_s *self)
 	oio_str_clean(&q->endpoint);
 	oio_str_clean(&q->username);
 	oio_str_clean(&q->password);
+	oio_str_clean(&q->queue_name);
 	oio_str_clean(&q->tube);
 	oio_str_clean(&q->exchange_name);
 	oio_str_clean(&q->exchange_type);

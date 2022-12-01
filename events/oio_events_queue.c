@@ -185,6 +185,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		const char *final_tube = tube;
 		const char *netloc;
 		const char *param_value = NULL;
+		const char *queue_name = NULL;
 		const char *exchange_name = NULL, *exchange_type = NULL;
 		struct oio_requri_s queue_uri = {0};
 
@@ -195,6 +196,10 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 				tok++) {
 			if ((param_value = _has_prefix(*tok, "tube=")))
 				final_tube = param_value;
+			else if ((param_value = _has_prefix(*tok, "queue_name=")))
+				queue_name = param_value;
+			else if ((param_value = _has_prefix(*tok, "routing_key=")))
+				final_tube = param_value;
 			else if ((param_value = _has_prefix(*tok, "exchange=")))
 				exchange_name = param_value;
 			else if ((param_value = _has_prefix(*tok, "exchange_type=")))
@@ -202,7 +207,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		}
 
 		if (!oio_str_is_set(final_tube)) {
-			err = BADREQ("missing 'tube' parameter: %s", cfg);
+			err = BADREQ("missing 'tube' or 'routing_key' parameter: %s", cfg);
 		} else {
 			// Choose the right queue connector
 			if ((netloc = _has_prefix(queue_uri.path, BEANSTALKD_PREFIX))) {
@@ -210,7 +215,8 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 						netloc, final_tube, out);
 			} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
 				err = oio_events_queue_factory__create_rabbitmq(
-						netloc, final_tube, exchange_name, exchange_type, out);
+						netloc, queue_name, final_tube, exchange_name,
+						exchange_type, out);
 			} else {
 				err = BADREQ("implementation not recognized: %s", cfg);
 			}

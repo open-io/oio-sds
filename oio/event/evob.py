@@ -94,6 +94,24 @@ class EventTypes(object):
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
 
+    ALL_EVENTS = (
+        ACCOUNT_SERVICES,
+        CHUNK_DELETED,
+        CHUNK_NEW,
+        CONTAINER_DELETED,
+        CONTAINER_NEW,
+        CONTAINER_STATE,
+        CONTAINER_UPDATE,
+        CONTENT_APPEND,
+        CONTENT_BROKEN,
+        CONTENT_DELETED,
+        CONTENT_DRAINED,
+        CONTENT_UPDATE,
+        CONTENT_NEW,
+        CONTENT_REBUILT,
+        META2_DELETED,
+        XCUTE_TASKS,
+    )
     CONTAINER_EVENTS = (
         CONTAINER_DELETED,
         CONTAINER_NEW,
