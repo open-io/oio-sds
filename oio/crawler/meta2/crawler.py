@@ -68,7 +68,7 @@ class Meta2Worker(CrawlerWorker):
             self.successes += 1
         except Exception:
             self.errors += 1
-            self.logger.exception("Failed to apply pipeline")
+            self.logger.exception("Failed to apply pipeline on path='%s'", path)
         self.scanned_since_last_report += 1
         return True
 
