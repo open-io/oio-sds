@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -347,8 +347,10 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	const char *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
 	gint64 now = oio_ext_monotonic_time ();
-	gint64 diff_total = now - r->tv_start;
-	gint64 diff_handler = now - r->tv_parsed;
+	double diff_total = (double)(now - r->tv_start)
+			/ (double)G_TIME_SPAN_SECOND;
+	double diff_handler = (double)(now - r->tv_parsed)
+			/ (double)G_TIME_SPAN_SECOND;
 
 	GString *gstr = g_string_sized_new(256);
 
@@ -360,7 +362,7 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	g_string_append_static(gstr, "\tmethod:");
 	g_string_append(gstr, ensure(r->request->cmd));
 	g_string_append_printf(gstr, "\tstatus_int:%d", status);
-	g_string_append_printf(gstr, "\trequest_time_int:%"G_GINT64_FORMAT, diff_total);
+	g_string_append_printf(gstr, "\trequest_time_float:%.6lf", diff_total);
 	g_string_append_printf(gstr, "\tbytes_sent_int:%"G_GSIZE_FORMAT, out_len);
 	g_string_append_static(gstr, "\trequest_id:");
 	g_string_append(gstr, ensure(reqid));
@@ -368,7 +370,7 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	/* arbitrary */
 	g_string_append_static(gstr, "\tpath:");
 	g_string_append(gstr, ensure(r->request->req_uri));
-	g_string_append_printf(gstr, "\ttime_spent_handler_int:%"G_GINT64_FORMAT, diff_handler);
+	g_string_append_printf(gstr, "\ttime_spent_handler_float:%.6lf", diff_handler);
 	if (tail) {
 		g_string_append_c(gstr, '\t');
 		g_string_append(gstr, tail);
