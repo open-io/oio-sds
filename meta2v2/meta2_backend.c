@@ -955,55 +955,65 @@ _transaction_begin(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 }
 
 static GError *
+_table_is_empty(struct sqlx_sqlite3_s *sq3, const gchar *table)
+{
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	gint64 count = 0;
+	gchar query[128] = {0};
+
+	/* In case the table name is too long, sqlite3_prepare_v2 will report
+	 * an invalid statement error (but won't crash). */
+	g_snprintf(query, sizeof(query),
+			"SELECT exists(SELECT 1 FROM %s LIMIT 1)", table);
+
+	int rc = sqlite3_prepare_v2(sq3->db, query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		return NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+				rc, sqlite3_errmsg(sq3->db));
+	}
+
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
+		count = sqlite3_column_int64(stmt, 0);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+				rc, sqlite3_errmsg(sq3->db));
+	}
+	sqlx_sqlite3_finalize(sq3, stmt, err);
+
+	if (!err && count > 0)
+		err = NEWERROR(CODE_CONTAINER_NOTEMPTY, "Table '%s' not empty", table);
+
+	return err;
+}
+
+static GError *
 _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
 
 	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-	gint64 count = 0;
 
 	// Check if the container contains data
-	int rc = sqlite3_prepare(sq3->db,
-			"SELECT exists(SELECT 1 FROM chunks LIMIT 1)",
-			-1, &stmt, NULL);
-	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
-		count = sqlite3_column_int64(stmt, 0);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		if (err) {
-			GRID_WARN("SQLite error: (%d) %s",
-					rc, sqlite3_errmsg(sq3->db));
-		} else {
-			err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
-					rc, sqlite3_errmsg(sq3->db));
-		}
-	}
-	sqlx_sqlite3_finalize(sq3, stmt, err);
+	err = _table_is_empty(sq3, "contents");
 
-	if (!err && count == 0) {
+	if (!err) {
 		/* Check if the container is sharded.
 		 * If the container is sharded,
 		 * then it probably still contains data in shards. */
-		stmt = NULL;
-		rc = sqlite3_prepare(sq3->db,
-				"SELECT exists(SELECT 1 FROM shard_ranges LIMIT 1)",
-				-1, &stmt, NULL);
-		while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
-			count = sqlite3_column_int64(stmt, 0);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			if (err) {
-				GRID_WARN("SQLite error: (%d) %s",
-						rc, sqlite3_errmsg(sq3->db));
-			} else {
-				err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
-						rc, sqlite3_errmsg(sq3->db));
-			}
-		}
-		sqlx_sqlite3_finalize(sq3, stmt, err);
+		err = _table_is_empty(sq3, "shard_ranges");
 	}
 
-	if (!err && count > 0)
-		err = NEWERROR(CODE_CONTAINER_NOTEMPTY, "Container not empty");
+	if (!err) {
+		/* Check for chunks, but do not fail.
+		 * We have seen chunks being rebuilt while the object was deleted. */
+		err = _table_is_empty(sq3, "chunks");
+		GRID_WARN("Database has no contents nor shards, "
+				"but still contains chunks (reqid=%s)",
+				oio_ext_get_reqid());
+		g_clear_error(&err);
+	}
+
 	return err;
 }
 
