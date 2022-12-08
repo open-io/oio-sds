@@ -221,6 +221,10 @@ class Checksum(Filter):
                 body="while parsing chunk_id=%s, err=%s" % {chunk.chunk_id, str(err)},
             )
             return resp(env, cb)
+        except OSError:
+            self.errors += 1
+            self.logger.exception("chunk_id=%s is not readable", chunk.chunk_id)
+            self._rebuild_chunk(chunk)
         return self.app(env, cb)
 
     def _get_filter_stats(self):
