@@ -259,7 +259,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		if (max > 0) {
 			if (DESCR(bean) == &descr_struct_ALIASES) {
 				_bean_list_cb(&obc->l, bean);
-				if (0 == --max) {
+				if (--max == 0) {
 					next_marker = g_strdup(ALIASES_get_alias(bean)->str);
 					if (lp->flag_allversion) {
 						next_version_marker = g_strdup_printf(
@@ -307,12 +307,14 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 				// The prefix is before the last object of this shard
 				&& g_strcmp0(lp->prefix, shard_upper) <= 0
 				// The last object of this shard desn't start with the prefix
-				&& !g_str_has_prefix(shard_upper, lp->prefix))
+				&& !g_str_has_prefix(shard_upper, lp->prefix)) {
 			goto end;
+		}
 		if (lp->marker_end
 				// The marker end is before the last object of this shard
-				&& g_strcmp0(lp->marker_end, shard_upper) <= 0)
+				&& g_strcmp0(lp->marker_end, shard_upper) <= 0) {
 			goto end;
+		}
 
 		// In all other cases, the list is truncated
 		truncated = TRUE;

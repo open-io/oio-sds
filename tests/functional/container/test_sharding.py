@@ -1573,6 +1573,86 @@ class TestSharding(BaseTestCase):
             M2_PROP_DRAINING_TIMESTAMP, value_3, value_3, flag_propagate_to_shards=True
         )
 
+    def test_optimized_object_listing_many_delete_markers(self):
+        """
+        This test ensures we do not miss object prefixes when the first
+        shard has only delete markers.
+
+        Historically we also got a case of infinite loop inside meta2.
+        """
+        self._create(self.cname, versioning=True)
+        self._add_objects(self.cname, 10, prefix="dir/obj")
+
+        test_shards = [
+            {"index": 0, "lower": "", "upper": "dir/obj_3"},
+            {"index": 1, "lower": "dir/obj_3", "upper": "dir/obj_5"},
+            {"index": 2, "lower": "dir/obj_5", "upper": "dir/obj_8"},
+            {"index": 3, "lower": "dir/obj_8", "upper": ""},
+        ]
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True
+        )
+        self.assertTrue(modified)
+        self._delete_objects(self.cname, 9, prefix="dir/obj")
+
+        # check objects
+        list_res = self.storage.object_list(
+            self.account, self.cname, delimiter="/", limit=4
+        )
+        self.assertIn("dir/", list_res["prefixes"])
+
+    def test_optimized_object_listing_several_prefixes(self):
+        """
+        This test ensures we do not miss object prefixes.
+        """
+        self._create(self.cname)
+        self._add_objects(self.cname, 4, prefix="dir1/obj")
+        self._add_objects(self.cname, 4, prefix="dir2/obj")
+        self._add_objects(self.cname, 4, prefix="dir3/obj")
+
+        test_shards = [
+            {"index": 0, "lower": "", "upper": "dir2/obj_1"},
+            {"index": 1, "lower": "dir2/obj_1", "upper": ""},
+        ]
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True
+        )
+        self.assertTrue(modified)
+        self._delete_objects(self.cname, 2, prefix="dir2/obj")
+
+        # check objects
+        list_res = self.storage.object_list(self.account, self.cname, delimiter="/")
+        self.assertIn("dir2/", list_res["prefixes"])
+
+    def test_optimized_object_listing_many_empty_shards(self):
+        """
+        This test ensures we do not miss object prefixes when the first
+        shards are empty.
+        """
+        self._create(self.cname, versioning=False)
+        self._add_objects(self.cname, 10, prefix="dir/obj")
+
+        test_shards = [
+            {"index": 0, "lower": "", "upper": "dir/obj_3"},
+            {"index": 1, "lower": "dir/obj_3", "upper": "dir/obj_5"},
+            {"index": 2, "lower": "dir/obj_5", "upper": "dir/obj_8"},
+            {"index": 3, "lower": "dir/obj_8", "upper": ""},
+        ]
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True
+        )
+        self.assertTrue(modified)
+        self._delete_objects(self.cname, 9, prefix="dir/obj")
+
+        # check objects
+        list_res = self.storage.object_list(
+            self.account, self.cname, delimiter="/", limit=4
+        )
+        self.assertIn("dir/", list_res["prefixes"])
+
 
 class TestShardingObjectLockRetention(TestSharding):
     def setUp(self):
@@ -1625,6 +1705,12 @@ class TestShardingObjectLockRetention(TestSharding):
         # check obejctlock sysmeta
         objlock_enabled = resp["system"]["sys.m2.bucket.objectlock.enabled"]
         self.assertEqual(objlock_enabled, "1")
+
+    def test_optimized_object_listing_several_prefixes(self):
+        self.skip("This tests removes objects, cannot run it with Object Lock enabled")
+
+    def test_optimized_object_listing_many_empty_shards(self):
+        self.skip("This tests removes objects, cannot run it with Object Lock enabled")
 
 
 class TestShardingObjectLockLegalHold(TestShardingObjectLockRetention):

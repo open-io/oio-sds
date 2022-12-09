@@ -2023,7 +2023,7 @@ typedef GByteArray* (*list_packer_f) (struct list_params_s *);
  * - req_prefix: the prefix specified in the request. */
 static gchar *
 _build_next_marker(const char *marker, const char *delimiter,
-		const char *req_prefix)
+		const char *req_prefix, GTree *tree_prefixes)
 {
 	/* There is no input marker, or the marker is before the request's prefix.
 	 * Let the downstream code use the prefix as a marker (or do not use any
@@ -2050,6 +2050,17 @@ _build_next_marker(const char *marker, const char *delimiter,
 	gsize prefix_len = req_prefix ? strlen(req_prefix) : 0;
 	const char *suffix = strstr(marker + prefix_len, delimiter);
 	if (!suffix) {
+		return g_strdup(marker);
+	}
+
+	/* Check if the "sub-prefix" is known. If the marker we built this prefix
+	 * from is a shard boundary, we must check if any object containing this
+	 * prefix have been yielded already. If we jump too far, we may miss some
+	 * objects at the beginning of the next shard. */
+	int len_delimiter = strlen(delimiter);
+	gchar subprefix[LIMIT_LENGTH_CONTENTPATH] = {0};
+	strncpy(subprefix, marker, suffix + len_delimiter - marker);
+	if (tree_prefixes && !g_tree_lookup(tree_prefixes, subprefix)) {
 		return g_strdup(marker);
 	}
 
@@ -2081,9 +2092,7 @@ _build_next_marker(const char *marker, const char *delimiter,
 	 *
 	 * Notice that there is the same mechanism in the meta2 service.
 	 * It is used to return a single alias per sub-prefix. */
-	int len_delimiter = strlen(delimiter);
-	gchar *next_marker = g_strdup_printf("%.*s"LAST_UNICODE_CHAR,
-			(int)(suffix + len_delimiter - marker), marker);
+	gchar *next_marker = g_strdup_printf("%s"LAST_UNICODE_CHAR, subprefix);
 	return next_marker;
 }
 
@@ -2092,6 +2101,8 @@ static GError * _list_loop (struct req_args_s *args,
 		GTree *tree_prefixes, list_packer_f packer) {
 	GError *err = NULL;
 	gboolean stop = FALSE;
+	gint iterations = 0;
+	// Total number of objects listed so far
 	guint main_count = 0;
 	struct list_params_s in = *in0;
 
@@ -2105,6 +2116,7 @@ static GError * _list_loop (struct req_args_s *args,
 
 	struct filter_ctx_s ctx = {0};
 	while (!err && !stop && grid_main_is_running()) {
+		iterations++;
 
 		struct list_result_s out = {0};
 		m2v2_list_result_init (&out);
@@ -2112,9 +2124,17 @@ static GError * _list_loop (struct req_args_s *args,
 		/* patch the input parameters */
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (main_count + g_tree_nnodes(tree_prefixes));
+
+		/* Build an optimized marker.
+		 * In the first iteration, skip the prefix check: if the marker sent
+		 * by the client contains a prefix, it has been reported by the
+		 * previous request. */
 		in.marker_start = _build_next_marker(
 				out0->next_marker?: in0->marker_start,
-				in0->delimiter, in0->prefix);
+				in0->delimiter,
+				in0->prefix,
+				iterations > 1? tree_prefixes : NULL
+		);
 		in.version_marker = g_strdup(
 			out0->next_version_marker?: in0->version_marker);
 
@@ -2185,7 +2205,9 @@ static GError * _list_loop (struct req_args_s *args,
 			ctx.prefix = in0->prefix;
 			ctx.marker = in0->marker_start;
 			ctx.delimiter = in0->delimiter;
+
 			_filter_list_result(&ctx, out.beans);
+
 			out.beans = NULL;
 			main_count = ctx.count;
 			out0->beans = ctx.beans;
