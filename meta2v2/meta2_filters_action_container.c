@@ -259,7 +259,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		if (max > 0) {
 			if (DESCR(bean) == &descr_struct_ALIASES) {
 				_bean_list_cb(&obc->l, bean);
-				if (0 == --max) {
+				if (--max == 0) {
 					next_marker = g_strdup(ALIASES_get_alias(bean)->str);
 					if (lp->flag_allversion) {
 						next_version_marker = g_strdup_printf(
@@ -307,12 +307,14 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 				// The prefix is before the last object of this shard
 				&& g_strcmp0(lp->prefix, shard_upper) <= 0
 				// The last object of this shard desn't start with the prefix
-				&& !g_str_has_prefix(shard_upper, lp->prefix))
+				&& !g_str_has_prefix(shard_upper, lp->prefix)) {
 			goto end;
+		}
 		if (lp->marker_end
 				// The marker end is before the last object of this shard
-				&& g_strcmp0(lp->marker_end, shard_upper) <= 0)
+				&& g_strcmp0(lp->marker_end, shard_upper) <= 0) {
 			goto end;
+		}
 
 		// In all other cases, the list is truncated
 		truncated = TRUE;
@@ -395,6 +397,7 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 		lp->flag_local = BOOL(flags & M2V2_FLAG_LOCAL);
 		// Beware of the negation of the flag
 		lp->flag_recursion = ! BOOL(flags & M2V2_FLAG_NORECURSION);
+		lp->flag_noskip = BOOL(flags & M2V2_FLAG_NOSKIP);
 	}
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);

@@ -1129,13 +1129,17 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		}
 	}
 
+	/* XXX: why do we loop? Because "maxkeys" is in terms of keys, whereas
+	 * the SQL query returns versions, and since there can be several versions
+	 * for each key, we may not get enough keys from the first query. */
 	while (!done) {
 		cur_aliases = g_ptr_array_new();
 
 		if (lp.maxkeys > 0)
 			lp.maxkeys -= count_aliases;
-		count_aliases = 0;
-		if (last_alias_name) {
+		/* If count_aliases > 0, last_alias_name comes from the last iteration
+		 * of the while loop, and it is safe to optimize the research. */
+		if ((!lp.flag_noskip || count_aliases > 0) && last_alias_name) {
 			const gchar *suffix = NULL;
 			if (delimiter_len) {
 				suffix = strstr(last_alias_name + prefix_len, lp.delimiter);
@@ -1185,6 +1189,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			lp.marker_start = NULL;
 			lp.version_marker = NULL;
 		}
+		count_aliases = 0;
 
 		// List the next items
 		GString *clause = g_string_sized_new(128);

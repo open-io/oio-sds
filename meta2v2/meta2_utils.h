@@ -55,6 +55,7 @@ struct list_params_s
 	guint8 flag_properties:1;
 	guint8 flag_local     :1;
 	guint8 flag_recursion :1;
+	guint8 flag_noskip    :1;
 };
 
 struct m2v2_position_s {
