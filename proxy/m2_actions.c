@@ -2092,7 +2092,7 @@ static GError * _list_loop (struct req_args_s *args,
 		GTree *tree_prefixes, list_packer_f packer) {
 	GError *err = NULL;
 	gboolean stop = FALSE;
-	guint count = 0;
+	guint main_count = 0;
 	struct list_params_s in = *in0;
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%s prefix=%s"
@@ -2111,28 +2111,29 @@ static GError * _list_loop (struct req_args_s *args,
 
 		/* patch the input parameters */
 		if (in0->maxkeys > 0)
-			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
+			in.maxkeys = in0->maxkeys - (main_count + g_tree_nnodes(tree_prefixes));
 		in.marker_start = _build_next_marker(
 				out0->next_marker?: in0->marker_start,
 				in0->delimiter, in0->prefix);
 		in.version_marker = g_strdup(
 			out0->next_version_marker?: in0->version_marker);
 
-		/* update path to use sharding resolver */
-		gchar *fake_path = NULL;
+		/* Build a routing key (object path) so the sharding resolver
+		 * will direct the request to the next shard. */
+		gchar *routing_key = NULL;
 		if (!(in.prefix && *in.prefix)
 				&& !(in.marker_start && *in.marker_start)) {
-			fake_path = g_strdup("");
+			routing_key = g_strdup("");
 		} else if (g_strcmp0(in.prefix, in.marker_start) > 0) {
-			fake_path = g_strdup(in.prefix);
+			routing_key = g_strdup(in.prefix);
 		} else {
 			/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
-			fake_path = g_strdup_printf("%s\x01", in.marker_start);
+			routing_key = g_strdup_printf("%s\x01", in.marker_start);
 		}
 
 		/* Action */
-		if (fake_path) {
-			oio_url_set(args->url, OIOURL_PATH, fake_path);
+		if (routing_key) {
+			oio_url_set(args->url, OIOURL_PATH, routing_key);
 		}
 		enum cache_control_e original_cache_control = args->cache_control;
 		if (g_tree_nnodes(out0->props) == 0) {
@@ -2143,14 +2144,14 @@ static GError * _list_loop (struct req_args_s *args,
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
 				m2v2_list_result_extract);
 		args->cache_control = original_cache_control;
-		if (fake_path) {
-			g_free(fake_path);
+		if (routing_key) {
+			g_free(routing_key);
 			oio_url_unset(args->url, OIOURL_PATH);
 		}
 		oio_str_clean((gchar**)&(in.marker_start));
 		oio_str_clean((gchar**)&(in.version_marker));
 		if (err) {
-			if (err->code == CODE_UNAVAILABLE && count > 0) {
+			if (err->code == CODE_UNAVAILABLE && main_count > 0) {
 				// We reached request deadline, just tell the caller the
 				// listing is truncated, it will call us again with the
 				// appropriate marker.
@@ -2180,18 +2181,18 @@ static GError * _list_loop (struct req_args_s *args,
 		if (out.beans) {
 			ctx.beans = out0->beans;
 			ctx.prefixes = tree_prefixes;
-			ctx.count = count;
+			ctx.count = main_count;
 			ctx.prefix = in0->prefix;
 			ctx.marker = in0->marker_start;
 			ctx.delimiter = in0->delimiter;
 			_filter_list_result(&ctx, out.beans);
 			out.beans = NULL;
-			count = ctx.count;
+			main_count = ctx.count;
 			out0->beans = ctx.beans;
 		}
 
 		if (in0->maxkeys > 0 &&
-				(count + g_tree_nnodes(tree_prefixes)) >= in0->maxkeys) {
+				(main_count + g_tree_nnodes(tree_prefixes)) >= in0->maxkeys) {
 			/* enough elements received */
 			out0->truncated = out.truncated;
 			stop = TRUE;
@@ -4139,7 +4140,7 @@ enum http_rc_e action_content_update(struct req_args_s *args) {
 // .. code-block:: http
 //
 //    HTTP/1.1 204 No Content
-//    Connetion: Close
+//    Connection: Close
 //    Content-Length: 0
 //
 // }}CONTENT

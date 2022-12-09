@@ -1388,9 +1388,14 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
 	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
-		const gchar *current_marker_start = lp->marker_start;
-		const gchar *current_version_marker = lp->version_marker;
-		const gchar *current_marker_end = lp->marker_end;
+		/* Keep pointers to the request's parameters,
+		 * because we will temporarily replace them. */
+		const gchar *req_marker_start = lp->marker_start;
+		const gchar *req_version_marker = lp->version_marker;
+		const gchar *req_marker_end = lp->marker_end;
+
+		/* The request has been redirected already, check if we can adapt
+		 * the request's parameter to what's supposed to be in this shard. */
 		if (oio_ext_is_shard_redirection()) {
 			gchar *shard_lower = NULL;
 			gchar *shard_upper = NULL;
@@ -1419,18 +1424,23 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			g_free(shard_lower);
 			g_free(shard_upper);
 		} else {
-			gchar *fake_path = NULL;
+			/* The request has not been redirected. Build a routing key
+			 * according to the request's parameters, and maybe redirect it. */
+			gchar *routing_key = NULL;
 			if (!(lp->prefix && *lp->prefix)
 					&& !(lp->marker_start && *lp->marker_start)) {
-				fake_path = g_strdup("");
+				/* No prefix or marker, start at the beginning. */
+				routing_key = g_strdup("");
 			} else if (g_strcmp0(lp->prefix, lp->marker_start) > 0) {
-				fake_path = g_strdup(lp->prefix);
+				/* The prefix is after the marker, start at the prefix. */
+				routing_key = g_strdup(lp->prefix);
 			} else {
-				/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
-				fake_path = g_strdup_printf("%s\x01", lp->marker_start);
+				/* HACK: build a routing key which is one character after
+				 * the marker. "\x01" is the first valid unicode character. */
+				routing_key = g_strdup_printf("%s\x01", lp->marker_start);
 			}
-			err = _redirect_to_shard(sq3, fake_path);
-			g_free(fake_path);
+			err = _redirect_to_shard(sq3, routing_key);
+			g_free(routing_key);
 		}
 		if (!err) {
 			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
@@ -1443,17 +1453,17 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (end_cb)
 				end_cb(sq3);
 		}
-		if (lp->marker_start != current_marker_start) {
+		if (lp->marker_start != req_marker_start) {
 			g_free((gchar *)lp->marker_start);
-			lp->marker_start = current_marker_start;
+			lp->marker_start = req_marker_start;
 		}
-		if (lp->version_marker != current_version_marker) {
+		if (lp->version_marker != req_version_marker) {
 			g_free((gchar *)lp->version_marker);
-			lp->version_marker = current_version_marker;
+			lp->version_marker = req_version_marker;
 		}
-		if (lp->marker_end != current_marker_end) {
+		if (lp->marker_end != req_marker_end) {
 			g_free((gchar *)lp->marker_end);
-			lp->marker_end = current_marker_end;
+			lp->marker_end = req_marker_end;
 		}
 		m2b_close(m2b, sq3, url);
 	}
