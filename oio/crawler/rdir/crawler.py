@@ -199,13 +199,16 @@ class RdirWorker(object):
                 self.error(container_id, chunk_id, error, reqid=reqid)
 
     def process_entry(self, container_id, chunk_id, value, reqid):
-        self.logger.debug("current chunk_id=%s volume_id=%s", chunk_id, self.volume_id)
-
         chunk_path = self._build_chunk_path(chunk_id)
 
         if not isfile(chunk_path):
+            self.logger.debug(
+                "rebuild chunk_id=%s volume_id=%s container=%s",
+                chunk_id,
+                self.volume_id,
+                container_id,
+            )
             self._rebuild_chunk(container_id, chunk_id, value, reqid)
-
         self.scanned_since_last_report += 1
 
     def crawl_volume(self):

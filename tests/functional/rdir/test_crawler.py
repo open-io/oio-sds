@@ -31,9 +31,11 @@ class TestRdirCrawler(BaseTestCase):
         # Prevent the chunks' rebuilds by the rdir crawlers
         cls._service("oio-rdir-crawler-1.service", "stop", wait=3)
         cls._service("oio-meta2-crawler-1.service", "stop", wait=3)
+        cls._service("oio-rawx-crawler-1.service", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
+        cls._service("oio-rawx-crawler-1.service", "start", wait=1)
         cls._service("oio-meta2-crawler-1.service", "start", wait=1)
         cls._service("oio-rdir-crawler-1.service", "start", wait=1)
         super(TestRdirCrawler, cls).tearDownClass()
@@ -112,7 +114,12 @@ class TestRdirCrawler(BaseTestCase):
         chunk = chunks[0]
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(self.conf, volume_path, watchdog=self.watchdog)
+        rdir_crawler = RdirWorker(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
         rdir_crawler.crawl_volume()
         nb_passes = rdir_crawler.passes
         nb_errors = rdir_crawler.errors
@@ -122,6 +129,9 @@ class TestRdirCrawler(BaseTestCase):
         rdir_crawler.crawl_volume()
         self.assertEqual(nb_passes + 1, rdir_crawler.passes)
         self.assertEqual(nb_errors + 1, rdir_crawler.errors)
+        # Check that chunk is not repaired
+        self.assertEqual(0, rdir_crawler.repaired)
+
         # Check that there is nothing where the chunk should be located
         _, new_chunks = self.api.container.content_locate(
             self.account, container, object_name
@@ -141,7 +151,13 @@ class TestRdirCrawler(BaseTestCase):
         old_chunks.remove(chunk)
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(self.conf, volume_path, watchdog=self.watchdog)
+        rdir_crawler = RdirWorker(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+
         rdir_crawler.crawl_volume()
         nb_passes = rdir_crawler.passes
         nb_errors = rdir_crawler.errors
@@ -155,6 +171,8 @@ class TestRdirCrawler(BaseTestCase):
         # to the context given by previous tests, the second crawl should also
         # produce these errors again.
         self.assertEqual(nb_errors, rdir_crawler.errors)
+        # Check that one chunk is repaired
+        self.assertEqual(1, rdir_crawler.repaired)
 
         _, new_chunks = self.api.container.content_locate(
             self.account, container, object_name
