@@ -21,3 +21,6 @@ jobs:
             cd ..
             worker cache push $fdbtag fdb-packages
           fi
+    requirements:
+      # - binary: wget
+      - model: Debian11-Container
