@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -2136,7 +2136,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 
 		// FIXME(ABO): Maybe validate the format as is done in the chunk part
 		// of rdir.
-		// It would consume a bit more CPU, so wether it's useful or not is
+		// It would consume a bit more CPU, so whether it's useful or not is
 		// debatable especially given that we don't cherry-pick data as in the
 		// chunk part of rdir.
 
@@ -2567,6 +2567,10 @@ _route_srv_status(struct req_args_s *args)
 	guint count = g_tree_nnodes(tree_bases);
 	g_mutex_unlock(&lock_bases);
 
+	g_mutex_lock(&meta2_db_lock);
+	count += g_tree_nnodes(meta2_db_tree);
+	g_mutex_unlock(&meta2_db_lock);
+
 	const gchar *format = OPT("format");
 	GString *gstr = g_string_sized_new(128);
 	if (!format || !*format || !g_strcmp0(format, "json")) {
@@ -2891,7 +2895,7 @@ grid_main_specific_fini(void)
 	g_mutex_clear(&lock_bases);
 
 	g_tree_destroy(meta2_db_tree);
-	tree_bases = NULL;
+	meta2_db_tree = NULL;
 	g_cond_clear(&meta2_db_cond);
 	g_mutex_clear(&meta2_db_lock);
 
