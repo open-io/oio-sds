@@ -29,6 +29,8 @@ from oio.common.wsgi import WerkzeugApp
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
+LIFECYCLE_LISTING_DEFAULT_LIMIT = 1000
+LIFECYCLE_LISTING_MAX_LIMIT = 10000
 
 
 def force_master(func):
@@ -143,6 +145,22 @@ class Account(WerkzeugApp):
                 Rule(
                     "/v1.0/bucket/get-owner",
                     endpoint="bucket_get_owner",
+                    methods=["GET"],
+                ),
+                # Bucket lifecycle
+                Rule(
+                    "/v1.0/bucket/lifecycle",
+                    endpoint="lifecycle_bucket_delete",
+                    methods=["DELETE"],
+                ),
+                Rule(
+                    "/v1.0/bucket/lifecycle",
+                    endpoint="lifecycle_bucket_put",
+                    methods=["PUT"],
+                ),
+                Rule(
+                    "/v1.0/bucket/lifecycle",
+                    endpoint="lifecycle_buckets_list",
                     methods=["GET"],
                 ),
                 # IAM
@@ -1543,6 +1561,42 @@ class Account(WerkzeugApp):
         res = self.iam.load_merged_user_policies(account, user)
         return Response(
             json.dumps(res, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+        )
+
+    @force_master
+    def on_lifecycle_bucket_delete(self, req, **kwargs):
+        bname = self._get_item_id(req, what="bucket")
+        self.backend.lifecycle_unregister_bucket(bname, **kwargs)
+        return Response(status=204)
+
+    @force_master
+    def on_lifecycle_bucket_put(self, req, **kwargs):
+        bname = self._get_item_id(req, what="bucket")
+        self.backend.lifecycle_register_bucket(bname, **kwargs)
+        return Response(status=204)
+
+    def on_lifecycle_buckets_list(self, req, **kwargs):
+        limit = max(
+            0, min(LIFECYCLE_LISTING_MAX_LIMIT, int_value(req.args.get("limit"), 0))
+        )
+        if limit <= 0:
+            limit = LIFECYCLE_LISTING_DEFAULT_LIMIT
+        prefix = req.args.get("prefix")
+        marker = req.args.get("marker")
+        end_marker = req.args.get("end_marker")
+        next_marker, buckets = self.backend.lifecycle_list_buckets(
+            marker, end_marker, limit, prefix, **kwargs
+        )
+
+        info = {}
+        info["listing"] = buckets
+        if next_marker is not None:
+            info["next_marker"] = next_marker
+            info["truncated"] = True
+        else:
+            info["truncated"] = False
+        return Response(
+            json.dumps(info, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
         )
 
 

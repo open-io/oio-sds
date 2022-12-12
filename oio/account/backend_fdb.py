@@ -122,11 +122,12 @@ class AccountBackendFdb(object):
     METADATA_PREFIX = "metadata"
     # Prefix for bucket db
     BUCKET_RESERVE_PREFIX = "s3bucket"
+    # Lifecycle prefix
+    LIFECYCLE_PREFIX = "lifecycle"
     # Stats & metric prefix
     METRICS_PREFIX = "metrics"
     # Rankings prefix
     RANKINGS_PREFIX = "rankings"
-
     # Timeout for bucket reservation
     DEFAULT_BUCKET_RESERVATION_TIMEOUT = 30
     # Maximum number of buckets per account
@@ -176,6 +177,9 @@ class AccountBackendFdb(object):
             self.buckets_index_space = self.namespace.create_or_open(
                 self.db, self.buckets_list_prefix
             )
+            self.lifecycle_space = self.namespace.create_or_open(
+                self.db, self.lifecycle_prefix
+            )
             self.metadata_space = self.namespace.create_or_open(
                 self.db, self.metadata_prefix
             )
@@ -216,13 +220,13 @@ class AccountBackendFdb(object):
         self.ct_to_delete_prefix = conf.get(
             "containers_to_delete_prefix", self.CTS_TO_DELETE_LIST_PREFIX
         )
+        self.lifecycle_prefix = conf.get("lifecycle_prefix", self.LIFECYCLE_PREFIX)
         self.metadata_prefix = conf.get("metadata_prefix", self.METADATA_PREFIX)
         self.metrics_prefix = conf.get("metrics_prefix", self.METRICS_PREFIX)
         self.rankings_prefix = conf.get("rankings_prefix", self.RANKINGS_PREFIX)
         self.reserve_bucket_prefix = conf.get(
             "reserve_bucket_prefix", self.BUCKET_RESERVE_PREFIX
         )
-
         self.bucket_reservation_timeout = float_value(
             conf.get("bucket_reservation_timeout"),
             self.DEFAULT_BUCKET_RESERVATION_TIMEOUT,
@@ -714,7 +718,7 @@ class AccountBackendFdb(object):
 
         account_ctime = tr[account_space.pack((CTIME_FIELD,))]
         if not account_ctime.present():
-            raise NotFound("Account does'nt exist")
+            raise NotFound("Account does not exist")
 
         containers = tr[account_space.pack((CONTAINERS_FIELD,))]
         if containers.present():
@@ -1480,7 +1484,7 @@ class AccountBackendFdb(object):
             region = region.upper()
             filters.append(lambda name, info: info[REGION_FIELD] == region)
         if bucket:
-            filters.append(lambda name, info: info[BUCKET_FIELD] == bucket)
+            filters.append(lambda name, info: info.get(BUCKET_FIELD) == bucket)
 
         start, stop = self._get_start_and_stop(
             containers_space, prefix=prefix, marker=marker, end_marker=end_marker
@@ -1641,7 +1645,7 @@ class AccountBackendFdb(object):
         if not account_ctime.present():
             # It's a new account
             if not autocreate_account:
-                raise NotFound("Account does'nt exist")
+                raise NotFound("Account does not exist")
             self._real_create_account(tr, account_id)
 
         container_is_deleted = new_dtime >= new_mtime
@@ -1670,7 +1674,7 @@ class AccountBackendFdb(object):
                 return
             # It's a new container
             if not autocreate_container:
-                raise NotFound("Container does'nt exist")
+                raise NotFound("Container does not exist")
             self._real_create_container(tr, account_id, cname, region, new_mtime)
             current_mtime = new_mtime
         else:
@@ -1880,7 +1884,7 @@ class AccountBackendFdb(object):
         if not account_ctime.present():
             # It's a new account
             if not autocreate_account:
-                raise NotFound("Account does'nt exist")
+                raise NotFound("Account does not exist")
             self._real_create_account(tr, account)
 
         self._set_bucket_owner(tr, bname, account)
@@ -2029,6 +2033,8 @@ class AccountBackendFdb(object):
         self._increment(
             tr, self.metrics_space.pack((OBJECTS_S3_FIELD, region)), -objects
         )
+        # Delete lifecycle index
+        self._lifecycle_unregister_bucket(bucket)
 
     @catch_service_errors
     def get_bucket_info(self, bname, **kwargs):
@@ -2609,3 +2615,60 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _is_element(self, tr, space, key):
         return tr[space.pack((key,))].present()
+
+    @catch_service_errors
+    def lifecycle_register_bucket(self, bucket, mtime=None, **kwargs):
+        return self._lifecycle_register_bucket(self.db, bucket, mtime, **kwargs)
+
+    def _lifecycle_register_bucket(self, tr, bucket, mtime, **kwargs):
+        # Ensure bucket exists by retrieving owner
+        try:
+            self._get_bucket_owner(tr, bucket)
+        except NotFound:
+            raise NotFound(f"Bucket {bucket} not found")
+
+        mtime = self._get_timestamp(mtime)
+        self._set_timestamp(
+            tr, self.lifecycle_space.pack((BUCKETS_FIELD, bucket)), mtime
+        )
+
+    @catch_service_errors
+    def lifecycle_unregister_bucket(self, bucket, **kwargs):
+        return self._lifecycle_unregister_bucket(
+            self.db, bucket, readonly=True, **kwargs
+        )
+
+    @fdb.transactional
+    def _lifecycle_unregister_bucket(self, tr, bucket, **kwargs):
+        del tr[self.lifecycle_space.pack((BUCKETS_FIELD, bucket))]
+
+    @catch_service_errors
+    def lifecycle_list_buckets(
+        self, marker=None, end_marker=None, limit=1000, prefix=None, **kwargs
+    ):
+        buckets = self._lifecycle_list_buckets(
+            self.db, marker, end_marker, limit + 1, prefix
+        )
+        next_marker = None
+        if len(buckets) > limit:
+            next_marker = buckets.pop(-1)
+
+        return next_marker, buckets
+
+    @fdb.transactional
+    @use_snapshot_reads
+    def _lifecycle_list_buckets(self, tr, marker, end_marker, limit, prefix, **kwargs):
+        buckets = []
+
+        space = self.lifecycle_space[BUCKETS_FIELD]
+        start, stop = self._get_start_and_stop(
+            space, prefix=prefix, marker=marker, end_marker=end_marker
+        )
+        iterator = tr.get_range(start, stop)
+        for key, _ in iterator:
+            bucket, *key = space.unpack(key)
+            buckets.append(bucket)
+            if len(buckets) >= limit:
+                break
+
+        return buckets

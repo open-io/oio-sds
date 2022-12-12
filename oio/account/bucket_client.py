@@ -143,3 +143,35 @@ class BucketClient(ServiceClient):
         """
         _resp, body = self.bucket_request(bucket, "GET", "get-owner", **kwargs)
         return body
+
+    def list_lifecycle_buckets(self, limit=None, marker=None, **kwargs):
+        """
+        List all buckets for which lifecycle is active
+        """
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        if marker is not None:
+            params["marker"] = marker
+
+        _resp, body = self.service_request("GET", "/lifecycle", params=params)
+
+        return body
+
+    def bucket_lifecycle_activate(self, bucket, **kwargs):
+        """
+        Activate lifecycle for bucket
+        """
+        params = {"bucket": bucket}
+        _resp, _body = self.service_request(
+            "PUT", "/lifecycle", params=params, **kwargs
+        )
+
+    def bucket_lifecycle_deactivate(self, bucket, **kwargs):
+        """
+        Deactivate lifecycle for bucket
+        """
+        params = {"bucket": bucket}
+        _resp, _body = self.service_request(
+            "DELETE", "/lifecycle", params=params, **kwargs
+        )

@@ -27,7 +27,7 @@ from pathlib import Path
 from tests.utils import BaseTestCase, random_str
 from testtools.testcase import ExpectedException
 from time import sleep, time
-from werkzeug.exceptions import BadRequest, Conflict
+from werkzeug.exceptions import BadRequest, Conflict, NotFound
 
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.account.backend_fdb import AccountBackendFdb
@@ -94,6 +94,7 @@ class TestAccountBackend(BaseTestCase):
         buckets_info,
         containers_info,
         deleted_containers_info,
+        lifecycle_info={},
     ):
         metrics_info = self._items_info_expected_items_info(metrics_info)
         accounts_info = self._items_info_expected_items_info(accounts_info)
@@ -105,7 +106,12 @@ class TestAccountBackend(BaseTestCase):
                 "<Q", int(float(dtime) * 1000000)
             )
         deleted_containers_info = expected_deleted_containers_info
-
+        expected_lifecycle_info = {}
+        for key, value in lifecycle_info.items():
+            expected_lifecycle_info[key] = struct.pack(
+                "<Q", int(float(value) * 1000000)
+            )
+        lifecycle_info = expected_lifecycle_info
         # Check deleted containers info
         deleted_containers_range = self.backend.ct_to_delete_space.range()
         iterator = self.backend.db.get_range(
@@ -287,6 +293,20 @@ class TestAccountBackend(BaseTestCase):
             key = self.backend.metrics_space.unpack(key)
             current_metrics_info[key] = value
         self.assertDictEqual(metrics_info, current_metrics_info)
+
+        # Check lifecycle listing
+        space = self.backend.lifecycle_space
+        lifecycle_buckets_range = space.range()
+        iterator = self.backend.db.get_range(
+            lifecycle_buckets_range.start,
+            lifecycle_buckets_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all,
+        )
+        current_lifecycle_info = {}
+        for key, value in iterator:
+            key = space.unpack(key)
+            current_lifecycle_info[key] = value
+        self.assertDictEqual(lifecycle_info, current_lifecycle_info)
 
     def _create_scenario(self, scenario):
         mtime = Timestamp().timestamp
@@ -3899,4 +3919,186 @@ class TestAccountBackend(BaseTestCase):
             objects_details={"THREECOPIES": 2, "EC": 4},
             bytes_details={"THREECOPIES": 20, "EC": 21},
         )
+        self._check_backend(*backend_info)
+
+    def test_lifecycle_register_existing_bucket(self):
+        region = "LOCALHOST"
+        account_id = "test-1"
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {("accounts",): 1},
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 0,
+                }
+            },
+            {},
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+        # Create bucket
+        bucket_name1 = "bucket1"
+        self.backend.create_bucket(bucket_name1, account_id, region)
+        bucket_info1 = {
+            ("account",): account_id,
+            ("region",): region,
+            ("containers",): 0,
+            ("bytes",): 0,
+            ("objects",): 0,
+        }
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                }
+            },
+            {(account_id, bucket_name1): bucket_info1},
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+        # Register lifecycle
+        mtime = Timestamp().timestamp
+        self.backend.lifecycle_register_bucket(bucket_name1, mtime)
+        backend_info[5][
+            (
+                "buckets",
+                bucket_name1,
+            )
+        ] = mtime
+        self._check_backend(*backend_info)
+
+        # Update registration
+        mtime += 2
+        self.backend.lifecycle_register_bucket(bucket_name1, mtime)
+        backend_info[5][
+            (
+                "buckets",
+                bucket_name1,
+            )
+        ] = mtime
+        self._check_backend(*backend_info)
+
+    def test_lifecycle_register_non_existing_bucket(self):
+        account_id = "test-1"
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {("accounts",): 1},
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 0,
+                }
+            },
+            {},
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+        bucket_name1 = "bucket1"
+        # Register lifecycle
+        mtime = Timestamp().timestamp
+        self.assertRaises(
+            NotFound, self.backend.lifecycle_register_bucket, bucket_name1, mtime
+        )
+
+    def test_lifecycle_unregister_existing_bucket(self):
+        region = "LOCALHOST"
+        account_id = "test-1"
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        backend_info = (
+            {("accounts",): 1},
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 0,
+                }
+            },
+            {},
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+        # Create bucket
+        bucket_name1 = "bucket1"
+        self.backend.create_bucket(bucket_name1, account_id, region)
+        bucket_info1 = {
+            ("account",): account_id,
+            ("region",): region,
+            ("containers",): 0,
+            ("bytes",): 0,
+            ("objects",): 0,
+        }
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                }
+            },
+            {(account_id, bucket_name1): bucket_info1},
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+        # Register lifecycle
+        mtime = Timestamp().timestamp
+        self.backend.lifecycle_register_bucket(bucket_name1, mtime)
+        backend_info[5][
+            (
+                "buckets",
+                bucket_name1,
+            )
+        ] = mtime
+        self._check_backend(*backend_info)
+
+        # Unregister bucket
+        self.backend.lifecycle_unregister_bucket(bucket_name1)
+        del backend_info[5][
+            (
+                "buckets",
+                bucket_name1,
+            )
+        ]
         self._check_backend(*backend_info)
