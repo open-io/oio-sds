@@ -137,7 +137,7 @@ class RdirDispatcher(object):
         all services of the specified type whom they host a database.
         """
         all_services, all_rdir = self.get_assignments(service_type, **kwargs)
-        dummy_rdirs = [{"addr": {"n/a"}, "tags": {}}]
+        dummy_rdirs = [{"addr": "n/a", "tags": {}}]
         managed_svc = {}
 
         for svc in all_services:
