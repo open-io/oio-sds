@@ -62,7 +62,7 @@ class RdirBootstrap(Lister):
             "--max-per-rdir",
             metavar="<N>",
             type=int,
-            help="Maximum number of databases per rdir service.",
+            help="Maximum number of databases per rdir service (total).",
         )
         parser.add_argument(
             "--min-dist",
@@ -130,6 +130,11 @@ class RdirAssignments(Lister):
             action="store_true",
             help="Display an aggregation of the assignation",
         )
+        parser.add_argument(
+            "--stats",
+            action="store_true",
+            help="Display additional rdir stats (requires --aggregated)",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -152,7 +157,30 @@ class RdirAssignments(Lister):
             for rdir, managed in iteritems(managed_svc):
                 results.append((rdir, len(managed), " ".join(managed)))
             results.sort()
-            columns = ("Rdir", "Number of bases", "Bases")
+            if parsed_args.stats:
+                all_rdir = dispatcher.cs.all_services("rdir", True)
+                by_id = {
+                    x["tags"].get("tag.service_id", x["addr"]): x for x in all_rdir
+                }
+                results = [
+                    (
+                        x[0],
+                        by_id.get(x[0], {}).get("score", "0"),
+                        x[1],
+                        by_id.get(x[0], {}).get("tags", {}).get("stat.opened_db_count"),
+                        x[2],
+                    )
+                    for x in results
+                ]
+                columns = (
+                    "Rdir",
+                    "Score",
+                    f"Number of bases ({parsed_args.service_type})",
+                    "Number of bases (total)",
+                    "Bases",
+                )
+            else:
+                columns = ("Rdir", "Number of bases", "Bases")
         return columns, results
 
 
@@ -181,7 +209,7 @@ class RdirReassign(Lister):
             "--max-per-rdir",
             metavar="<N>",
             type=int,
-            help="Maximum number of databases per rdir service.",
+            help="Maximum number of databases per rdir service (total).",
         )
         parser.add_argument(
             "--min-dist",
