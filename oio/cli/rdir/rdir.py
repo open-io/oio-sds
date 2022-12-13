@@ -78,7 +78,7 @@ class RdirBootstrap(Lister):
             metavar="<N>",
             type=int,
             default=DEFAULT_RDIR_REPLICAS,
-            help="Number of rdir replication per service.",
+            help="Number of rdirs per service.",
         )
         parser.add_argument(
             "--service-id",
@@ -225,7 +225,7 @@ class RdirReassign(Lister):
             metavar="<N>",
             type=int,
             default=DEFAULT_RDIR_REPLICAS,
-            help="Number of rdir(s) per service.",
+            help="Number of rdirs per service.",
         )
         parser.add_argument(
             "--service-id",
@@ -234,6 +234,16 @@ class RdirReassign(Lister):
         )
         parser.add_argument(
             "--dry-run", action="store_true", help="Display actions but do nothing."
+        )
+        parser.add_argument(
+            "--allow-down-services",
+            type=int,
+            default=0,
+            help=(
+                "Allow to reassign even if some of the old assigned "
+                "services are down (score=0). The parameter is the number "
+                "of down services we tolerate."
+            ),
         )
         return parser
 
@@ -248,6 +258,7 @@ class RdirReassign(Lister):
                 min_dist=parsed_args.min_dist,
                 replicas=parsed_args.replicas,
                 dry_run=parsed_args.dry_run,
+                allow_down_known_services=parsed_args.allow_down_services,
                 connection_timeout=30.0,
                 read_timeout=90.0,
             )

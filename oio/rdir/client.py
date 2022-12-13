@@ -82,6 +82,7 @@ class RdirDispatcher(object):
                 conf, directory_client=self.directory, logger=self.logger, **kwargs
             )
         self._pool_options = None
+        self._last_allow_down_known_services = None
 
     @property
     def cs(self):
@@ -175,6 +176,9 @@ class RdirDispatcher(object):
         :type service_id: `str`
         :param reassign: ID of an rdir service to be decommissioned.
         :type reassign: `str`
+        :param allow_down_known_services: allow to reassign rdir services even
+          if some of the old assigned services are down (score=0).
+        :type reassign: `int`
         :param dry_run: Display actions but do nothing.
         :type dry_run: `bool`
         :returns: The list of `service_type` services that were assigned
@@ -475,7 +479,12 @@ class RdirDispatcher(object):
         return polled_ids
 
     def _create_special_pool(
-        self, options=None, force=False, replicas=DEFAULT_RDIR_REPLICAS, **kwargs
+        self,
+        options=None,
+        force=False,
+        replicas=DEFAULT_RDIR_REPLICAS,
+        allow_down_known_services: int = 0,
+        **kwargs
     ):
         """
         Create the special pool for rdir services.
@@ -483,10 +492,22 @@ class RdirDispatcher(object):
         :param options: dictionary of custom options for the pool.
         :param force: overwrite the pool if it exists already.
         :param replicas: number of rdir services which must be selected.
+        :param allow_down_known_services: allow to reassign rdir services even
+            if some of the old assigned services are down (score=0).
         """
+        # If some of the old services are down (especially the ones we want to keep),
+        # the load balancer won't see them, and thus won't match them to "targets",
+        # and the selection will fail. We have to declare more "jokers" so the
+        # load balancer will accept them without checking.
+        # Nevertheless we must enforce the selection of at least one rdir service.
+        rdirs = max(1, replicas - allow_down_known_services)
+        # One of the jokers (the first one) is a rawx service (and thus does not
+        # count as a replica).
+        jokers = 1 + replicas - rdirs
+
         self.cs.lb.create_pool(
             "__rawx_rdir",
-            ((1, JOKER_SVC_TARGET), (replicas, "rdir")),
+            ((jokers, JOKER_SVC_TARGET), (rdirs, "rdir")),
             options=options,
             force=force,
             **kwargs
@@ -498,6 +519,7 @@ class RdirDispatcher(object):
         known=None,
         min_dist=None,
         replicas=DEFAULT_RDIR_REPLICAS,
+        allow_down_known_services: int = 0,
         **kwargs
     ):
         """
@@ -506,6 +528,8 @@ class RdirDispatcher(object):
         :param min_dist: minimum distance to ensure between the known
             service and the selected rdir service.
         :param replicas: number of rdir services which must be selected.
+        :param allow_down_known_services: allow to reassign rdir services even
+            if some of the old assigned services are down (score=0).
 
         :returns: the list of NEW services assigned to volume_id (when
             reassigning there will be less than 'replicas' services).
@@ -519,11 +543,19 @@ class RdirDispatcher(object):
         options = {}
         if min_dist is not None:
             options["min_dist"] = min_dist
-        if options != self._pool_options:
+        if (
+            options != self._pool_options
+            or allow_down_known_services != self._last_allow_down_known_services
+        ):
             # Options have changed, overwrite the pool.
             self._pool_options = options
+            self._last_allow_down_known_services = allow_down_known_services
             self._create_special_pool(
-                self._pool_options, force=True, replicas=replicas, **kwargs
+                self._pool_options,
+                force=True,
+                replicas=replicas,
+                allow_down_known_services=allow_down_known_services,
+                **kwargs
             )
 
         try:
