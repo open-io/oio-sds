@@ -21,7 +21,13 @@ from oio.common.constants import (
     READ_TIMEOUT,
     HIDDEN_ACCOUNTS,
 )
-from oio.common.exceptions import ClientException, OioException, OioTimeout
+from oio.common.exceptions import (
+    BadRequest,
+    ClientException,
+    ExplicitBury,
+    OioException,
+    OioTimeout,
+)
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
@@ -86,7 +92,7 @@ class AccountUpdateFilter(Filter):
                         **update_kwargs,
                         connection_timeout=self.connection_timeout,
                         read_timeout=self.read_timeout,
-                        headers=headers
+                        headers=headers,
                     )
                 elif event.event_type == EventTypes.CONTAINER_DELETED:
                     self.account.container_delete(
@@ -128,7 +134,7 @@ class AccountUpdateFilter(Filter):
                             exc,
                         )
         except OioTimeout as exc:
-            msg = "account update failure: %s" % str(exc)
+            msg = f"account update failure: {exc}"
             resp = EventError(event=Event(env), body=msg)
             return resp(env, beanstalkd, cb)
         except ClientException as exc:
@@ -140,8 +146,29 @@ class AccountUpdateFilter(Filter):
                     headers[REQID_HEADER],
                     exc.message,
                 )
+            elif isinstance(exc, BadRequest):
+                if "Mismatch between total " in str(exc):
+                    # Drop events resulting from a bug fixed
+                    # in commit c233ec718ef056548490736af3de014b77378d22
+                    self.logger.info(
+                        "Ignoring event (type=%s, job_id=%s, reqid=%s): %s",
+                        event.event_type,
+                        event.job_id,
+                        headers[REQID_HEADER],
+                        exc,
+                    )
+                else:
+                    # We are logging twice, but this message includes more information
+                    self.logger.info(
+                        "Burying event (type=%s, job_id=%s, reqid=%s): %s",
+                        event.event_type,
+                        event.job_id,
+                        headers[REQID_HEADER],
+                        exc,
+                    )
+                    raise ExplicitBury from exc
             else:
-                msg = "account update failure: %s" % str(exc)
+                msg = f"account update failure: {exc}"
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, beanstalkd, cb)
         return self.app(env, beanstalkd, cb)
