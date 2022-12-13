@@ -103,6 +103,8 @@ func (rr *rawxRequest) replyError(action string, err error) {
 		// Prepare the most adapted reply status.
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
+		} else if (err == io.ErrUnexpectedEOF && rr.req.Method == "PUT") {
+			rr.replyCode(httpStatusClientClosedRequest)
 		} else {
 			switch err {
 			case errInvalidChunkID, errMissingHeader, errInvalidHeader:

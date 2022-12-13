@@ -232,3 +232,9 @@ const (
 
 	beanstalkNotifierDefaultTube = "oio"
 )
+
+const (
+	// Error code returned when the client closes the connection before
+	// sending the whole request body
+	httpStatusClientClosedRequest = 499
+)

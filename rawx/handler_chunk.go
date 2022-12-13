@@ -129,7 +129,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferP
 				written += int64(nw)
 			}
 			if erw != nil {
-				// Only override the mais error if no strong condition occurred
+				// Only override the main error if no strong condition occurred
 				if er == nil || er == io.EOF {
 					return erw
 				}

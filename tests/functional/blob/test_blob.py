@@ -1060,3 +1060,24 @@ class RawxTestSuite(CommonTestCase):
     def test_get_rawx_stats_prometheus(self):
         stat_re = re.compile(r"^(\w+){(.+)} (\w+)$")
         return self._test_get_rawx_stats(stat_re, "prometheus")
+
+    def test_truncated_input(self):
+        """
+        Simulate a truncated input from the client application.
+
+        This is to cover the rawx code handling "io.ErrUnexpectedEOF".
+        """
+
+        def data_reader():
+            for _ in range(4):
+                yield b"0123"
+            raise EOFError
+
+        self.assertRaises(
+            EOFError,
+            self.storage.object_create_ext,
+            self.account,
+            self.container,
+            obj_name="truncated-input",
+            data=data_reader(),
+        )
