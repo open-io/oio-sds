@@ -83,6 +83,7 @@ class CrawlerWorker(object):
         self.app_env["api"] = api or ObjectStorageApi(
             self.namespace, logger=self.logger
         )
+        self.app_env["logger"] = self.logger
         self.app_env["volume_path"] = self.volume
         self.app_env["volume_id"] = self.volume_id
         self.app_env["watchdog"] = watchdog

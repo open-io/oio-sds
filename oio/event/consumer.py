@@ -120,7 +120,7 @@ class EventWorker(Worker):
     def __init__(self, *args, **kwargs):
         super(EventWorker, self).__init__(*args, **kwargs)
         # Environment that will be passed between Handler an Filter instances
-        self.app_env = dict()
+        self.app_env = {"logger": self.logger}
         self.concurrency = 1
         self.graceful_timeout = 1
         self.tube = None

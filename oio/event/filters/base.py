@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +23,7 @@ class Filter(object):
         self.app = app
         self.app_env = app.app_env
         self.conf = conf
-        self.logger = logger or get_logger(conf)
+        self.logger = logger or self.app_env.get("logger") or get_logger(conf)
         self.init()
 
     def init(self):
