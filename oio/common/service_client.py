@@ -165,9 +165,11 @@ class ServiceClient(HttpApi):
                     )
                     try:
                         self._refresh_endpoint()
-                    except Exception as exc:
+                    except Exception as exc2:
                         self.logger.warning(
-                            "Failed to refresh %s endpoint: %s", self.service_type, exc
+                            "Failed to refresh %s endpoint: %s",
+                            self.service_type,
+                            exc2,
                         )
                 if read_request and not already_retried:
                     # Only try once on read requests
