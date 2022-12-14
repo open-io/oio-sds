@@ -1,0 +1,85 @@
+From 9fd912acb8525e116119764e4bf84ee95a9f9444 Mon Sep 17 00:00:00 2001
+From: Sergey Shepelev <temotor@gmail.com>
+Date: Fri, 14 Jan 2022 01:50:53 +0300
+Subject: [PATCH] wsgi: server MUST NOT send Content-Length/Transfer-Encoding
+ header in response when there is no body
+
+It the case for:
+- a response with a status code to 1xx, 204 or (2xx to CONNECT request)
+- a response from the HEAD request
+
+https://httpwg.org/specs/rfc7230.html#rfc.section.3.3.1
+
+https://github.com/eventlet/eventlet/issues/746
+
+Co-Authored-By: Aymeric Ducroquetz <aymeric.ducroquetz@ovhcloud.com>
+---
+ eventlet/wsgi.py | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/eventlet/wsgi.py b/eventlet/wsgi.py
+index 7ef0254..e16b08d 100644
+--- a/eventlet/wsgi.py
++++ b/eventlet/wsgi.py
+@@ -479,6 +479,11 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+         use_chunked = [False]
+         length = [0]
+         status_code = [200]
++        # Status code of 1xx or 204 or 2xx to CONNECT request MUST NOT send body and related headers
++        # https://httpwg.org/specs/rfc7230.html#rfc.section.3.3.1
++        bodyless = [False]
++        if self.command == 'HEAD':
++            bodyless[0] = True
+ 
+         def write(data):
+             towrite = []
+@@ -511,9 +516,12 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+ 
+                 if 'content-length' not in header_list:
+                     if self.request_version == 'HTTP/1.1':
+-                        use_chunked[0] = True
+-                        towrite.append(b'Transfer-Encoding: chunked\r\n')
+-                    elif 'content-length' not in header_list:
++                        if bodyless[0]:
++                            pass  # client doesn't expect a body anyway
++                        else:
++                            use_chunked[0] = True
++                            towrite.append(b'Transfer-Encoding: chunked\r\n')
++                    else:
+                         # client is 1.0 and therefore must read to EOF
+                         self.close_connection = 1
+ 
+@@ -534,7 +542,7 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+             length[0] = length[0] + sum(map(len, towrite))
+ 
+         def start_response(status, response_headers, exc_info=None):
+-            status_code[0] = status.split()[0]
++            status_code[0] = int(status.split(" ", 1)[0])
+             if exc_info:
+                 try:
+                     if headers_sent:
+@@ -544,6 +552,12 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+                     # Avoid dangling circular ref
+                     exc_info = None
+ 
++            bodyless[0] = bodyless[0] or (
++                status_code[0] == 204
++                or (100 <= status_code[0] < 200)
++                or (self.command == "CONNECT" and 200 <= status_code[0] < 300)
++            )
++
+             # Response headers capitalization
+             # CONTent-TYpe: TExt/PlaiN -> Content-Type: TExt/PlaiN
+             # Per HTTP RFC standard, header name is case-insensitive.
+@@ -571,7 +585,7 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+                 # Set content-length if possible
+                 if headers_set and not headers_sent and hasattr(result, '__len__'):
+                     # We've got a complete final response
+-                    if 'Content-Length' not in [h for h, _v in headers_set[1]]:
++                    if not bodyless[0] and 'Content-Length' not in [h for h, _v in headers_set[1]]:
+                         headers_set[1].append(('Content-Length', str(sum(map(len, result)))))
+                     if request_input.should_send_hundred_continue:
+                         # We've got a complete final response, and never sent a 100 Continue.
+-- 
+2.17.1
+

@@ -2,7 +2,7 @@
 
 set -e
 
-ENV_PATH=${1:-VIRTUAL_ENV}
+ENV_PATH=${1:-$VIRTUAL_ENV}
 if [ -z "${ENV_PATH}" ]; then
     echo >&2 "This script expects python environment"
     exit 1
