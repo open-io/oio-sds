@@ -684,3 +684,11 @@ m2v2_remote_pack_ABORT_SHARDING(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_ABORT_SHARDING, url, NULL, dl);
 }
+
+GByteArray*
+m2v2_remote_pack_CHECKPOINT(struct oio_url_s *url, const char* prefix, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CHECKPOINT, url, NULL, dl);
+	metautils_message_add_field_str (msg, NAME_MSGKEY_PREFIX, prefix);
+	return message_marshall_gba_and_clean(msg);
+}

@@ -419,7 +419,7 @@ Used by `gcc`
 
 ### events.beanstalkd.ttr
 
-> Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd
+> Sets the TTR (time to run) allow on the treatment of the notification sent to the beanstalkd
 
  * default: **120**
  * type: gint64
@@ -556,6 +556,14 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_META2_BATCH_MAXLEN*
  * range: 1 -> 100000
+
+### meta2.checkpoints_directory
+
+> Directory in which symlinks to containers to proceess will be stored.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_META2_CHECKPOINTS_DIRECTORY*
 
 ### meta2.container.max_size
 

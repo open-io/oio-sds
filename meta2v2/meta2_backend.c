@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <math.h>
 #include <glib.h>
+#include <unistd.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
@@ -3888,5 +3889,73 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 
+	return err;
+}
+
+GError*
+meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
+		const gchar* prefix)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(prefix != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+
+	if (!master || !*master) {
+		err = SYSERR("No service ID");
+		goto end;
+	}
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
+			NULL
+		};
+
+	// Open database
+	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
+	if (!err) {
+		// Ensure no sharding is in progress
+		gint64 sharding_state = sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_STATE, 0);
+		if (SHARDING_IN_PROGRESS(sharding_state)) {
+			err = BADREQ("Sharding is in progress");
+			goto end;
+		}
+		gint64 timestamp = oio_ext_real_time();
+		gchar *copy_path = NULL;
+		gchar *link_path = NULL;
+		copy_path = g_strdup_printf(
+				"%s.%"G_GINT64_FORMAT,
+				sq3->path_inline, timestamp);
+		// Create a database copy (ref link)
+		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+		if (err) {
+			g_prefix_error(&err, "Failed to copy %s to %s: ",
+					sq3->path_inline, copy_path);
+			goto rollback;
+		}
+		link_path = g_strdup_printf("%s/%s.%s.meta2.%"G_GINT64_FORMAT,
+			meta2_checkpoints_directory, prefix, sq3->name.base, timestamp);
+		// Create sym link
+		if(symlink(copy_path, link_path)) {
+			err = SYSERR("Unable to create symlink: %s", g_strerror(errno));
+		}
+rollback:
+		// Remove copy
+		if (err) {
+			if (remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+		}
+
+		// Cleanup
+		g_free(copy_path);
+		g_free(link_path);
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+end:
 	return err;
 }

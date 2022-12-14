@@ -478,3 +478,14 @@ meta2_filter_extract_sharding_info(struct gridd_filter_ctx_s *ctx,
 
 	return FILTER_OK;
 }
+
+int
+meta2_filter_extract_prefix(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_PREFIX);
+	return FILTER_OK;
+}

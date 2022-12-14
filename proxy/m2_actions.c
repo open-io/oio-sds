@@ -1915,6 +1915,33 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 }
 
 static enum http_rc_e
+action_m2_container_checkpoint(struct req_args_s *args,
+	struct json_object *jargs)
+{
+	GError *err = NULL;
+	struct json_object *jprefix = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"prefix", &jprefix, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+
+	err = oio_ext_extract_json(jargs, m);
+	if (err)
+	{
+		return _reply_m2_error(args, err);
+	}
+	const gchar *prefix = json_object_get_string(jprefix);
+
+	PACKER_VOID(_pack)
+	{
+		return m2v2_remote_pack_CHECKPOINT(args->url, prefix, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+
+	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
 _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 {
 	gchar **properties = NULL;
@@ -2865,6 +2892,41 @@ enum http_rc_e action_container_raw_update (struct req_args_s *args) {
 
 enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_raw_delete);
+}
+
+// CONTAINER{{
+// POST /v3.0/{NS}/container/checkpoint?acct={account}&ref={container}
+// code-block:: json
+//
+//    {
+//      "prefix": "<checkpoint-prefix>"
+//    }
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//   Create a checkpoint of container for further processing.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/checkpoint?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 0
+//    Content-Type: application/json
+//    {
+//      "prefix": "my-prefix"
+//    }
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
+enum http_rc_e
+action_container_checkpoint(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_checkpoint);
 }
 
 

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -180,7 +180,7 @@ GError *meta2_backend_drain_content(struct meta2_backend_s *m2b,
 
 /** Delete an object version. The deleted alias, or the created delete
  * marker, will be sent to the callback. Notice that when a delete marker
- * is removed, no alias is sent to the callback! 
+ * is removed, no alias is sent to the callback!
  * If dryrun is True, the deletion will not be effective. It's useful
  * to check if the triggers allow the deletion but without doing it. */
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
@@ -289,5 +289,9 @@ GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 /** Abort sharding. */
 GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url);
+
+/** Create meta2 snapshot */
+GError* meta2_backend_checkpoint(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, const gchar* prefix);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

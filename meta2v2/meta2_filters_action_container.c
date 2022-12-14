@@ -634,6 +634,23 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 	return FILTER_KO;
 }
 
+int
+meta2_filter_action_checkpoint(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	const gchar* prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
+
+	GError *err = meta2_backend_checkpoint(m2b, url, prefix);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	return FILTER_OK;
+}
+
 /* Sharding ----------------------------------------------------------------- */
 
 int

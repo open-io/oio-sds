@@ -643,6 +643,35 @@ class ContainerClient(ProxyClient):
         resp, _ = self._request("POST", "/flush", params=params, **kwargs)
         return {"truncated": boolean_value(resp.getheader("x-oio-truncated"), False)}
 
+    def container_checkpoint(
+        self, account=None, reference=None, cid=None, prefix=None, **kwargs
+    ):
+        """
+        Create a checkpoint of a container. This checkpoint can be used for later
+        processing.
+
+        This function copies the database and creates a symlink pointing to this copy
+        in the checkpoints directory.
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        :type cid: `str`
+        :param prefix: checkpoint prefix. It can be used to filter checkpoints
+
+        """
+        params = self._make_params(account, reference, cid=cid)
+        data = {}
+        if prefix:
+            data["prefix"] = prefix
+        data = json.dumps(data)
+        resp, _ = self._request("POST", "/checkpoint", params=params, data=data)
+
+        return resp
+
     @extract_reference_params
     def content_list(
         self,

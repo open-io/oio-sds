@@ -109,6 +109,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_find_shards_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_prepare_shard_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_region);
 M2V2_DECLARE_FILTER(meta2_filter_extract_sharding_info);
+M2V2_DECLARE_FILTER(meta2_filter_extract_prefix);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);
@@ -121,6 +122,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_delete_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_purge_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_flush_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_drain_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_checkpoint);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_contents);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_chunk_id);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_id);

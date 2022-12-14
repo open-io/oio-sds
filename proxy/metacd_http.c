@@ -1177,6 +1177,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
 	SET("/$NS/container/raw_update/#POST", action_container_raw_update);
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
+	SET("/$NS/container/checkpoint/#POST", action_container_checkpoint);
 
 	// Sharding
 	SET("/$NS/container/sharding/find/#GET", action_container_sharding_find);
