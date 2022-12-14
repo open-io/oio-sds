@@ -155,6 +155,7 @@ class ObjectStorageApi(object):
         self._conscience_client = None
         self._directory_client = None
         self._proxy_client = None
+        self._lifecycle_client = None
 
     @property
     def account(self):
@@ -273,6 +274,24 @@ class ObjectStorageApi(object):
                 {"namespace": self.namespace}, logger=self.logger, **self._init_kwargs
             )
         return self._directory_client
+
+    @property
+    def lifecycle(self):
+        """
+        Get an instance of LifecycleClient
+
+        :rtype: `oio.`
+        """
+        if self._lifecycle_client is None:
+            from oio.container.lifecycle import LifecycleClient
+
+            conf = self.container.conf
+            pool_manager = self.container.pool_manager
+
+            self._lifecycle_client = LifecycleClient(
+                conf, pool_manager=pool_manager, logger=self.logger
+            )
+        return self._lifecycle_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,

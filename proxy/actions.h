@@ -103,6 +103,8 @@ enum http_rc_e action_container_sharding_clean(struct req_args_s *args);
 enum http_rc_e action_container_sharding_show(struct req_args_s *args);
 enum http_rc_e action_container_sharding_abort(struct req_args_s *args);
 
+enum http_rc_e action_container_lifecycle_snapshot(struct req_args_s *args);
+
 enum http_rc_e action_content_put (struct req_args_s *args);
 enum http_rc_e action_content_drain(struct req_args_s *args);
 enum http_rc_e action_content_delete (struct req_args_s *args);

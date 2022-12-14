@@ -17,6 +17,8 @@
 import time
 import uuid
 from datetime import datetime
+from oio.common import exceptions
+from oio.common.client import ProxyClient
 
 try:
     from lxml import etree
@@ -1051,3 +1053,35 @@ class NoncurrentVersionTransition(Transition):
         return not self.lifecycle.is_current_version(
             obj_meta, **kwargs
         ) and self._match_filter(obj_meta, **kwargs)
+
+
+class LifecycleClient(ProxyClient):
+    def __init__(self, conf, **kwargs):
+        super(LifecycleClient, self).__init__(
+            conf, request_prefix="/container/lifecycle", **kwargs
+        )
+
+    def _make_params(self, account=None, reference=None, cid=None, **kwargs):
+        if cid:
+            params = {"cid": cid}
+        else:
+            params = {"acct": account, "ref": reference}
+        return params
+
+    def container_snapshot(self, account, reference, **kwargs):
+        """
+        Create a snapshot of container and add a symbolic link to this snapshot
+        in lifecycle directory for further processing
+
+        :param account: account in which to create the container
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        """
+
+        params = self._make_params(account, reference)
+        resp, body = self._request("POST", "/snapshot", params=params, **kwargs)
+
+        if resp.status not in (204,):
+            raise exceptions.from_response(resp, body)
+        return resp == 204
