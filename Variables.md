@@ -363,7 +363,7 @@ Used by `gcc`
 
 ### events.beanstalkd.ttr
 
-> Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd
+> Sets the TTR (time to run) allow on the treatment of the notification sent to the beanstalkd
 
  * default: **120**
  * type: gint64
@@ -518,6 +518,14 @@ Used by `gcc`
  * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_META2_GENERATE_PRECHECK*
+
+### meta2.lifecycle.snapshots_directory
+
+> Directory in which symlinks to containers to proceess will be stored.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_META2_LIFECYCLE_SNAPSHOTS_DIRECTORY*
 
 ### meta2.max_versions
 
@@ -1048,7 +1056,7 @@ Used by `gcc`
 
 ### resolver.cache.csm0.max.default
 
-> In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
+> In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)
 
  * default: **4194304**
  * type: guint
@@ -1057,7 +1065,7 @@ Used by `gcc`
 
 ### resolver.cache.csm0.ttl.default
 
-> In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)
+> In any service resolver instantiated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)
 
  * default: **0**
  * type: gint64
@@ -1074,7 +1082,7 @@ Used by `gcc`
 
 ### resolver.cache.root.max.default
 
-> In any shard resolver instanciated, sets the maximum number of root entries
+> In any shard resolver instantiated, sets the maximum number of root entries
 
  * default: **4096**
  * type: guint
@@ -1083,7 +1091,7 @@ Used by `gcc`
 
 ### resolver.cache.root.ttl.default
 
-> In any shard resolver instanciated, sets the default TTL on the root entries
+> In any shard resolver instantiated, sets the default TTL on the root entries
 
  * default: **0**
  * type: gint64
@@ -1092,7 +1100,7 @@ Used by `gcc`
 
 ### resolver.cache.shards.max.default
 
-> In any shard resolver instanciated, sets the maximum number of shards entries per root
+> In any shard resolver instantiated, sets the maximum number of shards entries per root
 
  * default: **16**
  * type: guint
@@ -1101,7 +1109,7 @@ Used by `gcc`
 
 ### resolver.cache.srv.max.default
 
-> In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)
+> In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)
 
  * default: **4194304**
  * type: guint
@@ -1110,7 +1118,7 @@ Used by `gcc`
 
 ### resolver.cache.srv.ttl.default
 
-> In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)
+> In any service resolver instantiated, sets the default TTL on the meta1 entries (data-bound services)
 
  * default: **0**
  * type: gint64
