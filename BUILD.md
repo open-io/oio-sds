@@ -95,6 +95,7 @@ source oiovenv/bin/activate
 Then install the python module inside your virtualenv:
 ```
 pip install -e ${SRCDIR}
+${SRCDIR}/tools/patch-python-modules.sh
 ```
 
 Then install FoundationDB with oio-install-fdb.sh

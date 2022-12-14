@@ -83,6 +83,7 @@ Then follow those steps to setup the automated test suite environment:
   pip install -r test-requirements.txt
   # Some tests run the "openio" CLI, so install it (from sources)
   pip install -e ${SRCDIR}
+  ${SRCDIR}/tools/patch-python-modules.sh
 
 ## Launching tests
 

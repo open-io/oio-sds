@@ -68,6 +68,7 @@ override_dh_install:
 		$(DESTDIR)/run/oio/sds
 	# fix shebangs
 	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
+	./tools/patch-python-modules.sh "${DESTDIR}${PREFIX}"
 
 # remove postinst from dh-virtualenv as it's buggy and useless
 override_dh_installdeb:
