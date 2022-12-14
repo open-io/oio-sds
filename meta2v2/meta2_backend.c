@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <math.h>
 #include <glib.h>
+#include <unistd.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
@@ -3888,5 +3889,64 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 
+	return err;
+}
+
+GError*
+meta2_backend_snapshot_lifecycle(struct meta2_backend_s *m2b, struct oio_url_s *url)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+
+	if (!master || !*master) {
+		err = SYSERR("No service ID");
+		goto end;
+	}
+
+	struct m2_open_args_s open_args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
+			NULL
+		};
+	// Open database
+	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
+	if (!err) {
+		gchar *copy_path = NULL;
+		gchar *link_path = NULL;
+		copy_path = g_strdup_printf(
+				"%s.lifecycle",
+				sq3->path_inline);
+		// Create a database copy (ref link)
+		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+		if (err) {
+			g_prefix_error(&err, "Failed to copy %s to %s: ",
+					sq3->path_inline, copy_path);
+			goto rollback;
+		}
+		link_path = g_strdup_printf("%s/%s.meta2.lifecycle",
+			meta2_lifecycle_snapshots_directory, sq3->name.base);
+		// Create sym link
+		if(symlink(copy_path, link_path)) {
+			err = SYSERR("Unable to create symlink");
+			goto rollback;
+		}
+rollback:
+		// Remove copy
+		if (err) {
+			if (remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+		}
+
+		// Cleanup
+		g_free(copy_path);
+		g_free(link_path);
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+end:
 	return err;
 }

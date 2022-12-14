@@ -678,3 +678,9 @@ m2v2_remote_pack_ABORT_SHARDING(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_ABORT_SHARDING, url, NULL, dl);
 }
+
+GByteArray*
+m2v2_remote_pack_SNAPSHOT_LIFECYCLE(struct oio_url_s *url, gint64 dl)
+{
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_SNAPSHOT_LIFECYCLE, url, NULL, dl);
+}

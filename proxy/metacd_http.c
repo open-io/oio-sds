@@ -1189,6 +1189,9 @@ configure_request_handlers (void)
 	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 	SET("/$NS/container/sharding/abort/#POST", action_container_sharding_abort);
 
+	// Lifecycle
+	SET("/$NS/container/lifecycle/snapshot/#POST", action_container_lifecycle_snapshot);
+
 	// Content
 	SET("/$NS/content/create/#POST", action_content_put);
 	SET("/$NS/content/drain/#POST", action_content_drain);

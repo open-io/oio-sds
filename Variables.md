@@ -419,7 +419,7 @@ Used by `gcc`
 
 ### events.beanstalkd.ttr
 
-> Sets the TTR (time to run) allow on the treatment of the notificatio sent to the beanstalkd
+> Sets the TTR (time to run) allow on the treatment of the notification sent to the beanstalkd
 
  * default: **120**
  * type: gint64
@@ -599,6 +599,14 @@ Used by `gcc`
  * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_META2_GENERATE_PRECHECK*
+
+### meta2.lifecycle.snapshots_directory
+
+> Directory in which symlinks to containers to proceess will be stored.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_META2_LIFECYCLE_SNAPSHOTS_DIRECTORY*
 
 ### meta2.max_versions
 

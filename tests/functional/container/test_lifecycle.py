@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,24 +17,22 @@
 import time
 
 from mock import patch
+from os import walk
+from os.path import basename, isfile, islink, join
 
 from oio.container.lifecycle import (
     ContainerLifecycle,
     LIFECYCLE_PROPERTY_KEY,
     TAGGING_KEY,
     Expiration,
+    LifecycleClient,
     Transition,
     NoncurrentVersionExpiration,
     NoncurrentVersionTransition,
 )
-from oio.common.exceptions import NoSuchObject
+from oio.common.exceptions import NoSuchObject, NotFound
+from tests.functional.cli import CliTestCase
 from tests.utils import BaseTestCase, random_str
-
-
-def consume(generator):
-    """Consume a generator without doing anything with the results"""
-    for _ in generator:
-        pass
 
 
 class TestContainerLifecycle(BaseTestCase):
@@ -1430,3 +1428,80 @@ class TestContainerLifecycle(BaseTestCase):
             obj_meta3["name"],
             version=obj_meta3["version"],
         )
+
+
+class TestLifecycleSnapshot(CliTestCase):
+    def setUp(self):
+        super(TestLifecycleSnapshot, self).setUp()
+        self.api = self.storage
+        self.account = "test_lifecycle"
+        self.container = "lifecycle-" + random_str(4)
+        self.lifecycle_client = LifecycleClient(
+            self.conf, pool_manager=self.api.container.pool_manager, logger=self.logger
+        )
+        self._containers = self._list_containers_meta2()
+        self._symlinks = self._list_lifecycle_symlinks()
+
+    def _create_container(self):
+        self.api.container_create(
+            self.account,
+            self.container,
+        )
+
+    def _list_files_in_dirs(self, dirs):
+        entries = []
+        for dir in dirs:
+            for root, _, files in walk(dir):
+                for file in files:
+                    path = join(root, file)
+                    if isfile(path):
+                        entries.append(path)
+        return entries
+
+    def _list_containers_meta2(self):
+        meta2_dirs = [m["path"] for m in self.conf["services"]["meta2"]]
+        return self._list_files_in_dirs(meta2_dirs)
+
+    def _list_lifecycle_symlinks(self):
+        lifecycle_dir = self.conf["lifecycle_path"]
+        return self._list_files_in_dirs([lifecycle_dir])
+
+    def _get_created(self):
+        new_entries = self._list_containers_meta2()
+        entries = [e for e in new_entries if e not in self._containers]
+        self._containers = new_entries
+        return entries
+
+    def _get_links_created(self):
+        new_entries = self._list_lifecycle_symlinks()
+        entries = [e for e in new_entries if e not in self._symlinks]
+        self._symlinks = new_entries
+        return entries
+
+    def test_snapshot_existing_container(self):
+        self._create_container()
+        created = self._get_created()
+        self.assertEqual(1, len(created))
+
+        self.lifecycle_client.container_snapshot(self.account, self.container)
+        created = self._get_created()
+        self.assertEqual(1, len(created))
+        self.assertRegex(created[0], ".lifecycle$")
+        links = self._get_links_created()
+        self.assertEqual(1, len(links))
+        self.assertTrue(islink(links[0]))
+        self.assertEqual(basename(links[0]), basename(created[0]))
+
+    def test_snapshot_non_existing_container(self):
+        self._create_container()
+        created = self._get_created()
+        self.assertEqual(1, len(created))
+
+        self.assertRaises(
+            NotFound,
+            self.lifecycle_client.container_snapshot,
+            self.account,
+            "non-existing",
+        )
+        created = self._get_created()
+        self.assertEqual(0, len(created))

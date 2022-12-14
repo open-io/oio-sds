@@ -3654,6 +3654,50 @@ action_container_sharding_abort(struct req_args_s *args)
 	return rest_action(args, action_m2_container_sharding_abort);
 }
 
+static enum http_rc_e
+action_m2_container_lifecycle_snapshot(struct req_args_s *args,
+									   struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	if (!err)
+	{
+		PACKER_VOID(_pack)
+		{
+			return m2v2_remote_pack_SNAPSHOT_LIFECYCLE(args->url, DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	}
+	return _reply_m2_error(args, err);
+}
+
+// LIFECYCLE{{
+// POST /v3.0/{NS}/container/lifecycle/snapshot?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Create a snapshot of container for lifecycle processing.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/lifecycle/snapshot?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 0
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}LIFECYCLE
+enum http_rc_e
+action_container_lifecycle_snapshot(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_lifecycle_snapshot);
+}
+
 /* CONTENT action resource -------------------------------------------------- */
 
 static GError*
