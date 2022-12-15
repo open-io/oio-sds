@@ -34,7 +34,8 @@ jobs:
           EOF
           . $HOME/oiovenv/bin/activate
           env
-          pip install --upgrade pip setuptools virtualenv tox -r test-requirements.txt
+          # FIXME(adu): Fix tox configuration file to support the new versions
+          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
 
           fdbtag="fdb-${FDB_VERSION}"
           worker cache pull $fdbtag
