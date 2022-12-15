@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,6 +29,7 @@ class ItemLocateTest(CliTestCase):
         super(ItemLocateTest, self).tearDown()
 
     def test_account_locate(self):
+        # This test is using a new account on purpose
         account = random_str(10)
         opts = self.get_format_opts()
         output = self.openio("account create %s %s" % (account, opts))
@@ -86,40 +88,39 @@ class ItemLocateTest(CliTestCase):
         self.assertEqual("(" + cid + ")", output[1 + 2 * directory_replicas][2])
 
     def test_container_locate(self):
+        # XXX: if we wan't to use another account, we need to wait
+        # for its actual creation (it is asynchronous).
         container = random_str(10)
-        account = random_str(10)
         opts = self.get_format_opts()
         output = self.openio(
-            "container create --oio-account %s %s %s" % (account, container, opts)
+            "container create --oio-account %s %s %s" % (self.account, container, opts)
         )
         self.assertOutput("%s True" % container, output.strip())
         output = self.openio_admin(
-            "container locate --oio-account %s %s %s" % (account, container, opts)
+            "container locate --oio-account %s %s %s" % (self.account, container, opts)
         )
-        cid = cid_from_name(account, container)
-        self._test_container_check_output(output, cid, account, container)
+        cid = cid_from_name(self.account, container)
+        self._test_container_check_output(output, cid, self.account, container)
 
     def test_container_not_found(self):
-        account = random_str(10)
         container = random_str(10)
         opts = self.get_format_opts()
         self.assertRaises(
             CommandFailed,
             self.openio_admin,
-            "container locate --oio-account %s %s %s" % (account, container, opts),
+            "container locate --oio-account %s %s %s" % (self.account, container, opts),
         )
 
     def test_container_cid_locate(self):
         container = random_str(10)
-        account = random_str(10)
         opts = self.get_format_opts()
-        cid = cid_from_name(account, container)
+        cid = cid_from_name(self.account, container)
         output = self.openio(
-            "container create --oio-account %s %s %s" % (account, container, opts)
+            "container create --oio-account %s %s %s" % (self.account, container, opts)
         )
         self.assertOutput("%s True" % container, output.strip())
         output = self.openio_admin("container locate --cid %s %s" % (cid, opts))
-        self._test_container_check_output(output, cid, account, container)
+        self._test_container_check_output(output, cid, self.account, container)
 
     def test_container_cid_not_found(self):
         cid = random_str(64)
