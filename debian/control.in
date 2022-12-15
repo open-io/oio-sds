@@ -10,7 +10,7 @@ Build-Depends:
   wget,
   ca-certificates,
   go-1.19.4-ovh1031,
-  oio-zookeeper-3.7.0-ovh514,
+  obsto-zookeeper-3.7.1-ovh1033,
   python-3.7.15-ovh161,
   flex,
   bison,

@@ -10,7 +10,7 @@ PREFIX=/opt/${PACKAGE}
 # Only one Python path is expected
 PYTHON_PATH=$(shell readlink -f /opt/python-*)
 # Only one Zookeeper path is expected
-ZOOKEEPER_PATH=$(shell readlink -f /opt/oio-zookeeper-*)
+ZOOKEEPER_PATH=$(shell readlink -f /opt/obsto-zookeeper-*)
 # Only one Golang path is expected
 GO_PATH=$(shell readlink -f /opt/go-*)
 GO_HOME=${GO_PATH}
