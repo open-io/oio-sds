@@ -204,4 +204,7 @@ class TestRdirCrawler(BaseTestCase):
             ],
             enable=True,
         )
-        return self._test_rdir_crawler_m_chunks(container, object_name)
+        try:
+            return self._test_rdir_crawler_m_chunks(container, object_name)
+        finally:
+            container_sharding.clean_container(self.account, container)

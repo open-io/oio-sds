@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -484,7 +484,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/status")
         self.assertEqual(resp.status, 400)
 
-        # Status on inexistant DB
+        # Status on inexistent DB
         resp = self._post("/v1/rdir/status", params={"vol": self.vol})
         self.assertEqual(resp.status, 404)
 
@@ -771,26 +771,28 @@ class TestRdirServerConfig(RdirTestCase):
             self.assertTrue(wait_for_slow_startup(port))
 
     def test_volume_lock(self):
-        host, port = "127.0.0.1", 5999
-        cfg = tempfile.mktemp()
+        host, port = "127.0.0.1", 5998
+        _, cfg0 = tempfile.mkstemp()
+        _, cfg1 = tempfile.mkstemp()
         db = tempfile.mkdtemp()
-        self.garbage_files.extend((cfg, db))
-        out = open("/dev/null", "w")
-        fd = out.fileno()
+        self.garbage_files.extend((cfg0, cfg1, db))
 
-        # start a first rdir
-        config = {"host": host, "port": port, "ns": self.ns, "db": db}
-        _write_config(cfg, config)
-        proc0 = subprocess.Popen(["oio-rdir-server", cfg], stderr=fd)
-        self.garbage_procs.append(proc0)
-        self.assertTrue(wait_for_slow_startup(port))
+        with open("/dev/null", "w") as out:
+            fd = out.fileno()
 
-        # now start a second rdir on another port
-        config.update({"port": port + 1})
-        _write_config(cfg, config)
-        proc1 = subprocess.Popen(["oio-rdir-server", cfg], stderr=fd)
-        self.garbage_procs.append(proc1)
-        self.assertTrue(check_process_absent(proc1))
+            # start a first rdir
+            config = {"host": host, "port": port, "ns": self.ns, "db": db}
+            _write_config(cfg0, config)
+            proc0 = subprocess.Popen(["oio-rdir-server", cfg0], stderr=fd)
+            self.garbage_procs.append(proc0)
+            self.assertTrue(wait_for_slow_startup(port))
+
+            # now start a second rdir on another port
+            config.update({"port": port + 1})
+            _write_config(cfg1, config)
+            proc1 = subprocess.Popen(["oio-rdir-server", cfg1], stderr=fd)
+            self.garbage_procs.append(proc1)
+            self.assertTrue(check_process_absent(proc1))
 
 
 class TestRdirServerMeta2Ops(RdirTestCase):
