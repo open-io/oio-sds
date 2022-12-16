@@ -86,11 +86,10 @@ class TestRawxFilterChecksum(BaseTestCase):
         return chunk_id, chunk_path, volume_path, volume_id
 
     @staticmethod
-    def _get_chunk_quarantine_path(volume_path, volume_id, chunk_id):
-        return "%s/%s-%s/%s%s" % (
+    def _get_chunk_quarantine_path(volume_path, chunk_id):
+        return "%s/%s/%s%s" % (
             volume_path,
             CHUNK_QUARANTINE_FOLDER_NAME,
-            volume_id,
             chunk_id,
             CHUNK_SUFFIX_CORRUPT,
         )
@@ -135,9 +134,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.assertFalse(os.path.isfile(new_chunk_path))
 
         # Check that the chunk has been moved in quarantine folder
-        chunk_quarantine = self._get_chunk_quarantine_path(
-            volume_path, volume_id, chunk_id
-        )
+        chunk_quarantine = self._get_chunk_quarantine_path(volume_path, chunk_id)
         self.assertTrue(os.path.isfile(chunk_quarantine))
 
     def test_rawx_crawler_m_chunk(self):
@@ -175,7 +172,5 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.assertEqual(len(chunks), len(new_chunks))
 
         # Check that the chunk has been removed from quarantine folder
-        chunk_quarantine = self._get_chunk_quarantine_path(
-            volume_path, volume_id, chunk_id
-        )
+        chunk_quarantine = self._get_chunk_quarantine_path(volume_path, chunk_id)
         self.assertFalse(os.path.isfile(chunk_quarantine))

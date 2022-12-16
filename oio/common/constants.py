@@ -174,7 +174,7 @@ CHUNK_SUFFIX_CORRUPT = ".corrupt"
 CHUNK_SUFFIX_PENDING = ".pending"
 
 # Name of the folder for quarantined chunks
-CHUNK_QUARANTINE_FOLDER_NAME = "quarantined"
+CHUNK_QUARANTINE_FOLDER_NAME = "quarantine"
 
 # Accounts that are used internally by oio-sds and should stay hidden
 HIDDEN_ACCOUNTS = ("_RDIR",)

@@ -53,17 +53,11 @@ class Checksum(Filter):
         self.volume_path = self.app_env["volume_path"]
         self.volume_id = self.app_env["volume_id"]
         if self.quarantine_mountpoint:
-            self.quarantine_path = "%s/%s-%s" % (
-                find_mount_point(self.volume_path),
-                CHUNK_QUARANTINE_FOLDER_NAME,
-                self.volume_id,
+            self.quarantine_path = (
+                f"{find_mount_point(self.volume_path)}/{CHUNK_QUARANTINE_FOLDER_NAME}"
             )
         else:
-            self.quarantine_path = "%s/%s-%s" % (
-                self.volume_path,
-                CHUNK_QUARANTINE_FOLDER_NAME,
-                self.volume_id,
-            )
+            self.quarantine_path = f"{self.volume_path}/{CHUNK_QUARANTINE_FOLDER_NAME}"
 
         self.chunk_operator = ChunkOperator(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
