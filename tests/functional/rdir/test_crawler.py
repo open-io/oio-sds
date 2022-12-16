@@ -45,6 +45,10 @@ class TestRdirCrawler(BaseTestCase):
         self.api = self.storage
         self._containers_to_clean = set()
 
+        self.conf.update({"hash_width": 3, "hash_depth": 1})
+
+        self.rdir_client = RdirClient(self.conf)
+
         services = self.conscience.all_services("rawx")
         self.rawx_volumes = {}
         for rawx in services:
@@ -54,10 +58,14 @@ class TestRdirCrawler(BaseTestCase):
                 service_id = rawx["addr"]
             volume = tags.get("tag.vol", None)
             self.rawx_volumes[service_id] = volume
+            try:
+                self.rdir_client.admin_clear(service_id, clear_all=True)
+            except Exception as exc:
+                self.logger.warning(
+                    "rawx service id %s error message %s", service_id, str(exc)
+                )
+                pass
 
-        self.conf.update({"hash_width": 3, "hash_depth": 1})
-
-        self.rdir_client = RdirClient(self.conf)
         self.beanstalkd0.wait_until_empty("oio")
         self.beanstalkd0.drain_tube("oio-preserved")
 
@@ -124,6 +132,7 @@ class TestRdirCrawler(BaseTestCase):
         nb_passes = rdir_crawler.passes
         nb_errors = rdir_crawler.errors
 
+        self.assertEqual(nb_errors, 0)
         os.remove(chunk_path)
 
         rdir_crawler.crawl_volume()
