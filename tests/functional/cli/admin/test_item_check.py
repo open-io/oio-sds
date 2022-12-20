@@ -46,6 +46,7 @@ class ItemCheckTest(CliTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        accounts = set()
         conts = set()
         for acct, cont, obj, vers in cls.OBJECTS_CREATED:
             try:
@@ -58,6 +59,13 @@ class ItemCheckTest(CliTestCase):
                 cls.api.container_delete(acct, cont)
             except Exception as exc:
                 print(f"Failed to delete {acct}/{cont}: {exc}")
+            accounts.add(acct)
+        for acct in accounts:
+            try:
+                cls.api.account_flush(acct)
+                cls.api.account_delete(acct)
+            except Exception as exc:
+                print(f"Failed to delete {acct}: {exc}")
         cls._service("oio-rawx-crawler-1.service", "start")
         cls._service("oio-rdir-crawler-1.service", "start", wait=1)
         super(ItemCheckTest, cls).tearDownClass()
@@ -71,6 +79,7 @@ class ItemCheckTest(CliTestCase):
         self.obj_name = "item_check_obj_" + random_str(4)
 
         self.beanstalkd0.drain_tube("oio-preserved")
+        self.api.account_create(self.account)
 
     def _wait_for_events(self, chunks, reqid):
         for _ in range(2 + len(chunks)):
@@ -85,7 +94,7 @@ class ItemCheckTest(CliTestCase):
             )
 
     def create_object(self, account, container, obj_name):
-        reqid = request_id()
+        reqid = request_id(self.__class__.__name__)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
         )
@@ -96,7 +105,7 @@ class ItemCheckTest(CliTestCase):
         return obj_meta, obj_chunks
 
     def create_object_auto(self, account, obj_name):
-        reqid = request_id()
+        reqid = request_id(self.__class__.__name__)
         container = self.autocontainer(obj_name)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
@@ -472,6 +481,7 @@ class ItemCheckTest(CliTestCase):
             "account check %s %s %s" % (self.account, second_account, self.check_opts)
         )
         self.assert_list_output(expected_items, output)
+        self.api.account_delete(second_account)
 
     def test_container_check(self):
         obj_meta, obj_chunks = self.create_object(

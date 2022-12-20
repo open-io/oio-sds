@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,17 +23,28 @@ from tests.utils import random_str
 
 
 class ItemMoveTest(CliTestCase):
-    """Functionnal tests for item to move."""
+    """Functional tests for items movers."""
 
     def setUp(self):
         super(ItemMoveTest, self).setUp()
         self.container = "item_move_" + random_str(4)
         self.meta2_services = self.conf["services"]["meta2"]
+        self._containers_to_clean = set()
+
+    def tearDown(self):
+        for ct in self._containers_to_clean:
+            try:
+                self.storage.container_flush(self.account, ct)
+                self.storage.container_delete(self.account, ct)
+            except Exception as exc:
+                self.logger.info("Failed to clean container %s", exc)
+        super().tearDown()
 
     def test_container_move_without_dst(self):
         opts = self.get_opts(["Name"])
         output = self.openio("container create %s %s" % (self.container, opts))
         self.assertOutput("%s\n" % self.container, output)
+        self._containers_to_clean.add(self.container)
 
         opts = self.get_opts(["meta2"])
         output = self.openio("container locate %s %s" % (self.container, opts))
@@ -52,6 +64,7 @@ class ItemMoveTest(CliTestCase):
         opts = self.get_opts(["Name"])
         output = self.openio("container create %s %s" % (self.container, opts))
         self.assertOutput("%s\n" % self.container, output)
+        self._containers_to_clean.add(self.container)
 
         opts = self.get_opts(["meta2"])
         output = self.openio("container locate %s %s" % (self.container, opts))
@@ -78,6 +91,7 @@ class ItemMoveTest(CliTestCase):
         opts = self.get_opts(["Name"])
         output = self.openio("container create %s %s" % (self.container, opts))
         self.assertOutput("%s\n" % self.container, output)
+        self._containers_to_clean.add(self.container)
 
         opts = self.get_opts(["meta2"])
         output = self.openio("container locate %s %s" % (self.container, opts))
@@ -98,6 +112,7 @@ class ItemMoveTest(CliTestCase):
         opts = self.get_opts(["Name"])
         output = self.openio("container create %s %s" % (self.container, opts))
         self.assertOutput("%s\n" % self.container, output)
+        self._containers_to_clean.add(self.container)
 
         opts = self.get_opts(["meta2"])
         output = self.openio("container locate %s %s" % (self.container, opts))
@@ -110,6 +125,7 @@ class ItemMoveTest(CliTestCase):
         opts = self.get_opts(["Name"])
         output = self.openio("container create %s %s" % (container_bis, opts))
         self.assertOutput("%s\n" % container_bis, output)
+        self._containers_to_clean.add(container_bis)
 
         opts = self.get_opts(["meta2"])
         output = self.openio("container locate %s %s" % (container_bis, opts))
@@ -137,6 +153,7 @@ class ItemMoveTest(CliTestCase):
             "container --oio-account %s create %s %s" % (account, self.container, opts)
         )
         self.assertOutput("%s\n" % self.container, output)
+        self._containers_to_clean.add(self.container)
 
         opts = self.get_opts(["meta2"])
         output = self.openio(
