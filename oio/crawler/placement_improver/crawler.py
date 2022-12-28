@@ -81,17 +81,6 @@ class PlacementImproverCrawler(RawxCrawler):
     """
 
     def __init__(self, conf, conf_file=None, **kwargs):
-        super().__init__(conf, conf_file=conf_file, **kwargs)
-
-    def _init_volume_workers(self):
-        # Here the volumes in which to find potential chunks misplaced
-        self.volume_workers = [
-            PlacementImproverWorker(
-                self.conf,
-                volume,
-                logger=self.logger,
-                api=self.api,
-                watchdog=self.watchdog,
-            )
-            for volume in self.volumes
-        ]
+        super().__init__(
+            conf, conf_file=conf_file, worker_class=PlacementImproverWorker, **kwargs
+        )

@@ -95,16 +95,6 @@ class RawxCrawler(Crawler):
     SERVICE_TYPE = "rawx"
 
     def __init__(self, conf, conf_file=None, **kwargs):
-        super(RawxCrawler, self).__init__(conf, conf_file=conf_file, **kwargs)
-
-    def _init_volume_workers(self):
-        self.volume_workers = [
-            RawxWorker(
-                self.conf,
-                volume,
-                logger=self.logger,
-                api=self.api,
-                watchdog=self.watchdog,
-            )
-            for volume in self.volumes
-        ]
+        super(RawxCrawler, self).__init__(
+            conf, conf_file=conf_file, worker_class=RawxWorker, **kwargs
+        )

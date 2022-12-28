@@ -77,16 +77,6 @@ class Meta2Crawler(Crawler):
     SERVICE_TYPE = "meta2"
 
     def __init__(self, conf, conf_file=None, **kwargs):
-        super(Meta2Crawler, self).__init__(conf, conf_file=conf_file)
-
-    def _init_volume_workers(self):
-        self.volume_workers = [
-            Meta2Worker(
-                self.conf,
-                volume,
-                logger=self.logger,
-                api=self.api,
-                watchdog=self.watchdog,
-            )
-            for volume in self.volumes
-        ]
+        super(Meta2Crawler, self).__init__(
+            conf, conf_file=conf_file, worker_class=Meta2Worker
+        )

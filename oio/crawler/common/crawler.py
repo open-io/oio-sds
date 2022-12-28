@@ -232,14 +232,16 @@ class Crawler(Daemon):
 
     SERVICE_TYPE = None
 
-    def __init__(self, conf, conf_file=None, **kwargs):
+    def __init__(self, conf, conf_file=None, worker_class=None, **kwargs):
         super(Crawler, self).__init__(conf)
-
         if not conf_file:
             raise ConfigurationException("Missing configuration path")
         conf["conf_file"] = conf_file
         self.api = ObjectStorageApi(conf["namespace"], logger=self.logger)
-
+        if not worker_class:
+            raise ConfigurationException("Missing worker class")
+        self.worker_class = worker_class
+        self.volume_workers = list()
         self.volumes = list()
         for volume in conf.get("volume_list", "").split(","):
             volume = volume.strip()
@@ -253,8 +255,13 @@ class Crawler(Daemon):
         self._init_volume_workers()
 
     def _init_volume_workers(self, **kwargs):
-        self.volume_workers = []
-        raise NotImplementedError("_init_volume_workers not implemented")
+        """
+        Initialize volume workers
+        """
+        for volume in self.volumes:
+            worker = self.create_worker(self.worker_class, volume)
+            if worker:
+                self.volume_workers.append(worker)
 
     def run(self, *args, **kwargs):
         """Main loop to scan volumes and apply filters"""
@@ -268,3 +275,24 @@ class Crawler(Daemon):
         self.logger.info("stop %s crawler asked", self.SERVICE_TYPE)
         for worker in self.volume_workers:
             worker.stop()
+
+    def create_worker(self, cls, volume):
+        """
+        Create cls worker instance for the volume given in parameter
+
+        :param volume: volume path
+        :type volume: str
+        :return: worker class
+        :rtype: CrawlerWorker
+        """
+        try:
+            return cls(
+                self.conf,
+                volume,
+                logger=self.logger,
+                api=self.api,
+                watchdog=self.watchdog,
+            )
+        except Exception:
+            self.logger.exception("Worker initialization failed")
+            return None
