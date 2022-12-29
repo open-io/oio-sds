@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -651,13 +651,13 @@ class XcuteBackend(RedisConnection):
         limit = limit or self.DEFAULT_LIMIT
 
         if job_status:
-            job_status = job_status.upper().strip()
+            job_status = job_status.upper().strip().encode("utf-8")
         if job_type:
-            job_type = job_type.lower().strip()
+            job_type = job_type.lower().strip().encode("utf-8")
         if job_lock:
-            job_lock = job_lock.lower().strip()
+            job_lock = job_lock.lower().strip().encode("utf-8")
 
-        jobs = list()
+        jobs = []
         while True:
             limit_ = limit - len(jobs)
             if limit_ <= 0:
@@ -685,14 +685,19 @@ class XcuteBackend(RedisConnection):
                     # The job can be deleted between two requests
                     continue
 
-                if job_status and job_info["job.status"] != job_status:
-                    continue
-                if job_type and job_info["job.type"] != job_type:
-                    continue
-                if job_lock and not fnmatchcase(
-                    job_info.get("job.lock") or "", job_lock
-                ):
-                    continue
+                try:
+                    if job_status and job_info[b"job.status"] != job_status:
+                        continue
+                    if job_type and job_info[b"job.type"] != job_type:
+                        continue
+                    if job_lock and not fnmatchcase(
+                        job_info.get(b"job.lock") or b"", job_lock
+                    ):
+                        continue
+                except KeyError as err:
+                    self.logger.warning(
+                        "Missing key %s in job %r", err, job_info.get(b"job.id")
+                    )
 
                 jobs.append(self._unmarshal_job_info(job_info))
 
