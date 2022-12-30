@@ -21,8 +21,6 @@ jobs:
           echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/obsto.list
           apt update
           apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
-          systemctl stop apache2.service redis.service
-          systemctl disable apache2.service redis.service
           # Configure environment
           echo "export PATH=/opt/${GO_PACKAGE}/bin:/opt/${ZOOKEEPER_PACKAGE}/bin:/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
@@ -30,7 +28,7 @@ jobs:
           echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
           echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
           echo 'CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=${ZOOLIBDIR} -DZK_INCDIR=${ZOOINCDIR}"' >> $HOME/oio-env.sh
-          echo "export PYTHONPATH=$(find /opt/${PYTHON_PACKAGE}/lib/ -name 'site-packages')" >> $HOME/oio-env.sh
+          #echo "export PYTHONPATH=$(find /opt/${PYTHON_PACKAGE}/lib/ -name 'site-packages')" >> $HOME/oio-env.sh
           # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
           echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
           source $HOME/oio-env.sh
@@ -57,18 +55,18 @@ jobs:
           - pgrep rsyslogd || rsyslogd &
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-failfast.sh
-          - coverage combine .coverage.*-vm*
+          - coverage combine .coverage.*-b2*
           - mv .coverage .coverage.build
-          - rm -f .coverage.*-vm*
+          - rm -f .coverage.*-b2*
 
       - name: Run unit tests
         script:
           - . $HOME/oio-env.sh
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-unit.sh
-          - coverage combine .coverage.*-vm*
+          - coverage combine .coverage.*-b2*
           - mv .coverage .coverage.unit
-          - rm -f .coverage.*-vm*
+          - rm -f .coverage.*-b2*
 
       - name: Save coverage and test information
         script:
@@ -77,4 +75,4 @@ jobs:
           - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
 
     requirements:
-      - model: Ubuntu-20.04-VM-b2-07
+      - model: ubuntu-2004-openio-b2-07
