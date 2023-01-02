@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,15 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 
 @attr("no_thread_patch")
 class TestAccountServerBase(BaseTestCase):
+
+    # https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+    PROM_PATTERN = re.compile(
+        "(?P<key>[a-zA-Z_:][a-zA-Z0-9_:]*)"
+        '(?P<labels>{(?:[a-zA-Z_][a-zA-Z0-9_]*="[^"]+")'
+        '(?:,[a-zA-Z_][a-zA-Z0-9_]*="[^"]+")*})? '
+        "(?P<value>-?[0-9.]+)"
+    )
+
     def setUp(self):
         super(TestAccountServerBase, self).setUp()
         if os.path.exists(CommonFdb.DEFAULT_FDB):
@@ -57,6 +66,12 @@ class TestAccountServerBase(BaseTestCase):
         # Done in teardown to cover every possible modification to metrics done by tests
         # Eg: tests adding s3 specific metrics.
         self._check_metrics_format_prom()
+
+        try:
+            self._flush_account(self.account_id)
+            self._delete_account(self.account_id)
+        except NotFound:
+            pass
         return super().tearDown()
 
     @classmethod
@@ -75,18 +90,17 @@ class TestAccountServerBase(BaseTestCase):
     def _delete_account(self, account_id):
         self.app.post("/v1.0/account/delete", query_string={"id": account_id})
 
+    def _check_prom_format(self, resp_prom):
+        lines = resp_prom.data.decode("utf-8").splitlines()
+        for line in lines:
+            self.assertIsNotNone(re.fullmatch(self.PROM_PATTERN, line))
+
     def _check_metrics_format_prom(self):
         """
         This method ensures that each metric key respects the prometheus format.
         """
         resp_prom = self.app.get("/metrics?format=prometheus")
-        lines = resp_prom.data.decode("utf-8").splitlines()
-        # https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
-        pattern = re.compile("[a-zA-Z_:][a-zA-Z0-9_:]*")
-        for line in lines:
-            # Extract the key
-            key = line.split(" ")[0].split("{")[0]
-            self.assertIsNotNone(re.fullmatch(pattern, key))
+        self._check_prom_format(resp_prom)
 
 
 class TestAccountServer(TestAccountServerBase):
@@ -97,14 +111,6 @@ class TestAccountServer(TestAccountServerBase):
     def setUp(self):
         super(TestAccountServer, self).setUp()
         self._create_account(self.account_id)
-
-    def tearDown(self):
-        try:
-            self._flush_account(self.account_id)
-            self._delete_account(self.account_id)
-        except NotFound:
-            pass
-        return super().tearDown()
 
     def test_status(self):
         resp = self.app.get("/status")
@@ -599,9 +605,6 @@ class TestIamServer(TestAccountServerBase):
         self.user1 = self.account_id + ":user1"
         self.user2 = self.account_id + ":user2"
 
-    def tearDown(self):
-        super(TestIamServer, self).tearDown()
-
     def test_put_user_policy(self):
         resp = self.app.put(
             "/v1.0/iam/put-user-policy",
@@ -903,23 +906,114 @@ class TestIamServer(TestAccountServerBase):
 
 
 class TestAccountRankings(TestAccountServerBase):
-    def setUp(self):
-        super(TestAccountRankings, self).setUp()
-
     def test_rankings(self):
         resp = self.app.get("/rankings")
         self.assertEqual(200, resp.status_code)
         resp = self.json_loads(resp.data)
         self.assertDictEqual({"last-update": None, "bytes": {}, "objects": {}}, resp)
 
+        rankings = {
+            "bytes": {
+                "TEST": [
+                    ("bucket0", 10),
+                    ("bucket1", 20),
+                    ("bucket2", 30),
+                    ("bucket3", 40),
+                ]
+            },
+            "objects": {
+                "TEST": [
+                    ("bucket0", 1),
+                    ("bucket1", 2),
+                    ("bucket2", 3),
+                    ("bucket3", 4),
+                ]
+            },
+        }
+        expected_rankings = {
+            "bytes": {
+                "TEST": [
+                    {
+                        "name": "bucket0",
+                        "value": 10,
+                    },
+                    {
+                        "name": "bucket1",
+                        "value": 20,
+                    },
+                    {
+                        "name": "bucket2",
+                        "value": 30,
+                    },
+                    {
+                        "name": "bucket3",
+                        "value": 40,
+                    },
+                ]
+            },
+            "objects": {
+                "TEST": [
+                    {
+                        "name": "bucket0",
+                        "value": 1,
+                    },
+                    {
+                        "name": "bucket1",
+                        "value": 2,
+                    },
+                    {
+                        "name": "bucket2",
+                        "value": 3,
+                    },
+                    {
+                        "name": "bucket3",
+                        "value": 4,
+                    },
+                ]
+            },
+        }
+        self.acct_app.backend.update_rankings(rankings)
+        resp = self.app.get("/rankings")
+        self.assertEqual(200, resp.status_code)
+        resp = self.json_loads(resp.data)
+        self.assertIsNotNone(resp.pop("last-update", None))
+        self.assertDictEqual(expected_rankings, resp)
+
+    def test_check_rankings_format_prom(self):
+        """
+        This method ensures that each ranking key respects the prometheus format.
+        """
+        resp_prom = self.app.get("/rankings?format=prometheus")
+        self.assertEqual(b"", resp_prom.data)
+
+        rankings = {
+            "bytes": {
+                "TEST": [
+                    ("bucket0", 10),
+                    ("bucket1", 20),
+                    ("bucket2", 30),
+                    ("bucket3", 40),
+                ]
+            },
+            "objects": {
+                "TEST": [
+                    ("bucket0", 1),
+                    ("bucket1", 2),
+                    ("bucket2", 3),
+                    ("bucket3", 4),
+                ]
+            },
+        }
+        self.acct_app.backend.update_rankings(rankings)
+        resp_prom = self.app.get("/rankings?format=prometheus")
+        self.assertNotEqual(b"", resp_prom.data)
+        self._check_prom_format(resp_prom)
+
 
 class TestAccountMetrics(TestAccountServerBase):
     """
     Test account-related features of the account service.
     """
-
-    def setUp(self):
-        super(TestAccountMetrics, self).setUp()
 
     def test_metrics_nb_accounts(self):
         resp = self.app.get("/metrics")

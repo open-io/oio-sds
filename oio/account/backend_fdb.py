@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -558,14 +558,18 @@ class AccountBackendFdb(object):
 
     def _rankings_to_prometheus_format(self, rankings):
         prom_output = []
-        prom_output.append(f"obsto_last_update {rankings[LAST_UPDATE_FIELD]}")
+        last_update = rankings[LAST_UPDATE_FIELD]
+        if last_update is None:
+            return ""
+        prom_output.append(f"obsto_last_update {last_update}")
         for field in (BYTES_FIELD, OBJECTS_FIELD):
             for region, region_rankings in rankings[field].items():
                 for entry in region_rankings:
+                    bucket_name = entry["name"]
                     # Prometheus does not like hyphens
                     prom_output.append(
                         f"obsto_{field.replace('-', '_')}"
-                        f"{{region={region},bucket={entry['name']}}}"
+                        f'{{region="{region}",bucket="{bucket_name}"}}'
                         f" {entry['value']}"
                     )
         return "\n".join(prom_output)
