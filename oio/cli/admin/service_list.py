@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six import iteritems
 from cliff import lister
 
 from oio.common.exceptions import ClientException
@@ -109,7 +108,7 @@ class RawxListContainers(ServiceListCommand):
         status = self.rdir.status(rawx, reqid=reqid)
         containers = status.get("container")
         trans = self.translate_cid if translate else lambda x: x
-        for cid, info in iteritems(containers):
+        for cid, info in containers.items():
             yield trans(cid), info["total"]
         yield "Total", status["chunk"]["total"]
 
@@ -125,6 +124,62 @@ class RawxListContainers(ServiceListCommand):
     def _take_action(self, parsed_args):
         return self._list_containers(
             parsed_args.service, translate=not parsed_args.no_translation
+        )
+
+
+class RawxListObjects(ServiceListCommand):
+    """
+    List objects having chunks stored on the specified rawx service.
+
+    This will be slow if the queried volume contains a lot of chunks.
+    """
+
+    columns = ("Name", "Chunk", "Object", "Version", "Mtime", "Content ID")
+    reqid_prefix = "ACLI-RLO-"
+
+    def _list_objects(self, rawx, cid=None, chunk_id=None, translate=False):
+        reqid = self.app.request_id(self.reqid_prefix)
+        trans = self.translate_cid if translate else lambda x: x
+        for container, chunk, obj in self.rdir.chunk_fetch(
+            rawx, container_id=cid, reqid=reqid
+        ):
+            if chunk_id and chunk != chunk_id:
+                continue
+            yield (
+                trans(container),
+                chunk,
+                obj.get("path"),
+                obj.get("version"),
+                obj.get("mtime"),
+                obj.get("content_id"),
+            )
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        parser.add_argument(
+            "--cid",
+            help="Filter results on this container ID",
+        )
+        parser.add_argument(
+            "--chunk-id",
+            help=(
+                "Filter results on this chunk ID only. "
+                + "Filtering is done client-side."
+            ),
+        )
+        parser.add_argument(
+            "--no-translation",
+            action="store_true",
+            help="Do not translate container ID to account and container names",
+        )
+        return parser
+
+    def _take_action(self, parsed_args):
+        return self._list_objects(
+            parsed_args.service,
+            cid=parsed_args.cid,
+            chunk_id=parsed_args.chunk_id,
+            translate=not parsed_args.no_translation,
         )
 
 
