@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -87,7 +88,7 @@ class ServiceListCommand(SingleServiceCommandMixin, lister.Lister):
         reqid = self.app.request_id(self.reqid_prefix)
         try:
             if cid not in self._cids_cache:
-                md = self.dir.show(cid=cid, reqid=reqid)
+                md = self.dir.list(cid=cid, reqid=reqid)
                 self._cids_cache[cid] = "/".join([md.get("account"), md.get("name")])
             return self._cids_cache[cid]
         except ClientException:
