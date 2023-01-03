@@ -94,7 +94,7 @@ class RawxWorker(CrawlerWorker):
 class RawxCrawler(Crawler):
     SERVICE_TYPE = "rawx"
 
-    def __init__(self, conf, conf_file=None, **kwargs):
+    def __init__(self, conf, conf_file=None, worker_class=RawxWorker, **kwargs):
         super(RawxCrawler, self).__init__(
-            conf, conf_file=conf_file, worker_class=RawxWorker, **kwargs
+            conf, conf_file=conf_file, worker_class=worker_class, **kwargs
         )

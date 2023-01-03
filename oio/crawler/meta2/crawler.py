@@ -76,7 +76,7 @@ class Meta2Worker(CrawlerWorker):
 class Meta2Crawler(Crawler):
     SERVICE_TYPE = "meta2"
 
-    def __init__(self, conf, conf_file=None, **kwargs):
+    def __init__(self, conf, conf_file=None, worker_class=Meta2Worker, **kwargs):
         super(Meta2Crawler, self).__init__(
-            conf, conf_file=conf_file, worker_class=Meta2Worker
+            conf, conf_file=conf_file, worker_class=worker_class, **kwargs
         )
