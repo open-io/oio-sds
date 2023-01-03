@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ import sqlite3
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.green import time
+from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 from oio.directory.admin import AdminClient
@@ -123,6 +124,14 @@ class AutomaticVacuum(Filter):
                         meta2db.cid,
                     )
             if skip:
+                self.skipped += 1
+                return self.app(env, cb)
+
+            if ContainerSharding.sharding_in_progress({"system": meta2db.system}):
+                self.logger.info(
+                    "Sharding in progress, the container will be deleted or "
+                    "the vacuum will be done at the end"
+                )
                 self.skipped += 1
                 return self.app(env, cb)
 

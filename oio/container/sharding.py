@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -396,7 +396,8 @@ class ContainerSharding(ProxyClient):
             and shard1["cid"].upper() == shard2["cid"].upper()
         )
 
-    def sharding_in_progress(self, meta):
+    @staticmethod
+    def sharding_in_progress(meta):
         sharding_state = int_value(meta["system"].get(M2_PROP_SHARDING_STATE), 0)
         return (
             sharding_state
