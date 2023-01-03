@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-from six import PY2
 
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
@@ -118,7 +116,7 @@ class ECContent(Content):
         meta["full_path"] = self.full_path
         meta["oio_version"] = OIO_VERSION
         bytes_transferred, _ = self.blob_client.chunk_put(
-            spare_url[0], meta, GeneratorIO(stream, sub_generator=PY2), reqid=reqid
+            spare_url[0], meta, GeneratorIO(stream), reqid=reqid
         )
         if expected_chunk_size is not None and bytes_transferred != expected_chunk_size:
             try:
@@ -127,7 +125,11 @@ class ECContent(Content):
                 self.logger.warning(
                     "Failed to rollback the rebuild of the chunk: %s", exc
                 )
-            raise ChunkException("The rebuilt chunk is not the correct size")
+            raise ChunkException(
+                "The rebuilt chunk is not the correct size: "
+                + f"expected {expected_chunk_size} bytes, "
+                + f"rebuilt {bytes_transferred} (full_path={self.full_path})"
+            )
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:
