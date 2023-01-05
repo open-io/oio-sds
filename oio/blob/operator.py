@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,6 +51,8 @@ class ChunkOperator(object):
         container_id,
         content_id,
         chunk_id_or_pos,
+        path,
+        version,
         rawx_id=None,
         try_chunk_delete=False,
         allow_frozen_container=True,
@@ -62,7 +64,13 @@ class ChunkOperator(object):
         then rebuild it.
         """
         try:
-            content = self.content_factory.get(container_id, content_id, **kwargs)
+            content = self.content_factory.get_by_path_and_version(
+                container_id=container_id,
+                content_id=content_id,
+                path=path,
+                version=version,
+                **kwargs,
+            )
         except ContentNotFound:
             raise OrphanChunk("Content not found: possible orphan chunk")
 

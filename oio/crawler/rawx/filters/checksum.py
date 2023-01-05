@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -148,10 +148,12 @@ class Checksum(Filter):
         container_id = chunk.meta["container_id"]
         try:
             self.chunk_operator.rebuild(
-                container_id,
-                chunk.meta["content_id"],
-                chunk.chunk_id,
+                container_id=container_id,
+                content_id=chunk.meta["content_id"],
+                chunk_id_or_pos=chunk.chunk_id,
                 rawx_id=self.volume_id,
+                path=chunk.meta["content_path"],
+                version=chunk.meta["content_version"],
             )
 
             # Rebuilt OK, corrupted chunk can be removed

@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -158,7 +158,7 @@ class Changelocation(Filter):
 
         try:
             # Getting Content object
-            content = self.content_factory.get(
+            content = self.content_factory.get_by_path_and_version(
                 container_id=chunkwrapper.meta["container_id"],
                 content_id=chunkwrapper.meta["content_id"],
                 path=chunkwrapper.meta["content_path"],

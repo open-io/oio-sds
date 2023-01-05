@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -187,6 +187,8 @@ class BlobMoverWorker(object):
         meta = self.load_chunk_metadata(path, chunk_id)
         container_id = meta["container_id"]
         content_id = meta["content_id"]
+        obj_name = meta["content_path"]
+        version = meta["content_version"]
         chunk_id = meta["chunk_id"]
 
         # Maybe skip the chunk because it doesn't match the size constaint
@@ -202,7 +204,12 @@ class BlobMoverWorker(object):
 
         # Start moving the chunk
         try:
-            content = self.content_factory.get(container_id, content_id)
+            content = self.content_factory.get_by_path_and_version(
+                container_id=container_id,
+                content_id=content_id,
+                path=obj_name,
+                version=version,
+            )
         except ContentNotFound:
             raise exc.OrphanChunk("Content not found")
 
@@ -223,11 +230,18 @@ class BlobMoverWorker(object):
             old_links = meta["links"]
             for chunk_id, fullpath in old_links.items():
                 # pylint: disable=unbalanced-tuple-unpacking
-                account, container, _, _, content_id = decode_fullpath(fullpath)
+                account, container, obj_name, version, content_id = decode_fullpath(
+                    fullpath
+                )
                 container_id = cid_from_name(account, container)
 
                 try:
-                    content = self.content_factory.get(container_id, content_id)
+                    content = self.content_factory.get_by_path_and_version(
+                        container_id=container_id,
+                        content_id=content_id,
+                        path=obj_name,
+                        version=version,
+                    )
                 except ContentNotFound:
                     raise exc.OrphanChunk("Content not found")
 

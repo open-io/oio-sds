@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -103,8 +103,12 @@ class RawxDecommissionTask(XcuteTask):
 
         # Start moving the chunk
         try:
-            content = self.content_factory.get(
-                container_id, content_id, path=path, version=version, reqid=reqid
+            content = self.content_factory.get_by_path_and_version(
+                container_id=content_id,
+                content_id=content_id,
+                path=path,
+                version=version,
+                reqid=reqid,
             )
             content.move_chunk(
                 chunk_id,

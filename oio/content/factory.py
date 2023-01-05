@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -71,14 +71,14 @@ class ContentFactory(object):
     def get(
         self, container_id, content_id, account=None, container_name=None, **kwargs
     ):
+        # Deprecated, prefer using get_by_path_and_version.
+        # Using path and versions allows to resolve objects in sharded containers.
         try:
             meta, chunks = self.container_client.content_locate(
                 cid=container_id, content=content_id, **kwargs
             )
         except NotFound:
-            raise ContentNotFound(
-                "Content %s/%s not found" % (container_id, content_id)
-            )
+            raise ContentNotFound(f"Content {container_id}/{content_id} not found")
 
         return self._get(
             container_id,
@@ -86,19 +86,30 @@ class ContentFactory(object):
             chunks,
             account=account,
             container_name=container_name,
-            **kwargs
+            **kwargs,
         )
 
     def get_by_path_and_version(
-        self, container_id, path, version, account=None, container_name=None, **kwargs
+        self,
+        container_id,
+        content_id,
+        path,
+        version,
+        account=None,
+        container_name=None,
+        **kwargs,
     ):
         try:
             meta, chunks = self.container_client.content_locate(
-                cid=container_id, path=path, version=version, **kwargs
+                cid=container_id,
+                content=content_id,
+                path=path,
+                version=version,
+                **kwargs,
             )
         except NotFound:
             raise ContentNotFound(
-                "Content %s/%s/%s not found" % (container_id, path, str(version))
+                f"Content {container_id}/{path}/{version}/{content_id} not found"
             )
 
         return self._get(
@@ -107,7 +118,7 @@ class ContentFactory(object):
             chunks,
             account=account,
             container_name=container_name,
-            **kwargs
+            **kwargs,
         )
 
     def new(
@@ -118,7 +129,7 @@ class ContentFactory(object):
         policy,
         account=None,
         container_name=None,
-        **kwargs
+        **kwargs,
     ):
         meta, chunks = self.container_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy, **kwargs

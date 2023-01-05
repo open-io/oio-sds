@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -173,9 +173,9 @@ class RdirWorker(object):
     def _rebuild_chunk(self, container_id, chunk_id, value, reqid):
         try:
             self.chunk_operator.rebuild(
-                container_id,
-                value["content_id"],
-                chunk_id,
+                container_id=container_id,
+                content_id=value["content_id"],
+                chunk_id_or_pos=chunk_id,
                 rawx_id=self.volume_id,
                 path=value["path"],
                 version=value["version"],

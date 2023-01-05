@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -123,12 +123,19 @@ class ContentRepairerWorker(ToolWorker):
         self.blob_client = BlobClient(self.conf, watchdog=self.tool.watchdog)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
-    def _safe_chunk_rebuild(self, item, content_id, chunk_id_or_pos, **kwargs):
+    def _safe_chunk_rebuild(
+        self, item, content_id, chunk_id_or_pos, path, version, **kwargs
+    ):
         _, account, container, _, _ = item
         try:
             container_id = cid_from_name(account, container)
             self.chunk_operator.rebuild(
-                container_id, content_id, chunk_id_or_pos, **kwargs
+                container_id=container_id,
+                content_id=content_id,
+                chunk_id_or_pos=chunk_id_or_pos,
+                path=path,
+                version=version,
+                **kwargs,
             )
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
@@ -139,7 +146,7 @@ class ContentRepairerWorker(ToolWorker):
             )
             return exc
 
-    def _repair_metachunk(self, item, content_id, stg_met, pos, chunks):
+    def _repair_metachunk(self, item, content_id, stg_met, pos, chunks, path, version):
         """
         Check that a metachunk has the right number of chunks.
 
@@ -153,14 +160,24 @@ class ContentRepairerWorker(ToolWorker):
                 for sub in range(required):
                     if sub not in subs:
                         exc = self._safe_chunk_rebuild(
-                            item, content_id, "%d.%d" % (pos, sub)
+                            item=item,
+                            content_id=content_id,
+                            chunk_id_or_pos=f"{pos}.{sub}",
+                            path=path,
+                            version=version,
                         )
                         if exc:
                             exceptions.append(exc)
             else:
                 missing_chunks = required - len(chunks)
                 for _ in range(missing_chunks):
-                    exc = self._safe_chunk_rebuild(item, content_id, pos)
+                    exc = self._safe_chunk_rebuild(
+                        item=item,
+                        content_id=content_id,
+                        chunk_id_or_pos=pos,
+                        path=path,
+                        version=version,
+                    )
                     if exc:
                         exceptions.append(exc)
 
@@ -171,7 +188,14 @@ class ContentRepairerWorker(ToolWorker):
                 )
             except (NotFound, ClientPreconditionFailed) as e:
                 kwargs = {"try_chunk_delete": isinstance(e, ClientPreconditionFailed)}
-                exc = self._safe_chunk_rebuild(item, content_id, chunk["url"], **kwargs)
+                exc = self._safe_chunk_rebuild(
+                    item=item,
+                    content_id=content_id,
+                    chunk_id_or_pos=chunk["url"],
+                    path=path,
+                    version=version,
+                    **kwargs,
+                )
                 if exc:
                     exceptions.append(exc)
             except Exception as exc:  # pylint: disable=broad-except
@@ -208,7 +232,13 @@ class ContentRepairerWorker(ToolWorker):
         for pos, chunks in iteritems(chunks_by_pos):
             try:
                 exceptions += self._repair_metachunk(
-                    item, content_id, stg_met, pos, chunks
+                    item=item,
+                    content_id=content_id,
+                    stg_met=stg_met,
+                    pos=pos,
+                    chunks=chunks,
+                    path=obj_name,
+                    version=version,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -56,9 +56,9 @@ class RawxRebuildTask(XcuteTask):
         self.logger.debug("[reqid=%s] Rebuilding %s", reqid, chunk_id)
         try:
             chunk_size = self.chunk_operator.rebuild(
-                container_id,
-                content_id,
-                chunk_id,
+                container_id=container_id,
+                content_id=content_id,
+                chunk_id_or_pos=chunk_id,
                 rawx_id=self.service_id,
                 path=path,
                 version=version,
