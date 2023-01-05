@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,28 +35,28 @@ class ClusterTest(CliTestCase):
     """Functional tests for cluster."""
 
     def test_cluster_show(self):
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
         output = self.openio("cluster show" + opts)
         data = json.loads(output)
         for field in CLUSTER_FIELDS:
             self.assertIn(field, data)
 
     def test_cluster_list(self):
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
         output = self.openio("cluster list rawx" + opts)
         data = json.loads(output)
         self.assert_list_fields(data, CLUSTER_LIST_HEADERS)
         self.assertGreaterEqual(len(data), 1)
 
     def test_cluster_local_list(self):
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
         output = self.openio("cluster local list rawx" + opts)
         data = json.loads(output)
         self.assert_list_fields(data, CLUSTER_LIST_HEADERS)
         self.assertGreaterEqual(len(data), 1)
 
     def test_cluster_unlock(self):
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
         # Check that nonexistent types are rejected
         output = self.openio(
             "cluster unlock nonexistent 127.0.0.1:666" + opts, expected_returncode=1
@@ -72,7 +72,7 @@ class ClusterTest(CliTestCase):
         self.assertEqual(data[0]["Result"], "unlocked")
 
     def test_cluster_lock(self):
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
         # Check that nonexistent types are rejected
         output = self.openio(
             "cluster lock nonexistent 127.0.0.1:666" + opts, expected_returncode=1
@@ -87,6 +87,14 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "locked to 0")
 
+        opts = self.get_format_opts("json", ["Score"])
+        output = self.openio("cluster list --locked" + opts)
+        data = json.loads(output)
+        # We don't know how many others services are locked before running the
+        # test, so we just check that all services returned are locked.
+        for srv in data:
+            self.assertEquals(0, srv["Score"])
+
     def test_cluster_wait(self):
         if self.is_running_on_public_ci():
             self.skipTest("Too long to run on public CI")
@@ -95,7 +103,7 @@ class ClusterTest(CliTestCase):
 
         self._flush_cs("rawx")
         time.sleep(3.0)
-        opts = self.get_opts([], "json")
+        opts = self.get_format_opts("json")
 
         # Get one rawx service's ID
         output = self.openio("cluster list rawx" + opts)

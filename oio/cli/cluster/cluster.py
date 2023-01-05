@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -72,7 +72,10 @@ class ClusterList(Lister):
         parser.add_argument(
             "--stats", "--full", action="store_true", help="Display service statistics."
         )
-        parser.add_argument("--tags", action="store_true", help="Display service tags")
+        parser.add_argument("--tags", action="store_true", help="Display service tags.")
+        parser.add_argument(
+            "--locked", action="store_true", help="Only display locked services."
+        )
         return parser
 
     def _list_services(self, parsed_args):
@@ -96,12 +99,15 @@ class ClusterList(Lister):
                 continue
             for srv in data:
                 tags = srv["tags"]
+                locked = boolean_value(tags.pop("tag.lock", False), False)
+                if parsed_args.locked and not locked:
+                    # User asked for only locked services, skip...
+                    continue
                 location = tags.pop("tag.loc", "n/a")
                 slots = tags.pop("tag.slots", "n/a")
                 volume = tags.pop("tag.vol", "n/a")
                 service_id = tags.pop("tag.service_id", "n/a")
                 addr = srv["addr"]
-                locked = boolean_value(tags.pop("tag.lock", False), False)
                 up = tags.pop("tag.up", "n/a")
                 score = srv["score"]
                 service_type = srv_type
