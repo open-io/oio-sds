@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1008,10 +1008,12 @@ _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 		/* Check for chunks, but do not fail.
 		 * We have seen chunks being rebuilt while the object was deleted. */
 		err = _table_is_empty(sq3, "chunks");
-		GRID_WARN("Database has no contents nor shards, "
-				"but still contains chunks (reqid=%s)",
-				oio_ext_get_reqid());
-		g_clear_error(&err);
+		if (err) {
+			GRID_WARN("Database has no contents nor shards, "
+					"but still contains chunks (reqid=%s)",
+					oio_ext_get_reqid());
+			g_clear_error(&err);
+		}
 	}
 
 	return err;
