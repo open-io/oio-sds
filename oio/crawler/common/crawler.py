@@ -62,6 +62,7 @@ class CrawlerWorker(object):
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
         )
+        self.one_shot = boolean_value(self.conf.get("one_shot"), False)
         self.scans_interval = int_value(self.conf.get("interval"), 1800)
         self.report_interval = int_value(self.conf.get("report_interval"), 300)
         self.max_scanned_per_second = int_value(self.conf.get("scanned_per_second"), 30)
@@ -201,6 +202,9 @@ class CrawlerWorker(object):
                     start_crawl,
                     crawling_duration,
                 )
+                if self.one_shot:
+                    # For one shot crawler, we exit after the first execution
+                    return
                 waiting_time_to_restart = self.scans_interval - crawling_duration
                 if waiting_time_to_restart > 0:
                     for _ in range(int(waiting_time_to_restart)):
