@@ -1426,6 +1426,7 @@ pipeline = xcute
 
 [filter:xcute]
 use = egg:oio#xcute
+#cache_size = 50
 """
 
 template_billing_agent_service = """
