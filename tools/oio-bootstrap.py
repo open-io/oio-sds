@@ -3,7 +3,7 @@
 # oio-bootstrap.py
 # Copyright (C) 2015 Conrad Kleinespel
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -340,6 +340,41 @@ drain_limit_per_pass = 100000
 
 [filter:logger]
 use = egg:oio#logger
+"""
+
+template_meta2_placement_checker_crawler_service = """
+[meta2-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${META2_VOLUMES}
+
+wait_random_time_before_starting = True
+interval = 1200
+one_shot = True
+report_interval = 300
+scanned_per_second = 10
+
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = logger verify_chunk_placement
+
+[filter:logger]
+use = egg:oio#logger
+
+[filter:verify_chunk_placement]
+# Identify misplaced chunks after meta2db scan and tag them with misplaced header.
+# This filter is launched by a second instance of meta2 crawler. The second meta2
+# instance is a oneshot service that we can launch manually to execute only 
+# verify_chunk_placement filter.
+use = egg:oio#verify_chunk_placement
+# Maximum object scanned per second by the filter
+max_scanned_per_second  = 10000
+# Time interval after which service data are updated
+service_update_interval = 3600
 """
 
 template_placement_improver_crawler_service = """
@@ -1036,6 +1071,25 @@ ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
+template_systemd_service_placement_checker_crawler = """
+[Unit]
+Description=[OpenIO] Service meta2 crawler to check chunks placement
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=oneshot
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
@@ -2178,6 +2232,29 @@ def generate(options):
         f.write(to_write)
     register_service(
         _tmp_env, template_systemd_service_meta2_crawler, crawler_target, False
+    )
+
+    # oio-meta2-placement-checker-crawler
+    _tmp_env = subenv(
+        {
+            "META2_VOLUMES": ",".join(meta2_volumes),
+            "SRVTYPE": "meta2-crawler",
+            "SRVNUM": "2",
+            "GROUPTYPE": "crawler",
+            "EXE": "oio-meta2-crawler",
+        }
+    )
+    # first the conf
+    tpl = Template(template_meta2_placement_checker_crawler_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf".format(**_tmp_env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+    register_service(
+        _tmp_env,
+        template_systemd_service_placement_checker_crawler,
+        crawler_target,
+        False,
     )
 
     # RAWX

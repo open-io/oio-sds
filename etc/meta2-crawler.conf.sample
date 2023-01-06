@@ -86,3 +86,14 @@ drain_limit = 1000
 # Drain limit for each pass/iteration of the crawler. It aims to limit the 
 # meta2 usage and to smooth out the calls over time. Default to 100000.
 drain_limit_per_pass = 100000
+
+[filter:verify_chunk_placement]
+# Identify misplaced chunks after meta2db scan and tag them with misplaced header.
+# This filter is launched by a second instance of meta2 crawler. The second meta2
+# instance is a oneshot service that we can launch manually to execute only 
+# verify_chunk_placement filter. 
+use = egg:oio#verify_chunk_placement
+# Maximum object scanned per second by the filter
+max_scanned_per_second  = 10000
+# Time interval after which service data are updated
+service_update_interval = 3600

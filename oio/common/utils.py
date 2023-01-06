@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@ import os
 import grp
 import hashlib
 import pwd
+import re
 import sys
 from blake3 import blake3
 from collections import OrderedDict
@@ -311,6 +312,26 @@ class GeneratorIO(RawIOBase):
             if not buf:
                 return
             yield buf
+
+
+def get_nb_chunks(data_security):
+    """
+    Get the number of chunk expected for a specific data_security
+    defined for a specific policy
+
+    :param data_security: data security defined for a specific storage policy
+    :type data_security: str
+    :return: number of chunk expected for a specific policy
+    :rtype: int
+    """
+    if "nb_copy" in data_security:
+        # Plain storage
+        return int(re.findall(r"nb_copy=\d+", data_security)[0].split("=")[1])
+    else:
+        # Erasure code
+        k = int(re.findall(r"k=\d+", data_security)[0].split("=")[1])
+        m = int(re.findall(r"m=\d+", data_security)[0].split("=")[1])
+        return k + m
 
 
 def group_chunk_errors(chunk_err_iter):
