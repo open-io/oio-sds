@@ -3,7 +3,7 @@
 
 # oio-test-suites.sh
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -54,7 +54,7 @@ function trap_exit {
 	fi
 	lsof -i -P -n | grep LISTEN >> everything.log
 	$OPENIOCTL status2 >> everything.log
-	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-page -l >> everything.log
+	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-pager --full --lines=256 >> everything.log
 	#dump_syslog
 	${SRCDIR}/tools/oio-gdb.py >> everything.log
 }
