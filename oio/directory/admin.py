@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -400,6 +400,13 @@ class AdminClient(ProxyClient):
             "POST", "/balance-masters", params=params, **kwargs
         )
         return _resp.status, body
+
+    def service_release_memory(self, svc_id, **kwargs):
+        """
+        Ask the service to release memory (malloc_trim).
+        Works on all services using ASN.1 protocol.
+        """
+        self._forward_service_action(svc_id, "/lean-glib", **kwargs)
 
     def service_reload_lb(self, svc_id, **kwargs):
         """

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@
 from cliff import lister
 
 from oio.cli.admin.common import MultipleServicesCommandMixin
+from oio.common.configuration import load_namespace_conf
 
 
 class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
@@ -46,9 +47,7 @@ class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        MultipleServicesCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args
-        )
+        self.check_and_load_parsed_args(self.app, parsed_args)
         self.logger.debug("take_action(%s)", parsed_args)
 
         return self.columns, self.decache_services(parsed_args.services, parsed_args)
@@ -124,5 +123,46 @@ class Meta1Decache(SqliterepoDecacheCommand):
 
 class Meta2Decache(SqliterepoDecacheCommand):
     """Flush the cache of a meta2 service."""
+
+    service_type = "meta2"
+
+
+class ReleaseMemoryBase(DecacheCommand):
+    """Ask a service to release memory."""
+
+    def decache_services(self, services, args):
+        reqid = self.app.request_id()
+        for srv in services:
+            try:
+                self.admin.service_release_memory(svc_id=srv, reqid=reqid)
+                yield srv, "OK", None
+            except Exception as err:
+                self.success = False
+                yield srv, "error", err
+
+
+class ConscienceReleaseMemory(ReleaseMemoryBase):
+
+    service_type = "conscience"
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        # Cannot use the default implementation since conscience services
+        # are not registered.
+        if not parsed_args.services:
+            conf = load_namespace_conf(app.client_manager.namespace)
+            parsed_args.services = conf["conscience"].split(",")
+
+
+class Meta0ReleaseMemory(ReleaseMemoryBase):
+
+    service_type = "meta0"
+
+
+class Meta1ReleaseMemory(ReleaseMemoryBase):
+
+    service_type = "meta1"
+
+
+class Meta2ReleaseMemory(ReleaseMemoryBase):
 
     service_type = "meta2"

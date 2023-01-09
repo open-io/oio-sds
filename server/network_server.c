@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -149,6 +149,19 @@ _constructor (void)
 
 /* Public API --------------------------------------------------------------- */
 
+gint64
+network_server_get_memory_usage(struct network_server_s *srv UNUSED)
+{
+	struct rusage usage;
+	int ret = getrusage(RUSAGE_SELF, &usage);
+
+	if (ret < 0) {
+		GRID_NOTICE("getrusage failed: %s (%d)", strerror(errno), errno);
+		return -1;
+	}
+
+	return usage.ru_maxrss * 1024;
+}
 
 void
 network_server_reconfigure(struct network_server_s *srv)

@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -80,3 +81,30 @@ class ServiceDecacheTest(CliTestCase):
 
     def test_meta2_decache_one(self):
         self._test_service_decache_one("meta2")
+
+    def _test_service_release_memory_all(self, type_):
+        all_svc = self.conscience.all_services(type_)
+        output = self.openio_admin(
+            f"{type_} release-memory" + self.get_format_opts("json")
+        )
+        released = {s["Id"] for s in json.loads(output) if s["Status"] == "OK"}
+        expected = {s["id"] for s in all_svc}
+        self.assertEqual(expected, released)
+
+    def test_meta0_release_memory_all(self):
+        self._test_service_release_memory_all("meta0")
+
+    def test_meta1_release_memory_all(self):
+        self._test_service_release_memory_all("meta1")
+
+    def test_meta2_release_memory_all(self):
+        self._test_service_release_memory_all("meta2")
+
+    def test_conscience_release_memory_all(self):
+        all_svc = self.conf["services"]["conscience"]
+        output = self.openio_admin(
+            "conscience release-memory" + self.get_format_opts("json")
+        )
+        released = {s["Id"] for s in json.loads(output) if s["Status"] == "OK"}
+        expected = {s["addr"] for s in all_svc}
+        self.assertEqual(expected, released)

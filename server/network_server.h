@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@ struct network_server_s;
 struct network_client_s;
 struct network_transport_s;
 
-/* To be defined by the application instatiating the transport */
+/* To be defined by the application instantiating the transport */
 struct transport_client_context_s;
 
 enum {
@@ -97,6 +97,9 @@ extern GQuark gq_count_overloaded;
 extern GQuark gq_time_overloaded;
 
 struct network_server_s * network_server_init(void);
+
+/** Get the total memory usage (RSS) of the process, in bytes. */
+gint64 network_server_get_memory_usage(struct network_server_s *srv);
 
 /* Re-set the limits of the server with the values stored in the central
  * configuration facility */

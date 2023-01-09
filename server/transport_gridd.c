@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -773,8 +773,15 @@ static gboolean
 dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	malloc_trim (malloc_trim_size_ondemand);
+	gint64 ram_before = network_server_get_memory_usage(reply->client->server);
+	malloc_trim(malloc_trim_size_ondemand);
 	g_thread_pool_stop_unused_threads();
+	gint64 ram_after = network_server_get_memory_usage(reply->client->server);
+	if (ram_before > 0 && ram_after > 0) {
+		GRID_INFO("malloc_trim released %"G_GINT64_FORMAT
+				" bytes to the system (reqid=%s)",
+				ram_after - ram_before, oio_ext_get_reqid());
+	}
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
