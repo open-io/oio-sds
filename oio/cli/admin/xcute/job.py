@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -95,6 +95,7 @@ class JobList(XcuteCommand, Lister):
         for job_info in jobs:
             job_main_info = job_info["job"]
             job_tasks = job_info["tasks"]
+            job_errors = job_info["errors"]
             try:
                 progress = job_tasks["processed"] * 100.0 / job_tasks["total"]
             except ZeroDivisionError:
@@ -102,9 +103,12 @@ class JobList(XcuteCommand, Lister):
                     progress = 0.0
                 else:
                     progress = 100.0
+            status = job_main_info["status"]
+            if status == XcuteJobStatus.FINISHED and job_errors.get("total", 0) > 0:
+                status += "_WITH_ERRORS"
             yield (
                 job_main_info["id"],
-                job_main_info["status"],
+                status,
                 job_main_info["type"],
                 job_main_info.get("lock"),
                 "%.2f%%" % progress,
