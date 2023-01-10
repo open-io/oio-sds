@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,12 +20,15 @@ from oio.cli import Lister, ShowOne
 
 
 class StatsEvents(ShowOne):
-    """Stats events"""
+    """
+    Get statistics about events, from the beanstalkd service
+    behind the local event-agent.
+    """
 
     log = getLogger(__name__ + ".StatsEvents")
 
     def get_parser(self, prog_name):
-        parser = super(StatsEvents, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument("--tube", metavar="<tube>", help="Tube name")
         return parser
 
@@ -44,7 +47,7 @@ class EventsExhume(ShowOne):
     log = getLogger(__name__ + ".EventsExhume")
 
     def get_parser(self, prog_name):
-        parser = super(EventsExhume, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "--tube",
             default="oio",
@@ -86,7 +89,7 @@ class DrainTube(ShowOne):
     log = getLogger(__name__ + ".EventsDrain")
 
     def get_parser(self, prog_name):
-        parser = super(DrainTube, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "--non-interactive",
             dest="interactive",
