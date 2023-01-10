@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -87,7 +87,7 @@ class BaseServiceIdTest(BaseTestCase):
         with open(path, "r") as fp:
             data = fp.read().split("\n")
         for idx in range(len(data)):
-            if data[idx].startswith("Listen"):
+            if data[idx].startswith("listen"):
                 data[idx] = data[idx].split(":")[0] + ":" + str(port)
             elif data[idx].startswith("<VirtualHost"):
                 data[idx] = data[idx].split(":")[0] + ":" + str(port) + ">"

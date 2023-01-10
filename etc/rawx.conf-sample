@@ -1,13 +1,16 @@
-Listen 127.0.0.1:6010
+listen 127.0.0.1:6010
 
-# If not provisioned, the bind address will be used (cf. Listen)
-service_id        OPENIO-rawx-1
+# If not provisioned, the bind address will be used (cf. listen)
+service_id        rawx-1
 
-syslog_id              OIO,OPENIO,rawx,1
+syslog_id         OIO,OPENIO,rawx,1
 
 namespace         OPENIO
 
-docroot           /home/jfs/.oio/sds/data/OPENIO-rawx-1
+docroot           /srv/node/disk-00-123/OPENIO/rawx-12345
+
+# Set to false to disable the emission of chunk events
+#events            true
 
 # The following format strings demonstrate the templating possibilities,
 # not the default log format.
@@ -20,6 +23,11 @@ log_request_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	metho
 
 # Access log format
 log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ .Status }}	bytesin_int:{{ .BytesIn }}	bytesout_int:{{ .BytesOut }}	time_spent_int:{{ .TimeSpent }}	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	ttfb:{{ .TTFB }}"
+
+# Set to false to disable some access logs
+#log_access_get true
+#log_access_put true
+#log_access_delete true
 
 # How many hexdigits must be used to name the indirection directories
 hash_width        3
@@ -34,17 +42,29 @@ fsync             disabled
 fsync_dir         disabled
 
 # Preallocate space for the chunk file (enabled by default)
-fallocate         enabled
+#fallocate         enabled
 
 # Is the RAWX allowed to compress the chunks.
 # The actual activation of compression also depends on some flags carried on
-# the request.
-compression       off
+# the request. Allowed values are 'zlib', 'lzw', 'deflate' or 'off'.
+#compression       off
 
-http_keepalive    off
+# Set to off to remove the "Connection: keep-alive" response header
+#http_keepalive    off
+
+# Size (in kibibytes) of each buffer allocated for the upload
+buffer_size            2048
 
 # Maximum size (in bytes) of the whole header to any HTTP request
-headers_buffer_size    65536
+#headers_buffer_size    65536
+
+# Should the TCP_CORK be set (resp. removed) when a connection
+# becomes active (resp. inactive)
+#sock_tcp_cork          off
+
+# Should the Nagle algorithm be suspended when a connection
+# is established
+#sock_tcp_nodelay       off
 
 # Timeout (in seconds) to receive the whole header
 timeout_read_header    5

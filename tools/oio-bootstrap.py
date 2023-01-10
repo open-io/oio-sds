@@ -368,7 +368,7 @@ use = egg:oio#logger
 [filter:verify_chunk_placement]
 # Identify misplaced chunks after meta2db scan and tag them with misplaced header.
 # This filter is launched by a second instance of meta2 crawler. The second meta2
-# instance is a oneshot service that we can launch manually to execute only 
+# instance is a oneshot service that we can launch manually to execute only
 # verify_chunk_placement filter.
 use = egg:oio#verify_chunk_placement
 # Maximum object scanned per second by the filter
@@ -458,8 +458,7 @@ use = egg:oio#logger
 """
 
 template_rawx_service = """
-Listen ${IP}:${PORT}
-PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+listen ${IP}:${PORT}
 
 docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 namespace         ${NS}
