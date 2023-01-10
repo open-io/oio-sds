@@ -1077,7 +1077,6 @@ template_systemd_service_placement_checker_crawler = """
 [Unit]
 Description=[OpenIO] Service meta2 crawler to check chunks placement
 After=network.target
-PartOf=${PARENT}
 OioGroup=${NS},localhost,${SRVTYPE}
 
 [Service]
@@ -1087,9 +1086,6 @@ Type=oneshot
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
-
-[Install]
-WantedBy=${PARENT}
 """
 
 template_systemd_service_placement_improver_crawler = """
@@ -2248,7 +2244,7 @@ def generate(options):
     register_service(
         _tmp_env,
         template_systemd_service_placement_checker_crawler,
-        crawler_target,
+        None,
         False,
     )
 
