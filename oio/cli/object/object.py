@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -307,12 +307,12 @@ class TouchObject(ContainerCommandMixin, Command):
 
 
 class DeleteObject(ContainerCommandMixin, Lister):
-    """Delete object from container"""
+    """Delete one or several objects from a container."""
 
     log = getLogger(__name__ + ".DeleteObject")
 
     def get_parser(self, prog_name):
-        parser = super(DeleteObject, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
             "objects", metavar="<object>", nargs="+", help="Object(s) to delete"
@@ -339,13 +339,18 @@ class DeleteObject(ContainerCommandMixin, Lister):
             else:
                 container = parsed_args.container
 
-            deleted = self.app.client_manager.storage.object_delete(
-                account,
-                container,
-                parsed_args.objects[0],
-                version=parsed_args.object_version,
-                cid=parsed_args.cid,
-            )
+            try:
+                deleted = self.app.client_manager.storage.object_delete(
+                    account,
+                    container,
+                    parsed_args.objects[0],
+                    version=parsed_args.object_version,
+                    cid=parsed_args.cid,
+                )
+            except exceptions.OioException as exc:
+                self.log.error("%s", exc)
+                self.success = False
+                deleted = False
             results.append((parsed_args.objects[0], deleted))
         else:
             if parsed_args.object_version:
