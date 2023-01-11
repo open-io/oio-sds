@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -301,6 +301,50 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 
 /* HOOKS ------------------------------------------------------------------- */
 
+static void
+_leave_election(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
+{
+	NAME2CONST(n, ctx->sq3->name);
+	dump_request(__FUNCTION__, peers, "SQLX_EXITELECTION", &n);
+
+	GByteArray *encoded = sqlx_pack_EXITELECTION(&n, deadline);
+	struct gridd_client_s **clients =
+		gridd_client_create_many(peers, encoded, NULL, NULL);
+	g_byte_array_unref(encoded);
+	if (!clients) {
+		GRID_WARN(
+			"Failed to create leave election clients, "
+			"see service logs for more information");
+	}
+
+	if (deadline > 0) {
+		gridd_clients_set_timeout_cnx(clients,
+				oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
+		gridd_clients_set_timeout(clients,
+				oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
+	}
+
+	// Leave the election himself
+	election_exit(ctx->sq3->manager, &n);
+
+	// Ask others peers to leave the election
+	gridd_clients_start(clients);
+	GError *err = gridd_clients_loop(clients);
+	if (err != NULL) {
+		for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
+			GError *e = gridd_client_error(*pc);
+			if (e != NULL) {
+				GRID_WARN("Failed to leave the election [%s]: (%d) %s",
+						gridd_client_url(*pc), e->code, e->message);
+				g_error_free(e);
+			}
+		}
+		g_error_free(err);
+	}
+
+	gridd_clients_free(clients);
+}
+
 static GError*
 _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 {
@@ -324,17 +368,21 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	gridd_clients_set_timeout(clients,
 			oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
 
+	gboolean leave_election = FALSE;
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);
 	if (!err) {
 		for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 			GError *e = gridd_client_error(*pc);
-			if (!e)
+			if (!e) {
 				++ count_success;
-			else {
-				if (e->code == CODE_PIPEFROM || e->code == CODE_PIPETO
-						|| e->code == CODE_CONCURRENT)
-				{
+			} else {
+				if (e->code == CODE_IS_MASTER) {
+					// Let the quorum decide if the write is committed.
+					// On the other hand, all peers must leave the election.
+					leave_election = TRUE;
+				} else if (e->code == CODE_PIPEFROM || e->code == CODE_PIPETO
+						|| e->code == CODE_CONCURRENT) {
 					// XXX JFS Previously, the SLAVE triggered a RESYNC. Now
 					// we immediately send the DUMP as soon as the COMMIT is
 					// terminated. We Just store the SLAVE's address.
@@ -363,8 +411,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 				g_string_append_printf(ctx->errors, " %s",
 						err->message);
 			}
-		}
-		else {
+		} else {
 			if (count_success < group_to_quorum(groupsize)) {
 				err = NEWERROR(CODE_UNAVAILABLE,
 						"Not enough successes, no quorum (%u/%u)",
@@ -376,6 +423,14 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	}
 
 	gridd_clients_free(clients);
+
+	if (leave_election) {
+		GRID_WARN("Double master detected, try to leave the election "
+				"on all peers [%s][%s] reqid=%s", ctx->sq3->name.base,
+				ctx->sq3->name.type, oio_ext_get_reqid());
+		_leave_election(peers, ctx, 0);
+	}
+
 	return err;
 }
 

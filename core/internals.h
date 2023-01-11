@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -191,6 +191,7 @@ enum {
 	CODE_PIPETO = 470,
 	CODE_PIPEFROM = 471,
 	CODE_CONCURRENT = 472,
+	CODE_IS_MASTER = 473,
 	CODE_POLICY_NOT_SUPPORTED = 480,
 	CODE_POLICY_NOT_SATISFIABLE = 481,
 

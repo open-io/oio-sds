@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -439,25 +439,30 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
-	if (NULL != err)
-		return err;
-
-	err = sqlx_repository_restore_base(sq3, dump, dump_size);
-	if (NULL != err) {
-		sqlx_repository_unlock_and_close_noerror(sq3);
-		GRID_TRACE("Restore failed!");
+	if (err) {
 		return err;
 	}
-	GRID_TRACE("Restore done!");
+
+	// Check the election without trigger an election
+	if (election_is_master(repo->election_manager, name)) {
+		err = NEWERROR(CODE_IS_MASTER, "Master cannot restore the database");
+	}
 
 	if (!err) {
+		err = sqlx_repository_restore_base(sq3, dump, dump_size);
+	}
+
+	if (!err) {
+		GRID_TRACE("Restore done!");
 		/* See the comment in replicate_body_manage */
 		sqlx_admin_reload(sq3);
 		sqlx_repository_call_change_callback(sq3);
+	} else {
+		GRID_TRACE("Restore failed!");
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
-	return NULL;
+	return err;
 }
 
 static GError *
@@ -467,13 +472,26 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, name,
 		SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
+	if (err) {
+		return err;
+	}
+
+	// Check the election without trigger an election
+	if (election_is_master(repo->election_manager, name)) {
+		err = NEWERROR(CODE_IS_MASTER, "Master cannot restore the database");
+	}
+
 	if (!err) {
 		err = sqlx_repository_restore_from_file(sq3, path);
-		if (!err) {
-			/* See the comment in replicate_body_manage */
-			sqlx_admin_reload(sq3);
-			sqlx_repository_call_change_callback(sq3);
-		}
+	}
+
+	if (!err) {
+		GRID_TRACE("Restore done!");
+		/* See the comment in replicate_body_manage */
+		sqlx_admin_reload(sq3);
+		sqlx_repository_call_change_callback(sq3);
+	} else {
+		GRID_TRACE("Restore failed!");
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
@@ -883,12 +901,21 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* Unpack the body from the message, decode it */
-	err = replicate_body_parse(sq3, b, bsize);
-	if (NULL != err)
-		reply->send_error(0, err);
-	else
+	// Check the election without trigger an election
+	if (election_is_master(repo->election_manager, &n0)) {
+		err = NEWERROR(CODE_IS_MASTER, "Master cannot receive replication");
+	}
+
+	if (!err) {
+		/* Unpack the body from the message, decode it */
+		err = replicate_body_parse(sq3, b, bsize);
+	}
+
+	if (!err) {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	} else {
+		reply->send_error(0, err);
+	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 

@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -4506,3 +4506,27 @@ election_manager_play_timers(struct election_manager_s *M, const gint64 now)
 		_send_NONE_to_step(M, M->members_by_state + steps[i], now);
 }
 
+
+gboolean
+election_is_master(struct election_manager_s *manager,
+		const struct sqlx_name_s *n)
+{
+	MANAGER_CHECK(manager);
+	EXTRA_ASSERT(n != NULL);
+
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+
+	gboolean is_master = FALSE;
+	_manager_lock(manager);
+	struct election_member_s *member = _LOCKED_get_member(manager, key);
+	if (member) {
+		/* "CHECKING_SLAVES" being the state just before becoming "MASTER",
+		 *  it is already considered as master. */
+		is_master = member->step == STEP_MASTER
+				|| member->step == STEP_CHECKING_SLAVES;
+		member_unref(member);
+	}
+	_manager_unlock(manager);
+	return is_master;
+}
