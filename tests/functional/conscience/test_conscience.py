@@ -33,15 +33,26 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request("GET", self._url_cs("info/anything"))
         self.assertError(resp, 404, 404)
 
-    def _assert_list_echo(self):
-        resp = self.request("GET", self._url_cs("list"), params={"type": "echo"})
-        self.assertEqual(resp.status, 200)
-        parsed = self.json_loads(resp.data)
-        self.assertIsInstance(parsed, list)
+    def _assert_list_echo(self, expect_empty=False):
+        """
+        Get the list of "echo" services, ensure the response is a list.
+
+        :param expect_empty: if True, expect an empty list. When False, and
+                             an empty list is received, retry (2 times).
+        """
+        for _ in range(3):
+            resp = self.request("GET", self._url_cs("list"), params={"type": "echo"})
+            self.assertEqual(resp.status, 200)
+            parsed = self.json_loads(resp.data)
+            self.assertIsInstance(parsed, list)
+            # We expect an empty list, or the list is not empty
+            if expect_empty or bool(parsed):
+                break
+            time.sleep(0.5)
         return parsed
 
     def test_service_pool_get(self):
-        echo_list = self._assert_list_echo()
+        echo_list = self._assert_list_echo(expect_empty=True)
         self.assertEqual(len(echo_list), 0)
         resp = self.request("GET", self._url_cs("list"), params={"type": "error"})
         self.assertError(resp, 404, CODE_SRVTYPE_NOTMANAGED)
@@ -84,7 +95,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_service_pool_delete(self):
         self._flush_cs("echo")
-        services = self._assert_list_echo()
+        services = self._assert_list_echo(expect_empty=True)
         self.assertListEqual(services, [])
 
     def test_service_pool_delete_wrong(self):
@@ -102,23 +113,16 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request("POST", self._url_cs("lock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
         body = self._assert_list_echo()
-        # This test is known to be flaky
-        if not body:
-            body = self._assert_list_echo()
         self.assertIn(srv["addr"], [x["addr"] for x in body])
 
         self._register_srv(srv)
         body = self._assert_list_echo()
-        if not body:
-            body = self._assert_list_echo()
         self.assertIn(srv["addr"], [x["addr"] for x in body])
 
         srv2 = dict(srv)
         srv2["score"] = -1
         self._register_srv(srv2)
         body = self._assert_list_echo()
-        if not body:
-            body = self._assert_list_echo()
         self.assertIn(srv["addr"], [x["addr"] for x in body])
 
     def test_service_pool_actions_lock_and_relock(self):
@@ -126,17 +130,12 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request("POST", self._url_cs("lock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
         body = self._assert_list_echo()
-        # This test is known to be flaky
-        if not body:
-            body = self._assert_list_echo()
         self.assertIn(srv["addr"], [x["addr"] for x in body])
 
         srv["score"] = 0
         resp = self.request("POST", self._url_cs("lock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
         body = self._assert_list_echo()
-        if not body:
-            body = self._assert_list_echo()
         self.assertIn(str(srv["addr"]), [x["addr"] for x in body])
 
     def test_services_pool_actions_unlock(self):
@@ -154,7 +153,7 @@ class TestConscienceFunctional(BaseTestCase):
         srv["score"] = -1
         resp = self.request("POST", self._url_cs("unlock"), json.dumps(srv))
         self.assertIn(resp.status, (200, 204))
-        body = self._assert_list_echo()
+        body = self._assert_list_echo(expect_empty=True)
         self.assertListEqual(body, [])
         self._flush_cs("echo")
 
@@ -175,8 +174,6 @@ class TestConscienceFunctional(BaseTestCase):
         self._reload_proxy()
         # check it appears
         body = self._assert_list_echo()
-        if not body:
-            body = self._assert_list_echo()
         check_service_known(body)
         # check it is polled
         resp = self.request("POST", self._url_lb("poll"), params={"pool": "echo"})
@@ -193,8 +190,6 @@ class TestConscienceFunctional(BaseTestCase):
         self._reload_proxy()
         # check it appears
         body = self._assert_list_echo()
-        if not body:
-            body = self._assert_list_echo()
         check_service_known(body)
         # the service must not be polled
         resp = self.request("POST", self._url_lb("poll"), params={"pool": "echo"})
