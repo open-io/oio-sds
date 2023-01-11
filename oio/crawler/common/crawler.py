@@ -47,6 +47,10 @@ class CrawlerWorker(object):
     WORKING_DIR = ""
     EXCLUDED_DIRS = None
 
+    DEFAULT_SCAN_INTERVAL = 1800
+    DEFAULT_REPORT_INTERVAL = 300
+    DEFAULT_SCANNED_PER_SECOND = 30
+
     def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
         """
         - interval: (int) in sec time between two full scans. Default: half an
@@ -63,9 +67,15 @@ class CrawlerWorker(object):
             self.conf.get("wait_random_time_before_starting"), False
         )
         self.one_shot = boolean_value(self.conf.get("one_shot"), False)
-        self.scans_interval = int_value(self.conf.get("interval"), 1800)
-        self.report_interval = int_value(self.conf.get("report_interval"), 300)
-        self.max_scanned_per_second = int_value(self.conf.get("scanned_per_second"), 30)
+        self.scans_interval = int_value(
+            self.conf.get("interval"), self.DEFAULT_SCAN_INTERVAL
+        )
+        self.report_interval = int_value(
+            self.conf.get("report_interval"), self.DEFAULT_REPORT_INTERVAL
+        )
+        self.max_scanned_per_second = int_value(
+            self.conf.get("scanned_per_second"), self.DEFAULT_SCANNED_PER_SECOND
+        )
         self.namespace, self.volume_id = check_volume_for_service_type(
             self.volume, self.SERVICE_TYPE
         )
