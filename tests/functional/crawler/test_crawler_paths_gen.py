@@ -32,15 +32,11 @@ class TestCrawlerPathGen(BaseTestCase):
     def setUpClass(cls):
         super(TestCrawlerPathGen, cls).setUpClass()
         # Prevent the chunks' rebuilds or moves by the crawlers
-        cls._service("oio-rdir-crawler-1.service", "stop")
-        cls._service("oio-rawx-crawler-1.service", "stop", wait=3)
-        cls._service("oio-placement-improver-crawler-1.service", "stop", wait=3)
+        cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-rawx-crawler-1.service", "start")
-        cls._service("oio-rdir-crawler-1.service", "start", wait=1)
-        cls._service("oio-placement-improver-crawler-1.service", "start", wait=1)
+        cls._service("oio-crawler.target", "start")
         super(TestCrawlerPathGen, cls).tearDownClass()
 
     def setUp(self):

@@ -63,7 +63,7 @@ class TestBlobRebuilder(BaseTestCase):
         self.content_id = meta["id"]
 
         # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service("oio-rdir-crawler-1.service", "stop", wait=3)
+        self._service("oio-crawler.target", "stop", wait=3)
 
     def tearDown(self):
         for ct in self._containers_to_clean:
@@ -72,7 +72,7 @@ class TestBlobRebuilder(BaseTestCase):
                 self.storage.container_delete(self.account, ct)
             except Exception as exc:
                 self.logger.info("Failed to clean container %s", exc)
-        self._service("oio-rdir-crawler-1.service", "start", wait=1)
+        self._service("oio-crawler.target", "start", wait=1)
         super(TestBlobRebuilder, self).tearDown()
 
     def _chunk_path(self, chunk):

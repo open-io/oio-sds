@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,11 +49,11 @@ class TestDrainingFilter(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(TestDrainingFilter, cls).setUpClass()
-        cls._service("oio-meta2-crawler-1.service", "stop", wait=3)
+        cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-meta2-crawler-1.service", "start", wait=1)
+        cls._service("oio-crawler.target", "start", wait=1)
         super(TestDrainingFilter, cls).tearDownClass()
 
     def setUp(self):

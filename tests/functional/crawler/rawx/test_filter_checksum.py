@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,13 +30,11 @@ class TestRawxFilterChecksum(BaseTestCase):
     def setUpClass(cls):
         super(TestRawxFilterChecksum, cls).setUpClass()
         # Prevent the chunks' rebuilds or moves by the crawlers
-        cls._service("oio-rdir-crawler-1.service", "stop")
-        cls._service("oio-rawx-crawler-1.service", "stop", wait=3)
+        cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-rawx-crawler-1.service", "start")
-        cls._service("oio-rdir-crawler-1.service", "start", wait=1)
+        cls._service("oio-crawler.target", "start", wait=1)
         super(TestRawxFilterChecksum, cls).tearDownClass()
 
     def setUp(self):

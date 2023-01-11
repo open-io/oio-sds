@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,13 @@ class ItemRebuildTest(CliTestCase):
     def setUpClass(cls):
         super(ItemRebuildTest, cls).setUpClass()
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
+        # Prevent the chunks' rebuilds by the rdir crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super(ItemRebuildTest, cls).tearDownClass()
 
     def setUp(self):
         super(ItemRebuildTest, self).setUp()
@@ -64,9 +71,6 @@ class ItemRebuildTest(CliTestCase):
         return obj_meta, obj_chunks
 
     def test_chunk_rebuild(self):
-        # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service("oio-rdir-crawler-1.service", "stop", wait=3)
-
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name
         )
@@ -173,5 +177,3 @@ class ItemRebuildTest(CliTestCase):
             % (self.account, chunks_to_repair_file, opts)
         )
         self.assert_list_output(expected_items, output)
-
-        self._service("oio-rdir-crawler-1.service", "start", wait=1)

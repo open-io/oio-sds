@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,11 +35,11 @@ class TestRdirClient(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(TestRdirClient, cls).setUpClass()
-        cls._service("oio-rawx-crawler-1.service", "stop", wait=3)
+        cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-rawx-crawler-1.service", "start", wait=1)
+        cls._service("oio-crawler.target", "start", wait=1)
         super(TestRdirClient, cls).tearDownClass()
 
     def _push_chunks(self, max_containers=4, max_objects=5, max_chunks=5):

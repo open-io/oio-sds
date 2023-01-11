@@ -59,15 +59,13 @@ class TestVerifyChunkPlacement(BaseTestCase):
     def setUpClass(cls):
         super(TestVerifyChunkPlacement, cls).setUpClass()
         # Prevent the sharding/shrinking by the meta2 crawlers
-        cls._service("oio-meta2-crawler-1.service", "stop", wait=3)
         # Prevent the improver to move the misplaced chunks
-        cls._service("oio-placement-improver-crawler-1.service", "stop", wait=3)
+        cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
         # Restart services stopped above
-        cls._service("oio-meta2-crawler-1.service", "start", wait=1)
-        cls._service("oio-placement-improver-crawler-1.service", "start", wait=1)
+        cls._service("oio-crawler.target", "start", wait=1)
         super(TestVerifyChunkPlacement, cls).tearDownClass()
 
     def setUp(self):
