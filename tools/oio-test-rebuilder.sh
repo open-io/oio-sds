@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,11 +22,16 @@ CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 INTEGRITY="$(command -v oio-crawler-integrity)"
 CONCURRENCY=10
+RAWX_HASH_DEPTH=1
 
 # Some services declare their IP address and port as a service ID,
 # and thus this check does not work anymore.
 #SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
 SVCID_ENABLED=$(grep "service_id: true" ~/.oio/sds/conf/test.yml)
+
+urldecode() {
+  : "${*//+/ }"; echo -e "${_//%/\\x}";
+}
 
 usage() {
   echo "Usage: $(basename "${0}") -n namespace -c concurrency"
@@ -359,7 +364,8 @@ remove_rawx()
 
   TOTAL_CHUNKS=0
   while read -r RAWX_LOC; do
-    TOTAL_CHUNKS=$(( TOTAL_CHUNKS + $(/usr/bin/find "${RAWX_LOC}" -type f \
+    TOTAL_CHUNKS=$(( TOTAL_CHUNKS + $(/usr/bin/find "${RAWX_LOC}" \
+        -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f \
     | /usr/bin/wc -l) ))
   done < <($CLI cluster list rawx -c Volume -f value)
 
@@ -469,7 +475,7 @@ openioadmin_rawx_rebuild()
   TOTAL_CHUNKS_AFTER=0
   while read -r RAWX_LOC; do
     TOTAL_CHUNKS_AFTER=$(( TOTAL_CHUNKS_AFTER + \
-        $(/usr/bin/find "${RAWX_LOC}" -type f | /usr/bin/wc -l) ))
+        $(/usr/bin/find "${RAWX_LOC}" -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f | /usr/bin/wc -l) ))
   done < <($CLI cluster list rawx -c Volume -f value)
   if [ "${TOTAL_CHUNKS}" -ne "${TOTAL_CHUNKS_AFTER}" ]; then
     echo >&2 "Wrong number of chunks:" \
@@ -495,6 +501,7 @@ openioadmin_rawx_rebuild()
     OLD_IFS=$IFS
     IFS='/' read -r ACCOUNT CONTAINER CONTENT VERSION CONTENTID <<< "${FULLPATH}"
     IFS=$OLD_IFS
+    CONTENT="$(urldecode ${CONTENT})"
 
     if ! CHUNK_URLS=$($CLI object locate \
         --oio-account "${ACCOUNT}" "${CONTAINER}" "${CONTENT}" \
@@ -517,7 +524,8 @@ openioadmin_rawx_rebuild()
       #fi
       if ! $INTEGRITY "$NAMESPACE" "${ACCOUNT}" \
           "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &>> "$INTEGRITY_LOG"; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for rawx ${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed:"
+        tail -n 10 "$INTEGRITY_LOG" >&2
         FAIL=true
         continue
       fi

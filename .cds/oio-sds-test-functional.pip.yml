@@ -68,6 +68,7 @@ jobs:
         optional: true
         script:
           - '[ -f everything.log ] && mv everything.log everything.{{.cds.env.TEST_SUITE}}.log && worker upload everything.{{.cds.env.TEST_SUITE}}.log || true'
+          - '[ -f "/tmp/integrity.log" ] && mv "/tmp/integrity.log" integrity.{{.cds.env.TEST_SUITE}}.log && worker upload integrity.{{.cds.env.TEST_SUITE}}.log || true'
 
       - name: Save coverage and test information
         script:
