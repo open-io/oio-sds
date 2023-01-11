@@ -2,6 +2,7 @@ package main
 
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
+// Copyright (C) 2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -19,27 +20,38 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync"
 )
 
-func Run(srv *http.Server, tlsSrv *http.Server,
-	opts optionsMap) error {
+func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
 	errs := make(chan error)
+	var servers sync.WaitGroup
 
+	servers.Add(1)
 	go func() {
+		defer servers.Done()
 		log.Printf("Starting HTTP service on %s ...", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			errs <- err
+		} else {
+			errs <- nil
 		}
 
+		log.Printf("HTTP service on %s stopped", srv.Addr)
 	}()
 
 	if len(opts["tls_rawx_url"]) > 0 {
+		servers.Add(1)
 		// Starting HTTPS server
 		go func() {
+			defer servers.Done()
 			log.Printf("Starting HTTPS service on %s ...", tlsSrv.Addr)
-			if err := tlsSrv.ListenAndServeTLS(opts["tls_cert_file"], opts["tls_key_file"]); err != nil {
+			if err := tlsSrv.ListenAndServeTLS(opts["tls_cert_file"], opts["tls_key_file"]); err != http.ErrServerClosed {
 				errs <- err
+			} else {
+				errs <- nil
 			}
+			log.Printf("HTTPS service on %s stopped", tlsSrv.Addr)
 		}()
 	}
 
@@ -48,5 +60,6 @@ func Run(srv *http.Server, tlsSrv *http.Server,
 		return err
 	}
 
+	servers.Wait()
 	return nil
 }
