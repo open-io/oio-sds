@@ -86,10 +86,11 @@ jobs:
           tag: '{{.cds.version}}'
 
       - name: Aggregate Golang coverage statistics
+        optional: true
         script:
           - . $HOME/oio-env.sh
           - cd {{.cds.workspace}}/rawx
-          - $HOME/go/bin/gocov report ../go_coverage.* > ../go_coverage.txt
+          - $HOME/go/bin/gocov report ../go_coverage.* >> ../go_coverage.txt
 
       - name: Create code coverage directory
         script:

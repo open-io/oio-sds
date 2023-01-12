@@ -78,7 +78,7 @@ jobs:
           - '[ -n "$(echo $HOME/go_coverage.output.*)" ] && (cd rawx; gocov convert $HOME/go_coverage.output.* > {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json) || true'
           - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
-          - '[ ! -f {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json'
+          - '[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json'
 
     requirements:
         - model: '{{ .cds.env.MODEL}}'
