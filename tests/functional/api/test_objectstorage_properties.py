@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,9 @@
 # License along with this library.
 
 import logging
+
 from oio import ObjectStorageApi
+from oio.account.backend_fdb import AccountBackendFdb
 from tests.utils import random_str, BaseTestCase
 
 
@@ -62,10 +64,18 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         properties = dict((self._sized_prop(ksize, vsize),))
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
-        self.assertDictEqual(data["properties"], properties)
+        expected_properties = properties.copy()
+        expected_properties[
+            "max-buckets"
+        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        self.assertDictEqual(data["properties"], expected_properties)
+
         self.api.account_del_properties(aname, properties.keys())
         data = self.api.account_get_properties(aname)
-        self.assertDictEqual(data["properties"], {})
+        self.assertDictEqual(
+            data["properties"],
+            {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
+        )
         self.api.account_delete(aname)
 
     # redis max key/value 65535/1Mi
@@ -98,11 +108,18 @@ class ObjectStoragePropertiesTest(BaseTestCase):
 
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
-        self.assertDictEqual(data["properties"], properties)
+        expected_properties = properties.copy()
+        expected_properties[
+            "max-buckets"
+        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        self.assertDictEqual(data["properties"], expected_properties)
 
         self.api.account_del_properties(aname, properties.keys())
         data = self.api.account_get_properties(aname)
-        self.assertDictEqual(data["properties"], {})
+        self.assertDictEqual(
+            data["properties"],
+            {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
+        )
         self.api.account_delete(aname)
 
     # --- Reference properties ----------------------------------------

@@ -27,6 +27,7 @@ from werkzeug.wrappers import Response
 
 import fdb
 
+from oio.account.backend_fdb import AccountBackendFdb
 from oio.account.server import create_app
 from oio.common.exceptions import NotFound
 from oio.common.timestamp import Timestamp
@@ -135,6 +136,10 @@ class TestAccountServer(TestAccountServerBase):
         self.assertGreaterEqual(data["objects"], 0)
         self.assertGreaterEqual(data["containers"], 0)
         self.assertGreaterEqual(data["bytes"], 0)
+        self.assertEqual(
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT,
+            data["metadata"].get("max-buckets"),
+        )
 
     def test_account_update(self):
         data = {"metadata": {"foo": "bar"}, "to_delete": []}
@@ -143,6 +148,64 @@ class TestAccountServer(TestAccountServerBase):
             "/v1.0/account/update", data=data, query_string={"id": self.account_id}
         )
         self.assertEqual(resp.status_code, 204)
+
+    def test_account_update_max_buckets(self):
+        # Not a number
+        data = {"metadata": {"max-buckets": "bar"}}
+        data = json.dumps(data)
+        resp = self.app.put(
+            "/v1.0/account/update", data=data, query_string={"id": self.account_id}
+        )
+        self.assertEqual(resp.status_code, 400)
+        resp = self.app.get("/v1.0/account/show", query_string={"id": self.account_id})
+        self.assertEqual(resp.status_code, 200)
+        data = self.json_loads(resp.data.decode("utf-8"))
+        self.assertEqual(
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT,
+            data["metadata"].get("max-buckets"),
+        )
+
+        # Negative number
+        data = {"metadata": {"max-buckets": "-10"}}
+        data = json.dumps(data)
+        resp = self.app.put(
+            "/v1.0/account/update", data=data, query_string={"id": self.account_id}
+        )
+        self.assertEqual(resp.status_code, 400)
+        resp = self.app.get("/v1.0/account/show", query_string={"id": self.account_id})
+        self.assertEqual(resp.status_code, 200)
+        data = self.json_loads(resp.data.decode("utf-8"))
+        self.assertEqual(
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT,
+            data["metadata"].get("max-buckets"),
+        )
+
+        # Too many
+        data = {"metadata": {"max-buckets": "10000"}}
+        data = json.dumps(data)
+        resp = self.app.put(
+            "/v1.0/account/update", data=data, query_string={"id": self.account_id}
+        )
+        self.assertEqual(resp.status_code, 400)
+        resp = self.app.get("/v1.0/account/show", query_string={"id": self.account_id})
+        self.assertEqual(resp.status_code, 200)
+        data = self.json_loads(resp.data.decode("utf-8"))
+        self.assertEqual(
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT,
+            data["metadata"].get("max-buckets"),
+        )
+
+        # Maximum possible
+        data = {"metadata": {"max-buckets": "1000"}}
+        data = json.dumps(data)
+        resp = self.app.put(
+            "/v1.0/account/update", data=data, query_string={"id": self.account_id}
+        )
+        self.assertEqual(resp.status_code, 204)
+        resp = self.app.get("/v1.0/account/show", query_string={"id": self.account_id})
+        self.assertEqual(resp.status_code, 200)
+        data = self.json_loads(resp.data.decode("utf-8"))
+        self.assertEqual(1000, data["metadata"].get("max-buckets"))
 
     def test_account_container_update(self):
         params = {"id": self.account_id, "container": "foo", "region": "localhost"}
@@ -174,7 +237,10 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(data["objects"], 0)
         self.assertEqual(data["containers"], 0)
         self.assertEqual(data["buckets"], 0)
-        self.assertDictEqual(data["metadata"], {})
+        self.assertDictEqual(
+            data["metadata"],
+            {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
+        )
         self.assertListEqual(data["listing"], [])
         self.assertFalse(data["truncated"])
 

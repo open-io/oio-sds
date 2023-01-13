@@ -130,7 +130,8 @@ class AccountBackendFdb(object):
     # Timeout for bucket reservation
     DEFAULT_BUCKET_RESERVATION_TIMEOUT = 30
     # Maximum number of buckets per account
-    MAX_BUCKETS_PER_ACCOUNT = 100
+    DEFAULT_MAX_BUCKETS_PER_ACCOUNT = 100
+    ABSOLUTE_MAX_BUCKETS_PER_ACCOUNT = 1000
 
     def init_db(self, event_model="gevent"):
         """
@@ -228,7 +229,7 @@ class AccountBackendFdb(object):
             self.DEFAULT_BUCKET_RESERVATION_TIMEOUT,
         )
         self.max_buckets_per_account = int_value(
-            conf.get("max_buckets_per_account"), self.MAX_BUCKETS_PER_ACCOUNT
+            conf.get("max_buckets_per_account"), self.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
         )
 
     # Helpers -----------------------------------------------------------------
@@ -818,6 +819,8 @@ class AccountBackendFdb(object):
                 metadata[key[0]] = value.decode("utf-8")
             else:
                 self.logger.warning('Unknown key: "%s"', key)
+        max_buckets = metadata.get("max-buckets", self.max_buckets_per_account)
+        metadata["max-buckets"] = int(max_buckets)
         return metadata
 
     @fdb.transactional
@@ -1014,6 +1017,24 @@ class AccountBackendFdb(object):
         :param to_update: dict of entries to set (or update)
         :param to_delete: iterable of keys to delete
         """
+        if to_update is None:
+            to_update = {}
+        max_buckets = to_update.get("max-buckets")
+        if max_buckets is not None:
+            try:
+                max_buckets = int(max_buckets)
+            except ValueError as exc:
+                raise BadRequest(
+                    'Property "max-buckets" must be a positive number'
+                ) from exc
+            if max_buckets < 0:
+                raise BadRequest('Property "max-buckets" must be a positive number')
+            if max_buckets > self.ABSOLUTE_MAX_BUCKETS_PER_ACCOUNT:
+                raise BadRequest(
+                    'Property "max-buckets" cannot exceed '
+                    f"{self.ABSOLUTE_MAX_BUCKETS_PER_ACCOUNT}"
+                )
+            to_update["max-buckets"] = str(max_buckets)
         return self._update_account_metadata(self.db, account_id, to_update, to_delete)
 
     @fdb.transactional

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ import time
 from mock import MagicMock as Mock
 from urllib3 import exceptions as urllibexc
 
+from oio.account.backend_fdb import AccountBackendFdb
 from oio.account.client import AccountClient
 from oio.account.bucket_client import BucketClient
 from oio.common.exceptions import (
@@ -350,7 +351,9 @@ class TestAccountClient(BaseTestCase):
                     "shards": 0,
                     "containers": 1,
                     "buckets": 0,
-                    "metadata": {},
+                    "metadata": {
+                        "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                    },
                 },
                 {
                     "id": f"{self.account_id}0",
@@ -359,7 +362,9 @@ class TestAccountClient(BaseTestCase):
                     "shards": 0,
                     "containers": 0,
                     "buckets": 0,
-                    "metadata": {},
+                    "metadata": {
+                        "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                    },
                 },
             ],
             resp["listing"],
@@ -1369,7 +1374,9 @@ class TestAccountClient(BaseTestCase):
                 "shards": 0,
                 "objects": 12,
                 "bytes": 42,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     self.account_client.region.upper(): {
                         "buckets": 0,
@@ -1404,7 +1411,9 @@ class TestAccountClient(BaseTestCase):
                 "shards": 0,
                 "objects": 12,
                 "bytes": 42,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     self.account_client.region.upper(): {
                         "buckets": 0,
@@ -1434,7 +1443,9 @@ class TestAccountClient(BaseTestCase):
                 "shards": 0,
                 "objects": 0,
                 "bytes": 0,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {},
             },
             resp,
@@ -1451,7 +1462,9 @@ class TestAccountClient(BaseTestCase):
             "shards": 0,
             "objects": 12,
             "bytes": 42,
-            "metadata": {},
+            "metadata": {
+                "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+            },
             "regions": {
                 self.account_client.region.upper(): {
                     "buckets": 1,

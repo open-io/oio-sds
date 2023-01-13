@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -504,7 +504,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 0,
                 "bytes": 0,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {},
             },
             info,
@@ -533,7 +535,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 1,
                 "bytes": 1,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -563,7 +567,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 1,
                 "bytes": 1,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -600,7 +606,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 2,
                 "bytes": 2,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -628,7 +636,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 1,
                 "bytes": 1,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -656,7 +666,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 0,
                 "bytes": 0,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -702,7 +714,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 3,
                 "bytes": 30,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
@@ -747,7 +761,9 @@ class TestAccountBackend(BaseTestCase):
                 "shards": 0,
                 "objects": 0,
                 "bytes": 0,
-                "metadata": {},
+                "metadata": {
+                    "max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+                },
                 "regions": {
                     region: {
                         "buckets": 0,
