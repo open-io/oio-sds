@@ -51,17 +51,19 @@ jobs:
           rabbitmq-plugins enable rabbitmq_management
 
       - name: Run functional tests
-        script:
-          - . $HOME/oio-env.sh
-          - pgrep rsyslogd || rsyslogd &
-          - sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
-          - ulimit -c unlimited
-          - ulimit -n 8192
-          - . $HOME/oiovenv/bin/activate
-          - ./tools/oio-zk-cluster.sh bootstrap {{ .cds.env.ZK_CLUSTER }}
-          - ./tools/oio-zk-cluster.sh start {{ .cds.env.ZK_CLUSTER }}
-          - ./tools/oio-travis-suites.sh
-          - ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
+        script: |+
+          #!/bin/bash
+          . $HOME/oio-env.sh
+          pgrep rsyslogd || rsyslogd &
+          sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
+          ulimit -c unlimited
+          ulimit -n 8192
+          echo "DefaultLimitNOFILE=8192" >> /etc/systemd/system.conf
+          . $HOME/oiovenv/bin/activate
+          ./tools/oio-zk-cluster.sh bootstrap {{ .cds.env.ZK_CLUSTER }}
+          ./tools/oio-zk-cluster.sh start {{ .cds.env.ZK_CLUSTER }}
+          ./tools/oio-travis-suites.sh
+          ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
 
       - name: Save failure logs
         always_executed: true
