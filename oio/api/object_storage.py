@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,14 +16,13 @@
 
 
 from __future__ import absolute_import
-from six import PY2, string_types
-from six.moves.urllib_parse import unquote
 
 from io import BytesIO
 import os
 import warnings
 import time
-import random
+
+from urllib.parse import unquote
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -935,7 +934,7 @@ class ObjectStorageApi(object):
         src = data if data is not None else file_or_path
         if src is file_or_path:
             # We are asked to read from a file path or a file-like object
-            if isinstance(file_or_path, string_types):
+            if isinstance(file_or_path, str):
                 if not os.path.exists(file_or_path):
                     raise exc.FileNotFound("File '%s' not found." % file_or_path)
                 file_name = os.path.basename(file_or_path)
@@ -947,16 +946,12 @@ class ObjectStorageApi(object):
             obj_name = obj_name or file_name
         else:
             # We are asked to read from a buffer or an iterator
-            if isinstance(src, string_types):
-                try:
-                    src = src.encode("utf-8")
-                except UnicodeDecodeError:
-                    # src is already encoded
-                    pass
+            if isinstance(src, str):
+                src = src.encode("utf-8")
             try:
                 src = BytesIO(src)
             except TypeError:
-                src = GeneratorIO(src, sub_generator=PY2)
+                src = GeneratorIO(src)
 
         if not obj_name:
             raise exc.MissingName("No name for the object has been specified")
@@ -1986,32 +1981,6 @@ class ObjectStorageApi(object):
         :type account: `str`
         """
         self.account.account_flush(account, **kwargs)
-
-    def _random_buffer(self, dictionary, num_chars):
-        """
-        :rtype: `str`
-        :returns: `num_chars` randomly taken from `dictionary`
-        """
-        return "".join(random.choice(dictionary) for _ in range(num_chars))
-
-    def _link_chunks(self, targets, fullpath, **kwargs):
-        """
-        Create chunk hard links.
-
-        :param targets: original chunk URLs
-        :param fullpath: full path to the object whose chunks will
-            be hard linked
-        """
-        new_chunks = list()
-        # TODO(FVE): use a GreenPool to parallelize
-        for chunk in targets:
-            _, new_chunk_url = self.blob_client.chunk_link(
-                chunk["url"], None, fullpath, **kwargs
-            )
-            new_chunk = chunk.copy()
-            new_chunk["url"] = new_chunk_url
-            new_chunks.append(new_chunk)
-        return new_chunks
 
     def _prepare_meta2_raw_update(self, targets, copies, content):
         """

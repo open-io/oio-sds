@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -274,23 +274,6 @@ def chain(iterable):
         return Closeable([d], iterator)
     except StopIteration:
         return []
-
-
-def iters_to_raw_body(parts_iter):
-    try:
-        body_iter = next(parts_iter)["iter"]
-    except StopIteration:
-        return ""
-
-    def wrap(it, _j):
-        for d in it:
-            yield d
-        try:
-            next(_j)
-        except StopIteration:
-            pass
-
-    return wrap(body_iter, parts_iter)
 
 
 def discard_bytes(buf_size, start):
