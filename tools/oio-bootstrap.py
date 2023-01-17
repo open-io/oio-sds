@@ -1272,6 +1272,9 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 queue_url=${QUEUE_URL}
+
+rdir_connection_timeout = 0.5
+rdir_read_timeout = 5.0
 """
 
 template_event_agent_handlers = """

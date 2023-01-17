@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,7 @@ from oio.account.client import AccountClient
 from oio.rdir.client import RdirClient
 from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
 from oio.common.utils import drop_privileges
-from oio.common.easy_value import int_value
+from oio.common.easy_value import float_value, int_value
 from oio.common.json import json
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
@@ -128,19 +128,25 @@ class EventWorker(Worker):
     def init(self):
         self.concurrency = int_value(self.conf.get("concurrency"), 10)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
-        acct_refresh_interval = int_value(self.conf.get("acct_refresh_interval"), 3600)
-        rdir_refresh_interval = int_value(self.conf.get("rdir_refresh_interval"), 3600)
+        acct_refresh_interval = float_value(
+            self.conf.get("acct_refresh_interval"), 3600.0
+        )
+        rdir_refresh_interval = float_value(
+            self.conf.get("rdir_refresh_interval"), 3600.0
+        )
         self.app_env["account_client"] = AccountClient(
             self.conf,
             logger=self.logger,
             refresh_delay=acct_refresh_interval,
             pool_connections=3,  # 1 account, 1 proxy, 1 extra
         )
+        rdir_kwargs = {k: v for k, v in self.conf.items() if k.startswith("rdir_")}
         self.app_env["rdir_client"] = RdirClient(
             self.conf,
             logger=self.logger,
             pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
             cache_duration=rdir_refresh_interval,
+            **rdir_kwargs,
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 

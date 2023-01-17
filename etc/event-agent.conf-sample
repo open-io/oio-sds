@@ -13,9 +13,16 @@ workers = 2
 handlers_conf = /etc/oio/sds/OPENIO/event-agent/event-handlers.conf
 
 # How often to refresh the account service address (in seconds)
-#acct_refresh_interval = 3600
+#acct_refresh_interval = 3600.0
 
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,event-agent,1
+
+# Timeouts for the internal RdirClient (used mostly by volume_index filter)
+#rdir_connection_timeout = 2.0
+#rdir_read_timeout = 30.0
+
+# How often to refresh the rdir services addresses (in seconds)
+#rdir_refresh_interval = 3600.0

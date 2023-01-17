@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,8 @@
 import random
 
 from oio.api.base import HttpApi
-from oio.common.constants import HEADER_PREFIX, REQID_HEADER
+from oio.common.constants import HEADER_PREFIX, REQID_HEADER, TIMEOUT_KEYS
+from oio.common.easy_value import float_value
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
 from oio.common.exceptions import (
@@ -27,7 +28,7 @@ from oio.common.exceptions import (
 )
 from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
-from oio.common.decorators import ensure_headers, ensure_request_id
+from oio.common.decorators import ensure_headers, ensure_request_id, patch_kwargs
 from oio.conscience.client import ConscienceClient
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
@@ -605,9 +606,16 @@ class RdirClient(HttpApi):
         self.oioproxy_kwargs["pool_manager"] = self.directory.pool_manager
         self.admin = AdminClient(self.conf, logger=self.logger, **self.oioproxy_kwargs)
         self.ns = conf["namespace"]
-        self._addr_cache = dict()
+        self._addr_cache = {}
         self._cache_duration = cache_duration
         self._cs = None
+        # Extract timeout kwargs only applying to the rdir services,
+        # will be applied on each request.
+        self._global_kwargs = {
+            k[5:]: float_value(v, None)
+            for k, v in kwargs.items()
+            if k.startswith("rdir_") and k[5:] in TIMEOUT_KEYS
+        }
 
     @property
     def cs(self):
@@ -671,6 +679,7 @@ class RdirClient(HttpApi):
             )
         return all_uri
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def _rdir_request(
