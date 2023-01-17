@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -716,7 +716,7 @@ action_conscience_score (struct req_args_s *args)
 
 #ifdef HAVE_ENBUG
 	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
-		return _reply_retry(args, BUDY("FAKE"));
+		return _reply_retry(args, BUSY("FAKE"));
 #endif
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
