@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -105,15 +105,23 @@ type LogRequestTemplateInventory struct {
 
 func InitLogTemplates() error {
 	var err error
-	logTemplate, err = template.New("logTemplate").Parse(logFormat)
+	log_funcs := template.FuncMap{
+		"div1k": func(a uint64) float64 {
+			return float64(a) / 1000.0
+		},
+		"div1M": func(a uint64) float64 {
+			return float64(a) / 1000000.0
+		},
+	}
+	logTemplate, err = template.New("logTemplate").Funcs(log_funcs).Parse(logFormat)
 	if err != nil {
 		return err
 	}
-	requestLogTemplate, err = template.New("requestLogTemplate").Parse(requestLogFormat)
+	requestLogTemplate, err = template.New("requestLogTemplate").Funcs(log_funcs).Parse(requestLogFormat)
 	if err != nil {
 		return err
 	}
-	accessLogTemplate, err = template.New("accessLogTemplate").Parse(accessLogFormat)
+	accessLogTemplate, err = template.New("accessLogTemplate").Funcs(log_funcs).Parse(accessLogFormat)
 	return err
 }
 
