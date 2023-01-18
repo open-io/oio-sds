@@ -143,19 +143,15 @@ class Changelocation(Filter):
             if isinstance(chunk_exc, exc.OrphanChunk):
                 self.logger.warning(str(chunk_exc))
             else:
-                self.logger.error(
-                    "Error while looking for chunks location: %s",
-                    str(chunk_exc),
-                )
                 self.errors += 1
             resp = PlacementImproverCrawlerChunkNotFound(
                 chunk=chunkwrapper,
-                body=f"Error while looking for chunks location: {0}".format(
-                    str(chunk_exc)
+                body=(
+                    f"Error while looking for chunks location: {chunk_exc} "
+                    f"reqid={reqid}"
                 ),
             )
             return resp(env, cb)
-
         try:
             # Getting Content object
             content = self.content_factory.get_by_path_and_version(
