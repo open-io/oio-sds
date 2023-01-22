@@ -192,7 +192,7 @@ class SavedWritesApplicator(object):
             return remaining_jobs / average_speed < 0.1
         return False
 
-    def wait_until_queue_is_almost_empty(self, limit=100, timeout=30, **kwargs):
+    def wait_until_queue_is_almost_empty(self, limit=500, timeout=30, **kwargs):
         """
         Check if the receive queue is empty
         and if the send queues are almost empty.
@@ -311,8 +311,8 @@ class ContainerSharding(ProxyClient):
     DEFAULT_SHARD_SIZE = 100000
     DEFAULT_PRECLEAN_NEW_SHARDS = True
     DEFAULT_PRECLEAN_TIMEOUT = 120
-    DEFAULT_CREATE_SHARD_TIMEOUT = 60
-    DEFAULT_SAVE_WRITES_TIMEOUT = 60
+    DEFAULT_CREATE_SHARD_TIMEOUT = 120
+    DEFAULT_SAVE_WRITES_TIMEOUT = 120
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -759,9 +759,18 @@ class ContainerSharding(ProxyClient):
         return body
 
     def _create_shard(
-        self, root_account, root_container, parent_shard, shard, **kwargs
+        self,
+        root_account,
+        root_container,
+        parent_shard,
+        shard,
+        preclean_new_shards=None,
+        create_shard_timeout=None,
+        **kwargs
     ):
-        if self.preclean_new_shards:
+        if preclean_new_shards is None:
+            preclean_new_shards = self.preclean_new_shards
+        if preclean_new_shards:
             # Clean up the local shard copy before replicating it
             # If cleanup fails here, it will be retried after sharding
             # is complete (but may interfere with client requests).
@@ -794,7 +803,9 @@ class ContainerSharding(ProxyClient):
         # the CID will be used to attempt to delete this new shard.
         shard["cid"] = cid_from_name(shard_account, shard_container)
 
-        deadline = time.time() + self.create_shard_timeout
+        if create_shard_timeout is None:
+            create_shard_timeout = self.create_shard_timeout
+        deadline = time.time() + create_shard_timeout
         params = self._make_params(
             account=shard_account, reference=shard_container, **kwargs
         )
@@ -803,7 +814,7 @@ class ContainerSharding(ProxyClient):
             "/create_shard",
             params=params,
             json=shard_info,
-            timeout=self.create_shard_timeout,
+            timeout=create_shard_timeout,
             **kwargs
         )
         if resp.status != 204:

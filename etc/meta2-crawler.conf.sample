@@ -43,15 +43,20 @@ sharding_partition = 50,50
 # Try to clean up the copy before creating the new shard
 # (in order to reduce the database size before replicating it and
 # in order to no longer clean up a database accessible by client requests).
-preclean_new_shards = True
+# If the previous sharding attempt failed, precleaning is disabled
+# (it may be the cause of the failure).
+sharding_preclean_new_shards = True
 # Maximum amount of time the sharding process is allowed
-# to pre-clean shard copie
+# to preclean shard copie
 sharding_preclean_timeout = 120
+# The precleaning is really too long when the meta2 database becomes really too large.
+# When the meta2 database exceeds a certain size, precleaning is disabled.
+sharding_preclean_max_db_size = 1610612736
 # Maximum amount of time the sharding process is allowed to create new shard
-sharding_create_shard_timeout = 60
+sharding_create_shard_timeout = 120
 # Maximum amount of time the sharding process is allowed to save writes
 # before applying them directly to the new shards
-sharding_save_writes_timeout = 60
+sharding_save_writes_timeout = 120
 # Time before considering that one of the sharding steps is blocked
 sharding_step_timeout = 600
 # Size of the meta2 database from which shrinking can be triggered

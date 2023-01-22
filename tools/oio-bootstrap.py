@@ -321,11 +321,15 @@ pipeline = logger draining auto_vacuum auto_sharding
 use = egg:oio#auto_sharding
 sharding_db_size = 104857600
 sharding_strategy = shard-with-partition
-sharding_shard_size = 100000
-sharding_threshold = 50000
+sharding_threshold = 1000
 sharding_partition = 50,50
-sharding_save_writes_timeout = 30
+sharding_preclean_new_shards = True
+sharding_preclean_timeout = 60
+sharding_preclean_max_db_size = 157286400
+sharding_create_shard_timeout = 60
+sharding_save_writes_timeout = 60
 shrinking_db_size = 26214400
+sharding_step_timeout = 960
 
 [filter:auto_vacuum]
 use = egg:oio#auto_vacuum
