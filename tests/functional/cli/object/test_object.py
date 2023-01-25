@@ -232,6 +232,9 @@ class ObjectTest(CliTestCase):
         hasher.update(test_content)
         checksum = hasher.hexdigest().upper()
         opts = self.get_format_opts("json")
+        # Wait for meta2 service to be available again
+        # After the set timeout the test must fail
+        self.wait_for_score(("meta2",), timeout=5.0)
         output = self.openio("container create " + cname + opts)
         data = self.json_loads(output)
         self.assertThat(len(data), Equals(1))
