@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,8 +65,6 @@ OBJ_FIELDS = [
 class ObjectTest(CliTestCase):
     """Functional tests for objects."""
 
-    CONTAINER_NAME = uuid.uuid4().hex
-
     def setUp(self):
         super(ObjectTest, self).setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
@@ -84,7 +82,7 @@ class ObjectTest(CliTestCase):
             f.write(test_content)
             f.flush()
             self._test_obj(f.name, test_content, name, with_cid=with_cid, oca=oca)
-        self._test_many_obj(with_cid=with_cid)
+        self._test_many_obj(name, with_cid=with_cid)
 
     def test_obj(self):
         self.__test_obj(uuid.uuid4().hex)
@@ -129,11 +127,10 @@ class ObjectTest(CliTestCase):
                 "object create --no-autocreate " + uuid.uuid4().hex + " " + f.name,
             )
 
-    def _test_many_obj(self, with_cid=False):
-        cname = self.CONTAINER_NAME
+    def _test_many_obj(self, cname, with_cid=False):
         cid_opt = ""
         if with_cid:
-            cname = self._get_cid_from_name(self.CONTAINER_NAME)
+            cname = self._get_cid_from_name(cname)
             cid_opt = "--cid "
         opts = self.get_format_opts("json")
         obj_name_exists = ""
@@ -254,7 +251,6 @@ class ObjectTest(CliTestCase):
         listing = self.json_loads(output)
         self.assert_list_fields(listing, CONTAINER_LIST_HEADERS)
         self.assertGreaterEqual(len(listing), 1)
-        # TODO verify CONTAINER_NAME in list
 
         opts = self.get_format_opts("json")
         output = self.openio("container show " + cname + opts)
