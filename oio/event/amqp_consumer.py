@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -213,6 +213,7 @@ class AmqpConsumerPool:
         self.logger = logger or get_logger(None)
         self.processes = processes or os.cpu_count()
         self.queue_name = queue
+        self.running = False
         self.worker_args = args
         self.worker_class = worker_class
         self.worker_kwargs = kwargs
@@ -234,9 +235,15 @@ class AmqpConsumerPool:
         )
         self._workers[worker_id].start()
 
+    def stop(self):
+        """Ask the consumer pool to stop."""
+        self.running = False
+
     def run(self):
+        self.running = True
+        signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
-            while True:
+            while self.running:
                 for worker_id in range(self.processes):
                     if (
                         worker_id not in self._workers
@@ -249,10 +256,11 @@ class AmqpConsumerPool:
                         self._start_worker(worker_id)
                 time.sleep(1)
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
-            for worker_id, worker in self._workers.items():
-                self.logger.info("Stopping worker %d", worker_id)
-                worker.stop()
-            for worker in self._workers.values():
-                # TODO(FVE): set a timeout (some processes may take a long time to stop)
-                worker.join()
-            self.logger.info("All workers stopped")
+            self.running = False
+        for worker_id, worker in self._workers.items():
+            self.logger.info("Stopping worker %d", worker_id)
+            worker.stop()
+        for worker in self._workers.values():
+            # TODO(FVE): set a timeout (some processes may take a long time to stop)
+            worker.join()
+        self.logger.info("All workers stopped")
