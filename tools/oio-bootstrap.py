@@ -1303,7 +1303,7 @@ pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
 # pipeline = replication content_cleaner
-pipeline = ${REPLICATION} content_cleaner ${PRESERVE}
+pipeline = ${REPLICATION} content_cleaner notify_drained ${PRESERVE}
 
 [handler:storage.container.new]
 # pipeline = replication account_update
@@ -1334,7 +1334,6 @@ pipeline = account_update volume_index ${PRESERVE}
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
-key_file = ${KEY_FILE}
 
 # These values are changed only for testing purposes.
 # The default values are good for most use cases.
@@ -1379,6 +1378,14 @@ use = egg:oio#dump
 
 [filter:noop]
 use = egg:oio#noop
+
+# This filter is only to demonstrate policy regexes
+[filter:notify_drained]
+use = egg:oio#notify
+queue_url = ${QUEUE_URL}
+tube = oio-drained
+policy_regex_EC = ^EC.*
+tube_EC = oio-drained-ec
 
 [filter:logger]
 use = egg:oio#logger
@@ -1646,7 +1653,6 @@ ACCOUNT_ID = "account_id"
 BUCKET_NAME = "bucket_name"
 COMPRESSION = "compression"
 APPLICATION_KEY = "application_key"
-KEY_FILE = "key_file"
 META_HEADER = "x-oio-chunk-meta"
 COVERAGE = os.getenv("PYTHON_COVERAGE")
 TLS_CERT_FILE = None
@@ -1789,7 +1795,6 @@ def generate(options):
     TLS_CERT_FILE = options.get("tls_cert_file")
     TLS_KEY_FILE = options.get("tls_key_file")
 
-    key_file = options.get(KEY_FILE, CFGDIR + "/" + "application_keys.cfg")
     ENV = dict(
         ZK_CNXSTRING=options.get("ZK"),
         NS=ns,
@@ -1825,7 +1830,6 @@ def generate(options):
         M2_DISTANCE=str(1),
         COMPRESSION=compression,
         APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
-        KEY_FILE=key_file,
         HTTPD_BINARY=HTTPD_BINARY,
         META_HEADER=META_HEADER,
         PRESERVE="preserve" if options.get("preserve_events") else "",

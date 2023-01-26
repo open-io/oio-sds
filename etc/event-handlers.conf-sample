@@ -52,6 +52,8 @@ pipeline = volume_index
 [handler:account.services]
 pipeline = account_update volume_index
 
+# -----------------------------------------------------------------
+# For object events: delete chunks
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 # Allowed parameters:
@@ -65,20 +67,43 @@ use = egg:oio#content_cleaner
 #connection_timeout=1.0
 #read_timeout=5.0
 
+# -----------------------------------------------------------------
+# For container events: update counters inside the account service
 [filter:account_update]
 use = egg:oio#account_update
 # Timeouts to the account service, in seconds
 #connection_timeout=2.0
 #read_timeout=30.0
 
+# -----------------------------------------------------------------
+# Index meta2 or rawx content into rdir services
 [filter:volume_index]
 use = egg:oio#volume_index
 
+# -----------------------------------------------------------------
+# Example of the notify filter: redirect some events to another tube,
+# with a filter on the event's URL.
 [filter:content_rebuild]
 use = egg:oio#notify
 tube = oio-rebuild
 queue_url = ${QUEUE_URL}
+# Exclude events whose URL matches these accounts and containers
+exclude = AUTH_demo1,AUTH_demo2/trash
 
+# -----------------------------------------------------------------
+# Example of the notify filter: redirect some events to another tube,
+# with regular expressions on the storage policy.
+[filter:notify_delete]
+use = egg:oio#notify
+queue_url = ${QUEUE_URL}
+# Default tube
+tube = oio-delete
+# Regex and tube for EC storage policies.
+policy_regex_EC = ^EC.*
+tube_EC = oio-delete-ec
+
+# -----------------------------------------------------------------
+# Redirect event to the replication queue (deprecated).
 [filter:replication]
 use = egg:oio#replicate
 tube = oio-repli
@@ -102,15 +127,23 @@ queue_url = ${QUEUE_URL}
 # Ensure the master service is called for each request to the account service.
 #force_master=False
 
+# -----------------------------------------------------------------
+# Does nothing. You'd better not defining any filter.
 [filter:noop]
 use = egg:oio#noop
 
+# -----------------------------------------------------------------
+# Call POST on an external URL with the event's body (unmaintained)
 [filter:webook]
 use = egg:oio#webhook
 endpoint = http://localhost:8000/invoke
 
+# -----------------------------------------------------------------
+# Display the body of each event passing through (for debugging).
 [filter:logger]
 use = egg:oio#logger
 
+# -----------------------------------------------------------------
+# Bury each event passing through (for debugging).
 [filter:bury]
 use = egg:oio#bury
