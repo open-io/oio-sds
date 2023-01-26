@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -458,11 +458,15 @@ class CommonTestCase(testtools.TestCase):
                     )
                 self.assertEqual(resp.status, 204)
 
-    def _reload(self):
+    def _reload(self, wait=1.0):
         self._flush_proxy()
         self._flush_meta()
+        # In a perfect world™️ we do not need the time.sleep().
+        # For mysterious reason, all services are not reloaded immediately.
         self._reload_meta()
+        time.sleep(wait)
         self._reload_proxy()
+        time.sleep(wait)
 
     def _addr(self, low=7000, high=65535, ip="127.0.0.2"):
         return ip + ":" + str(random.randint(low, high))
