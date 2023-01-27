@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -435,6 +435,7 @@ class TestDirectoryAPI(BaseTestCase):
         # FIXME(FVE): this test will fail if run after self._flush_cs('rawx')
         client = RdirDispatcher({"namespace": self.ns}, pool_manager=self.http_pool)
         self._reload_proxy()
+        time.sleep(1.0)
         all_rawx = client.assign_all_rawx(
             replicas=self.conf.get("directory_replicas", 1)
         )
