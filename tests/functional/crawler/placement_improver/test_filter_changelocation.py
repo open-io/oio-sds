@@ -224,7 +224,28 @@ class TestFilterChangelocation(BaseTestCase):
         # Chunk relocation failed
         self.assertTrue(islink(chunk_symlink_path))
         self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
-        self.assertEqual(1, changelocation.errors)
+        self.assertEqual(1, changelocation.orphan_chunks_found)
+
+    def test_change_location_filter_overwritten_object(self):
+        """
+        Tests if the filter changelocation is working as
+        expected in case of overwritten object
+        """
+        (
+            container,
+            object_name,
+            chunk_path,
+            chunk_symlink_path,
+            chunk_env,
+            changelocation,
+            _,
+        ) = self.init_test_objects()
+        self.init_test_objects(container=container, object_name=object_name)
+        # Launch filter to change location of misplaced chunk
+        changelocation.process(chunk_env, self.cb)
+        self.assertTrue(islink(chunk_symlink_path))
+        self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
+        self.assertEqual(1, changelocation.orphan_chunks_found)
 
     def _check_shards(self, new_shards, test_shards, shards_content):
         # check shards

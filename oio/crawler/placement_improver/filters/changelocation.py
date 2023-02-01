@@ -43,6 +43,8 @@ class Changelocation(Filter):
         self.relocated_chunk = 0
         # Count the error encountered during chunk relocation
         self.errors = 0
+        # Count orphans chunks found
+        self.orphan_chunks_found = 0
         # Path of the volume in which the chunk is located
         self.volume_path = self.app_env["volume_path"]
         self.volume_id = self.app_env["volume_id"]
@@ -140,8 +142,9 @@ class Changelocation(Filter):
         try:
             self._check_chunk_location(chunkwrapper, reqid)
         except Exception as chunk_exc:
-            if isinstance(chunk_exc, exc.OrphanChunk):
-                self.logger.warning(str(chunk_exc))
+            if isinstance(chunk_exc, (exc.OrphanChunk, exc.NotFound)):
+                self.logger.warning("Orphan chunk: %s", str(chunk_exc))
+                self.orphan_chunks_found += 1
             else:
                 self.errors += 1
             resp = PlacementImproverCrawlerChunkNotFound(
@@ -181,12 +184,14 @@ class Changelocation(Filter):
             "successes": self.successes,
             "relocated_chunk": self.relocated_chunk,
             "errors": self.errors,
+            "orphan_chunks_found": self.orphan_chunks_found,
         }
 
     def _reset_filter_stats(self):
         self.successes = 0
         self.relocated_chunk = 0
         self.errors = 0
+        self.orphan_chunks_found = 0
 
 
 def filter_factory(global_conf, **local_conf):
