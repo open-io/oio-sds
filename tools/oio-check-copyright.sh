@@ -32,7 +32,7 @@ do
 	if [[ "$line" == \#* ]];then
 		continue
 	else
-		EXCLUDED_COMMIT+="$line"
+		EXCLUDED_COMMIT+=" $line"
 fi
 done < "$BLAME_PATH"
 
