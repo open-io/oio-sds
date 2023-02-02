@@ -2,3 +2,8 @@
 # Date:   Thu Oct 27 16:45:51 2022 +0200
 #    Apply black on oio-sds repo
 ce3c452730f92685281ec2564cf25b8e51ddfc71
+
+# Author: Franco Davy Irakoze <franco-davy.irakoze@ovhcloud.com>
+# Date:   Thu Feb 2 10:38:47 2023 +0100
+#    apply new black 23.1.0 version on oio sds
+54c97fe4ade5dccc06159d07b236ecec4800d6a6
