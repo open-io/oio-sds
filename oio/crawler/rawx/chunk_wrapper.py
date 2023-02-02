@@ -36,7 +36,6 @@ def _rawx_env_property(field):
 
 
 class ChunkWrapper(object):
-
     chunk_id = _rawx_env_property("chunk_id")
     chunk_path = _rawx_env_property("chunk_path")
     chunk_symlink_path = _rawx_env_property("chunk_symlink_path")

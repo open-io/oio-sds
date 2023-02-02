@@ -622,7 +622,6 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _update_rankings(self, tr, global_rankings):
-
         # Reset rankings
         rankings_range = self.rankings_space.range()
         tr.clear_range(rankings_range.start, rankings_range.stop)

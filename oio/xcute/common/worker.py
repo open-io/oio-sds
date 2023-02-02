@@ -27,7 +27,6 @@ from oio.xcute.jobs import JOB_TYPES
 
 
 class XcuteWorker(object):
-
     DEFAULT_CACHE_SIZE = 50
 
     def __init__(self, conf, logger=None, watchdog=None):

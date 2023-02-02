@@ -71,7 +71,6 @@ class RawxWorker(CrawlerWorker):
         return True
 
     def process_path(self, path):
-
         chunk = ChunkWrapper({})
         chunk.chunk_id = path.rsplit("/", 1)[-1]
         chunk.chunk_path = path

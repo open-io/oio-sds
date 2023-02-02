@@ -32,7 +32,6 @@ FILTER = _Filter()
 
 
 class ConfigLoader(loader.ConfigLoader):
-
     HANDLER = HANDLER
     FILTER = FILTER
 

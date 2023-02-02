@@ -142,7 +142,6 @@ class ReleaseMemoryBase(DecacheCommand):
 
 
 class ConscienceReleaseMemory(ReleaseMemoryBase):
-
     service_type = "conscience"
 
     def check_and_load_parsed_args(self, app, parsed_args):
@@ -154,15 +153,12 @@ class ConscienceReleaseMemory(ReleaseMemoryBase):
 
 
 class Meta0ReleaseMemory(ReleaseMemoryBase):
-
     service_type = "meta0"
 
 
 class Meta1ReleaseMemory(ReleaseMemoryBase):
-
     service_type = "meta1"
 
 
 class Meta2ReleaseMemory(ReleaseMemoryBase):
-
     service_type = "meta2"

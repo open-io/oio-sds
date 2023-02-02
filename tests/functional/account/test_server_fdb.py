@@ -39,7 +39,6 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 
 @attr("no_thread_patch")
 class TestAccountServerBase(BaseTestCase):
-
     # https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
     PROM_PATTERN = re.compile(
         "(?P<key>[a-zA-Z_:][a-zA-Z0-9_:]*)"
