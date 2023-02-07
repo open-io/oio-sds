@@ -70,11 +70,14 @@ class RawxWorker(CrawlerWorker):
             return False
         return True
 
-    def process_path(self, path):
+    def _get_chunk_info(self, path):
         chunk = ChunkWrapper({})
         chunk.chunk_id = path.rsplit("/", 1)[-1]
         chunk.chunk_path = path
+        return chunk
 
+    def process_path(self, path):
+        chunk = self._get_chunk_info(path)
         # Check chunk validity
         if not self._is_chunk_valid(chunk):
             return False

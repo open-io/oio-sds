@@ -17,7 +17,7 @@ import os
 import sqlite3
 import time
 import random
-from os.path import join, isfile, islink
+from os.path import join, isfile, islink, exists
 from urllib.parse import urlparse
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.utils import cid_from_name
@@ -158,16 +158,19 @@ class TestVerifyChunkPlacement(BaseTestCase):
             server_constraints = verifychunkplacement.policy_data[policy][2][2]
             chunk_test_path = srv_ids[rawx_srv_id]
             chunk_test_id = urlparse(chunk_test["url"]).path[1:]
-            link_created.append(
-                islink(
-                    join(
-                        chunk_test_path,
-                        RawxWorker.EXCLUDED_DIRS[0],
-                        chunk_test_id[:3],
-                        chunk_test_id,
-                    )
-                )
+            symlink_folder = join(
+                chunk_test_path, RawxWorker.EXCLUDED_DIRS[0], chunk_test_id[:3]
             )
+            if exists(symlink_folder):
+                symlinks = [
+                    file for file in os.listdir(symlink_folder) if chunk_test_id in file
+                ]
+                if len(symlinks) != 0:
+                    chunk_symlink_path = join(
+                        symlink_folder,
+                        symlinks[0],
+                    )
+                    link_created.append(islink(chunk_symlink_path))
         diff = len(chunks_test) - server_constraints
         self.assertEqual(diff, link_created.count(True))
         if is_already_created:
@@ -246,18 +249,26 @@ class TestVerifyChunkPlacement(BaseTestCase):
                 if srv["id"] == urlparse(chunk_test["url"]).netloc
             ][0]
             chunk_test_id = urlparse(chunk_test["url"]).path[1:]
-            path_link = join(
-                chunk_test_path,
-                RawxWorker.EXCLUDED_DIRS[0],
-                chunk_test_id[:3],
-                chunk_test_id,
+            symlink_folder = join(
+                chunk_test_path, RawxWorker.EXCLUDED_DIRS[0], chunk_test_id[:3]
             )
-            if islink(path_link):
-                # Remove the link created at the creation of the object
-                os.remove(path_link)
-                # Set the misplaced chunk header to False
-                headers = {CHUNK_HEADERS["non_optimal_placement"]: False}
-                self.api.blob_client.chunk_post(url=chunk_test["url"], headers=headers)
+            if exists(symlink_folder):
+                symlinks = [
+                    file for file in os.listdir(symlink_folder) if chunk_test_id in file
+                ]
+                if len(symlinks) != 0:
+                    path_link = join(
+                        symlink_folder,
+                        symlinks[0],
+                    )
+                    if islink(path_link):
+                        # Remove the link created at the creation of the object
+                        os.remove(path_link)
+                        # Set the misplaced chunk header to False
+                        headers = {CHUNK_HEADERS["non_optimal_placement"]: False}
+                        self.api.blob_client.chunk_post(
+                            url=chunk_test["url"], headers=headers
+                        )
         return chunks_test
 
     def _check_shards(self, new_shards, test_shards, shards_content):

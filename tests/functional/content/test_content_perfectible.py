@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from os import path
+from os import listdir, path
 import random
 import time
 from urllib.parse import urlparse
@@ -108,7 +108,14 @@ class TestPerfectibleContent(BaseTestCase):
         # Assumptions:
         #  - HASH_WIDTH = 3
         #  - HASH_DEPTH = 1
-        return path.join(rawx["path"], "non_optimal_placement", chunk_id[:3], chunk_id)
+        symlink_folder = path.join(rawx["path"], "non_optimal_placement", chunk_id[:3])
+        if not path.exists(symlink_folder):
+            return symlink_folder
+        chunk_symlink_path = path.join(
+            symlink_folder,
+            [file for file in listdir(symlink_folder) if chunk_id in file][0],
+        )
+        return chunk_symlink_path
 
     def _is_symlink(self, abs_path):
         # islink: check symbolic link
@@ -226,7 +233,6 @@ class TestPerfectibleContent(BaseTestCase):
 
         # Choose a chunk and locate it on the disk.
         chunk = random.choice(chunks)
-        abs_link = self._get_symlink_non_optimal_path(chunk["real_url"])
 
         # Do the POST.
         self.request(
@@ -234,7 +240,7 @@ class TestPerfectibleContent(BaseTestCase):
             chunk["real_url"],
             headers={CHUNK_HEADERS["non_optimal_placement"]: True},
         )
-
+        abs_link = self._get_symlink_non_optimal_path(chunk["real_url"])
         # Check symbolic link does exist.
         self.assertTrue(self._is_symlink(abs_link))
 

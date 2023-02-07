@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,11 +194,10 @@ func (fr *fileRepository) put(name string) (fileWriter, error) {
 }
 
 func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
-	LogDebug("chunk %s doesn't have an optimal placement", name)
+	LogInfo("chunk %s doesn't have an optimal placement", name)
 
-	// Relative path of the chunk (from the rawx root)
+	// Relative path of the chunk (from the rawx root) -> chunkId[:3]/
 	relPath := fr.nameToRelPath(name)
-
 	// Construct relative symlink path according to:
 	// <hashDepth + 1> (+1 for nonOptimalPlacementFolder)
 	sb := strings.Builder{}
@@ -205,23 +205,37 @@ func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
 		sb.WriteString("../")
 	}
 	sb.WriteString(relPath)
+	// ../../chunkId[:3]/chunkId
 	relOldPath := sb.String()
-
+	// symlink name := chunk_id.nb_attempt_by_placement_improver.time_stamp_of_next_pass
+	relPathWithTimeStamp := strings.Join([]string{relPath, itoa(0), itoa64(time.Now().Unix())}, ".")
 	// Absolute destination of the chunk
-	absNewPath := strings.Join([]string{fr.nonOptimalPlacementFolderPath, relPath}, "/")
-
-	err := syscall.Symlink(relOldPath, absNewPath)
+	absNewPath := strings.Join([]string{fr.nonOptimalPlacementFolderPath, relPathWithTimeStamp}, "/")
+	// Absolute path to symlink folder
+	folderPath := filepath.Dir(absNewPath)
+	files, err := ioutil.ReadDir(folderPath)
 	if err != nil {
 		// If Symlink failed because folder does not exist,
 		// create it and execute the function again.
 		if os.IsNotExist(err) {
+			LogInfo("Create symlink dir %s", folderPath)
 			// Lazy dir creation
-			err = os.MkdirAll(filepath.Dir(absNewPath), fr.putMkdirMode)
+			err = os.MkdirAll(folderPath, fr.putMkdirMode)
 			if err == nil {
 				return fr.createSymlinkNonOptimal(name)
 			}
 		}
+		return err
 	}
+	for _, file := range files {
+		// if filename contains chunkId
+		if strings.Contains(file.Name(), name) {
+			// Symlink already exist
+			return os.ErrExist
+		}
+	}
+	// Create the symlink
+	err = syscall.Symlink(relOldPath, absNewPath)
 	return err
 }
 

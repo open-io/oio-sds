@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # License along with this library.
 
 import random
-from os import remove, walk
+from os import listdir, remove, walk
 from os.path import join, islink
 from oio.common.utils import paths_gen, request_id
 from oio.event.evob import EventTypes
@@ -98,10 +98,12 @@ class TestCrawlerPathGen(BaseTestCase):
         chunk_id = url.split("/", 3)[3]
         volume_path = self.rawx_volumes[volume_id]
         chunk_path = join(volume_path, chunk_id[:3], chunk_id)
+        symlink_folder = join(volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3])
         chunk_symlink_path = join(
-            volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3], chunk_id
+            symlink_folder,
+            [file for file in listdir(symlink_folder) if chunk_id in file][0],
         )
-        return (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id, url)
+        return (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id)
 
     def test_paths_gen(self):
         """
@@ -112,7 +114,9 @@ class TestCrawlerPathGen(BaseTestCase):
         object_name = "m_chunk-" + random_str(8)
         chunks = self._create(container, object_name)
         chunk = random.choice(chunks)
-        (_, _, chunk_symlink_path, volume_path, _, url) = self._chunk_info(chunk)
+        url = chunk["url"]
+        volume_id = url.split("/", 3)[2]
+        volume_path = self.rawx_volumes[volume_id]
         misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
         # Get number of already created chunks and symbolic links
         nb_link = sum(
@@ -122,6 +126,7 @@ class TestCrawlerPathGen(BaseTestCase):
         # Create the symbolic link of the chunk
         headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
         self.api.blob_client.chunk_post(url=url, headers=headers)
+        (_, _, chunk_symlink_path, volume_path, _) = self._chunk_info(chunk)
         # Case 1: non optimal placement with one symbolic link
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(

@@ -16,6 +16,7 @@ import os
 from oio.blob.utils import read_chunk_metadata
 from oio.common.utils import is_chunk_id_valid
 from oio.common import exceptions as exc
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 from oio.crawler.rawx.crawler import RawxCrawler, RawxWorker
 
 
@@ -73,6 +74,24 @@ class PlacementImproverWorker(RawxWorker):
             self.logger.error("Skip not valid chunk %s", chunk.chunk_path)
             return False
         return True
+
+    def _get_chunk_info(self, path):
+        """
+        Build chunkwrapper object with chunk info
+
+        :param path: _description_
+        :type path: _type_
+        :return: _description_
+        :rtype: _type_
+        """
+        chunk = ChunkWrapper({})
+        chunk_id = path.rsplit("/", 1)[-1]
+        if "." in chunk_id:
+            # New symlink format
+            chunk_id = chunk_id.split(".")[0]
+        chunk.chunk_id = chunk_id
+        chunk.chunk_path = path
+        return chunk
 
 
 class PlacementImproverCrawler(RawxCrawler):
