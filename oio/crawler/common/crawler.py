@@ -13,8 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from os import makedirs
+from os.path import join, basename, splitext, isdir, isfile
 from random import randint
-from os.path import join
+
 from oio import ObjectStorageApi
 from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
@@ -46,10 +48,15 @@ class CrawlerWorker(object):
     SERVICE_TYPE = None
     WORKING_DIR = ""
     EXCLUDED_DIRS = None
+    MARKERS_DIR = "markers"
 
     DEFAULT_SCAN_INTERVAL = 1800
     DEFAULT_REPORT_INTERVAL = 300
     DEFAULT_SCANNED_PER_SECOND = 30
+    # Every 60 seconds if the crawler can reach the max scanned_per_second asked.
+    # If the max is not reached, the marker will be updated less often, it is
+    # kind of a way to reduce the load/iops.
+    DEFAULT_SCANNED_BETWEEN_MARKERS = DEFAULT_SCANNED_PER_SECOND * 60
 
     def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
         """
@@ -79,6 +86,11 @@ class CrawlerWorker(object):
         self.namespace, self.volume_id = check_volume_for_service_type(
             self.volume, self.SERVICE_TYPE
         )
+        self.use_marker = boolean_value(self.conf.get("use_marker"), False)
+        self.scanned_between_markers = int_value(
+            self.conf.get("scanned_between_markers"),
+            self.DEFAULT_SCANNED_BETWEEN_MARKERS,
+        )
 
         self.passes = 0
         self.successes = 0
@@ -103,6 +115,55 @@ class CrawlerWorker(object):
         self.pipeline = LOAD_PIPELINES[type(self).__name__](
             self.conf.get("conf_file"), global_conf=self.conf, app=self
         )
+
+        # Init marker if used
+        self.marker_current = None
+        self.marker_dir = None
+        self.marker_path = None
+        if self.use_marker:
+            # Take the name of the conf file (remove its path) and remove its extension
+            service_name = splitext(basename(self.conf["conf_file"]))[0]
+            self.marker_dir = f"{volume_path}/{self.MARKERS_DIR}"
+
+            # Read marker if it exists, default to 0 otherwise.
+            self.marker_path = f"{self.marker_dir}/{service_name}"
+            self._read_marker()
+
+    def _read_marker(self):
+        if not self.use_marker:
+            self.logger.error("trying to open marker file while feature disabled")
+            return
+        # Create marker dir if it does not exist
+        if not isdir(self.marker_dir):
+            makedirs(self.marker_dir)
+            # Folder does not exist, no marker for sure.
+            self.marker_current = "0"
+            return
+
+        # Create file if does not exist
+        if not isfile(self.marker_path):
+            # File does not exist, no marker for sure.
+            self.marker_current = "0"
+            return
+
+        # Open it RW (file should exist as checked above)
+        with open(self.marker_path, "r") as marker_file:
+            self.marker_current = marker_file.readline()
+            if self.marker_current == "":
+                self.marker_current = "0"
+
+    def _write_marker(self):
+        if not self.use_marker:
+            self.logger.error(
+                f"trying to write marker={self.marker_current} while feature disabled"
+            )
+            return
+        # Create marker dir if it does not exist
+        if not isdir(self.marker_dir):
+            makedirs(self.marker_dir)
+
+        with open(self.marker_path, "w") as marker_file:
+            marker_file.write(self.marker_current)
 
     def cb(self, status, msg):
         raise NotImplementedError("cb not implemented")
@@ -168,11 +229,19 @@ class CrawlerWorker(object):
         self.passes += 1
         # EXCLUDED_DIRS can be used to avoid scanning the non optimal
         # placement folder for rawx crawler
-        paths = paths_gen(join(self.volume, self.WORKING_DIR), self.EXCLUDED_DIRS)
+        excluded_dirs = (self.MARKERS_DIR,)
+        if self.EXCLUDED_DIRS:
+            excluded_dirs = excluded_dirs + self.EXCLUDED_DIRS
+        paths = paths_gen(
+            volume_path=join(self.volume, self.WORKING_DIR),
+            excluded_dirs=excluded_dirs,
+            marker=self.marker_current,
+        )
 
         self.report("starting", force=True)
         self.start_time = time.time()
         last_scan_time = 0
+        nb_path_processed = 0  # only used for markers if feature is used
         for path in paths:
             self.logger.debug("crawl_volume current path: %s", path)
             if not self.running:
@@ -182,7 +251,19 @@ class CrawlerWorker(object):
             if not self.process_path(path):
                 continue
 
-            last_scan_time = ratelimit(last_scan_time, self.max_scanned_per_second)
+            last_scan_time = ratelimit(
+                run_time=last_scan_time,
+                max_rate=self.max_scanned_per_second,
+                increment=1,
+            )
+
+            if self.use_marker:
+                nb_path_processed = nb_path_processed + 1
+                if nb_path_processed >= self.scanned_between_markers:
+                    # Update marker and reset counter
+                    nb_path_processed = 0
+                    self.marker_current = path.rsplit("/", 1)[-1]
+                    self._write_marker()
 
             self.report("running")
 
@@ -193,6 +274,10 @@ class CrawlerWorker(object):
         self.errors = 0
         self.successes = 0
         self.invalid_paths = 0
+        if self.use_marker:
+            # reset marker
+            self.marker_current = "0"
+            self._write_marker()
 
     def run(self):
         if self.wait_random_time_before_starting:

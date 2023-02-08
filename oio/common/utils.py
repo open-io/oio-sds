@@ -112,7 +112,7 @@ def drop_privileges(user):
     os.umask(0o22)
 
 
-def paths_gen(volume_path, excluded_dirs=None):
+def paths_gen(volume_path, excluded_dirs=None, marker=None):
     """
     Yield paths of all regular files under `volume_path`.
 
@@ -120,15 +120,31 @@ def paths_gen(volume_path, excluded_dirs=None):
     :type volume_path: str
     :param excluded_dirs: contains excluded dirs
     :type excluded_dirs: tuple
+    :param marker: name of the marker file (files are sorted if not None)
+    :type marker: str
     """
     # Get absolute path of the volume path
     volume_abs_path = os.path.abspath(volume_path)
-    for root, dirs, files in os.walk(volume_abs_path):
-        if excluded_dirs is not None and volume_abs_path == root:
+
+    # Here, topdown=True is mandatory. It allows us to exclude some directories
+    # and to sort them if needed.
+    for root, dirs, files in os.walk(volume_abs_path, topdown=True):
+        # Alter the list of directories only during its first occurence.
+        if volume_abs_path == root:
             # Remove directory listed in excluded dir
-            # Only done if the root dir is the volume path
-            dirs[:] = [dir for dir in dirs if dir not in excluded_dirs]
+            if excluded_dirs is not None:
+                dirs[:] = [dir for dir in dirs if dir not in excluded_dirs]
+            if marker:
+                dirs.sort()
+        # Here, files is not an iterator. Could be a problem for huge volumes.
+        # A solution would be to reimplement "os.walk".
+        # Advantage: we are able to sort this list if needed.
+        if files and marker:
+            files.sort()
         for file in files:
+            if marker and marker >= file:  # string comparison possible as chunk sorted
+                # Continue until the marker
+                continue
             yield os.path.join(root, file)
 
 

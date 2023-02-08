@@ -305,9 +305,12 @@ user = ${USER}
 volume_list = ${META2_VOLUMES}
 
 wait_random_time_before_starting = True
+use_marker = False
 interval = 1200
 report_interval = 300
 scanned_per_second = 10
+# represents 30 seconds at max rate
+# scanned_between_markers = 300
 
 log_level = INFO
 log_facility = LOG_LOCAL0
@@ -388,9 +391,12 @@ user = ${USER}
 volume_list = ${RAWX_VOLUMES}
 
 wait_random_time_before_starting = True
+use_marker = False
 interval = 300
 report_interval = 75
 scanned_per_second = 10
+# represents 30 seconds at max rate
+# scanned_between_markers = 300
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
@@ -444,9 +450,12 @@ user = ${USER}
 volume_list = ${RAWX_VOLUMES}
 
 wait_random_time_before_starting = True
+use_marker = False
 interval = 1200
 report_interval = 300
 scanned_per_second = 10
+# represents 30 seconds at max rate
+# scanned_between_markers = 300
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
@@ -469,9 +478,12 @@ user = ${USER}
 volume_list = ${RAWX_VOLUMES}
 
 wait_random_time_before_starting = True
+use_marker = True
 interval = 1200
 report_interval = 300
 scanned_per_second = 5
+# represents 30 seconds at max rate
+scanned_between_markers = 150
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log

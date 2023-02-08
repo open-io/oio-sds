@@ -72,6 +72,7 @@ TMP_VOLUME="${TMPDIR:-/tmp}/openio_volume_before"
 TMP_FILE_BEFORE="${TMPDIR:-/tmp}/openio_file_before"
 TMP_FILE_AFTER="${TMPDIR:-/tmp}/openio_file_after"
 INTEGRITY_LOG="${TMPDIR:-/tmp}/integrity.log"
+RAWX_FIND_OPT="-not -path "*/markers/*""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -365,7 +366,7 @@ remove_rawx()
   TOTAL_CHUNKS=0
   while read -r RAWX_LOC; do
     TOTAL_CHUNKS=$(( TOTAL_CHUNKS + $(/usr/bin/find "${RAWX_LOC}" \
-        -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f \
+        -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f ${RAWX_FIND_OPT} \
     | /usr/bin/wc -l) ))
   done < <($CLI cluster list rawx -c Volume -f value)
 
@@ -475,7 +476,7 @@ openioadmin_rawx_rebuild()
   TOTAL_CHUNKS_AFTER=0
   while read -r RAWX_LOC; do
     TOTAL_CHUNKS_AFTER=$(( TOTAL_CHUNKS_AFTER + \
-        $(/usr/bin/find "${RAWX_LOC}" -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f | /usr/bin/wc -l) ))
+        $(/usr/bin/find "${RAWX_LOC}" -maxdepth $((RAWX_HASH_DEPTH + 1)) -type f ${RAWX_FIND_OPT} | /usr/bin/wc -l) ))
   done < <($CLI cluster list rawx -c Volume -f value)
   if [ "${TOTAL_CHUNKS}" -ne "${TOTAL_CHUNKS_AFTER}" ]; then
     echo >&2 "Wrong number of chunks:" \
@@ -484,6 +485,10 @@ openioadmin_rawx_rebuild()
   fi
 
   for CHUNK in ${TMP_VOLUME}/*/*; do
+    # Skip files in marker folders (they are not chunks and does not need to be rebuilt)
+    if [[ "$CHUNK" == *"/markers/"* ]]; then
+      continue
+    fi
     CHUNK_ID=${CHUNK##*/}
     if ! FULLPATH=$(/usr/bin/getfattr -n "user.oio.content.fullpath:${CHUNK_ID}" \
         --only-values "${CHUNK}" 2> /dev/null); then

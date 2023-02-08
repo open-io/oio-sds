@@ -7,6 +7,9 @@ volume_list = /var/lib/oio/sds/vol1/NS/meta2-1/,/var/lib/oio/sds/vol1/NS/meta2-2
 # Wait random time before starting
 # to avoid all the crawlers from working at the same time.
 wait_random_time_before_starting = False
+# The crawler stores a marker in a file to be able to resume after being
+# stopped/restarted. Default to False.
+# use_marker = False
 # In seconds, the interval between two full scans. Defaults to half an hour.
 interval = 1800
 # In seconds, the interval between two logs entries (for each volume)
@@ -14,6 +17,10 @@ interval = 1800
 report_interval = 300
 # Maximum containers to be scanned per second. Defaults to 10.
 scanned_per_second = 10
+# Number of chunks to check before updating the markers
+# (not used if <use_marker> is disabled). Default to 900.
+# This value represents 60s at max rate.
+# scanned_between_markers = 900
 
 # Common log stuff
 log_level = INFO
