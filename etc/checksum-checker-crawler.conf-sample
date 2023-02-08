@@ -21,6 +21,9 @@ scanned_per_second = 5
 # (not used if <use_marker> is disabled). Default to 900.
 # This value represents 60s at max rate.
 scanned_between_markers = 300
+# Set the nice value of the crawler to <nice_value>.
+# Default to 0 (default system value).
+nice_value = 19
 
 # Common log stuff
 log_level = INFO

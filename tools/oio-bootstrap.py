@@ -484,6 +484,7 @@ report_interval = 300
 scanned_per_second = 5
 # represents 30 seconds at max rate
 scanned_between_markers = 150
+nice_value = 19
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log

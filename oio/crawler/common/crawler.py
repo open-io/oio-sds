@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from os import makedirs
+from os import makedirs, nice
 from os.path import join, basename, splitext, isdir, isfile
 from random import randint
 
@@ -330,6 +330,7 @@ class Crawler(Daemon):
     """
 
     SERVICE_TYPE = None
+    DEFAULT_NICE_VALUE = 0
 
     def __init__(self, conf, conf_file=None, worker_class=None, **kwargs):
         super(Crawler, self).__init__(conf)
@@ -351,6 +352,14 @@ class Crawler(Daemon):
 
         self.pool = ContextPool(len(self.volumes))
         self.watchdog = get_watchdog(called_from_main_application=True)
+
+        # Apply new nice value
+        nice_value = int_value(conf.get("nice_value"), self.DEFAULT_NICE_VALUE)
+        current_nice = nice(0)
+        # <nice()> increments the process’s niceness by specified value, so we need to
+        # compensate the old value to reach the targeted value.
+        nice(-current_nice + nice_value)
+
         self._init_volume_workers()
 
     def _init_volume_workers(self, **kwargs):
