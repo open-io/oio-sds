@@ -73,6 +73,7 @@ struct m2_open_args_s
 {
 	enum m2v2_open_type_e how;
 	const gchar *peers;
+	gint64 deadline;
 };
 
 struct m2_prepare_data
@@ -557,9 +558,13 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, suffix);
 	NAME2CONST(n,n0);
 	enum m2v2_open_type_e how = open_args->how;
+	gint64 deadline = open_args->deadline;
+	if (deadline <= 0) {
+		deadline = oio_ext_get_deadline();
+	}
 
 	err = sqlx_repository_timed_open_and_lock(m2->repo, &n, m2_to_sqlx(how),
-		   open_args->peers, &sq3, NULL, oio_ext_get_deadline());
+		   open_args->peers, &sq3, NULL, deadline);
 	if (err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = GQ();
@@ -609,7 +614,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	gchar *sharding_master = NULL;
 	gchar *sharding_queue = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct m2_open_args_s args = {how, NULL};
+	struct m2_open_args_s args = {how, NULL, 0};
 	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
 
 reopen:
@@ -2703,7 +2708,8 @@ meta2_backend_find_shards_with_partition(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			_mode_readonly(M2V2_FLAG_MASTER)|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -2779,7 +2785,8 @@ meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			_mode_readonly(M2V2_FLAG_MASTER)|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -2884,7 +2891,8 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3010,7 +3018,8 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3133,7 +3142,8 @@ _m2b_open_shard_local_copy(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	struct m2_open_args_s args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2, url, suffix, &args, &sq3);
 	if (err) {
@@ -3200,7 +3210,8 @@ meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3297,7 +3308,8 @@ meta2_backend_update_shard(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3346,9 +3358,14 @@ _m2b_delete_shard_copies(struct meta2_backend_s *m2b,
 		struct oio_url_s *copy_url = oio_url_dup(url);
 		gchar *suffix = g_strdup_printf(
 			"sharding-%"G_GINT64_FORMAT"-%s", sharding_timestamp, *index);
+		/* Deleting local copies should not block the master */
+		gint64 deadline = MIN(
+			oio_ext_monotonic_time() + (500 * G_TIME_SPAN_MILLISECOND),
+			oio_ext_get_deadline());
 		struct m2_open_args_s open_args = {
 				M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK,
-				NULL
+				NULL,
+				deadline
 			};
 		err = m2b_open_with_args(m2b, copy_url, suffix, &open_args, &sq3);
 		if (err) {
@@ -3376,7 +3393,8 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3438,7 +3456,8 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3518,7 +3537,8 @@ meta2_backend_clean_once_sharding(struct meta2_backend_s *m2b,
 
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
 	if (err) {
@@ -3596,7 +3616,8 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
 			|(urgent ? M2V2_OPEN_URGENT : 0),
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (err) {
@@ -3674,7 +3695,8 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
 	struct m2_open_args_s open_args = {
 			_mode_readonly(open_mode),
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
@@ -3789,7 +3811,8 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
-			NULL
+			NULL,
+			0
 		};
 	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
 	if (!err) {
