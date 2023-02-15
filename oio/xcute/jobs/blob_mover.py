@@ -104,7 +104,7 @@ class RawxDecommissionTask(XcuteTask):
         # Start moving the chunk
         try:
             content = self.content_factory.get_by_path_and_version(
-                container_id=content_id,
+                container_id=container_id,
                 content_id=content_id,
                 path=path,
                 version=version,
