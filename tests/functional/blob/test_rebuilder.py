@@ -16,6 +16,7 @@
 
 import os
 import random
+import time
 
 from oio.common.utils import cid_from_name
 from oio.common.constants import OIO_VERSION
@@ -94,7 +95,7 @@ class TestBlobRebuilder(BaseTestCase):
             )
 
         chunk = random.choice(self.chunks)
-        chunk_volume = chunk["url"].split("/")[2]
+        rawx_id = chunk["url"].split("/")[2]
         chunk_id = chunk["url"].split("/")[3]
         chunk_headers, chunk_stream = self.blob_client.chunk_get(
             chunk["url"], check_headers=False
@@ -105,7 +106,7 @@ class TestBlobRebuilder(BaseTestCase):
 
         conf = self.conf.copy()
         conf["allow_same_rawx"] = True
-        rebuilder = BlobRebuilder(conf, service_id=chunk_volume, watchdog=self.watchdog)
+        rebuilder = BlobRebuilder(conf, service_id=rawx_id, watchdog=self.watchdog)
         rebuilder_worker = rebuilder.create_worker(None, None)
         rebuilder_worker._process_item(
             (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id)
@@ -121,6 +122,7 @@ class TestBlobRebuilder(BaseTestCase):
             if c["url"] not in url_kept:
                 self.assertIsNone(new_chunk)
                 new_chunk = c
+        self.assertIsNotNone(new_chunk)
 
         # Cannot check if the URL is different: it may be the same since we
         # generate predictable chunk IDs.
@@ -158,3 +160,69 @@ class TestBlobRebuilder(BaseTestCase):
         del chunk_headers["chunk_mtime"]
         del new_chunk_headers["chunk_mtime"]
         self.assertEqual(chunk_headers, new_chunk_headers)
+
+    def test_rebuild_chunk_with_another_chunk_on_zero_scored_rawx(self):
+        chunk = random.choice(self.chunks)
+        rawx_id = chunk["url"].split("/")[2]
+        chunk_id = chunk["url"].split("/")[3]
+        os.remove(self._chunk_path(chunk))
+        chunks_kept = list(self.chunks)
+        chunks_kept.remove(chunk)
+
+        zero_scored_rawx_id = random.choice(chunks_kept)["url"].split("/")[2]
+        rawx_definition = self.conscience.get_service_definition(
+            "rawx", zero_scored_rawx_id, score=0
+        )
+        try:
+            # Set the score of the rawx to 0 and wait for the proxy to update
+            self.conscience.lock_score([rawx_definition])
+            self._flush_proxy()
+            self._reload_proxy()
+            for _ in range(5):
+                time.sleep(1.0)
+                data = self.conscience.all_services("rawx")
+                for srv in data:
+                    service_id = srv["tags"].get("tag.service_id", srv["addr"])
+                    if zero_scored_rawx_id == service_id and srv["score"] == 0:
+                        break
+                else:
+                    # We didn't find the service or its score was non-zero
+                    continue
+                # We did find it, break the external loop
+                break
+            else:
+                raise Exception(
+                    f"The rawx {zero_scored_rawx_id} still has a non-zero score"
+                )
+
+            # Rebuild the chunk
+            conf = self.conf.copy()
+            conf["allow_same_rawx"] = True
+            rebuilder = BlobRebuilder(conf, service_id=rawx_id, watchdog=self.watchdog)
+            rebuilder_worker = rebuilder.create_worker(None, None)
+            rebuilder_worker._process_item(
+                (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id)
+            )
+        finally:
+            self.conscience.unlock_score([rawx_definition])
+
+        _, new_chunks = self.api.object_locate(self.account, self.container, self.path)
+        new_chunk = list(new_chunks)
+
+        self.assertEqual(len(new_chunks), len(chunks_kept) + 1)
+        url_kept = [c["url"] for c in chunks_kept]
+        new_chunk = None
+        for c in new_chunks:
+            if c["url"] not in url_kept:
+                self.assertIsNone(new_chunk)
+                new_chunk = c
+        self.assertIsNotNone(new_chunk)
+
+        # Cannot check if the URL is different: it may be the same since we
+        # generate predictable chunk IDs.
+        # self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
+        # self.assertNotEqual(chunk['url'], new_chunk['url'])
+        self.assertEqual(chunk["pos"], new_chunk["pos"])
+        self.assertEqual(chunk["size"], new_chunk["size"])
+        self.assertEqual(chunk["hash"], new_chunk["hash"])
+        self.blob_client.chunk_head(new_chunk["url"])

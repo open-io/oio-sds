@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -270,6 +270,8 @@ struct oio_lb_slot_s
 	 * need to complexify by a secondary sort by ID, especially if the number
 	 * of services at the same location is rather small.*/
 	GArray *items;
+	/* Same as above, but for unavailable items (score=0). */
+	GArray *zero_scored_items;
 
 	/* Total number of items per location, for each level.
 	 * We do not use level 0 at the moment. */
@@ -289,6 +291,7 @@ struct oio_lb_slot_s
 	/* Does the slot need to be re-sorted by location.
 	 * When set, the slot cannot be used to be searched by location */
 	guint8 flag_dirty_order : 1;
+	guint8 flag_zero_scored_dirty_order : 1;
 
 	guint8 flag_rehash_on_update : 1;
 
@@ -486,6 +489,7 @@ oio_lb_world__count_slot_items_unlocked(struct oio_lb_world_s *self,
 #define CITEM(p) CSLOT(p)->item
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
 #define SLOT_ITEM(s,i) TAB_ITEM (s->items, i)
+#define ZERO_SCORED_ITEM(s,i) TAB_ITEM (s->zero_scored_items, i)
 
 static guint _search_first_at_location(GArray *tab,
 		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
@@ -698,35 +702,49 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 }
 
 static void
+_slot_items_flush(GArray *items)
+{
+	if (!items) {
+		return;
+	}
+	const guint max = items->len;
+	for (guint i = 0; i<max; ++i) { /* unref all the elements */
+		struct _slot_item_s *si = &TAB_ITEM(items, i);
+		struct _lb_item_s *it = si->item;
+		if (it) {
+			EXTRA_ASSERT(it->refcount > 0);
+			-- it->refcount;
+		}
+		si->acc_weight = 0;
+		si->item = NULL;
+	}
+	g_array_set_size(items, 0);
+}
+
+static void
 _slot_flush(struct oio_lb_slot_s *slot)
 {
-	if (!slot)
+	if (!slot) {
 		return;
-	if (slot->items) {
-		const guint max = slot->items->len;
-		for (guint i = 0; i<max; ++i) { /* unref all the elements */
-			struct _slot_item_s *si = &SLOT_ITEM(slot,i);
-			struct _lb_item_s *it = si->item;
-			if (NULL != it) {
-				EXTRA_ASSERT(it->refcount > 0);
-				-- it->refcount;
-			}
-			si->acc_weight = 0;
-			si->item = NULL;
-		}
-		g_array_set_size(slot->items, 0);
 	}
+	_slot_items_flush(slot->items);
+	_slot_items_flush(slot->zero_scored_items);
 }
 
 static void
 _slot_destroy (struct oio_lb_slot_s *slot)
 {
-	if (!slot)
+	if (!slot) {
 		return;
+	}
+	_slot_flush(slot);
 	if (slot->items) {
-		_slot_flush(slot);
-		g_array_free (slot->items, TRUE);
+		g_array_free(slot->items, TRUE);
 		slot->items = NULL;
+	}
+	if (slot->zero_scored_items) {
+		g_array_free(slot->zero_scored_items, TRUE);
+		slot->zero_scored_items = NULL;
 	}
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_clear(&(slot->items_by_loc[level]));
@@ -738,15 +756,16 @@ _slot_destroy (struct oio_lb_slot_s *slot)
 
 
 static const struct _lb_item_s *
-_slot_get (struct oio_lb_slot_s *slot, const int i)
+_slot_get(struct oio_lb_slot_s *slot, const int i)
 {
-	return SLOT_ITEM(slot,i).item;
+	return SLOT_ITEM(slot, i).item;
 }
 
 static inline gboolean
 _slot_needs_rehash (const struct oio_lb_slot_s * const slot)
 {
-	return BOOL(slot->flag_dirty_order) || BOOL(slot->flag_dirty_weights);
+	return BOOL(slot->flag_dirty_order) || BOOL(slot->flag_dirty_weights)
+			|| BOOL(slot->flag_zero_scored_dirty_order);
 }
 
 static void
@@ -764,7 +783,7 @@ _level_datalist_incr_loc(GData **counters, oio_location_t loc)
 }
 
 static void
-_slot_rehash (struct oio_lb_slot_s *slot)
+_slot_rehash(struct oio_lb_slot_s *slot)
 {
 	if (slot->flag_dirty_order) {
 		slot->flag_dirty_order = 0;
@@ -810,6 +829,11 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 			si->acc_weight = sum;
 		}
 		slot->sum_weight = sum;
+	}
+
+	if (slot->flag_zero_scored_dirty_order) {
+		slot->flag_zero_scored_dirty_order = 0;
+		g_array_sort(slot->zero_scored_items, _compare_stored_items_by_location);
 	}
 
 	/* 2^31-1 used to be the default jump, and was giving good results,
@@ -1086,6 +1110,11 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			guint pos = _search_first_at_location(slot->items,
 					*known, OIO_LOC_PROX_VOLUME,
 					0, slot->items->len-1);
+			if (pos == (guint)-1 && strict) {
+				pos = _search_first_at_location(slot->zero_scored_items,
+						*known, OIO_LOC_PROX_VOLUME,
+						0, slot->zero_scored_items->len-1);
+			}
 			if (pos != (guint)-1) {
 				/* The current item is in a slot referenced by our target.
 				** Place this item at the beginning of ctx->next_polled so
@@ -1640,6 +1669,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 		slot->world = self;
 		slot->name = g_strdup(name);
 		slot->items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
+		slot->zero_scored_items = g_array_new(FALSE, TRUE, sizeof(struct _slot_item_s));
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 			g_datalist_init(&(slot->items_by_loc[level]));
 		}
@@ -1762,6 +1792,88 @@ _search_first_at_location (GArray *tab,
 }
 #undef M
 
+static guint
+_find_slot_item(GArray *items, gboolean dirty_order, struct _lb_item_s *item0)
+{
+	guint i0 = (guint)-1;
+	if (dirty_order) {
+		/* Linear search from the beginning */
+		i0 = 0;
+	} else if (items->len) {
+		/* Binary search, faster when items are sorted */
+		i0 = _search_first_at_location(items,
+				item0->location, OIO_LOC_PROX_VOLUME,
+				0, items->len-1);
+	}
+
+	if (i0 != (guint)-1) {
+		/* then iterate on the location to find it precisely. */
+		for (guint i=i0; i < items->len; ++i) {
+			if (item0 == TAB_ITEM(items, i).item) {
+				return i;
+			}
+		}
+	}
+
+	return (guint)-1;
+}
+
+static void
+_add_new_slot_item(struct oio_lb_world_s *self, struct oio_lb_slot_s *slot,
+		struct _lb_item_s *item)
+{
+	++ item->refcount;
+	struct _slot_item_s fake = {item, 0, self->generation};
+	if (item->weight > 0) {
+		g_array_append_vals(slot->items, &fake, 1);
+		slot->flag_dirty_order = 1;
+	} else {
+		g_array_append_vals(slot->zero_scored_items, &fake, 1);
+		slot->flag_zero_scored_dirty_order = 1;
+	}
+}
+
+static gboolean
+_update_slot_item(struct oio_lb_world_s *self, struct _slot_item_s *slot_item,
+		const struct oio_lb_item_s *updated_item)
+{
+	slot_item->generation = self->generation;
+	struct _lb_item_s *current_item = slot_item->item;
+	if (current_item->location != updated_item->location) {
+		current_item->location = updated_item->location;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void
+_move_from_slot_item_to_zero_scored_slot_item(struct oio_lb_world_s *self,
+		struct oio_lb_slot_s *slot, const guint i,
+		const struct oio_lb_item_s *updated_item)
+{
+	struct _slot_item_s *slot_item = &SLOT_ITEM(slot, i);
+	_update_slot_item(self, slot_item, updated_item);
+	g_array_append_vals(slot->zero_scored_items, slot_item, 1);
+	slot->flag_zero_scored_dirty_order = 1;
+
+	g_array_remove_index_fast(slot->items, i);
+	slot->flag_dirty_order = 1;
+}
+
+static void
+_move_from_zero_scored_slot_item_to_slot_item(struct oio_lb_world_s *self,
+		struct oio_lb_slot_s *slot, guint i,
+		const struct oio_lb_item_s *updated_item)
+{
+	struct _slot_item_s *slot_item = &ZERO_SCORED_ITEM(slot, i);
+	_update_slot_item(self, slot_item, updated_item);
+	g_array_append_vals(slot->items, slot_item, 1);
+	slot->flag_dirty_order = 1;
+
+	g_array_remove_index_fast(slot->zero_scored_items, i);
+	slot->flag_zero_scored_dirty_order = 1;
+}
+
 static void
 oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		struct oio_lb_slot_s *slot, const struct oio_lb_item_s *item)
@@ -1800,32 +1912,34 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		}
 
 		/* look for the slice of items AT THE OLD LOCATION (maybe it changed) */
-		guint i0 = (guint)-1;
-		if (slot->flag_dirty_order) {
-			/* Linear search from the beginning */
-			i0 = 0;
-		} else if (slot->items->len) {
-			/* Binary search, faster when items are sorted */
-			i0 = _search_first_at_location (slot->items,
-					item0->location, OIO_LOC_PROX_VOLUME,
-					0, slot->items->len-1);
+		guint i = _find_slot_item(slot->items, slot->flag_dirty_order, item0);
+		if (i != (guint)-1) {
+			found = TRUE;
+			/* we found the old item, now check the location matches */
+			if (item0->weight > 0) {
+				if (_update_slot_item(self, &SLOT_ITEM(slot, i), item)) {
+					slot->flag_dirty_order = 1;
+				}
+			} else {
+				_move_from_slot_item_to_zero_scored_slot_item(
+						self, slot, i, item);
+			}
 		}
 
-		if (i0 != (guint)-1) {
-			/* then iterate on the location to find it precisely. */
-			for (guint i=i0; !found && i<slot->items->len ;++i) {
-				if (item0 == _slot_get(slot,i)) {
-					found = TRUE;
-					/* we found the old item, now check the location matches */
-					if (item0->weight <= 0) {
-						g_array_remove_index_fast(slot->items, i);
-						slot->flag_dirty_order = 1;
-					} else {
-						SLOT_ITEM(slot,i).generation = self->generation;
-						if (item0->location != item->location) {
-							item0->location = item->location;
-							slot->flag_dirty_order = 1;
-						}
+		if (!found) {
+			/* If the slot item was not found, search for zero_scored items */
+			i = _find_slot_item(slot->zero_scored_items,
+					slot->flag_zero_scored_dirty_order, item0);
+			if (i != (guint)-1) {
+				found = TRUE;
+				/* we found the old item, now check the location matches */
+				if (item0->weight > 0) {
+					_move_from_zero_scored_slot_item_to_slot_item(
+							self, slot, i, item);
+				} else {
+					if (_update_slot_item(self, &ZERO_SCORED_ITEM(slot, i),
+							item)) {
+						slot->flag_zero_scored_dirty_order = 1;
 					}
 				}
 			}
@@ -1833,18 +1947,15 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	}
 	EXTRA_ASSERT (item0 != NULL);
 
-	if (!found && item0->weight > 0) {
-		++ item0->refcount;
-		struct _slot_item_s fake = {item0, 0, self->generation};
-		g_array_append_vals (slot->items, &fake, 1);
-		item0 = NULL;
+	/* It's a new item */
+	if (!found) {
+		_add_new_slot_item(self, slot, item0);
 		found = TRUE;
-		slot->flag_dirty_order = 1;
-		slot->flag_dirty_weights = 1;
 	}
 
-	if (slot->flag_rehash_on_update && _slot_needs_rehash (slot))
+	if (slot->flag_rehash_on_update && _slot_needs_rehash(slot)) {
 		_slot_rehash(slot);
+	}
 
 	/* This is an optimization to speedup the locations comparisons.
 	 * It needs __builtin_clzll which is a GCC builtin. */
@@ -1905,18 +2016,27 @@ oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
 }
 
 static void
-_slot_debug (struct oio_lb_slot_s *slot)
+_slot_items_debug(GArray *items, gchar *suffix)
+{
+	for (guint i = 0; i < items->len; ++i) {
+		const struct _slot_item_s *si = &TAB_ITEM(items, i);
+		GRID_DEBUG("- [%s,0x%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT"%s",
+				si->item->id, si->item->location, si->item->weight,
+				si->acc_weight, suffix);
+	}
+}
+
+static void
+_slot_debug(struct oio_lb_slot_s *slot)
 {
 	GRID_DEBUG("slot=%s num=%u sum=%"G_GUINT32_FORMAT" flags=%d jump=%"
 			G_GUINT64_FORMAT" content:",
 			slot->name, slot->items->len, slot->sum_weight,
 			slot->flag_dirty_weights | slot->flag_dirty_order<<1 |
-			slot->flag_rehash_on_update<<2, slot->jump);
-	for (guint i = 0; i < slot->items->len; ++i) {
-		const struct _slot_item_s *si = &SLOT_ITEM(slot,i);
-		GRID_DEBUG ("- [%s,0x%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT,
-				si->item->id, si->item->location, si->item->weight, si->acc_weight);
-	}
+			slot->flag_zero_scored_dirty_order<<2 | slot->flag_rehash_on_update<<3,
+			slot->jump);
+	_slot_items_debug(slot->items, "");
+	_slot_items_debug(slot->zero_scored_items, " (zero_scored)");
 }
 
 void
@@ -1959,32 +2079,45 @@ _world_rehash_slots(struct oio_lb_world_s *self)
 			g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_rehash, self));
 }
 
+static guint
+_purge_slot_items(GArray *items, generation_t current_generation, guint32 age) {
+	guint pre = items->len;
+	for (guint i=0; i<items->len ;++i) {
+		struct _slot_item_s *si = &TAB_ITEM(items, i);
+		if (absolute_delta(si->generation, current_generation) > age) {
+			EXTRA_ASSERT(si->item->refcount > 0);
+			-- si->item->refcount;
+			g_array_remove_index_fast(items, i);
+			-- i;
+		}
+	}
+	return pre - items->len;
+}
+
 static void
 _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 {
 	gboolean _on_slot_purge_inside(gpointer k UNUSED,
 			struct oio_lb_slot_s *slot, struct oio_lb_world_s *world) {
 
-		guint pre = slot->items->len;
-		for (guint i=0; i<slot->items->len ;++i) {
-			struct _slot_item_s *si = &SLOT_ITEM(slot, i);
-			if (absolute_delta(si->generation, world->generation) > age) {
-				EXTRA_ASSERT(si->item->refcount > 0);
-				-- si->item->refcount;
-				g_array_remove_index_fast(slot->items, i);
-				-- i;
-			}
-		}
-
-		if (pre != slot->items->len) {
+		guint removed = _purge_slot_items(slot->items, world->generation, age);
+		if (removed != 0) {
 			GRID_DEBUG("%u services removed from %s (%u remain)",
-					pre - slot->items->len, slot->name, slot->items->len);
+					removed, slot->name, slot->items->len);
 			slot->flag_dirty_weights = 1;
 			slot->flag_dirty_order = 1;
 		}
 
-		if (_slot_needs_rehash(slot))
+		removed = _purge_slot_items(slot->zero_scored_items, world->generation, age);
+		if (removed != 0) {
+			GRID_DEBUG("%u zero_scored services removed from %s (%u remain)",
+					removed, slot->name, slot->zero_scored_items->len);
+			slot->flag_zero_scored_dirty_order = 1;
+		}
+
+		if (_slot_needs_rehash(slot)) {
 			_slot_rehash(slot);
+		}
 
 		return FALSE;
 	}
