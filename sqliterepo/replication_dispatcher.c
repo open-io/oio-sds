@@ -445,7 +445,8 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 	// Check the election without trigger an election
 	if (election_is_master(repo->election_manager, name)) {
-		err = NEWERROR(CODE_IS_MASTER, "Master cannot restore the database");
+		err = NEWERROR(CODE_IS_MASTER,
+				"Restore operation is not allowed on the master service");
 	}
 
 	if (!err) {
@@ -478,7 +479,8 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 	// Check the election without trigger an election
 	if (election_is_master(repo->election_manager, name)) {
-		err = NEWERROR(CODE_IS_MASTER, "Master cannot restore the database");
+		err = NEWERROR(CODE_IS_MASTER,
+				"Restore operation is not allowed on the master service");
 	}
 
 	if (!err) {
@@ -903,7 +905,8 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 
 	// Check the election without trigger an election
 	if (election_is_master(repo->election_manager, &n0)) {
-		err = NEWERROR(CODE_IS_MASTER, "Master cannot receive replication");
+		err = NEWERROR(CODE_IS_MASTER,
+				"Replicate operation is not allowed on the master service");
 	}
 
 	if (!err) {
