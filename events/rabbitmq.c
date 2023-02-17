@@ -57,7 +57,9 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		 * we have to make them talk to separate channels. Here we make the
 		 * supposition that each thread will create its own connection. */
 		out1.channel = AMQP_DEFAULT_CHANNEL;
-		out1.exchange = amqp_cstring_bytes(exchange);
+		/* XXX: amqp_cstring_bytes() does not copy the string, whereas
+		 * amqp_bytes_free() will free() the internal buffer... */
+		out1.exchange = amqp_cstring_bytes(strdup(exchange));
 		out1.username = g_strdup(username);
 		out1.password = g_strdup(password);
 	}
@@ -311,4 +313,5 @@ rabbitmq_destroy(struct rabbitmq_s *rabbitmq)
 	g_free(rabbitmq->password);
 
 	memset(rabbitmq, 0, sizeof(struct rabbitmq_s));
+	g_free(rabbitmq);
 }
