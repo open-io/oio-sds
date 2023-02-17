@@ -64,10 +64,6 @@ if ( ENABLE_CODECOVERAGE )
 		set( CODECOV_OUTPUTFILE /tmp/cmake_coverage.output )
 	endif ( NOT DEFINED CODECOV_OUTPUTFILE )
 
-	if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
-		set( CODECOV_HTMLOUTPUTDIR coverage_results )
-	endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
-
 
 	set(CODECOV_PATTERN_TO_IGNORE
 		"'${CMAKE_BINARY_DIR}/metautils/asn1c/*.*'"
@@ -79,7 +75,6 @@ if ( ENABLE_CODECOVERAGE )
 	if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 		find_program( CODECOV_GCOV gcov )
 		find_program( CODECOV_LCOV lcov )
-		find_program( CODECOV_GENHTML genhtml )
 		add_definitions( -fprofile-arcs -ftest-coverage )
 		link_libraries( gcov )
 		set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
@@ -91,9 +86,8 @@ if ( ENABLE_CODECOVERAGE )
 		add_custom_target( coverage
 						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
 						   COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
-						   COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
 						   COMMAND coverage combine -a .coverage.*
-						   COMMAND coverage html)
+		)
 
 	endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 endif (ENABLE_CODECOVERAGE )
