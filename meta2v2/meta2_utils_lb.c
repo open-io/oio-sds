@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -136,7 +136,7 @@ GError*
 get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 		struct oio_lb_s *lb,
 		struct storage_policy_s *policy,
-		const gchar *ns_name, GSList *already, GSList *broken,
+		const gchar *ns_name, GSList *already, GSList *broken, gboolean force_fair_constraints,
 		GSList **result)
 {
 	GError *err = NULL;
@@ -162,7 +162,7 @@ get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 		beans = g_slist_prepend(beans, prop);
 		beans = g_slist_prepend(beans, chunk);
 	}
-	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, NULL);
+	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, force_fair_constraints, NULL);
 	guint chunks_count = g_slist_length(beans) / 2;
 	if (err) {
 		g_prefix_error(&err,

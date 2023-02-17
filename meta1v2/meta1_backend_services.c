@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -528,8 +528,9 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	{
 		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
+	gboolean force_fair_constraints = FALSE;
 	*err = oio_lb__patch_with_pool(
-			m1->lb, srvtype, avoid, NULL, _on_id, NULL);
+			m1->lb, srvtype, avoid, NULL, _on_id, force_fair_constraints, NULL);
 	if (*err) {
 		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
@@ -810,8 +811,9 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 				g_ptr_array_add(ids, g_strdup(sel->item->id));
 			}
+			gboolean force_fair_constraints = FALSE;
 			err = oio_lb__patch_with_pool(in->m1->lb, in->srvtype,
-					avoids, known, _on_id, NULL);
+					avoids, known, _on_id, force_fair_constraints, NULL);
 			if (err) {
 				g_prefix_error(&err,
 						"found only %u services matching the criteria: ",

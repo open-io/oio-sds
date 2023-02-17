@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -86,7 +86,7 @@ GError *oio_lb_pool__poll(struct oio_lb_pool_s *self,
 GError *oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids,
 		const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean *flawed);
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
 
 /* Get an item from its ID. Returns NULL if the ID is isn't known.
  * The result must be freed with g_free(). */
@@ -223,7 +223,7 @@ GError *oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
 /** Calls oio_lb_pool__patch() on the pool `name`. Thread-safe. */
 GError *oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean *flawed);
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
 
 /** Get an item from a pool. Returns NULL if ID isn't known.
  *  The result must be freed with g_free(). */

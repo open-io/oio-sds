@@ -110,6 +110,7 @@ class Content(object):
         max_attempts=3,
         check_quality=False,
         fake_excluded_chunks=None,
+        moving_data=False,
         **kwargs
     ):
         notin = ChunksHelper(chunks_notin, False).raw()
@@ -121,7 +122,11 @@ class Content(object):
                 chunk["pos"] = broken[0]["pos"]
                 chunk["size"] = broken[0]["size"]
                 broken.append(chunk)
-        spare_data = {"notin": notin, "broken": broken}
+        spare_data = {
+            "notin": notin,
+            "broken": broken,
+            "force_fair_constraints": moving_data,
+        }
         last_exc = None
         bal = 0
         for attempt in range(max_attempts):
@@ -313,6 +318,7 @@ class Content(object):
             position=current_chunk.pos,
             check_quality=check_quality,
             max_attempts=max_attempts,
+            moving_data=True,
             **kwargs
         )
 

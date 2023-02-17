@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -84,6 +84,8 @@ GError* get_spare_chunks_focused(
  *   into account when computing distance
  * @param broken The list of chunks that are known to be broken and whose
  *   location should be avoided (do not count when computing distance)
+ * @param force_fair_constraints True if spare chunks are selected regarding
+ *   fair location constraints, false if not
  * @param result Pointer to a list where spare chunks will be inserted
  * @return A GError in case of error
  */
@@ -92,6 +94,7 @@ GError* get_conditioned_spare_chunks(
 		struct oio_lb_s *lb,
 		struct storage_policy_s *stgpol, const gchar *ns_name,
 		GSList *notin, GSList *broken,
+		gboolean force_fair_constraints,
 		GSList **result);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_lb_h*/

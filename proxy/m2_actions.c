@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -3626,7 +3626,7 @@ action_container_sharding_abort(struct req_args_s *args)
 
 static GError*
 _get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
-		const char *polname, GSList *notin, GSList *broken, GSList **beans)
+		const char *polname, GSList *notin, GSList *broken, gboolean force_fair_constraints, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
@@ -3636,7 +3636,7 @@ _get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err = get_conditioned_spare_chunks(url, position,
-			lb_rawx, policy, ns_name, notin, broken, beans);
+			lb_rawx, policy, ns_name, notin, broken, force_fair_constraints, beans);
 	storage_policy_clean(policy);
 	return err;
 }
@@ -3760,9 +3760,10 @@ action_m2_content_prepare_v2(struct req_args_s *args, struct json_object *jargs)
 
 static GError *_m2_json_spare (struct req_args_s *args,
 		struct json_object *jbody, GSList ** out) {
-	struct json_object *jnotin = NULL, *jbroken = NULL;
+	struct json_object *jnotin = NULL, *jbroken = NULL, *jforce_fair_constraints = NULL;
 	GSList *notin = NULL, *broken = NULL, *obeans = NULL;
 	GError *err = NULL;
+	gboolean force_fair_constraints;
 
 	*out = NULL;
 	const char *stgpol = OPT("stgpol");
@@ -3775,7 +3776,16 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		return BADREQ("'notin' field missing");
 	if (!json_object_object_get_ex (jbody, "broken", &jbroken))
 		return BADREQ("'broken' field missing");
-
+	if (!json_object_object_get_ex (jbody, "force_fair_constraints", &jforce_fair_constraints)){
+		/* use default value */
+		force_fair_constraints = FALSE;
+	}else{
+		if (!json_object_is_type(jforce_fair_constraints, json_type_boolean)){
+			goto label_exit;
+		} else{
+			force_fair_constraints = json_object_get_boolean(jforce_fair_constraints);
+		}
+	}
 	if (!json_object_is_type(jnotin, json_type_null)
 			&& NULL != (err = _load_simplified_chunks (jnotin, &notin)))
 		goto label_exit;
@@ -3793,7 +3803,7 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		err = _get_spare_chunks(args->url, OPT("position"), stgpol, &obeans);
 	} else {
 		err = _get_conditioned_spare_chunks(args->url, OPT("position"),
-				stgpol, notin, broken, &obeans);
+				stgpol, notin, broken, force_fair_constraints, &obeans);
 	}
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 

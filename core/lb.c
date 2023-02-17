@@ -53,7 +53,7 @@ struct oio_lb_pool_vtable_s
 	GError* (*patch) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
 			const oio_location_t * known,
-			oio_lb_on_id_f on_id, gboolean *flawed);
+			oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
 
 	struct oio_lb_item_s* (*get_item) (struct oio_lb_pool_s *self,
 			const char *id);
@@ -97,9 +97,9 @@ GError*
 oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
 {
-	CFG_CALL(self, patch)(self, avoids, known, on_id, flawed);
+	CFG_CALL(self, patch)(self, avoids, known, on_id, force_fair_constraints, flawed);
 }
 
 struct oio_lb_item_s *
@@ -377,6 +377,9 @@ struct polling_ctx_s
 
 	/* Did we use a fallback slot while polling? */
 	gboolean fallback_used : 8;
+	
+	/* are we moving data while polling? */
+	gboolean force_fair_constraints : 8;
 
 	/* Shall we check the distance requirements? This will be disabled
 	 * automagically if we detect a case where it is not possible to
@@ -406,7 +409,7 @@ static GError *_local__poll (struct oio_lb_pool_s *self,
 static GError *_local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean *flawed);
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
 
 static struct oio_lb_item_s *_local__get_item(struct oio_lb_pool_s *self,
 		const char *id);
@@ -676,7 +679,7 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 				g_datalist_id_get_data(ctx->counters + level, key));
 		popularity_by_level[level] = (guint8) MIN(popularity, 255);
 		// Maximum number of elements with this location that we can take
-		guint32 max = ctx->strict_max_items[level];
+		guint32 max = (ctx->force_fair_constraints)?ctx->fair_max_items[level]:ctx->strict_max_items[level];
 		if (max == 0) {
 			// We are considering a subtree of services. Compute the proportion
 			// this subtree represents compared to the whole cluster, and
@@ -1069,7 +1072,8 @@ _local__poll (struct oio_lb_pool_s *self,
 		oio_lb_on_id_f on_id,
 		gboolean *flawed)
 {
-	return _local__patch(self, avoids, NULL, on_id, flawed);
+	gboolean force_fair_constraints = FALSE;
+	return _local__patch(self, avoids, NULL, on_id, force_fair_constraints, flawed);
 }
 
 static struct oio_lb_selected_item_s*
@@ -1212,7 +1216,7 @@ _debug_service_selection(struct polling_ctx_s *ctx)
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -1256,6 +1260,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		.next_polled = polled,
 		.n_targets = count_targets,
 		.check_distance = TRUE,
+		.force_fair_constraints = force_fair_constraints,
 		.max_dist = max_dist,
 		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
@@ -2240,14 +2245,14 @@ oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 GError*
 oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
 {
 	EXTRA_ASSERT(name != NULL);
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__patch(pool, avoids, known, on_id, flawed);
+		res = oio_lb_pool__patch(pool, avoids, known, on_id, force_fair_constraints, flawed);
 	else
 		res = BADREQ("pool [%s] not found", name);
 	g_rw_lock_reader_unlock(&lb->lock);
@@ -2443,7 +2448,8 @@ _local__poll_around(struct oio_lb_pool_s *self,
 			known[i] = sel->item->location;
 		}
 		known[selection->len] = 0;
-		err = _local__patch(self, NULL, known, _select, flawed);
+		gboolean force_fair_constraints = FALSE;
+		err = _local__patch(self, NULL, known, _select, force_fair_constraints, flawed);
 	}
 
 	if (flawed && nb_locals > 0)
