@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 
 from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
-from oio.common.exceptions import VolumeException, from_multi_responses
+from oio.common.exceptions import ClientException, VolumeException, from_multi_responses
 from oio.common.logger import get_logger
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
@@ -242,9 +242,27 @@ class Meta2Database(object):
                 "Copying base (base=%s true_src=%s dst=%s)", bseq, true_src, dst
             )
             try:
-                self.admin.copy_base_from(
-                    self.service_type, cid=cid, svc_from=true_src, svc_to=dst, **kwargs
-                )
+                try:
+                    self.admin.copy_base_from(
+                        self.service_type,
+                        cid=cid,
+                        svc_from=true_src,
+                        svc_to=dst,
+                        **kwargs
+                    )
+                except ClientException as cliexc:
+                    if cliexc.status != 473:
+                        raise
+                    # The service missing the database is currently master.
+                    # Make it leave the election and retry once.
+                    self.admin.election_leave(self.service_type, cid=cid, service=dst)
+                    self.admin.copy_base_from(
+                        self.service_type,
+                        cid=cid,
+                        svc_from=true_src,
+                        svc_to=dst,
+                        **kwargs
+                    )
                 break
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.warn(

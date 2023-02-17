@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -109,9 +109,9 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     Repair a container.
 
     The steps of the repair:
-    rebuild all missing, lost bases ;
-    synchronize its bases ;
-    update the counters for the account service.
+    rebuild all missing, lost databases;
+    synchronize the databases;
+    update the counters in the account service.
     """
 
     tool_class = ContainerRepairer
