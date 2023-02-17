@@ -271,15 +271,15 @@ class TestPerfectibleContent(BaseTestCase):
         )
         soft_margins = []
         strict_margins = []
-        for key, qual in meta["properties"].items():
+        for _, qual in meta["properties"].items():
             quality = json.loads(qual)
             self.assertIn("cur_items", quality)
             self.assertIn("strict_location_constraint", quality)
             self.assertIn("fair_location_constraint", quality)
             strict_margins.append(
-                location_constraint_margin(quality, key="strict_location_constraint")
+                location_constraint_margin(quality, key="strict_location_constraint")[0]
             )
-            soft_margins.append(location_constraint_margin(quality))
+            soft_margins.append(location_constraint_margin(quality)[0])
 
         # Make sure all chunks respect the strict limit: aka no chunk has a negative
         # margin with "strict_location_constraint".

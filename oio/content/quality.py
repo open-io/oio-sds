@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping, Union
 
 from oio.common import exceptions as exc
 from oio.common.json import json
@@ -58,7 +58,7 @@ def location_constraint_to_int(max_items: str) -> int:
 
 def location_constraint_margin(
     quality: Mapping[str, Any], key: str = "fair_location_constraint"
-) -> int:
+) -> Iterable[Union[int, bool]]:
     """
     Compute an improvement margin for the number of services per location.
 
@@ -66,15 +66,17 @@ def location_constraint_margin(
     :param key: quality name to be compared with.
     :returns: an integer telling how far from the target is the number of
         services per location. If positive, the selection is better than
-        expected, if negative, it can be improved.
+        expected, if negative, it can be improved. It return also a boolean
+        to tell if were able to make comparison or not.
     """
+
     if "cur_items" not in quality or key not in quality:
-        return 0  # Cannot compare
+        return 0, False  # Cannot compare
     target = location_constraint_to_int(quality[key])
     if target == 0:
-        return 0  # Not configured (legacy configuration?)
+        return 0, False  # Not configured (legacy configuration?)
     cur = location_constraint_to_int(quality["cur_items"])
-    return target - cur
+    return target - cur, True
 
 
 def compare_chunk_quality(current, candidate):
@@ -90,9 +92,13 @@ def compare_chunk_quality(current, candidate):
     balance += candidate.get("final_dist", 1) - current.get("final_dist", 1)
 
     # Compare the number of services per location
-    current_margin = location_constraint_margin(current)
-    candidate_margin = location_constraint_margin(candidate)
-    if candidate_margin > current_margin:
+    current_margin, current_compared = location_constraint_margin(current)
+    candidate_margin, candidate_compared = location_constraint_margin(candidate)
+    if current_compared and candidate_margin > current_margin:
+        balance += 1
+    elif not current_compared and candidate_compared and candidate_margin >= 0:
+        # if the candidate margin is the last slot available on the host targeted,
+        # the candidate margin is equal to zero.
         balance += 1
     elif candidate_margin < current_margin:
         balance -= 1

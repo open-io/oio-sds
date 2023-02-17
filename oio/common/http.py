@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -134,7 +134,7 @@ def headers_from_object_metadata(metadata, chunk_url):
             headers[CHUNK_HEADERS["non_optimal_placement"]] = True
 
         # Check with fair_location_constraint (new way!)
-        if location_constraint_margin(qual) < 0:
+        if location_constraint_margin(qual)[0] < 0:
             headers[CHUNK_HEADERS["non_optimal_placement"]] = True
     except KeyError:
         # Ignore if there is no qualities.
