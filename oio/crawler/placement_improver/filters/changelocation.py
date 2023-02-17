@@ -12,12 +12,14 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from os import unlink
+from os import unlink, rename
+from os.path import join
+import time
 from oio.common.green import get_watchdog
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.crawler.common.base import Filter
-from oio.common.utils import request_id
+from oio.common.utils import is_chunk_id_valid, request_id
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     PlacementImproverCrawlerError,
@@ -45,6 +47,7 @@ class Changelocation(Filter):
         self.errors = 0
         # Count orphans chunks found
         self.orphan_chunks_found = 0
+        self.waiting_new_attempt = 0
         # Path of the volume in which the chunk is located
         self.volume_path = self.app_env["volume_path"]
         self.volume_id = self.app_env["volume_id"]
@@ -136,15 +139,48 @@ class Changelocation(Filter):
         :type cb: function
         """
         chunkwrapper = ChunkWrapper(env)
-
         # Getting a request id for chunk placement improvement
         reqid = request_id("placementImprover-")
         try:
+            now = time.time()
+            path = chunkwrapper.chunk_symlink_path
+            is_symlink_new_format = self.has_new_format(path)
+            # Check if the symlink name file is in chunkid.nb_attempt.timestamp format
+            if is_symlink_new_format:
+                next_try_time = int(chunkwrapper.chunk_symlink_path.rsplit(".", 1)[1])
+                if next_try_time > now:
+                    # An attempt has already failed
+                    # a timeout has been set until the next attempt to move the chunk
+                    self.waiting_new_attempt += 1
+                    return self.app(env, cb)
             self._check_chunk_location(chunkwrapper, reqid)
         except Exception as chunk_exc:
             if isinstance(chunk_exc, (exc.OrphanChunk, exc.NotFound)):
                 self.logger.warning("Orphan chunk: %s", str(chunk_exc))
                 self.orphan_chunks_found += 1
+                # Check if the symlink name file is in
+                # chunkid.nb_attempt.timestamp format
+                # TODO (FIR) remove this verification as of now the symlink
+                # created will always be on this format. This verification
+                # was set up to be compatible with symlinks created prior
+                # this change.
+                if is_symlink_new_format:
+                    attempt_counter = int(path.rsplit(".", 2)[1]) + 1
+                    next_attempt_time = int(path.rsplit(".", 2)[2])
+                else:
+                    attempt_counter = 1
+                # Define the next time we will be allowed to move the misplaced chunk
+                seconds = self.get_timedelta(attempt_counter)
+                next_attempt_time = str(int(now + seconds))
+                new_symlink_name = ".".join(
+                    [
+                        chunkwrapper.meta["chunk_id"],
+                        str(attempt_counter),
+                        next_attempt_time,
+                    ]
+                )
+                new_symlink_path = join(path.rsplit("/", 1)[0], new_symlink_name)
+                rename(chunkwrapper.chunk_symlink_path, new_symlink_path)
             else:
                 self.errors += 1
             resp = PlacementImproverCrawlerChunkNotFound(
@@ -179,12 +215,50 @@ class Changelocation(Filter):
         self._post_process(chunkwrapper)
         return self.app(env, cb)
 
+    @staticmethod
+    def get_timedelta(nb_attempt, delay=450):
+        """
+        Return time to wait before another improver attempt
+
+        :param nb_attempt: number of attempt by placement Improver
+        :type nb_attempt: int
+        :param delay: time is second, defaults to 450s
+        :type delay: int, optional
+        :return: time in second
+        :rtype: int
+        """
+        # first attemp -> 15 min
+        # second attemp -> 30 min
+        # third attemps -> 1h
+        # fourth attemps -> 2h
+        # fourth attemps -> 2h
+        # sixth attemps -> 2h ...
+        res = 2**nb_attempt
+        times = res if res < 16 else 16
+        return delay * times
+
+    @staticmethod
+    def has_new_format(path):
+        """
+        Verify if the symlink path has the new format
+        chunk_id.nb_attempt.timestamp
+
+        :param path: symlink
+        :type path: str
+        :return: True if it has the new format and False if not
+        :rtype: boolean
+        """
+        res = path.rsplit("/", 1)[1].split(".")
+        chunk_id = res[0]
+        return len(res) == 3 and is_chunk_id_valid(chunk_id)
+
     def _get_filter_stats(self):
         return {
             "successes": self.successes,
             "relocated_chunk": self.relocated_chunk,
             "errors": self.errors,
             "orphan_chunks_found": self.orphan_chunks_found,
+            "waiting_new_attempt": self.waiting_new_attempt,
         }
 
     def _reset_filter_stats(self):
@@ -192,6 +266,7 @@ class Changelocation(Filter):
         self.relocated_chunk = 0
         self.errors = 0
         self.orphan_chunks_found = 0
+        self.waiting_new_attempt = 0
 
 
 def filter_factory(global_conf, **local_conf):

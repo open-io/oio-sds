@@ -14,17 +14,17 @@
 # License along with this library.
 
 import random
-from os.path import isfile, isdir, join, islink
+from os import listdir
+from os.path import dirname, isdir, isfile, islink, join
+
 from oio.common.constants import M2_PROP_OBJECTS
-from oio.container.sharding import ContainerSharding
-from oio.crawler.placement_improver.filters.changelocation import (
-    Changelocation,
-)
 from oio.common.utils import request_id
+from oio.container.sharding import ContainerSharding
+from oio.crawler.placement_improver.filters.changelocation import Changelocation
 from oio.crawler.rawx.crawler import RawxWorker
 from oio.event.evob import EventTypes
-from tests.utils import BaseTestCase, random_str
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
+from tests.utils import BaseTestCase, random_str
 
 
 class TestFilterChangelocation(BaseTestCase):
@@ -99,10 +99,12 @@ class TestFilterChangelocation(BaseTestCase):
         chunk_id = url.split("/", 3)[3]
         volume_path = self.rawx_volumes[volume_id]
         chunk_path = join(volume_path, chunk_id[:3], chunk_id)
+        symlink_folder = join(volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3])
         chunk_symlink_path = join(
-            volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3], chunk_id
+            symlink_folder,
+            [file for file in listdir(symlink_folder) if chunk_id in file][0],
         )
-        return (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id, url)
+        return (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id)
 
     def cb(self, status, msg):
         """
@@ -120,18 +122,19 @@ class TestFilterChangelocation(BaseTestCase):
             object_name = "m_chunk-" + random_str(8)
         chunks = self._create(container, object_name)
         chunk = random.choice(chunks)
+        url = chunk["url"]
+
+        misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
+        # Create the symbolic link of the chunk
+        headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
+        self.api.blob_client.chunk_post(url=url, headers=headers)
         (
             chunk_id,
             chunk_path,
             chunk_symlink_path,
             volume_path,
             volume_id,
-            url,
         ) = self._chunk_info(chunk)
-        misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
-        # Create the symbolic link of the chunk
-        headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
-        self.api.blob_client.chunk_post(url=url, headers=headers)
         self.assertTrue(isfile(chunk_symlink_path))
         app = FilterApp
         app.app_env["volume_path"] = volume_path
@@ -142,6 +145,7 @@ class TestFilterChangelocation(BaseTestCase):
         chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
         changelocation = Changelocation(app=app, conf=self.conf)
         return (
+            chunk,
             container,
             object_name,
             chunk_path,
@@ -177,11 +181,53 @@ class TestFilterChangelocation(BaseTestCase):
             self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
             self.assertEqual(1, changelocation.errors)
 
+    def _get_new_symlink_path(self, chunk_id, chunk_symlink_path):
+        symlink_folder = dirname(chunk_symlink_path)
+        new_symlink_path = join(
+            symlink_folder,
+            [file for file in listdir(symlink_folder) if chunk_id in file][0],
+        )
+        return new_symlink_path
+
+    def test_get_timedelta(self):
+        """test if get_timedelta works as expected"""
+        expected = [900, 1800, 3600, 7200, 7200]
+        for attempt in range(5):
+            self.assertEqual(
+                expected[attempt], Changelocation.get_timedelta(attempt + 1)
+            )
+
+    def test_has_new_format(self):
+        """test if has_new_format works as expected"""
+        (
+            _,
+            _,
+            _,
+            _,
+            symb_link_path,
+            chunk_env,
+            _,
+            _,
+        ) = self.init_test_objects()
+        # missing attempt
+        invalid_symlink = symb_link_path.replace(".0", " ")
+        self.assertFalse(Changelocation.has_new_format(invalid_symlink))
+        self.assertTrue(Changelocation.has_new_format(symb_link_path))
+        new_symlink_path = self._get_new_symlink_path(
+            chunk_env["chunk_id"], symb_link_path
+        )
+        self.assertTrue(Changelocation.has_new_format(new_symlink_path))
+        chunk_id, _, _ = symb_link_path.rsplit("/", 1)[1].split(".")
+        # Invalid symlink with invalid chunk id in its name
+        invalid_symlink = symb_link_path.replace(chunk_id, chunk_id[-3:-1])
+        self.assertFalse(Changelocation.has_new_format(invalid_symlink))
+
     def test_change_location_filter(self):
         """
         Tests if the filter changelocation is working as expected
         """
         (
+            _,
             container,
             object_name,
             chunk_path,
@@ -208,6 +254,7 @@ class TestFilterChangelocation(BaseTestCase):
         expected in case of deleted object
         """
         (
+            _,
             container,
             object_name,
             chunk_path,
@@ -222,9 +269,19 @@ class TestFilterChangelocation(BaseTestCase):
         process_res = changelocation.process(chunk_env, self.cb)
         self.assertIsNone(process_res)
         # Chunk relocation failed
-        self.assertTrue(islink(chunk_symlink_path))
+        self.assertFalse(islink(chunk_symlink_path))
         self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
         self.assertEqual(1, changelocation.orphan_chunks_found)
+        new_symlink_path = self._get_new_symlink_path(
+            chunk_env["chunk_id"], chunk_symlink_path
+        )
+        self.assertTrue(islink(new_symlink_path))
+        new_attempt_time = int(new_symlink_path.rsplit(".", 1)[1])
+        last_attempt_time = int(chunk_symlink_path.rsplit(".", 1)[1])
+        self.assertGreater(new_attempt_time, last_attempt_time)
+        old_attempt_counter = int(chunk_symlink_path.rsplit(".", 2)[1])
+        attempt_counter = int(new_symlink_path.rsplit(".", 2)[1])
+        self.assertEqual(attempt_counter - old_attempt_counter, 1)
 
     def test_change_location_filter_overwritten_object(self):
         """
@@ -232,6 +289,7 @@ class TestFilterChangelocation(BaseTestCase):
         expected in case of overwritten object
         """
         (
+            chunk,
             container,
             object_name,
             chunk_path,
@@ -243,9 +301,23 @@ class TestFilterChangelocation(BaseTestCase):
         self.init_test_objects(container=container, object_name=object_name)
         # Launch filter to change location of misplaced chunk
         changelocation.process(chunk_env, self.cb)
-        self.assertTrue(islink(chunk_symlink_path))
+        self.assertFalse(islink(chunk_symlink_path))
         self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
         self.assertEqual(1, changelocation.orphan_chunks_found)
+        (
+            _,
+            _,
+            new_symlink_path,
+            _,
+            _,
+        ) = self._chunk_info(chunk)
+        self.assertTrue(islink(new_symlink_path))
+        new_attempt_time = int(new_symlink_path.rsplit(".", 1)[1])
+        last_attempt_time = int(chunk_symlink_path.rsplit(".", 1)[1])
+        self.assertGreater(new_attempt_time, last_attempt_time)
+        old_attempt_counter = int(chunk_symlink_path.rsplit(".", 2)[1])
+        attempt_counter = int(new_symlink_path.rsplit(".", 2)[1])
+        self.assertEqual(attempt_counter - old_attempt_counter, 1)
 
     def _check_shards(self, new_shards, test_shards, shards_content):
         # check shards
@@ -278,6 +350,7 @@ class TestFilterChangelocation(BaseTestCase):
         Test on sharded meta2 database
         """
         (
+            _,
             container,
             object_name,
             chunk_path,
@@ -322,3 +395,40 @@ class TestFilterChangelocation(BaseTestCase):
         for shard in show_shards:
             self.api.container.container_flush(cid=shard["cid"])
             self.api.container.container_delete(cid=shard["cid"])
+
+    def test_change_location_after_first_failed_attempt(self):
+        """Test if the filter does nothing before the timeout set is passed"""
+        (
+            _,
+            container,
+            object_name,
+            chunk_path,
+            chunk_symlink_path,
+            chunk_env,
+            changelocation,
+            _,
+        ) = self.init_test_objects()
+        # Delete the chunk
+        self.api.object_delete(self.account, container, object_name)
+        # Launch filter to change location of misplaced chunk
+        process_res = changelocation.process(chunk_env, self.cb)
+        self.assertIsNone(process_res)
+        # Chunk relocation failed
+        self.assertFalse(islink(chunk_symlink_path))
+        self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
+        self.assertEqual(1, changelocation.orphan_chunks_found)
+        new_symlink_path = self._get_new_symlink_path(
+            chunk_env["chunk_id"], chunk_symlink_path
+        )
+        self.assertTrue(islink(new_symlink_path))
+        new_attempt_time = int(new_symlink_path.rsplit(".", 1)[1])
+        last_attempt_time = int(chunk_symlink_path.rsplit(".", 1)[1])
+        self.assertGreater(new_attempt_time, last_attempt_time)
+        old_attempt_counter = int(chunk_symlink_path.rsplit(".", 2)[1])
+        attempt_counter = int(new_symlink_path.rsplit(".", 2)[1])
+        self.assertEqual(attempt_counter - old_attempt_counter, 1)
+        # Update symlink path in chunk environment
+        chunk_env["chunk_symlink_path"] = new_symlink_path
+        # Launch filter to change location of misplaced chunk
+        changelocation.process(chunk_env, self.cb)
+        self.assertEqual(changelocation.waiting_new_attempt, 1)
