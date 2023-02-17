@@ -14,8 +14,9 @@
 # License along with this library.
 
 import random
+import time
 from os import listdir
-from os.path import dirname, isdir, isfile, islink, join
+from os.path import dirname, exists, isdir, isfile, islink, join
 
 from oio.common.constants import M2_PROP_OBJECTS
 from oio.common.utils import request_id
@@ -58,6 +59,7 @@ class TestFilterChangelocation(BaseTestCase):
             volume = tags.get("tag.vol", None)
             self.rawx_volumes[service_id] = volume
         self.conf.update({"quarantine_mountpoint": False})
+        self.nb_rawx = len(self.conf["services"]["rawx"])
         self.containers = []
 
     def tearDown(self):
@@ -295,6 +297,83 @@ class TestFilterChangelocation(BaseTestCase):
         old_attempt_counter = int(chunk_symlink_path.rsplit(".", 2)[1])
         attempt_counter = int(new_symlink_path.rsplit(".", 2)[1])
         self.assertEqual(attempt_counter - old_attempt_counter, 1)
+
+    def _get_misplaced_chunks(self, chunks):
+        chunks_info = []
+        for chunk in chunks:
+            url = chunk["url"]
+            volume_id = url.split("/", 3)[2]
+            chunk_id = url.split("/", 3)[3]
+            volume_path = self.rawx_volumes[volume_id]
+            chunk_path = join(volume_path, chunk_id[:3], chunk_id)
+            symlink_folder = join(
+                volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3]
+            )
+            files = (
+                [file for file in listdir(symlink_folder) if chunk_id in file]
+                if exists(symlink_folder)
+                else []
+            )
+            if len(files) != 0:
+                chunk_symlink_path = join(
+                    symlink_folder,
+                    files[0],
+                )
+                chunks_info.append(
+                    (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id)
+                )
+        return chunks_info
+
+    def test_change_location_with_service_down(self):
+        """Test placement improver after"""
+        if self.nb_rawx < 16:
+            self.skipTest("need at least 16 rawx to run")
+        all_rawx = self.conscience.all_services("rawx")
+        address, _ = all_rawx[0]["addr"].split(":")
+        # lock rawx services on selected host
+        # The objective is to be sure that some chunks are
+        # misplaced.
+        for rawx in all_rawx:
+            if address in rawx["addr"]:
+                rawx["score"] = 0
+                rawx["type"] = "rawx"
+                self.locked_svc.append(rawx)
+        self._lock_services("rawx", self.locked_svc, wait=2.0)
+        # Create object
+        container = "rawx_crawler_m_chunk_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        chunks = self._create(container, object_name, policy="ANY-E93")
+        chunks_misplaced = self._get_misplaced_chunks(chunks)
+        misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
+        # Unlock rawx services before running the improver
+        self.conscience.unlock_score(self.locked_svc)
+        # wait until the services are unlocked
+        time.sleep(5)
+        # For each misplaced chunk apply the improver
+        for (
+            chunk_id,
+            chunk_path,
+            chunk_symlink_path,
+            volume_path,
+            volume_id,
+        ) in chunks_misplaced:
+            self.assertTrue(isfile(chunk_symlink_path))
+            app = FilterApp
+            app.app_env["volume_path"] = volume_path
+            app.app_env["volume_id"] = volume_id
+            app.app_env["watchdog"] = self.watchdog
+            app.app_env["working_dir"] = misplaced_chunk_dir
+            app.app_env["api"] = self.api
+            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
+            changelocation = Changelocation(app=app, conf=self.conf)
+            # Launch filter to change location of misplaced chunk
+            changelocation.process(chunk_env, self._cb)
+        _, new_chunks = self.api.container.content_locate(
+            self.account, container, object_name
+        )
+        # Check if there is no more mispalced chunk
+        chunks_misplaced = self._get_misplaced_chunks(new_chunks)
+        self.assertTrue(len(chunks_misplaced) == 0)
 
     def test_change_location_filter_overwritten_object(self):
         """

@@ -99,3 +99,11 @@ min_dist=1
 warn_dist=0
 strict_location_constraint=9.9.2.1
 fair_location_constraint=9.9.2.1
+
+# Special pools for placement tests
+[pool:rawx_12]
+targets=12,rawx
+min_dist=1
+warn_dist=0
+fair_location_constraint=12.12.3.1
+strict_location_constraint=12.12.4.1

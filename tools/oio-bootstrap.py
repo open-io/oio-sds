@@ -821,6 +821,7 @@ ECX21=NONE:ECX21
 
 JUSTENOUGH=justenoughrawx:EC
 NOTENOUGH=notenoughrawx:EC
+ANY-E93=rawx_12:E93
 
 [DATA_SECURITY]
 # Data security definitions
@@ -833,6 +834,7 @@ DUPONETWO=plain/min_dist=1,nb_copy=2
 DUPONETHREE=plain/max_dist=2,min_dist=1,nb_copy=3
 DUP17=plain/min_dist=1,nb_copy=17
 
+E93=ec/k=9,m=3,algo=liberasurecode_rs_vand,min_dist=1
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
 EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
 ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
@@ -948,6 +950,14 @@ min_dist=1
 warn_dist=0
 strict_location_constraint=9.9.2.1
 fair_location_constraint=9.9.2.1
+
+# Special pools for placement tests
+[pool:rawx_12]
+targets=12,rawx
+min_dist=1
+max_dist=3
+fair_location_constraint=12.12.3.1
+strict_location_constraint=12.12.4.1
 """
 
 template_service_types = """
