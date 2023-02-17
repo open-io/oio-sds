@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,8 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 
 	GError *err = NULL;
 	struct rabbitmq_s out1 = {0};
-	gchar **host_and_port = g_strsplit(endpoint, ":", 2);
+	gchar **netloc_and_vhost = g_strsplit(endpoint, "/", 2);
+	gchar **host_and_port = g_strsplit(netloc_and_vhost[0], ":", 2);
 	if (!oio_str_is_set(host_and_port[0])) {
 		err = BADREQ("RabbitMQ endpoint is empty");
 	} else if (!oio_str_is_set(exchange)) {
@@ -49,6 +50,9 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		} else {
 			out1.port = AMQP_DEFAULT_PORT;
 		}
+		if (netloc_and_vhost[1] != NULL) {
+			out1.vhost = g_uri_unescape_string(netloc_and_vhost[1], NULL);
+		}
 		/* If we want to allow multiple threads to talk to the same connection,
 		 * we have to make them talk to separate channels. Here we make the
 		 * supposition that each thread will create its own connection. */
@@ -58,6 +62,7 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		out1.password = g_strdup(password);
 	}
 	g_strfreev(host_and_port);
+	g_strfreev(netloc_and_vhost);
 
 	if (!err)
 		*out = g_memdup(&out1, sizeof(struct rabbitmq_s));
@@ -207,10 +212,10 @@ rabbitmq_connect(struct rabbitmq_s *rabbitmq)
 	} else {
 		amqp_rpc_reply_t rep = amqp_login(
 				rabbitmq->conn,
-				"/",     // vhost
-				0,       // channel_max -> no limit
-				131072,  // frame_max
-				0,       // heartbeat (seconds)
+				rabbitmq->vhost?:"/",
+				0,                        // channel_max -> no limit
+				AMQP_DEFAULT_FRAME_SIZE,  // frame_max
+				AMQP_DEFAULT_HEARTBEAT,   // heartbeat (seconds)
 				AMQP_SASL_METHOD_PLAIN,
 				rabbitmq->username?: "guest", // login
 				rabbitmq->password?: "guest"  // password
@@ -234,8 +239,8 @@ rabbitmq_connect(struct rabbitmq_s *rabbitmq)
 		amqp_destroy_connection(rabbitmq->conn);
 		rabbitmq->conn = NULL;
 	} else {
-		GRID_INFO("RabbitMQ connected to [%s:%d]",
-				rabbitmq->hostname, rabbitmq->port);
+		GRID_INFO("RabbitMQ connected to [%s:%d] vhost=%s",
+				rabbitmq->hostname, rabbitmq->port, rabbitmq->vhost?:"/");
 	}
 	return err;
 }
@@ -300,6 +305,7 @@ rabbitmq_destroy(struct rabbitmq_s *rabbitmq)
 
 	amqp_destroy_connection(rabbitmq->conn);
 	g_free(rabbitmq->hostname);
+	g_free(rabbitmq->vhost);
 	amqp_bytes_free(rabbitmq->exchange);
 	g_free(rabbitmq->username);
 	g_free(rabbitmq->password);

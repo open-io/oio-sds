@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -85,7 +85,8 @@ oio_events_queue_factory__create_rabbitmq(
 		real_endpoint = endpoint;
 	}
 
-	if (!metautils_url_valid_for_connect(real_endpoint)) {
+	gchar **netloc_vhost = g_strsplit(real_endpoint, "/", 2);
+	if (!metautils_url_valid_for_connect(netloc_vhost[0])) {
 		err = BADREQ("Invalid RabbitMQ endpoint [%s]", real_endpoint);
 	} else {
 		struct _queue_with_endpoint_s *self = g_malloc0(sizeof(*self));
@@ -110,6 +111,7 @@ oio_events_queue_factory__create_rabbitmq(
 		*out = (struct oio_events_queue_s*) self;
 	}
 
+	g_strfreev(netloc_vhost);
 	g_strfreev(creds_endpoint_toks);
 	return err;
 }
