@@ -60,6 +60,16 @@ class TestFilterChangelocation(BaseTestCase):
             volume = tags.get("tag.vol", None)
             self.rawx_volumes[service_id] = volume
         self.conf.update({"quarantine_mountpoint": False})
+        self.containers = []
+
+    def tearDown(self):
+        try:
+            for container in self.containers:
+                self.api.container_flush(self.account, container)
+                self.api.container_delete(self.account, container, force=True)
+        except Exception:
+            self.logger.warning("Failed to clean root %s", container)
+        return super().tearDown()
 
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
@@ -69,6 +79,11 @@ class TestFilterChangelocation(BaseTestCase):
 
     def _create(self, container, path, policy=None):
         reqid = request_id()
+        self.containers = (
+            self.containers
+            if container in self.containers
+            else self.containers + [container]
+        )
         chunks, _, _ = self.api.object_create(
             self.account,
             container,
@@ -106,13 +121,13 @@ class TestFilterChangelocation(BaseTestCase):
         )
         return (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id)
 
-    def cb(self, status, msg):
+    def _cb(self, status, msg):
         """
         Call back function used only on these tests
         """
         print("Move chunk failed due to error %s, %s", status, msg)
 
-    def init_test_objects(self, container=None, object_name=None):
+    def _init_test_objects(self, container=None, object_name=None):
         """
         Initialize different objects used to test change location filter
         """
@@ -155,7 +170,7 @@ class TestFilterChangelocation(BaseTestCase):
             chunks,
         )
 
-    def check_process_res(
+    def _check_process_res(
         self,
         container,
         object_name,
@@ -208,7 +223,7 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             _,
             _,
-        ) = self.init_test_objects()
+        ) = self._init_test_objects()
         # missing attempt
         invalid_symlink = symb_link_path.replace(".0", " ")
         self.assertFalse(Changelocation.has_new_format(invalid_symlink))
@@ -235,10 +250,10 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             changelocation,
             chunks,
-        ) = self.init_test_objects()
+        ) = self._init_test_objects()
         # Launch filter to change location of misplaced chunk
-        process_res = changelocation.process(chunk_env, self.cb)
-        self.check_process_res(
+        process_res = changelocation.process(chunk_env, self._cb)
+        self._check_process_res(
             container,
             object_name,
             chunk_path,
@@ -262,11 +277,11 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             changelocation,
             _,
-        ) = self.init_test_objects()
+        ) = self._init_test_objects()
         # Delete the chunk
         self.api.object_delete(self.account, container, object_name)
         # Launch filter to change location of misplaced chunk
-        process_res = changelocation.process(chunk_env, self.cb)
+        process_res = changelocation.process(chunk_env, self._cb)
         self.assertIsNone(process_res)
         # Chunk relocation failed
         self.assertFalse(islink(chunk_symlink_path))
@@ -297,10 +312,10 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             changelocation,
             _,
-        ) = self.init_test_objects()
-        self.init_test_objects(container=container, object_name=object_name)
+        ) = self._init_test_objects()
+        self._init_test_objects(container=container, object_name=object_name)
         # Launch filter to change location of misplaced chunk
-        changelocation.process(chunk_env, self.cb)
+        changelocation.process(chunk_env, self._cb)
         self.assertFalse(islink(chunk_symlink_path))
         self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
         self.assertEqual(1, changelocation.orphan_chunks_found)
@@ -336,7 +351,7 @@ class TestFilterChangelocation(BaseTestCase):
             # check object names in each shard
             _, listing = self.api.container.content_list(cid=shard["cid"])
 
-            list_objects = list()
+            list_objects = []
             for obj in listing["objects"]:
                 list_objects.append(obj["name"])
                 self.assertIn(obj["name"], shards_content[index])
@@ -358,7 +373,7 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             changelocation,
             chunks,
-        ) = self.init_test_objects()
+        ) = self._init_test_objects()
         test_shards = [
             {"index": 0, "lower": "", "upper": object_name + "."},
             {"index": 1, "lower": object_name + ".", "upper": ""},
@@ -381,8 +396,8 @@ class TestFilterChangelocation(BaseTestCase):
         shards_content = [{object_name}, {}]
         self._check_shards(show_shards, test_shards, shards_content)
         # Launch filter to change location of misplaced chunk
-        process_res = changelocation.process(chunk_env, self.cb)
-        self.check_process_res(
+        process_res = changelocation.process(chunk_env, self._cb)
+        self._check_process_res(
             container,
             object_name,
             chunk_path,
@@ -407,11 +422,11 @@ class TestFilterChangelocation(BaseTestCase):
             chunk_env,
             changelocation,
             _,
-        ) = self.init_test_objects()
+        ) = self._init_test_objects()
         # Delete the chunk
         self.api.object_delete(self.account, container, object_name)
         # Launch filter to change location of misplaced chunk
-        process_res = changelocation.process(chunk_env, self.cb)
+        process_res = changelocation.process(chunk_env, self._cb)
         self.assertIsNone(process_res)
         # Chunk relocation failed
         self.assertFalse(islink(chunk_symlink_path))
@@ -430,5 +445,5 @@ class TestFilterChangelocation(BaseTestCase):
         # Update symlink path in chunk environment
         chunk_env["chunk_symlink_path"] = new_symlink_path
         # Launch filter to change location of misplaced chunk
-        changelocation.process(chunk_env, self.cb)
+        changelocation.process(chunk_env, self._cb)
         self.assertEqual(changelocation.waiting_new_attempt, 1)
