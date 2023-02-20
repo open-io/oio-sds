@@ -15,6 +15,7 @@
 from os import unlink, rename
 from os.path import join
 import time
+from oio.common.easy_value import int_value
 from oio.common.green import get_watchdog
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
@@ -34,6 +35,7 @@ class Changelocation(Filter):
     """
 
     NAME = "Changelocation"
+    NEW_ATTEMPT_DELAY = 900
 
     def init(self):
         """
@@ -48,6 +50,9 @@ class Changelocation(Filter):
         # Count orphans chunks found
         self.orphan_chunks_found = 0
         self.waiting_new_attempt = 0
+        self.new_attempt_delay = int_value(
+            self.conf.get("new_attempt_delay"), self.NEW_ATTEMPT_DELAY
+        )
         # Path of the volume in which the chunk is located
         self.volume_path = self.app_env["volume_path"]
         self.volume_id = self.app_env["volume_id"]
@@ -170,7 +175,9 @@ class Changelocation(Filter):
                 else:
                     attempt_counter = 1
                 # Define the next time we will be allowed to move the misplaced chunk
-                seconds = self.get_timedelta(attempt_counter)
+                seconds = self.get_timedelta(
+                    attempt_counter, delay=self.new_attempt_delay
+                )
                 next_attempt_time = str(int(now + seconds))
                 new_symlink_name = ".".join(
                     [
@@ -216,25 +223,23 @@ class Changelocation(Filter):
         return self.app(env, cb)
 
     @staticmethod
-    def get_timedelta(nb_attempt, delay=450):
+    def get_timedelta(nb_attempt, delay=NEW_ATTEMPT_DELAY):
         """
         Return time to wait before another improver attempt
 
         :param nb_attempt: number of attempt by placement Improver
         :type nb_attempt: int
-        :param delay: time is second, defaults to 450s
-        :type delay: int, optional
         :return: time in second
         :rtype: int
         """
         # first attemp -> 15 min
         # second attemp -> 30 min
-        # third attemps -> 1h
-        # fourth attemps -> 2h
-        # fourth attemps -> 2h
-        # sixth attemps -> 2h ...
-        res = 2**nb_attempt
-        times = res if res < 16 else 16
+        # third attemp -> 1h
+        # fourth attemp -> 2h
+        # fifth attemp -> 2h
+        # sixth attemp -> 2h ...
+        res = 2 ** (nb_attempt - 1)
+        times = res if res < 8 else 8
         return delay * times
 
     @staticmethod

@@ -404,6 +404,15 @@ use = egg:oio#logger
 
 [filter:changelocation]
 use = egg:oio#changelocation
+# Delay in second before next attempt by the improver to move
+# a chunk that we were not able to move at previous pass.
+# first attemp -> 15 min
+# second attemp -> 30 min
+# third attemp -> 1h
+# fourth attemp -> 2h
+# fifth attemp -> 2h
+# sixth attemp -> 2h ...
+new_attempt_delay = 900
 """
 
 template_rdir_crawler_service = """

@@ -1,0 +1,39 @@
+[placement-improver-crawler]
+namespace = OPENIO
+user = openio
+volume_list =  /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
+
+# Wait random time before starting
+# to avoid all the crawlers from working at the same time.
+wait_random_time_before_starting = True
+# In seconds, the interval between two full scans. Defaults to half an hour.
+interval = 1800
+# In seconds, the interval between two logs entries (for each volume)
+# Defaults to 300 seconds.
+report_interval = 300
+# Maximum chunks to be scanned per second. Defaults to 30.
+scanned_per_second = 30
+
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,rawx-crawler
+
+[pipeline:main]
+pipeline = changelocation
+
+[filter:changelocation]
+use = egg:oio#changelocation
+# Delay in second before next attempt by the improver to move
+# a chunk that we were not able to move at previous pass.
+# first attemp -> 15 min
+# second attemp -> 30 min
+# third attemp -> 1h
+# fourth attemp -> 2h
+# fifth attemp -> 2h
+# sixth attemp -> 2h ...
+new_attempt_delay = 900
+
+[filter:logger]
+use = egg:oio#logger
