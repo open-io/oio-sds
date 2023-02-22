@@ -279,7 +279,10 @@ func_tests () {
 		${WRKDIR}/core/tool_sdk_noconf
 	fi
 
+	# Parallel stop
 	$SYSTEMCTL stop oio-cluster.target
+	# Sequential wait for all processes to stop
+	$OPENIOCTL stop
 	sleep 0.5
 }
 
@@ -291,6 +294,7 @@ test_meta2_filters () {
 	${PYTHON} $(command -v nosetests) tests.functional.m2_filters.test_filters
 
 	$SYSTEMCTL stop oio-cluster.target
+	$OPENIOCTL stop
 	sleep 0.5
 }
 
@@ -304,6 +308,7 @@ test_cli () {
 	tox -e cli
 
 	$SYSTEMCTL stop oio-cluster.target
+	$OPENIOCTL stop
 	sleep 0.5
 
 	# This is tested here because we do not need to test it several times,
