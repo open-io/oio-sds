@@ -86,8 +86,14 @@ def make_arg_parser():
     )
     parser.add_argument(
         "--endpoint",
-        default="amqp://guest:guest@127.0.0.1:5672/%2F",
-        help="Endpoint of the RabbitMQ server (default is 127.0.0.1:5672)",
+        default=os.environ.get(
+            "OIO_RABBITMQ_ENDPOINT", "amqp://guest:guest@127.0.0.1:5672/%2F"
+        ),
+        help=(
+            "Endpoint of the RabbitMQ server "
+            "(env: OIO_RABBITMQ_ENDPOINT, "
+            "default: amqp://guest:guest@127.0.0.1:5672/%%2F)"
+        ),
     )
     parser.add_argument(
         "--input-queue",
