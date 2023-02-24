@@ -19,6 +19,7 @@ from os import listdir
 from os.path import dirname, exists, isdir, isfile, islink, join
 
 from oio.common.constants import M2_PROP_OBJECTS
+from oio.common.exceptions import Conflict
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.placement_improver.filters.changelocation import Changelocation
@@ -140,9 +141,13 @@ class TestFilterChangelocation(BaseTestCase):
         url = chunk["url"]
 
         misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
-        # Create the symbolic link of the chunk
-        headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
-        self.api.blob_client.chunk_post(url=url, headers=headers)
+        try:
+            # Create the symbolic link of the chunk
+            headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
+            self.api.blob_client.chunk_post(url=url, headers=headers)
+        except Conflict:
+            # The symlink already exists
+            pass
         (
             chunk_id,
             chunk_path,

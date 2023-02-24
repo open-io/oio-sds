@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1045,7 +1045,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.account,
             name,
             obj_name=name,
-            data=name * 4,
+            data=name * 16,
         )
         # Ensure that the chunk deletion has been called with proper args
         self.api.blob_client.chunk_delete_many.assert_called_once()

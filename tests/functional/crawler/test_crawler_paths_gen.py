@@ -16,6 +16,7 @@
 import random
 from os import listdir, remove, walk
 from os.path import join, islink
+from oio.common.exceptions import Conflict
 from oio.common.utils import paths_gen, request_id
 from oio.event.evob import EventTypes
 from oio.crawler.rawx.crawler import RawxWorker
@@ -119,14 +120,20 @@ class TestCrawlerPathGen(BaseTestCase):
             [len(files) for _, _, files in walk(join(volume_path, misplaced_chunk_dir))]
         )
         nb_chunk = sum([len(files) for _, _, files in walk(volume_path)]) - nb_link
-        # Create the symbolic link of the chunk
-        headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
-        self.api.blob_client.chunk_post(url=url, headers=headers)
+        try:
+            # Create the symbolic link of the chunk
+            headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
+            self.api.blob_client.chunk_post(url=url, headers=headers)
+            symlink_sup = 1
+        except Conflict:
+            # The symlink already exists
+            symlink_sup = 0
         (_, _, chunk_symlink_path, volume_path, _) = self._chunk_info(chunk)
         # Case 1: non optimal placement with one symbolic link
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
-            len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))), nb_link + 1
+            len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),
+            nb_link + symlink_sup,
         )
         self.assertEqual(
             len(list(paths_gen(volume_path, RawxWorker.EXCLUDED_DIRS))), nb_chunk
@@ -137,7 +144,8 @@ class TestCrawlerPathGen(BaseTestCase):
         self.beanstalkd0.wait_until_empty("oio")
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
-            len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))), nb_link + 1
+            len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),
+            nb_link + symlink_sup,
         )
         self.assertEqual(
             len(list(paths_gen(volume_path, RawxWorker.EXCLUDED_DIRS))), nb_chunk - 1

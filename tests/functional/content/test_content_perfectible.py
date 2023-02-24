@@ -111,9 +111,12 @@ class TestPerfectibleContent(BaseTestCase):
         symlink_folder = path.join(rawx["path"], "non_optimal_placement", chunk_id[:3])
         if not path.exists(symlink_folder):
             return symlink_folder
+        files = listdir(symlink_folder)
+        if len(files) == 0:
+            return symlink_folder
         chunk_symlink_path = path.join(
             symlink_folder,
-            [file for file in listdir(symlink_folder) if chunk_id in file][0],
+            [file for file in files if chunk_id in file][0],
         )
         return chunk_symlink_path
 
@@ -163,10 +166,11 @@ class TestPerfectibleContent(BaseTestCase):
         self.wait_for_score(("rawx",))
         # Check we have enough service locations.
         by_place = self._aggregate_rawx_by_place()
-
+        keys = list(by_place.keys())
         # Lock all services of the 3rd location.
-        banned_loc = list(by_place.keys())[2]
-        self._lock_services("rawx", by_place[banned_loc])
+        banned_locs = list(map(lambda x: keys[x], range(2, len(keys))))
+        for banned_loc in banned_locs:
+            self._lock_services("rawx", by_place[banned_loc], wait=2.0)
 
         # Upload an object.
         container = self._random_user()
@@ -179,7 +183,6 @@ class TestPerfectibleContent(BaseTestCase):
             policy="THREECOPIES",
             headers={REQID_HEADER: reqid},
         )
-
         # Check that at least one chunk has a non optimal placement.
         self._check_symlinks(chunks)
 
@@ -193,7 +196,7 @@ class TestPerfectibleContent(BaseTestCase):
 
         # Lock all services of the 'rawx-even' slot.
         banned_slot = "rawx-even"
-        self._lock_services("rawx", by_slot[banned_slot])
+        self._lock_services("rawx", by_slot[banned_slot], wait=2.0)
 
         # Upload an object.
         container = self._random_user()
