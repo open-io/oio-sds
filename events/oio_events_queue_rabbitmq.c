@@ -85,33 +85,32 @@ oio_events_queue_factory__create_rabbitmq(
 		real_endpoint = endpoint;
 	}
 
-	gchar **netloc_vhost = g_strsplit(real_endpoint, "/", 2);
-	if (!metautils_url_valid_for_connect(netloc_vhost[0])) {
-		err = BADREQ("Invalid RabbitMQ endpoint [%s]", real_endpoint);
-	} else {
-		struct _queue_with_endpoint_s *self = g_malloc0(sizeof(*self));
-		self->vtable = &vtable_RABBITMQ;
-		self->queue = g_async_queue_new();
-		self->endpoint = g_strdup(real_endpoint);
-		self->username = g_strdup(username);  // NULL-safe
-		self->password = g_strdup(password);  // NULL-safe
-		self->queue_name = g_strdup(queue_name?:"oio");
-		self->tube = g_strdup(tube);
-		self->exchange_name = g_strdup(exchange_name?:"oio");
-		self->exchange_type = g_strdup(exchange_type?:"topic");
-		// self->pending_events = 0;  // Already 0
-		self->running = FALSE;
+	/* XXX: here we used to call metautils_url_valid_for_connect()
+	 * on the provided endpoint, but this function did not support
+	 * DNS names, and thus was failing when the endpoint was not
+	 * an IP address. */
 
-		oio_events_queue_buffer_init(&(self->buffer));
-		self->event_send_count = grid_single_rrd_create(
-				oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
-		self->event_send_time = grid_single_rrd_create(
-				oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
+	struct _queue_with_endpoint_s *self = g_malloc0(sizeof(*self));
+	self->vtable = &vtable_RABBITMQ;
+	self->queue = g_async_queue_new();
+	self->endpoint = g_strdup(real_endpoint);
+	self->username = g_strdup(username);  // NULL-safe
+	self->password = g_strdup(password);  // NULL-safe
+	self->queue_name = g_strdup(queue_name?:"oio");
+	self->tube = g_strdup(tube);
+	self->exchange_name = g_strdup(exchange_name?:"oio");
+	self->exchange_type = g_strdup(exchange_type?:"topic");
+	// self->pending_events = 0;  // Already 0
+	self->running = FALSE;
 
-		*out = (struct oio_events_queue_s*) self;
-	}
+	oio_events_queue_buffer_init(&(self->buffer));
+	self->event_send_count = grid_single_rrd_create(
+			oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
+	self->event_send_time = grid_single_rrd_create(
+			oio_ext_monotonic_seconds(), OIO_EVENTS_STATS_HISTORY_SECONDS);
 
-	g_strfreev(netloc_vhost);
+	*out = (struct oio_events_queue_s*) self;
+
 	g_strfreev(creds_endpoint_toks);
 	return err;
 }

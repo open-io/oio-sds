@@ -5,5 +5,5 @@ config:
   # These events will be used for the asynchronous replication:
   # we must be able to route them separately.
   meta2.tube.content_created: "amqp://127.0.0.1:5672//?routing_key=storage.content.new&exchange=oio&exchange_type=topic&queue_name=oio"
-  meta2.tube.content_deleted: "amqp://127.0.0.1:5672/%%2F?routing_key=storage.content.deleted&exchange=oio&exchange_type=topic&queue_name=oio"
+  meta2.tube.content_deleted: "amqp://rabbitmq.localhost:5672/%%2F?routing_key=storage.content.deleted&exchange=oio&exchange_type=topic&queue_name=oio"
   meta2.tube.content_updated: "amqp://127.0.0.1:5672?routing_key=storage.content.update&exchange=oio&exchange_type=topic&queue_name=oio"
