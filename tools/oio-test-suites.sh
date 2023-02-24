@@ -391,8 +391,8 @@ fi
 if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
 
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-3hosts.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-4hosts.yml"
 fi
 
 if is_running_test_suite "multi-beanstalk" ; then
