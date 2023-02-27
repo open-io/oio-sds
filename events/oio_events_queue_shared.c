@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -59,6 +59,7 @@ _q_destroy(struct oio_events_queue_s *self)
 	oio_str_clean(&q->tube);
 	oio_str_clean(&q->exchange_name);
 	oio_str_clean(&q->exchange_type);
+	g_strfreev(q->extra_args);
 	oio_events_queue_buffer_clean(&(q->buffer));
 	grid_single_rrd_destroy(q->event_send_count);
 	grid_single_rrd_destroy(q->event_send_time);

@@ -1,5 +1,6 @@
 rabbitmq:
-  endpoint: "amqp://127.0.0.1:5672?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio"
+  endpoint: "amqp://127.0.0.1:5672?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=classic"
+  # endpoint: "amqp://127.0.0.1:5672?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum"
 config:
   events.beanstalkd.check_period: "5s"
   # These events will be used for the asynchronous replication:

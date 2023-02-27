@@ -37,6 +37,10 @@ struct rabbitmq_s
 	gchar *username;
 	gchar *password;
 
+	amqp_table_t *exchange_args;
+	amqp_table_t *queue_args;
+	amqp_table_t *bind_args;
+
 	amqp_connection_state_t conn;
 };
 
@@ -50,6 +54,7 @@ struct rabbitmq_queue_stats_s
 /** Create a RabbitMQ connector, tied to the specified exchange. */
 GError *rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		const gchar *username, const gchar *password,
+		const gchar **extra_args,
 		struct rabbitmq_s **out);
 
 /** Connect the specified RabbitMQ connector.

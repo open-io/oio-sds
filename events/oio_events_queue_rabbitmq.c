@@ -57,6 +57,7 @@ GError *
 oio_events_queue_factory__create_rabbitmq(
 		const char *endpoint, const char *queue_name, const char *tube,
 		const char *exchange_name, const char *exchange_type,
+		char **extra_args,
 		struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT(endpoint != NULL);
@@ -100,6 +101,7 @@ oio_events_queue_factory__create_rabbitmq(
 	self->tube = g_strdup(tube);
 	self->exchange_name = g_strdup(exchange_name?:"oio");
 	self->exchange_type = g_strdup(exchange_type?:"topic");
+	self->extra_args = extra_args;
 	// self->pending_events = 0;  // Already 0
 	self->running = FALSE;
 
@@ -327,7 +329,7 @@ _q_run(struct _queue_with_endpoint_s *q)
 	struct _running_ctx_s ctx = {0};
 	err = rabbitmq_create(
 			q->endpoint, q->exchange_name, q->username, q->password,
-			&(ctx.rabbitmq));
+			(const gchar **)q->extra_args, &(ctx.rabbitmq));
 	if (err)
 		return err;
 

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -187,6 +187,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		const char *param_value = NULL;
 		const char *queue_name = NULL;
 		const char *exchange_name = NULL, *exchange_type = NULL;
+		gchar **extra_args = g_malloc0(sizeof(gchar*));
 		struct oio_requri_s queue_uri = {0};
 
 		// Look for a tube name in the optional query string
@@ -204,6 +205,10 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 				exchange_name = param_value;
 			else if ((param_value = _has_prefix(*tok, "exchange_type=")))
 				exchange_type = param_value;
+			else {
+				// Generic parameter
+				extra_args = oio_strv_append(extra_args, g_strdup(*tok));
+			}
 		}
 
 		if (!oio_str_is_set(final_tube)) {
@@ -216,12 +221,14 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 			} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
 				err = oio_events_queue_factory__create_rabbitmq(
 						netloc, queue_name, final_tube, exchange_name,
-						exchange_type, out);
+						exchange_type, extra_args, out);
+				extra_args = NULL;
 			} else {
 				err = BADREQ("implementation not recognized: %s", cfg);
 			}
 		}
 
+		g_strfreev(extra_args);  // cleaned only if not used (!= NULL)
 		oio_requri_clear(&queue_uri);
 		return err;
 	}

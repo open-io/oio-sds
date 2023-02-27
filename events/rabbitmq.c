@@ -27,10 +27,49 @@ License along with this library.
 
 #include "rabbitmq.h"
 
+static amqp_table_t *
+_parse_extra_args(const gchar **extra_args, const gchar *prefix)
+{
+	int prefix_len = prefix? strlen(prefix) : 0;
+	amqp_table_t *args_table = g_malloc0(sizeof(amqp_table_t));
+	GArray *entries = g_array_new(FALSE, TRUE, sizeof(amqp_table_entry_t));
+	for (const gchar **entry = extra_args; entry && *entry; entry++) {
+		if (g_str_has_prefix(*entry, prefix) && strchr(*entry, '=')) {
+			gchar **kv_toks = g_strsplit(*entry + prefix_len, "=", 2);
+			GRID_DEBUG("%s extra param: %s", prefix, *entry + prefix_len);
+			// Notice the use of strdup(), NOT g_strdup().
+			amqp_table_entry_t aentry =  {
+					.key = amqp_cstring_bytes(strdup(kv_toks[0])),
+					.value.kind = AMQP_FIELD_KIND_UTF8,
+					.value.value.bytes = amqp_cstring_bytes(strdup(kv_toks[1]))
+			};
+			g_array_append_vals(entries, &aentry, 1);
+			g_strfreev(kv_toks);
+		}
+	}
+	args_table->num_entries = entries->len;
+	args_table->entries = (amqp_table_entry_t*) g_array_free(entries, FALSE);
+	return args_table;
+}
+
+static void
+_free_extra_args(amqp_table_t *args_table)
+{
+	for (int i = args_table->num_entries; i > 0; i--) {
+		amqp_table_entry_t entry = args_table->entries[i - 1];
+		amqp_bytes_free(entry.key);
+		amqp_bytes_free(entry.value.value.bytes);
+	}
+	g_free(args_table->entries);
+	args_table->num_entries = 0;
+	args_table->entries = NULL;
+	g_free(args_table);
+}
 
 GError*
 rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		const gchar *username, const gchar *password,
+		const gchar **extra_args,
 		struct rabbitmq_s **out)
 {
 	g_assert_nonnull(out);
@@ -62,12 +101,17 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		out1.exchange = amqp_cstring_bytes(strdup(exchange));
 		out1.username = g_strdup(username);
 		out1.password = g_strdup(password);
+
+		out1.exchange_args = _parse_extra_args(extra_args, "exchange_");
+		out1.queue_args = _parse_extra_args(extra_args, "queue_");
+		out1.bind_args = _parse_extra_args(extra_args, "bind_");
 	}
 	g_strfreev(host_and_port);
 	g_strfreev(netloc_and_vhost);
 
-	if (!err)
+	if (!err) {
 		*out = g_memdup(&out1, sizeof(struct rabbitmq_s));
+	}
 
 	return err;
 }
@@ -131,7 +175,7 @@ rabbitmq_declare_exchange(struct rabbitmq_s *rabbitmq,
 				rabbitmq->exchange, amqp_cstring_bytes(exchange_type),
 				passive, durable, auto_delete,
 				FALSE,  // internal
-				amqp_empty_table  // extra arguments
+				*rabbitmq->exchange_args  // extra arguments
 		);
 		amqp_rpc_reply_t rep = amqp_get_rpc_reply(rabbitmq->conn);
 		if (rep.reply_type != AMQP_RESPONSE_NORMAL) {
@@ -154,7 +198,7 @@ rabbitmq_declare_queue(struct rabbitmq_s *rabbitmq,
 		amqp_queue_declare(rabbitmq->conn, rabbitmq->channel,
 				amqp_cstring_bytes(queue_name),
 				passive, durable, exclusive, auto_delete,
-				amqp_empty_table  // extra arguments
+				*rabbitmq->queue_args  // extra arguments
 		);
 		amqp_rpc_reply_t rep = amqp_get_rpc_reply(rabbitmq->conn);
 		if (rep.reply_type != AMQP_RESPONSE_NORMAL) {
@@ -178,7 +222,7 @@ rabbitmq_bind_queue(struct rabbitmq_s *rabbitmq,
 		amqp_queue_bind(rabbitmq->conn, rabbitmq->channel,
 				amqp_cstring_bytes(queue_name), rabbitmq->exchange,
 				amqp_cstring_bytes(routing_key),
-				amqp_empty_table  // extra arguments
+				*rabbitmq->bind_args  // extra arguments
 		);
 		amqp_rpc_reply_t rep = amqp_get_rpc_reply(rabbitmq->conn);
 		if (rep.reply_type != AMQP_RESPONSE_NORMAL) {
@@ -311,6 +355,10 @@ rabbitmq_destroy(struct rabbitmq_s *rabbitmq)
 	amqp_bytes_free(rabbitmq->exchange);
 	g_free(rabbitmq->username);
 	g_free(rabbitmq->password);
+
+	_free_extra_args(rabbitmq->exchange_args);
+	_free_extra_args(rabbitmq->queue_args);
+	_free_extra_args(rabbitmq->bind_args);
 
 	memset(rabbitmq, 0, sizeof(struct rabbitmq_s));
 	g_free(rabbitmq);
