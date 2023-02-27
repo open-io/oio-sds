@@ -16,6 +16,7 @@
 import argparse
 import os
 
+from oio.cli.common.utils import KeyValueAction
 from oio.common.logger import get_logger
 from oio.event.amqp_consumer import (
     AmqpConsumerWorker,
@@ -49,6 +50,7 @@ class MessageToBeanstalkd(AmqpConsumerWorker):
         self._channel.queue_declare(
             self.queue_name,
             durable=True,
+            arguments=self.queue_args,
         )
         self._channel.queue_bind(
             exchange=self.queue_name,
@@ -104,6 +106,11 @@ def make_arg_parser():
         ),
     )
     parser.add_argument(
+        "--input-queue-argument",
+        action=KeyValueAction,
+        help="Pass extra arguments during queue declaration",
+    )
+    parser.add_argument(
         "--namespace",
         "--ns",
         default=os.environ.get("OIO_NS", "OPENIO"),
@@ -131,6 +138,7 @@ def main():
         logger=logger,
         processes=args.workers,
         evt_conf={"namespace": args.namespace, "tube": args.dest_tube},
+        queue_args=args.input_queue_argument,
     )
     pool.run()
 

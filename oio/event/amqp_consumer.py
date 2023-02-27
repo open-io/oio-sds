@@ -61,10 +61,11 @@ class AmqpConsumerWorker(Process):
     Base class for processes listening to messages on an AMQP queue.
     """
 
-    def __init__(self, endpoint, queue, logger, *args, **kwargs):
+    def __init__(self, endpoint, queue, logger, *args, queue_args=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.endpoint = endpoint
         self.logger = logger
+        self.queue_args = queue_args or {}
         self.queue_name = queue
         self._channel = None
         self._conn = None

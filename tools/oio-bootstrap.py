@@ -412,12 +412,12 @@ use = egg:oio#logger
 use = egg:oio#changelocation
 # Delay in second before next attempt by the improver to move
 # a chunk that we were not able to move at previous pass.
-# first attemp -> 15 min
-# second attemp -> 30 min
-# third attemp -> 1h
-# fourth attemp -> 2h
-# fifth attemp -> 2h
-# sixth attemp -> 2h ...
+# first attempt -> 15 min
+# second attempt -> 30 min
+# third attempt -> 1h
+# fourth attempt -> 2h
+# fifth attempt -> 2h
+# sixth attempt -> 2h ...
 new_attempt_delay = 900
 """
 
@@ -1658,7 +1658,7 @@ OioGroup=${NS},localhost,event
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} --ns ${NS} --workers 2
+ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=classic
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
