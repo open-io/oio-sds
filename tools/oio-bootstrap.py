@@ -477,6 +477,11 @@ namespace = ${NS}
 user = ${USER}
 volume_list = ${RAWX_VOLUMES}
 
+# How many hexdigits must be used to name the indirection directories
+hash_width = ${HASH_WIDTH}
+# How many levels of directories are used to store chunks
+hash_depth = ${HASH_DEPTH}
+
 wait_random_time_before_starting = True
 use_marker = True
 interval = 1200
@@ -2417,6 +2422,8 @@ def generate(options):
                 "EXE": "oio-rawx-crawler",
                 "GROUPTYPE": "crawler",
                 "SRVNUM": "1",
+                "HASH_WIDTH": defaults[HASH_WIDTH],
+                "HASH_DEPTH": defaults[HASH_DEPTH],
             }
         )
         tpl = Template(template_checksum_checker_crawler_service)

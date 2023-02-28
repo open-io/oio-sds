@@ -112,19 +112,31 @@ def drop_privileges(user):
     os.umask(0o22)
 
 
-def paths_gen(volume_path, excluded_dirs=None, marker=None):
+def paths_gen(
+    volume_path, excluded_dirs=None, marker=None, hash_width=None, hash_depth=None
+):
     """
     Yield paths of all regular files under `volume_path`.
 
     :param volume_path: path of the volume to explore
     :type volume_path: str
-    :param excluded_dirs: contains excluded dirs
+    :param excluded_dirs: contains excluded dirs (optional)
     :type excluded_dirs: tuple
-    :param marker: name of the marker file (files are sorted if not None)
+    :param marker: name of the marker file (files are sorted if not None) (optional)
     :type marker: str
+    :param hash_width: how many hexdigits used to name the indirection directories
+        (mandatory if marker is set)
+    :type hash_width: int
+    :param hash_depth: how many levels of directories used to store chunks
+        (mandatory if marker is set)
+    :type hash_depth: int
     """
+    if marker and (not hash_width or not hash_depth):
+        raise OioException("marker cannot be used without hash_width nor hash_depth")
+
     # Get absolute path of the volume path
     volume_abs_path = os.path.abspath(volume_path)
+    dir_marker_reached = False
 
     # Here, topdown=True is mandatory. It allows us to exclude some directories
     # and to sort them if needed.
@@ -136,6 +148,29 @@ def paths_gen(volume_path, excluded_dirs=None, marker=None):
         # walk() iterates recursively on folders, need to sort them each time.
         if marker:
             dirs.sort()
+            if not dir_marker_reached:
+                # walk() does not return the depth comparing to the first root dir.
+                # This variable permits to deduce it.
+                dir_without_volume = root.replace(volume_abs_path, "").replace("/", "")
+                # According to the depth, this marker will allow to exclude some dirs.
+                dir_marker = marker[: hash_width + len(dir_without_volume)]
+                # to be able to remove in list while iterating on it
+                tmp_dirs = list(dirs)
+                # Exclude dirs before markers (no need to parse them)
+                for dir in tmp_dirs:
+                    if f"{dir_without_volume}{dir}" < dir_marker:
+                        dirs.remove(dir)
+                    else:
+                        # Folder marker reached in the last subfolder, there is no need
+                        # to check markers deeper for this pass (aka no need for
+                        # further recursive folders given by <walk()>).
+                        if len(dir_marker) >= hash_width * hash_depth:
+                            dir_marker_reached = True
+
+                        # Files are sorted, no need to continue for this iteration
+                        # (aka until next recursive folder given by <walk()>).
+                        break
+
         # Here, files is not an iterator. Could be a problem for huge volumes.
         # A solution would be to reimplement "os.walk".
         # Advantage: we are able to sort this list if needed.
@@ -372,7 +407,7 @@ def depaginate(
     truncated_key=None,
     attempts=1,
     *args,
-    **kwargs
+    **kwargs,
 ):
     """
     Yield items from the lists returned by the repetitive calls

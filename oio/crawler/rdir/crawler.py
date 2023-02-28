@@ -66,10 +66,10 @@ class RdirWorker(object):
         self.report_interval = int_value(self.conf.get("report_interval"), 300)
         self.max_chunks_per_second = int_value(conf.get("chunks_per_second"), 30)
         self.conscience_cache = int_value(self.conf.get("conscience_cache"), 30)
-        self.hash_width = self.conf.get("hash_width")
+        self.hash_width = int_value(self.conf.get("hash_width"), 0)
         if not self.hash_width:
             raise exc.ConfigurationException("No hash_width specified")
-        self.hash_depth = self.conf.get("hash_depth")
+        self.hash_depth = int_value(self.conf.get("hash_depth"), 0)
         if not self.hash_depth:
             raise exc.ConfigurationException("No hash_depth specified")
 
@@ -162,9 +162,9 @@ class RdirWorker(object):
     def _build_chunk_path(self, chunk_id):
         chunk_path = self.volume_path
 
-        for i in range(int(self.hash_depth)):
-            start = chunk_id[i * int(self.hash_width) :]
-            chunk_path = "{}/{}".format(chunk_path, start[: int(self.hash_width)])
+        for i in range(self.hash_depth):
+            start = chunk_id[i * self.hash_width :]
+            chunk_path = "{}/{}".format(chunk_path, start[: self.hash_width])
 
         chunk_path = "{}/{}".format(chunk_path, chunk_id)
 

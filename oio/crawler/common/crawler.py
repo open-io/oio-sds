@@ -120,6 +120,8 @@ class CrawlerWorker(object):
         self.marker_current = None
         self.marker_dir = None
         self.marker_path = None
+        self.hash_width = 0
+        self.hash_depth = 0
         if self.use_marker:
             # Take the name of the conf file (remove its path) and remove its extension
             service_name = splitext(basename(self.conf["conf_file"]))[0]
@@ -128,6 +130,16 @@ class CrawlerWorker(object):
             # Read marker if it exists, default to 0 otherwise.
             self.marker_path = f"{self.marker_dir}/{service_name}"
             self._read_marker()
+            self.hash_width = int_value(self.conf.get("hash_width"), 0)
+            if not self.hash_width:
+                raise ConfigurationException(
+                    "No hash_width specified (mandatory if marker is used)"
+                )
+            self.hash_depth = int_value(self.conf.get("hash_depth"), 0)
+            if not self.hash_depth:
+                raise ConfigurationException(
+                    "No hash_depth specified (mandatory if marker is used)"
+                )
 
     def _read_marker(self):
         if not self.use_marker:
@@ -236,6 +248,8 @@ class CrawlerWorker(object):
             volume_path=join(self.volume, self.WORKING_DIR),
             excluded_dirs=excluded_dirs,
             marker=self.marker_current,
+            hash_width=self.hash_width,
+            hash_depth=self.hash_depth,
         )
 
         self.report("starting", force=True)
