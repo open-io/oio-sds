@@ -129,13 +129,13 @@ def paths_gen(volume_path, excluded_dirs=None, marker=None):
     # Here, topdown=True is mandatory. It allows us to exclude some directories
     # and to sort them if needed.
     for root, dirs, files in os.walk(volume_abs_path, topdown=True):
-        # Alter the list of directories only during its first occurence.
         if volume_abs_path == root:
             # Remove directory listed in excluded dir
             if excluded_dirs is not None:
                 dirs[:] = [dir for dir in dirs if dir not in excluded_dirs]
-            if marker:
-                dirs.sort()
+        # walk() iterates recursively on folders, need to sort them each time.
+        if marker:
+            dirs.sort()
         # Here, files is not an iterator. Could be a problem for huge volumes.
         # A solution would be to reimplement "os.walk".
         # Advantage: we are able to sort this list if needed.
