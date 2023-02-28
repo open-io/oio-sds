@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -70,6 +70,9 @@ class TestBillingAgent(BaseTestCase):
 
     def setUp(self):
         super(TestBillingAgent, self).setUp()
+        self.__class__.CONF["ns.region"] = self.ns_conf.get(
+            "ns.region", "LOCALHOST"
+        ).upper()
         conf = self.CONF.copy()
         conf["fdb_file"] = conf["fdb_file"] % self.ns
         self.agent = BillingAgent(conf, logger=self.logger)
@@ -520,8 +523,8 @@ class TestBillingAgent(BaseTestCase):
                 self.assertEqual(1, self.agent.passes)
                 mock_backend_update.assert_called_once_with(
                     {
-                        BYTES_FIELD: {"LOCALHOST": top_bytes[:2]},
-                        OBJECTS_FIELD: {"LOCALHOST": top_objects[:2]},
+                        BYTES_FIELD: {self.CONF["ns.region"]: top_bytes[:2]},
+                        OBJECTS_FIELD: {self.CONF["ns.region"]: top_objects[:2]},
                     }
                 )
         self.assertEqual(0, self.agent.errors)
