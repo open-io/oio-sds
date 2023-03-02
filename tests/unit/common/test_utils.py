@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,7 @@ from oio.common.constants import (
     MAX_STRLEN_CHUNKID,
     MIN_STRLEN_CHUNKID,
 )
-from oio.common.utils import is_chunk_id_valid
+from oio.common.utils import is_chunk_id_valid, rotate_list
 from tests.utils import random_id
 
 
@@ -57,3 +57,11 @@ class TestUtils(unittest.TestCase):
 
         chunk_id = random_id(MAX_STRLEN_CHUNKID)[:-1] + "G"  # not hexdigit
         self.assertFalse(is_chunk_id_valid(chunk_id))
+
+    def test_rotate_list(self):
+        mylist = [1, 2, 3, 4]
+        self.assertListEqual([2, 3, 4, 1], rotate_list(mylist))
+        self.assertListEqual([4, 1, 2, 3], rotate_list(mylist, shift=-1))
+        self.assertListEqual([3, 4, 1, 2], rotate_list(mylist, shift=2))
+        rotate_list(mylist, inplace=True)
+        self.assertListEqual([2, 3, 4, 1], mylist)

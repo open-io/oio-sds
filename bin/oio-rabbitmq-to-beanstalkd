@@ -92,7 +92,7 @@ def make_arg_parser():
             "OIO_RABBITMQ_ENDPOINT", "amqp://guest:guest@127.0.0.1:5672/%2F"
         ),
         help=(
-            "Endpoint of the RabbitMQ server "
+            "Endpoint of the RabbitMQ server. Can be a list separated by ';' "
             "(env: OIO_RABBITMQ_ENDPOINT, "
             "default: amqp://guest:guest@127.0.0.1:5672/%%2F)"
         ),

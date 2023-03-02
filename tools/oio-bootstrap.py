@@ -1667,6 +1667,7 @@ ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=clas
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+Environment=OIO_RABBITMQ_ENDPOINT=amqp://guest:guest@127.0.0.1:56666/%%2F;amqp://guest:guest@127.0.0.1:5672/%%2F
 
 [Install]
 WantedBy=${PARENT}

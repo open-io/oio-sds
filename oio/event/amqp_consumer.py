@@ -17,22 +17,24 @@ import signal
 import time
 
 from multiprocessing import Event, Process
+from random import shuffle
 
 import pika
 
 from oio.common.logger import get_logger
+from oio.common.utils import rotate_list
 
 
-def amqp_connect(url, logger):
+def amqp_connect(conn_params, logger):
     """
-    Returns an AMQP BlockingConnection and a channel for the provided URL
+    Returns an AMQP BlockingConnection and a channel for the provided parameters.
 
-    :param url: An AMQP URL
+    :param conn_params: a list of AMQP connection parameters
     """
-    url_param = pika.URLParameters(url)
-    logger.info(f"Connecting to {url_param!r}")
+    # Fortunately does not log credentials
+    logger.info(f"Connecting to {conn_params!r}")
 
-    connection = pika.BlockingConnection(url_param)
+    connection = pika.BlockingConnection(conn_params)
     try:
         channel = connection.channel()
     except Exception:
@@ -61,9 +63,24 @@ class AmqpConsumerWorker(Process):
     Base class for processes listening to messages on an AMQP queue.
     """
 
-    def __init__(self, endpoint, queue, logger, *args, queue_args=None, **kwargs):
+    def __init__(
+        self,
+        endpoint,
+        queue,
+        logger,
+        *args,
+        queue_args=None,
+        shuffle_endpoints=True,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        self.endpoint = endpoint
+        if isinstance(endpoint, str):
+            endpoints = endpoint.split(";")
+        else:
+            endpoints = endpoint
+        self.conn_params = [pika.URLParameters(url) for url in endpoints]
+        if shuffle_endpoints:
+            shuffle(self.conn_params)
         self.logger = logger
         self.queue_args = queue_args or {}
         self.queue_name = queue
@@ -91,7 +108,7 @@ class AmqpConsumerWorker(Process):
         """
         Connect to the endpoint specified in this class' constructor.
         """
-        self._conn, self._channel = amqp_connect(self.endpoint, self.logger)
+        self._conn, self._channel = amqp_connect(self.conn_params, self.logger)
 
     def _consume(self):
         """
@@ -138,6 +155,7 @@ class AmqpConsumerWorker(Process):
                 self._consume()
             except Exception:
                 self.logger.exception("Error, reconnecting")
+                rotate_list(self.conn_params, inplace=True)
             finally:
                 self._close_conn()
 

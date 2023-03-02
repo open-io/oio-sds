@@ -684,3 +684,17 @@ def find_mount_point(dirname):
     while not os.path.ismount(dirname):
         dirname = os.path.dirname(dirname)
     return dirname
+
+
+def rotate_list(mylist, shift=1, inplace=False):
+    """
+    Rotate a list.
+
+    :param shift: the number of elements to shift (can be negative)
+    :param inplace: if True, modifies the list in place
+    :returns: the rotated list
+    """
+    if inplace:
+        mylist[:] = mylist[shift:] + mylist[:shift]
+        return mylist
+    return mylist[shift:] + mylist[:shift]
