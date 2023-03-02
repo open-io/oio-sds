@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -24,11 +24,13 @@ import os
 # parser
 import argparse
 
-from eventlet import sleep
+from eventlet import sleep, monkey_patch
 from eventlet.greenpool import GreenPool
 from eventlet.queue import LightQueue
 from oio import ObjectStorageApi
 from oio.common.utils import depaginate
+
+monkey_patch()
 
 # globals
 ACCOUNT = None
