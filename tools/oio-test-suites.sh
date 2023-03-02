@@ -317,6 +317,18 @@ test_cli () {
 	test_oio_logger
 }
 
+test_rabbitmq_resiliency () {
+	randomize_env
+	$OIO_RESET ${args} -N $OIO_NS $@ -f "${SRCDIR}/etc/bootstrap-option-rabbitmq.yml"
+
+	cd $SRCDIR
+	${PYTHON} $(command -v nosetests) --verbose tests.functional.rabbitmq.test_rabbitmq_cluster.py -s
+
+	$SYSTEMCTL stop oio-cluster.target
+	$OPENIOCTL stop
+	sleep 0.5
+}
+
 #-------------------------------------------------------------------------------
 
 set -e
@@ -400,6 +412,13 @@ if is_running_test_suite "multi-beanstalk" ; then
 	func_tests \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
+fi
+
+if is_running_test_suite "rabbitmq-cluster-resiliency" ; then
+	echo -e "\n### Tests resiliency with rabbitmq cluster"
+	test_rabbitmq_resiliency \
+		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
 fi
 
 func_tests_rebuilder_mover () {

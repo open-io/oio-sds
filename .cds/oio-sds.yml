@@ -101,6 +101,18 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
+  tests-rabbitmq-resiliency:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-rabbitmq-resiliency
+    depends_on:
+      - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
+
   coverage:
     pipeline: oio-sds-coverage
     application: oio-sds
@@ -112,6 +124,7 @@ workflow:
       - tests-fullrepli
       - tests-rebuilder
       - tests-mover
+      - tests-rabbitmq-resiliency
     when:
       - success
 
