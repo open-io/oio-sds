@@ -12,46 +12,67 @@ jobs:
         script: |+
           #!/bin/bash
           set -x
-          . .cds/versions
-          echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" >> /etc/apt/sources.list.d/obsto.list
-          echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/obsto.list
-          apt update
-          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
-          systemctl stop apache2.service redis.service
-          systemctl disable apache2.service redis.service
-          # Configure environment
-          echo "export COVERAGE_PROCESS_START=.coveragerc" > $HOME/oio-env.sh
-          echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
-          echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
-          echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
-          echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
-          echo 'CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=${ZOOLIBDIR} -DZK_INCDIR=${ZOOINCDIR}"' >> $HOME/oio-env.sh
-          echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
-          # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
-          echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
-          source $HOME/oio-env.sh
-          mkdir /tmp/oio
-          /opt/${PYTHON_PACKAGE}/bin/python3 -m venv $HOME/oiovenv
-          cat << EOF > $HOME/oiovenv/pip.conf
-          [global]
-          index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
-          EOF
-          . $HOME/oiovenv/bin/activate
-          env
-          # FIXME(adu): Fix tox configuration file to support the new versions
-          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
-          go install github.com/axw/gocov/gocov@latest
+          #          . .cds/versions
+          #          echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" >> /etc/apt/sources.list.d/obsto.list
+          #          echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/obsto.list
+          #          apt update
+          #          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
+          #          systemctl stop apache2.service redis.service
+          #          systemctl disable apache2.service redis.service
+          #          # Configure environment
+          #          echo "export COVERAGE_PROCESS_START=.coveragerc" > $HOME/oio-env.sh
+          #          echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
+          #          echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
+          #          echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
+          #          echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
+          #          echo 'CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=${ZOOLIBDIR} -DZK_INCDIR=${ZOOINCDIR}"' >> $HOME/oio-env.sh
+          #          echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
+          #          # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
+          #          echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
+          #          source $HOME/oio-env.sh
+          #          mkdir /tmp/oio
+          #          /opt/${PYTHON_PACKAGE}/bin/python3 -m venv $HOME/oiovenv
+          #          cat << EOF > $HOME/oiovenv/pip.conf
+          #          [global]
+          #          index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          #          EOF
+          #          . $HOME/oiovenv/bin/activate
+          #          env
+          #          # FIXME(adu): Fix tox configuration file to support the new versions
+          #          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          #          go install github.com/axw/gocov/gocov@latest
+          #
+          #          fdbtag="fdb-${FDB_VERSION}"
+          #          worker cache pull $fdbtag
+          #          dpkg -i fdb-packages/*.deb
+          #          systemctl stop foundationdb.service
+          #          systemctl disable foundationdb.service
+          #          rm -rf fdb-packages
+          #          rabbitmq-plugins enable rabbitmq_management
 
-          fdbtag="fdb-${FDB_VERSION}"
-          worker cache pull $fdbtag
-          dpkg -i fdb-packages/*.deb
-          systemctl stop foundationdb.service
-          systemctl disable foundationdb.service
-          rm -rf fdb-packages
-          rabbitmq-plugins enable rabbitmq_management
-
+          set +e
+          systemctl stop rabbitmq-server
+          ls
+          pwd
           docker version
           docker-compose version
+
+          #docker network create rabbits
+          #docker run -d --net rabbits --hostname rabbit-1 --name rabbit-1 -p 15672:15672 -p 5672:5672 -e RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK rabbitmq:3-management
+          #docker run -d --net rabbits --hostname rabbit-2 --name rabbit-2 -p 15673:15672 -p 5673:5672 -e RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK rabbitmq:3-management
+          #docker run -d --net rabbits --hostname rabbit-3 --name rabbit-3 -p 15674:15672 -p 5674:5672 -e RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK rabbitmq:3-management
+          #docker exec rabbit-1 rabbitmqctl cluster_status
+
+          docker-compose -f tests/functional/rabbitmq/clusterr-config/docker-compose.yml up -d
+          sleep 5
+          docker ps
+          docker-compose -f tests/functional/rabbitmq/clusterr-config/docker-compose.yml ps
+          docker exec rabbit-1 cat /var/lib/rabbitmq/.erlang.cookie
+          docker exec rabbit-2 cat /var/lib/rabbitmq/.erlang.cookie
+          docker exec rabbit-3 cat /var/lib/rabbitmq/.erlang.cookie
+          docker exec rabbit-1 rabbitmqctl cluster_status
+          sleep 60
+          docker exec rabbit-1 rabbitmqctl cluster_status
 
 
     requirements:
