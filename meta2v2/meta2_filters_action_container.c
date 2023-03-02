@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -835,7 +835,7 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 		// Manipulate the database locally (without replication)
 		// to clean it up once
 		beans = meta2_filter_ctx_get_input_udata(ctx);
-		err = meta2_backend_clean_once_sharding(m2b, url, beans, &truncated);
+		err = meta2_backend_clean_locally_sharding(m2b, url, beans, &truncated);
 	} else {
 		gboolean urgent = meta2_filter_ctx_get_param(
 				ctx, NAME_MSGKEY_URGENT) != NULL;

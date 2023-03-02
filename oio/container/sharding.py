@@ -45,7 +45,7 @@ from oio.common.exceptions import (
 )
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import cid_from_name, depaginate
+from oio.common.utils import cid_from_name, depaginate, monotonic_time
 from oio.container.client import ContainerClient
 from oio.common.decorators import ensure_request_id
 from oio.directory.admin import AdminClient
@@ -320,7 +320,7 @@ class ContainerSharding(ProxyClient):
             request_prefix="/container/sharding",
             logger=logger,
             pool_manager=pool_manager,
-            **kwargs
+            **kwargs,
         )
 
         # Make sure to use up-to-date information
@@ -572,7 +572,7 @@ class ContainerSharding(ProxyClient):
             shard,
             "shard-with-partition",
             strategy_params=formatted_strategy_params,
-            **kwargs
+            **kwargs,
         )
         return None, found_shards["shard_ranges"]
 
@@ -595,7 +595,7 @@ class ContainerSharding(ProxyClient):
             shard,
             "shard-with-size",
             strategy_params=formatted_strategy_params,
-            **kwargs
+            **kwargs,
         )
         return shard_size, found_shards["shard_ranges"]
 
@@ -658,7 +658,7 @@ class ContainerSharding(ProxyClient):
                 strategy=strategy,
                 index=index,
                 incomplete_shard=incomplete_shard,
-                **kwargs
+                **kwargs,
             )
 
             # If the last shard was too small,
@@ -766,7 +766,7 @@ class ContainerSharding(ProxyClient):
         shard,
         preclean_new_shards=None,
         create_shard_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         if preclean_new_shards is None:
             preclean_new_shards = self.preclean_new_shards
@@ -779,7 +779,7 @@ class ContainerSharding(ProxyClient):
                 parent_shard=parent_shard,
                 attempts=1,
                 timeout=self.preclean_timeout,
-                **kwargs
+                **kwargs,
             )
 
         shard_account = ".shards_%s" % (root_account)
@@ -815,7 +815,7 @@ class ContainerSharding(ProxyClient):
             params=params,
             json=shard_info,
             timeout=create_shard_timeout,
-            **kwargs
+            **kwargs,
         )
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
@@ -942,12 +942,24 @@ class ContainerSharding(ProxyClient):
             params = self._make_params(cid=cid, **kwargs)
             # The first request must take priority to be sure to start cleaning
             params["urgent"] = 1
+        timeout = kwargs.get("timeout")
+        preclean_deadline = monotonic_time() + timeout if timeout else None
         truncated = True
+        request_kwargs = kwargs.copy()
+        request_kwargs.pop("timeout", None)
+        if preclean_deadline:
+            request_kwargs["deadline"] = int(preclean_deadline)
         while truncated:
+            if preclean_deadline and monotonic_time() >= preclean_deadline:
+                break
             for i in range(attempts):
+                # Ensure some timeleft for preclean
+                if preclean_deadline and monotonic_time() >= preclean_deadline:
+                    self.logger.warning(f"Failed to clean the container in {timeout}s")
+                    break
                 try:
                     resp, body = self._request(
-                        "POST", "/clean", params=params, json=data, **kwargs
+                        "POST", "/clean", params=params, json=data, **request_kwargs
                     )
                     if resp.status != 204:
                         raise exceptions.from_response(resp, body)
@@ -986,7 +998,7 @@ class ContainerSharding(ProxyClient):
                     suffix=suffix,
                     service_id=service_id,
                     params=params,
-                    **kwargs
+                    **kwargs,
                 )
             except Exception as exc:
                 self.logger.warning(
@@ -1026,7 +1038,7 @@ class ContainerSharding(ProxyClient):
         root_cid=None,
         limit=None,
         marker=None,
-        **kwargs
+        **kwargs,
     ):
         params = self._make_params(
             account=root_account, reference=root_container, cid=root_cid, **kwargs
@@ -1055,7 +1067,7 @@ class ContainerSharding(ProxyClient):
                 truncated_key=lambda x: x["truncated"],
                 root_account=root_account,
                 root_container=root_container,
-                **kwargs
+                **kwargs,
             )
         else:
             shards = self._show_shards(root_account, root_container, **kwargs)[
@@ -1124,7 +1136,7 @@ class ContainerSharding(ProxyClient):
                     root_container,
                     parent_shard,
                     new_shard,
-                    **kwargs
+                    **kwargs,
                 )
             )
         creator_exceptions = []
@@ -1282,7 +1294,7 @@ class ContainerSharding(ProxyClient):
                     limit=1,
                     no_paging=False,
                     marker=parent_shard["lower"],
-                    **kwargs
+                    **kwargs,
                 )
             )
             if not shard_list or not self._shards_equal(shard_list[0], parent_shard):
@@ -1310,7 +1322,7 @@ class ContainerSharding(ProxyClient):
         parent_shard,
         new_shards,
         max_new_shards_per_op=2,
-        **kwargs
+        **kwargs,
     ):
         new_shards_size = len(new_shards)
         if new_shards_size <= max_new_shards_per_op:
@@ -1355,7 +1367,7 @@ class ContainerSharding(ProxyClient):
                 tmp_parent_shard,
                 sub_new_shards,
                 max_new_shards_per_op=max_new_shards_per_op,
-                **kwargs
+                **kwargs,
             )
 
     @ensure_request_id
@@ -1414,7 +1426,7 @@ class ContainerSharding(ProxyClient):
         current_shard,
         new_shards,
         new_shard,
-        **kwargs
+        **kwargs,
     ):
         tmp_new_shard = None
         shards_for_sharding = list()
@@ -1468,7 +1480,7 @@ class ContainerSharding(ProxyClient):
         current_shard,
         new_shards,
         new_shard,
-        **kwargs
+        **kwargs,
     ):
         raise NotImplementedError("Shrinking not implemented")
 
@@ -1528,7 +1540,7 @@ class ContainerSharding(ProxyClient):
                     current_shard,
                     new_shards,
                     new_shard,
-                    **kwargs
+                    **kwargs,
                 )
                 # Sub-change is complete
                 continue
@@ -1544,7 +1556,7 @@ class ContainerSharding(ProxyClient):
                     current_shard,
                     new_shards,
                     new_shard,
-                    **kwargs
+                    **kwargs,
                 )
                 # Sub-change is complete
                 continue
@@ -1599,7 +1611,7 @@ class ContainerSharding(ProxyClient):
                 limit=3,
                 no_paging=False,
                 marker=marker,
-                **kwargs
+                **kwargs,
             )
         )
 
@@ -1652,7 +1664,7 @@ class ContainerSharding(ProxyClient):
         bigger_shard,
         new_shard,
         pre_vacuum=True,
-        **kwargs
+        **kwargs,
     ):
         self.logger.info(
             "Shrinking shards by merging %s and %s in %s",
@@ -1691,7 +1703,7 @@ class ContainerSharding(ProxyClient):
                 svc_from=smaller_shard["sharding"]["master"],
                 svc_to=bigger_shard["sharding"]["master"],
                 suffix=suffix,
-                **kwargs
+                **kwargs,
             )
 
         # Merge the copy in the bigger shard
@@ -1755,7 +1767,7 @@ class ContainerSharding(ProxyClient):
                     cid=smaller_shard["cid"],
                     service_id=service_id,
                     suffix=suffix,
-                    **kwargs
+                    **kwargs,
                 )
                 from_multi_responses(data)
             except Exception as exc:
@@ -1810,7 +1822,7 @@ class ContainerSharding(ProxyClient):
                     cid=smaller_shard["cid"],
                     service_id=service_id,
                     suffix=suffix,
-                    **kwargs
+                    **kwargs,
                 )
                 from_multi_responses(data)
             except Exception as exc:
@@ -1892,7 +1904,7 @@ class ContainerSharding(ProxyClient):
                     limit=1,
                     no_paging=False,
                     marker=shard["lower"],
-                    **kwargs
+                    **kwargs,
                 )
             )
             if not shard_list or not self._shards_equal(shard_list[0], shard):
