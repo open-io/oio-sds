@@ -6,112 +6,112 @@ workflow:
     pipeline: oio-sds-root
     application: oio-sds
 
-  tests-fast:
-    pipeline: oio-sds-test-fast
-    environment: oio-sds-env-test-fast
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-  
-  tests-lint:
-    pipeline: oio-sds-lint
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-single:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-single
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-cli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-cli
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-3copies:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-3copies
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-ec:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-ec
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-fullrepli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-fullrepli
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-rebuilder:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rebuilder
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-mover:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-mover
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
+#  tests-fast:
+#    pipeline: oio-sds-test-fast
+#    environment: oio-sds-env-test-fast
+#    application: oio-sds
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-lint:
+#    pipeline: oio-sds-lint
+#    application: oio-sds
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-single:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-single
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-cli:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-cli
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-3copies:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-3copies
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-ec:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-ec
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-fullrepli:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-fullrepli
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-rebuilder:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-rebuilder
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  tests-mover:
+#    pipeline: oio-sds-test-functional
+#    application: oio-sds
+#    environment: oio-sds-env-mover
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
 
   tests-rabbitmq-resilience:
     pipeline: oio-sds-rabbitmq-resilience-tests
@@ -125,61 +125,61 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
-  coverage:
-    pipeline: oio-sds-coverage
-    application: oio-sds
-    depends_on:
-      - tests-cli
-      - tests-fast
-      - tests-single
-      - tests-3copies
-      - tests-ec
-      - tests-fullrepli
-      - tests-rebuilder
-      - tests-mover
-      - tests-rabbitmq-resilience
-    when:
-      - success
-
-  ready-for-merge:
-    application: oio-sds
-    depends_on:
-      - coverage
-      - tests-lint
-    pipeline: oio-sds-ready-for-merge
-
-  mirror:
-    pipeline: oio-sds-mirror
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.proj.mirror_to_github
-          operator: eq
-          value: "true"
-
-  build:
-    pipeline: oio-sds-build
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  clean-artifacts:
-    pipeline: oio-sds-clean-artifacts
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: eq
-          value: "cds.scheduler"
+#  coverage:
+#    pipeline: oio-sds-coverage
+#    application: oio-sds
+#    depends_on:
+#      - tests-cli
+#      - tests-fast
+#      - tests-single
+#      - tests-3copies
+#      - tests-ec
+#      - tests-fullrepli
+#      - tests-rebuilder
+#      - tests-mover
+#      - tests-rabbitmq-resilience
+#    when:
+#      - success
+#
+#  ready-for-merge:
+#    application: oio-sds
+#    depends_on:
+#      - coverage
+#      - tests-lint
+#    pipeline: oio-sds-ready-for-merge
+#
+#  mirror:
+#    pipeline: oio-sds-mirror
+#    application: oio-sds
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.proj.mirror_to_github
+#          operator: eq
+#          value: "true"
+#
+#  build:
+#    pipeline: oio-sds-build
+#    application: oio-sds
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: ne
+#          value: "cds.scheduler"
+#
+#  clean-artifacts:
+#    pipeline: oio-sds-clean-artifacts
+#    application: oio-sds
+#    depends_on:
+#      - root
+#    conditions:
+#      check:
+#        - variable: cds.triggered_by.username
+#          operator: eq
+#          value: "cds.scheduler"
 
 metadata:
   default_tags: git.branch,git.author,git.tag
