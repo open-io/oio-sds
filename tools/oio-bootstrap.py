@@ -28,13 +28,11 @@ import yaml
 import os
 import pwd
 from random import choice
-import re  # noqa
 from string import ascii_letters, digits, Template
 import sys
 import argparse
 from collections import namedtuple
 import shutil
-from os.path import join
 
 template_redis = """
 daemonize no
@@ -104,6 +102,7 @@ ExecStart=${redis_server} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -123,6 +122,7 @@ ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -180,6 +180,7 @@ Environment=HOME=${HOME}
 ExecStart=${fdbmonitor} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 ExecStartPost=/bin/sleep 5 ; ${fdbcli} -C ${CLUSTERFILE} --exec "configure new ssd single"
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -199,6 +200,7 @@ ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -218,6 +220,7 @@ ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -236,6 +239,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -255,6 +259,7 @@ ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -277,6 +282,7 @@ ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 ${ENVIRONMENT}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1044,6 +1050,7 @@ ExecStart=${EXE} ${CFGDIR}/conscience-agent.yml
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1064,6 +1071,7 @@ ExecStart=${EXE} -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/consci
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1094,6 +1102,7 @@ ExecStart=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${O
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1113,6 +1122,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1132,6 +1142,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1166,6 +1177,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1184,6 +1196,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1202,6 +1215,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1220,6 +1234,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1245,6 +1260,7 @@ ExecStart=${EXE} %s
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1267,6 +1283,7 @@ Environment=PATH=${PATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1285,6 +1302,7 @@ Type=simple
 ExecStart=${EXE} --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1337,6 +1355,7 @@ ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1492,6 +1511,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1659,6 +1679,7 @@ Environment=PATH=${PATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1680,6 +1701,7 @@ Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 Environment=OIO_RABBITMQ_ENDPOINT=amqp://guest:guest@127.0.0.1:56666/%%2F;amqp://guest:guest@127.0.0.1:5672/%%2F
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
 WantedBy=${PARENT}
@@ -1757,6 +1779,8 @@ defaults = {
     M1_DIGITS: 2,
     HASH_WIDTH: 3,
     HASH_DEPTH: 1,
+    # After being stopped (SIGTERM), timeout before sending a SIGKILL
+    "SYSTEMCTL_TIMEOUT_STOP_SEC": 90,  # systemctl default value
 }
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
@@ -1833,7 +1857,7 @@ def generate(options):
     def getint(v, default):
         try:
             return int(ensure(v, default))
-        except:
+        except Exception:
             return default
 
     final_conf = {}
@@ -1874,6 +1898,8 @@ def generate(options):
 
     TLS_CERT_FILE = options.get("tls_cert_file")
     TLS_KEY_FILE = options.get("tls_key_file")
+
+    systemctl_timeout_stop_sec = defaults["SYSTEMCTL_TIMEOUT_STOP_SEC"]
 
     ENV = dict(
         ZK_CNXSTRING=options.get("ZK"),
@@ -1921,6 +1947,7 @@ def generate(options):
         WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
         TLS_CERT_FILE=TLS_CERT_FILE,
         TLS_KEY_FILE=TLS_KEY_FILE,
+        SYSTEMCTL_TIMEOUT_STOP_SEC=systemctl_timeout_stop_sec,
     )
 
     def merge_env(add):
@@ -2008,7 +2035,7 @@ def generate(options):
         final_services[t].append(out)
 
     def register_target(name, parent=None):
-        if not name in targets:
+        if name not in targets:
             env = subenv({"PREFIX": systemd_prefix, "SRVTYPE": name, "SRVNUM": 1})
             targets[name] = Target(
                 name,
