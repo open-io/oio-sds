@@ -50,8 +50,6 @@ jobs:
           #          rm -rf fdb-packages
           #          rabbitmq-plugins enable rabbitmq_management
 
-          set +e
-          systemctl stop rabbitmq-server
           ls
           pwd
           docker version
@@ -63,14 +61,13 @@ jobs:
           #docker run -d --net rabbits --hostname rabbit-3 --name rabbit-3 -p 15674:15672 -p 5674:5672 -e RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK rabbitmq:3-management
           #docker exec rabbit-1 rabbitmqctl cluster_status
 
-          docker-compose -f tests/functional/rabbitmq/clusterr-config/docker-compose.yml up -d
+          docker-compose -f tests/functional/rabbitmq/cluster-config/docker-compose.yml up -d
           sleep 5
-          docker ps
-          docker-compose -f tests/functional/rabbitmq/clusterr-config/docker-compose.yml ps
+          ps
+          docker-compose -f tests/functional/rabbitmq/cluster-config/docker-compose.yml ps
           docker exec rabbit-1 cat /var/lib/rabbitmq/.erlang.cookie
           docker exec rabbit-2 cat /var/lib/rabbitmq/.erlang.cookie
           docker exec rabbit-3 cat /var/lib/rabbitmq/.erlang.cookie
-          docker exec rabbit-1 rabbitmqctl cluster_status
           sleep 60
           docker exec rabbit-1 rabbitmqctl cluster_status
 
