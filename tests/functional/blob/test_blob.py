@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -256,29 +256,90 @@ class RawxTestSuite(CommonTestCase):
                 self.assertEqual(resp.getheader(k), str(v))
 
         # check ranges can be downloaded
+        def _get_header_range(start, end):
+            if start is None:
+                start_header = ""
+            else:
+                start_header = str(start)
+            if end is None:
+                end_header = ""
+            else:
+                end_header = str(end)
+            return f"bytes={start_header}-{end_header}"
+
         def ranges():
-            if length <= 0:
-                return
-            yield (0, 0)
+            yield (None, 1)
+            if length > 0:
+                yield (0, 0)
+                yield (0, None)
             if length > 1:
                 yield (0, 1)
                 yield (0, length - 1)
                 yield (length - 2, length - 1)
+                yield (length - 2, None)
+                yield (None, 2)
             if length > 4:
                 yield (2, length - 3)
+                yield (2, None)
+                yield (None, 3)
 
         for start, end in ranges():
-            r = "bytes={0}-{1}".format(start, end)
-            resp, body = self._http_request(chunkurl, "GET", "", {"Range": r})
+            resp, body = self._http_request(
+                chunkurl, "GET", "", {"Range": _get_header_range(start, end)}
+            )
+            if start is None:
+                expected_start = length - end
+                expected_end = length - 1
+            else:
+                expected_start = start
+                if end is None:
+                    expected_end = max(length - 1, 0)
+                else:
+                    expected_end = end
+            if length > 0:
+                expected_length = expected_end - expected_start + 1
+            else:
+                expected_length = 0
             self.assertEqual(resp.status // 100, 2)
-            self.assertEqual(len(body), end - start + 1)
-            self.assertEqual(body, chunkdata[start : end + 1])
-        if length > 0:
-            # TODO FIXME getting an unsatisfiable range on an empty content
-            # returns "200 OK" with an empty body, but should return 416
-            r = "bytes={0}-{1}".format(length, length + 1)
-            resp, body = self._http_request(chunkurl, "GET", "", {"Range": r})
+            self.assertEqual(resp.headers["Content-Length"], str(expected_length))
+            if length > 0:
+                self.assertEqual(
+                    resp.headers["Content-Range"],
+                    f"bytes {expected_start}-{expected_end}/{length}",
+                )
+            else:
+                self.assertNotIn("Content-Range", resp.headers)
+            self.assertEqual(len(body), expected_length)
+            self.assertEqual(body, chunkdata[expected_start : expected_end + 1])
+
+        def invalid_ranges():
+            yield (length, length + 1)
+            yield (None, 0)
+
+        for start, end in invalid_ranges():
+            resp, body = self._http_request(
+                chunkurl, "GET", "", {"Range": _get_header_range(start, end)}
+            )
             self.assertEqual(416, resp.status)
+            self.assertNotIn("Content-Range", resp.headers)
+
+        def ignored_ranges():
+            yield (-1, None)
+            yield (None, -1)
+            yield (0, -2)
+            yield (-2, -1)
+            yield (2, 1)
+            yield (length + 1, length)
+
+        for start, end in ignored_ranges():
+            resp, body = self._http_request(
+                chunkurl, "GET", "", {"Range": _get_header_range(start, end)}
+            )
+            self.assertEqual(resp.status // 100, 2)
+            self.assertEqual(resp.headers["Content-Length"], str(length))
+            self.assertNotIn("Content-Range", resp.headers)
+            self.assertEqual(len(body), length)
+            self.assertEqual(body, chunkdata)
 
         # verify chunk checksum
         resp, body = self._http_request(

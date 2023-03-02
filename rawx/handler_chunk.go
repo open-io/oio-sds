@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -24,11 +24,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +60,8 @@ type rangeInfo struct {
 	last   int64
 	size   int64
 }
+
+var RangeRegex = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
 
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
@@ -391,27 +393,62 @@ func (rr *rawxRequest) checkChunk() {
 func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 	ri := rangeInfo{}
 	headerRange := rr.req.Header.Get("Range")
-	if headerRange == "" || chunkSize == 0 {
+	if headerRange == "" {
 		return ri, nil
 	}
 
-	var offset int64
-	var last int64
-	if nb, err := fmt.Sscanf(headerRange, "bytes=%d-%d", &offset, &last); err != nil || nb != 2 {
+	var range_start int64
+	var range_end int64
+	max_range_end := chunkSize - 1
+	match := RangeRegex.FindStringSubmatch(headerRange)
+	if match == nil {
 		return ri, nil
 	}
-	if offset < 0 || last < 0 || offset > last {
-		return ri, nil
+	if match[1] == "" {
+		if match[2] == "" {
+			// bytes=-
+			return ri, nil
+		}
+		// bytes=-<suffix-length>
+		suffix_length, _ := strconv.ParseInt(match[2], 10, 64)
+		if suffix_length <= 0 {
+			// No data to send
+			return ri, errInvalidRange
+		}
+		range_start = chunkSize - suffix_length
+		if range_start < 0 {
+			range_start = 0
+		}
+		range_end = max_range_end
+	} else {
+		range_start, _ = strconv.ParseInt(match[1], 10, 64)
+		if match[2] == "" {
+			// bytes=<range-start>-
+			if range_start > max_range_end {
+				// Range start beyond the data
+				return ri, errInvalidRange
+			}
+			range_end = max_range_end
+		} else {
+			// bytes=<range-start>-<range-end>
+			range_end, _ = strconv.ParseInt(match[2], 10, 64)
+			if range_start > range_end {
+				// Range is reversed
+				return ri, nil
+			}
+			if range_start > max_range_end {
+				// Range start beyond the data
+				return ri, errInvalidRange
+			}
+			if range_end > max_range_end {
+				range_end = max_range_end
+			}
+		}
 	}
-	if offset >= chunkSize {
-		return ri, errInvalidRange
-	}
-	if last >= chunkSize {
-		last = chunkSize - 1
-	}
-	ri.offset = offset
-	ri.last = last
-	ri.size = last - offset + 1
+
+	ri.offset = range_start
+	ri.last = range_end
+	ri.size = range_end - range_start + 1
 	return ri, nil
 }
 
