@@ -325,7 +325,7 @@ WRKDIR="$2" ; [[ -n "$WRKDIR" ]] ; [[ -d "$WRKDIR" ]]
 
 export PYTHON=python
 if [[ -n "$PYTHON_COVERAGE" ]] ; then
-	export PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
+	export PYTHON="coverage run --context ${TEST_SUITE:-nocontext} -p"
 fi
 
 OPENIOCTL="openioctl.sh"

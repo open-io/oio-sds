@@ -62,12 +62,9 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - cd {{.cds.workspace}}
           - coverage combine .coverage.*
-          - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report-py.txt
-          - coverage xml --omit="/usr/lib/python3*" --skip-empty --ignore-errors -o coverage-py.xml
-          - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors -d coverage-report-py
+          - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
           - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
           - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
-          - rm -f coverage-report-py.txt
 
       - name: Aggregate C coverage statistics
         script:
@@ -149,20 +146,6 @@ jobs:
         optional: true
         always_executed: true
         jUnitReport: '{{.cds.workspace}}/nosetests-*.xml'
-
-      - name: Publish C code coverage scores on CDS
-        optional: true
-        coverage:
-          format: lcov
-          minimum: "70"
-          path: '{{.cds.workspace}}/cmake_coverage.all'
-
-      - name: Publish Python code coverage scores on CDS
-        optional: true
-        coverage:
-          format: cobertura
-          minimum: "70"
-          path: '{{.cds.workspace}}/coverage-py.xml'
 
     requirements:
         - model: ubuntu-focal
