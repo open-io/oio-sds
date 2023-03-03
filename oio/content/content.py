@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -276,6 +276,7 @@ class Content(object):
         check_quality=False,
         dry_run=False,
         max_attempts=3,
+        cur_items=None,
         **kwargs
     ):
         """
@@ -311,7 +312,8 @@ class Content(object):
                 .exclude(id=chunk_id)
                 .all()
             )
-
+        if cur_items:  # If cur_items is defined
+            current_chunk.quality["cur_items"] = cur_items
         spare_urls, qualities = self._get_spare_chunk(
             other_chunks,
             [current_chunk],

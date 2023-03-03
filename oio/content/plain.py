@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -68,6 +68,7 @@ class PlainContent(Content):
         chunk_pos=None,
         allow_frozen_container=False,
         reqid=None,
+        cur_items=None,
     ):
         if reqid is None:
             reqid = request_id("plaincontent-")
@@ -102,7 +103,8 @@ class PlainContent(Content):
             chunk["url"] = ""
             chunk["pos"] = chunk_pos
             current_chunk = Chunk(chunk)
-
+        if cur_items:  # If cur_items is defined
+            current_chunk.quality["cur_items"] = cur_items
         # Find a spare chunk address
         broken_list = []
         if not allow_same_rawx and chunk_id is not None:

@@ -14,10 +14,13 @@
 # License along with this library.
 
 
+from collections import Counter
 from typing import Any, Iterable, Mapping, Union
+from urllib.parse import urlparse
 
 from oio.common import exceptions as exc
 from oio.common.json import json
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 
 
 NB_LOCATION_LEVELS = 4
@@ -90,7 +93,8 @@ def compare_chunk_quality(current, candidate):
 
     # Compare distance between chunks.
     balance += candidate.get("final_dist", 1) - current.get("final_dist", 1)
-
+    if "fair_location_constraint" not in current:
+        current["fair_location_constraint"] = candidate["fair_location_constraint"]
     # Compare the number of services per location
     current_margin, current_compared = location_constraint_margin(current)
     candidate_margin, candidate_compared = location_constraint_margin(candidate)
@@ -139,3 +143,80 @@ def ensure_better_chunk_qualities(current_chunks, candidates, threshold=1):
             "(balance=%d, threshold=%d)" % (balance, threshold)
         )
     return balance
+
+
+def format_location(location, levels=NB_LOCATION_LEVELS):
+    """
+    Format location with dc.rack.server.disk format if needed
+
+    :param location: location on dc.rack.server.disk format
+    :type location: str
+    :param levels: excepected number of levels
+    :type levels: int
+    :return: location formatted as (dc, rack, server, disk)
+    :rtype: tuple
+    """
+    length = len(location)
+    if length != levels:
+        # Complete missing position in chunk location
+        levels = levels - length
+        for _ in range(levels):
+            # For local environments
+            location = ("",) + location
+    return location
+
+
+def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=None):
+    """
+    Calculate current items on the host of the chunk passed in parameters
+
+    :param current: chunk representation or a chunk_id.
+    :type current: ChunkWrapper
+    :param rawx_id: Rawx id hosting the current chunk
+    :type rawx_id: str
+    :param all_chunks: list of object chunks
+    :type all_chunks: list
+    :param rawx_srv_locations: location of all rawx service
+    :type rawx_srv_locations: dict
+    :param logger: logger instance
+    :type logger: Logger
+    :return: the current items on the host, e.g: 12.12.4.1
+    :rtype: str
+    """
+    try:
+        counters = {}
+        # Location of the current chunk
+        current_loc = None
+        if isinstance(current, ChunkWrapper):
+            chunk_id = current.chunk_id
+        else:  # Chunk id
+            chunk_id = current
+        for chunk in all_chunks:
+            rawx_srv_id = urlparse(chunk["url"]).netloc
+            # Location of the rawx hosting the chunk selected
+            location = format_location(rawx_srv_locations[rawx_srv_id])
+            if chunk_id and chunk_id in chunk["url"]:
+                # Get the location of the chunk
+                current_loc = location
+
+            for depth in range(NB_LOCATION_LEVELS):
+                # Create a counter for each level
+                depth_counter = counters.setdefault(depth, Counter())
+                subloc = location[: depth + 1]
+                depth_counter[subloc] += 1
+        cur_items = []
+        if not current_loc and rawx_id:
+            current_loc = format_location(rawx_srv_locations[rawx_id])
+        for depth in range(NB_LOCATION_LEVELS):
+            counter = counters[depth]
+            subloc = current_loc[: depth + 1]
+            cur_items.append(str(counter[subloc]))
+        return ".".join(cur_items)
+    except Exception as exception:
+        if logger:
+            logger.error(
+                "Chunk %s: calculate current items quality has failed due to %s",
+                chunk_id,
+                exception,
+            )
+    return None

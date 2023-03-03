@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,11 @@ import unittest
 
 from oio.common import exceptions
 from oio.content.content import Chunk
-from oio.content.quality import compare_chunk_quality, ensure_better_chunk_qualities
+from oio.content.quality import (
+    compare_chunk_quality,
+    ensure_better_chunk_qualities,
+    get_current_items,
+)
 
 CRAPPY = {
     "expected_dist": 2,
@@ -162,3 +166,74 @@ class TestContentFunctions(unittest.TestCase):
         )
         # threshold=0 -> accept no improvement
         ensure_better_chunk_qualities([chunk], {chunk.url: chunk.quality}, threshold=0)
+
+    def test_get_current_items(self):
+        chunk0_data = {
+            "url": "http://OPENIO-rawx-12/AABBCC",
+            "pos": "0",
+            "size": 0,
+            "hash": "00000000000000000000000000000000",
+            "quality": CRAPPY,
+        }
+        chunk1_data = {
+            "url": "http://OPENIO-rawx-11/AABBDD",
+            "pos": "0",
+            "size": 0,
+            "hash": "00000000000000000000000000000000",
+            "quality": SMALL_DIST,
+        }
+        chunk2_data = {
+            "url": "http://OPENIO-rawx-10/AABBEE",
+            "pos": "0",
+            "size": 0,
+            "hash": "00000000000000000000000000000000",
+            "quality": PERFECT,
+        }
+        chunk0 = Chunk(chunk0_data).raw()
+        chunk1 = Chunk(chunk1_data).raw()
+        chunk2 = Chunk(chunk2_data).raw()
+
+        rawx_srv_locations = {
+            "OPENIO-rawx-12": ("rack", "127-0-0-4", "12"),
+            "OPENIO-rawx-10": ("rack", "127-0-0-3", "10"),
+            "OPENIO-rawx-11": ("rack", "127-0-0-4", "11"),
+        }
+
+        self.assertEqual(
+            "3.3.2.1",
+            get_current_items(
+                None,
+                "OPENIO-rawx-12",
+                [chunk0, chunk1, chunk2],
+                rawx_srv_locations,
+            ),
+        )
+
+        self.assertEqual(
+            "3.3.1.1",
+            get_current_items(
+                None,
+                "OPENIO-rawx-10",
+                [chunk0, chunk1, chunk2],
+                rawx_srv_locations,
+            ),
+        )
+
+        self.assertEqual(
+            "3.3.2.1",
+            get_current_items(
+                "AABBCC",
+                None,
+                [chunk0, chunk1, chunk2],
+                rawx_srv_locations,
+            ),
+        )
+
+        self.assertIsNone(
+            get_current_items(
+                None,
+                None,
+                [chunk0, chunk1, chunk2],
+                rawx_srv_locations,
+            ),
+        )

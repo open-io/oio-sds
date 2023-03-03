@@ -34,6 +34,8 @@ use = egg:oio#changelocation
 # fifth attemp -> 2h
 # sixth attemp -> 2h ...
 new_attempt_delay = 900
+# Time interval after which service data are updated
+service_update_interval = 3600
 
 [filter:logger]
 use = egg:oio#logger

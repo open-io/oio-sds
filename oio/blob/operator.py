@@ -19,6 +19,7 @@ from six.moves.urllib_parse import urlparse
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
+from oio.content.quality import get_current_items
 from oio.rdir.client import RdirClient
 
 
@@ -38,13 +39,14 @@ class ChunkOperator(object):
     Execute maintenance operations on chunks.
     """
 
-    def __init__(self, conf, logger=None, watchdog=None):
+    def __init__(self, conf, logger=None, watchdog=None, rawx_srv_locations=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.rdir_client = RdirClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(
             conf, logger=self.logger, watchdog=watchdog
         )
+        self.rawx_srv_locations = rawx_srv_locations
 
     def rebuild(
         self,
@@ -99,7 +101,23 @@ class ChunkOperator(object):
                 )
             elif rawx_id and chunk.host != rawx_id:
                 raise ValueError("Chunk does not belong to this rawx")
-
+        # Get all the known chunks
+        chunks = content.chunks.raw()
+        if self.rawx_srv_locations is None:
+            self.rawx_srv_locations = {}
+            rawx_srv_data = self.rdir_client.cs.all_services(
+                service_type="rawx",
+                reqid=kwargs.get("reqid"),
+            )
+            for data in rawx_srv_data:
+                # Fetch location of each rawx service
+                loc = tuple(data["tags"]["tag.loc"].split("."))
+                # Here data["id"] represents the rawx service id
+                self.rawx_srv_locations[data["id"]] = loc
+        # Calculate the current items on the same host with the chunk to rebuild
+        cur_items = get_current_items(
+            chunk_id, rawx_id, chunks, self.rawx_srv_locations, self.logger
+        )
         rebuilt_bytes = content.rebuild_chunk(
             chunk_id,
             service_id=rawx_id,
@@ -107,6 +125,7 @@ class ChunkOperator(object):
             allow_same_rawx=allow_same_rawx,
             chunk_pos=chunk_pos,
             reqid=kwargs.get("reqid"),
+            cur_items=cur_items,
         )
 
         if try_chunk_delete:

@@ -28,7 +28,7 @@ from oio.common.utils import (
     get_nb_chunks,
     request_id,
 )
-from oio.content.quality import NB_LOCATION_LEVELS
+from oio.content.quality import NB_LOCATION_LEVELS, format_location
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 from oio.directory.admin import AdminClient
@@ -97,6 +97,8 @@ class VerifyChunkPlacement(Filter):
                 service_type="rawx",
                 reqid=reqid,
             )
+            # Update the rawx server locations
+            self.chunk_operator.rawx_srv_locations = self.rawx_srv_locations
             for data in self.rawx_srv_data:
                 # Fetch location of each rawx service
                 loc = tuple(data["tags"]["tag.loc"].split("."))
@@ -319,14 +321,7 @@ class VerifyChunkPlacement(Filter):
             rawx_srv_id = chunk_data[0]
             pos = chunk_data[1]
             # Location of the rawx of the chunk selected
-            location = self.rawx_srv_locations[rawx_srv_id]
-            length = len(location)
-            if length != NB_LOCATION_LEVELS:
-                # Complete missing position in chunk location
-                levels = NB_LOCATION_LEVELS - length
-                for _ in range(levels):
-                    # For local environments
-                    location = ("",) + location
+            location = format_location(self.rawx_srv_locations[rawx_srv_id])
             for depth in range(NB_LOCATION_LEVELS):
                 # Create a counter for each depth
                 depth_counter = counters.setdefault(depth, Counter())

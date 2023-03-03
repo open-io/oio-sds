@@ -33,6 +33,7 @@ class ECContent(Content):
         chunk_pos=None,
         allow_frozen_container=False,
         reqid=None,
+        cur_items=None,
     ):
         if reqid is None:
             reqid = request_id("eccontent-")
@@ -67,6 +68,9 @@ class ECContent(Content):
         if chunk_id is None:
             current_chunk.size = chunks[0].size
             current_chunk.checksum = chunks[0].checksum
+
+        if cur_items:  # If cur_items is defined
+            current_chunk.quality["cur_items"] = cur_items
 
         # Find a spare chunk address
         broken_list = []

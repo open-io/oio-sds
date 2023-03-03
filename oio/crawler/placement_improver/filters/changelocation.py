@@ -19,6 +19,7 @@ from oio.common.easy_value import int_value
 from oio.common.green import get_watchdog
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
+from oio.content.quality import get_current_items
 from oio.crawler.common.base import Filter
 from oio.common.utils import is_chunk_id_valid, request_id
 from oio.crawler.rawx.chunk_wrapper import (
@@ -36,6 +37,7 @@ class Changelocation(Filter):
 
     NAME = "Changelocation"
     NEW_ATTEMPT_DELAY = 900
+    SERVICE_UPDATE_INTERVAL = 3600
 
     def init(self):
         """
@@ -53,6 +55,11 @@ class Changelocation(Filter):
         self.new_attempt_delay = int_value(
             self.conf.get("new_attempt_delay"), self.NEW_ATTEMPT_DELAY
         )
+        # Interval of time in sec after which the services are updated
+        self.service_update_interval = int_value(
+            self.conf.get("service_update_interval"), self.SERVICE_UPDATE_INTERVAL
+        )
+        self.last_services_update = 0.0
         # Path of the volume in which the chunk is located
         self.volume_path = self.app_env["volume_path"]
         self.volume_id = self.app_env["volume_id"]
@@ -64,6 +71,8 @@ class Changelocation(Filter):
         self.content_factory = ContentFactory(
             self.conf, logger=self.logger, watchdog=watchdog
         )
+        self.rawx_srv_data = None
+        self.rawx_srv_locations = {}
 
     def _check_chunk_location(self, chunk, reqid):
         """
@@ -89,9 +98,9 @@ class Changelocation(Filter):
         # Checking if the chunk object exists
         if len(chunkshelper.chunks) == 0:
             raise exc.OrphanChunk("Chunk not found in content")
-        return True
+        return chunks
 
-    def _move_chunk(self, chunkwrapper, content, reqid):
+    def _move_chunk(self, chunkwrapper, content, reqid, cur_items=None):
         """
         Move the misplaced chunk to a better placement
 
@@ -109,10 +118,41 @@ class Changelocation(Filter):
             service_id=self.volume_id,
             check_quality=True,
             reqid=reqid,
+            cur_items=cur_items,
         )
         self.logger.debug("Chunk moved to %s", rawx_dict["url"])
         # Incrementing the counter of chunks relocated
         self.relocated_chunk += 1
+
+    def _get_current_items(self, chunk, chunks, reqid):
+        """Calculate current items on the host of the chunk tagged as misplaced
+
+        :param chunk: chunk representation.
+        :type chunk: ChunkWrapper
+        :param chunks: list of chunks of an object
+        :type chunks: list of dict
+        :param reqid: request id
+        :type reqid: str
+        :return: the current items on the host, e.g: 12.12.4.1
+        :rtype: str
+        """
+        now = time.time()
+        if self.rawx_srv_data is None or (
+            (now - self.last_services_update) >= self.service_update_interval
+        ):
+            self.rawx_srv_data = self.conscience_client.all_services(
+                service_type="rawx",
+                reqid=reqid,
+            )
+            for data in self.rawx_srv_data:
+                # Fetch location of each rawx service
+                loc = tuple(data["tags"]["tag.loc"].split("."))
+                # Here data["id"] represents the rawx service id
+                self.rawx_srv_locations[data["id"]] = loc
+            self.last_services_update = now
+        return get_current_items(
+            chunk, None, chunks, self.rawx_srv_locations, self.logger
+        )
 
     def _post_process(self, chunkwrapper):
         """
@@ -158,7 +198,8 @@ class Changelocation(Filter):
                     # a timeout has been set until the next attempt to move the chunk
                     self.waiting_new_attempt += 1
                     return self.app(env, cb)
-            self._check_chunk_location(chunkwrapper, reqid)
+            chunks = self._check_chunk_location(chunkwrapper, reqid)
+            cur_items = self._get_current_items(chunkwrapper, chunks, reqid)
         except Exception as chunk_exc:
             if isinstance(chunk_exc, (exc.OrphanChunk, exc.NotFound)):
                 self.logger.warning("Orphan chunk: %s", str(chunk_exc))
@@ -207,7 +248,7 @@ class Changelocation(Filter):
                 version=chunkwrapper.meta["content_version"],
                 reqid=reqid,
             )
-            self._move_chunk(chunkwrapper, content, reqid)
+            self._move_chunk(chunkwrapper, content, reqid, cur_items=cur_items)
         except Exception as chunk_exc:
             self.errors += 1
             resp = PlacementImproverCrawlerError(

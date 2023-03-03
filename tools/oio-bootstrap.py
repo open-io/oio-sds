@@ -419,6 +419,8 @@ use = egg:oio#changelocation
 # fifth attempt -> 2h
 # sixth attempt -> 2h ...
 new_attempt_delay = 900
+# Time interval after which service data are updated
+service_update_interval = 3600
 """
 
 template_rdir_crawler_service = """
