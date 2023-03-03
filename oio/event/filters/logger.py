@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,9 +20,9 @@ from oio.event.filters.base import Filter
 class LoggerFilter(Filter):
     """Log all events with 'info' level"""
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         self.logger.info("got event: %s", str(env))
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

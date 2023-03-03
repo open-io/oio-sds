@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -46,7 +47,7 @@ class WebhookFilter(Filter):
         except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc)
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
 
         url = env["url"]
@@ -104,10 +105,9 @@ class WebhookFilter(Filter):
             data = json.dumps(body)
             self._request(data)
         except exceptions.OioException as exc:
-            return EventError(event=event, body="webhook error: %s" % exc)(
-                env, beanstalkd, cb
-            )
-        return self.app(env, beanstalkd, cb)
+            # FIXME(FVE): some errors may be retryable
+            return EventError(event=event, body="webhook error: %s" % exc)(env, cb)
+        return self.app(env, cb)
 
 
 def extract_data_from_event(env):

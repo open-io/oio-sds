@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,10 @@ def is_success(status):
 
 def is_error(status):
     return 500 <= status <= 599
+
+
+def is_retryable(status):
+    return status == 503
 
 
 def _event_env_property(field):
@@ -60,7 +64,7 @@ class Response(object):
             self.env = {}
         self.body = body
 
-    def __call__(self, env, beanstalkd, cb):
+    def __call__(self, env, cb):
         if not self.event:
             self.event = Event(env)
         if not self.body:
@@ -136,3 +140,4 @@ class StatusMap(object):
 status_map = StatusMap()
 EventOk = status_map[200]
 EventError = status_map[500]
+RetryableEventError = status_map[503]

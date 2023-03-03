@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,10 +28,10 @@ class DumpFilter(Filter):
     def __init__(self, app, conf, **kwargs):
         super(DumpFilter, self).__init__(app, conf, **kwargs)
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         with open("/tmp/event_%s" % env["job_id"], "w") as fp:
             fp.write(json.dumps(env, indent=4))
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,7 @@ from oio.common.exceptions import (
     OioTimeout,
 )
 from oio.common.utils import request_id
-from oio.event.evob import Event, EventError, EventTypes
+from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
 
@@ -56,7 +56,7 @@ class AccountUpdateFilter(Filter):
         if not self.account.region:
             raise OioException("Missing region key in namespace conf")
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
         headers = {REQID_HEADER: event.reqid or request_id("account-update-")}
 
@@ -135,8 +135,8 @@ class AccountUpdateFilter(Filter):
                         )
         except OioTimeout as exc:
             msg = f"account update failure: {exc}"
-            resp = EventError(event=Event(env), body=msg)
-            return resp(env, beanstalkd, cb)
+            resp = RetryableEventError(event=Event(env), body=msg)
+            return resp(env, cb)
         except ClientException as exc:
             if exc.http_status == 409 and "No update needed" in exc.message:
                 self.logger.info(
@@ -170,8 +170,8 @@ class AccountUpdateFilter(Filter):
             else:
                 msg = f"account update failure: {exc}"
                 resp = EventError(event=Event(env), body=msg)
-                return resp(env, beanstalkd, cb)
-        return self.app(env, beanstalkd, cb)
+                return resp(env, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,9 +15,9 @@
 # License along with this library.
 
 from oio.common.constants import REQID_HEADER
-from oio.event.evob import Event, EventError, EventTypes
+from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, OioTimeout, ServiceBusy
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
@@ -75,7 +75,7 @@ class VolumeIndexFilter(Filter):
                 content_path,
                 content_ver,
                 headers=headers,
-                **args
+                **args,
             )
         except Exception as exc:
             self.logger.warning(
@@ -119,7 +119,7 @@ class VolumeIndexFilter(Filter):
                 exc,
             )
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
         mtime = event.when // 1000000  # seconds
         if event.event_type in CHUNK_EVENTS:
@@ -147,9 +147,14 @@ class VolumeIndexFilter(Filter):
                         content_ver,
                         args,
                     )
+            except (ServiceBusy, OioTimeout) as exc:
+                resp = RetryableEventError(
+                    event=event, body=f"rdir update error: {exc}"
+                )
+                return resp(env, cb)
             except OioException as exc:
-                resp = EventError(event=event, body="rdir update error: %s" % exc)
-                return resp(env, beanstalkd, cb)
+                resp = EventError(event=event, body=f"rdir update error: {exc}")
+                return resp(env, cb)
         elif event.event_type in SERVICE_EVENTS:
             container_id = event.url["id"]
             container_url = "/".join(
@@ -178,7 +183,7 @@ class VolumeIndexFilter(Filter):
                     self._service_delete(
                         event.reqid, "meta2", peer, container_url, container_id
                     )
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

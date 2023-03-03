@@ -17,7 +17,7 @@
 
 from oio.event.beanstalk import ConnectionError as BeanstalkdConnectionError
 from oio.event.consumer import StopServe
-from oio.event.evob import Event, EventOk, EventError
+from oio.event.evob import Event, EventOk, EventError, RetryableEventError
 
 
 class Handler(object):
@@ -30,24 +30,24 @@ class Handler(object):
     def process(self, event):
         return EventOk(event=event)
 
-    def __call__(self, env, beanstalkd, cb):
+    def __call__(self, env, cb):
         event = Event(env)
         try:
             res = self.process(event)
-            return res(env, beanstalkd, cb)
+            return res(env, cb)
         except StopServe:
             self.logger.info(
                 "Job %s not handled: the process is stopping", event.job_id
             )
-            res = EventError(event=event, body="Process is stopping")
+            res = RetryableEventError(event=event, body="Process is stopping")
         except BeanstalkdConnectionError as err:
-            res = EventError(event=event, body=f"{err} reqid={event.job_id}")
+            res = RetryableEventError(event=event, body=f"{err} reqid={event.job_id}")
         except Exception as err:
             self.logger.exception("Job %s not handled: %s", event.job_id, err)
             res = EventError(
                 event=event, body=f"An error occurred: {err} reqid={event.job_id}"
             )
-        return res(env, beanstalkd, cb)
+        return res(env, cb)
 
 
 def handler_factory(app, global_conf, **local_conf):

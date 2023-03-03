@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ class XcuteFilter(Filter):
             self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
         )
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
 
         if event.data.get("processed"):
@@ -76,9 +76,11 @@ class XcuteFilter(Filter):
                     },
                 }
             )
+            # TODO(FVE): make it compatible with another queue system
+            beanstalkd = env["queue_connector"]
             beanstalkd.put(tasks_processed_event, delay=self.retry_delay_to_reply)
 
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

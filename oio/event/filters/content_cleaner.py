@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,7 +65,7 @@ class ContentReaperFilter(Filter):
                     resp.status,
                 )
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
         if (
             event.event_type == EventTypes.CONTENT_DELETED
@@ -85,9 +85,9 @@ class ContentReaperFilter(Filter):
             if chunks:
                 reqid = event.reqid or request_id("content-cleaner-")
                 self._process_rawx(url, chunks, reqid)
-                return self.app(env, beanstalkd, cb)
+                return self.app(env, cb)
 
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

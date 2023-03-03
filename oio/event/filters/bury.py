@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +22,7 @@ from oio.common.exceptions import ExplicitBury
 class BuryFilter(Filter):
     """Bury all events"""
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         raise ExplicitBury()
 
 

@@ -18,7 +18,7 @@ import re
 from urllib.parse import unquote
 
 from oio.common.json import json
-from oio.event.evob import Event, EventError
+from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.filters.base import Filter
 
@@ -133,7 +133,7 @@ class NotifyFilter(Filter):
         self.beanstalk = Beanstalk.from_url(queue_url)
         self.beanstalk.use(self.tube)
 
-    def process(self, env, beanstalkd, cb):
+    def process(self, env, cb):
         event = Event(env)
         if self.should_notify(event):
             out_beanstalkd = self.beanstalk
@@ -147,14 +147,19 @@ class NotifyFilter(Filter):
             try:
                 # Encode without whitespace to make sure not
                 # to exceed the maximum size of the event (default: 65535)
-                data = json.dumps(env, separators=(",", ":"))  # compact encoding
+                payload = env.copy()
+                payload.pop("queue_connector", None)
+                data = json.dumps(payload, separators=(",", ":"))  # compact encoding
                 out_beanstalkd.put(data)
             except BeanstalkError as err:
-                msg = "notify failure: %s" % str(err)
-                resp = EventError(event=Event(env), body=msg)
-                return resp(env, beanstalkd, cb)
+                msg = f"notify failure: {err!r}"
+                if err.retryable():
+                    resp = RetryableEventError(event=Event(env), body=msg)
+                else:
+                    resp = EventError(event=Event(env), body=msg)
+                return resp(env, cb)
 
-        return self.app(env, beanstalkd, cb)
+        return self.app(env, cb)
 
 
 def filter_factory(global_conf, **local_conf):

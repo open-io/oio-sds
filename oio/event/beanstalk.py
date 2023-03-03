@@ -36,7 +36,12 @@ SERVER_CLOSED_CONNECTION_ERROR = "Connection closed by server."
 
 
 class BeanstalkError(Exception):
-    pass
+    def retryable(self):
+        """Tell if we can retry the operation which raised this error."""
+        return len(self.args) > 1 and self.args[1] not in (
+            "JOB_TOO_BIG",
+            "OUT_OF_MEMORY",
+        )
 
 
 class ConnectionError(BeanstalkError):
@@ -383,7 +388,7 @@ def parse_yaml(connection, response, **kwargs):
     size = int(results[0])
     body = connection.read_body(size)
     if size > 0 and not body:
-        raise ResponseError()
+        raise ResponseError("", "UNPARSABLE")
     return yaml.load(body, Loader=yaml.Loader)
 
 
@@ -393,7 +398,7 @@ def parse_body(connection, response, **kwargs):
     job_size = int(results[1])
     body = connection.read_body(job_size)
     if job_size > 0 and not body:
-        raise ResponseError()
+        raise ResponseError("", "UNPARSABLE")
     return job_id, body
 
 

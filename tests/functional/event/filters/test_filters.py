@@ -32,7 +32,7 @@ from tests.utils import BaseTestCase, random_str, strange_paths
 class _App(object):
     app_env = {}
 
-    def __init__(self, env, beanstalkd, cb):
+    def __init__(self, env, cb):
         self.env = env
         self.cb = cb
 
@@ -160,7 +160,7 @@ class TestContentRebuildFilter(BaseTestCase):
         time.sleep(1)  # Need to sleep 1s, because mtime has 1s precision
         missing_pos = [chunk["pos"] for chunk in chunks_to_remove]
         event = self._create_event(obj_meta, chunks, missing_pos)
-        self.notify_filter.process(event, None, None)
+        self.notify_filter.process(event, None)
         self._rebuild(event)
         _, after = self.storage.object_locate(
             account=self.account,

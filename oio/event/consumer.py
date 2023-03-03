@@ -27,7 +27,7 @@ from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
 from oio.common.utils import drop_privileges
 from oio.common.easy_value import float_value, int_value
 from oio.common.json import json
-from oio.event.evob import is_success, is_error
+from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.common.exceptions import ExplicitBury, OioNetworkException, ClientException
 
@@ -265,6 +265,8 @@ class EventWorker(Worker):
             beanstalk.delete(job_id)
             return
 
+        event["queue_connector"] = beanstalk
+
         def cb(status, msg):
             if is_success(status):
                 try:
@@ -273,7 +275,7 @@ class EventWorker(Worker):
                     self.logger.warn(
                         "Job %s succeeded but was not deleted: %s", job_id, err
                     )
-            elif is_error(status):
+            elif is_retryable(status):
                 self.logger.warn(
                     "event %s handling failure (release with delay): %s", job_id, msg
                 )
@@ -283,8 +285,16 @@ class EventWorker(Worker):
                     self.logger.error(
                         "Job %s failed and could not be rescheduled: %s", job_id, err
                     )
+            else:
+                self.logger.warn("event %s handling failure (bury): %s", job_id, msg)
+                try:
+                    beanstalk.bury(job_id)
+                except ResponseError as err:
+                    self.logger.error(
+                        "Job %s failed and could not be buried: %s", job_id, err
+                    )
 
-        handler(event, beanstalk, cb)
+        handler(event, cb)
 
     def get_handler(self, event):
         return self.handlers.get(event.get("event"), None)

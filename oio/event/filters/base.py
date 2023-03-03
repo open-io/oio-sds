@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,8 +29,8 @@ class Filter(object):
     def init(self):
         pass
 
-    def process(self, env, beanstalkd, cb):
-        return self.app(env, beanstalkd, cb)
+    def process(self, env, cb):
+        return self.app(env, cb)
 
-    def __call__(self, env, beanstalkd, cb):
-        self.process(env, beanstalkd, cb)
+    def __call__(self, env, cb):
+        self.process(env, cb)
