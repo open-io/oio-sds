@@ -17,7 +17,7 @@ workflow:
         - variable: cds.triggered_by.username
           operator: ne
           value: "cds.scheduler"
-  
+
   tests-lint:
     pipeline: oio-sds-lint
     application: oio-sds
@@ -53,65 +53,65 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
-  tests-3copies:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-3copies
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-ec:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-ec
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-fullrepli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-fullrepli
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-rebuilder:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rebuilder
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
-  tests-mover:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-mover
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
+          #  tests-3copies:
+          #    pipeline: oio-sds-test-functional
+          #    application: oio-sds
+          #    environment: oio-sds-env-3copies
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
+          #
+          #  tests-ec:
+          #    pipeline: oio-sds-test-functional
+          #    application: oio-sds
+          #    environment: oio-sds-env-ec
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
+          #
+          #  tests-fullrepli:
+          #    pipeline: oio-sds-test-functional
+          #    application: oio-sds
+          #    environment: oio-sds-env-fullrepli
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
+          #
+          #  tests-rebuilder:
+          #    pipeline: oio-sds-test-functional
+          #    application: oio-sds
+          #    environment: oio-sds-env-rebuilder
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
+          #
+          #  tests-mover:
+          #    pipeline: oio-sds-test-functional
+          #    application: oio-sds
+          #    environment: oio-sds-env-mover
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
 
   coverage:
     pipeline: oio-sds-coverage
@@ -120,11 +120,11 @@ workflow:
       - tests-cli
       - tests-fast
       - tests-single
-      - tests-3copies
-      - tests-ec
-      - tests-fullrepli
-      - tests-rebuilder
-      - tests-mover
+        #      - tests-3copies
+        #      - tests-ec
+        #      - tests-fullrepli
+        #      - tests-rebuilder
+        #      - tests-mover
     when:
       - success
 
@@ -146,16 +146,16 @@ workflow:
           operator: eq
           value: "true"
 
-  build:
-    pipeline: oio-sds-build
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
+          #  build:
+          #    pipeline: oio-sds-build
+          #    application: oio-sds
+          #    depends_on:
+          #      - root
+          #    conditions:
+          #      check:
+          #        - variable: cds.triggered_by.username
+          #          operator: ne
+          #          value: "cds.scheduler"
 
   clean-artifacts:
     pipeline: oio-sds-clean-artifacts

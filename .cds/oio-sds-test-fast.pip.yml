@@ -39,6 +39,8 @@ jobs:
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          [install]
+          progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
           # FIXME(adu): Fix tox configuration file to support the new versions
@@ -69,6 +71,7 @@ jobs:
           - coverage combine .coverage.*-vm*
           - mv .coverage .coverage.unit
           - rm -f .coverage.*-vm*
+          - pip cache list
 
       - name: Save coverage and test information
         script:

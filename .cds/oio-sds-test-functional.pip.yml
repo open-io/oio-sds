@@ -35,11 +35,26 @@ jobs:
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          [install]
+          progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
           env
+          pip cache info
+          pip cache list
+          if worker cache pull "pip-cache"
+          then
+            pip cache info
+            pip cache list
+          fi
           # FIXME(adu): Fix tox configuration file to support the new versions
-          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          pip install \
+            --trusted-host ${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net \
+            --upgrade \
+            pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          pip cache info
+          pip cache list
+          worker cache push "pip-cache" $(pip cache dir)
           go install github.com/axw/gocov/gocov@latest
 
           fdbtag="fdb-${FDB_VERSION}"
@@ -64,6 +79,7 @@ jobs:
           ./tools/oio-zk-cluster.sh start {{ .cds.env.ZK_CLUSTER }}
           ./tools/oio-travis-suites.sh
           ./tools/oio-zk-cluster.sh stop {{ .cds.env.ZK_CLUSTER }}
+          pip cache list
 
       - name: Save failure logs
         always_executed: true
