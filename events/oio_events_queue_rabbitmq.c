@@ -131,31 +131,6 @@ struct _running_ctx_s {
 };
 
 static gboolean
-_q_reconnect(struct _queue_with_endpoint_s *q UNUSED, struct _running_ctx_s *ctx)
-{
-	EXTRA_ASSERT(ctx->rabbitmq != NULL);
-
-	if (ctx->rabbitmq && ctx->rabbitmq->conn) {
-		return TRUE;
-	}
-
-	GError *err = rabbitmq_connect(ctx->rabbitmq);
-#ifdef HAVE_EXTRA_DEBUG
-	if (intercept_errors)
-		(*intercept_errors) (err);
-#endif
-	if (err) {
-		GRID_WARN("Failed to (re)connect: %s", err->message);
-		g_clear_error(&err);
-		ctx->attempts_connect += 1;
-		return FALSE;
-	} else {
-		ctx->attempts_connect = 0;
-		return TRUE;
-	}
-}
-
-static gboolean
 _q_declare_exchange_and_queue(struct _queue_with_endpoint_s *q,
 		struct _running_ctx_s *ctx)
 {
@@ -212,6 +187,39 @@ _q_declare_exchange_and_queue(struct _queue_with_endpoint_s *q,
 	}
 
 	return TRUE;
+}
+
+static gboolean
+_q_reconnect(struct _queue_with_endpoint_s *q UNUSED, struct _running_ctx_s *ctx)
+{
+	EXTRA_ASSERT(ctx->rabbitmq != NULL);
+
+	if (ctx->rabbitmq && ctx->rabbitmq->conn) {
+		return TRUE;
+	}
+
+	GError *err = rabbitmq_connect(ctx->rabbitmq);
+#ifdef HAVE_EXTRA_DEBUG
+	if (intercept_errors)
+		(*intercept_errors) (err);
+#endif
+	if (err) {
+		GRID_WARN("Failed to (re)connect: %s", err->message);
+		g_clear_error(&err);
+		ctx->attempts_connect += 1;
+		return FALSE;
+	} else {
+		if (ctx->attempts_connect > 0) {
+			/* After a reconnection, try to redeclare exchange and queue
+			 * If it works, that's good, we will be able to send events again.
+			 * If it fails, maybe they already exist, that's not a big deal.
+			 */
+			_q_declare_exchange_and_queue(q, ctx);
+			ctx->attempts_connect = 0;
+		}
+		
+		return TRUE;
+	}
 }
 
 // TODO(FVE): factorize the following functions
