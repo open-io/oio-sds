@@ -45,6 +45,7 @@ _q_destroy(struct oio_events_queue_s *self)
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 
 	q->running = FALSE;
+	q->healthy = FALSE;
 
 	if (q->worker) {
 		g_thread_join(q->worker);
@@ -113,8 +114,9 @@ _q_is_stalled(struct oio_events_queue_s *self)
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	EXTRA_ASSERT (q != NULL && q->vtable != NULL);
 	const int l = g_async_queue_length(q->queue);
-	if (l <= 0)
+	if (l <= 0) {
 		return FALSE;
+	}
 	return ((guint)l) >= oio_events_common_max_pending;
 }
 
@@ -218,6 +220,10 @@ _q_get_health(struct oio_events_queue_s *self)
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
 
+	if (!q->healthy) {
+		/* Queue is explicitely unhealthy */
+		return SCORE_DOWN;
+	}
 	double max_score = ((double)SCORE_MAX);
 	return (gint64) (max_score / (1.0 + log(1.0 + q->pending_events * 0.1)));
 }

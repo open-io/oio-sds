@@ -104,6 +104,7 @@ oio_events_queue_factory__create_rabbitmq(
 	self->extra_args = extra_args;
 	// self->pending_events = 0;  // Already 0
 	self->running = FALSE;
+	self->healthy = FALSE;
 
 	oio_events_queue_buffer_init(&(self->buffer));
 	self->event_send_count = grid_single_rrd_create(
@@ -313,11 +314,21 @@ exit:
 		GRID_WARN("RabbitMQ error with [%s]: (%d) %s",
 				q->endpoint, err->code, err->message);
 		g_clear_error(&err);
+
 		ctx->attempts_check += 1;
+		q->healthy = FALSE;
+		// maybe the rabbit is down, force reconnection next time
+		amqp_destroy_connection(ctx->rabbitmq->conn);
+		ctx->rabbitmq->conn = NULL;
+
 		return FALSE;
 	} else {
 		ctx->last_check = ctx->now;
-		ctx->attempts_check = 0;
+		if (ctx->attempts_check > 0) {
+			// queue is working again!
+			ctx->attempts_check = 0;
+			q->healthy = TRUE;
+		}
 		return TRUE;
 	}
 }
@@ -415,6 +426,7 @@ _q_start (struct oio_events_queue_s *self)
 	GError *err = NULL;
 
 	q->running = TRUE;
+	q->healthy = TRUE;
 	q->worker = g_thread_try_new("event|rabbitmq", _q_worker, q, &err);
 	if (!q->worker) {
 		GRID_WARN("%s worker startup error: (%d) %s", __FUNCTION__,

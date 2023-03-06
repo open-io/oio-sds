@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -76,6 +76,7 @@ oio_events_queue_factory__create_beanstalkd (
 	self->tube = g_strdup(tube);
 	self->endpoint = g_strdup (endpoint);
 	self->running = FALSE;
+	self->healthy = FALSE;
 
 	oio_events_queue_buffer_init(&(self->buffer));
 	self->event_send_count = grid_single_rrd_create(
@@ -325,6 +326,7 @@ _q_start (struct oio_events_queue_s *self)
 	GError *err = NULL;
 
 	q->running = TRUE;
+	q->healthy = TRUE;
 	q->worker = g_thread_try_new("event|beanstalk", _q_worker, q, &err);
 	if (!q->worker) {
 		GRID_WARN("%s worker startup error: (%d) %s", __FUNCTION__,

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -37,8 +37,8 @@ void oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
 void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 		gchar *key, gchar *msg);
 
-/* should emitters stop sending events? whatever, even if it returns TRUE,
- * the queue won't deny events. */
+/* Should emitters stop sending events? 
+ * (based on queue reaching maximum pending events) */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 
 /** Get the total time spent sending events. */

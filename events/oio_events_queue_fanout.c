@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -146,6 +146,7 @@ _q_run (struct _queue_FANOUT_s *q)
 	gchar *saved = NULL;
 	gint64 last_flush = 0;
 	guint next_output = 0;
+	guint i;
 
 	/* run the agent loop of the current queue */
 	while (q->running
@@ -168,17 +169,32 @@ _q_run (struct _queue_FANOUT_s *q)
 
 		/* forward the event as a beanstalkd job */
 		if (*msg) {
-			struct oio_events_queue_s *out =
-				q->output_tab[ next_output++ % q->output_nb ];
-			oio_events_queue__send(out, msg);
-			msg = NULL;
+			/* loop until finding a healthy output (should be usually the first) */
+			for (i = 0; i < q->output_nb; i++) {
+				struct oio_events_queue_s *out =
+						q->output_tab[ next_output++ % q->output_nb ];
+				if (oio_events_queue__get_health(out) > SCORE_DOWN) {
+					/* output found (accepting events) */
+					oio_events_queue__send(out, msg);
+					msg = NULL;
+					break;
+				}
+			}
+			/* Here, if message is not NULL, there is no output ready for events.
+			 * This event is therefore pushed again in the queue.
+			 */
+			if (msg) {
+				g_async_queue_push_front(q->queue, msg);
+				msg = NULL;
+			}
 		}
 
 		oio_str_clean (&msg);
 	}
 
-	if (saved)
+	if (saved) {
 		g_async_queue_push (q->queue, saved);
+	}
 	saved = NULL;
 	return err;
 }

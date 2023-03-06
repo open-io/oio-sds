@@ -48,7 +48,8 @@ struct _queue_with_endpoint_s
 	gchar **extra_args;  // only for RabbitMQ
 	gint64 pending_events;
 
-	volatile gboolean running;
+	volatile gboolean running;  // used to control the infinite loop
+	volatile gboolean healthy;  // used to know if a queue is explicitly unhealthy
 
 	struct oio_events_queue_buffer_s buffer;
 	struct grid_single_rrd_s *event_send_count;
@@ -76,11 +77,13 @@ void _q_flush_pending(struct _queue_with_endpoint_s *q);
 guint64 _q_get_avg_send_rate(struct oio_events_queue_s *self, gint64 duration);
 /** Get the average send time over the specified duration. */
 guint64 _q_get_avg_send_time(struct oio_events_queue_s *self, gint64 duration);
+/** Get a health metric for the events queue, from 0 (bad) to 100 (good). */
 gint64 _q_get_health(struct oio_events_queue_s *self);
 guint64 _q_get_total_send_time(struct oio_events_queue_s *self);
 guint64 _q_get_total_sent_events(struct oio_events_queue_s *self);
 gboolean _q_is_empty(struct _queue_with_endpoint_s *q);
 gboolean _q_is_running(struct _queue_with_endpoint_s *q);
+/** Does the queue reached the maximum pending events? */
 gboolean _q_is_stalled(struct oio_events_queue_s *self);
 void _q_send(struct oio_events_queue_s *self, gchar *msg);
 void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
