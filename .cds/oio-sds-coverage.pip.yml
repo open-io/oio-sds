@@ -19,7 +19,7 @@ jobs:
           - . $HOME/oio-env.sh
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
-          - pip install --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
+          - pip install --progress-bar off --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
           - go install github.com/axw/gocov/gocov@latest
 
       - name: Download test result artifacts

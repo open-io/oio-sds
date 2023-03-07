@@ -15,7 +15,7 @@ jobs:
           - apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
           - virtualenv -p /usr/bin/python3 $HOME/venv
           - . $HOME/venv/bin/activate
-          - pip install -r requirements.txt -r test-requirements.txt
+          - pip install --progress-bar off -r requirements.txt -r test-requirements.txt
 
       - name: Run coding style tests
         script:

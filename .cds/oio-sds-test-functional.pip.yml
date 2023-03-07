@@ -35,6 +35,8 @@ jobs:
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          [install]
+          progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
           env
