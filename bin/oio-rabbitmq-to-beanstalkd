@@ -47,16 +47,7 @@ class MessageToBeanstalkd(AmqpConsumerWorker):
     def post_connect(self):
         # This queue has probably already been declared by meta2 processes,
         # but it's considered good practice to redeclare it.
-        self._channel.queue_declare(
-            self.queue_name,
-            durable=True,
-            arguments=self.queue_args,
-        )
-        self._channel.queue_bind(
-            exchange=self.queue_name,
-            queue=self.queue_name,
-            routing_key="#",  # Everything
-        )
+        self.declare_queue()
 
     def process_message(self, message, properties):
         decoded = message.decode("utf-8")

@@ -33,6 +33,8 @@ import sys
 import argparse
 from collections import namedtuple
 import shutil
+from os.path import join
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 template_redis = """
 daemonize no
@@ -1363,17 +1365,24 @@ WantedBy=${PARENT}
 
 template_event_agent = """
 [event-agent]
-tube = oio
 namespace = ${NS}
 user = ${USER}
 workers = 2
 concurrency = 5
+
 handlers_conf = ${CFGDIR}/event-handlers-${SRVNUM}.conf
+
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+
 queue_url=${QUEUE_URL}
+queue_args = ${QUEUE_ARGS}
+queue_name = oio
+exchange_name = oio
+routing_key = #
+tube = oio
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
@@ -2206,23 +2215,44 @@ def generate(options):
     else:
         ENV.update({"EVENT_CNXSTRING": "***disabled***", "NOBS": "#"})
 
+    # For testing purposes, some events must go to the main queue
+    if all_beanstalkd:
+        _, host, port = all_beanstalkd[0]
+        ENV["MAIN_QUEUE_URL"] = "beanstalk://{0}:{1}".format(host, port)
+
+    event_target = register_target("event", root_target)
     # If a RabbitMQ endpoint is configured, configure it only for meta2
     if "endpoint" in options["rabbitmq"]:
         ENV.update({"EVENT_CNXSTRING_M2": options["rabbitmq"]["endpoint"]})
+        num += 1
+        url_parts = urlsplit(options["rabbitmq"]["endpoint"])
+        queue_args = {
+            k[6:]: v for k, v in parse_qsl(url_parts.query) if k.startswith("queue_")
+        }
+        queue_url = urlunsplit(url_parts[:3] + ("", ""))
         env = subenv(
             {
-                "SRVNUM": 1,
-                "SRVTYPE": "event-forwarder",
-                "EXE": "oio-rabbitmq-to-beanstalkd",
+                "SRVTYPE": "event-agent",
+                "SRVNUM": num,
+                "QUEUE_ARGS": ",".join("=".join((k, v)) for k, v in queue_args.items()),
+                "QUEUE_URL": queue_url,
+                "EXE": "oio-event-agent-rabbitmq",
             }
         )
-        rabbitmq_target = register_target("rabbitmq-to-beanstalkd", root_target)
         register_service(
             env,
-            template_systemd_rabbitmq_to_beanstalkd,
-            rabbitmq_target,
+            template_systemd_service_event_agent,
+            event_target,
             coverage_wrapper=shutil.which("coverage") + " run -p ",
         )
+        with open(config(env), "w+") as f:
+            tpl = Template(template_event_agent)
+            f.write(tpl.safe_substitute(env))
+        env["QUEUE_URL"] = ENV["MAIN_QUEUE_URL"]
+        with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as f:
+            tpl = Template(template_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
+
     else:
         ENV.update({"EVENT_CNXSTRING_M2": ENV["EVENT_CNXSTRING"]})
 
@@ -2620,12 +2650,6 @@ def generate(options):
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
 
-    # For testing purposes, some events must go to the main queue
-    if all_beanstalkd:
-        _, host, port = all_beanstalkd[0]
-        ENV["MAIN_QUEUE_URL"] = "beanstalk://{0}:{1}".format(host, port)
-
-    event_target = register_target("event", root_target)
     conscience_agents_target = register_target("event-agent", event_target)
     xcute_agents_target = register_target("xcute-event-agent", event_target)
 
@@ -2637,6 +2661,7 @@ def generate(options):
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
+                "QUEUE_ARGS": "",
                 "QUEUE_URL": bnurl,
                 "EXE": "oio-event-agent",
             }

@@ -70,6 +70,9 @@ class AmqpConsumerWorker(Process):
         logger,
         *args,
         queue_args=None,
+        exchange_name=None,
+        routing_key=None,
+        bind_args=None,
         shuffle_endpoints=True,
         **kwargs,
     ):
@@ -84,6 +87,9 @@ class AmqpConsumerWorker(Process):
         self.logger = logger
         self.queue_args = queue_args or {}
         self.queue_name = queue
+        self.exchange_name = exchange_name or queue
+        self.routing_key = routing_key or "#"
+        self.bind_args = bind_args or {}
         self._channel = None
         self._conn = None
         self._stop_requested = Event()
@@ -183,6 +189,23 @@ class AmqpConsumerWorker(Process):
         except Exception:
             self.logger.exception("Failed to reject message %s", tag)
             return False
+
+    def declare_queue(self):
+        """
+        Declare the queue with the arguments specified at class instantiation,
+        bind it to the configured exchange.
+        """
+        self._channel.queue_declare(
+            self.queue_name,
+            durable=True,
+            arguments=self.queue_args,
+        )
+        self._channel.queue_bind(
+            exchange=self.exchange_name,
+            queue=self.queue_name,
+            routing_key=self.routing_key,
+            arguments=self.bind_args,
+        )
 
     # --- Abstract methods ------------
 

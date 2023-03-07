@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -187,7 +187,7 @@ class Connection(object):
     def from_url(cls, url, **kwargs):
         url = urlparse(url)
         if not url.netloc:
-            raise ConnectionError("Invalid URL")
+            raise ConnectionError(f"Invalid URL: {url}")
         url_options = {}
         url_options.update({"host": url.hostname, "port": int(url.port)})
         kwargs.update(url_options)
@@ -479,7 +479,7 @@ class Beanstalk(object):
         socket_keepalive=None,
         socket_keepalive_options=None,
         connection=None,
-        **kwargs
+        **kwargs,
     ):
         if not connection:
             self.socket_timeout = socket_timeout

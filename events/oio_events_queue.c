@@ -182,7 +182,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		return _parse_and_create_multi(cfg, tube, out);
 	} else {
 		GError *err = NULL;
-		const char *final_tube = tube;
+		const char *final_tube = NULL;
 		const char *netloc;
 		const char *param_value = NULL;
 		const char *queue_name = NULL;
@@ -210,6 +210,11 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 				extra_args = oio_strv_append(extra_args, g_strdup(*tok));
 			}
 		}
+
+		// A tube/routing key specified in its own configuration line
+		// takes precedence over the one configured in the endpoint URL.
+		if (oio_str_is_set(tube))
+			final_tube = tube;
 
 		if (!oio_str_is_set(final_tube)) {
 			err = BADREQ("missing 'tube' or 'routing_key' parameter: %s", cfg);

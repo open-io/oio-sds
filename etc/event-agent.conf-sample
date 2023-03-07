@@ -1,13 +1,37 @@
 [event-agent]
 namespace = OPENIO
 user = openio
+# URL of the queue to listen to. Notice that the old event-agent is only able
+# to listen to Beanstalkd, and the new one is only able to listen to AMQP queues.
 queue_url = beanstalk://127.0.0.1:11300
+# queue_url = amqp://guest:guest@127.0.0.1:5672/%2F
+
+# When using Beanstalkd, listen to this tube.
 tube = oio
 
-# Number of worker processes, based on CPU count if not set
+# When using AMQP, this is the queue name
+#(will also read "tube" for compatibility).
+queue_name = oio
+
+# Comma-separated list of key-value arguments to pass when declaring the queue.
+# The default queue type is "classic".
+queue_args = x-queue-type=quorum
+
+# Name of the (topic) exchange to bind the queue to.
+#exchange_name = oio
+
+# Routing key to use when binding the queue to the exchange.
+# The character '#' is a wildcard and will match everything.
+#routing_key = #
+
+# Arguments to use when binding the queue to the exchange.
+# Only useful with header exchanges.
+#bind_args =
+
+# Number of worker processes, based on CPU count if not set or zero
 workers = 2
 
-# Number of green threads
+# Number of green threads (only for the old event-agent)
 #concurrency = 10
 
 handlers_conf = /etc/oio/sds/OPENIO/event-agent/event-handlers.conf

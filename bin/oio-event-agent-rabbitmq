@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+# Copyright (C) 2023 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+
+from urllib.parse import parse_qsl
+
+from oio.cli.common.utils import KeyValueAction
+from oio.common.configuration import read_conf
+from oio.common.easy_value import int_value
+from oio.common.logger import get_logger
+from oio.event.amqp_agent import AmqpEventWorker
+from oio.event.amqp_consumer import AmqpConsumerPool
+
+
+DEFAULT_ENDPOINT = "amqp://guest:guest@127.0.0.1:5672/%2F"
+DEFAULT_QUEUE = "oio"
+
+
+def make_arg_parser():
+    descr = """
+    Read object storage events from RabbitMQ, execute actions.
+    """
+    parser = argparse.ArgumentParser(description=descr)
+
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
+    parser.add_argument("configuration", help="Path to the legacy configuration file")
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    conf = read_conf(args.configuration, "event-agent")
+    endpoint = conf.get("queue_url", DEFAULT_ENDPOINT)
+    input_queue = conf.get("queue_name", conf.get("tube", DEFAULT_QUEUE))
+    logger = get_logger(conf, verbose=args.verbose)
+    workers = int_value(conf.get("workers"), 0)
+
+    routing_key = conf.get("routing_key")
+    exchange_name = conf.get("exchange_name")
+    bind_args = dict(parse_qsl(conf.get("bind_args", ""), separator=","))
+    queue_args = dict(parse_qsl(conf.get("queue_args", ""), separator=","))
+
+    pool = AmqpConsumerPool(
+        endpoint,
+        input_queue,
+        AmqpEventWorker,
+        queue_args=queue_args,
+        exchange_name=exchange_name,
+        routing_key=routing_key,
+        bind_args=bind_args,
+        logger=logger,
+        processes=workers,
+        app_conf=conf,
+    )
+    pool.run()
+
+
+if __name__ == "__main__":
+    main()
