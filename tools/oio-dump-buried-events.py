@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-# oio-election-dump.py
 # Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -17,22 +17,22 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
-import beanstalkc
+
+from oio.event.beanstalk import Beanstalk
 
 
 def dump_buried(host, port):
-    beanstalk = beanstalkc.Connection(host=host, port=int(port))
+    beanstalk = Beanstalk(host, int(port))
 
     beanstalk.use("oio")
 
     while True:
-        job = beanstalk.peek_buried()
-        if not job:
+        jobid, raw_message = beanstalk.peek_buried()
+        if not jobid:
             break
+        print(f"{jobid}: {raw_message!r}")
         print("job")
-        print(job.stats())
-        print(job.body)
-        job.delete()
+        beanstalk.delete(jobid)
 
 
 if __name__ == "__main__":

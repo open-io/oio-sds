@@ -1,4 +1,3 @@
-beanstalkc3
 black
 codecov
 coverage
