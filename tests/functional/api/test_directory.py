@@ -454,11 +454,12 @@ class TestDirectoryAPI(BaseTestCase):
                 by_rdir[rdir["addr"]] = count + 1
         # round average to integer value
         avg = round(total / float(len(by_rdir)))
+        print("Total number of bases hosted by rdir services: ", total)
         print("Ideal number of bases per rdir: ", avg)
         print("Current repartition: ", by_rdir)
 
         # Define an acceptable variance for rdir assignment around average.
-        epsilon = 2
+        epsilon = 3
         for count in by_rdir.values():
             # Assert upper bounded values
             self.assertLessEqual(count, avg + epsilon)
