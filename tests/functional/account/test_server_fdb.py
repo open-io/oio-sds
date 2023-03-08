@@ -642,6 +642,96 @@ class TestAccountServer(TestAccountServerBase):
             resp["regions"],
         )
 
+    def test_add_bucket_ratelimit_with_bad_syntax(self):
+        # Create a new bucket
+        bucket_params = {"id": "foo", "account": self.account_id, "region": "localhost"}
+        resp = self.app.put("/v1.0/bucket/create", query_string=bucket_params)
+        self.assertEqual(201, resp.status_code)
+        # Fetch bucket metadata
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        expected_metdata = self.json_loads(resp.data)
+        # Add ratelimit
+        resp = self.app.put(
+            "/v1.0/bucket/update",
+            data=json.dumps({"metadata": {"ratelimit": 1}}),
+            query_string=bucket_params,
+        )
+        self.assertEqual(400, resp.status_code)
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(expected_metdata, self.json_loads(resp.data))
+
+    def test_add_bucket_ratelimit_with_correct_syntax(self):
+        # Create a new bucket
+        bucket_params = {"id": "foo", "account": self.account_id, "region": "localhost"}
+        resp = self.app.put("/v1.0/bucket/create", query_string=bucket_params)
+        self.assertEqual(201, resp.status_code)
+        # Fetch bucket metadata
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        expected_metdata = self.json_loads(resp.data)
+        expected_metdata.pop("mtime")
+        # Add ratelimit with one group
+        resp = self.app.put(
+            "/v1.0/bucket/update",
+            data=json.dumps(
+                {
+                    "metadata": {
+                        "ratelimit": {
+                            "READ": 10,
+                        }
+                    }
+                }
+            ),
+            query_string=bucket_params,
+        )
+        self.assertEqual(204, resp.status_code)
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        self.assertEqual(200, resp.status_code)
+        metadata = self.json_loads(resp.data)
+        metadata.pop("mtime")
+        expected_metdata["ratelimit"] = {
+            "READ": 10,
+        }
+        self.assertEqual(expected_metdata, metadata)
+        # Add ratelimit with two groups (different from the first)
+        resp = self.app.put(
+            "/v1.0/bucket/update",
+            data=json.dumps(
+                {
+                    "metadata": {
+                        "ratelimit": {
+                            "ALL": 12,
+                            "PUT": 3,
+                        }
+                    }
+                }
+            ),
+            query_string=bucket_params,
+        )
+        self.assertEqual(204, resp.status_code)
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        self.assertEqual(200, resp.status_code)
+        metadata = self.json_loads(resp.data)
+        metadata.pop("mtime")
+        expected_metdata["ratelimit"] = {
+            "ALL": 12,
+            "PUT": 3,
+        }
+        self.assertEqual(expected_metdata, metadata)
+        # Delete ratelimit
+        resp = self.app.put(
+            "/v1.0/bucket/update",
+            data=json.dumps({"to_delete": ["ratelimit"]}),
+            query_string=bucket_params,
+        )
+        self.assertEqual(204, resp.status_code)
+        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        self.assertEqual(200, resp.status_code)
+        metadata = self.json_loads(resp.data)
+        metadata.pop("mtime")
+        expected_metdata.pop("ratelimit")
+        self.assertEqual(expected_metdata, metadata)
+
 
 IAM_POLICY_FULLACCESS = """{
     "Statement": [

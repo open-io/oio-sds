@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,9 @@ from oio.common.exceptions import (
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import (
+    BUCKET_PROP_RATELIMIT,
     BUCKET_PROP_REPLI_ENABLED,
+    GLOBAL_RATELIMIT_GROUP,
     OIO_DB_STATUS_NAME,
     OIO_DB_ENABLED,
     OIO_DB_DISABLED,
@@ -333,6 +335,18 @@ class SetBucket(Command):
             help="Enable or disable bucket replication.",
         )
         parser.add_argument("--region", help="Change the bucket region")
+        parser.add_argument(
+            "--ratelimit",
+            metavar="<[group=]value>",
+            action="append",
+            default=[],
+            help="""
+            Ratelimit per second (for specific S3 operations group).
+            All ratelimit values must be set at the same time, the new values
+            replace the old value (option must be repeated in the same command
+            if there are several groups).
+            """,
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -349,6 +363,16 @@ class SetBucket(Command):
             metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
         if parsed_args.region:
             metadata["region"] = parsed_args.region
+        if parsed_args.ratelimit:
+            ratelimit = {}
+            for rl in parsed_args.ratelimit:
+                group = GLOBAL_RATELIMIT_GROUP
+                if "=" in rl:
+                    group, rl = rl.split("=", 1)
+                if group in ratelimit:
+                    raise ValueError("Only one ratelimit per group")
+                ratelimit[group] = rl
+            metadata[BUCKET_PROP_RATELIMIT] = ratelimit
         bucket_client.bucket_update(
             parsed_args.bucket,
             account=account,
@@ -1079,6 +1103,59 @@ class UnsetContainer(ContainerCommandMixin, Command):
                 system=system,
                 cid=parsed_args.cid,
             )
+
+
+class UnsetBucket(Command):
+    """Unset metadata from a bucket."""
+
+    log = getLogger(__name__ + ".UnsetBucket")
+
+    def get_parser(self, prog_name):
+        parser = super(UnsetBucket, self).get_parser(prog_name)
+        parser.add_argument("bucket", help="Name of the bucket to query.")
+        parser.add_argument(
+            "--check-owner",
+            default=False,
+            help="Check if the bucket owner is the account used",
+            action="store_true",
+        )
+        parser.add_argument(
+            "--replicate",
+            "--replication",
+            default=False,
+            help="Use the default value",
+            action="store_true",
+        )
+        parser.add_argument(
+            "--ratelimit",
+            default=False,
+            help="Use the default value",
+            action="store_true",
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+
+        reqid = request_id(prefix="CLI-BUCKET-")
+        try:
+            account = self.app.client_manager.account
+        except CommandError:
+            account = None
+        bucket_client = self.app.client_manager.storage.bucket
+        to_delete = []
+        if parsed_args.replicate is not None:
+            to_delete.append(BUCKET_PROP_REPLI_ENABLED)
+        if parsed_args.ratelimit is not None:
+            to_delete.append(BUCKET_PROP_RATELIMIT)
+        bucket_client.bucket_update(
+            parsed_args.bucket,
+            account=account,
+            check_owner=parsed_args.check_owner,
+            metadata=None,
+            to_delete=to_delete,
+            reqid=reqid,
+        )
 
 
 class SaveContainer(ContainerCommandMixin, Command):

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -178,6 +178,10 @@ CHUNK_QUARANTINE_FOLDER_NAME = "quarantine"
 
 # Accounts that are used internally by oio-sds and should stay hidden
 HIDDEN_ACCOUNTS = ("_RDIR",)
+
+# Bucket ratelimit
+BUCKET_PROP_RATELIMIT = "ratelimit"
+GLOBAL_RATELIMIT_GROUP = "ALL"
 
 BUCKET_PROP_REPLI_ENABLED = "replication_enabled"
 

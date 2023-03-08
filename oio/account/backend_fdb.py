@@ -22,7 +22,11 @@ import time
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, SHARDING_ACCOUNT_PREFIX
+from oio.common.constants import (
+    BUCKET_PROP_RATELIMIT,
+    BUCKET_PROP_REPLI_ENABLED,
+    SHARDING_ACCOUNT_PREFIX,
+)
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ServiceBusy
 from oio.common.timestamp import Timestamp
@@ -268,6 +272,14 @@ class AccountBackendFdb(object):
     def _timestamp_value_to_timestamp(self, timestamp_value):
         return struct.unpack("<Q", timestamp_value)[0] / 1000000
 
+    def _unmarshal_field_value(self, field, value):
+        if field in COUNTERS_FIELDS:
+            return self._counter_value_to_counter(value)
+        elif field in TIMESTAMP_FIELDS:
+            return self._timestamp_value_to_timestamp(value)
+        else:
+            return value.decode("utf-8")
+
     def _unmarshal_info(self, keys_values, has_regions=False, unpack=None):
         info = {}
         for key, value in keys_values:
@@ -278,24 +290,21 @@ class AccountBackendFdb(object):
                 if not has_regions and len(details) == 1:
                     policy = details[0]
                     dict_values = info.setdefault(f"{field}-details", {})
-                    dict_values[policy] = self._counter_value_to_counter(value)
+                    dict_values[policy] = self._unmarshal_field_value(field, value)
                 elif has_regions and len(details) <= 2:
                     region = details[0]
                     dict_values = info.setdefault(REGIONS_FIELD, {}).setdefault(
                         region, {}
                     )
+                    value = self._unmarshal_field_value(field, value)
                     if len(details) == 2:
                         dict_values = dict_values.setdefault(f"{field}-details", {})
                         field = details[1]  # polciy
-                    dict_values[field] = self._counter_value_to_counter(value)
+                    dict_values[field] = value
                 else:
                     self.logger.warning('Unknown key: "%s"', key)
-            elif field in COUNTERS_FIELDS:
-                info[field] = self._counter_value_to_counter(value)
-            elif field in TIMESTAMP_FIELDS:
-                info[field] = self._timestamp_value_to_timestamp(value)
             else:
-                info[field] = value.decode("utf-8")
+                info[field] = self._unmarshal_field_value(field, value)
         if info:
             # Make sure all keys are still visible,
             # even if there is no associated information
@@ -371,20 +380,31 @@ class AccountBackendFdb(object):
                 f"Keys {common_keys} cannot be updated and deleted at the same time"
             )
 
+        for key in to_delete:
+            if isinstance(key, tuple):
+                subspace = space
+                for k in key:
+                    subspace = subspace[k]
+                range_to_delete = subspace.range()
+                tr.clear_range(range_to_delete.start, range_to_delete.stop)
+            else:
+                if not isinstance(key, str):
+                    raise BadRequest("All keys must be strings")
+                if key in forbidden_keys:
+                    raise Forbidden(f"Key {key} cannot be changed")
+                tr.clear(space.pack((key,)))
         for key, value in to_update.items():
-            if not isinstance(key, str):
-                raise BadRequest("All keys must be strings")
             if not isinstance(value, str):
                 raise BadRequest("All values must be strings")
-            if key in forbidden_keys:
-                raise Forbidden(f"Key {key} cannot be changed")
-            tr[space.pack((key,))] = value.encode("utf-8")
-        for key in to_delete:
-            if not isinstance(key, str):
-                raise BadRequest("All keys must be strings")
-            if key in forbidden_keys:
-                raise Forbidden(f"Key {key} cannot be changed")
-            tr.clear(space.pack((key,)))
+            value = value.encode("utf-8")
+            if isinstance(key, tuple):
+                tr[space.pack(key)] = value
+            else:
+                if not isinstance(key, str):
+                    raise BadRequest("All keys must be strings")
+                if key in forbidden_keys:
+                    raise Forbidden(f"Key {key} cannot be changed")
+                tr[space.pack((key,))] = value
 
     # Status/metrics/rankings -------------------------------------------------
 
@@ -2082,6 +2102,13 @@ class AccountBackendFdb(object):
         if not raw_metadata:
             repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
             info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
+        ratelimit = info.pop(f"{BUCKET_PROP_RATELIMIT}-details", None)
+        if ratelimit is not None:
+            if raw_metadata:
+                for group, rl in ratelimit.items():
+                    info[(BUCKET_PROP_RATELIMIT, group)] = rl
+            else:
+                info[BUCKET_PROP_RATELIMIT] = {k: int(v) for k, v in ratelimit.items()}
         return info
 
     @catch_service_errors
@@ -2313,6 +2340,13 @@ class AccountBackendFdb(object):
         account_id = self._get_bucket_account(tr, bname, **kwargs)
         bucket_space = self.bucket_space[account_id][bname]
 
+        if to_update is None:
+            to_update = {}
+        if to_delete is None:
+            to_delete = set()
+        else:
+            to_delete = set(to_delete)
+
         # Do not use the ctime, it is not present for old buckets
         current_region = tr[bucket_space.pack((REGION_FIELD,))]
         if current_region.present():
@@ -2321,10 +2355,31 @@ class AccountBackendFdb(object):
             # Bucket doesn't exist
             return False
 
-        if to_update is None:
-            to_update = {}
         # Allow to change the bucket region
         new_region = to_update.pop(REGION_FIELD, None)
+
+        # Set bucket ratelimit
+        clear_ratelimit = False
+        if BUCKET_PROP_RATELIMIT in to_delete:
+            clear_ratelimit = True
+            to_delete.remove(BUCKET_PROP_RATELIMIT)
+        new_ratelimit = to_update.pop(BUCKET_PROP_RATELIMIT, None)
+        if new_ratelimit is not None:
+            # Validate the format
+            if not isinstance(new_ratelimit, dict):
+                raise BadRequest("Expected a JSON object for the ratelimit key")
+            for group, rl in new_ratelimit.items():
+                if not isinstance(group, str):
+                    raise BadRequest("Expected a string for the ratelimit group")
+                try:
+                    int(rl)
+                except Exception:
+                    raise BadRequest("Expected an integer for the ratelimit value")
+                to_update[(BUCKET_PROP_RATELIMIT, group)] = str(rl)
+            # Clear old configuration
+            clear_ratelimit = True
+        if clear_ratelimit:
+            to_delete.add((BUCKET_PROP_RATELIMIT,))
 
         self._update_metadata(
             tr,
