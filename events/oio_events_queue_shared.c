@@ -122,7 +122,8 @@ void
 _q_send(struct oio_events_queue_s *self, gchar *msg)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
-	g_async_queue_push(q->queue, msg);
+	GRID_ERROR("##### LME: oio_events_queue_shared.c:124 _q_send queue=%p tube=%s msg=%s", q->queue, q->tube, msg);
+	g_async_queue_push(q->queue, msg); // changer le msg pour en faire une struct
 }
 
 void

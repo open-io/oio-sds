@@ -87,6 +87,7 @@ oio_events_queue_factory__create_fanout (
 		struct oio_events_queue_s **subv, guint sublen,
 		struct oio_events_queue_s **out)
 {
+	GRID_ERROR("##### LME: oio_events_queue_fanout.c:90 oio_events_queue_factory__create_fanout");
 	EXTRA_ASSERT(subv != NULL);
 	EXTRA_ASSERT(sublen > 0);
 	EXTRA_ASSERT(out != NULL);
@@ -102,6 +103,7 @@ oio_events_queue_factory__create_fanout (
 	/* Turn the buffering off, it is already done in the fanout layer */
 	for (guint i = 0; i < sublen; i++) {
 		struct oio_events_queue_s *sub = subv[i];
+		GRID_ERROR("###### LME: oio_events_queue_fanout.c:106 sub=%p", sub);
 		oio_events_queue__set_buffering(sub, 0);
 	}
 
@@ -168,6 +170,7 @@ _q_run (struct _queue_FANOUT_s *q)
 
 		/* forward the event as a beanstalkd job */
 		if (*msg) {
+			GRID_ERROR("##### LME: oio_events_queue_fanout.c:173 _q_run g_async_queue_timeout_pop queue=%p msg=%s", q->queue, msg);
 			struct oio_events_queue_s *out =
 				q->output_tab[ next_output++ % q->output_nb ];
 			oio_events_queue__send(out, msg);
@@ -258,6 +261,7 @@ static void
 _q_send (struct oio_events_queue_s *self, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
+	GRID_ERROR("##### LME: oio_events_queue_fanout.c:262 _q_send queue=%p output_nb=%d msg=%s", q->queue, q->output_nb, msg);
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_FANOUT);
 	g_async_queue_push (q->queue, msg);
 }

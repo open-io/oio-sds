@@ -27,7 +27,7 @@ License along with this library.
 #define AMQP_DEFAULT_PORT 5672
 #define AMQP_PREFIX "amqp://"
 
-struct rabbitmq_s
+struct rabbitmq_s // on devrait avoir plusieur hostname et plusieur port
 {
 	gchar *hostname;
 	int port;

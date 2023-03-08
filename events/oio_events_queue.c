@@ -45,6 +45,7 @@ oio_events_queue__destroy (struct oio_events_queue_s *self)
 void
 oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
 {
+	GRID_ERROR("### LME: oio_events_queue.c:48 oio_events_queue__send msg=%s", msg);
 	EXTRA_ASSERT (msg != NULL);
 	EVTQ_CALL(self,send)(self,msg);
 }
@@ -176,6 +177,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 	EXTRA_ASSERT (cfg != NULL);
 	EXTRA_ASSERT (out != NULL);
 	*out = NULL;
+	GRID_ERROR("## LME: oio_events_queue.c:180 oio_events_queue_factory__create cfg=%s tube=%s", cfg, tube);
 
 	if (NULL != strchr(cfg, OIO_CSV_SEP2_C)) {
 		// Sharding over several endpoints

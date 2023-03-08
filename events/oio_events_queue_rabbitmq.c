@@ -225,17 +225,19 @@ _q_declare_exchange_and_queue(struct _queue_with_endpoint_s *q,
 static gboolean
 _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 {
+	//GRID_ERROR("##### LME: oio_events_queue_rabbitmq.c:251 _q_manage_message");
 	EXTRA_ASSERT(ctx->rabbitmq != NULL && ctx->rabbitmq->conn != NULL);
 
 	gboolean rc = TRUE;
-	gchar* msg = g_async_queue_timeout_pop(q->queue, 200 * G_TIME_SPAN_MILLISECOND);
+	gchar* msg = g_async_queue_timeout_pop(q->queue, 200 * G_TIME_SPAN_MILLISECOND); //faire passer une stuct au lieu de gchar* avec la routing key
 	if (!msg) goto exit;
 	if (!*msg) goto exit;
+	GRID_ERROR("##### LME: oio_events_queue_rabbitmq.c:235 _q_manage_message g_async_queue_timeout_pop queue=%p tube=%s endpoint=%s", q->queue, q->tube, q->endpoint);
 
 	/* forward the event as a RabbitMQ message */
 	const size_t msglen = strlen(msg);
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = rabbitmq_send_msg(ctx->rabbitmq, msg, msglen, q->tube);
+	GError *err = rabbitmq_send_msg(ctx->rabbitmq, msg, msglen, q->tube); //tube doit arriver en meme temps que le message
 	gint64 end = oio_ext_monotonic_time();
 	time_t end_seconds = end / G_TIME_SPAN_SECOND;
 	/* count the operation whether it's a success or a failure */
@@ -248,6 +250,7 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 	if (!err) {
 		ctx->attempts_put = 0;
 	} else {
+		GRID_ERROR("##### LME: oio_events_queue_rabbitmq.c:251 _q_manage_message code=%d msg=%s", err->code, err->message);
 		if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
 			GRID_NOTICE("RabbitMQ recoverable error with [%s]: (%d) %s",
 					q->endpoint, err->code, err->message);
@@ -310,6 +313,8 @@ _q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 
 exit:
 	if (err) {
+		GRID_ERROR("==== LME: RabbitMQ error with [%s]: (%d) %s",
+				q->endpoint, err->code, err->message);
 		GRID_WARN("RabbitMQ error with [%s]: (%d) %s",
 				q->endpoint, err->code, err->message);
 		g_clear_error(&err);
@@ -325,6 +330,8 @@ exit:
 static GError *
 _q_run(struct _queue_with_endpoint_s *q)
 {
+	GRID_ERROR("==== LME: oio_events_queue_rabbitmq.c:328 _q_run endpoint=%s tube=%s", q->endpoint, q->tube);
+
 	GError *err = NULL;
 	struct _running_ctx_s ctx = {0};
 	err = rabbitmq_create(
@@ -340,6 +347,9 @@ _q_run(struct _queue_with_endpoint_s *q)
 	/* Loop until the (asked) end or until there is no event */
 	while (_q_is_running(q)) {
 		ctx.now = oio_ext_monotonic_time();
+		//if(strcmp(q->tube, "oio") != 0) {
+		//	GRID_ERROR("+++LME: _q_run queue=%p tube=%s endpoint=%s", q, q->tube, q->endpoint);
+		//}
 
 		/* Maybe do a periodic flush of buffered/delayed events. */
 		if (ctx.now - ctx.last_flush > q->buffer.delay / 10) {
@@ -348,11 +358,13 @@ _q_run(struct _queue_with_endpoint_s *q)
 		}
 
 		if (!_q_reconnect(q, &ctx)) {
+			GRID_ERROR("---LME: !_q_reconnect endpoint=%s", q->endpoint);
 			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_connect, 5);
 			continue;
 		}
 
 		if (!_q_maybe_check(q, &ctx)) {
+			GRID_ERROR("---LME: !_q_maybe_check tube=%s endpoint=%s", q->tube, q->endpoint);
 			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_check, 5);
 			continue;
 		}

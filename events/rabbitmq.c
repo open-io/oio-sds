@@ -70,7 +70,7 @@ GError*
 rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		const gchar *username, const gchar *password,
 		const gchar **extra_args,
-		struct rabbitmq_s **out)
+		struct rabbitmq_s **out) // passer de gchar *endpoint a gchar **endpoint
 {
 	g_assert_nonnull(out);
 
@@ -302,6 +302,7 @@ rabbitmq_send_msg(struct rabbitmq_s *rabbitmq, void *msg, size_t msglen UNUSED,
 	amqp_boolean_t immediate = FALSE;
 	struct amqp_basic_properties_t_ const *properties = NULL;
 	// FIXME(FVE): amqp_cstring_bytes expects a nul-terminated string
+	GRID_ERROR("#### LME: rabbitmq.c:305 rabbitmq_send_msg routing_key=%s port=%d hostname=%s", routing_key, rabbitmq->port, rabbitmq->hostname);
 	int res = amqp_basic_publish(rabbitmq->conn, rabbitmq->channel,
 			rabbitmq->exchange, routing_key_bytes,
 			mandatory, immediate, properties, amqp_cstring_bytes(msg));
