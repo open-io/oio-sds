@@ -41,9 +41,7 @@ class TestCrawlerPathGen(BaseTestCase):
         super(TestCrawlerPathGen, cls).tearDownClass()
 
     def setUp(self):
-        super(TestCrawlerPathGen, self).setUp()
-        if "event-forwarder" in self.conf["services"]:
-            self.skipTest("Cannot run when events go to RabbitMQ before Beanstalkd")
+        super().setUp()
         self.api = self.storage
         self.beanstalkd0.wait_until_empty("oio")
         services = self.conscience.all_services("rawx")
@@ -117,9 +115,12 @@ class TestCrawlerPathGen(BaseTestCase):
         misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
         # Get number of already created chunks and symbolic links
         nb_link = sum(
-            [len(files) for _, _, files in walk(join(volume_path, misplaced_chunk_dir))]
+            len(files) for _, _, files in walk(join(volume_path, misplaced_chunk_dir))
         )
-        nb_chunk = sum([len(files) for _, _, files in walk(volume_path)]) - nb_link
+        nb_chunk = sum(len(files) for _, _, files in walk(volume_path)) - nb_link
+        self.logger.debug(
+            "%d chunks and %d symlinks before the test", nb_chunk, nb_link
+        )
         try:
             # Create the symbolic link of the chunk
             headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
@@ -129,6 +130,7 @@ class TestCrawlerPathGen(BaseTestCase):
             # The symlink already exists
             symlink_sup = 0
         (_, _, chunk_symlink_path, volume_path, _) = self._chunk_info(chunk)
+
         # Case 1: non optimal placement with one symbolic link
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
@@ -140,8 +142,14 @@ class TestCrawlerPathGen(BaseTestCase):
         )
 
         # Case 2: delete the chunk but the symbolic link is still there
-        self.api.object_delete(self.account, container, object_name)
-        self.beanstalkd0.wait_until_empty("oio")
+        del_reqid = request_id("testpathsgen-")
+        self.api.object_delete(self.account, container, object_name, reqid=del_reqid)
+        self.wait_for_event(
+            "oio-preserved",
+            reqid=del_reqid,
+            timeout=5.0,
+            types=(EventTypes.CHUNK_DELETED,),
+        )
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
             len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),
