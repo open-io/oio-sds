@@ -1705,7 +1705,7 @@ OioGroup=${NS},localhost,event
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=classic
+ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=quorum
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
@@ -2223,19 +2223,33 @@ def generate(options):
     event_target = register_target("event", root_target)
     # If a RabbitMQ endpoint is configured, configure it only for meta2
     if "endpoint" in options["rabbitmq"]:
-        ENV.update({"EVENT_CNXSTRING_M2": options["rabbitmq"]["endpoint"]})
-        num += 1
-        url_parts = urlsplit(options["rabbitmq"]["endpoint"])
-        queue_args = {
-            k[6:]: v for k, v in parse_qsl(url_parts.query) if k.startswith("queue_")
-        }
-        queue_url = urlunsplit(url_parts[:3] + ("", ""))
+        endpoints = options["rabbitmq"]["endpoint"]
+        if isinstance(endpoints, str):
+            endpoints = [endpoints]
+        ENV.update({"EVENT_CNXSTRING_M2": ";".join(endpoints)})
+        queue_args_list = []
+        queue_url_list = []
+        for endpoint in endpoints:
+            num += 1
+            url_parts = urlsplit(endpoint)
+            queue_args = {
+                k[6:]: v
+                for k, v in parse_qsl(url_parts.query)
+                if k.startswith("queue_")
+            }
+            queue_url = urlunsplit(url_parts[:3] + ("", ""))
+            queue_args_list.append(queue_args)
+            queue_url_list.append(queue_url)
+        first_args = queue_args_list[0]
+        for args in queue_args_list[1:]:
+            if args != first_args:
+                raise Exception("Arguments of rabbitmq queues are not the same")
         env = subenv(
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
-                "QUEUE_ARGS": ",".join("=".join((k, v)) for k, v in queue_args.items()),
-                "QUEUE_URL": queue_url,
+                "QUEUE_ARGS": ",".join("=".join((k, v)) for k, v in first_args.items()),
+                "QUEUE_URL": ";".join(queue_url_list),
                 "EXE": "oio-event-agent-rabbitmq",
             }
         )
