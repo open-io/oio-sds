@@ -918,6 +918,20 @@ class RdirClient(HttpApi):
                 break
 
     @ensure_request_id
+    def chunk_search(self, volume, chunk_id, **kwargs):
+        """
+        Search the RDIR databases for all entries matching the specified chunk ID.
+
+        The input and output are the same as chunk_fetch except that the result
+        is a list filtered with the provided chunk ID.
+
+        :rtype: list
+        """
+        # Unfortunately we cannot seek for a chunk ID.
+        entries = [x for x in self.chunk_fetch(volume, **kwargs) if x[1] == chunk_id]
+        return entries
+
+    @ensure_request_id
     def chunk_copy_vol(
         self,
         volume_id,

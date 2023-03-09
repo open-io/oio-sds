@@ -250,6 +250,7 @@ class CommonTestCase(testtools.TestCase):
         self._conscience = None
         self._http_pool = None
         self._logger = None
+        self._rdir_client = None
         self._storage_api = None
         self._watchdog = None
         self._bucket = None
@@ -312,6 +313,16 @@ class CommonTestCase(testtools.TestCase):
         if not self._bucket:
             self._bucket = BucketClient(self.conf)
         return self._bucket
+
+    @property
+    def rdir(self):
+        if self._rdir_client is None:
+            from oio.rdir.client import RdirClient
+
+            self._rdir_client = RdirClient(
+                self.conf, directory_client=self.storage.directory, logger=self.logger
+            )
+        return self._rdir_client
 
     @property
     def storage(self):

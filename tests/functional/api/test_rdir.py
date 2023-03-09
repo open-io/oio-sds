@@ -20,7 +20,6 @@ from mock import MagicMock as Mock
 
 from oio.common.exceptions import NotFound, OioException
 from oio.common.utils import cid_from_name
-from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_id
 
 
@@ -99,7 +98,6 @@ class TestRdirClient(BaseTestCase):
         self.meta2_id = meta2_conf.get("service_id", meta2_conf["addr"])
         self.rawx_conf = random.choice(self.conf["services"]["rawx"])
         self.rawx_id = self.rawx_conf.get("service_id", self.rawx_conf["addr"])
-        self.rdir = RdirClient(self.conf)
         self.rdir.admin_clear(self.rawx_id, clear_all=True)
         self.expected_entries = None
         self.expected_m2_entries = list()
@@ -245,7 +243,7 @@ class TestRdirClient(BaseTestCase):
             expected_entries_rebuild[start_after_index + 1 :], entries
         )
 
-    def test_chunk_fetch_with_rebuild_contaier_id_limit(self):
+    def test_chunk_fetch_with_rebuild_container_id_limit(self):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [
@@ -524,7 +522,7 @@ class TestRdirClient(BaseTestCase):
         all_recs.sort()
         self.assertListEqual(self.expected_entries, all_recs)
 
-    def test_chunk_db_copy_to_withs_same_source_and_destination(self):
+    def test_chunk_db_copy_to_with_same_source_and_destination(self):
         my_rdir = self.rdir._get_rdir_addr(self.rawx_id)
         candidate = my_rdir[0]
         self.assertRaises(
@@ -582,7 +580,7 @@ class TestRdirClient(BaseTestCase):
             except Exception:
                 pass
 
-    def test_meta2_db_copy_to_withs_same_source_and_destination(self):
+    def test_meta2_db_copy_to_with_same_source_and_destination(self):
         my_rdir = self.rdir._get_rdir_addr(self.meta2_id)
         candidate = my_rdir[0]
         self.assertRaises(

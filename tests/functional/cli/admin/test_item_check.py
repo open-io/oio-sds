@@ -91,6 +91,16 @@ class ItemCheckTest(CliTestCase):
                 ),
             )
 
+    def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
+        _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)
+        deadline = time.monotonic() + timeout
+        while (
+            not self.rdir.chunk_search(rawx_service, chunk_id)
+            and time.monotonic() < deadline
+        ):
+            self.logger.info("Waiting for chunk %s to be indexed in rdir", chunk_url)
+            time.sleep(1.0)
+
     def create_object(self, account, container, obj_name):
         reqid = request_id(self.__class__.__name__)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
@@ -1542,6 +1552,8 @@ class ItemCheckTest(CliTestCase):
         )
         expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
 
+        self._wait_for_chunk_indexation(chunk["url"])
+
         # Check with checksum
         output = self.openio_admin(
             "chunk check %s --checksum %s" % (chunk["url"], self.check_opts)
@@ -1595,6 +1607,8 @@ class ItemCheckTest(CliTestCase):
             )
         )
         expected_items.append("chunk chunk=%s error" % missing_chunk["url"])
+
+        self._wait_for_chunk_indexation(missing_chunk["url"])
 
         # Stop treating the events
         self._service("oio-event.target", "stop", wait=8)
