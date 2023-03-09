@@ -1,7 +1,7 @@
 /*
 OpenIO SDS functional tests
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -135,7 +135,8 @@ main(int argc, char **argv)
 {
 	OIO_TEST_INIT(argc, argv);
 
-	use_ecd = g_strcmp0("ec", g_getenv("TEST_SUITE")) == 0;
+	const gchar *test_suite = g_getenv("TEST_SUITE");
+	use_ecd = oio_str_is_set(test_suite) && g_str_has_prefix(test_suite, "ec");
 
 	ns_name = g_getenv("OIO_NS");
 	account = g_getenv("OIO_ACCOUNT");

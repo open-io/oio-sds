@@ -53,18 +53,6 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
-  tests-3copies:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-3copies
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
-
   tests-ec:
     pipeline: oio-sds-test-functional
     application: oio-sds
@@ -120,7 +108,6 @@ workflow:
       - tests-cli
       - tests-fast
       - tests-single
-      - tests-3copies
       - tests-ec
       - tests-fullrepli
       - tests-rebuilder
