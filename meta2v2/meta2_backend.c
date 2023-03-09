@@ -221,17 +221,13 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 		return NULL;
 	STRING_STACKIFY(url);
 
-	format_tube_list(oio_meta2_tube_container_new);
-	format_tube_list(oio_meta2_tube_container_deleted);
-	format_tube_list(oio_meta2_tube_container_state);
-	format_tube_list(oio_meta2_tube_container_updated);
-	format_tube_list(oio_meta2_tube_content_created);
-	format_tube_list(oio_meta2_tube_content_appended);
-	format_tube_list(oio_meta2_tube_content_deleted);
-	format_tube_list(oio_meta2_tube_content_updated);
-	format_tube_list(oio_meta2_tube_content_broken);
-	format_tube_list(oio_meta2_tube_content_drained);
-	format_tube_list(oio_meta2_tube_meta2_deleted);
+	gchar *oio_meta2_tube_content_created_from_conf = oio_cfg_get_value(ns, "meta2.tube.content_created");
+	gchar *oio_meta2_tube_content_deleted_from_conf = oio_cfg_get_value(ns, "meta2.tube.content_deleted");
+	gchar *oio_meta2_tube_content_updated_from_conf = oio_cfg_get_value(ns, "meta2.tube.content_updated");
+
+	format_tube_list(oio_meta2_tube_content_created_from_conf);
+	format_tube_list(oio_meta2_tube_content_deleted_from_conf);
+	format_tube_list(oio_meta2_tube_content_updated_from_conf);
 
 	GError *err = NULL;
 	INIT(m2->notifier_container_created, oio_meta2_tube_container_new);
@@ -239,10 +235,10 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_container_state, oio_meta2_tube_container_state);
 	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated);
 
-	INIT(m2->notifier_content_created, oio_meta2_tube_content_created);
+	INIT(m2->notifier_content_created, oio_meta2_tube_content_created_from_conf);
 	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended);
-	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted);
-	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated);
+	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted_from_conf);
+	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated_from_conf);
 	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken);
 	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
 
