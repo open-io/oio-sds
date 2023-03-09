@@ -187,10 +187,51 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 		oio_events_stats_register(#Out + sizeof("m2->notifier"), Out); \
 	} \
 }
+
+	void
+	format_tube_list(gchar* tube_list) {
+		int i, j, len;
+		len = strlen(tube_list);
+		for(i=0; i<len; i++)
+		{
+			switch(tube_list[i])
+			{
+				case '[':
+				case ']':
+				case '\'':
+				case ' ':
+					for(j = i; j < len; j++)
+					{
+						tube_list[j] = tube_list[j+1];
+					}
+					len--;
+					i--;
+					break;
+				case ',':
+					tube_list[i] = ';';
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
 	gchar *url = oio_cfg_get_eventqueue(ns, "meta2");
 	if (!url)
 		return NULL;
 	STRING_STACKIFY(url);
+
+	format_tube_list(oio_meta2_tube_container_new);
+	format_tube_list(oio_meta2_tube_container_deleted);
+	format_tube_list(oio_meta2_tube_container_state);
+	format_tube_list(oio_meta2_tube_container_updated);
+	format_tube_list(oio_meta2_tube_content_created);
+	format_tube_list(oio_meta2_tube_content_appended);
+	format_tube_list(oio_meta2_tube_content_deleted);
+	format_tube_list(oio_meta2_tube_content_updated);
+	format_tube_list(oio_meta2_tube_content_broken);
+	format_tube_list(oio_meta2_tube_content_drained);
+	format_tube_list(oio_meta2_tube_meta2_deleted);
 
 	GError *err = NULL;
 	INIT(m2->notifier_container_created, oio_meta2_tube_container_new);

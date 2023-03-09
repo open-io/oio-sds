@@ -2169,7 +2169,8 @@ def generate(options):
 
     # If a RabbitMQ endpoint is configured, configure it only for meta2
     if "endpoint" in options["rabbitmq"]:
-        ENV.update({"EVENT_CNXSTRING_M2": options["rabbitmq"]["endpoint"]})
+        endpoints = options.get("rabbitmq").get("endpoint")
+        ENV.update({"EVENT_CNXSTRING_M2": ";".join(endpoints)})
         env = subenv(
             {
                 "SRVNUM": 1,
