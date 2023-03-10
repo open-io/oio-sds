@@ -48,7 +48,7 @@ class TestConscienceFunctional(BaseTestCase):
             # We expect an empty list, or the list is not empty
             if expect_empty or bool(parsed):
                 break
-            time.sleep(0.5)
+            time.sleep(1.0)
         return parsed
 
     def test_service_pool_get(self):
