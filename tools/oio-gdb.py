@@ -2,6 +2,7 @@
 
 # oio-gdb.py
 # Copyright (C) 2015-2018 OpenIO SAS, original work as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -79,5 +80,9 @@ class Core(object):
 
 if __name__ == "__main__":
     core = Core()
-    for item in core.list():
+    corelist = core.list()
+    if not corelist:
+        print("oio-gdb: no core dump found")
+        core.vars()
+    for item in corelist:
         core.parse(item)
