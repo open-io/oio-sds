@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -377,7 +377,6 @@ _pack_list_params(MESSAGE msg, struct list_params_s *p)
 	if (p->flag_properties) flags |= M2V2_FLAG_ALLPROPS;
 	// Beware of the negation of the flag
 	if (!p->flag_recursion) flags |= M2V2_FLAG_NORECURSION;
-	if (p->flag_noskip) flags |= M2V2_FLAG_NOSKIP;
 	flags = g_htonl(flags);
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 

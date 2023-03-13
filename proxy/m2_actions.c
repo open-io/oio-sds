@@ -2092,11 +2092,7 @@ static GError * _list_loop (struct req_args_s *args,
 		GTree *tree_prefixes, list_packer_f packer) {
 	GError *err = NULL;
 	gboolean stop = FALSE;
-	gint iterations = 0;
-	// Total number of objects listed so far
 	guint main_count = 0;
-	// Number of objects and prefix found in the previous iteration
-	guint prev_iter_count = 0;
 	struct list_params_s in = *in0;
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%s prefix=%s"
@@ -2109,7 +2105,6 @@ static GError * _list_loop (struct req_args_s *args,
 
 	struct filter_ctx_s ctx = {0};
 	while (!err && !stop && grid_main_is_running()) {
-		iterations++;
 
 		struct list_result_s out = {0};
 		m2v2_list_result_init (&out);
@@ -2117,17 +2112,9 @@ static GError * _list_loop (struct req_args_s *args,
 		/* patch the input parameters */
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (main_count + g_tree_nnodes(tree_prefixes));
-		/* Build an optimized marker (only if first iteration
-		 * or if the previous iteration yielded something). */
-		if (iterations <= 1 || prev_iter_count > 0) {
-			in.marker_start = _build_next_marker(
-					out0->next_marker?: in0->marker_start,
-					in0->delimiter, in0->prefix);
-			in.flag_noskip = 0;
-		} else {
-			in.marker_start = g_strdup(out0->next_marker?: in0->marker_start);
-			in.flag_noskip = 1;
-		}
+		in.marker_start = _build_next_marker(
+				out0->next_marker?: in0->marker_start,
+				in0->delimiter, in0->prefix);
 		in.version_marker = g_strdup(
 			out0->next_version_marker?: in0->version_marker);
 
@@ -2198,17 +2185,10 @@ static GError * _list_loop (struct req_args_s *args,
 			ctx.prefix = in0->prefix;
 			ctx.marker = in0->marker_start;
 			ctx.delimiter = in0->delimiter;
-			gint prefix_count = g_tree_nnodes(tree_prefixes);
-
 			_filter_list_result(&ctx, out.beans);
-
 			out.beans = NULL;
-			prev_iter_count = ctx.count - main_count
-					+ g_tree_nnodes(tree_prefixes) - prefix_count;
 			main_count = ctx.count;
 			out0->beans = ctx.beans;
-		} else {
-			prev_iter_count = 0;
 		}
 
 		if (in0->maxkeys > 0 &&

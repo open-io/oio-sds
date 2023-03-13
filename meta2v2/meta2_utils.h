@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -55,7 +55,6 @@ struct list_params_s
 	guint8 flag_properties:1;
 	guint8 flag_local     :1;
 	guint8 flag_recursion :1;
-	guint8 flag_noskip    :1;
 };
 
 struct m2v2_position_s {
