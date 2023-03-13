@@ -65,7 +65,7 @@ class TestConscienceFunctional(BaseTestCase):
         srvin = self._srv("echo")
         self._register_srv(srvin)
         body = self._assert_list_echo()
-        self.assertIn(srvin["addr"], (x["addr"] for x in body))
+        self.assertIn(srvin["addr"], [x["addr"] for x in body])
 
     def test_service_pool_put_invalid_addr(self):
         srvin = self._srv("echo")
@@ -161,9 +161,11 @@ class TestConscienceFunctional(BaseTestCase):
         self._flush_cs("echo")
         srv = self._srv("echo")
 
-        def check_service_known(body):
+        def check_service_known(body, expected_score=None):
             self.assertIsInstance(body, list)
             self.assertListEqual([srv["addr"]], [s["addr"] for s in body])
+            if expected_score is not None:
+                self.assertEqual(expected_score, body[0]["score"])
 
         # register the service with a positive score
         srv["score"] = 1
@@ -174,11 +176,12 @@ class TestConscienceFunctional(BaseTestCase):
         self._reload_proxy()
         # check it appears
         body = self._assert_list_echo()
-        check_service_known(body)
+        check_service_known(body, 1)
         # check it is polled
         resp = self.request("POST", self._url_lb("poll"), params={"pool": "echo"})
-        self.assertEqual(resp.status, 200)
-        body = self.json_loads(resp.data)
+        raw_body = resp.data
+        self.assertEqual(resp.status, 200, f"Failed to poll 'echo' service: {raw_body}")
+        body = self.json_loads(raw_body)
         check_service_known(body)
 
         # register the service locked to 0
@@ -190,7 +193,7 @@ class TestConscienceFunctional(BaseTestCase):
         self._reload_proxy()
         # check it appears
         body = self._assert_list_echo()
-        check_service_known(body)
+        check_service_known(body, 0)
         # the service must not be polled
         resp = self.request("POST", self._url_lb("poll"), params={"pool": "echo"})
         self.assertError(resp, 503, 481)
