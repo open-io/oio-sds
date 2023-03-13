@@ -718,7 +718,7 @@ class AccountBackendFdb(object):
 
         account_ctime = tr[account_space.pack((CTIME_FIELD,))]
         if not account_ctime.present():
-            raise NotFound("Account does'nt exist")
+            raise NotFound("Account doesn't exist")
 
         containers = tr[account_space.pack((CONTAINERS_FIELD,))]
         if containers.present():
@@ -1665,7 +1665,7 @@ class AccountBackendFdb(object):
         if not account_ctime.present():
             # It's a new account
             if not autocreate_account:
-                raise NotFound("Account does'nt exist")
+                raise NotFound("Account doesn't exist")
             self._real_create_account(tr, account_id)
 
         container_is_deleted = new_dtime >= new_mtime
@@ -1694,7 +1694,7 @@ class AccountBackendFdb(object):
                 return
             # It's a new container
             if not autocreate_container:
-                raise NotFound("Container does'nt exist")
+                raise NotFound("Container doesn't exist")
             self._real_create_container(tr, account_id, cname, region, new_mtime)
             current_mtime = new_mtime
         else:
@@ -1904,7 +1904,7 @@ class AccountBackendFdb(object):
         if not account_ctime.present():
             # It's a new account
             if not autocreate_account:
-                raise NotFound("Account does'nt exist")
+                raise NotFound("Account doesn't exist")
             self._real_create_account(tr, account)
 
         self._set_bucket_owner(tr, bname, account)

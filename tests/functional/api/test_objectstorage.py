@@ -1283,6 +1283,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             fields={"account": account},
             types=(EventTypes.CONTAINER_DELETED,),
             reqid=reqid,
+            timeout=5.0,
+        )
+        self.wait_for_event(
+            "oio-preserved",
+            fields={"account": account},
+            types=(EventTypes.CONTAINER_STATE,),
+            reqid=reqid,
+            timeout=2.0,
         )
         self.api.account_delete(account)
         # account_refresh on deleted account
