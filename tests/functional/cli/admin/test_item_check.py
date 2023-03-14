@@ -1525,6 +1525,7 @@ class ItemCheckTest(CliTestCase):
         self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_checksum(self):
+        self.maxDiff = 1024
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name
         )

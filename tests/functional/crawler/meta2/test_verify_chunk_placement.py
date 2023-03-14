@@ -147,21 +147,21 @@ class TestVerifyChunkPlacement(BaseTestCase):
         return chunks
 
     def _verify_links(
-        self, chunks_test, verifychunkplacement, policy, is_already_created=False
+        self, test_chunks, verifychunkplacement, policy, is_already_created=False
     ):
         link_created = []
         srv_ids = {srv["id"]: srv["tags"]["tag.vol"] for srv in self.rawx_srv_list}
-        for chunk_test in chunks_test:
-            rawx_srv_id = urlparse(chunk_test["url"]).netloc
+        for test_chunk in test_chunks:
+            rawx_srv_id = urlparse(test_chunk["url"]).netloc
             server_constraints = verifychunkplacement.policy_data[policy][2][2]
             chunk_test_path = srv_ids[rawx_srv_id]
-            chunk_test_id = urlparse(chunk_test["url"]).path[1:]
+            chunk_test_id = urlparse(test_chunk["url"]).path[1:]
             symlink_folder = join(
                 chunk_test_path, RawxWorker.EXCLUDED_DIRS[0], chunk_test_id[:3]
             )
             if exists(symlink_folder):
                 symlinks = [
-                    file for file in os.listdir(symlink_folder) if chunk_test_id in file
+                    link for link in os.listdir(symlink_folder) if chunk_test_id in link
                 ]
                 if len(symlinks) != 0:
                     chunk_symlink_path = join(
@@ -169,7 +169,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
                         symlinks[0],
                     )
                     link_created.append(islink(chunk_symlink_path))
-        diff = len(chunks_test) - server_constraints
+        diff = max(0, len(test_chunks) - server_constraints)
         self.assertEqual(diff, link_created.count(True))
         if is_already_created:
             # symlink already created at object creation
