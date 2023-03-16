@@ -2,7 +2,7 @@
 
 # oio-rdir-harass.py
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """Repeatedly send and remove fake records to/from rdir services.
 
-usage: %s NAMESPACE
+usage: %s NAMESPACE [LOOPS [MAX_CONTAINERS [MAX_CONTENTS]]]
+
+LOOPS: average number of entries to create during each send batch
 """
 
 from __future__ import print_function
@@ -35,7 +37,7 @@ CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
 
 
 class Harasser(object):
-    def __init__(self, ns, max_containers=256, max_contents=256):
+    def __init__(self, ns, loops=2000, max_containers=256, max_contents=256):
         conf = {"namespace": ns}
         self.cs = ConscienceClient(conf)
         self.rdir = RdirClient(conf)
@@ -47,10 +49,10 @@ class Harasser(object):
         self.pushed_time = 0
         self.removed_count = 0
         self.removed_time = 0
+        self.loops = loops or 1000
 
-    def harass_put(self, loops=None):
-        if loops is None:
-            loops = random.randint(1000, 2000)
+    def harass_put(self):
+        loops = random.randint(self.loops * 3 // 4, self.loops * 5 // 4)
         print("Pushing %d fake chunks" % loops)
         loop = loops
         count_start_container = random.randrange(2**20)
@@ -124,7 +126,11 @@ class Harasser(object):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 3:
+    if len(sys.argv) > 4:
+        HARASS = Harasser(
+            sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[3])
+        )
+    elif len(sys.argv) > 3:
         HARASS = Harasser(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))
     elif len(sys.argv) > 2:
         HARASS = Harasser(sys.argv[1], int(sys.argv[2]))

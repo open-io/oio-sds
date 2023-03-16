@@ -1046,6 +1046,24 @@ Used by `gcc`
  * cmake directive: *OIO_RDIR_FD_RESERVE*
  * range: 0 -> 32768
 
+### rdir.leveldb.block_size
+
+> Configure the size of rdir Leveldb data blocks. See Leveldb documentation.
+
+ * default: **4096**
+ * type: guint
+ * cmake directive: *OIO_RDIR_LEVELDB_BLOCK_SIZE*
+ * range: 1024 -> 1048576
+
+### rdir.leveldb.max_file_size
+
+> Configure the size of rdir Leveldb files. Leveldb will write up to this amount of bytes to a file before switching to a new one. See Leveldb documentation.
+
+ * default: **2097152**
+ * type: guint
+ * cmake directive: *OIO_RDIR_LEVELDB_MAX_FILE_SIZE*
+ * range: 16384 -> 1073741824
+
 ### resolver.cache.csm0.max.default
 
 > In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)

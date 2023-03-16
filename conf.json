@@ -742,7 +742,17 @@
 			{ "type": "uint", "name": "rdir_fd_reserve",
 				"key": "rdir.fd_reserve",
 				"descr": "Configure the total number of file descriptors the leveldb backend may use. Set to 0 to autodetermine the value. Will only be applied on bases opened after the configuration change.",
-				"def": 0, "min": 0, "max": "32ki" }
+				"def": 0, "min": 0, "max": "32ki" },
+
+			{ "type": "uint", "name": "rdir_leveldb_block_size",
+				"key": "rdir.leveldb.block_size",
+				"descr": "Configure the size of rdir Leveldb data blocks. See Leveldb documentation.",
+				"def": 4096, "min": 1024, "max": "1024ki" },
+
+			{ "type": "uint", "name": "rdir_leveldb_max_file_size",
+				"key": "rdir.leveldb.max_file_size",
+				"descr": "Configure the size of rdir Leveldb files. Leveldb will write up to this amount of bytes to a file before switching to a new one. See Leveldb documentation.",
+				"def": "2Mi", "min": 16384, "max": "1024Mi" }
 		]
 	},
 	"server": {

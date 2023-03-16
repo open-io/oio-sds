@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -422,6 +422,8 @@ _db_open(const char *volid, gboolean autocreate, leveldb_t **pdb)
 	leveldb_options_t *options = leveldb_options_create();
 	leveldb_options_set_max_open_files(options, rdir_fd_per_base);
 	leveldb_options_set_create_if_missing(options, BOOL(autocreate));
+	leveldb_options_set_block_size(options, rdir_leveldb_block_size);
+	leveldb_options_set_max_file_size(options, rdir_leveldb_max_file_size);
 	db = leveldb_open(options, dbname, &errmsg);
 	leveldb_options_destroy(options);
 	g_free(dbname);
@@ -2807,6 +2809,9 @@ _patch_and_apply_configuration(void)
 		GRID_INFO("FD configured sys[%u] db[%u] passive[%u] %%base[%u]",
 				maxfd, rdir_fd_reserve, server_fd_max_passive, rdir_fd_per_base);
 	}
+
+	GRID_INFO("LevelDB block size: %u bytes, max file size: %u bytes",
+			rdir_leveldb_block_size, rdir_leveldb_max_file_size);
 
 	network_server_reconfigure(server);
 }
