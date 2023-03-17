@@ -874,9 +874,18 @@ class ListBuckets(Lister):
             dest="versioning",
             help="Display the versioning state of each bucket",
         )
+        parser.add_argument(
+            "--human",
+            action="store_true",
+            dest="humanize",
+            default=False,
+            help="Display bytes size in a human-redable format",
+        )
         return parser
 
     def take_action(self, parsed_args):
+        from oio.common.easy_value import convert_size
+
         self.log.debug("take_action(%s)", parsed_args)
 
         kwargs = {"reqid": request_id(prefix="CLI-BUCKET-")}
@@ -936,6 +945,15 @@ class ListBuckets(Lister):
                     yield v
 
             listing = enrich(listing)
+
+        if parsed_args.humanize:
+
+            def humanize(listing):
+                for v in listing:
+                    v["bytes"] = "{:>10}".format(convert_size(v["bytes"], unit="B"))
+                    yield v
+
+            listing = humanize(listing)
 
         return columns, ([v[k.lower()] for k in columns] for v in listing)
 
