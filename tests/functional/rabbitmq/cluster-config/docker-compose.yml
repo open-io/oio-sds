@@ -1,0 +1,61 @@
+version: "3"
+services:
+  rabbit-1:
+    container_name: rabbit-1
+    image: rabbitmq:3-management
+    hostname: rabbit-1
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      - RABBITMQ_CONFIG_FILE=/config/rabbitmq
+      - RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK
+    networks:
+      - rabbits-net
+    volumes:
+      - ./rabbit-1/:/config/
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "cluster_status"]
+      interval: 60s
+      retries: 1
+      timeout: 10s
+  rabbit-2:
+    container_name: rabbit-2
+    image: rabbitmq:3-management
+    hostname: rabbit-2
+    ports:
+      - "15673:15672"
+      - "5673:5672"
+    environment:
+      - RABBITMQ_CONFIG_FILE=/config/rabbitmq
+      - RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK
+    networks:
+      - rabbits-net
+    volumes:
+      - ./rabbit-2/:/config/
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "cluster_status"]
+      interval: 60s
+      retries: 1
+      timeout: 10s
+  rabbit-3:
+    container_name: rabbit-3
+    image: rabbitmq:3-management
+    hostname: rabbit-3
+    ports:
+      - "15674:15672"
+      - "5674:5672"
+    environment:
+      - RABBITMQ_CONFIG_FILE=/config/rabbitmq
+      - RABBITMQ_ERLANG_COOKIE=SDGJROHXTBCOQJFZJOFK
+    networks:
+      - rabbits-net
+    volumes:
+      - ./rabbit-3/:/config/
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "cluster_status"]
+      interval: 60s
+      retries: 1
+      timeout: 10s
+networks:
+  rabbits-net:
