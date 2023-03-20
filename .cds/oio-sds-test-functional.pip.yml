@@ -50,7 +50,15 @@ jobs:
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
           rm -rf fdb-packages
-          rabbitmq-plugins enable rabbitmq_management
+          rabbitmqctl stop
+          docker-compose -f tests/functional/rabbitmq/cluster-config/docker-compose.yml up -d
+          # wait for the rabbitmq nodes to form a cluster
+          until [ "$(docker inspect -f "{{.State.Health.Status}}" rabbit-1)" = "healthy" ]
+          do
+            sleep 1
+          done
+          sleep 1
+          docker exec rabbit-1 rabbitmqctl await_online_nodes 3
 
       - name: Run functional tests
         script: |+
