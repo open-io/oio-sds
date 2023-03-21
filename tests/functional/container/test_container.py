@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,7 @@ from tests.utils import (
 )
 from oio.common import exceptions as exc
 from oio.common.constants import (
+    DELETEMARKER_HEADER,
     OIO_DB_STATUS_NAME,
     OIO_DB_ENABLED,
     OIO_DB_FROZEN,
@@ -42,6 +43,7 @@ from oio.common.constants import (
     M2_PROP_OBJECTS,
     M2_PROP_USAGE,
     SIMULATEVERSIONING_HEADER,
+    VERSIONID_HEADER,
 )
 from oio.common.easy_value import boolean_value
 from oio.conscience.client import ConscienceClient
@@ -110,8 +112,8 @@ class TestMeta2Containers(BaseTestCase):
                 params=params,
                 headers={"X-oio-action-mode": "force"},
             )
-        except Exception:
-            pass
+        except Exception as err:
+            self.logger.debug("Failed to clean %s: %s", self.ref, err)
 
     def _create(self, params, code, autocreate=True):
         headers = {}
@@ -990,6 +992,8 @@ class TestMeta2Containers(BaseTestCase):
                 headers=headers,
             )
             self.assertEqual(204, resp.status)
+            self.assertIn(DELETEMARKER_HEADER, resp.headers)
+            self.assertIn(VERSIONID_HEADER, resp.headers)
             sorted_versions = list(versions.keys())
             sorted_versions.sort()
             versions[sorted_versions[-1] + 1] = True
@@ -1092,9 +1096,12 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(204, resp.status)
         resp = self.request("POST", self.url_content("delete"), params=param_content)
         self.assertEqual(204, resp.status)
+        self.assertIn(DELETEMARKER_HEADER, resp.headers)
+        self.assertIn(VERSIONID_HEADER, resp.headers)
 
         # Add delete marker to a delete marker
         resp = self.request("POST", self.url_content("delete"), params=param_content)
+        # FIXME(FVE): this should work, multiple delete markers are allowed
         self.assertEqual(400, resp.status)
 
         # Add delete marker to a specific version
@@ -1102,6 +1109,10 @@ class TestMeta2Containers(BaseTestCase):
         param_content["version"] = 12345
         resp = self.request("POST", self.url_content("delete"), params=param_content)
         self.assertEqual(204, resp.status)
+        self.assertIn(DELETEMARKER_HEADER, resp.headers)
+        self.assertEqual(
+            str(param_content["version"] + 1), resp.headers.get(VERSIONID_HEADER)
+        )
         resp = self.request(
             "POST", self.url_content("get_properties"), params=param_content
         )
@@ -1570,6 +1581,7 @@ class TestMeta2Contents(BaseTestCase):
 
         resp = self.request("POST", self.url_content("delete"), params=params)
         self.assertEqual(resp.status, 204)
+        self.assertIn(VERSIONID_HEADER, resp.headers)
 
         resp = self.request("GET", self.url_content("show"), params=params)
         self.assertError(resp, 404, 420)

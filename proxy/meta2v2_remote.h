@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,8 @@ struct list_result_s
 void m2v2_list_result_init (struct list_result_s *p);
 void m2v2_list_result_clean (struct list_result_s *p);
 
-/* suitable as a request extractor */
+/* Extract a list of beans from a meta2 response. Beans are stored
+ * in a (struct list_result_s *) cast from ctx. */
 gboolean m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply);
 gboolean m2v2_boolean_truncated_extract(gpointer ctx, guint status,
 		MESSAGE reply);

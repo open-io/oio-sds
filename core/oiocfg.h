@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -66,6 +66,9 @@ extern "C" {
 #  define PROXYD_HEADER_PREFIX "x-oio-"
 # endif
 
+/* Boolean telling if a deleter marker has been created or deleted */
+#define PROXYD_HEADER_DELETE_MARKER PROXYD_HEADER_PREFIX "delete-marker"
+
 # ifndef PROXYD_HEADER_MODE
 #  define PROXYD_HEADER_MODE PROXYD_HEADER_PREFIX "action-mode"
 # endif
@@ -109,6 +112,9 @@ extern "C" {
 # ifndef PROXYD_HEADER_SIMULATE_VERSIONING
 #  define PROXYD_HEADER_SIMULATE_VERSIONING PROXYD_HEADER_PREFIX "simulate-versioning"
 # endif
+
+/* Version Id of the object being manipulated */
+#define PROXYD_HEADER_VERSION_ID PROXYD_HEADER_PREFIX "version-id"
 
 /* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_SERVICES

@@ -340,13 +340,21 @@ class DeleteObject(ContainerCommandMixin, Lister):
                 container = parsed_args.container
 
             try:
-                deleted = self.app.client_manager.storage.object_delete(
+                (
+                    delete_marker,
+                    _version_id,
+                ) = self.app.client_manager.storage.object_delete(
                     account,
                     container,
                     parsed_args.objects[0],
                     version=parsed_args.object_version,
                     cid=parsed_args.cid,
                 )
+                # If we specify a version, something is deleted each time (supposedly).
+                # If we don't specify a version, something is deleted only if no
+                # delete marker is created.
+                # FIXME(FVE): should we say "False" when a delete marker is created?
+                deleted = bool(parsed_args.object_version) or not delete_marker
             except exceptions.OioException as exc:
                 self.log.error("%s", exc)
                 self.success = False

@@ -1935,6 +1935,7 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 static void
 _bulk_item_result(GString *gresponse,
 		const guint i, const char *name,
+		const char *version,
 		const GError *err, gint code_ok)
 {
 	if (i > 0)
@@ -1942,6 +1943,10 @@ _bulk_item_result(GString *gresponse,
 	g_string_append_c(gresponse, '{');
 	oio_str_gstring_append_json_pair(gresponse, "name", name);
 	g_string_append_c(gresponse, ',');
+	if (oio_str_is_set(version)) {
+		oio_str_gstring_append_json_pair(gresponse, "version", version);
+		g_string_append_c(gresponse, ',');
+	}
 	if (err)
 		_append_status(gresponse, err->code, err->message);
 	else
@@ -2006,7 +2011,7 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 				KV_get_value(properties, M2V2_ADMIN_STORAGE_POLICY),
 				KV_get_value(properties, M2V2_ADMIN_VERSIONING_POLICY));
 		g_strfreev(properties);
-		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_CREATED);
+		_bulk_item_result(gresponse, i, name, NULL, err, HTTP_CODE_CREATED);
 		if (err) g_clear_error(&err);
 	}
 	g_string_append(gresponse, "]}");
@@ -4389,7 +4394,48 @@ enum http_rc_e action_content_delete (struct req_args_s *args) {
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
 			bypass_governance, create_delete_marker, DL()); }
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	gboolean delete_marker = FALSE;
+	gint64 version = -1;
+	struct list_result_s del_result = {0};
+	m2v2_list_result_init(&del_result);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack,
+			&del_result, m2v2_list_result_extract);
+
+	for (GSList *l = del_result.beans; !err && l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_ALIASES) {
+			continue;
+		}
+
+		delete_marker = ALIASES_get_deleted(bean);
+		version = ALIASES_get_version(bean);
+	}
+
+	if (!err) {
+		gchar *version_str = NULL;
+		if (version == -1) {
+			/* XXX: we did not receive any alias bean.
+			 * This happens when we remove a delete marker: the meta2 does not
+			 * want to emit any object event because both the object creation
+			 * and "removal" have already been notified. */
+			if (!oio_url_has(args->url, OIOURL_VERSION)) {
+				GRID_WARN("BUG: a deletion without version id did not return "
+						"the deleted alias or any delete marker (reqid=%s)",
+						oio_ext_get_reqid());
+				version_str = g_strdup("-1");
+			} else {
+				delete_marker = TRUE;
+				version_str = g_strdup(oio_url_get(args->url, OIOURL_VERSION));
+			}
+		} else {
+			version_str = g_strdup_printf("%"G_GUINT64_FORMAT, version);
+		}
+		if (delete_marker)
+			args->rp->add_header(PROXYD_HEADER_DELETE_MARKER, g_strdup("true"));
+		args->rp->add_header(PROXYD_HEADER_VERSION_ID, version_str);
+	}
+
+	m2v2_list_result_clean(&del_result);
 	return _reply_m2_error (args, err);
 }
 
@@ -4442,13 +4488,15 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	for (guint i = 0; i < jarray_len; i++) {
 		struct json_object * jcontent = json_object_array_get_idx(jarray, i);
 
-		struct json_object * jname = NULL;
+		struct json_object *jname = NULL, *jversion = NULL;
 		json_object_object_get_ex(jcontent, "name", &jname);
+		json_object_object_get_ex(jcontent, "version", &jversion);
 		const gchar *name = json_object_get_string(jname);
-
 		oio_url_set(args->url, OIOURL_PATH, name);
+		const gchar *version = jversion? json_object_get_string(jversion) : "";
+		oio_url_set(args->url, OIOURL_VERSION, version);
 		GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_NO_CONTENT);
+		_bulk_item_result(gresponse, i, name, version, err, HTTP_CODE_NO_CONTENT);
 		if (err) g_clear_error(&err);
 	}
 

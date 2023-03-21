@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@ from oio.common.cache import (
     set_cached_object_metadata,
     del_cached_object_metadata,
 )
+from oio.common.constants import DELETEMARKER_HEADER, VERSIONID_HEADER
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioNetworkException
 from oio.common.green import eventlet
@@ -773,7 +774,10 @@ class ContainerClient(ProxyClient):
         """
         Delete one object.
 
-        :returns: True if the object has been deleted
+        :returns: True if a delete marker has been created, False otherwise,
+            and the version id which has been deleted or the version id of the
+            delete marker which has been created
+        :rtype: tuple
         """
         uri = self._make_uri("content/delete")
         params = self._make_params(
@@ -794,7 +798,9 @@ class ContainerClient(ProxyClient):
         )
 
         resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
-        return resp.status == 204
+        delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
+        version_id = resp.headers.get(VERSIONID_HEADER)
+        return delete_marker, version_id
 
     def content_delete_many(
         self, account=None, reference=None, paths=None, cid=None, **kwargs
@@ -809,11 +815,14 @@ class ContainerClient(ProxyClient):
         """
         uri = self._make_uri("content/delete_many")
         params = self._make_params(account, reference, cid=cid)
-        unformatted_data = list()
+        unformatted_data = []
         for obj in paths:
-            unformatted_data.append({"name": obj})
+            if isinstance(obj, tuple):
+                unformatted_data.append({"name": obj[0], "version": obj[1]})
+            else:
+                unformatted_data.append({"name": obj})
         data = json.dumps({"contents": unformatted_data})
-        results = list()
+        results = []
 
         for path in paths:
             del_cached_object_metadata(
@@ -826,11 +835,6 @@ class ContainerClient(ProxyClient):
             )
             for obj in resp_body["contents"]:
                 results.append((obj["name"], obj["status"] == 204))
-            return results
-        except exceptions.NotFound:
-            for obj in paths:
-                rc = self.content_delete(account, reference, obj, cid=cid, **kwargs)
-                results.append((obj, rc))
             return results
         except exceptions.TooLarge:
             pivot = len(paths) // 2

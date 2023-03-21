@@ -1081,7 +1081,10 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param obj: name of the object to delete
         :param version: version of the object to delete
-        :returns: True on success
+        :returns:
+            - True if a delete marker has been created or removed
+            - and the version id which has been deleted
+              or the version id of the delete marker created
         """
         return self.container.content_delete(
             account,

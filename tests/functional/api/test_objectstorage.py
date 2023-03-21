@@ -74,7 +74,9 @@ class ObjectStorageApiTestBase(BaseTestCase):
             except Exception as err:
                 logging.warning("Failed to destroy %s/%s: %s", acct, name, err)
 
-    def _create(self, name, properties=None, **kwargs):
+    def _create(self, name, properties=None, versioning=False, **kwargs):
+        if versioning:
+            kwargs.setdefault("system", {})[M2_PROP_VERSIONING_POLICY] = "-1"
         res = self.api.container_create(
             self.account, name, properties=properties, **kwargs
         )
@@ -103,11 +105,14 @@ class ObjectStorageApiTestBase(BaseTestCase):
 
     def _upload_empty(self, container, *objs, **kwargs):
         """Upload empty objects to `container`"""
+        created = []
         for obj in objs:
-            self.api.object_create(
+            _, _, _, obj_meta = self.api.object_create_ext(
                 self.account, container, obj_name=obj, data="", **kwargs
             )
             self.created.append((container, obj))
+            created.append(obj_meta)
+        return created
 
     def _check_stats(
         self,
@@ -1720,6 +1725,39 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         _check_content_id()
         _check_content_id(content_id=random_id(32))
+
+    def test_object_delete(self):
+        container = random_str(6)
+        obj = random_str(6)
+        obj_meta = self._upload_empty(container, obj)[0]
+        is_marker, version_id = self.api.object_delete(self.account, container, obj)
+        self.assertFalse(is_marker)  # versioning is not enabled
+        self.assertEqual(obj_meta["version"], version_id)
+
+    def test_object_delete_with_versioning(self):
+        container = random_str(6)
+        obj = random_str(6)
+        self._create(container, versioning=True)
+        obj_meta = self._upload_empty(container, obj)[0]
+
+        # Create a delete marker
+        is_marker, version_id = self.api.object_delete(self.account, container, obj)
+        self.assertTrue(is_marker)
+        self.assertEqual(int(obj_meta["version"]) + 1, int(version_id))
+
+        # Delete the delete marker
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, version=version_id
+        )
+        self.assertTrue(is_marker)
+        self.assertEqual(int(obj_meta["version"]) + 1, int(version_id))
+
+        # Delete the object
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, version=obj_meta["version"]
+        )
+        self.assertFalse(is_marker)
+        self.assertEqual(obj_meta["version"], version_id)
 
     def test_object_delete_many(self):
         container = random_str(8)

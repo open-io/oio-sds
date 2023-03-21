@@ -178,6 +178,9 @@ GError * meta2_backend_purge_alias(struct meta2_backend_s *m2,
 GError *meta2_backend_drain_content(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
+/** Delete an object version. The deleted alias, or the created delete
+ * marker, will be sent to the callback. Notice that when a delete marker
+ * is removed, no alias is sent to the callback! */
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, m2_onbean_cb cb, gpointer u0);
@@ -272,7 +275,7 @@ GError* meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 /** Clean up local copies
  * Each table of each copie is cleaned in single step */
 GError* meta2_backend_clean_locally_sharding(struct meta2_backend_s *m2b,
-        struct oio_url_s *url, GSList * beans, gboolean *truncated);
+		struct oio_url_s *url, GSList * beans, gboolean *truncated);
 
 
 /** Get shard ranges in root container */
