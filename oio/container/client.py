@@ -769,6 +769,7 @@ class ContainerClient(ProxyClient):
         cid=None,
         version=None,
         bypass_governance=None,
+        create_delete_marker=False,
         **kwargs
     ):
         """
@@ -788,6 +789,8 @@ class ContainerClient(ProxyClient):
             version=version,
             bypass_governance=bypass_governance,
         )
+        if create_delete_marker:
+            params["delete_marker"] = create_delete_marker
         del_cached_object_metadata(
             account=account,
             reference=reference,

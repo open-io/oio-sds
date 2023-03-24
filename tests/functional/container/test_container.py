@@ -51,12 +51,12 @@ from oio.conscience.client import ConscienceClient
 
 def random_content():
     """Generate an object name."""
-    return random_str(1023)
+    return random_str(16)
 
 
 def random_container():
     """Generate a container name."""
-    return random_str(1023)
+    return random_str(16)
 
 
 def merge(s0, s1):
@@ -1080,8 +1080,10 @@ class TestMeta2Containers(BaseTestCase):
         param_content = self.param_content(self.ref, path)
         param_content["delete_marker"] = 1
 
+        # Create the first object version
+        self._create_content(path, version=12345)
+
         # Versioning not enabled
-        self._create_content(path)
         resp = self.request("POST", self.url_content("delete"), params=param_content)
         self.assertEqual(400, resp.status)
 
@@ -1094,45 +1096,80 @@ class TestMeta2Containers(BaseTestCase):
             data=json.dumps(props),
         )
         self.assertEqual(204, resp.status)
-        resp = self.request("POST", self.url_content("delete"), params=param_content)
-        self.assertEqual(204, resp.status)
-        self.assertIn(DELETEMARKER_HEADER, resp.headers)
-        self.assertIn(VERSIONID_HEADER, resp.headers)
 
-        # Add delete marker to a delete marker
+        # Create delete marker without version
         resp = self.request("POST", self.url_content("delete"), params=param_content)
-        # FIXME(FVE): this should work, multiple delete markers are allowed
         self.assertEqual(400, resp.status)
 
-        # Add delete marker to a specific version
-        self._create_content(path, version=12345)
+        # Create delete marker with the same version
         param_content["version"] = 12345
+        resp = self.request("POST", self.url_content("delete"), params=param_content)
+        self.assertEqual(409, resp.status)
+        resp = self.request(
+            "POST", self.url_content("get_properties"), params=param_content
+        )
+        self.assertEqual(200, resp.status)
+        self.assertEqual("12345", resp.headers[OBJECT_METADATA_PREFIX + "version"])
+        self.assertEqual("False", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
+
+        # Create delete marker after the first object version
+        param_content["version"] = 123456
         resp = self.request("POST", self.url_content("delete"), params=param_content)
         self.assertEqual(204, resp.status)
         self.assertIn(DELETEMARKER_HEADER, resp.headers)
         self.assertEqual(
-            str(param_content["version"] + 1), resp.headers.get(VERSIONID_HEADER)
+            str(param_content["version"]), resp.headers.get(VERSIONID_HEADER)
+        )
+        resp = self.request(
+            "POST", self.url_content("get_properties"), params=param_content
+        )
+        self.assertEqual(200, resp.status)
+        self.assertEqual("123456", resp.headers[OBJECT_METADATA_PREFIX + "version"])
+        self.assertEqual("True", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
+        param_content["version"] = 12345
+        resp = self.request(
+            "POST", self.url_content("get_properties"), params=param_content
+        )
+        self.assertEqual(200, resp.status)
+        self.assertEqual("12345", resp.headers[OBJECT_METADATA_PREFIX + "version"])
+        self.assertEqual("False", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
+
+        # Create delete marker before the first object version
+        param_content["version"] = 1234
+        resp = self.request("POST", self.url_content("delete"), params=param_content)
+        self.assertEqual(204, resp.status)
+        self.assertIn(DELETEMARKER_HEADER, resp.headers)
+        self.assertEqual(
+            str(param_content["version"]), resp.headers.get(VERSIONID_HEADER)
+        )
+        resp = self.request(
+            "POST", self.url_content("get_properties"), params=param_content
+        )
+        self.assertEqual(200, resp.status)
+        self.assertEqual("1234", resp.headers[OBJECT_METADATA_PREFIX + "version"])
+        self.assertEqual("True", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
+        param_content["version"] = 12345
+        resp = self.request(
+            "POST", self.url_content("get_properties"), params=param_content
+        )
+        self.assertEqual(200, resp.status)
+        self.assertEqual("12345", resp.headers[OBJECT_METADATA_PREFIX + "version"])
+        self.assertEqual("False", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
+
+        # Create a delete marker for an object that does not exist
+        param_content["path"] = random_content()
+        resp = self.request("POST", self.url_content("delete"), params=param_content)
+        self.assertEqual(204, resp.status)
+        self.assertIn(DELETEMARKER_HEADER, resp.headers)
+        self.assertEqual(
+            str(param_content["version"]), resp.headers.get(VERSIONID_HEADER)
         )
         resp = self.request(
             "POST", self.url_content("get_properties"), params=param_content
         )
         self.assertEqual(200, resp.status)
         self.assertEqual("12345", resp.headers[OBJECT_METADATA_PREFIX + "version"])
-        param_content["version"] = 12346
-        resp = self.request(
-            "POST", self.url_content("get_properties"), params=param_content
-        )
-        self.assertEqual(200, resp.status)
-        self.assertEqual("12346", resp.headers[OBJECT_METADATA_PREFIX + "version"])
-        print(resp.headers)
         self.assertEqual("True", resp.headers[OBJECT_METADATA_PREFIX + "deleted"])
-        del param_content["version"]
-
-        # Add delete marker to a specific version with delete marker
-        param_content["version"] = 12345
-        resp = self.request("POST", self.url_content("delete"), params=param_content)
-        self.assertEqual(409, resp.status)
-        del param_content["version"]
 
     def test_object_with_versioned_objects_before_latest(self):
         path = random_content()

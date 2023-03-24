@@ -1629,54 +1629,67 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		gboolean bypass_governance, gboolean create_delete_marker,
 	 struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
-	GError *err;
-	struct bean_ALIASES_s *alias = NULL;
-	struct bean_CONTENTS_HEADERS_s *header = NULL;
-	GSList *beans = NULL;
+	GError *err = NULL;
+	gint64 version = 0;
+	struct oio_url_s *delete_marker_url = NULL;
 
-	void _search_alias_and_size(gpointer ignored, gpointer bean) {
-		(void) ignored;
-		if (DESCR(bean) == &descr_struct_ALIASES)
-			alias = _bean_dup(bean);
-		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS)
-			header = bean;
-		beans = g_slist_prepend(beans, bean);
+	if (oio_url_has(url, OIOURL_VERSION)) {
+		version = g_ascii_strtoll(oio_url_get(url, OIOURL_VERSION), NULL, 10);
+		if (VERSIONS_DISABLED(max_versions) && version != 0) {
+			return NEWERROR(CODE_BAD_REQUEST,
+					"Versioning not supported and version specified");
+		}
 	}
 
-	if (VERSIONS_DISABLED(max_versions) && oio_url_has(url, OIOURL_VERSION)
-			&& 0!=g_ascii_strtoll(oio_url_get(url, OIOURL_VERSION), NULL, 10))
-		return NEWERROR(CODE_BAD_REQUEST,
-				"Versioning not supported and version specified");
-
-	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS,
-			_search_alias_and_size, NULL);
-	if (err) {
-		_bean_clean(alias);
-		_bean_cleanl2(beans);
-		return err;
-	}
-	if (!alias || !beans) {
-		_bean_clean(alias);
-		_bean_cleanl2(beans);
-		return NEWERROR(CODE_CONTENT_NOTFOUND, "No content to delete");
-	}
-
-	GRID_TRACE("CONTENT %s beans=%u maxvers=%"G_GINT64_FORMAT
-			" deleted=%d ver=%u/%s",
-			oio_url_get(url, OIOURL_WHOLE), g_slist_length(beans),
-			max_versions, ALIASES_get_deleted(alias),
-			oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
-
-	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
-			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
-		if (create_delete_marker) {
-			if (VERSIONS_DISABLED(max_versions) ||
-					VERSIONS_SUSPENDED(max_versions)) {
-				err = BADREQ("Versioning not enabled and delete marker specified");
-			} else if (ALIASES_get_deleted(alias)) {
-				err = BADREQ("Alias is a delete marker and delete marker specified");
-			}
+	if (create_delete_marker) {
+		// Force to create a delete marker to the specific version
+		if (!oio_url_has(url, OIOURL_PATH)) {
+			err = BADREQ("Delete marker specified, but missing path");
+		} else if (!oio_url_has(url, OIOURL_VERSION)) {
+			err = BADREQ("Delete marker specified, but missing version");
 		} else {
+			// Since the URL contains a version, the check for disabling
+			// versioning has already been done
+			delete_marker_url = oio_url_dup(url);
+			oio_url_unset(delete_marker_url, OIOURL_CONTENTID);
+		}
+
+		GRID_TRACE("DELETE_MARKER %s maxvers=%"G_GINT64_FORMAT" ver=%s",
+				oio_url_get(delete_marker_url, OIOURL_WHOLE), max_versions,
+				oio_url_get(delete_marker_url, OIOURL_VERSION));
+	} else {
+		struct bean_ALIASES_s *alias = NULL;
+		struct bean_CONTENTS_HEADERS_s *header = NULL;
+		GSList *beans = NULL;
+
+		void _search_alias_and_size(gpointer ignored, gpointer bean) {
+			(void) ignored;
+			if (DESCR(bean) == &descr_struct_ALIASES)
+				alias = _bean_dup(bean);
+			else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS)
+				header = bean;
+			beans = g_slist_prepend(beans, bean);
+		}
+
+		err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS,
+				_search_alias_and_size, NULL);
+		if (err) {
+			goto clean;
+		}
+		if (!alias || !beans) {
+			err = NEWERROR(CODE_CONTENT_NOTFOUND, "No content to delete");
+			goto clean;
+		}
+
+		GRID_TRACE("CONTENT %s beans=%u maxvers=%"G_GINT64_FORMAT
+				" deleted=%d ver=%u/%s",
+				oio_url_get(url, OIOURL_WHOLE), g_slist_length(beans),
+				max_versions, ALIASES_get_deleted(alias),
+				oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
+
+		if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
+				oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
+			// Actually delete the object
 			if (bypass_governance && !ALIASES_get_deleted(alias)) {
 				// Allow to delete object (with data) despite retention
 				struct bean_PROPERTIES_s *prop = _bean_create(
@@ -1693,26 +1706,37 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 				err = _real_delete_and_save_deleted_beans(sq3, beans,
 						alias, header, cb, u0);
 			}
+		} else {
+			// Create a delete marker on latest version
+			delete_marker_url = oio_url_dup(url);
+			oio_url_set(delete_marker_url, OIOURL_PATH,
+					ALIASES_get_alias(alias)->str);
+			version = ALIASES_get_version(alias) + 1;
+			gchar *str_delete_marker_version = g_strdup_printf(
+					"%"G_GINT64_FORMAT, version);
+			oio_url_set(delete_marker_url, OIOURL_VERSION,
+					str_delete_marker_version);
+			g_free(str_delete_marker_version);
+			oio_url_unset(delete_marker_url, OIOURL_CONTENTID);
 		}
-	} else {
-		create_delete_marker = TRUE;
+
+clean:
+		_bean_clean(alias);
+		_bean_cleanl2(beans);
 	}
-	if (!err && create_delete_marker) {
+
+	if (!err && delete_marker_url) {
 		/* Check if delete marker already exists */
-		struct oio_url_s *delete_marker_url = oio_url_dup(url);
-		oio_url_set(delete_marker_url, OIOURL_PATH,
-				ALIASES_get_alias(alias)->str);
-		gint64 delete_marker_version = ALIASES_get_version(alias) + 1;
-		gchar *str_delete_marker_version = g_strdup_printf(
-				"%"G_GINT64_FORMAT, delete_marker_version);
-		oio_url_set(delete_marker_url, OIOURL_VERSION,
-				str_delete_marker_version);
-		g_free(str_delete_marker_version);
-		oio_url_unset(delete_marker_url, OIOURL_CONTENTID);
 		err = check_alias_doesnt_exist(sq3, delete_marker_url);
-		if (err)
-			g_prefix_error(&err, "Delete marker error: ");
-		oio_url_clean(delete_marker_url);
+		if (err) {
+			if (err->code == CODE_CONTENT_EXISTS) {
+				g_error_free(err);
+				err = NEWERROR(CODE_CONTENT_PRECONDITION,
+						"An object already exists with the same version");
+			} else {
+				g_prefix_error(&err, "Delete marker error: ");
+			}
+		}
 
 		if (!err) {
 			gint64 now = oio_ext_real_seconds();
@@ -1720,25 +1744,22 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			struct bean_ALIASES_s *new_alias = _bean_create(
 					&descr_struct_ALIASES);
 			ALIASES_set_deleted(new_alias, TRUE);
-			ALIASES_set_alias(new_alias, ALIASES_get_alias(alias));
-			ALIASES_set_version(new_alias, 1 + ALIASES_get_version(alias));
-			GByteArray *content = g_byte_array_new_take(
-					(guint8 *) "DELETED", 7);
-			ALIASES_set_content(new_alias, content);
-			g_byte_array_free(content, FALSE);
+			ALIASES_set2_alias(new_alias, oio_url_get(
+				delete_marker_url, OIOURL_PATH));
+			ALIASES_set_version(new_alias, version);
+			ALIASES_set2_content(new_alias, (guint8 *) "DELETED", 7);
 			ALIASES_set_ctime(new_alias, now);
 			ALIASES_set_mtime(new_alias, now);
 			err = _db_save_bean(sq3, new_alias);
-			if (!err && cb)
+			if (!err && cb) {
 				cb(u0, new_alias);
-			else
+			} else {
 				_bean_clean(new_alias);
-			new_alias = NULL;
+			}
 		}
 	}
 
-	_bean_clean(alias);
-	_bean_cleanl2(beans);
+	oio_url_clean(delete_marker_url);
 	return err;
 }
 
