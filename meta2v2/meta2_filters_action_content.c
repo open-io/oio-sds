@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -52,9 +52,6 @@ _load_url_from_alias(struct oio_url_s *url, struct bean_ALIASES_s *alias)
 	GString *path = ALIASES_get_alias(alias);
 	oio_url_set(url, OIOURL_PATH, path->str);
 	gint64 version = ALIASES_get_version(alias);
-	// If it's a delete marker, use the version of the associated object
-	if (ALIASES_get_deleted(alias))
-		version--;
 	gchar *str_version = g_strdup_printf("%"G_GINT64_FORMAT, version);
 	oio_url_set(url, OIOURL_VERSION, str_version);
 	g_free(str_version);
@@ -421,7 +418,30 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
+	gboolean delete_marker_created = FALSE;
+	for (GSList *l = obc->l; l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_ALIASES) {
+			continue;
+		}
+		if (!ALIASES_get_deleted(bean)) {
+			continue;
+		}
+		GByteArray *content_id = ALIASES_get_content(bean);
+		if (!content_id) {
+			continue;
+		}
+		if (strncmp((gchar*)content_id->data, "NEW", content_id->len) != 0) {
+			continue;
+		}
+		delete_marker_created = TRUE;
+		break;
+	}
+	if (delete_marker_created) {
+		_m2b_notify_beans(m2b->notifier_content_created, url, obc->l, "content.new", FALSE);
+	} else {
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
+	}
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;

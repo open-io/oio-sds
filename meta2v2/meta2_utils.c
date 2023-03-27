@@ -1752,6 +1752,7 @@ clean:
 			ALIASES_set_mtime(new_alias, now);
 			err = _db_save_bean(sq3, new_alias);
 			if (!err && cb) {
+				ALIASES_set2_content(new_alias, (guint8 *) "NEW", 3);
 				cb(u0, new_alias);
 			} else {
 				_bean_clean(new_alias);
