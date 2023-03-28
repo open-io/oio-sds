@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2020 OpenIO SAS
+// Copyright (C) 2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -16,6 +17,8 @@
 
 package main
 
+// bufferPool stores already allocated memory buffers.
+// Notice there is no limit on the number of buffer this module can allocate.
 type bufferPool interface {
 	Acquire() []byte
 	Release(buf []byte)
@@ -36,8 +39,10 @@ func newBufferPool(max, size int) bufferPool {
 
 func (p *unisizeBufferPool) Acquire() []byte {
 	select {
+	// Try to take an already allocated buffer from the pool
 	case buf := <-p.pool:
 		return buf[:cap(buf)]
+	// Allocate a new buffer
 	default:
 		return make([]byte, p.size, p.size)
 	}
@@ -45,7 +50,9 @@ func (p *unisizeBufferPool) Acquire() []byte {
 
 func (p *unisizeBufferPool) Release(buf []byte) {
 	select {
-	case p.pool <- buf: // reused
-	default: // freed
+	// Try to put the buffer back in the pool
+	case p.pool <- buf:
+	// Free the buffer if the pool is full
+	default:
 	}
 }

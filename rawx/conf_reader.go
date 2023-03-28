@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -57,6 +57,7 @@ var loadedOpts = map[string]string{
 	"fadvise_download": "fadvise_download",
 	"open_nonblock":    "nonblock",
 
+	"max_connections":      "max_connections",
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
 	"timeout_write_reply":  "timeout_write_reply",

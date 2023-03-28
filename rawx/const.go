@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -200,6 +200,10 @@ const (
 )
 
 const (
+	// Default maximum number of simultaneous connections the server will accept (per port)
+	maxConnectionsDefault = 256
+
+	// How long (in seconds) might a client take to send the request headers
 	timeoutReadHeader = 60
 
 	// How long (in seconds) might a client take to send its whole request

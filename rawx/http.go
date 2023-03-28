@@ -19,22 +19,33 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"sync"
+	"golang.org/x/net/netutil"
 )
 
 func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
 	errs := make(chan error)
 	var servers sync.WaitGroup
+	max_connections := opts.getInt("max_connections", maxConnectionsDefault)
 
 	servers.Add(1)
 	go func() {
 		defer servers.Done()
-		log.Printf("Starting HTTP service on %s ...", srv.Addr)
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Printf("Starting HTTP service on %s, max_connections=%d",
+				srv.Addr, max_connections)
+		listener, err := net.Listen("tcp", srv.Addr)
+		if err != nil {
 			errs <- err
 		} else {
-			errs <- nil
+			listener = netutil.LimitListener(listener, max_connections)
+			defer listener.Close()
+			if err := srv.Serve(listener); err != http.ErrServerClosed {
+				errs <- err
+			} else {
+				errs <- nil
+			}
 		}
 
 		log.Printf("HTTP service on %s stopped", srv.Addr)
@@ -45,11 +56,20 @@ func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
 		// Starting HTTPS server
 		go func() {
 			defer servers.Done()
-			log.Printf("Starting HTTPS service on %s ...", tlsSrv.Addr)
-			if err := tlsSrv.ListenAndServeTLS(opts["tls_cert_file"], opts["tls_key_file"]); err != http.ErrServerClosed {
+			log.Printf("Starting HTTPS service on %s, max_connections=%d",
+					tlsSrv.Addr, max_connections)
+			tls_listener, err := net.Listen("tcp", tlsSrv.Addr)
+			if err != nil {
 				errs <- err
 			} else {
-				errs <- nil
+				tls_listener = netutil.LimitListener(tls_listener, max_connections)
+				defer tls_listener.Close()
+				if err := tlsSrv.ServeTLS(tls_listener, opts["tls_cert_file"], opts["tls_key_file"]);
+						err != http.ErrServerClosed {
+					errs <- err
+				} else {
+					errs <- nil
+				}
 			}
 			log.Printf("HTTPS service on %s stopped", tlsSrv.Addr)
 		}()
