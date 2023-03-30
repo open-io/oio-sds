@@ -50,7 +50,7 @@ jobs:
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
           rm -rf fdb-packages
-          rabbitmqctl stop
+          docker login -u {{ .cds.proj.artifactory_user }} -p {{ .cds.proj.artifactory_token }} pu-objectstorage-default-docker.artifactory.ovhcloud.tools
           docker-compose -f tests/functional/rabbitmq/cluster-config/docker-compose.yml up -d
           # wait for the rabbitmq nodes to form a cluster
           until [ "$(docker inspect -f "{{.State.Health.Status}}" rabbit-1)" = "healthy" ]
