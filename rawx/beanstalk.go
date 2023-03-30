@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2018-2020 OpenIO SAS
+// Copyright (C) 2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -66,8 +67,9 @@ type beanstalkClient struct {
 	bufReader *bufio.Reader
 }
 
-func DialBeanstalkd(addr string) (*beanstalkClient, error) {
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+func DialBeanstalkd(addr string, timeout time.Duration) (*beanstalkClient, error) {
+	LogDebug("Connecting to event broker %s", addr)
+	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, err
 	}

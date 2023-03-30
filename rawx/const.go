@@ -196,10 +196,15 @@ const (
 )
 
 const (
-	oioConfigEventAgent = "event-agent"
+	oioConfigEventAgent     = "event-agent"
+	oioConfigEventAgentRawx = "event-agent.rawx"
+	oioConfigEventExchange  = "event-agent.amqp_exchange"
 )
 
 const (
+	// Number of connection attempts to the event broker
+	eventConnAttempts = 3
+
 	// Default maximum number of simultaneous connections the server will accept (per port)
 	// 0 to disable setting a limit
 	maxConnectionsDefault = 0
@@ -215,6 +220,12 @@ const (
 
 	// How long (in seconds) might a connection stay idle (between two requests)
 	timeoutIdle = 3600
+
+	// How long (in seconds) the connection to the event broker may take
+	timeoutConnEvent = 0.5
+
+	// How long (in seconds) the sending of an event may take
+	timeoutSendEvent = 5
 )
 
 const (

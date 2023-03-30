@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -275,7 +275,7 @@ func main() {
 		LogFatal("Notifier error: no address")
 	}
 
-	rawx.notifier, err = MakeNotifier(eventAgent, &rawx)
+	rawx.notifier, err = MakeNotifier(eventAgent, &opts, &rawx)
 	if err != nil {
 		LogFatal("Notifier error: %v", err)
 	}

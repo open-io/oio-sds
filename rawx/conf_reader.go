@@ -57,11 +57,14 @@ var loadedOpts = map[string]string{
 	"fadvise_download": "fadvise_download",
 	"open_nonblock":    "nonblock",
 
+	"event_conn_attempts":  "event_conn_attempts",
 	"max_connections":      "max_connections",
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
 	"timeout_write_reply":  "timeout_write_reply",
 	"timeout_idle":         "timeout_idle",
+	"timeout_conn_event":   "timeout_conn_event",
+	"timeout_send_event":   "timeout_send_event",
 	"headers_buffer_size":  "headers_buffer_size",
 
 	"sock_tcp_cork":    "cork",
@@ -73,12 +76,12 @@ var loadedOpts = map[string]string{
 	"tls_key_file":  "tls_key_file",
 	"tls_rawx_url":  "tls_rawx_url",
 
-	"log_access_get":    "log_access_get",
-	"log_access_put":    "log_access_put",
-	"log_access_delete": "log_access_delete",
-	"log_access_format": "log_access_format",
+	"log_access_get":     "log_access_get",
+	"log_access_put":     "log_access_put",
+	"log_access_delete":  "log_access_delete",
+	"log_access_format":  "log_access_format",
 	"log_request_format": "log_request_format",
-	"log_format":        "log_format",
+	"log_format":         "log_format",
 	// TODO(jfs): also implement a cachedir
 }
 
@@ -145,6 +148,19 @@ func readConfig(conf string) (optionsMap, error) {
 	return opts, nil
 }
 
+func (m optionsMap) getFloat(k string, def float64) float64 {
+	v := m[k]
+	if len(v) <= 0 {
+		return def
+	}
+	f64, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		LogFatal("Invalid float option for %s: %s (%s)", k, v, err.Error())
+		return def
+	}
+	return f64
+}
+
 func (m optionsMap) getInt(k string, def int) int {
 	v := m[k]
 	if len(v) <= 0 {
@@ -153,7 +169,7 @@ func (m optionsMap) getInt(k string, def int) int {
 	i64, err := strconv.ParseInt(v, 0, 32)
 	if err != nil {
 		LogFatal("Invalid integer option for %s: %s (%s)", k, v, err.Error())
-		return 0
+		return def
 	}
 	return int(i64)
 }
@@ -165,6 +181,16 @@ func (m optionsMap) getBool(k string, def bool) bool {
 	}
 	/* TODO(mbo): emit a warning for invalid value */
 	return GetBool(v, def)
+}
+
+// getString gets a string value from the map, or returns `def` if
+// the key does not exist.
+func (m optionsMap) getString(k string, def string) string {
+	v, ok := m[k]
+	if !ok {
+		return def
+	}
+	return v
 }
 
 func GetBool(v string, def bool) bool {

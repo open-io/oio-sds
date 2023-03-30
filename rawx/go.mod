@@ -3,6 +3,7 @@ module openio-sds/rawx
 go 1.19
 
 require (
+	github.com/rabbitmq/amqp091-go v1.8.0
 	golang.org/x/net v0.8.0
 	golang.org/x/sys v0.6.0
 	gopkg.in/ini.v1 v1.67.0

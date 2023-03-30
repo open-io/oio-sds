@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -19,18 +19,30 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"strings"
 	"sync"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Tells if the current RAWX service may emit notifications
 var notifAllowed = configDefaultEvents
 
+// Represents a chunk event with a routing key.
+// routingKey will not be used when sending to Beanstalkd,
+// but will be with AMQP. The routing key will be the event type, basically.
+type routedEvent struct {
+	event      []byte
+	routingKey string
+}
+
 type notifier struct {
-	queue   chan []byte
+	queue   chan routedEvent
 	wg      sync.WaitGroup
 	running bool
 	url     string
@@ -38,14 +50,27 @@ type notifier struct {
 }
 
 type notifierBackend interface {
-	push([]byte)
+	push(event []byte, routingKey string)
 	close()
 }
 
 type beanstalkdBackend struct {
-	b        *beanstalkClient
-	endpoint string
-	tube     string
+	b             *beanstalkClient
+	endpoint      string
+	tube          string
+	conn_attempts int
+	conn_timeout  time.Duration
+}
+
+type amqpBackend struct {
+	cnx           *amqp.Connection
+	channel       *amqp.Channel
+	urls          []string
+	urlId         int
+	exchange      string
+	conn_attempts int
+	conn_timeout  time.Duration
+	send_timeout  time.Duration
 }
 
 var (
@@ -56,25 +81,26 @@ var (
 
 func deadLetter(event []byte, err error) {
 	if err != nil && alertThrottling.Ok() {
-		LogError("Beanstalkd connection error: %v", err)
+		LogError("Event broker connection error: %v", err)
 	}
 	if len(event) > 0 {
 		LogWarning("event %s", string(event))
 	}
 }
 
-func (backend *beanstalkdBackend) push(event []byte) {
-	cnxDeadline := time.Now().Add(1 * time.Second)
+func (backend *beanstalkdBackend) push(event []byte, routingKey string) {
+	cnxDeadline := time.Now().Add(
+		time.Duration(backend.conn_attempts) * backend.conn_timeout)
 
 	// Lazy reconnection
 	for backend.b == nil {
-		b, err := DialBeanstalkd(backend.endpoint)
+		b, err := DialBeanstalkd(backend.endpoint, backend.conn_timeout)
 		if err != nil {
 			if time.Now().After(cnxDeadline) {
 				deadLetter(event, err)
 				return
 			} else {
-				time.Sleep(time.Second)
+				time.Sleep(backend.conn_timeout / 2)
 			}
 		} else {
 			err = b.Use(beanstalkNotifierDefaultTube)
@@ -87,7 +113,7 @@ func (backend *beanstalkdBackend) push(event []byte) {
 	}
 
 	if backend.b == nil {
-		panic("BUG")
+		panic("BUG: connection loop exited without creating backend")
 	}
 
 	_, err := backend.b.Put(event)
@@ -104,30 +130,146 @@ func (backend *beanstalkdBackend) close() {
 	}
 }
 
-func makeSingleBackend(config string) (notifierBackend, error) {
-	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
+// connect connects to one of the configured AMQP endpoints and opens a
+// channel. If the connection is already established, do nothing. If the
+// current endpoint is not available, try the next one, in a round-robin
+// fashion.
+func (backend *amqpBackend) connect() error {
+	// Deadline for the connection attempts, not TCP connection timeout.
+	cnxDeadline := time.Now().Add(
+		time.Duration(backend.conn_attempts) * backend.conn_timeout)
+
+	for backend.cnx == nil {
+		// backend.urls contains credentials, must be filtered before logging,
+		// hence the logging of urlId.
+		LogDebug("Connecting to event broker #%d", backend.urlId)
+		cnx, err := amqp.DialConfig(backend.urls[backend.urlId], amqp.Config{
+			Dial: func(network, addr string) (net.Conn, error) {
+				return net.DialTimeout(network, addr, backend.conn_timeout)
+			},
+			// Setting this low (the default is 10s) will help us identify
+			// outages when the activity is low.
+			Heartbeat: 2 * time.Second,
+		})
+		backend.urlId = (backend.urlId + 1) % len(backend.urls)
+		if err != nil {
+			if time.Now().After(cnxDeadline) {
+				return err
+			} else {
+				LogDebug("Failed to connect, will retry soon: %v", err)
+				// When there is only one endpoint, wait a bit between attempts
+				if len(backend.urls) < 2 {
+					time.Sleep(backend.conn_timeout / 2)
+				}
+			}
+		} else {
+			ch, err := cnx.Channel()
+			if err != nil {
+				LogDebug("Failed to open AMQP channel: %v", err)
+				cnx.Close()
+			} else {
+				backend.cnx = cnx
+				backend.channel = ch
+			}
+		}
+	}
+	return nil
+}
+
+func (backend *amqpBackend) push(event []byte, routingKey string) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), backend.send_timeout)
+	defer cancel()
+
+	sent := false
+
+loop:
+	for !sent {
+		// Lazy connect
+		err := backend.connect()
+		if err == nil {
+			// Publish if possible
+			msg := amqp.Publishing{
+				Body: event,
+			}
+			err = backend.channel.PublishWithContext(
+				ctx, backend.exchange, routingKey, false, false, msg)
+			// Disconnect in case of error
+			if err != nil {
+				LogDebug("Failed to push event: %v", err)
+				backend.close()
+			} else {
+				sent = true
+			}
+		}
+		// If there is an error and we reached the deadline, trash the event.
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				deadLetter(event, err)
+				break loop
+			default:
+				continue
+			}
+		}
+	}
+}
+
+func (backend *amqpBackend) close() {
+	if backend.channel != nil {
+		backend.channel.Close()
+		backend.channel = nil
+	}
+	if backend.cnx != nil {
+		backend.cnx.Close()
+		backend.cnx = nil
+	}
+}
+
+func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error) {
+	conn_attempts := options.getInt("event_conn_attempts", eventConnAttempts)
+	conn_timeout := time.Duration(
+		options.getFloat("timeout_conn_event", timeoutConnEvent)) * time.Second
+	send_timeout := time.Duration(
+		options.getFloat("timeout_send_event", timeoutSendEvent)) * time.Second
+	if endpoint, ok := hasPrefix(url, "beanstalk://"); ok {
 		out := new(beanstalkdBackend)
 		out.endpoint = endpoint
 		out.tube = beanstalkNotifierDefaultTube
+		out.conn_attempts = conn_attempts
+		out.conn_timeout = conn_timeout
+		return out, nil
+	} else if _, ok := hasPrefix(url, "amqp://"); ok {
+		out := new(amqpBackend)
+		out.urls = strings.Split(url, ";")
+		out.urlId = 0
+		// The namespace comes from rawx configuration, but the exchange
+		// comes from the namespace configuration file.
+		out.exchange = oioGetConfigValue(
+			options.getString("ns", "OIO"), oioConfigEventExchange)
+		if out.exchange == "" {
+			out.exchange = "oio"
+		}
+		out.conn_attempts = conn_attempts
+		out.conn_timeout = conn_timeout
+		out.send_timeout = send_timeout
 		return out, nil
 	}
-	// TODO(adu): make a ZMQ Notifier
-	// TODO(jfs): make a GRPC Notifier
-	// TODO(jfs): make an HTTP Notifier
-	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://" +
+		"and `amqp://` are accepted")
 }
 
-func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
+func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notifier, error) {
 	n := new(notifier)
-	n.queue = make(chan []byte, notifierDefaultPipeSize)
+	n.queue = make(chan routedEvent, notifierDefaultPipeSize)
 	n.running = true
 	n.url = rawx.url
 	n.srvid = rawx.id
 
 	workers := make([]notifierBackend, 0)
-	if !strings.Contains(config, ";") {
+	if !strings.Contains(evtUrl, ";") || strings.HasPrefix(evtUrl, "amqp://") {
 		for i := 0; i < notifierSingleMultiplier; i++ {
-			backend, err := makeSingleBackend(config)
+			backend, err := makeSingleBackend(evtUrl, options)
 			if err != nil {
 				return nil, err
 			} else {
@@ -135,9 +277,9 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 			}
 		}
 	} else {
-		for _, conf := range strings.Split(config, ";") {
+		for _, singleUrl := range strings.Split(evtUrl, ";") {
 			for i := 0; i < notifierMultipleMultiplier; i++ {
-				backend, err := makeSingleBackend(conf)
+				backend, err := makeSingleBackend(singleUrl, options)
 				if err != nil {
 					return nil, err
 				} else {
@@ -148,20 +290,20 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 	}
 
 	n.wg.Add(len(workers))
-	doWork := func(w notifierBackend, input <-chan []byte) {
+	doWork := func(backend notifierBackend, input <-chan routedEvent) {
 		defer n.wg.Done()
 		for event := range input {
 			if n.running {
-				w.push(event)
+				backend.push(event.event, event.routingKey)
 			} else {
-				deadLetter(event, errExiting)
+				deadLetter(event.event, errExiting)
 			}
 		}
-		w.close()
+		backend.close()
 	}
 
-	for _, w := range workers {
-		go doWork(w, n.queue)
+	for _, backend := range workers {
+		go doWork(backend, n.queue)
 	}
 
 	return n, nil
@@ -240,7 +382,7 @@ func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 			deadLetter(event, errExiting)
 		} else {
 			select {
-			case n.queue <- event:
+			case n.queue <- routedEvent{event, eventType}:
 			default:
 				deadLetter(event, errClogged)
 			}

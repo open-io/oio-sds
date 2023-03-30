@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -113,5 +113,9 @@ func oioGetConfigValue(namespace, value string) string {
 }
 
 func OioGetEventAgent(namespace string) string {
-	return oioGetConfigValue(namespace, oioConfigEventAgent)
+	conf := oioGetConfigValue(namespace, oioConfigEventAgentRawx)
+	if conf == "" {
+		conf = oioGetConfigValue(namespace, oioConfigEventAgent)
+	}
+	return conf
 }

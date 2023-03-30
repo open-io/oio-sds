@@ -1330,6 +1330,7 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
 ${NOBS}event-agent=${EVENT_CNXSTRING}
+${NOBS}event-agent.rawx=${EVENT_CNXSTRING_RAWX}
 ${NOBS}event-agent.meta2=${EVENT_CNXSTRING_M2}
 
 ns.meta1_digits=${M1_DIGITS}
@@ -2229,7 +2230,6 @@ def generate(options):
         endpoints = options["rabbitmq"]["endpoint"]
         if isinstance(endpoints, str):
             endpoints = [endpoints]
-        ENV.update({"EVENT_CNXSTRING_M2": ";".join(endpoints)})
         queue_args_list = []
         queue_url_list = []
         for endpoint in endpoints:
@@ -2243,6 +2243,12 @@ def generate(options):
             queue_url = urlunsplit(url_parts[:3] + ("", ""))
             queue_args_list.append(queue_args)
             queue_url_list.append(queue_url)
+        ENV.update(
+            {
+                "EVENT_CNXSTRING_M2": ";".join(endpoints),
+                "EVENT_CNXSTRING_RAWX": ";".join(queue_url_list),
+            }
+        )
         first_args = queue_args_list[0]
         for args in queue_args_list[1:]:
             if args != first_args:
@@ -2271,7 +2277,12 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     else:
-        ENV.update({"EVENT_CNXSTRING_M2": ENV["EVENT_CNXSTRING"]})
+        ENV.update(
+            {
+                "EVENT_CNXSTRING_M2": ENV["EVENT_CNXSTRING"],
+                "EVENT_CNXSTRING_RAWX": ENV["EVENT_CNXSTRING"],
+            }
+        )
 
     meta2_volumes = []
 

@@ -1,10 +1,12 @@
 rabbitmq:
   endpoint:
-    - "amqp://127.0.0.1:5672?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum"
-    - "amqp://127.0.0.1:5673?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum"
-    - "amqp://127.0.0.1:5674?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum"
+    - 'amqp://guest:guest@127.0.0.1:5672/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
+    - 'amqp://guest:guest@127.0.0.1:5673/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
+    - 'amqp://guest:guest@127.0.0.1:5674/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
 config:
   events.beanstalkd.check_period: "5s"
+  # Not necessary ("oio" is the default), just to provide an example
+  event-agent.amqp_exchange: "oio"
   # These events will be used for the asynchronous replication:
   # we must be able to route them separately.
   # If the string we set here does not look like a URL, it is considered as a
