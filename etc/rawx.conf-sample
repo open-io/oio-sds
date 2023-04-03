@@ -60,7 +60,7 @@ buffer_size            2048
 
 # Maximum number of simultaneous connections the server will accept,
 # per port (HTTP and HTTPS if configured).
-max_connections        256
+max_connections        0
 
 # Should the TCP_CORK be set (resp. removed) when a connection
 # becomes active (resp. inactive)

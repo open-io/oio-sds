@@ -201,7 +201,8 @@ const (
 
 const (
 	// Default maximum number of simultaneous connections the server will accept (per port)
-	maxConnectionsDefault = 256
+	// 0 to disable setting a limit
+	maxConnectionsDefault = 0
 
 	// How long (in seconds) might a client take to send the request headers
 	timeoutReadHeader = 60

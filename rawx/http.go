@@ -39,7 +39,9 @@ func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
 		if err != nil {
 			errs <- err
 		} else {
-			listener = netutil.LimitListener(listener, max_connections)
+			if max_connections > 0 {
+				listener = netutil.LimitListener(listener, max_connections)
+			}
 			defer listener.Close()
 			if err := srv.Serve(listener); err != http.ErrServerClosed {
 				errs <- err
@@ -62,7 +64,9 @@ func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
 			if err != nil {
 				errs <- err
 			} else {
-				tls_listener = netutil.LimitListener(tls_listener, max_connections)
+				if max_connections > 0 {
+					tls_listener = netutil.LimitListener(tls_listener, max_connections)
+				}
 				defer tls_listener.Close()
 				if err := tlsSrv.ServeTLS(tls_listener, opts["tls_cert_file"], opts["tls_key_file"]);
 						err != http.ErrServerClosed {
