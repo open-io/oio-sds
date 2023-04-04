@@ -17,6 +17,7 @@
 from logging import getLogger
 
 from oio.cli import Lister, ShowOne
+from oio.common.easy_value import boolean_value
 
 
 class StatsEvents(ShowOne):
@@ -112,7 +113,7 @@ class DrainTube(ShowOne):
                 ".\nAre you sure you want to continue? "
                 "[No/yes] "
             )
-            if input_text.lower() != "yes":
+            if not boolean_value(input_text, default=False):
                 return [("Aborted",), (tube,)]
 
         tubes = self.app.client_manager.event.list_tubes()

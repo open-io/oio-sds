@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 from oio.account.cleaner import AccountServiceCleaner
 from oio.cli import ShowOne
+from oio.common.easy_value import boolean_value
 
 
 class AccountServiceClean(ShowOne):
@@ -47,7 +48,7 @@ class AccountServiceClean(ShowOne):
                 "the account service.\nAre you sure you want to continue? "
                 "[No/yes] "
             )
-            if input_text.lower() != "yes":
+            if not boolean_value(input_text, default=False):
                 return (
                     ("success", "deleted-containers", "released-buckets"),
                     ("Aborted", 0, 0),
