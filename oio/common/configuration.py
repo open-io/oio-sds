@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,7 @@ import yaml
 from os import path
 from optparse import OptionParser
 from glob import glob
-from six.moves.configparser import SafeConfigParser
+from configparser import ConfigParser
 
 
 def parse_options(parser=None):
@@ -59,51 +59,21 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
         return parse_config(conf_path)
     if defaults is None:
         defaults = {}
-    parser = SafeConfigParser(defaults)
+    parser = ConfigParser(defaults, interpolation=None)
     success = parser.read(conf_path)
     if not success:
         print("Unable to read config from %s" % conf_path)
         sys.exit(1)
     if section_name:
         if parser.has_section(section_name):
-            # if log_format is set, extract it from the parser
-            # to prevent to expand variables which can, in case of
-            # log_format throw a ConfigParser.InterpolationMissingOptionError
-            log_format = {}
-            for option in ("log_format", "access_log_format"):
-                if not parser.has_option(section_name, option):
-                    continue
-                log_format[option] = parser.get(section_name, option, raw=True)
-                # don't use remove_options because it can fail without reason
-                parser.set(section_name, option, "")
-
             conf = dict(parser.items(section_name))
-
-            # Add log_format again, after parsing
-            conf.update(log_format)
-
         else:
             print("Unable to find section %s in config %s" % (section_name, conf_path))
             exit(1)
     else:
         conf = {}
         for section in parser.sections():
-            # if log_format is set, extract it from the parser
-            # to prevent to expand variables which can, in case of
-            # log_format throw a ConfigParser.InterpolationMissingOptionError
-            log_format = {}
-            for option in ("log_format", "access_log_format"):
-                if not parser.has_option(section, option):
-                    continue
-                log_format[option] = parser.get(section, option, raw=True)
-                # don't use remove_options because it can fail without reason
-                parser.set(section, option, "")
-
             conf.update({section: dict(parser.items(section))})
-
-            # Add log_format again, after parsing
-            conf[section].update(log_format)
-
     return conf
 
 
@@ -162,7 +132,7 @@ def load_namespace_conf(namespace, failsafe=False, fresh=False):
     if not fresh and namespace in NS_CONF_CACHE:
         return NS_CONF_CACHE[namespace]
 
-    parser = SafeConfigParser({})
+    parser = ConfigParser({}, interpolation=None)
     success = False
 
     # Do not load a non-overriding file (local) if any file has
@@ -210,7 +180,7 @@ def set_namespace_options(namespace, options, remove=None):
     :param remove: an iterable of options to remove
     :returns: a dictionary with all options of the namespace
     """
-    parser = SafeConfigParser({})
+    parser = ConfigParser({}, interpolation=None)
 
     potential_confs = list()
     actual_confs = list()

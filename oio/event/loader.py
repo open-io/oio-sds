@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 import os
 import re
 import pkg_resources
-from six.moves import configparser
+from configparser import ConfigParser
 
 
 DEFAULT_HANDLER = "egg:oio#default"
@@ -121,12 +121,6 @@ class _Loader(object):
     pass
 
 
-class CustomConfigParser(configparser.ConfigParser):
-    def __init__(self, filename, *args, **kwargs):
-        configparser.ConfigParser.__init__(self, *args, **kwargs)
-        self.filename = filename
-
-
 class ConfigLoader(object):
     HANDLER = HANDLER
     FILTER = FILTER
@@ -135,10 +129,10 @@ class ConfigLoader(object):
     def __init__(self, filename):
         self.filename = filename = filename.strip()
         defaults = {"__file__": os.path.abspath(filename)}
-        self.parser = CustomConfigParser(filename, defaults=defaults)
+        self.parser = ConfigParser(defaults=defaults, interpolation=None)
         self.parser.optionxform = str
-        with open(filename) as f:
-            self.parser.readfp(f)
+        with open(filename, "rt") as infile:
+            self.parser.read_file(infile, source=filename)
 
     _absolute_re = re.compile(r"^[a-zA-Z]+:")
 
