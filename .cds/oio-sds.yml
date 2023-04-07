@@ -5,6 +5,15 @@ workflow:
   root:
     pipeline: oio-sds-root
     application: oio-sds
+    payload:
+      "git.author": ""
+      "git.branch": "master"
+      "git.hash": ""
+      "git.hash.before": ""
+      "git.message": ""
+      "git.repository": OPENIO/oio-sds
+      "git.tag": ""
+      "build_deb": "false"
 
   tests-fast:
     pipeline: oio-sds-test-fast
@@ -17,7 +26,7 @@ workflow:
         - variable: cds.triggered_by.username
           operator: ne
           value: "cds.scheduler"
-  
+
   tests-lint:
     pipeline: oio-sds-lint
     application: oio-sds
@@ -152,10 +161,8 @@ workflow:
     depends_on:
       - root
     conditions:
-      check:
-        - variable: cds.triggered_by.username
-          operator: ne
-          value: "cds.scheduler"
+      script: |+
+        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb == "true" or git_branch == "master")
 
   clean-artifacts:
     pipeline: oio-sds-clean-artifacts
