@@ -1,5 +1,4 @@
 black
-codecov
 coverage
 fixtures>=1.4.0
 flake8
