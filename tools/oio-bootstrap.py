@@ -142,7 +142,7 @@ user = ${USER}
 group = ${GROUP}
 
 [general]
-restart_delay = 60
+restart_delay = 15
 cluster_file = ${CLUSTERFILE}
 
 [fdbserver]
@@ -1793,7 +1793,7 @@ defaults = {
     HASH_WIDTH: 3,
     HASH_DEPTH: 1,
     # After being stopped (SIGTERM), timeout before sending a SIGKILL
-    "SYSTEMCTL_TIMEOUT_STOP_SEC": 90,  # systemctl default value
+    "SYSTEMCTL_TIMEOUT_STOP_SEC": 30,  # systemctl default value
 }
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
