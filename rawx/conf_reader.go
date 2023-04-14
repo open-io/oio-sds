@@ -84,6 +84,8 @@ var loadedOpts = map[string]string{
 	"log_request_format": "log_request_format",
 	"log_format":         "log_format",
 	// TODO(jfs): also implement a cachedir
+
+	"graceful_stop_timeout": "graceful_stop_timeout",
 }
 
 // FIXME(jfs): Schedule the removal of these misleading options

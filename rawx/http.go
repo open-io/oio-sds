@@ -18,72 +18,82 @@ package main
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import (
-	"log"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
-	"golang.org/x/net/netutil"
 )
 
-func Run(srv *http.Server, tlsSrv *http.Server, opts optionsMap) error {
-	errs := make(chan error)
-	var servers sync.WaitGroup
-	max_connections := opts.getInt("max_connections", maxConnectionsDefault)
+func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file string) error {
+	var protocol string
+	var fd int64 = -1
+	var addr string
+	var err error
+	var listener net.Listener
 
-	servers.Add(1)
-	go func() {
-		defer servers.Done()
-		log.Printf("Starting HTTP service on %s, max_connections=%d",
-				srv.Addr, max_connections)
-		listener, err := net.Listen("tcp", srv.Addr)
+	if tls_cert_file != "" && tls_key_file != "" {
+			protocol = "HTTPS"
+	} else {
+			protocol = "HTTP"
+	}
+
+	fdEnvVar := os.Getenv(fmt.Sprintf("__OIO_RAWX_FORK_%s_FD", protocol))
+	if fdEnvVar != "" {
+		fd, err = strconv.ParseInt(fdEnvVar, 10, 64)
 		if err != nil {
-			errs <- err
+			LogWarning("[%s] Error while parsing __OIO_RAWX_FORK_%s_FD env variable: %v", protocol, protocol, err)
+			fd = -1
+		}
+	}
+	if fd > -1 {
+		addr = os.Getenv(fmt.Sprintf("__OIO_RAWX_FORK_%s_ADDR", protocol))
+		if addr == "" || addr != srv.server.Addr {
+			LogWarning("[%s] graceful restart asked but Addr changed, use a new socket (old=%s new=%s)", protocol, addr, srv.server.Addr)
+			file := os.NewFile(uintptr(fd), "")
+			file.Close()
+			fd = -1
+		}
+	}
+
+	if fd > -1 {
+		LogInfo("[%s] About to use fd %d to listen on %s", protocol, fd, srv.server.Addr)
+		file := os.NewFile(uintptr(fd), "")
+		listener, err = net.FileListener(file)
+		if err != nil {
+			fd = -1
+			return fmt.Errorf("[%s] Unable to listen (%s) using existing FD %d: %v", protocol, srv.server.Addr, fd, err)
+		}
+	}
+	if fd == -1 {
+		listener, err = net.Listen("tcp", srv.server.Addr)
+		if err != nil {
+			return err
+		}
+	}
+	srv.socket = listener.(*net.TCPListener)
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		var err error
+
+		LogInfo("[%s] About to serve on %s", protocol, srv.server.Addr)
+		if tls_cert_file != "" && tls_key_file != "" {
+			err = srv.server.ServeTLS(listener, tls_cert_file, tls_key_file)
 		} else {
-			if max_connections > 0 {
-				listener = netutil.LimitListener(listener, max_connections)
-			}
-			defer listener.Close()
-			if err := srv.Serve(listener); err != http.ErrServerClosed {
-				errs <- err
-			} else {
-				errs <- nil
-			}
+			err = srv.server.Serve(listener)
 		}
 
-		log.Printf("HTTP service on %s stopped", srv.Addr)
+		if err != http.ErrServerClosed {
+			LogWarning("[%s] Unable to start server: %v", protocol, err.Error())
+		}
+
+		LogInfo("[%s] server stopped on %s", protocol, srv.server.Addr)
 	}()
 
-	if len(opts["tls_rawx_url"]) > 0 {
-		servers.Add(1)
-		// Starting HTTPS server
-		go func() {
-			defer servers.Done()
-			log.Printf("Starting HTTPS service on %s, max_connections=%d",
-					tlsSrv.Addr, max_connections)
-			tls_listener, err := net.Listen("tcp", tlsSrv.Addr)
-			if err != nil {
-				errs <- err
-			} else {
-				if max_connections > 0 {
-					tls_listener = netutil.LimitListener(tls_listener, max_connections)
-				}
-				defer tls_listener.Close()
-				if err := tlsSrv.ServeTLS(tls_listener, opts["tls_cert_file"], opts["tls_key_file"]);
-						err != http.ErrServerClosed {
-					errs <- err
-				} else {
-					errs <- nil
-				}
-			}
-			log.Printf("HTTPS service on %s stopped", tlsSrv.Addr)
-		}()
-	}
-
-	if err := <-errs; err != nil {
-		log.Printf("Could not start serving service due to (error: %s)", err)
-		return err
-	}
-
-	servers.Wait()
 	return nil
 }

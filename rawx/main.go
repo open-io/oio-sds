@@ -30,15 +30,57 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
+type httpServer struct {
+	server http.Server
+	socket *net.TCPListener
+}
+
 var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
+
+// variable to track if a child process has been forked
+var childPid int = 0
+
+// notify systemd using sd_notify
+// more to read: https://www.freedesktop.org/software/systemd/man/sd_notify.html#Description
+func updateSystemd(status string) (notify_socket string) {
+	notify_socket = os.Getenv("NOTIFY_SOCKET")
+
+	if notify_socket == "" || status == "" {
+		LogDebug("unable to send status to systemd as NOTIFY_SOCKET env variable is not set")
+		return
+	}
+
+	addr := &net.UnixAddr{
+		Name: notify_socket,
+		Net:  "unixgram",
+	}
+
+	LogDebug("notifying systemd with: %s", status)
+
+	conn, err := net.DialUnix(addr.Net, nil, addr)
+	// Error connecting to NOTIFY_SOCKET
+	if err != nil {
+		LogWarning("Unable to dial NOTIFY_SOCKET(%s): %v", notify_socket, err)
+		return
+	}
+	defer conn.Close()
+	if _, err = conn.Write([]byte(status)); err != nil {
+		LogWarning("Unable to send state %s to systemd: %v", status, err)
+		return
+	}
+
+	return
+}
 
 func checkURL(url string) {
 	addr, err := net.ResolveTCPAddr("tcp", url)
@@ -54,31 +96,168 @@ func checkNS(ns string) {
 	}
 }
 
-func installSigHandlers(srv *http.Server) {
+func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Duration, wg *sync.WaitGroup) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
 		syscall.SIGUSR1,
 		syscall.SIGUSR2,
+		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM)
+	servers := []*httpServer{}
+	if srv != nil {
+		servers = append(servers, srv)
+	}
+	if srvTls != nil {
+		servers = append(servers, srvTls)
+	}
 
 	go func() {
+		ongoing_stop := false
+
 		for {
-			switch <-signalChan {
+			sig := <-signalChan
+			LogInfo("Received signal %s", sig)
+
+			switch sig {
+
+			// SIGUSR1 increase verbosity for 15 minutes
 			case syscall.SIGUSR1:
-				increaseVerbosity()
+				// run in a goroutine to prevent the time.Sleep to lock
+				// the current (sig handler) goroutine
 				go func() {
+					increaseVerbosity()
 					time.Sleep(time.Minute * 15)
 					resetVerbosity()
 				}()
+
+			// SIGUSR1 reset verbosity
 			case syscall.SIGUSR2:
 				resetVerbosity()
-			case syscall.SIGINT, syscall.SIGTERM:
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				if err := srv.Shutdown(ctx); err != nil {
-					LogWarning("graceful shutdown error: %v", err)
+
+			// INT exits immediately (timeout = 0)
+			// TERM exits after all requests are finished or at timeout expiration
+			//      if timeout is negative, wait for ever
+			//      if timeout is 0, exit immediately
+			case syscall.SIGTERM, syscall.SIGINT:
+
+				if childPid == 0 {
+					updateSystemd(fmt.Sprintf("STOPPING=1\nSTATUS=received %s signal, quitting", sig))
 				}
-				cancel() // releases resources if Shutdown completes before timeout elapses
+
+				if sig == syscall.SIGINT {
+					timeout = 0
+				} else {
+					if ongoing_stop {
+						LogWarning("A graceful stop is already on going, forcing to exit immediately")
+						timeout = 0
+					}
+				}
+
+				ongoing_stop = true
+
+				for i:=0; i<len(servers); i++ {
+					server := servers[i]
+
+					// run in a go routine as the Shutdown function is blocking the current goroutine
+					go func() {
+						var ctx context.Context
+						if timeout < 0 {
+							LogInfo("Shutting down %s server once all requests are over", server.server.Addr)
+							ctx = context.Background()
+						} else {
+							if timeout > 0 {
+								LogInfo("Shutting down %s server after all request are over or after %s", server.server.Addr, timeout)
+							} else {
+								LogInfo("Shutting down %s server immediately", server.server.Addr)
+							}
+							var cancel context.CancelFunc
+							ctx, cancel = context.WithTimeout(context.Background(), timeout)
+							defer cancel()
+						}
+
+						// increment the waitgroup to prevent the main loop to exit too early
+						wg.Add(1)
+						defer wg.Done()
+
+						// stops the server waiting for all requests to finish (or for timeout to expires if set)
+						if err := server.server.Shutdown(ctx); err != nil {
+							LogWarning("HTTP shutdown (%s) error: %v", server.server.Addr, err.Error())
+						}
+					}()
+				}
+
+			// HUP is used to trigger a graceful restart
+			// only 1 at a time can be done
+			case syscall.SIGHUP:
+				if ongoing_stop {
+					LogWarning("A graceful stop is already on going, ignoring %s", sig)
+					continue
+				}
+				// inform systemd that a reload has started
+				updateSystemd(fmt.Sprintf("RELOADING=1\nSTATUS=reloading"))
+				var args []string
+				var err error
+				var file *os.File
+				var fileTls *os.File
+				files := []*os.File{}
+				// __OIO_RAWX_FORK is used for the new process to know
+				// it's a forked from a reload
+				env := []string{"__OIO_RAWX_FORK=1"}
+
+				// prepare args for the exec.Command call
+				if len(os.Args) > 1 {
+					args = os.Args[1:]
+				}
+
+				// retrieve file descriptor of the HTTP listen socket
+				file, err = srv.socket.File()
+				if err != nil {
+					LogWarning("Unable to retrieve file from HTTP listener, not forking: %v", err)
+					continue
+				}
+
+				// append the file descriptor to the list
+				files = append(files, file)
+				// set the environment variable to indicate to the child process
+				// which FD to use
+				// hardcoding 3 because the first 3 are stdin, stdout and stderr
+				// see https://pkg.go.dev/os/exec#Cmd and especially ExtraFiles
+				env = append(env, "__OIO_RAWX_FORK_HTTP_FD=3")
+				// Addr is used to ensure the address used by the parent is the same as the one the child is
+				// supposed to listen to
+				env = append(env, fmt.Sprintf("__OIO_RAWX_FORK_HTTP_ADDR=%s", srv.server.Addr))
+
+				// same but for TLS
+				if srvTls != nil {
+					fileTls, err = srvTls.socket.File()
+					if err != nil {
+						LogWarning("Unable to retrieve file from HTTPS listener, not forking: %v", err)
+						continue
+					}
+					files = append(files, fileTls)
+					env = append(env, "__OIO_RAWX_FORK_HTTPS_FD=4")
+					env = append(env, fmt.Sprintf("__OIO_RAWX_FORK_HTTPS_ADDR=%s", srvTls.server.Addr))
+				} else {
+					// if TLS is not used, ensure to not pass wrong env variables
+					os.Unsetenv("__OIO_RAWX_FORK_HTTPS_FD")
+					os.Unsetenv("__OIO_RAWX_FORK_HTTPS_ADDR")
+				}
+
+				// Launch child process
+				cmd := exec.Command(os.Args[0], args...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.ExtraFiles = files
+				cmd.Env = append(os.Environ(),  env[:]...)
+				if err := cmd.Start(); err != nil {
+					LogWarning("Fork did not succeed: %s", err)
+					continue
+				}
+				childPid = cmd.Process.Pid
+				LogInfo("Started child process %d, waiting for its ready signal", cmd.Process.Pid)
+				// notify systemd that the reloading is done (so that systemctl reload can return)
+				updateSystemd(fmt.Sprintf("READY=1\nSTATUS=waiting for new rawx process to take over ..."))
 			}
 		}
 	}()
@@ -134,6 +313,20 @@ func taskProbeRepository(rawx *rawxService, finished chan bool) {
 
 func main() {
 	var err error
+	var wg sync.WaitGroup
+
+	// notify systemd with the PID of the new process right before exiting
+	// otherwise systemd will take it into account partially and stopping after
+	// a reload would be done with a SIGKILL instead of a SIGTERM
+	defer func() {
+		if childPid > 0 {
+			LogInfo("process exit ! (process %d has taken over after reload)", childPid)
+			updateSystemd(fmt.Sprintf("MAINPID=%d\nSTATUS=processing request (after reload) ...", childPid))
+		} else {
+			LogInfo("process exit !")
+			updateSystemd("EXIST_STATUS=0\nSTATUS=stopped")
+		}
+	}()
 
 	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
 	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
@@ -181,6 +374,14 @@ func main() {
 		InitSysLogger(v)
 	} else {
 		InitNoopLogger()
+	}
+
+	var graceful_stop_timeout time.Duration = -1
+	if v, ok := opts["graceful_stop_timeout"]; ok {
+		graceful_stop_timeout, err = time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("Invalid graceful_stop_timeout value: %v", err)
+		}
 	}
 
 	chunkrepo := chunkRepository{}
@@ -271,14 +472,16 @@ func main() {
 		}
 	}
 
-	eventAgent := OioGetEventAgent(namespace)
-	if eventAgent == "" {
-		LogFatal("Notifier error: no address")
-	}
+	if notifAllowed {
+		eventAgent := OioGetEventAgent(namespace)
+		if eventAgent == "" {
+			LogFatal("Notifier error: no address")
+		}
 
-	rawx.notifier, err = MakeNotifier(eventAgent, &opts, &rawx)
-	if err != nil {
-		LogFatal("Notifier error: %v", err)
+		rawx.notifier, err = MakeNotifier(eventAgent, &opts, &rawx)
+		if err != nil {
+			LogFatal("Notifier error: %v", err)
+		}
 	}
 
 	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
@@ -287,34 +490,38 @@ func main() {
 	toIdle := opts.getInt("timeout_idle", timeoutIdle)
 
 	/* need to be duplicated for HTTP and HTTPS */
-	srv := http.Server{
-		Addr:              rawx.url,
-		Handler:           &rawx,
-		TLSConfig:         nil,
-		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
-		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
-		WriteTimeout:      time.Duration(toWrite) * time.Second,
-		IdleTimeout:       time.Duration(toIdle) * time.Second,
-		// The default is at 1MiB but the RAWX never needs that
-		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
+	srv := httpServer{
+		server: http.Server {
+			Addr:              rawx.url,
+			Handler:           &rawx,
+			TLSConfig:         nil,
+			ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
+			ReadTimeout:       time.Duration(toReadRequest) * time.Second,
+			WriteTimeout:      time.Duration(toWrite) * time.Second,
+			IdleTimeout:       time.Duration(toIdle) * time.Second,
+			// The default is at 1MiB but the RAWX never needs that
+			MaxHeaderBytes:    opts.getInt("headers_buffer_size", 65536),
+		},
 	}
 
-	tlsSrv := http.Server{
-		Addr:              rawx.tlsUrl,
-		Handler:           &rawx,
-		TLSConfig:         nil,
-		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
-		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
-		WriteTimeout:      time.Duration(toWrite) * time.Second,
-		IdleTimeout:       time.Duration(toIdle) * time.Second,
-		// The default is at 1MiB but the RAWX never needs that
-		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
+	tlsSrv := httpServer{
+		server : http.Server {
+			Addr:              rawx.tlsUrl,
+			Handler:           &rawx,
+			TLSConfig:         nil,
+			ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
+			ReadTimeout:       time.Duration(toReadRequest) * time.Second,
+			WriteTimeout:      time.Duration(toWrite) * time.Second,
+			IdleTimeout:       time.Duration(toIdle) * time.Second,
+			// The default is at 1MiB but the RAWX never needs that
+			MaxHeaderBytes:    opts.getInt("headers_buffer_size", 65536),
+		},
 	}
 
 	flagNoDelay := opts.getBool("nodelay", configDefaultNoDelay)
 	flagCork := opts.getBool("cork", configDefaultCork)
 	if flagNoDelay || flagCork {
-		srv.ConnState = func(cnx net.Conn, st http.ConnState) {
+		srv.server.ConnState = func(cnx net.Conn, st http.ConnState) {
 			setOpt := func(dom, flag, val int) {
 				if tcpCnx, ok := cnx.(*net.TCPConn); ok {
 					if rawCnx, err := tcpCnx.SyscallConn(); err == nil {
@@ -342,11 +549,13 @@ func main() {
 	}
 
 	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
-	srv.SetKeepAlivesEnabled(keepalive)
-	tlsSrv.SetKeepAlivesEnabled(keepalive)
-
-	installSigHandlers(&srv)
-	installSigHandlers(&tlsSrv)
+	srv.server.SetKeepAlivesEnabled(keepalive)
+	tlsSrv.server.SetKeepAlivesEnabled(keepalive)
+	if opts["tls_rawx_url"] == "" {
+		installSigHandlers(&srv, nil, graceful_stop_timeout, &wg)
+	} else {
+		installSigHandlers(&srv, &tlsSrv, graceful_stop_timeout, &wg)
+	}
 
 	if !*servicingPtr {
 		id := rawx.id
@@ -359,10 +568,10 @@ func main() {
 	}
 
 	if logExtremeVerbosity {
-		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
+		srv.server.ConnState = func(cnx net.Conn, state http.ConnState) {
 			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
-		tlsSrv.ConnState = func(cnx net.Conn, state http.ConnState) {
+		tlsSrv.server.ConnState = func(cnx net.Conn, state http.ConnState) {
 			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 	}
@@ -370,11 +579,48 @@ func main() {
 	finished := make(chan bool)
 	go taskProbeRepository(&rawx, finished)
 
-	if err := Run(&srv, &tlsSrv, opts); err != nil {
-		LogWarning("HTTP Server exiting: %v", err)
+	// run HTTP server
+	if err := Run(&wg, &srv, "", ""); err != nil {
+		log.Fatalf("Unable to start HTTP server on %s: %v", srv.server.Addr, err.Error())
 	}
 
+	// run TLS server
+	if opts["tls_rawx_url"] != "" {
+		if err := Run(&wg, &tlsSrv, opts["tls_cert_file"], opts["tls_key_file"]); err != nil {
+			log.Fatalf("Unable to start HTTPS server on %s: %v", tlsSrv.server.Addr, err.Error())
+		}
+	}
+
+	// if process has been launched from a graceful restart
+	// kill the parent process gracefuly
+	if os.Getenv("__OIO_RAWX_FORK") != "" {
+		ppid := syscall.Getppid()
+		LogInfo("child process launched with success, graceful stop the parent process (%d)", ppid)
+		syscall.Kill(ppid, syscall.SIGTERM)
+	} else {
+		// it is a initial start
+		// let's inform systemd that the process is up and running
+		updateSystemd(fmt.Sprintf("READY=1\nSTATUS=processing request (initial start) ..."))
+	}
+
+	// backup NOTIFY_SOCKET (systemd)
+	notify_socket := os.Getenv("NOTIFY_SOCKET")
+
+	// ensure the process environment is cleanup for next graceful restart
+	os.Clearenv()
+
+	// push back NOTIFY_SOCKET if set
+	if notify_socket != "" {
+		os.Setenv("NOTIFY_SOCKET", notify_socket)
+	}
+
+	// wait for HTTP and TLS server to stop before clean exit
+	wg.Wait()
+
 	finished <- true
-	rawx.notifier.stop()
+	if notifAllowed {
+		rawx.notifier.stop()
+	}
+
 	logger.close()
 }

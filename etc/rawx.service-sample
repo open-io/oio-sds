@@ -1,0 +1,13 @@
+[Unit]
+Description=rawx
+After=network.target
+
+[Service]
+Type=notify
+ExecStart=/opt/oio-sds/bin/oio-rawx -f /etc/oio/INFRA1234/rawx-1234/rawx.conf -s rawx-1234
+ExecReload=kill -HUP $MAINPID
+Restart=on-failure
+Environment="PATH=/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+
+[Install]
+WantedBy=multi-user.target
