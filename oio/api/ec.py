@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,8 +32,7 @@ from oio.common.green import (
 import collections
 import math
 from socket import error as SocketError
-from six import text_type
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
 from greenlet import GreenletExit
 
 from oio.api import io
@@ -775,7 +774,7 @@ class EcChunkWriter(object):
                 eventlet_yield()
             except (Exception, ChunkWriteTimeout) as exc:
                 self.failed = True
-                msg = text_type(exc)
+                msg = str(exc)
                 self.logger.warning(
                     "Failed to write to %s (%s, reqid=%s)", self.chunk, msg, self.reqid
                 )
@@ -843,7 +842,7 @@ class EcChunkWriter(object):
                 self.conn.set_cork(False)
         except (Exception, ChunkWriteTimeout) as exc:
             self.failed = True
-            msg = text_type(exc)
+            msg = str(exc)
             self.logger.warning(
                 "Failed to finish %s (%s, reqid=%s)", self.chunk, msg, self.reqid
             )
@@ -989,7 +988,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
-                            raise SourceReadError(text_type(exc))
+                            raise SourceReadError(str(exc)) from exc
                     return data
 
                 # the main write loop
@@ -1047,12 +1046,17 @@ class EcMetachunkWriter(io.MetachunkWriter):
             self.logger.warning("%s (reqid=%s)", exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
-            self.logger.warning("Source read error (reqid=%s): %s", self.reqid, exc)
+            self.logger.warning(
+                "Source read error (reqid=%s, policy=%s): %s",
+                self.reqid,
+                self.storage_method.name,
+                exc,
+            )
             raise
         except Timeout as to:
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
-            raise exceptions.OioTimeout(to)
+            raise exceptions.OioTimeout(to) from to
         except Exception:
             self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
             raise
@@ -1086,7 +1090,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             )
             return writer, chunk
         except (Exception, Timeout) as exc:
-            msg = text_type(exc)
+            msg = str(exc)
             self.logger.warning(
                 "Failed to connect to %s (%s, reqid=%s): %s",
                 chunk,
@@ -1176,7 +1180,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             resp = writer.getresponse()
         except (Exception, Timeout) as exc:
             resp = None
-            msg = text_type(exc)
+            msg = str(exc)
             self.logger.warning(
                 "Failed to read response for %s (reqid=%s): %s",
                 writer.chunk,

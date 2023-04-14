@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,8 +19,7 @@ from oio.common.green import LightQueue, Timeout, GreenPile, WatchdogTimeout
 
 from socket import error as SocketError
 
-from six import text_type
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
 
 from oio.api import io
 from oio.common.exceptions import OioTimeout, SourceReadError, SourceReadTimeout
@@ -104,7 +103,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as err:
-                            raise SourceReadError(str(err))
+                            raise SourceReadError(str(err)) from err
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
@@ -132,13 +131,18 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
 
         except green.SourceReadTimeout as err:
             self.logger.warning("Source read timeout (reqid=%s): %s", self.reqid, err)
-            raise SourceReadTimeout(err)
+            raise SourceReadTimeout(err) from err
         except SourceReadError as err:
-            self.logger.warning("Source read error (reqid=%s): %s", self.reqid, err)
+            self.logger.warning(
+                "Source read error (reqid=%s, policy=%s): %s",
+                self.reqid,
+                self.storage_method.name,
+                err,
+            )
             raise
         except Timeout as to:
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
-            raise OioTimeout(to)
+            raise OioTimeout(to) from to
         except Exception:
             self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
             raise
@@ -221,7 +225,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         conn.upload_start = None
         while True:
             data = conn.queue.get()
-            if isinstance(data, text_type):
+            if isinstance(data, str):
                 data = data.encode("utf-8")
             if not conn.failed:
                 try:
