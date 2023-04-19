@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,11 +27,11 @@ class HttpChecker(BaseChecker):
         for k in ("uri",):
             if k not in self.checker_conf:
                 raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k
+                    f'Missing field "{k}" in configuration'
                 )
 
         self.path = self.checker_conf["uri"].lstrip("/")
-        self.name = "%s|%s" % (self.name, self.path)
+        self.name = f"{self.name}|{self.path}"
         self.url = "%s:%s%s%s" % (
             self.host,
             self.port,
@@ -49,23 +49,26 @@ class HttpChecker(BaseChecker):
             if resp.status == 200:
                 self.last_check_success = True
             else:
-                raise Exception("status code != 200: %s" % resp.status)
+                raise Exception(f"({resp.status}) {resp.data.decode('utf-8')}")
         except Exception as err:
             # Avoid spamming the logs
             if self.last_check_success:
                 self.logger.warn(
-                    "ERROR performing %s check (%s): %s",
+                    "ERROR performing %s check (%s reqid=%s): %s",
                     self.checker_type,
                     self.url,
+                    reqid,
                     err,
                 )
             self.last_check_success = False
         finally:
             if resp:
                 try:
+                    # Probably useless since we do not disable preload_content
+                    resp.drain_conn()
                     resp.close()
                 except urllibexc.HTTPError:
                     pass
             if not self.last_check_success:
-                self.logger.warn("%s check failed", self.name)
+                self.logger.warn("%s check failed (reqid=%s)", self.name, reqid)
             return self.last_check_success

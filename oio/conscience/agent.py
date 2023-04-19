@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -62,7 +62,7 @@ class ServiceWatcher(object):
         )
 
         self.logger = get_logger(self.conf)
-        self.pool_manager = get_pool_manager()
+        self.pool_manager = get_pool_manager(pool_maxsize=4)
         self.cs = ConscienceClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger
         )
@@ -96,8 +96,8 @@ class ServiceWatcher(object):
             if self.service.get(name):
                 self.service_definition["tags"][tag] = self.service[name]
 
-        self.service_checks = list()
-        self.service_stats = list()
+        self.service_checks = []
+        self.service_stats = []
         self.init_checkers(service)
         self.init_stats(service)
 
@@ -105,7 +105,12 @@ class ServiceWatcher(object):
         return self.service.get(item, self.conf.get(item)) or default
 
     def start(self):
-        self.logger.info('watcher "%s" starting', self.name)
+        self.logger.info(
+            'watcher "%s" starting (%d↑ %d↓)',
+            self.name,
+            self.rise,
+            self.fall,
+        )
         self.running = True
         self.watch()
         self.running = False
@@ -124,7 +129,7 @@ class ServiceWatcher(object):
 
     def check(self, reqid=None):
         """Perform the registered checks on the service until any of
-        them fails of the end of the list is reached."""
+        them fails or the end of the list is reached."""
         self.status = True
         for service_check in (x for x in self.service_checks if self.running):
             if not service_check.service_status(reqid=reqid):
@@ -141,7 +146,10 @@ class ServiceWatcher(object):
                 stats = stat.get_stats(reqid=reqid)
                 self.service_definition["tags"].update(stats)
         except Exception as ex:
-            self.logger.debug(
+            # Log only if the current status is OK (the basic TCP or HTTP check
+            # is OK but the stats collection is not).
+            log = self.logger.info if self.status else self.logger.debug
+            log(
                 "get_stats error: %s, skipping %s (reqid=%s)",
                 ex,
                 [type(col).__name__ for col in collectors] or "<nothing>",
@@ -157,9 +165,11 @@ class ServiceWatcher(object):
         # Alert when the status changes
         if self.status != self.last_status:
             if self.status:
-                self.logger.info('service "%s" is now up', self.name)
+                self.logger.info('service "%s" is now up (reqid=%s)', self.name, reqid)
             else:
-                self.logger.warning('service "%s" is now down', self.name)
+                self.logger.warning(
+                    'service "%s" is now down (reqid=%s)', self.name, reqid
+                )
             self.last_status = self.status
 
         # Use a boolean so we can easily convert it to a number in conscience

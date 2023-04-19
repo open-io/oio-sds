@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-from six import binary_type
 
 from oio.common.constants import REQID_HEADER
 from oio.common.easy_value import float_value
@@ -32,7 +30,7 @@ class HttpStat(BaseStat):
         self.path = self.stat_conf["path"].lstrip("/")
         self.host = self.stat_conf["host"]
         self.port = self.stat_conf["port"]
-        self.url = "%s:%s/%s" % (self.host, self.port, self.path)
+        self.url = f"{self.host}:{self.port}/{self.path}"
         if self.parser == "json":
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -44,7 +42,7 @@ class HttpStat(BaseStat):
     @staticmethod
     def _parse_stats_lines(body):
         """Converts each line to a dictionary entry"""
-        if isinstance(body, binary_type):
+        if isinstance(body, bytes):
             body = body.decode("utf-8")
         data = {}
         for line in body.splitlines():
@@ -67,7 +65,7 @@ class HttpStat(BaseStat):
     @staticmethod
     def _parse_stats_json(body):
         """Prefix each entry with 'stat.'"""
-        if isinstance(body, binary_type):
+        if isinstance(body, bytes):
             body = body.decode("utf-8")
         body = json.loads(body)
         uuid = body.pop("uuid", None)
@@ -91,15 +89,17 @@ class HttpStat(BaseStat):
                         headers={"Connection": "close", REQID_HEADER: reqid},
                     )
             except Timeout as toe:
-                raise Exception(str(toe))
+                raise Exception(str(toe)) from toe
             if resp.status == 200:
                 result = self._parse_func(resp.data)
             else:
-                raise Exception("status code != 200: %s" % resp.status)
+                raise Exception(f"({resp.status}) {resp.data.decode('utf-8')}")
             return result
         finally:
             if resp:
                 try:
+                    # Probably useless since we do not disable preload_content
+                    resp.drain_conn()
                     resp.close()
                 except urllibexc.HTTPError:
                     pass
