@@ -139,7 +139,8 @@ class CommonShell(App):
         if self.options.coverage:
             import coverage
 
-            coverage.process_startup()
+            cov = coverage.process_startup()
+            cov.switch_context("cli")
 
     def prepare_to_run_command(self, cmd):
         LOG.debug(

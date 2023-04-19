@@ -2222,7 +2222,7 @@ def generate(options):
     # For testing purposes, some events must go to the main queue
     if all_beanstalkd:
         _, host, port = all_beanstalkd[0]
-        ENV["MAIN_QUEUE_URL"] = "beanstalk://{0}:{1}".format(host, port)
+        ENV["MAIN_QUEUE_URL"] = f"beanstalk://{host}:{port}"
 
     event_target = register_target("event", root_target)
     # If a RabbitMQ endpoint is configured, configure it only for meta2
@@ -2266,7 +2266,8 @@ def generate(options):
             env,
             template_systemd_service_event_agent,
             event_target,
-            coverage_wrapper=shutil.which("coverage") + " run -p ",
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent -p ",
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_event_agent)
@@ -2378,7 +2379,10 @@ def generate(options):
     with open(path, "w+") as f:
         f.write(to_write)
     register_service(
-        _tmp_env, template_systemd_service_meta2_indexer, indexer_target, False
+        _tmp_env,
+        template_systemd_service_meta2_indexer,
+        indexer_target,
+        add_service_to_conf=False,
     )
 
     # oio-meta2-crawler
@@ -2398,7 +2402,10 @@ def generate(options):
     with open(path, "w+") as f:
         f.write(to_write)
     register_service(
-        _tmp_env, template_systemd_service_meta2_crawler, crawler_target, False
+        _tmp_env,
+        template_systemd_service_meta2_crawler,
+        crawler_target,
+        add_service_to_conf=False,
     )
 
     # oio-meta2-placement-checker-crawler
@@ -2421,7 +2428,7 @@ def generate(options):
         _tmp_env,
         template_systemd_service_placement_checker_crawler,
         None,
-        False,
+        add_service_to_conf=False,
     )
 
     # RAWX
@@ -2489,7 +2496,10 @@ def generate(options):
         with open(path, "w+") as f:
             f.write(to_write)
         register_service(
-            env, template_systemd_service_rdir_crawler, crawler_target, False
+            env,
+            template_systemd_service_rdir_crawler,
+            crawler_target,
+            add_service_to_conf=False,
         )
 
         # oio-rawx-crawler
@@ -2509,7 +2519,10 @@ def generate(options):
             f.write(to_write)
         tpl = Template(template_systemd_service_rawx_crawler)
         register_service(
-            env, template_systemd_service_rawx_crawler, crawler_target, False
+            env,
+            template_systemd_service_rawx_crawler,
+            crawler_target,
+            add_service_to_conf=False,
         )
 
         # oio-checksum-checker-crawler
@@ -2534,7 +2547,7 @@ def generate(options):
             env,
             template_systemd_service_checksum_checker_crawler,
             crawler_target,
-            False,
+            add_service_to_conf=False,
         )
 
         # oio-placement-improver-crawler
@@ -2557,7 +2570,7 @@ def generate(options):
             env,
             template_systemd_service_placement_improver_crawler,
             crawler_target,
-            False,
+            add_service_to_conf=False,
         )
     # redis
     if options.get(ALLOW_REDIS):
@@ -2695,7 +2708,11 @@ def generate(options):
             }
         )
         register_service(
-            env, template_systemd_service_event_agent, conscience_agents_target
+            env,
+            template_systemd_service_event_agent,
+            conscience_agents_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent -p ",
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_event_agent)
@@ -2713,7 +2730,10 @@ def generate(options):
             }
         )
         register_service(
-            env, template_systemd_service_xcute_event_agent, xcute_agents_target, False
+            env,
+            template_systemd_service_xcute_event_agent,
+            xcute_agents_target,
+            add_service_to_conf=False,
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_xcute_event_agent)
@@ -2758,7 +2778,12 @@ def generate(options):
     path = "{CFGDIR}/{SRVTYPE}.conf".format(**env)
     with open(path, "w+") as f:
         f.write(to_write)
-    register_service(env, template_systemd_service_billing_agent, crawler_target, False)
+    register_service(
+        env,
+        template_systemd_service_billing_agent,
+        crawler_target,
+        add_service_to_conf=False,
+    )
 
     # blob-rebuilder configuration -> one per beanstalkd
     rebuilder_target = register_target("blob-rebuilder", root_target)
@@ -2797,7 +2822,9 @@ def generate(options):
     )
     cluster_file = cluster(env)
     env.update({"CLUSTERFILE": cluster_file})
-    register_service(env, template_systemd_service_ns, root_target, False)
+    register_service(
+        env, template_systemd_service_ns, root_target, add_service_to_conf=False
+    )
 
     # system config
     with open("{OIODIR}/sds.conf".format(**ENV), "w+") as f:

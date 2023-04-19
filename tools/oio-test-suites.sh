@@ -337,7 +337,7 @@ WRKDIR="$2" ; [[ -n "$WRKDIR" ]] ; [[ -d "$WRKDIR" ]]
 
 export PYTHON=python
 if [[ -n "$PYTHON_COVERAGE" ]] ; then
-	export PYTHON="coverage run --context ${TEST_SUITE:-nocontext} -p"
+	export PYTHON="coverage run --context ${TEST_SUITE:=nocontext} -p"
 fi
 
 OPENIOCTL="openioctl.sh"
