@@ -1103,7 +1103,12 @@ class ContainerSharding(ProxyClient):
                     exc,
                 )
 
-    def _safe_abort_sharding(self, shard, **kwargs):
+    def abort_sharding(self, shard, **kwargs):
+        """
+        Abort an ongoing sharding (or shrinking) operation.
+
+        :returns: True if everything is ok, False otherwise
+        """
         try:
             self._abort_sharding(shard, attempts=3, **kwargs)
             return True
@@ -1228,7 +1233,7 @@ class ContainerSharding(ProxyClient):
         self.logger.error(
             "Failed to shard container (CID=%s), aborting...", parent_shard["cid"]
         )
-        self._safe_abort_sharding(parent_shard, **kwargs)
+        self.abort_sharding(parent_shard, **kwargs)
         for new_shard in new_shards:
             if "cid" not in new_shard:
                 # Shard doesn't exist yet
@@ -1796,9 +1801,9 @@ class ContainerSharding(ProxyClient):
             bigger_shard["cid"],
         )
         if smaller_shard["sharding"] is not None:
-            self._safe_abort_sharding(smaller_shard, **kwargs)
+            self.abort_sharding(smaller_shard, **kwargs)
         if bigger_shard["sharding"] is not None:
-            if self._safe_abort_sharding(bigger_shard, **kwargs):
+            if self.abort_sharding(bigger_shard, **kwargs):
                 # If the abort didn't work, do not clean up the shard,
                 # otherwise the merge will be considered successful
                 # (from the point of view of this shard only).
