@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -420,7 +420,8 @@ service_info_to_lb_item(const struct service_info_s *si,
 			!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
 		item->location = location_from_dotted_string(loc_str);
 	}
-	item->weight = CLAMP(si->score.value, 0, 100);
+	item->put_weight = CLAMP(si->put_score.value, 0, 100);
+	item->get_weight = CLAMP(si->get_score.value, 0, 100);
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);
@@ -484,7 +485,12 @@ service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolea
 	g_string_append_c(gstr, '{');
 	OIO_JSON_append_str(gstr, "addr", straddr);
 	g_string_append_c(gstr, ',');
-	OIO_JSON_append_int(gstr, "score", si->score.value);
+	OIO_JSON_append_int(gstr, "score", si->put_score.value);
+	g_string_append_static(gstr, ",\"scores\":{");
+	OIO_JSON_append_int(gstr, "score.put", si->put_score.value);
+	g_string_append_c(gstr, ',');
+	OIO_JSON_append_int(gstr, "score.get", si->get_score.value);
+	g_string_append_c(gstr, '}');
 	if (full) {
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_str(gstr, "ns", si->ns_name);
@@ -581,7 +587,7 @@ service_info_encode_prometheus(GString *gstr, const struct service_info_s *si)
 
 	gchar *labels = _service_info_encode_prometheus_labels(si);
 	g_string_append_printf(gstr, "conscience_score{%s} %"G_GINT32_FORMAT"\n",
-			labels, si->score.value);
+			labels, si->put_score.value);
 
 	if (!si->tags || !si->tags->len) {
 		goto end;
@@ -632,12 +638,13 @@ service_info_load_json_object(struct json_object *obj,
 {
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
-	struct json_object *ns, *type, *url, *score, *tags;
+	struct json_object *ns, *type, *url, *score, *scores, *tags;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"ns",    &ns,    json_type_string, !permissive},
 		{"type",  &type,  json_type_string, !permissive},
 		{"addr",  &url,   json_type_string, 1},
 		{"score", &score, json_type_int,    !permissive},
+		{"scores", &scores, json_type_object,    !permissive},
 		{"tags",  &tags,  json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -654,8 +661,18 @@ service_info_load_json_object(struct json_object *obj,
 	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
 	if (type)
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
-	if (score)
-		si->score.value = json_object_get_int(score);
+	if (score) {
+		si->put_score.value = json_object_get_int(score);
+		si->get_score.value = json_object_get_int(score);
+	}
+	if (scores) {
+		json_object *score_put_obj = json_object_object_get(scores, "score.put");
+		if (score_put_obj)
+			si->put_score.value = json_object_get_int(score_put_obj);
+		json_object *score_get_obj = json_object_object_get(scores, "score.get");
+		if (score_get_obj)
+			si->get_score.value = json_object_get_int(score_get_obj);
+	}
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
@@ -716,7 +733,7 @@ service_info_dated_new(struct service_info_s *si, time_t lock_mtime)
 			struct service_info_dated_s));
 	sid->si = service_info_dup(si);
 	sid->lock_mtime = lock_mtime;
-	sid->tags_mtime = si->score.timestamp * G_TIME_SPAN_SECOND;
+	sid->tags_mtime = si->put_score.timestamp * G_TIME_SPAN_SECOND;
 	return sid;
 }
 
@@ -741,7 +758,12 @@ service_info_dated_encode_json(GString *gstr,
 	g_string_append_c(gstr, '{');
 	OIO_JSON_append_str(gstr, "addr", straddr);
 	g_string_append_c(gstr, ',');
-	OIO_JSON_append_int(gstr, "score", sid->si->score.value);
+	OIO_JSON_append_int(gstr, "score", sid->si->put_score.value);
+	g_string_append_static(gstr, ",\"scores\":{");
+	OIO_JSON_append_int(gstr, "score.put", sid->si->put_score.value);
+	g_string_append_c(gstr, ',');
+	OIO_JSON_append_int(gstr, "score.get", sid->si->get_score.value);
+	g_string_append_c(gstr, '}');
 	if (full) {
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_str(gstr, "ns", sid->si->ns_name);

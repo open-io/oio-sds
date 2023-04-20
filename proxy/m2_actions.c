@@ -338,7 +338,7 @@ _score_from_chunk_id (const char *id)
 
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	if (item) {
-		res.score = item->weight;
+		res.score = item->put_weight;
 		res.location = item->location;
 	}
 

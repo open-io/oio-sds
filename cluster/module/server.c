@@ -103,7 +103,8 @@ struct conscience_srv_s {
 	GPtrArray *tags;
 	GByteArray *cache;
 
-	score_t score;
+	score_t put_score;
+	score_t get_score;
 	time_t time_last_alert;
 	gboolean locked;
 
@@ -179,7 +180,7 @@ conscience_srv_destroy(struct conscience_srv_s *service)
 }
 
 static gboolean
-conscience_srv_compute_score(struct conscience_srv_s *service)
+conscience_srv_compute_score(struct conscience_srv_s *service, enum score_type_e score_type)
 {
 	struct conscience_srvtype_s *srvtype;
 
@@ -225,30 +226,43 @@ conscience_srv_compute_score(struct conscience_srv_s *service)
 		}
 	}
 
+	gboolean compute_score(gint32 *pResult, struct expr_s *pExpr, gint32 old_score)
+	{
+		EXTRA_ASSERT(pExpr != NULL);
+		gdouble d = 0.0;
+		if (expr_evaluate(&d, pExpr, getAcc))
+			return FALSE;
+
+		gint32 current = isnan(d) ? 0 : floor(d);
+
+		if (old_score >= 0) {
+			if (srvtype->score_variation_bound > 0) {
+				gint32 max = old_score + srvtype->score_variation_bound;
+				current = MIN(current,max);
+			}
+		}
+		*pResult = CLAMP(current, 0, 100);
+		return TRUE;
+	}
+
+
 	EXTRA_ASSERT(service != NULL);
 	srvtype = service->srvtype;
 	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(srvtype->put_score_expr != NULL);
-	EXTRA_ASSERT(srvtype->get_score_expr != NULL);
 
 	if (service->locked)
 		return TRUE;
 
-	gdouble d = 0.0;
-	if (expr_evaluate(&d, srvtype->put_score_expr, getAcc))
-		return FALSE;
-
-	gint32 current = isnan(d) ? 0 : floor(d);
-
-	if (service->score.value >= 0) {
-		if (srvtype->score_variation_bound > 0) {
-			gint32 max = service->score.value + srvtype->score_variation_bound;
-			current = MIN(current,max);
-		}
+	gboolean ret;
+	if (score_type & PUT)
+	{
+		ret = compute_score(&service->put_score.value, srvtype->put_score_expr, service->put_score.value);
 	}
-
-	service->score.value = CLAMP(current, 0, 100);
-	return TRUE;
+	if (score_type & GET)
+	{
+		ret = compute_score(&service->get_score.value, srvtype->get_score_expr, service->get_score.value);
+	}
+	return ret;
 }
 
 static void
@@ -261,7 +275,8 @@ conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 	EXTRA_ASSERT(sizeof(dst->type) == sizeof(src->srvtype->type_name));
 
 	memcpy(&dst->addr, &src->addr, sizeof(addr_info_t));
-	memcpy(&dst->score, &src->score, sizeof(score_t));
+	memcpy(&dst->put_score, &src->put_score, sizeof(score_t));
+	memcpy(&dst->get_score, &src->get_score, sizeof(score_t));
 	g_strlcpy(dst->type, src->srvtype->type_name, sizeof(dst->type));
 	g_strlcpy(dst->ns_name, nsname, sizeof(dst->ns_name));
 }
@@ -484,8 +499,10 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	service->tags = g_ptr_array_new();
 	service->lock_mtime = 0;
 	service->locked = FALSE;
-	service->score.timestamp = 0;
-	service->score.value = -1;
+	service->put_score.timestamp = 0;
+	service->put_score.value = -1;
+	service->get_score.timestamp = 0;
+	service->get_score.value = -1;
 	service->srvtype = srvtype;
 
 	/*build the service description once for all*/
@@ -524,10 +541,24 @@ conscience_srvtype_zero_expired(struct conscience_srvtype_s * srvtype,
 	g_hash_table_iter_init(&iter, srvtype->services_ht);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct conscience_srv_s *p_srv = value;
-		if (!p_srv->locked && p_srv->score.timestamp < oldest) {
-			if (p_srv->score.value > 0) {
-				p_srv->score.value = 0;
-				p_srv->score.timestamp = now;
+		if (!p_srv->locked && p_srv->put_score.timestamp < oldest) {
+			if (p_srv->put_score.value > 0) {
+				p_srv->put_score.value = 0;
+				p_srv->put_score.timestamp = now;
+				p_srv->tags_mtime = now * G_TIME_SPAN_SECOND;
+				struct service_tag_s *tag =
+						service_info_ensure_tag(p_srv->tags, NAME_TAGNAME_UP);
+				service_tag_set_value_boolean(tag, FALSE);
+				_conscience_srv_prepare_cache(p_srv);
+				if (callback)
+					callback(p_srv, u);
+				count++;
+			}
+		}
+		if (!p_srv->locked && p_srv->get_score.timestamp < oldest) {
+			if (p_srv->get_score.value > 0) {
+				p_srv->get_score.value = 0;
+				p_srv->get_score.timestamp = now;
 				p_srv->tags_mtime = now * G_TIME_SPAN_SECOND;
 				struct service_tag_s *tag =
 						service_info_ensure_tag(p_srv->tags, NAME_TAGNAME_UP);
@@ -566,7 +597,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	/* register the service if necessary, excepted if unlocking */
 	struct conscience_srv_s *p_srv = g_hash_table_lookup(srvtype->services_ht, &si->addr);
 	if (!p_srv) {
-		if (si->score.value == SCORE_UNLOCK) {
+		if (si->put_score.value == SCORE_UNLOCK || si->get_score.value == SCORE_UNLOCK) {
 			return NULL;
 		} else {
 			p_srv = conscience_srvtype_register_srv(srvtype, &si->addr);
@@ -612,22 +643,23 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	}
 	if (tags_updated) {
 		p_srv->tags_mtime = now;
-		p_srv->score.timestamp = now / G_TIME_SPAN_SECOND;
+		p_srv->put_score.timestamp = now / G_TIME_SPAN_SECOND;
+		p_srv->get_score.timestamp = now / G_TIME_SPAN_SECOND;
 	}
 
-	if (si->score.value == SCORE_UNSET || si->score.value == SCORE_UNLOCK) {
+	if (si->put_score.value == SCORE_UNSET || si->put_score.value == SCORE_UNLOCK) {
 		if (really_first && srvtype->lock_at_first_register) {
 			GRID_TRACE2("SRV first [%s]", p_srv->description);
-			p_srv->score.value = 0;
+			p_srv->put_score.value = 0;
 			p_srv->lock_mtime = now;
 			p_srv->locked = TRUE;
 		} else {
-			if (si->score.value == SCORE_UNLOCK) {
+			if (si->put_score.value == SCORE_UNLOCK) {
 				p_srv->lock_mtime = now;
 				if (p_srv->locked) {
 					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
 					p_srv->locked = FALSE;
-					conscience_srv_compute_score(p_srv);
+					conscience_srv_compute_score(p_srv, PUT);
 				} else {
 					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
 				}
@@ -635,7 +667,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 				if (p_srv->locked) {
 					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
 				} else {
-					if (conscience_srv_compute_score(p_srv)) {
+					if (conscience_srv_compute_score(p_srv, PUT)) {
 						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
 					} /* else ... a trace is already written */
 				}
@@ -649,7 +681,43 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 			GRID_TRACE2("SRV locked [%s]", p_srv->description);
 			p_srv->locked = TRUE;
 		}
-		p_srv->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+		p_srv->put_score.value = CLAMP(si->put_score.value, SCORE_DOWN, SCORE_MAX);
+	}
+	if (si->get_score.value == SCORE_UNSET || si->get_score.value == SCORE_UNLOCK) {
+		if (really_first && srvtype->lock_at_first_register) {
+			GRID_TRACE2("SRV first [%s]", p_srv->description);
+			p_srv->get_score.value = 0;
+			p_srv->lock_mtime = now;
+			p_srv->locked = TRUE;
+		} else {
+			if (si->get_score.value == SCORE_UNLOCK) {
+				p_srv->lock_mtime = now;
+				if (p_srv->locked) {
+					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
+					p_srv->locked = FALSE;
+					conscience_srv_compute_score(p_srv, GET);
+				} else {
+					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
+				}
+			} else { /* UNSET, a.k.a. regular computation */
+				if (p_srv->locked) {
+					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
+				} else {
+					if (conscience_srv_compute_score(p_srv, GET)) {
+						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
+					} /* else ... a trace is already written */
+				}
+			}
+		}
+	} else { /* LOCK */
+		p_srv->lock_mtime = now;
+		if (p_srv->locked) {
+			GRID_TRACE2("SRV already locked [%s]", p_srv->description);
+		} else {
+			GRID_TRACE2("SRV locked [%s]", p_srv->description);
+			p_srv->locked = TRUE;
+		}
+		p_srv->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
 	}
 	/* Set a tag to reflect the locked/unlocked state of the service.
 	 * Modifying service_info_s would cause upgrade issues. */
@@ -839,7 +907,9 @@ conscience_srvtype_refresh_dated(
 				&& tag_lock->value.b;
 
 		if (p_srv->locked) {
-			p_srv->score.value = CLAMP(sid->si->score.value, SCORE_DOWN,
+			p_srv->put_score.value = CLAMP(sid->si->put_score.value, SCORE_DOWN,
+					SCORE_MAX);
+			p_srv->get_score.value = CLAMP(sid->si->get_score.value, SCORE_DOWN,
 					SCORE_MAX);
 		}
 
@@ -855,7 +925,8 @@ conscience_srvtype_refresh_dated(
 		GRID_TRACE("Refreshing tags for srv [%.*s]",
 				(int)LIMIT_LENGTH_SRVDESCR, p_srv->description);
 		p_srv->tags_mtime = sid->tags_mtime;
-		p_srv->score.timestamp = sid->tags_mtime / G_TIME_SPAN_SECOND;
+		p_srv->put_score.timestamp = sid->tags_mtime / G_TIME_SPAN_SECOND;
+		p_srv->get_score.timestamp = sid->tags_mtime / G_TIME_SPAN_SECOND;
 
 		if (sid->si->tags) {
 			const guint max = sid->si->tags->len;
@@ -868,7 +939,7 @@ conscience_srvtype_refresh_dated(
 		}
 
 		if (!p_srv->locked) {
-			conscience_srv_compute_score(p_srv);
+			conscience_srv_compute_score(p_srv, PUT | GET);
 		}
 	}
 
@@ -894,7 +965,8 @@ push_service_dated(struct service_info_dated_s *sid)
 						sid->si->tags, NAME_TAGNAME_UP);
 				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) \
 						&& !bval) {
-					srv->score.value = 0;
+					srv->put_score.value = 0;
+					srv->get_score.value = 0;
 					_alert_service_with_zeroed_score(srv);
 				}
 			}
@@ -947,7 +1019,8 @@ push_service(struct service_info_s *si)
 				gboolean bval = FALSE;
 				struct service_tag_s *tag = service_info_get_tag(si->tags, NAME_TAGNAME_UP);
 				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval) {
-					srv->score.value = 0;
+					srv->put_score.value = 0;
+					srv->get_score.value = 0;
 					_alert_service_with_zeroed_score(srv);
 				}
 			}
@@ -1466,8 +1539,8 @@ static gboolean
 service_expiration_notifier(struct conscience_srv_s *srv, gpointer u UNUSED)
 {
 	if (srv) {
-		GRID_INFO("Service expired [%s] (score=%d)",
-				srv->description, srv->score.value);
+		GRID_INFO("Service expired [%s] (score=%d get_score=%d)",
+				srv->description, srv->put_score.value, srv->get_score.value);
 		struct service_info_dated_s *sid = service_info_dated_new2(srv);
 		hub_publish_service(sid);
 		service_info_dated_free(sid);
@@ -1575,7 +1648,8 @@ restart_srv_from_file(gchar *path)
 
 	for (GSList *si = si_l; si; si = si->next) {
 		struct service_info_s *si_data = si->data;
-		score_t old_score = si_data->score;
+		score_t old_put_score = si_data->put_score;
+		score_t old_get_score = si_data->get_score;
 
 		struct conscience_srvtype_s *srvtype = conscience_get_srvtype(
 				si_data->type, FALSE);
@@ -1584,7 +1658,8 @@ restart_srv_from_file(gchar *path)
 					nsname, si_data->type);
 		} else {
 			/* service is not registered if score.value != 0 */
-			si_data->score.value = 0;
+			si_data->put_score.value = 0;
+			si_data->get_score.value = 0;
 			/* As we don't know the modification time,
 			 * set the lock modification time to 0. */
 			struct service_info_dated_s *sid = service_info_dated_new(
@@ -1605,7 +1680,8 @@ restart_srv_from_file(gchar *path)
 
 			/* force score to allow _task_expire to pass since
 			 * it should not possible to have unlocked service with score 0 */
-			p_srv->score = old_score;
+			p_srv->put_score = old_put_score;
+			p_srv->get_score = old_get_score;
 		}
 	}
 	ret = 0;

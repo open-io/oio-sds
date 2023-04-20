@@ -238,7 +238,8 @@ oio_lb_resolve_service_id(const gchar* service_id, gboolean upgrade_to_tls)
 struct _lb_item_s
 {
 	oio_location_t location;
-	oio_weight_t weight;
+	oio_weight_t put_weight;
+	oio_weight_t get_weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
 	gchar tls[STRLEN_ADDRINFO];
@@ -252,7 +253,8 @@ struct _lb_item_s
 struct _slot_item_s
 {
 	struct _lb_item_s *item;
-	oio_weight_acc_t acc_weight;
+	oio_weight_acc_t put_acc_weight;
+	oio_weight_acc_t get_acc_weight;
 	generation_t generation;
 };
 
@@ -464,7 +466,8 @@ _item_select(const struct _lb_item_s *src)
 		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
 		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
 		res->item->location = src->location;
-		res->item->weight = src->weight;
+		res->item->put_weight = src->put_weight;
+		res->item->get_weight = src->get_weight;
 	}
 	return res;
 }
@@ -718,7 +721,8 @@ _slot_items_flush(GArray *items)
 			EXTRA_ASSERT(it->refcount > 0);
 			-- it->refcount;
 		}
-		si->acc_weight = 0;
+		si->put_acc_weight = 0;
+		si->get_acc_weight = 0;
 		si->item = NULL;
 	}
 	g_array_set_size(items, 0);
@@ -828,8 +832,8 @@ _slot_rehash(struct oio_lb_slot_s *slot)
 		const guint max = slot->items->len;
 		for (guint i=0; i<max ;++i) {
 			struct _slot_item_s *si = &SLOT_ITEM(slot,i);
-			sum += si->item->weight;
-			si->acc_weight = sum;
+			sum += si->item->put_weight;
+			si->put_acc_weight = sum;
 		}
 		slot->sum_weight = sum;
 	}
@@ -886,7 +890,7 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 	if (start >= end)
 		return end;
 	const guint i_pivot = start + ((end - start) / 2);
-	const guint32 w_pivot = TAB_ITEM(tab,i_pivot).acc_weight;
+	const guint32 w_pivot = TAB_ITEM(tab,i_pivot).put_acc_weight;
 	GRID_TRACE2("%s needle=%"G_GUINT32_FORMAT" start=%u end=%u"
 			" i=%d w_pivot=%"G_GUINT32_FORMAT,
 			__FUNCTION__, needle, start, end, i_pivot, w_pivot);
@@ -1731,7 +1735,8 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 	if (item0) {
 		item = g_malloc0(sizeof(struct oio_lb_item_s));
 		item->location = item0->location;
-		item->weight = item0->weight;
+		item->put_weight = item0->put_weight;
+		item->get_weight = item0->get_weight;
 		memcpy(item->addr, item0->addr, sizeof(item->addr));
 		g_strlcpy(item->id, id, sizeof(item->id));
 	}
@@ -1829,7 +1834,7 @@ _add_new_slot_item(struct oio_lb_world_s *self, struct oio_lb_slot_s *slot,
 {
 	++ item->refcount;
 	struct _slot_item_s fake = {item, 0, self->generation};
-	if (item->weight > 0) {
+	if (item->put_weight > 0 || item->get_weight > 0) {
 		g_array_append_vals(slot->items, &fake, 1);
 		slot->flag_dirty_order = 1;
 	} else {
@@ -1898,15 +1903,20 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 
 		/* Item unknown in the world, so we add it */
 		item0 = _item_make (item->location, item->id, item->addr, item->tls);
-		item0->weight = item->weight;
+		item0->put_weight = item->put_weight;
+		item0->get_weight = item->get_weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
 		_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
 
 	} else {
 
 		/* Item already known in the world, so update it */
-		if (item0->weight != item->weight) {
-			item0->weight = item->weight;
+		if (item0->put_weight != item->put_weight) {
+			item0->put_weight = item->put_weight;
+			slot->flag_dirty_weights = 1;
+		}
+		if (item0->get_weight != item->get_weight) {
+			item0->get_weight = item->get_weight;
 			slot->flag_dirty_weights = 1;
 		}
 
@@ -1921,7 +1931,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		if (i != (guint)-1) {
 			found = TRUE;
 			/* we found the old item, now check the location matches */
-			if (item0->weight > 0) {
+			if (item0->put_weight > 0 || item0->get_weight > 0) {
 				if (_update_slot_item(self, &SLOT_ITEM(slot, i), item)) {
 					slot->flag_dirty_order = 1;
 				}
@@ -1938,7 +1948,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			if (i != (guint)-1) {
 				found = TRUE;
 				/* we found the old item, now check the location matches */
-				if (item0->weight > 0) {
+				if (item0->put_weight > 0 || item0->get_weight > 0) {
 					_move_from_zero_scored_slot_item_to_slot_item(
 							self, slot, i, item);
 				} else {
@@ -2025,10 +2035,13 @@ _slot_items_debug(GArray *items, gchar *suffix)
 {
 	for (guint i = 0; i < items->len; ++i) {
 		const struct _slot_item_s *si = &TAB_ITEM(items, i);
-		GRID_DEBUG("- [%s,0x%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT"%s",
-				si->item->id, si->item->location, si->item->weight,
-				si->acc_weight, suffix);
-	}
+                GRID_DEBUG("- [%s,0x%" OIO_LOC_FORMAT
+                           "] get_w=%u/%" G_GUINT32_FORMAT
+                           " put_w=%u/%" G_GUINT32_FORMAT "%s",
+                           si->item->id, si->item->location,
+                           si->item->get_weight, si->get_acc_weight,
+                           si->item->put_weight, si->put_acc_weight, suffix);
+        }
 }
 
 static void
