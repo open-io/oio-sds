@@ -2,7 +2,7 @@
 OpenIO SDS conscience central server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,8 @@ License along with this library.
 # define KEY_ALERT_LIMIT "alert_frequency_limit"
 # define KEY_SCORE_TIMEOUT "score_timeout"
 # define KEY_SCORE_EXPR "score_expr"
+# define KEY_PUT_SCORE_EXPR "put_score_expr"
+# define KEY_GET_SCORE_EXPR "get_score_expr"
 # define KEY_SCORE_VARBOUND "score_variation_bound"
 # define KEY_SCORE_LOCK "lock_at_first_register"
 # define KEY_POOL_TARGETS "targets"
@@ -116,10 +118,18 @@ struct conscience_srv_s {
 	gchar service_id[LIMIT_LENGTH_SERVICE_ID];
 };
 
+enum score_type_e
+{
+	PUT = 1 << 0,
+	GET = 1 << 1,
+};
+
 struct conscience_srvtype_s
 {
-	gchar *score_expr_str;
-	struct expr_s *score_expr;
+	gchar *put_score_expr_str;
+	gchar *get_score_expr_str;
+	struct expr_s *put_score_expr;
+	struct expr_s *get_score_expr;
 	GHashTable *services_ht;  /**<Maps (addr_info_t*) to (conscience_srv_s*)*/
 
 	GRWLock rw_lock;
@@ -218,13 +228,14 @@ conscience_srv_compute_score(struct conscience_srv_s *service)
 	EXTRA_ASSERT(service != NULL);
 	srvtype = service->srvtype;
 	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(srvtype->score_expr != NULL);
+	EXTRA_ASSERT(srvtype->put_score_expr != NULL);
+	EXTRA_ASSERT(srvtype->get_score_expr != NULL);
 
 	if (service->locked)
 		return TRUE;
 
 	gdouble d = 0.0;
-	if (expr_evaluate(&d, srvtype->score_expr, getAcc))
+	if (expr_evaluate(&d, srvtype->put_score_expr, getAcc))
 		return FALSE;
 
 	gint32 current = isnan(d) ? 0 : floor(d);
@@ -323,27 +334,44 @@ hash_service_id(gconstpointer p)
 
 static gboolean
 conscience_srvtype_set_type_expression(struct conscience_srvtype_s * srvtype,
-	GError ** err, const gchar * expr_str)
+	GError ** err, const gchar * expr_str, enum score_type_e score_type)
 {
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(expr_str != NULL);
 
-	struct expr_s *pE = NULL;
-	if (expr_parse(expr_str, &pE)) {
-		GSETCODE(err, CODE_INTERNAL_ERROR,
-				"Failed to parse expression '%s'",
-				expr_str);
-		return FALSE;
-	}
-
 	/*replaces the string */
-	if (srvtype->score_expr_str)
-		g_free(srvtype->score_expr_str);
-	if (srvtype->score_expr)
-		expr_clean(srvtype->score_expr);
-
-	srvtype->score_expr_str = g_strdup(expr_str);
-	srvtype->score_expr = pE;
+	if (score_type & PUT)
+	{
+		struct expr_s *pE = NULL;
+		if (expr_parse(expr_str, &pE)) {
+			GSETCODE(err, CODE_INTERNAL_ERROR,
+					"Failed to parse expression '%s'",
+					expr_str);
+			return FALSE;
+		}
+		if (srvtype->put_score_expr_str)
+			g_free(srvtype->put_score_expr_str);
+		if (srvtype->put_score_expr)
+			expr_clean(srvtype->put_score_expr);
+		srvtype->put_score_expr_str = g_strdup(expr_str);
+		srvtype->put_score_expr = pE;
+	}
+	if (score_type & GET)
+	{
+		struct expr_s *pE = NULL;
+		if (expr_parse(expr_str, &pE)) {
+			GSETCODE(err, CODE_INTERNAL_ERROR,
+					"Failed to parse expression '%s'",
+					expr_str);
+			return FALSE;
+		}
+		if (srvtype->get_score_expr_str)
+			g_free(srvtype->get_score_expr_str);
+		if (srvtype->get_score_expr)
+			expr_clean(srvtype->get_score_expr);
+		srvtype->get_score_expr_str = g_strdup(expr_str);
+		srvtype->get_score_expr = pE;
+	}
 	return TRUE;
 }
 
@@ -351,7 +379,7 @@ static void
 conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 {
 	EXTRA_ASSERT(srvtype != NULL);
-	conscience_srvtype_set_type_expression(srvtype, NULL, "100");
+	conscience_srvtype_set_type_expression(srvtype, NULL, "100", PUT | GET);
 	srvtype->alert_frequency_limit = 30;
 	srvtype->score_expiration = 300;
 	srvtype->score_variation_bound = 5;
@@ -406,11 +434,17 @@ conscience_srvtype_destroy(struct conscience_srvtype_s *srvtype)
 
 	if (srvtype->services_ht)
 		g_hash_table_destroy(srvtype->services_ht);
-	if (srvtype->score_expr)
-		expr_clean(srvtype->score_expr);
-	if (srvtype->score_expr_str) {
-		*(srvtype->score_expr_str) = '\0';
-		g_free(srvtype->score_expr_str);
+	if (srvtype->put_score_expr)
+		expr_clean(srvtype->put_score_expr);
+	if (srvtype->put_score_expr_str) {
+		*(srvtype->put_score_expr_str) = '\0';
+		g_free(srvtype->put_score_expr_str);
+	}
+	if (srvtype->get_score_expr)
+		expr_clean(srvtype->get_score_expr);
+	if (srvtype->get_score_expr_str) {
+		*(srvtype->get_score_expr_str) = '\0';
+		g_free(srvtype->get_score_expr_str);
 	}
 
 	g_free(srvtype);
@@ -1770,7 +1804,7 @@ module_init_known_service_types(void)
 		struct conscience_srvtype_s *config = conscience_get_srvtype(type->name, TRUE);
 		conscience_srvtype_init(config);
 		config->alert_frequency_limit = TIME_DEFAULT_ALERT_LIMIT;
-		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr);
+		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr, PUT | GET);
 		g_assert_true(rc);
 	}
 }
@@ -1789,32 +1823,46 @@ _configure_srvtype(GError ** err, const gchar * type, const gchar * what, const 
 	}
 
 	/* adjust the parameter */
-	if (0 == g_ascii_strcasecmp(what, KEY_SCORE_TIMEOUT)) {
+	if (g_ascii_strcasecmp(what, KEY_SCORE_TIMEOUT) == 0) {
 		srvtype->score_expiration = g_ascii_strtoll(value, NULL, 10);
 		GRID_INFO("[NS=%s][SRVTYPE=%s] score expiration set to [%ld] seconds",
 				nsinfo->name, srvtype->type_name,
 				srvtype->score_expiration);
 		return TRUE;
-	} else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_VARBOUND)) {
+	} else if (g_ascii_strcasecmp(what, KEY_SCORE_VARBOUND) == 0) {
 		srvtype->score_variation_bound = g_ascii_strtoll(value, NULL, 10);
 		GRID_INFO("[NS=%s][SRVTYPE=%s] score variation bound set to [%d]",
 				nsinfo->name, srvtype->type_name,
 				srvtype->score_variation_bound);
 		return TRUE;
-	} else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_EXPR)) {
-		if (conscience_srvtype_set_type_expression(srvtype, err, value)) {
+	} else if (g_ascii_strcasecmp(what, KEY_SCORE_EXPR) == 0) {
+		if (conscience_srvtype_set_type_expression(srvtype, err, value, PUT | GET)) {
 			GRID_INFO("[NS=%s][SRVTYPE=%s] score expression set to [%s]",
 					nsinfo->name, srvtype->type_name, value);
 			return TRUE;
 		}
 		return FALSE;
-	} else if (0 == g_ascii_strcasecmp(what, KEY_SCORE_LOCK)) {
+	} else if (g_ascii_strcasecmp(what, KEY_PUT_SCORE_EXPR) == 0) {
+		if (conscience_srvtype_set_type_expression(srvtype, err, value, PUT)) {
+			GRID_INFO("[NS=%s][SRVTYPE=%s] put score expression set to [%s]",
+					nsinfo->name, srvtype->type_name, value);
+			return TRUE;
+		}
+		return FALSE;
+	} else if (g_ascii_strcasecmp(what, KEY_GET_SCORE_EXPR) == 0) {
+		if (conscience_srvtype_set_type_expression(srvtype, err, value, GET)) {
+			GRID_INFO("[NS=%s][SRVTYPE=%s] get score expression set to [%s]",
+					nsinfo->name, srvtype->type_name, value);
+			return TRUE;
+		}
+		return FALSE;
+	} else if (g_ascii_strcasecmp(what, KEY_SCORE_LOCK) == 0) {
 		srvtype->lock_at_first_register = oio_str_parse_bool(value, TRUE);
 		GRID_INFO("[NS=%s][SRVTYPE=%s] lock at first register: %s",
 				nsinfo->name, srvtype->type_name,
 				srvtype->lock_at_first_register? "yes":"no");
 		return TRUE;
-	} else if (0 == g_ascii_strcasecmp(what, KEY_ALERT_LIMIT)) {
+	} else if (g_ascii_strcasecmp(what, KEY_ALERT_LIMIT) == 0) {
 		srvtype->alert_frequency_limit = g_ascii_strtoll(value, NULL, 10);
 		GRID_INFO("[NS=%s][SRVTYPE=%s] Alert limit set to %ld",
 				nsinfo->name, srvtype->type_name, srvtype->alert_frequency_limit);
