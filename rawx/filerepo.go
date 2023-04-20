@@ -117,15 +117,7 @@ func (fr *fileRepository) del(name string) error {
 		LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
 	}
 
-	err = syscall.Unlinkat(fr.rootFd, relPath, 0)
-	if err == nil {
-		// JFS: We are about to open the directory. there is slight
-		// probability that the directory ceases to exist between the unlink
-		// and the attempt to sync. We should avoid to consider this an
-		// error.
-		_ = fr.syncRelParent(relPath)
-	}
-	return err
+	return syscall.Unlinkat(fr.rootFd, relPath, 0)
 }
 
 func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
