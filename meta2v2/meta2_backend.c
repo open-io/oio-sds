@@ -607,48 +607,15 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	return NULL;
 }
 
+/** Do all necessary checks and create the queue which will save SQL queries
+ * while a sharding operation is in progress. */
 static GError *
-m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
-		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
+m2b_check_sharding_queue(struct meta2_backend_s *m2,
+		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	GError *err = NULL;
 	gchar *sharding_master = NULL;
 	gchar *sharding_queue = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct m2_open_args_s args = {how, NULL, 0};
-	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
-
-reopen:
-	err = m2b_open_with_args(m2, url, NULL, &args, &sq3);
-	if (err)
-		return err;
-
-	if (replimode == M2V2_OPEN_LOCAL)
-		goto exit;
-
-	gint64 sharding_state = sqlx_admin_get_i64(sq3,
-			M2V2_ADMIN_SHARDING_STATE, 0);
-	if (sharding_state == EXISTING_SHARD_STATE_LOCKED) {
-		sqlx_repository_unlock_and_close_noerror(sq3);
-		sq3 = NULL;
-		g_thread_yield();
-		goto reopen;
-	}
-
-	if (replimode != M2V2_OPEN_MASTERONLY)
-		goto exit;
-
-	if (sharding_state != EXISTING_SHARD_STATE_SAVING_WRITES) {
-		if (sq3->sharding_queue) {
-			// Should never happen
-			GRID_WARN("For sharding, "
-					"a connection to the beanstalkd was left open");
-			beanstalkd_destroy(sq3->sharding_queue);
-			sq3->sharding_queue = NULL;
-		}
-		goto exit;
-	}
-
 	// EXISTING_SHARD_STATE_SAVING_WRITES
 	// Check sharding properties
 	gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
@@ -748,12 +715,57 @@ reopen:
 	sq3->save_update_queries = 1;
 
 exit:
+	g_free(sharding_master);
+	g_free(sharding_queue);
+	return err;
+}
+
+static GError *
+m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
+		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct m2_open_args_s args = {how, NULL, 0};
+	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
+
+reopen:
+	err = m2b_open_with_args(m2, url, NULL, &args, &sq3);
+	if (err)
+		return err;
+
+	if (replimode == M2V2_OPEN_LOCAL)
+		goto exit;
+
+	gint64 sharding_state = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_SHARDING_STATE, 0);
+	if (sharding_state == EXISTING_SHARD_STATE_LOCKED) {
+		sqlx_repository_unlock_and_close_noerror(sq3);
+		sq3 = NULL;
+		g_thread_yield();
+		goto reopen;
+	}
+
+	if (replimode != M2V2_OPEN_MASTERONLY)
+		goto exit;  // Nothing special to do, exit successfully
+
+	if (sharding_state == EXISTING_SHARD_STATE_SAVING_WRITES) {
+		err = m2b_check_sharding_queue(m2, sq3, url);
+	} else {
+		if (sq3->sharding_queue) {
+			// Should never happen
+			GRID_WARN("For sharding, "
+					"a connection to the beanstalkd was left open");
+			beanstalkd_destroy(sq3->sharding_queue);
+			sq3->sharding_queue = NULL;
+		}
+	}
+
+exit:
 	if (err)
 		m2b_close(m2, sq3, url);
 	else
 		*result = sq3;
-	g_free(sharding_master);
-	g_free(sharding_queue);
 	return err;
 }
 
@@ -2806,26 +2818,19 @@ end:
 	return err;
 }
 
-GError*
-meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans, gchar ***out_properties)
+static GError*
+_extract_sharding_indices(GSList *beans, GSList **indices, GString *indices_prop)
 {
+	EXTRA_ASSERT(indices != NULL);
+	EXTRA_ASSERT(indices_prop != NULL);
+
 	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	const gchar *master = sqlx_get_service_id();
-	gchar *queue_url = NULL;
 	json_object *jbody = NULL;
 	struct json_object *jindex = NULL;
-	GSList *indexes = NULL;
-	GString *indexes_property = g_string_sized_new(4);
-
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"index", &jindex, json_type_int, 1},
 		{NULL,    NULL,    0,             0}
 	};
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
 
 	if (!beans) {
 		err = BADREQ("No shard");
@@ -2852,24 +2857,45 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			goto end;
 		}
 		gchar *index = g_strdup(json_object_get_string(jindex));
-		indexes = g_slist_prepend(indexes, index);
-		if (indexes_property->len > 0) {
-			g_string_append_c(indexes_property, ',');
+		*indices = g_slist_prepend(*indices, index);
+		if (indices_prop->len > 0) {
+			g_string_append_c(indices_prop, ',');
 		}
-		g_string_append(indexes_property, index);
+		g_string_append(indices_prop, index);
 		if (jbody) {
 			json_object_put(jbody);
 			jbody = NULL;
 		}
 	}
-
-	if (!master || !*master) {
-		err = SYSERR("No service ID");
-		goto end;
+end:
+	if (jbody) {
+		json_object_put(jbody);
 	}
+	return err;
+}
 
-	gboolean _sharding_filter(const gchar *k) {
-		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
+static gboolean
+_has_sharding_prefix(const gchar *k) {
+	return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
+}
+
+GError*
+meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans, gchar ***out_properties)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+	gchar *queue_url = NULL;
+	GSList *indexes = NULL;
+	GString *indexes_property = g_string_sized_new(4);
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(master && *master);
+
+	if ((err = _extract_sharding_indices(beans, &indexes, indexes_property))) {
+		goto end;
 	}
 
 	gchar *cfg = oio_cfg_get_eventagent(m2b->nsinfo->name);
@@ -2936,8 +2962,8 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		}
 		if (sq3->sharding_queue) {
 			// Should never happen
-			GRID_WARN("For sharding, "
-					"a connection to the beanstalkd was left open");
+			GRID_WARN("For sharding, a connection to beanstalkd %s "
+					"was left open", sq3->sharding_queue->endpoint);
 			beanstalkd_destroy(sq3->sharding_queue);
 		}
 		sq3->sharding_queue = beanstalkd;
@@ -2956,7 +2982,8 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		}
 
 		if (!err && out_properties) {
-			*out_properties = sqlx_admin_get_keyvalues(sq3, _sharding_filter);
+			*out_properties = \
+					sqlx_admin_get_keyvalues(sq3, _has_sharding_prefix);
 		}
 
 rollback:
@@ -2990,9 +3017,6 @@ rollback:
 	}
 end:
 	g_free(queue_url);
-	if (jbody) {
-		json_object_put(jbody);
-	}
 	g_slist_free_full(indexes, g_free);
 	g_string_free(indexes_property, TRUE);
 	return err;
@@ -3011,10 +3035,6 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 
 	if (!master || !*master) {
 		return SYSERR("No service ID");
-	}
-
-	gboolean _sharding_filter(const gchar *k) {
-		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
 	}
 
 	struct m2_open_args_s open_args = {
@@ -3056,7 +3076,8 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 		}
 
 		if (!err && out_properties) {
-			*out_properties = sqlx_admin_get_keyvalues(sq3, _sharding_filter);
+			*out_properties = \
+					sqlx_admin_get_keyvalues(sq3, _has_sharding_prefix);
 		}
 
 rollback:
@@ -3570,9 +3591,11 @@ meta2_backend_clean_locally_sharding(struct meta2_backend_s *m2b,
 	gint64 timestamp = oio_ext_real_time();
 	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 		// Local shard copy or shard
-		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned, shard_lower, shard_upper, truncated);
+		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
+				shard_lower, shard_upper, truncated);
 	} else if (m2db_get_shard_count(sq3)) {  // Root
-		err = m2db_clean_root_container(sq3, meta2_sharding_max_entries_cleaned, truncated);
+		err = m2db_clean_root_container(
+				sq3, meta2_sharding_max_entries_cleaned, truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
 		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;
