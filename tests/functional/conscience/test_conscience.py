@@ -26,6 +26,26 @@ from tests.utils import CODE_SRVTYPE_NOTMANAGED
 
 
 class TestConscienceFunctional(BaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # oio-proxy cache buffers service registrations before sending them
+        # to conscience. Since we do a lot of registrations here and we don't
+        # want to abuse of time.sleep(), we disable the cache.
+        prev_setting = cls._cls_get_proxy_config()
+        cls.cache_enabled = prev_setting["proxy.cache.enabled"]
+
+    def setUp(self):
+        super().setUp()
+        # There is at least one test restarting the proxy,
+        # as a security we set this before each test.
+        self._cls_set_proxy_config({"proxy.cache.enabled": "off"})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._cls_set_proxy_config({"proxy.cache.enabled": cls.cache_enabled})
+        super().tearDownClass()
+
     def test_namespace_get(self):
         resp = self.request("GET", self._url_cs("info"))
         self.assertEqual(resp.status, 200)

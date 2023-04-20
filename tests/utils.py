@@ -421,8 +421,19 @@ class CommonTestCase(testtools.TestCase):
         cls.static_request("POST", url, "")
 
     @classmethod
+    def _cls_get_proxy_config(cls):
+        """
+        Get the current configuration of the local oio-proxy.
+
+        :rtype: dict
+        """
+        url = f"{cls._cls_uri}/v3.0/config"
+        resp = cls.static_request("GET", url)
+        return jsonlib.loads(resp.data)
+
+    @classmethod
     def _cls_set_proxy_config(cls, config):
-        url = "{0}/v3.0/config".format(cls._cls_uri)
+        url = f"{cls._cls_uri}/v3.0/config"
         cls.static_request("POST", url, json=config)
 
     def _reload_proxy(self):
