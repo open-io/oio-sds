@@ -550,23 +550,33 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 
 func (rr *rawxRequest) removeChunk() {
 	var err error
-	tmp := xattrBufferPool.Acquire()
-	defer xattrBufferPool.Release(tmp)
 
-	getter := func(name, key string) (string, error) {
-		nb, err := rr.rawx.repo.getAttr(name, key, tmp)
-		if nb <= 0 || err != nil {
-			return "", err
-		} else {
-			return string(tmp[:nb]), err
+	if notifAllowed {
+		rr.chunk = chunkInfo{}
+		rr.chunk.ChunkID = rr.chunkID
+		rr.chunk.ContainerID = rr.req.Header.Get(HeaderNameContainerID)
+		rr.chunk.ContentID = rr.req.Header.Get(HeaderNameContentID)
+
+		if rr.chunk.ContainerID == "" || rr.chunk.ContentID == "" {
+			tmp := xattrBufferPool.Acquire()
+			defer xattrBufferPool.Release(tmp)
+
+			getter := func(name, key string) (string, error) {
+				nb, err := rr.rawx.repo.getAttr(name, key, tmp)
+				if nb <= 0 || err != nil {
+					return "", err
+				} else {
+					return string(tmp[:nb]), err
+				}
+			}
+
+			// Load only the fullpath in an attempt to spare syscalls
+			rr.chunk, err = loadFullPath(getter, rr.chunkID)
+			if err != nil {
+				rr.replyError("removeChunk()", err)
+				return
+			}
 		}
-	}
-
-	// Load only the fullpath in an attempt to spare syscalls
-	rr.chunk, err = loadFullPath(getter, rr.chunkID)
-	if err != nil {
-		rr.replyError("removeChunk()", err)
-		return
 	}
 
 	err = rr.rawx.repo.del(rr.chunkID)
@@ -574,7 +584,9 @@ func (rr *rawxRequest) removeChunk() {
 		rr.replyError("removeChunk()", err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
+		if notifAllowed {
+			rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
+		}
 	}
 }
 

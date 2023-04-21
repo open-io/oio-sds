@@ -44,6 +44,10 @@ class ContentReaperFilter(Filter):
         cid = url.get("id")
         headers = {REQID_HEADER: reqid, "Connection": "close"}
 
+        content_id = url.get("content")
+        if content_id is not None:
+            headers["X-oio-Chunk-Meta-Content-Id"] = content_id
+
         resps = self.blob_client.chunk_delete_many(
             chunks,
             cid=cid,

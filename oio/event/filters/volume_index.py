@@ -132,6 +132,16 @@ class VolumeIndexFilter(Filter):
             content_ver = data.get("content_version")
             try:
                 if event.event_type == EventTypes.CHUNK_DELETED:
+                    if not all((volume_id, container_id, content_id, chunk_id)):
+                        self.logger.warning(
+                            "%s event is missing some fields: "
+                            "volume_id=% container_id=%s content_id=%s chunk_id=%s",
+                            EventTypes.CHUNK_DELETED,
+                            volume_id,
+                            container_id,
+                            content_id,
+                            chunk_id,
+                        )
                     self._chunk_delete(
                         event.reqid, volume_id, container_id, content_id, chunk_id
                     )

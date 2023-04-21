@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,13 +14,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.event.evob import EventTypes
+from oio.common.utils import request_id
 from tests.utils import random_str
 from tests.functional.cli import CliTestCase
 
 
 class ServiceListTest(CliTestCase):
     def test_meta2_list_containers(self):
-        container = random_str(16)
+        container = "meta2_list_containers_" + random_str(3)
         self.storage.container_create(self.account, container)
         output = self.storage.directory.list(self.account, container)
         meta2s = []
@@ -46,8 +48,8 @@ class ServiceListTest(CliTestCase):
             self.assertNotIn(fullname, output.split("\n"))
 
     def test_rawx_list_containers(self):
-        container = random_str(16)
-        obj = random_str(16)
+        container = "rawx_list_containers_" + random_str(3)
+        obj = random_str(6)
         self.storage.object_create(
             self.account, container, data="test data", obj_name=obj
         )
@@ -59,7 +61,14 @@ class ServiceListTest(CliTestCase):
             output = self.openio_admin("rawx list containers %s %s" % (rawx, opts))
             self.assertIn(fullname, output.split("\n"))
 
-        self.storage.object_delete(self.account, container, obj)
+        reqid = request_id("rlc")
+        self.storage.object_delete(self.account, container, obj, reqid=reqid)
+        self.wait_for_event(
+            "oio-preserved",
+            reqid=reqid,
+            timeout=5.0,
+            types=(EventTypes.CHUNK_DELETED,),
+        )
         for rawx in rawx_list:
             output = self.openio_admin("rawx list containers %s %s" % (rawx, opts))
             self.assertNotIn(fullname, output.split("\n"))
