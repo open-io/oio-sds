@@ -2658,12 +2658,6 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 		g_string_free(new_hash, TRUE);
 		goto label_end;
 	}
-	if (g_strcmp0(CONTENTS_HEADERS_get_policy(current_header)->str,
-		CONTENTS_HEADERS_get_policy(new_header)->str) != 0) {
-		err = NEWERROR(CODE_NOT_ALLOWED,
-					   "Different policies, cannot restore");
-		goto label_end;
-	}
 
 	/* Modify new beans with current mtime and ctime */
 	CONTENTS_HEADERS_set_mime_type(new_header,

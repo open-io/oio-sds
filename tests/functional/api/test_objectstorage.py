@@ -1446,7 +1446,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             obj_name=target_obj,
             content_id=target_content_id,
         )
-        obj = self.api.object_show(
+        obj = self.api.object_get_properties(
             self.account, target_container, target_obj, content=target_content_id
         )
         target_version = obj["version"]
@@ -1543,7 +1543,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             obj_name=target_obj,
             content_id=target_content_id,
         )
-        obj = self.api.object_show(
+        obj = self.api.object_get_properties(
             self.account, target_container, target_obj, content=target_content_id
         )
         target_version = obj["version"]
@@ -1717,7 +1717,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             chunks, _, _ = self.api.object_create(
                 self.account, name, data=b"data", obj_name=name, content_id=content_id
             )
-            obj_meta = self.api.object_show(self.account, name, name)
+            obj_meta = self.api.object_get_properties(self.account, name, name)
             if content_id is not None:
                 self.assertEqual(content_id, obj_meta["id"])
             headers, _ = self.api.blob_client.chunk_get(chunks[0]["url"])
@@ -2550,7 +2550,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
 
         # Check the object is really drained (to be sure that restore actually
         # do something)
-        resp = self.api.object_show(self.account, name, name)
+        resp = self.api.object_get_properties(self.account, name, name)
         self.assertEqual("drained", resp["chunk_method"])
         for chunk in chunks1:
             self.assertRaises(
@@ -2792,6 +2792,54 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
             data=data,
             restore_drained=True,
         )
+
+    def test_restore_different_policy(self):
+        if len(self.conf["services"]["rawx"]) < 12:
+            self.skipTest("Not enough rawx. This test needs at least 12 rawx to run")
+
+        name = "restore-drained-" + random_str(6)
+        self._create(name)
+
+        object_data = random_data(self.chunk_size)
+        self.api.object_create(
+            self.account,
+            name,
+            obj_name=name,
+            data=object_data,
+            properties={"test": "it works"},
+            policy="EC",
+        )
+        # Drain the object
+        reqid = request_id()
+        self.api.object_drain(self.account, name, name, reqid=reqid)
+        self.wait_for_event(
+            "oio-preserved",
+            types=(EventTypes.CONTENT_DRAINED),
+            reqid=reqid,
+            timeout=5.0,
+        )
+
+        data = self.api.object_get_properties(self.account, name, name)
+        # Make sure the object is drained
+        self.assertEqual("drained", data["chunk_method"])
+        self.assertEqual("EC", data["policy"])
+        hash = data["hash"]
+
+        # Restore the object
+        reqid = request_id()
+        self.api.object_create(
+            self.account,
+            name,
+            obj_name=name,
+            data=object_data,
+            restore_drained=True,
+            reqid=reqid,
+            policy="THREECOPIES",
+        )
+        data = self.api.object_get_properties(self.account, name, name)
+        self.assertNotEqual("drained", data["chunk_method"])
+        self.assertEqual("THREECOPIES", data["policy"])
+        self.assertEqual(hash, data["hash"])
 
 
 class TestObjectList(ObjectStorageApiTestBase):
