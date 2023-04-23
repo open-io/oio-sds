@@ -556,6 +556,7 @@ log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ 
 # Don't know why, but there is a risk our test suites do not pass
 # if we set a lower number of connections.
 max_connections 80
+shallow_copy ${SHALLOW_COPY}
 #tcp_keepalive disabled
 #timeout_read_header 10
 #timeout_read_request 10
@@ -1756,6 +1757,7 @@ ZOOKEEPER = "zookeeper"
 REMOTE_ACCOUNT = "remote_account"
 GO_RAWX = "go_rawx"
 FSYNC_RAWX = "rawx_fsync"
+SHALLOW_COPY = "shallow_copy"
 MONITOR_PERIOD = "monitor_period"
 M1_DIGITS = "meta1_digits"
 M1_REPLICAS = "directory_replicas"
@@ -2449,6 +2451,9 @@ def generate(options):
                     "FSYNC": ("enabled" if options[FSYNC_RAWX] else "disabled"),
                     "HASH_WIDTH": defaults[HASH_WIDTH],
                     "HASH_DEPTH": defaults[HASH_DEPTH],
+                    "SHALLOW_COPY": (
+                        "enabled" if options[SHALLOW_COPY] else "disabled"
+                    ),
                 }
             )
             rawx_volumes.append(env["VOLUME"])
@@ -2888,6 +2893,7 @@ def generate(options):
         elif k in defaults:
             final_conf[k] = defaults[k]
     final_conf["config"] = options["config"]
+    final_conf["shallow_copy"] = options[SHALLOW_COPY]
     final_conf["with_service_id"] = options["with_service_id"]
     final_conf["random_service_id"] = bool(options["random_service_id"])
     final_conf["webhook"] = WEBHOOK_ENDPOINT
@@ -3006,6 +3012,7 @@ def main():
     opts[GO_RAWX] = False
     opts[FSYNC_RAWX] = False
     opts["rdir"] = {SVC_NB: None, SVC_HOSTS: None}
+    opts[SHALLOW_COPY] = False
     opts["beanstalkd"] = {SVC_NB: None, SVC_HOSTS: None}
     opts["rabbitmq"] = {}
 

@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 import random
 
+from oio.common.easy_value import true_value
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk
 from oio.blob.auditor import BlobAuditorWorker
@@ -89,6 +90,8 @@ class TestBlobAuditor(BaseTestCase):
         auditor.chunk_audit(self._chunk_path(chunk), chunk_id)
 
     def test_audit_linked_chunk(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         self.api.object_link(
             self.account,
             self.container,

@@ -52,6 +52,10 @@ fsync_dir         disabled
 # the request. Allowed values are 'zlib', 'lzw', 'deflate' or 'off'.
 #compression       off
 
+# On a COPY request, do not copy the chunk, make a physical link
+# (and set extended attributes appropriately).
+#shallow_copy           disabled
+
 # Set to off to remove the "Connection: keep-alive" response header
 #http_keepalive    off
 

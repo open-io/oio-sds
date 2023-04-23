@@ -33,6 +33,7 @@ from oio.common.constants import (
     M2_PROP_VERSIONING_POLICY,
     REQID_HEADER,
 )
+from oio.common.easy_value import true_value
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
@@ -1382,6 +1383,23 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_content_id=None,
         **kwargs,
     ):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.assertRaises(
+                exc.MethodNotAllowed,
+                self.api.object_link,
+                self.account,
+                target_container,
+                target_obj,
+                self.account,
+                link_container,
+                link_obj,
+                target_content_id=target_content_id,
+                target_version=target_version,
+                link_content_id=link_content_id,
+                **kwargs,
+            )
+            return
+
         self.api.object_link(
             self.account,
             target_container,
@@ -1518,8 +1536,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_create(
             self.account, target_container, data="1" * 128, obj_name=target_obj
         )
+        expected = exc.NotFound
+        if not true_value(self.conf.get("shallow_copy")):
+            expected = exc.MethodNotAllowed
+
         self.assertRaises(
-            exc.NotFound,
+            expected,
             self.api.object_link,
             self.account,
             target_container,
@@ -1636,6 +1658,20 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             obj_name=target_obj,
             properties={"AAA": "1", "BBB": "1"},
         )
+        if not true_value(self.conf.get("shallow_copy")):
+            self.assertRaises(
+                exc.MethodNotAllowed,
+                self.api.object_link,
+                self.account,
+                target_container,
+                target_obj,
+                self.account,
+                link_container,
+                link_obj,
+                properties={"BBB": "2"},
+            )
+            return
+
         self.api.object_link(
             self.account,
             target_container,
@@ -1834,6 +1870,17 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 obj_name=test_object % i,
                 chunk_checksum_algo=None,
             )
+
+        if not true_value(self.conf.get("shallow_copy")):
+            self.assertRaises(
+                exc.MethodNotAllowed,
+                self.api.container_snapshot,
+                self.account,
+                container,
+                self.account,
+                snapshot,
+            )
+            return
 
         # Non existing snapshot should work
         self.api.container_snapshot(self.account, container, self.account, snapshot)

@@ -56,6 +56,7 @@ var loadedOpts = map[string]string{
 	"fadvise_upload":   "fadvise_upload",
 	"fadvise_download": "fadvise_download",
 	"open_nonblock":    "nonblock",
+	"shallow_copy":     "shallow_copy",
 
 	"event_conn_attempts":  "event_conn_attempts",
 	"max_connections":      "max_connections",

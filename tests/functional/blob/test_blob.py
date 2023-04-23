@@ -19,15 +19,16 @@
 import re
 import string
 from os.path import isfile
-from six.moves.urllib_parse import unquote, urlparse
-from oio.common.http import headers_from_object_metadata, HeadersDict
+from urllib.parse import unquote, urlparse
+from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, REQID_HEADER
+from oio.common.easy_value import true_value
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, request_id
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import CommonTestCase, random_id, strange_paths
-from tests.functional.blob import convert_to_old_chunk, random_buffer, random_chunk_id
+from tests.functional.blob import random_buffer, random_chunk_id
 
 
 map_cfg = {"addr": "Listen", "ns": "namespace", "basedir": "docroot"}
@@ -128,6 +129,8 @@ class RawxTestSuite(CommonTestCase):
         return resp, body
 
     def test_copy_errors(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         length = 100
         chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length).encode("utf-8")
@@ -530,7 +533,9 @@ class RawxTestSuite(CommonTestCase):
         with open(chunkpath, "r") as fd:
             meta, _ = read_chunk_metadata(fd, chunkid)
             self.assertEqual(headers1["x-oio-chunk-meta-full-path"], meta["full_path"])
-            self.assertEqual(1, len(meta["links"]))
+            self.assertEqual(
+                1, len(meta["links"]), "The number of links is not as expected"
+            )
             self.assertEqual(
                 headers2["x-oio-chunk-meta-full-path"], meta["links"][copyid]
             )
@@ -538,7 +543,9 @@ class RawxTestSuite(CommonTestCase):
         with open(copypath, "r") as fd:
             meta, _ = read_chunk_metadata(fd, copyid)
             self.assertEqual(headers2["x-oio-chunk-meta-full-path"], meta["full_path"])
-            self.assertEqual(1, len(meta["links"]))
+            self.assertEqual(
+                1, len(meta["links"]), "The number of links is not as expected"
+            )
             self.assertEqual(
                 headers1["x-oio-chunk-meta-full-path"], meta["links"][chunkid]
             )
@@ -558,19 +565,26 @@ class RawxTestSuite(CommonTestCase):
         with open(copypath, "r") as fd:
             meta, _ = read_chunk_metadata(fd, copyid)
             self.assertEqual(headers2["x-oio-chunk-meta-full-path"], meta["full_path"])
-            self.assertEqual(0, len(meta["links"]))
+            self.assertFalse(len(meta["links"]), "Chunk still has some links")
 
         resp, body = self._http_request(copyurl, "DELETE", "", {})
         self.assertEqual(204, resp.status)
         resp, body = self._http_request(copyurl, "GET", "", {})
         self.assertEqual(404, resp.status)
 
-    def test_strange_path(self):
+    def test_strange_path_copy(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         for path in strange_paths:
-            self._cycle_put(1, 201, path=path)
             self._cycle_copy(path)
 
+    def test_strange_path_put(self):
+        for path in strange_paths:
+            self._cycle_put(1, 201, path=path)
+
     def test_copy_with_same_chunkid(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         metachunk_hash = checksum().hexdigest()
         trailers = {
             "x-oio-chunk-meta-metachunk-size": "1",
@@ -606,6 +620,8 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(403, resp.status)
 
     def test_copy_with_existing_destination(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         metachunk_hash = checksum().hexdigest()
         trailers = {
             "x-oio-chunk-meta-metachunk-size": "1",
@@ -657,6 +673,8 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(409, resp.status)
 
     def test_copy_with_nonexistent_source(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         metachunk_hash = checksum().hexdigest()
         trailers = {
             "x-oio-chunk-meta-metachunk-size": "1",
@@ -838,158 +856,6 @@ class RawxTestSuite(CommonTestCase):
         )
         resp, _ = self._http_request(chunkurl, "PUT", chunkdata, headers, trailers)
         self.assertEqual(400, resp.status)
-
-    def test_read_old_chunk(self):
-        metachunk_hash = checksum().hexdigest()
-        trailers = {
-            "x-oio-chunk-meta-metachunk-size": "1",
-            "x-oio-chunk-meta-metachunk-hash": metachunk_hash,
-        }
-
-        chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, 1).encode("utf-8")
-        chunkurl = self._rawx_url(chunkid)
-        chunkpath = self._chunk_path(chunkid)
-        headers = self._chunk_attr(chunkid, chunkdata)
-        self._check_not_present(chunkurl)
-
-        resp, _ = self._http_request(chunkurl, "PUT", chunkdata, headers, trailers)
-        self.assertEqual(201, resp.status)
-
-        resp1, data1 = self._http_request(chunkurl, "GET", "", {})
-        self.assertEqual(200, resp1.status)
-        headers1 = HeadersDict(resp1.getheaders())
-        with open(chunkpath, "r") as fd:
-            meta1, _ = read_chunk_metadata(fd, chunkid)
-
-        convert_to_old_chunk(
-            chunkpath,
-            self.account,
-            self.container,
-            self.content_path,
-            self.content_version,
-            self.content_id,
-        )
-
-        resp2, data2 = self._http_request(chunkurl, "GET", "", {})
-        self.assertEqual(200, resp2.status)
-        headers2 = HeadersDict(resp2.getheaders())
-        with open(chunkpath, "r") as fd:
-            meta2, _ = read_chunk_metadata(fd, chunkid)
-
-        self.assertEqual(data1, data2)
-        del headers1[CHUNK_HEADERS["full_path"]]
-        del headers1[CHUNK_HEADERS["oio_version"]]
-        del headers2[CHUNK_HEADERS["oio_version"]]
-        del headers1["date"]
-        del headers2["date"]
-        self.assertDictEqual(headers1, headers2)
-        del meta1["full_path"]
-        del meta1["oio_version"]
-        del meta2["oio_version"]
-        self.assertDictEqual(meta1, meta2)
-
-        # Copy old chunk
-        copyid = random_chunk_id()
-        copyid = chunkid[:-60] + copyid[-60:]
-        copyurl = self._rawx_url(copyid)
-        copypath = self._chunk_path(copyid)
-        copycontentid = random_id(32)
-        copyheaders = {}
-        copyheaders["Destination"] = copyurl
-        copyheaders["x-oio-chunk-meta-full-path"] = encode_fullpath(
-            "account-snapshot",
-            "container-snapshot",
-            self.content_path + "-snapshot",
-            1456938361143741,
-            copycontentid,
-        )
-        resp, _ = self._http_request(chunkurl, "COPY", "", copyheaders)
-        self.assertEqual(201, resp.status)
-
-        resp2, data2 = self._http_request(chunkurl, "GET", "", {})
-        self.assertEqual(200, resp2.status)
-        headers2 = HeadersDict(resp2.getheaders())
-        with open(chunkpath, "r") as fd:
-            meta2, _ = read_chunk_metadata(fd, chunkid)
-
-        self.assertEqual(1, len(meta2["links"]))
-        self.assertEqual(
-            copyheaders["x-oio-chunk-meta-full-path"], meta2["links"][copyid]
-        )
-        meta2["links"] = dict()
-
-        self.assertEqual(data1, data2)
-        del headers2[CHUNK_HEADERS["oio_version"]]
-        del headers2["date"]
-        self.assertDictEqual(headers1, headers2)
-        del meta2["oio_version"]
-        self.assertDictEqual(meta1, meta2)
-
-        resp3, data3 = self._http_request(copyurl, "GET", "", {})
-        self.assertEqual(200, resp3.status)
-        headers3 = HeadersDict(resp3.getheaders())
-        with open(copypath, "r") as fd:
-            meta3, _ = read_chunk_metadata(fd, copyid)
-
-        self.assertEqual(
-            copyheaders["x-oio-chunk-meta-full-path"],
-            headers3["x-oio-chunk-meta-full-path"],
-        )
-        del headers3["x-oio-chunk-meta-full-path"]
-        self.assertEqual(
-            cid_from_name("account-snapshot", "container-snapshot"),
-            headers3["x-oio-chunk-meta-container-id"],
-        )
-        del headers1["x-oio-chunk-meta-container-id"]
-        del headers3["x-oio-chunk-meta-container-id"]
-        self.assertEqual(
-            self.content_path + "-snapshot",
-            unquote(headers3["x-oio-chunk-meta-content-path"]),
-        )
-        del headers1["x-oio-chunk-meta-content-path"]
-        del headers3["x-oio-chunk-meta-content-path"]
-        self.assertEqual(
-            "1456938361143741", headers3["x-oio-chunk-meta-content-version"]
-        )
-        del headers1["x-oio-chunk-meta-content-version"]
-        del headers3["x-oio-chunk-meta-content-version"]
-        self.assertEqual(copycontentid, headers3["x-oio-chunk-meta-content-id"])
-        del headers1["x-oio-chunk-meta-content-id"]
-        del headers3["x-oio-chunk-meta-content-id"]
-        self.assertEqual(copyid, headers3["x-oio-chunk-meta-chunk-id"])
-        del headers1["x-oio-chunk-meta-chunk-id"]
-        del headers3["x-oio-chunk-meta-chunk-id"]
-
-        self.assertEqual(copyheaders["x-oio-chunk-meta-full-path"], meta3["full_path"])
-        del meta3["full_path"]
-        self.assertEqual(
-            cid_from_name("account-snapshot", "container-snapshot"),
-            meta3["container_id"],
-        )
-        del meta1["container_id"]
-        del meta3["container_id"]
-        self.assertEqual(self.content_path + "-snapshot", meta3["content_path"])
-        del meta1["content_path"]
-        del meta3["content_path"]
-        self.assertEqual("1456938361143741", meta3["content_version"])
-        del meta1["content_version"]
-        del meta3["content_version"]
-        self.assertEqual(copycontentid, meta3["content_id"])
-        del meta1["content_id"]
-        del meta3["content_id"]
-        self.assertEqual(copyid, meta3["chunk_id"])
-        del meta1["chunk_id"]
-        del meta3["chunk_id"]
-        # FIXME the old chunk is invisible
-        self.assertEqual(0, len(meta3["links"]))
-
-        self.assertEqual(data1, data3)
-        del headers3[CHUNK_HEADERS["oio_version"]]
-        del headers3["date"]
-        self.assertDictEqual(headers1, headers3)
-        del meta3["oio_version"]
-        self.assertDictEqual(meta1, meta3)
 
     def test_HEAD_chunk(self):
         length = 100

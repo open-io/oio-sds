@@ -93,9 +93,10 @@ const (
 )
 
 const (
-	configDefaultFallocate = false
-	configDefaultSyncFile  = false
-	configDefaultSyncDir   = false
+	configDefaultShallowCopy = false
+	configDefaultFallocate   = false
+	configDefaultSyncFile    = false
+	configDefaultSyncDir     = false
 
 	// By default, no fadvise() will be called before committing a chunk
 	configDefaultFadviseUpload = configFadviseNone

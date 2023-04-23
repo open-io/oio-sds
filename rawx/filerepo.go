@@ -37,6 +37,7 @@ type fileRepository struct {
 	putMkdirMode                  os.FileMode
 	hashWidth                     int
 	hashDepth                     int
+	shallowCopy                   bool
 	syncFile                      bool
 	syncDir                       bool
 	fallocateFile                 bool
@@ -73,6 +74,7 @@ func (fr *fileRepository) init(root string) error {
 	fr.hashDepth = hashDepth
 	fr.putOpenMode = putOpenMode
 	fr.putMkdirMode = putMkdirMode
+	fr.shallowCopy = configDefaultShallowCopy
 	fr.syncFile = configDefaultSyncFile
 	fr.syncDir = configDefaultSyncDir
 	fr.fallocateFile = configDefaultFallocate
@@ -107,16 +109,18 @@ func (fr *fileRepository) lock(ns, id string) error {
 	return nil
 }
 
+// del removes a chunk from the repository.
+// It will also remove appropriate extended attributes if shallow copies are enabled.
 func (fr *fileRepository) del(name string) error {
 	relPath := fr.nameToRelPath(name)
-	absPath := fr.relToAbsPath(relPath)
-	xattrName := xattrKey(name)
-
-	err := syscall.Removexattr(absPath, xattrName)
-	if err != nil {
-		LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
+	if fr.shallowCopy {
+		absPath := fr.relToAbsPath(relPath)
+		xattrName := xattrKey(name)
+		err := syscall.Removexattr(absPath, xattrName)
+		if err != nil {
+			LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
+		}
 	}
-
 	return syscall.Unlinkat(fr.rootFd, relPath, 0)
 }
 
@@ -274,6 +278,9 @@ func (fr *fileRepository) linkRelPath(fromPath, toPath string) (linkOperation, e
 }
 
 func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
+	if !fr.shallowCopy {
+		return nil, errNotImplemented
+	}
 	relSrc := fr.nameToRelPath(src)
 	relDst := fr.nameToRelPath(dst)
 	return fr.linkRelPath(relSrc, relDst)

@@ -204,6 +204,9 @@ func_tests () {
 	if is_running_test_suite "fsync"; then
 		args="${args} -f ${SRCDIR}/etc/bootstrap-option-rawx-fsync.yml"
 	fi
+	if is_running_test_suite "shallow-copy"; then
+		args="${args} -f ${SRCDIR}/etc/bootstrap-option-shallow-copy.yml"
+	fi
 	if is_running_test_suite "small-cache"; then
 		args="${args} -f ${SRCDIR}/etc/bootstrap-option-smallcache.yml"
 	fi

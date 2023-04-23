@@ -697,7 +697,7 @@ class ObjectStorageApi(object):
                     self.logger.warning(
                         "Failed to upload all data (%s), deleting chunks", ex.exception
                     )
-                    kwargs["cid"] = obj["container_id"]
+                    kwargs["cid"] = cid_from_name(dst_account, dst_container)
                     self._delete_orphan_chunks(ex.chunks_already_uploaded, **kwargs)
                     ex.reraise()
                 t_beans, c_beans = self._prepare_meta2_raw_update(

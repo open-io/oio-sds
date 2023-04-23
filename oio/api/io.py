@@ -806,6 +806,8 @@ class _MetachunkWriter(object):
                     raise exc.SourceReadTimeout(new_exc)
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
+                elif isinstance(err, exc.MethodNotAllowed):
+                    raise exc.MethodNotAllowed(new_exc)
                 elif err == "HTTP 409":
                     raise exc.Conflict(new_exc)
             raise new_exc
@@ -878,7 +880,8 @@ class MetachunkLinker(_MetachunkWriter):
                 new_chunk = chunk_target.copy()
                 new_chunk["url"] = new_chunk_url
                 new_meta_chunks.append(new_chunk)
-            except Exception:
+            except Exception as err:
+                chunk_target["error"] = err
                 failed_chunks.append(chunk_target)
         try:
             self.quorum_or_fail(new_meta_chunks, failed_chunks)

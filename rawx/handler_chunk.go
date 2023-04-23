@@ -304,7 +304,12 @@ func (rr *rawxRequest) copyChunk() {
 	// Attempt a LINK in the repository
 	op, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
-		rr.replyError("copyChunk()", err)
+		// TODO(FVE): if shallow copy is disabled, do a regular copy
+		if err == errNotImplemented {
+			rr.replyCode(http.StatusMethodNotAllowed)
+		} else {
+			rr.replyError("copyChunk()", err)
+		}
 		return
 	} else {
 		// Link created, try to place an xattr

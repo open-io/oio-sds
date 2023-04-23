@@ -21,6 +21,7 @@ from mock import MagicMock as Mock, patch
 from oio.blob.client import BlobClient
 from oio.blob.utils import CHUNK_XATTR_KEYS, read_chunk_metadata
 from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
+from oio.common.easy_value import true_value
 from oio.common.exceptions import FaultyChunk
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
@@ -261,6 +262,8 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(0, len(chunks))
 
     def test_indexer_with_linked_chunk(self):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
         (
             _,
             _,

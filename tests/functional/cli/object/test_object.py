@@ -17,6 +17,7 @@
 import os
 import tempfile
 import uuid
+from oio.common.easy_value import true_value
 from oio.common.utils import get_hasher
 from tests.functional.cli import CliTestCase, CommandFailed
 from testtools.matchers import Equals
@@ -446,6 +447,9 @@ class ObjectTest(CliTestCase):
             self.assertEqual(len(entry["Name"]), 2)
 
     def _test_object_link(self, with_cid=False):
+        if not true_value(self.conf.get("shallow_copy")):
+            self.skipTest("Shallow copy disabled")
+
         cont_name = random_str(8)
         obj_name = random_str(8)
         lk_name = obj_name + "-link"
