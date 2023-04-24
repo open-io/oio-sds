@@ -356,6 +356,12 @@ class ContainerSharding(ProxyClient):
         return params
 
     def meta_to_shard(self, meta):
+        """
+        Build a dictionary containing sharding information,
+        from a container metadata dictionary.
+
+        :returns: the CID of the root container, and the aforementioned dict
+        """
         sys = meta["system"]
         root_cid = sys.get(M2_PROP_SHARDING_ROOT)
         shard_lower = sys.get(M2_PROP_SHARDING_LOWER)
@@ -1248,27 +1254,33 @@ class ContainerSharding(ProxyClient):
                 self.logger.warning(
                     "Failed to delete new shard (CID=%s): %s", new_shard["cid"], exc
                 )
+        self.drain_sharding_queue(parent_shard)
 
+    def drain_sharding_queue(self, shard):
+        """
+        Drain the queue used to buffer operation while a sharding (or shrinking)
+        operation is in progress.
+        """
         # Drain beanstalk tube
-        beanstalk_url = parent_shard["sharding"]["queue"]
-        beanstalk_tube = (
-            parent_shard["cid"]
-            + ".sharding-"
-            + str(parent_shard["sharding"]["timestamp"])
+        beanstalkd_url = shard["sharding"]["queue"]
+        beanstalkd_tube = (
+            shard["cid"] + ".sharding-" + str(shard["sharding"]["timestamp"])
         )
         self.logger.info(
-            "Drain beanstalk tube (URL=%s TUBE=%s)", beanstalk_url, beanstalk_tube
+            "Drain beanstalk tube (URL=%s TUBE=%s)", beanstalkd_url, beanstalkd_tube
         )
         try:
-            beanstalk = Beanstalk.from_url(beanstalk_url)
-            beanstalk.drain_tube(beanstalk_tube)
+            beanstalkd = Beanstalk.from_url(beanstalkd_url)
+            beanstalkd.drain_tube(beanstalkd_tube)
+            return True
         except Exception as exc:
             self.logger.warning(
                 "Failed to drain the beanstalk tube (URL=%s TUBE=%s): %s",
-                beanstalk_url,
-                beanstalk_tube,
+                beanstalkd_url,
+                beanstalkd_tube,
                 exc,
             )
+            return False
 
     def _almost_safe_shard_container(
         self, root_account, root_container, parent_shard, new_shards, **kwargs
@@ -1836,26 +1848,7 @@ class ContainerSharding(ProxyClient):
                 )
 
         if smaller_shard["sharding"] is not None:
-            # Drain beanstalk tube
-            beanstalk_url = smaller_shard["sharding"]["queue"]
-            beanstalk_tube = (
-                smaller_shard["cid"]
-                + ".sharding-"
-                + str(smaller_shard["sharding"]["timestamp"])
-            )
-            self.logger.info(
-                "Drain beanstalk tube (URL=%s TUBE=%s)", beanstalk_url, beanstalk_tube
-            )
-            try:
-                beanstalk = Beanstalk.from_url(beanstalk_url)
-                beanstalk.drain_tube(beanstalk_tube)
-            except Exception as exc:
-                self.logger.warning(
-                    "Failed to drain the beanstalk tube (URL=%s TUBE=%s): %s",
-                    beanstalk_url,
-                    beanstalk_tube,
-                    exc,
-                )
+            self.drain_sharding_queue(smaller_shard)
 
     def _almost_safe_shrink_shards(
         self, root_cid, smaller_shard, bigger_shard, new_shard, **kwargs

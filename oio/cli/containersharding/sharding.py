@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.common.constants import (
     M2_PROP_OBJECTS,
+    M2_PROP_SHARDING_QUEUE,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
     SHARDING_STATE_NAME,
@@ -59,6 +60,58 @@ class ContainerShardingCommandMixin(object):
             self.app.client_manager._account = acct
             return acct, cont
         return self.app.client_manager.account, parsed_args.container
+
+
+class AbortSharding(ContainerShardingCommandMixin, ShowOne):
+    """
+    Abort a sharding operation.
+
+    Conditions: the container metadata has a sharding.state field
+    and a sharding operation is in progress.
+
+    If the container is in "saving writes" state, the associated queue will
+    be drained.
+    """
+
+    columns = (
+        "account",
+        "container",
+        "aborted",
+        "drained",
+    )
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.patch_parser_container_sharding(parser)
+        return parser
+
+    def container_meta_to_shard_struct(self, meta):
+        pass
+
+    def take_action(self, parsed_args):
+        obsto = self.app.client_manager.storage
+        cs = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger,
+            pool_manager=self.app.client_manager.pool_manager,
+        )
+        acct, cont = self.account_and_container(parsed_args)
+        raw_meta = obsto.container_get_properties(acct, cont)
+        _, shard = cs.meta_to_shard(raw_meta)
+        # meta_to_shard() does not work on root containers
+        if not shard:
+            shard = {"cid": cid_from_name(acct, cont)}
+        if M2_PROP_SHARDING_QUEUE in raw_meta["system"]:
+            shard["sharding"] = {
+                "queue": raw_meta["system"][M2_PROP_SHARDING_QUEUE],
+                "timestamp": raw_meta["system"][M2_PROP_SHARDING_TIMESTAMP],
+            }
+        aborted = drained = False
+        if shard:
+            aborted = cs.abort_sharding(shard)
+            if aborted and "sharding" in shard:
+                drained = cs.drain_sharding_queue(shard)
+        return self.columns, (acct, cont, aborted, drained)
 
 
 class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
@@ -154,7 +207,7 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
         return self.patch_parser(parser)
 
     @staticmethod
-    def prepare_startegy(parsed_args):
+    def prepare_strategy(parsed_args):
         strategy_params = dict()
         if parsed_args.partition is not None:
             strategy_params["partition"] = parsed_args.partition
@@ -167,7 +220,7 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        strategy, strategy_params = self.prepare_startegy(parsed_args)
+        strategy, strategy_params = self.prepare_strategy(parsed_args)
 
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf, logger=self.app.client_manager.logger
@@ -390,7 +443,7 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        strategy, strategy_params = FindContainerSharding.prepare_startegy(parsed_args)
+        strategy, strategy_params = FindContainerSharding.prepare_strategy(parsed_args)
 
         modified = False
         container_sharding = ContainerSharding(
