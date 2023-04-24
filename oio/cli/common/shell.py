@@ -140,7 +140,16 @@ class CommonShell(App):
             import coverage
 
             cov = coverage.process_startup()
-            cov.switch_context("cli")
+            if cov:
+                cov.switch_context("cli")
+            else:
+                from os import getenv
+
+                LOG.warning(
+                    "code coverage not started, missing environment? "
+                    "COVERAGE_PROCESS_START=%s",
+                    getenv("COVERAGE_PROCESS_START"),
+                )
 
     def prepare_to_run_command(self, cmd):
         LOG.debug(
