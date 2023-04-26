@@ -391,6 +391,12 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
     log = getLogger(__name__ + ".SetContainer")
 
     def get_parser(self, prog_name):
+        self.status_value = {
+            "enabled": str(OIO_DB_ENABLED),
+            "disabled": str(OIO_DB_DISABLED),
+            "frozen": str(OIO_DB_FROZEN),
+        }
+
         parser = super(SetContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
         self.patch_parser_container(parser)
@@ -408,8 +414,8 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
         )
         parser.add_argument(
             "--status",
-            metavar="<status>",
-            help="Set container status, can be enabled, disabled or frozen",
+            choices=self.status_value.keys(),
+            help="Set container status",
         )
         return parser
 
@@ -418,7 +424,7 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
 
         super(SetContainer, self).take_action_container(parsed_args)
         properties = parsed_args.property
-        system = dict()
+        system = {}
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.quota is not None:
@@ -432,12 +438,7 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
                 int(parsed_args.delete_exceeding_versions)
             )
         if parsed_args.status is not None:
-            status_value = {
-                "enabled": str(OIO_DB_ENABLED),
-                "disabled": str(OIO_DB_DISABLED),
-                "frozen": str(OIO_DB_FROZEN),
-            }
-            system["sys.status"] = status_value[parsed_args.status]
+            system["sys.status"] = self.status_value[parsed_args.status]
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.account,
