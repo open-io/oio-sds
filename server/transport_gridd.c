@@ -74,6 +74,7 @@ struct req_ctx_s
 	struct hashstr_s *reqname;
 	gchar *subject;
 	const gchar *reqid;
+	guint64 reqsize;
 	gboolean final_sent;
 	gboolean access_disabled;
 };
@@ -221,6 +222,7 @@ network_client_log_access(struct log_item_s *item)
 			hashstr_len(r->reqname)?:1);
 	g_string_append_printf(gstr, "\tstatus_int:%d", item->code);
 	g_string_append_printf(gstr, "\trequest_time_float:%.6lf", diff_total);
+	g_string_append_printf(gstr, "\tbytes_recvd_int:%"G_GSIZE_FORMAT, r->reqsize);
 	g_string_append_printf(gstr, "\tbytes_sent_int:%"G_GSIZE_FORMAT, item->out_len);
 	g_string_append_static(gstr, "\trequest_id:");
 	g_string_append(gstr, ensure(r->reqid));
@@ -712,6 +714,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.reqid = _req_get_ID(request, reqid, sizeof(reqid));
 	oio_ext_set_reqid(req_ctx.reqid);
+	req_ctx.reqsize = gba->len;
 	rc = TRUE;
 
 	/* TODO check the socket is still active, specially if it seems old (~long
@@ -728,7 +731,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	rc = _client_call_handler(&req_ctx);
 
 	if (!req_ctx.final_sent) {
-		_client_reply_fixed(&req_ctx, CODE_INTERNAL_ERROR, "BUG : no reply sent");
+		_client_reply_fixed(&req_ctx, CODE_INTERNAL_ERROR, "BUG: no reply sent");
 		rc = FALSE;
 	}
 
