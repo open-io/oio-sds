@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -85,10 +85,10 @@ struct sqlx_base_s
 	guint32 heat;
 
 	guint32 count_open; /*!< Counts the number of times this base has been
-						  explicitely opened and locked by the user. */
+						  explicitly opened and locked by the user. */
 
 	guint32 count_waiting; /*!< Counts the number of threads waiting for the
-							base to become avaible. */
+							base to become available. */
 
 	gint index; /*!< self reference */
 
@@ -573,7 +573,7 @@ sqlx_cache_init(void)
 	}
 
 	/* stack all the bases in the FREE list, so that the first bases are
-	 * prefered. */
+	 * preferred. */
 	for (guint i=cache->bases_max_hard; i>0 ;i--) {
 		sqlx_base_t *base = cache->bases + i - 1;
 		SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
@@ -779,6 +779,7 @@ GError *
 sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 {
 	GError *err = NULL;
+	gchar bname[LIMIT_LENGTH_BASENAME] = {0};
 
 	GRID_TRACE2("%s(%p,%d,%d)", __FUNCTION__, (void*)cache, bd, flags);
 
@@ -790,6 +791,11 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 	g_mutex_lock(&cache->lock);
 
 	sqlx_base_t *base; base = GET(cache,bd);
+
+	// base->name is no more valid after _expire_base()
+	if (base->name)
+		g_strlcpy(bname, hashstr_str(base->name), sizeof(bname));
+
 	switch (base->status) {
 
 		case SQLX_BASE_FREE:
@@ -879,7 +885,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 		if (lock_time > _cache_timeout_open * 3 / 4) {
 			GRID_WARN("The current thread held a lock on [%s] for %"
 					G_GINT64_FORMAT"us (sqliterepo.cache.timeout.open=%"
-					G_GINT64_FORMAT", reqid=%s)", hashstr_str(base->name),
+					G_GINT64_FORMAT", reqid=%s)", bname,
 					lock_time, _cache_timeout_open, oio_ext_get_reqid());
 		}
 	}
