@@ -1525,7 +1525,7 @@ Used by `gcc`
 
 ### sqliterepo.dump.chunk_size
 
-> Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.
+> Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism. Also used as block size for internal database copies.
 
  * default: **8388608**
  * type: gint64

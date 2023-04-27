@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1431,21 +1431,32 @@ _backup_main(sqlite3 *src, sqlite3 *dst)
 	int rc;
 	sqlite3_backup *backup;
 	GError *err = NULL;
+	// Copy more than one page at a time.
+	int pages_per_step = MAX(sqliterepo_dump_chunk_size / _page_size, 1);
+	gint64 start = oio_ext_monotonic_time();
 
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, src, dst);
 
 	backup = sqlite3_backup_init(dst, "main", src, "main");
 
-	if (!backup)
+	if (!backup) {
 		err = NEWERROR(sqlite3_errcode(dst), "%s", sqlite3_errmsg(dst));
-	else {
-		while (SQLITE_OK == (rc = sqlite3_backup_step(backup, 1))) {}
+	} else {
+		while ((rc = sqlite3_backup_step(backup, pages_per_step)) == SQLITE_OK) {
+			// TODO(FVE): check deadline?
+		}
 		if (rc != SQLITE_DONE)
 			err = NEWERROR(CODE_INTERNAL_ERROR, "backup error: (%d) %s", rc,
 					sqlite_strerror(rc));
 		(void) sqlite3_backup_finish(backup);
 	}
 
+	gint64 duration = oio_ext_monotonic_time() - start;
+	// The "3/4" threshold is the same as in sqlx_cache_unlock_and_close_base()
+	if (duration > _cache_timeout_open * 3 / 4) {
+		GRID_NOTICE("%s took %"G_GINT64_FORMAT"us (reqid=%s)",
+				__FUNCTION__, duration, oio_ext_get_reqid());
+	}
 	GRID_TRACE("Backup %s!", err ? "failed" : "done");
 	return err;
 }

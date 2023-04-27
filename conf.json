@@ -721,7 +721,7 @@
 
 			{ "type": "int64", "name": "sqliterepo_dump_chunk_size",
 				"key": "sqliterepo.dump.chunk_size",
-				"descr": "Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.",
+				"descr": "Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism. Also used as block size for internal database copies.",
 				"def": "8Mi", "min": 4096, "max": "2047Mi" },
 
 			{ "type": "int64", "name": "sqliterepo_dump_max_size",
