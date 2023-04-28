@@ -64,10 +64,13 @@ class PlacementImproverWorker(RawxWorker):
                 # process of all filters
                 chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
         except FileNotFoundError:
-            self.logger.info("chunk_id=%s no longer exists, deleting", chunk.chunk_id)
             # unlink the symbolic link
             os.unlink(chunk.chunk_symlink_path)
-            self.logger.debug("symbolic link=%s removed", chunk.chunk_path)
+            self.logger.info(
+                "Chunk %s no longer exists, symlink %s removed.",
+                chunk.chunk_id,
+                chunk.chunk_symlink_path,
+            )
             return False
         except (exc.MissingAttribute, exc.FaultyChunk):
             self.errors += 1

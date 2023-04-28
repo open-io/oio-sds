@@ -113,14 +113,15 @@ class Changelocation(Filter):
         :return: dict with metadata of the new chunk created
         :rtype: dict
         """
+        chunk_id = chunkwrapper.chunk_id
         rawx_dict = content.move_chunk(
-            chunk_id=chunkwrapper.meta["chunk_id"],
+            chunk_id=chunk_id,
             service_id=self.volume_id,
             check_quality=True,
             reqid=reqid,
             cur_items=cur_items,
         )
-        self.logger.debug("Chunk moved to %s", rawx_dict["url"])
+        self.logger.debug("Chunk %s moved to %s", chunk_id, rawx_dict["url"])
         # Incrementing the counter of chunks relocated
         self.relocated_chunk += 1
 
@@ -186,6 +187,7 @@ class Changelocation(Filter):
         chunkwrapper = ChunkWrapper(env)
         # Getting a request id for chunk placement improvement
         reqid = request_id("placementImprover-")
+        chunk_id = chunkwrapper.chunk_id
         try:
             now = time.time()
             path = chunkwrapper.chunk_symlink_path
@@ -202,7 +204,7 @@ class Changelocation(Filter):
             cur_items = self._get_current_items(chunkwrapper, chunks, reqid)
         except Exception as chunk_exc:
             if isinstance(chunk_exc, (exc.OrphanChunk, exc.NotFound)):
-                self.logger.warning("Orphan chunk: %s", str(chunk_exc))
+                self.logger.warning("Orphan chunk %s: %s", chunk_id, str(chunk_exc))
                 self.orphan_chunks_found += 1
                 # Check if the symlink name file is in
                 # chunkid.nb_attempt.timestamp format
@@ -222,7 +224,7 @@ class Changelocation(Filter):
                 next_attempt_time = str(int(now + seconds))
                 new_symlink_name = ".".join(
                     [
-                        chunkwrapper.meta["chunk_id"],
+                        chunk_id,
                         str(attempt_counter),
                         next_attempt_time,
                     ]
@@ -235,7 +237,7 @@ class Changelocation(Filter):
                 chunk=chunkwrapper,
                 body=(
                     f"Error while looking for chunks location: {chunk_exc} "
-                    f"reqid={reqid}"
+                    f"reqid={reqid}, chunk_id={chunk_id}"
                 ),
             )
             return resp(env, cb)
@@ -254,7 +256,7 @@ class Changelocation(Filter):
             resp = PlacementImproverCrawlerError(
                 chunk=chunkwrapper,
                 body="Error while moving the chunk {0}: {1}".format(
-                    chunkwrapper.chunk_id, str(chunk_exc)
+                    chunk_id, str(chunk_exc)
                 ),
             )
             return resp(env, cb)
