@@ -1,4 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,14 +22,14 @@ from oio.common.constants import (
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.utils import CacheDict, monotonic_time, request_id
 from oio.event.evob import EventTypes
-from oio.event.filters.notify import NotifyFilter
+from oio.event.filters.notify import BeanstalkdNotifyFilter
 
 
 CACHE_DURATION = 30.0
 CACHE_SIZE = 10000
 
 
-class ReplicateFilter(NotifyFilter):
+class ReplicateFilter(BeanstalkdNotifyFilter):
     """
     This filter will check, with the help of the account service,
     if the container or object linked in the event is supposed to be

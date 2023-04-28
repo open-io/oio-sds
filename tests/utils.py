@@ -601,7 +601,7 @@ class BaseTestCase(CommonTestCase):
     def tearDownClass(cls):
         super(BaseTestCase, cls).tearDownClass()
 
-    def wait_for_score(self, types, timeout=20.0, score_threshold=35):
+    def wait_for_score(self, types, timeout=12.0, score_threshold=35):
         """Wait for services to have a score greater than the threshold."""
         deadline = time.time() + timeout
         while time.time() < deadline:

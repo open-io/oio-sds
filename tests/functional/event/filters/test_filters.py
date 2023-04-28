@@ -24,7 +24,7 @@ from oio.account.client import AccountClient
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.event.beanstalk import Beanstalk
-from oio.event.filters.notify import NotifyFilter
+from oio.event.filters.notify import BeanstalkdNotifyFilter
 from oio.event.filters.replicate import ReplicateFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 
@@ -64,7 +64,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self.queue_url = queue_addr
         self.conf["queue_url"] = "beanstalk://" + self.queue_url
         self.conf["tube"] = BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
-        self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
+        self.notify_filter = BeanstalkdNotifyFilter(app=_App, conf=self.conf)
         bt = Beanstalk.from_url(self.conf["queue_url"])
         bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE, timeout=0.5)
         bt.close()
@@ -406,8 +406,8 @@ class TestNotifyFilterBase(BaseTestCase):
         super(TestNotifyFilterBase, self).tearDown()
 
 
-class TestNotifyFilter(TestNotifyFilterBase):
-    filter_class = NotifyFilter
+class TestBeanstalkdNotifyFilter(TestNotifyFilterBase):
+    filter_class = BeanstalkdNotifyFilter
 
     def test_parsing(self):
         expected = {

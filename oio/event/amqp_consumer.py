@@ -19,30 +19,8 @@ import time
 from multiprocessing import Event, Process
 from random import shuffle
 
-import pika
-
+from oio.common.amqp import AmqpConnector
 from oio.common.logger import get_logger
-from oio.common.utils import rotate_list
-
-
-def amqp_connect(conn_params, logger):
-    """
-    Returns an AMQP BlockingConnection and a channel for the provided parameters.
-
-    :param conn_params: a list of AMQP connection parameters
-    """
-    # Fortunately does not log credentials
-    logger.info(f"Connecting to {conn_params!r}")
-
-    connection = pika.BlockingConnection(conn_params)
-    try:
-        channel = connection.channel()
-    except Exception:
-        if connection.is_open:
-            connection.close()
-        raise
-    else:
-        return connection, channel
 
 
 class RejectMessage(Exception):
@@ -58,7 +36,7 @@ class RetryLater(RejectMessage):
     """
 
 
-class AmqpConsumerWorker(Process):
+class AmqpConsumerWorker(AmqpConnector, Process):
     """
     Base class for processes listening to messages on an AMQP queue.
     """
@@ -76,45 +54,15 @@ class AmqpConsumerWorker(Process):
         shuffle_endpoints=True,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
-        if isinstance(endpoint, str):
-            endpoints = endpoint.split(";")
-        else:
-            endpoints = endpoint
-        self.conn_params = [pika.URLParameters(url) for url in endpoints]
+        super().__init__(*args, endpoints=endpoint, logger=logger, **kwargs)
         if shuffle_endpoints:
-            shuffle(self.conn_params)
-        self.logger = logger
+            shuffle(self._conn_params)
         self.queue_args = queue_args or {}
         self.queue_name = queue
         self.exchange_name = exchange_name or queue
         self.routing_key = routing_key or "#"
         self.bind_args = bind_args or {}
-        self._channel = None
-        self._conn = None
         self._stop_requested = Event()
-
-    def _close_conn(self):
-        """
-        Close the AMQP channel and connection.
-        """
-        if self._conn is not None:
-            try:
-                if self._channel.is_open:
-                    self._channel.cancel()
-                if self._conn.is_open:
-                    self._conn.close()
-            except Exception:
-                self.logger.exception("Failed to disconnect from conn_in")
-            finally:
-                self._channel = None
-                self._conn = None
-
-    def _connect(self):
-        """
-        Connect to the endpoint specified in this class' constructor.
-        """
-        self._conn, self._channel = amqp_connect(self.conn_params, self.logger)
 
     def _consume(self):
         """
@@ -127,6 +75,9 @@ class AmqpConsumerWorker(Process):
                 break
             if (method_frame, properties, body) == (None, None, None):
                 continue
+
+            # If we are here, we just communicated with RabbitMQ, we know it's alive
+            self._last_use = time.monotonic()
 
             try:
                 self.process_message(body, properties)
@@ -155,15 +106,16 @@ class AmqpConsumerWorker(Process):
             if self._stop_requested.is_set():
                 break
 
+            got_error = False
             try:
                 self._connect()
                 self.post_connect()
                 self._consume()
             except Exception:
                 self.logger.exception("Error, reconnecting")
-                rotate_list(self.conn_params, inplace=True)
+                got_error = True
             finally:
-                self._close_conn()
+                self._close_conn(after_error=got_error)
 
     def stop(self):
         """

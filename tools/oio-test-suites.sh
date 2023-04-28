@@ -445,12 +445,13 @@ func_tests_rebuilder_mover () {
 	for i in {1..10}; do
 		CONTAINER="container-${RANDOM}"
 		for j in {1..10}; do
-			dd if=/dev/urandom of=/tmp/openio_object_$i_$j bs=1K \
+			dd if=/dev/urandom of=/tmp/openio_object_$j bs=1K \
 					count=$(shuf -i 1-2000 -n 1) 2> /dev/null
-			echo "object create ${CONTAINER} /tmp/openio_object_$i_$j" \
+			echo "object create ${CONTAINER} /tmp/openio_object_$j" \
 					"--name object-${RANDOM} -f value"
 		done | ${PYTHON} ${CLI}
 	done
+	rm -f /tmp/openio_object_*
 	# Shard the last container
 	${OPENIOCTL} stop @meta2-crawler
 	${PYTHON} ${CLI} container-sharding find-and-replace --threshold 1 \

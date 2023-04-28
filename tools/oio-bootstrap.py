@@ -1373,7 +1373,7 @@ template_event_agent = """
 [event-agent]
 namespace = ${NS}
 user = ${USER}
-workers = 2
+workers = ${EVENT_WORKERS}
 concurrency = 5
 
 handlers_conf = ${CFGDIR}/event-handlers-${SRVNUM}.conf
@@ -1385,10 +1385,10 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 queue_url=${QUEUE_URL}
 queue_args = ${QUEUE_ARGS}
-queue_name = oio
-exchange_name = oio
-routing_key = #
-tube = oio
+queue_name = ${QUEUE_NAME}
+exchange_name = ${EXCHANGE_NAME}
+routing_key = ${ROUTING_KEY}
+tube = ${QUEUE_NAME}
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
@@ -1412,11 +1412,17 @@ pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # pipeline = replication content_cleaner
-pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
+
+# New pipeline with a separate oio-event-agent doing deletions
+pipeline = ${REPLICATION} ${WEBHOOK} notify_deleted
+
+# Old pipeline with deletion done by the main oio-event-agent
+# pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
 # pipeline = replication content_cleaner
-pipeline = ${REPLICATION} content_cleaner notify_drained ${PRESERVE}
+pipeline = ${REPLICATION} notify_deleted notify_drained
+# pipeline = ${REPLICATION} content_cleaner notify_drained ${PRESERVE}
 
 [handler:storage.container.new]
 # pipeline = replication account_update
@@ -1458,7 +1464,7 @@ timeout = 4.5
 [filter:content_rebuild]
 use = egg:oio#notify
 tube = oio-rebuild
-queue_url = ${QUEUE_URL}
+queue_url = ${MAIN_QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -1492,13 +1498,55 @@ use = egg:oio#dump
 [filter:noop]
 use = egg:oio#noop
 
+[filter:notify_deleted]
+# Forward storage.content.deleted events to another queue. Another
+# oio-event-agent will read this queue and delete chunks at a limited rate.
+use = egg:oio#notify
+tube = oio-delete
+queue_url = ${QUEUE_URL}
+queue_args = ${QUEUE_ARGS}
+# In exchange "oio", all messages are routed to the queue "oio". To prevent
+# loops, we need another exchange.
+exchange_name = oio-delete
+
 # This filter is only to demonstrate policy regexes
 [filter:notify_drained]
 use = egg:oio#notify
 queue_url = ${QUEUE_URL}
+queue_args = ${QUEUE_ARGS}
 tube = oio-drained
 policy_regex_EC = ^EC.*
 tube_EC = oio-drained-ec
+exchange_name = oio-drained
+
+[filter:logger]
+use = egg:oio#logger
+
+[filter:preserve]
+# Preserve all events in the oio-preserved tube. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+tube = oio-preserved
+queue_url = ${MAIN_QUEUE_URL}
+"""
+
+template_event_agent_delete_handlers = """
+[handler:storage.content.deleted]
+pipeline = content_cleaner ${PRESERVE}
+
+[handler:storage.content.drained]
+pipeline = content_cleaner ${PRESERVE}
+
+[filter:content_cleaner]
+use = egg:oio#content_cleaner
+
+# These values are changed only for testing purposes.
+# The default values are good for most use cases.
+concurrency = 4
+pool_connections = 16
+pool_maxsize = 16
+timeout = 4.5
 
 [filter:logger]
 use = egg:oio#logger
@@ -2228,7 +2276,7 @@ def generate(options):
         ENV["MAIN_QUEUE_URL"] = f"beanstalk://{host}:{port}"
 
     event_target = register_target("event", root_target)
-    # If a RabbitMQ endpoint is configured, configure it only for meta2
+    # If a RabbitMQ endpoint is configured, configure it only for meta2 and rawx
     if "endpoint" in options["rabbitmq"]:
         endpoints = options["rabbitmq"]["endpoint"]
         if isinstance(endpoints, str):
@@ -2246,36 +2294,45 @@ def generate(options):
             queue_url = urlunsplit(url_parts[:3] + ("", ""))
             queue_args_list.append(queue_args)
             queue_url_list.append(queue_url)
-        ENV.update(
-            {
-                "EVENT_CNXSTRING_M2": ";".join(endpoints),
-                "EVENT_CNXSTRING_RAWX": ";".join(queue_url_list),
-            }
-        )
         first_args = queue_args_list[0]
         for args in queue_args_list[1:]:
             if args != first_args:
                 raise Exception("Arguments of rabbitmq queues are not the same")
+        ENV.update(
+            {
+                "EVENT_CNXSTRING_M2": ";".join(endpoints),
+                "EVENT_CNXSTRING_RAWX": ";".join(queue_url_list),
+                "RABBIT_QUEUE_ARGS": ",".join(
+                    "=".join((k, v)) for k, v in first_args.items()
+                ),
+                "RABBIT_QUEUE_URL": ";".join(queue_url_list),
+            }
+        )
         env = subenv(
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
-                "QUEUE_ARGS": ",".join("=".join((k, v)) for k, v in first_args.items()),
-                "QUEUE_URL": ";".join(queue_url_list),
+                "EXCHANGE_NAME": "oio",
+                "QUEUE_NAME": "oio",
+                "QUEUE_ARGS": ENV["RABBIT_QUEUE_ARGS"],
+                "QUEUE_URL": ENV["RABBIT_QUEUE_URL"],
+                "ROUTING_KEY": "#",
                 "EXE": "oio-event-agent-rabbitmq",
+                "EVENT_WORKERS": "2",
             }
         )
         register_service(
             env,
             template_systemd_service_event_agent,
             event_target,
+            # FIXME(FVE): we must set concurrency=multiprocessing in a config file
+            # and set COVERAGE_RCFILE in environment
             coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent -p ",
+            + " run --context event-agent --concurrency=eventlet -p ",
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_event_agent)
             f.write(tpl.safe_substitute(env))
-        env["QUEUE_URL"] = ENV["MAIN_QUEUE_URL"]
         with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as f:
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
@@ -2697,7 +2754,7 @@ def generate(options):
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
 
-    conscience_agents_target = register_target("event-agent", event_target)
+    event_agents_target = register_target("event-agent", event_target)
     xcute_agents_target = register_target("xcute-event-agent", event_target)
 
     # Event agent configuration -> one per beanstalkd
@@ -2708,17 +2765,19 @@ def generate(options):
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
+                "QUEUE_NAME": "oio",
                 "QUEUE_ARGS": "",
                 "QUEUE_URL": bnurl,
                 "EXE": "oio-event-agent",
+                "EVENT_WORKERS": "2",
             }
         )
         register_service(
             env,
             template_systemd_service_event_agent,
-            conscience_agents_target,
+            event_agents_target,
             coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent -p ",
+            + " run --context event-agent --concurrency=eventlet -p ",
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_event_agent)
@@ -2747,6 +2806,38 @@ def generate(options):
         with open(CFGDIR + "/xcute-event-handlers-" + str(num) + ".conf", "w+") as f:
             tpl = Template(template_xcute_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
+
+    # Configure a special oio-event-agent dedicated to chunk deletions
+    # -------------------------------------------------------------------------
+    num += 1
+    use_rabbitmq = "RABBIT_QUEUE_URL" in ENV
+    env = subenv(
+        {
+            "SRVTYPE": "event-agent",
+            "SRVNUM": num,
+            "EXCHANGE_NAME": "oio-delete",
+            "QUEUE_NAME": "oio-delete",
+            "QUEUE_ARGS": ENV.get("RABBIT_QUEUE_ARGS", ""),
+            "QUEUE_URL": ENV.get("RABBIT_QUEUE_URL", ENV["MAIN_QUEUE_URL"]),
+            "ROUTING_KEY": "oio-delete",
+            "EXE": "oio-event-agent" + ("-rabbitmq" if use_rabbitmq else ""),
+            "EVENT_WORKERS": "1",
+        }
+    )
+    register_service(
+        env,
+        template_systemd_service_event_agent,
+        event_agents_target,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context event-agent --concurrency=eventlet -p ",
+    )
+    with open(config(env), "w+") as outf:
+        tpl = Template(template_event_agent)
+        outf.write(tpl.safe_substitute(env))
+    with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as outf:
+        tpl = Template(template_event_agent_delete_handlers)
+        outf.write(tpl.safe_substitute(env))
+    # -------------------------------------------------------------------------
 
     # xcute
     env = subenv(
