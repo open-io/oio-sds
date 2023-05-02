@@ -2680,7 +2680,10 @@ class AccountBackendFdb(object):
         except NotFound as exc:
             if check_owner:
                 raise Forbidden(f"No owner found: {exc}") from exc
-            raise BadRequest(f"Missing account param or an owner: {exc}") from exc
+            # We used to raise BadRequest here, but sometimes this method is
+            # called to find the owner of a bucket. If there is no owner,
+            # NotFound is totally appropriate.
+            raise
         if account and account != owner:
             raise Forbidden("Bucket reserved by another owner")
         return owner
