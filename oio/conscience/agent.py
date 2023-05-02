@@ -128,8 +128,10 @@ class ServiceWatcher(object):
         self.running = False
 
     def check(self, reqid=None):
-        """Perform the registered checks on the service until any of
-        them fails or the end of the list is reached."""
+        """
+        Perform the registered checks on the service until any of
+        them fails or the end of the list is reached.
+        """
         self.status = True
         for service_check in (x for x in self.service_checks if self.running):
             if not service_check.service_status(reqid=reqid):
@@ -140,22 +142,25 @@ class ServiceWatcher(object):
         """Update service definition with all configured stats"""
         if not self.status:
             return
-        collectors = (x for x in self.service_stats if self.running)
-        try:
-            for stat in collectors:
+
+        for stat in self.service_stats:
+            if not self.running:
+                break
+            try:
                 stats = stat.get_stats(reqid=reqid)
                 self.service_definition["tags"].update(stats)
-        except Exception as ex:
-            # Log only if the current status is OK (the basic TCP or HTTP check
-            # is OK but the stats collection is not).
-            log = self.logger.info if self.status else self.logger.debug
-            log(
-                "get_stats error: %s, skipping %s (reqid=%s)",
-                ex,
-                [type(col).__name__ for col in collectors] or "<nothing>",
-                reqid,
-            )
-            self.status = False
+            except Exception as exc:
+                # Log only if the current status is OK (the basic TCP or HTTP check
+                # is OK but the stats collection is not).
+                log = self.logger.warning if self.status else self.logger.debug
+                log(
+                    "Failed to fetch the %s stats: %s, skipping (reqid=%s)",
+                    type(stat).__name__,
+                    exc,
+                    reqid,
+                )
+                # Do not set the status to Down, let the score calculation
+                # in the conscience decide
 
     def register(self, reqid=None):
         # only accept a final zero/down-registration when exiting
