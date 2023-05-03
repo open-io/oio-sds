@@ -3095,6 +3095,9 @@ class TestObjectList(ObjectStorageApiTestBase):
         for obj in res["objects"]:
             self.assertIn("chunks", obj)
             loc = self.api.object_locate(self.account, self.cname, obj["name"])
+            # There can be a score update between the call, set them all to 50
+            for chunk in loc[1] + obj["chunks"]:
+                chunk["score"] = 50
             locate_chunks = sorted(loc[1], key=lambda d: (d["pos"], d["url"]))
             list_chunks = sorted(obj["chunks"], key=lambda d: (d["pos"], d["url"]))
             self.assertListEqual(locate_chunks, list_chunks)
