@@ -84,9 +84,10 @@ struct m2_prepare_data
 	gchar storage_policy[LIMIT_LENGTH_STGPOLICY];
 };
 
-gchar* SHARED_KEYS[3] = {
+gchar* SHARED_KEYS[4] = {
 	M2V2_ADMIN_BUCKET_NAME,
 	M2V2_ADMIN_VERSIONING_POLICY,
+	SQLX_ADMIN_STATUS,
 	NULL
 };
 
