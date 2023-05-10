@@ -780,6 +780,45 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertIn("trailing_prop", props["properties"])
         self.assertEqual("yes", props["properties"]["trailing_prop"])
 
+    def test_object_create_ext_limit_name(self):
+        name = random_str(32)
+        obj_name = random_str(1087)
+        self._create(name)
+
+        def props_cb(**_kwargs):
+            return {"trailing_prop": "yes"}
+
+        _, size, _, metadata = self.api.object_create_ext(
+            self.account,
+            name,
+            data=b"data",
+            obj_name=obj_name,
+            properties_callback=props_cb,
+        )
+        self.assertEqual(metadata["ns"], self.ns)
+        self.assertIn("version", metadata)
+
+        props = self.api.object_get_properties(self.account, name, obj_name)
+        self.assertEqual(metadata["version"], props["version"])
+        self.assertEqual(int(props["length"]), size)
+        self.assertEqual("Ok", metadata["status"])
+        self.assertIn("trailing_prop", props["properties"])
+        self.assertEqual("yes", props["properties"]["trailing_prop"])
+
+    def test_object_create_name_too_long(self):
+        ct = random_str(32)
+        obj = random_str(1088)
+        self._create(ct)
+        self.assertRaises(
+            exc.ClientException,
+            self.api.object_create,
+            self.account,
+            ct,
+            data=b"data",
+            obj_name=obj,
+        )
+        self._clean(ct)
+
     def test_object_create_invalid_name(self):
         ct = random_str(32)
         obj = "Beno\xeet".encode("latin1")

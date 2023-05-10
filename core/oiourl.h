@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -61,8 +61,12 @@ enum oio_url_field_e
 #define LIMIT_LENGTH_ACCOUNTNAME 64
 
 /** One plus the maximum length of a content name
- * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_CONTENTPATH 1024
+ * i.e. a size enough to store the C string
+ * 1024 characters for object name
+ * 55 characters for potential suffixes (ex: MPU, ...)
+ * 1 character for '\0'
+ * 1080 characters total raised to 1088 for 64 bytes alignment sake */
+#define LIMIT_LENGTH_CONTENTPATH 1088
 
 /** One plus the maximum length of the string representation of a content version
  * i.e. a size enough to store the C string */
