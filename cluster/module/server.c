@@ -384,6 +384,7 @@ conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 	srvtype->score_expiration = 300;
 	srvtype->score_variation_bound = 5;
 	srvtype->lock_at_first_register = TRUE;
+	g_rw_lock_init(&srvtype->rw_lock);
 }
 
 static struct conscience_srvtype_s *
@@ -447,6 +448,7 @@ conscience_srvtype_destroy(struct conscience_srvtype_s *srvtype)
 		g_free(srvtype->get_score_expr_str);
 	}
 
+	g_rw_lock_clear(&srvtype->rw_lock);
 	g_free(srvtype);
 }
 
@@ -1606,6 +1608,8 @@ restart_srv_from_file(gchar *path)
 			/* force score to allow _task_expire to pass since
 			 * it should not possible to have unlocked service with score 0 */
 			p_srv->score = old_score;
+
+			service_info_dated_free(sid);
 		}
 	}
 	ret = 0;
@@ -1802,7 +1806,6 @@ module_init_known_service_types(void)
 
 	for (struct srvtype_init_s *type=types_to_init; type->name ; type++) {
 		struct conscience_srvtype_s *config = conscience_get_srvtype(type->name, TRUE);
-		conscience_srvtype_init(config);
 		config->alert_frequency_limit = TIME_DEFAULT_ALERT_LIMIT;
 		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr, PUT | GET);
 		g_assert_true(rc);
