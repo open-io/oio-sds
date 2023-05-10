@@ -112,13 +112,10 @@ class TestPerfectibleContent(BaseTestCase):
         if not path.exists(symlink_folder):
             return symlink_folder
         files = listdir(symlink_folder)
-        if len(files) == 0:
-            return symlink_folder
-        chunk_symlink_path = path.join(
-            symlink_folder,
-            [file for file in files if chunk_id in file][0],
-        )
-        return chunk_symlink_path
+        for file in files:
+            if chunk_id in file:
+                return path.join(symlink_folder, file)
+        return symlink_folder
 
     def _is_symlink(self, abs_path):
         # islink: check symbolic link
