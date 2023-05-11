@@ -382,6 +382,12 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 	memcpy(api->type, asn->type.buf, MIN(asn->type.size, (int)sizeof(api->type)));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	score_ASN2API(&asn->score, &api->put_score);
+	// This condition is temporary, it allows to continue communicating with outdated service
+	if (!asn->getScore)
+		score_ASN2API(&asn->score, &api->get_score);
+	else {
+		score_ASN2API(asn->getScore, &api->get_score);
+	}
 
 	/*tags */
 	if (!asn->tags)
@@ -454,6 +460,8 @@ service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->nsName), api->ns_name, strnlen(api->ns_name, sizeof(api->ns_name)));
 	addr_info_API2ASN(&(api->addr), &(asn->addr));
 	score_API2ASN(&api->put_score, &asn->score);
+	asn->getScore = ASN1C_CALLOC(1, sizeof(struct Score));
+	score_API2ASN(&api->get_score, asn->getScore);
 
 	/*tags */
 	if (api->tags) {

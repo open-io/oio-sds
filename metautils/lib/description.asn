@@ -121,11 +121,12 @@ BEGIN
 	}
 
 	ServiceInfo ::= SEQUENCE {
-		nsName [0] PrintableString,
-		type   [1] PrintableString,
-		addr   [2] AddrInfo,
-		score  [3] Score,
-		tags   [4] SEQUENCE OF ServiceTag OPTIONAL
+		nsName     [0] PrintableString,
+		type       [1] PrintableString,
+		addr       [2] AddrInfo,
+		score      [3] Score,
+		tags       [4] SEQUENCE OF ServiceTag OPTIONAL,
+		getScore   [5] Score OPTIONAL
 	}
 
 	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
