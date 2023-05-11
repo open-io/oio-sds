@@ -656,8 +656,10 @@ service_info_load_json_object(struct json_object *obj,
 	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
 	if (type)
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
-	if (score)
+	if (score) {
 		si->put_score.value = json_object_get_int(score);
+		si->get_score.value = json_object_get_int(score);
+	}
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
