@@ -2028,7 +2028,7 @@ _slot_items_debug(GArray *items, gchar *suffix)
 		GRID_DEBUG("- [%s,0x%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT"%s",
 				si->item->id, si->item->location, si->item->weight,
 				si->acc_weight, suffix);
-	}
+        }
 }
 
 static void
