@@ -130,12 +130,15 @@ oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
 			}
 
 			if (elements > 2) {
-				srv->weight = atoi(id_loc[2]);
+				srv->put_weight = atoi(id_loc[2]);
+				srv->get_weight = atoi(id_loc[2]);
 			} else {
-				srv->weight = 80;
+				srv->put_weight = 80;
+				srv->get_weight = 80;
 			}
-			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
-					srv->id, srv->location, srv->weight);
+			GRID_TRACE(
+				"Built service id=%s,location=%lu,put_weight=%d,get_weight=%d",
+				srv->id, srv->location, srv->put_weight, srv->get_weight);
 			oio_lb_world__feed_slot(self, main_slot, srv);
 
 			if (elements > 3) {

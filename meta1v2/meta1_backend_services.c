@@ -576,7 +576,7 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 					m1->ns_name, srvtype, (*pe)->host);
 			struct oio_lb_item_s *item =
 				oio_lb__get_item_from_pool(m1->lb, srvtype, key);
-			one_is_up = item? item->weight > 0 : FALSE;
+			one_is_up = item? item->put_weight > 0 || item->get_weight > 0 : FALSE;
 			g_free(item);
 		}
 		if (one_is_up) {
