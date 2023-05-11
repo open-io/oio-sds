@@ -1870,7 +1870,12 @@ class ObjectStorageApi(object):
                 chunk_method=obj_meta["chunk_method"],
                 **kwargs
             )
-        except (exc.BadRequest, exc.Forbidden) as ex:
+        except (exc.BadRequest, exc.Forbidden, exc.ServiceBusy) as ex:
+            # 436: CODE_CONTAINER_FROZEN
+            if isinstance(ex, exc.ServiceBusy) and ex.status != 436:
+                # On ServiceBusy, rollback is only allowed if the container is frozen.
+                raise
+
             # Only delete chunk if the request really failed.
             # If the request was successful in the background, keep the chunks.
             self.logger.warning("Failed to commit to meta2 (%s), deleting chunks", ex)
