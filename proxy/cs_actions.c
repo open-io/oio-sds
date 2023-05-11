@@ -352,16 +352,16 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 		if (err)
 			return err;
 
-		si->score.timestamp = now;
+		si->put_score.timestamp = now;
 		switch (op) {
 			case REGOP_PUSH:
-				si->score.value = SCORE_UNSET;
+				si->put_score.value = SCORE_UNSET;
 				continue;
 			case REGOP_LOCK:
-				si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+				si->put_score.value = CLAMP(si->put_score.value, SCORE_DOWN, SCORE_MAX);
 				continue;
 			case REGOP_UNLOCK:
-				si->score.value = SCORE_UNLOCK;
+				si->put_score.value = SCORE_UNLOCK;
 				continue;
 		}
 	}
@@ -384,7 +384,7 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 			REG_WRITE(
 					const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
 					if (si0)
-						v->score.value = si0->score.value;
+						v->put_score.value = si0->put_score.value;
 					lru_tree_insert (srv_registered, g_strdup(k), v);
 					);
 		}
@@ -399,8 +399,8 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 #define ENQUEUE_SERVICE() { \
 	if (op == REGOP_PUSH) { \
 		struct service_info_s *si0 = lru_tree_get(push_queue, key); \
-		if (si0 && si0->score.value != SCORE_UNSET) \
-			si->score.value = si0->score.value; \
+		if (si0 && si0->put_score.value != SCORE_UNSET) \
+			si->put_score.value = si0->put_score.value; \
 	} \
 	lru_tree_insert(push_queue, key, si); \
 }
