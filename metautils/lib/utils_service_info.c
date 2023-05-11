@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -420,7 +420,7 @@ service_info_to_lb_item(const struct service_info_s *si,
 			!(item->location = g_ascii_strtoull(loc_str, NULL, 16))) {
 		item->location = location_from_dotted_string(loc_str);
 	}
-	item->weight = CLAMP(si->score.value, 0, 100);
+	item->weight = CLAMP(si->put_score.value, 0, 100);
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);
@@ -484,7 +484,7 @@ service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolea
 	g_string_append_c(gstr, '{');
 	OIO_JSON_append_str(gstr, "addr", straddr);
 	g_string_append_c(gstr, ',');
-	OIO_JSON_append_int(gstr, "score", si->score.value);
+	OIO_JSON_append_int(gstr, "score", si->put_score.value);
 	if (full) {
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_str(gstr, "ns", si->ns_name);
@@ -581,7 +581,7 @@ service_info_encode_prometheus(GString *gstr, const struct service_info_s *si)
 
 	gchar *labels = _service_info_encode_prometheus_labels(si);
 	g_string_append_printf(gstr, "conscience_score{%s} %"G_GINT32_FORMAT"\n",
-			labels, si->score.value);
+			labels, si->put_score.value);
 
 	if (!si->tags || !si->tags->len) {
 		goto end;
@@ -655,7 +655,7 @@ service_info_load_json_object(struct json_object *obj,
 	if (type)
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	if (score)
-		si->score.value = json_object_get_int(score);
+		si->put_score.value = json_object_get_int(score);
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
@@ -716,7 +716,7 @@ service_info_dated_new(struct service_info_s *si, time_t lock_mtime)
 			struct service_info_dated_s));
 	sid->si = service_info_dup(si);
 	sid->lock_mtime = lock_mtime;
-	sid->tags_mtime = si->score.timestamp * G_TIME_SPAN_SECOND;
+	sid->tags_mtime = si->put_score.timestamp * G_TIME_SPAN_SECOND;
 	return sid;
 }
 
@@ -741,7 +741,7 @@ service_info_dated_encode_json(GString *gstr,
 	g_string_append_c(gstr, '{');
 	OIO_JSON_append_str(gstr, "addr", straddr);
 	g_string_append_c(gstr, ',');
-	OIO_JSON_append_int(gstr, "score", sid->si->score.value);
+	OIO_JSON_append_int(gstr, "score", sid->si->put_score.value);
 	if (full) {
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_str(gstr, "ns", sid->si->ns_name);
