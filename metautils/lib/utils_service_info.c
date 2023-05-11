@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -632,13 +632,15 @@ service_info_load_json_object(struct json_object *obj,
 {
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
-	struct json_object *ns, *type, *url, *score, *tags;
+	struct json_object *ns, *type, *url, *score, *scores, *tags;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_string, !permissive},
-		{"type",  &type,  json_type_string, !permissive},
-		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_int,    !permissive},
-		{"tags",  &tags,  json_type_object, 0},
+		{"ns",     &ns,     json_type_string, !permissive},
+		{"type",   &type,   json_type_string, !permissive},
+		{"addr",   &url,    json_type_string, 1},
+		{"score",  &score,  json_type_int,    !permissive},
+		// "scores" is not mandatory in order to continue communicating with outdated service
+		{"scores", &scores, json_type_object, 0},
+		{"tags",   &tags,   json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (obj, mapping);
@@ -656,6 +658,11 @@ service_info_load_json_object(struct json_object *obj,
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	if (score)
 		si->score.value = json_object_get_int(score);
+	if (scores) {
+		json_object *score_put_obj;
+		if (json_object_object_get_ex(scores, "score.put", &score_put_obj))
+			si->score.value = json_object_get_int(score_put_obj);
+	}
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))

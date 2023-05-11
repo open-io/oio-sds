@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -39,6 +39,7 @@ License along with this library.
 # define NAME_TAGNAME_LOC "tag.loc"
 # define NAME_TAGNAME_LOCK "tag.lock"
 # define NAME_TAGNAME_SLOTS "tag.slots"
+# define NAME_TAGNAME_PUT_LOCK "tag.putlock"
 
 #define NAME_MSGNAME_METAREPLY         "RP"
 

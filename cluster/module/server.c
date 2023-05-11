@@ -657,7 +657,10 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	 * Modifying service_info_s would cause upgrade issues. */
 	struct service_tag_s *lock_tag = service_info_ensure_tag(
 			p_srv->tags, NAME_TAGNAME_LOCK);
+	struct service_tag_s *put_lock_tag = service_info_ensure_tag(
+			p_srv->tags, NAME_TAGNAME_PUT_LOCK);
 	service_tag_set_value_boolean(lock_tag, p_srv->locked);
+	service_tag_set_value_boolean(put_lock_tag, p_srv->locked);
 
 	return p_srv;
 }
@@ -837,6 +840,11 @@ conscience_srvtype_refresh_dated(
 
 		struct service_tag_s *tag_lock = service_info_get_tag(
 			sid->si->tags, NAME_TAGNAME_LOCK);
+		struct service_tag_s *tag_put_lock = service_info_get_tag(
+			sid->si->tags, NAME_TAGNAME_PUT_LOCK);
+		if (tag_put_lock && tag_put_lock->value.b)
+			tag_lock->value.b = TRUE;
+
 		p_srv->locked = tag_lock && tag_lock->type == STVT_BOOL
 				&& tag_lock->value.b;
 
@@ -847,8 +855,12 @@ conscience_srvtype_refresh_dated(
 
 		/* Set a tag to reflect the locked/unlocked state of the service.
 		 * Modifying service_info_s would cause upgrade issues. */
-		tag_lock = service_info_ensure_tag(p_srv->tags, NAME_TAGNAME_LOCK);
-		service_tag_set_value_boolean(tag_lock, p_srv->locked);
+		struct service_tag_s *lock_tag = service_info_ensure_tag(
+				p_srv->tags, NAME_TAGNAME_LOCK);
+		struct service_tag_s *put_lock_tag = service_info_ensure_tag(
+				p_srv->tags, NAME_TAGNAME_PUT_LOCK);
+		service_tag_set_value_boolean(lock_tag, p_srv->locked);
+		service_tag_set_value_boolean(put_lock_tag, p_srv->locked);
 	}
 
 	/* refresh the tags: create missing, replace existing
@@ -1597,7 +1609,12 @@ restart_srv_from_file(gchar *path)
 			/* If the service was locked, lock it again. */
 			struct service_tag_s *tag_lock = service_info_get_tag(
 					si_data->tags, NAME_TAGNAME_LOCK);
+			struct service_tag_s *tag_put_lock = service_info_get_tag(
+					si_data->tags, NAME_TAGNAME_PUT_LOCK);
 			if (tag_lock) {
+				if (tag_put_lock && tag_put_lock->value.b) {
+					tag_lock->value.b = TRUE;
+				}
 				service_tag_get_value_boolean(tag_lock, &(p_srv->locked), &err);
 				if (err) {
 					GRID_WARN("Failed to read lock tag: %s", err->message);
