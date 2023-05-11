@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 from oio.common.utils import cid_from_name
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
@@ -34,12 +35,13 @@ class ItemLocateTest(CliTestCase):
         opts = self.get_format_opts()
         output = self.openio("account create %s %s" % (account, opts))
         self.assertOutput("%s True" % account, output.strip())
+        opts = self.get_format_opts("json")
         output = self.openio_admin("account locate %s %s" % (account, opts))
-        output = output.split(" ")
-        self.assertEqual("account", output[0])
-        self.assertEqual(account, output[1])
-        self.assertEqual("up=True,", output[5])
-        self.assertEqual("None", output[7].strip())
+        data = json.loads(output)[0]
+        self.assertEqual("account", data["Type"])
+        self.assertEqual(account, data["Item"])
+        self.assertEqual("up=True,", data["Status"].split(" ")[0])
+        self.assertEqual(None, data["Errors"])
 
     def _recover_commandfailed(self, func, *args):
         try:
