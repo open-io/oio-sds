@@ -1,6 +1,7 @@
 /*
 OpenIO SDS functional tests
 Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -84,13 +85,13 @@ conscience_push_service (const char *ns_, struct service_info_s *si)
 	};
 
 	GError *err;
-	if (si->score.value == SCORE_UNSET)
+	if (si->put_score.value == SCORE_UNSET)
 		err = oio_cs_client__register_service (cs, si->type, &reg);
-	else if (si->score.value == SCORE_UNLOCK)
+	else if (si->put_score.value == SCORE_UNLOCK)
 		err = oio_cs_client__unlock_service (cs, si->type, &reg);
 	else
 		err = oio_cs_client__lock_service (cs, si->type, &reg,
-				si->score.value);
+				si->put_score.value);
 
 	g_free (srvkey);
 	g_strfreev (kv);
@@ -104,8 +105,8 @@ register_namespace_service(const struct service_info_s *si)
 	g_assert(si != NULL);
 
 	struct service_info_s *si_copy = service_info_dup(si);
-	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = oio_ext_real_seconds();
+	si_copy->put_score.value = SCORE_UNSET;
+	si_copy->put_score.timestamp = oio_ext_real_seconds();
 	metautils_srvinfo_ensure_tags (si_copy);
 	GError *err = conscience_push_service (si->ns_name, si_copy);
 	service_info_clean(si_copy);
