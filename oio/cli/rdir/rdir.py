@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -46,6 +46,16 @@ def _format_assignments(all_services, svc_col_title="Rawx"):
     results.sort()
     columns = (svc_col_title, "Rdir", "%s location" % svc_col_title, "Rdir location")
     return columns, results
+
+
+def _format_detailed_scores(srv):
+    return " ".join(
+        [
+            f"{k[6:]}={v}"
+            for k, v in iteritems(srv.get("scores", {}))
+            if k.startswith("score.")
+        ]
+    )
 
 
 class RdirBootstrap(Lister):
@@ -166,7 +176,7 @@ class RdirAssignments(Lister):
                     (
                         x[0],
                         by_id.get(x[0], {}).get("score", "0"),
-                        x[1],
+                        _format_detailed_scores(by_id.get(x[0], {})),
                         by_id.get(x[0], {}).get("tags", {}).get("stat.opened_db_count"),
                         x[2],
                     )
@@ -175,6 +185,7 @@ class RdirAssignments(Lister):
                 columns = (
                     "Rdir",
                     "Score",
+                    "Scores",
                     f"Number of bases ({parsed_args.service_type})",
                     "Number of bases (total)",
                     "Bases",

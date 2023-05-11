@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,7 @@ class LbClient(ProxyClient):
             "/create_pool",
             params={"name": pool, "force": str(force)},
             data=json.dumps(ibody),
-            **kwargs
+            **kwargs,
         )
 
 
@@ -190,13 +190,17 @@ class ConscienceClient(ProxyClient):
         else:
             raise OioException("ERROR while getting services types: %s" % resp.text)
 
-    def get_service_definition(self, srv_type, srv_id, score=None, tags=None):
+    def get_service_definition(
+        self, srv_type, srv_id, score=None, scores=None, tags=None
+    ):
         service_definition = dict()
         service_definition["ns"] = self.ns
         service_definition["type"] = srv_type
         service_definition["addr"] = srv_id
         if score is not None:
             service_definition["score"] = score
+        if scores is not None:
+            service_definition["scores"] = scores
         if tags is not None:
             service_definition["tags"] = tags
         return service_definition
@@ -245,7 +249,7 @@ class ConscienceClient(ProxyClient):
             "GET",
             "/resolve",
             params={"type": srv_type, "service_id": service_id},
-            **kwargs
+            **kwargs,
         )
         if resp.status == 200:
             return body
