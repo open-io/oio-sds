@@ -573,7 +573,10 @@ test_lb_item_loc_user(void)
 {
 	const char *source0 = "{\
 		\"addr\": \"127.0.0.1:6015\",\
-		\"score\": 78,\
+		\"scores\": {\
+			\"score.put\": 78,\
+			\"score.get\": 78\
+		},\
 		\"tags\": {\
 			\"tag.loc\": \"abcd.hem.oio.vol8\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
@@ -589,7 +592,10 @@ test_lb_item_loc_user_long(void)
 {
 	const char *source0 = "{\
 		\"addr\": \"127.0.0.1:6015\",\
-		\"score\": 78,\
+		\"scores\": {\
+			\"score.put\": 78,\
+			\"score.get\": 78\
+		},\
 		\"tags\": {\
 			\"tag.loc\": \"hem.dc2.room1.rack2.server3.vol8\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
@@ -606,7 +612,10 @@ test_lb_item_loc_hex(void)
 {
 	const char *source1 = "{\
 		\"addr\": \"127.0.0.1:6015\",\
-		\"score\": 78,\
+		\"scores\": {\
+			\"score.put\": 78,\
+			\"score.get\": 78\
+		},\
 		\"tags\": {\
 			\"tag.loc\": \"0xEE4F7ABF990CAA8E\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
@@ -622,7 +631,10 @@ test_lb_item_loc_ipv4(void)
 {
 	const char *source2 = "{\
 		\"addr\": \"127.0.0.1:6015\",\
-		\"score\": 78,\
+		\"scores\": {\
+			\"score.put\": 78,\
+			\"score.get\": 78\
+		},\
 		\"tags\": {\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
@@ -637,7 +649,10 @@ test_lb_item_loc_ipv6(void)
 {
 	const char *source3 = "{\
 		\"addr\": \"[dead:beef:feed:face:cafe:babe:baad:c0de]:51966\",\
-		\"score\": 78,\
+		\"scores\": {\
+			\"score.put\": 78,\
+			\"score.get\": 78\
+		},\
 		\"tags\": {\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
