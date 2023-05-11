@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -189,7 +189,8 @@ typedef struct service_info_s
 	gchar ns_name[LIMIT_LENGTH_NSNAME]; /**< The namespace name this service belongs to */
 	gchar type[LIMIT_LENGTH_SRVTYPE];   /**< The service type */
 	addr_info_t addr;                   /**< The service network address */
-	score_t score;                      /**< The service score */
+	score_t put_score;                  /**< The service score for write operations */
+	score_t get_score;                  /**< The service score for read operations */
 	GPtrArray *tags;                    /**< The list of service tags */
 } service_info_t;
 
