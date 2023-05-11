@@ -20,6 +20,21 @@ from logging import getLogger
 from oio.cli import Lister, ShowOne
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioException, OioNetworkException, ServiceBusy
+from oio.cli.common.utils import format_detailed_scores
+
+
+DETAILED_SCORES = ("get", "put")
+
+
+def _detailed_score(value):
+    parts = value.split("=")
+    if len(parts) != 2:
+        raise ValueError("Usage: '-S put=0' or '-S get=0'")
+    name = parts[0]
+    if name not in DETAILED_SCORES:
+        raise ValueError("Usage: '-S put=0' or '-S get=0'")
+    score = int(parts[1])
+    return (name, score)
 
 
 def _batches_boundaries(srclen, size):
@@ -110,6 +125,7 @@ class ClusterList(Lister):
                 addr = srv["addr"]
                 up = tags.pop("tag.up", "n/a")
                 score = srv["score"]
+                scores = format_detailed_scores(srv)
                 service_type = srv_type
                 if service_type == "all":
                     service_type = srv["type"]
@@ -122,6 +138,7 @@ class ClusterList(Lister):
                     slots,
                     up,
                     score,
+                    scores,
                     locked,
                 ]
                 if parsed_args.stats:
@@ -151,6 +168,7 @@ class ClusterList(Lister):
             "Slots",
             "Up",
             "Score",
+            "Scores",
             "Locked",
         ]
         if parsed_args.stats:
@@ -180,7 +198,7 @@ class ClusterLocalList(Lister):
             self.app.client_manager.sds_conf.get("proxy.quirk.local_scores"), False
         )
         if not local_scores:
-            self.log.warn(
+            self.log.warning(
                 "'proxy.quirk.local_scores' not set, scores won't be realistic."
             )
         data = self.app.client_manager.conscience.local_services()
@@ -193,6 +211,7 @@ class ClusterLocalList(Lister):
             addr = srv["addr"]
             up = tags.get("tag.up", "n/a")
             score = srv["score"]
+            scores = format_detailed_scores(srv)
             locked = boolean_value(tags.get("tag.putlock"), False)
             srv_type = srv["type"]
             if not srv_types or srv_type in srv_types:
@@ -206,6 +225,7 @@ class ClusterLocalList(Lister):
                         slots,
                         up,
                         score,
+                        scores,
                         locked,
                     )
                 )
@@ -218,6 +238,7 @@ class ClusterLocalList(Lister):
             "Slots",
             "Up",
             "Score",
+            "Scores",
             "Locked",
         )
         result_gen = (r for r in results)
@@ -352,7 +373,9 @@ class ClusterWait(Lister):
             default=15.0,
             help="How long to wait for a score (15s by default).",
         )
-        parser.add_argument(
+
+        score_group = parser.add_mutually_exclusive_group()
+        score_group.add_argument(
             "-s",
             "--score",
             metavar="<score>",
@@ -360,6 +383,17 @@ class ClusterWait(Lister):
             default=1,
             help="Minimum score value required for the chosen services (1 by default).",
         )
+
+        score_group.add_argument(
+            "-S",
+            "--detail-score",
+            metavar="<detail_score>",
+            type=_detailed_score,
+            action="append",
+            help="Minimum put or get score value required for the chosen services, "
+            "e.g.: '-S put=50'.",
+        )
+
         parser.add_argument(
             "-u",
             "--unlock",
@@ -372,7 +406,16 @@ class ClusterWait(Lister):
     def _wait(self, parsed_args):
         from time import time as now, sleep
 
-        min_score = parsed_args.score
+        min_scores = []
+        if parsed_args.detail_score:
+            min_scores.extend(parsed_args.detail_score)
+        else:
+            min_scores.extend(
+                [
+                    ("get", parsed_args.score),
+                    ("put", parsed_args.score),
+                ]
+            )
         delay = parsed_args.delay
         deadline = now() + delay
         descr = []
@@ -381,6 +424,14 @@ class ClusterWait(Lister):
             "Timeout ({0}s) while waiting for the services to get a score >= {1}, {2}"
         )
         req_count = 0
+
+        def service_ready(srv):
+            scores = srv.get("scores", {})
+            for name, value in min_scores:
+                score = scores.get(f"score.{name}", srv["score"])
+                if score < value:
+                    return False
+            return True
 
         def maybe_unlock(allsrv, reqid=None):
             if not parsed_args.unlock:
@@ -393,14 +444,18 @@ class ClusterWait(Lister):
             if now() > deadline:
                 if ko < 0:
                     msg = exc_msg.format(
-                        delay, min_score, "proxy and/or conscience not ready"
+                        delay, min_scores, "proxy and/or conscience not ready"
                     )
                 else:
-                    msg = exc_msg.format(delay, min_score, "still %d are not." % ko)
+                    msg = exc_msg.format(delay, min_scores, f"still {ko} are not.")
                 for srv in descr:
-                    if srv["score"] < min_score:
-                        self.log.warn(
-                            "%s %s %s", srv["type"], srv.get("id", None), srv["score"]
+                    if service_ready(srv):
+                        self.log.warning(
+                            "%s %s %s %s",
+                            srv["type"],
+                            srv.get("id", None),
+                            srv["score"],
+                            format_detailed_scores(srv),
                         )
                 raise Exception(msg)
 
@@ -449,23 +504,25 @@ class ClusterWait(Lister):
             # If a minimum has been specified, let's check we have enough
             # services
             if parsed_args.count:
-                ok = len([s for s in descr if s["score"] >= min_score])
+                ok = len([s for s in descr if service_ready(s)])
                 if ok < parsed_args.count:
                     self.log.debug("Only %d services up", ok)
                     continue
             else:
-                ko = len([s["score"] for s in descr if s["score"] < min_score])
+                ko = len([s["score"] for s in descr if not service_ready(s)])
                 if ko > 0:
                     self.log.debug("Still %d services down", ko)
                     continue
 
             # No service down, and enough services, we are done.
             for srv in descr:
-                yield srv["type"], srv["addr"], srv["score"]
+                yield srv["type"], srv["addr"], srv["score"], format_detailed_scores(
+                    srv
+                )
             return
 
     def take_action(self, parsed_args):
-        columns = ("Type", "Service", "Score")
+        columns = ("Type", "Service", "Score", "Scores")
         return columns, self._wait(parsed_args)
 
 
@@ -476,6 +533,7 @@ class ClusterLock(ClusterUnlock):
 
     def get_parser(self, prog_name):
         parser = super(ClusterLock, self).get_parser(prog_name)
+
         parser.add_argument(
             "-s",
             "--score",
@@ -484,18 +542,38 @@ class ClusterLock(ClusterUnlock):
             default=0,
             help="Score to set (0 by default).",
         )
+
+        parser.add_argument(
+            "-S",
+            "--detail-score",
+            metavar="<detail_score>",
+            type=_detailed_score,
+            action="append",
+            default=[],
+            help="Score to set for put or get, e.g.: '-S put=50'.",
+        )
+
         return parser
 
     def _lock_services(self, parsed_args):
-        srv_definitions = list()
+        srv_definitions = []
+        # Default scores
+        scores = {}
+        for score in DETAILED_SCORES:
+            scores[f"score.{score}"] = parsed_args.score
+        for k, v in parsed_args.detail_score:
+            scores[f"score.{k}"] = v
+
         for srv_id in parsed_args.srv_ids:
             srv_definitions.append(
                 self.app.client_manager.conscience.get_service_definition(
-                    parsed_args.srv_type, srv_id, score=parsed_args.score
+                    parsed_args.srv_type,
+                    srv_id,
+                    scores=scores,
                 )
             )
+        result = "locked to " + format_detailed_scores({"scores": scores})
         for batch in _bounded_batches(srv_definitions):
-            result = "locked to %d" % int(parsed_args.score)
             try:
                 self.app.client_manager.conscience.lock_score(batch)
             except Exception as exc:
