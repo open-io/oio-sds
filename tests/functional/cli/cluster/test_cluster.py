@@ -85,7 +85,7 @@ class ClusterTest(CliTestCase):
         # Check that existent type are accepted even if the service is invalid
         output = self.openio("cluster lock rdir 127.0.0.1:666" + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]["Result"], "locked to 0")
+        self.assertEqual(data[0]["Result"], "locked to get=0 put=0")
 
         opts = self.get_format_opts("json", ["Score"])
         output = self.openio("cluster list --locked" + opts)
@@ -115,7 +115,7 @@ class ClusterTest(CliTestCase):
         # Lock that rawx
         output = self.openio("cluster lock rawx " + nodeid + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]["Result"], "locked to 0")
+        self.assertEqual(data[0]["Result"], "locked to get=0 put=0")
         self._reload_proxy()
         time.sleep(4)
         for attempt in range(attempts):
@@ -149,7 +149,7 @@ class ClusterTest(CliTestCase):
         # Lock that rawx
         output = self.openio("cluster lock rawx " + nodeid + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]["Result"], "locked to 0")
+        self.assertEqual(data[0]["Result"], "locked to get=0 put=0")
         time.sleep(4)
         self._reload_proxy()
         time.sleep(2)
