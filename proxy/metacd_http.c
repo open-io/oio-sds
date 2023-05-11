@@ -419,7 +419,10 @@ _NOLOCK_local_score_update (const struct service_info_s *si0)
 	gchar *k = service_info_key (si0);
 	STRING_STACKIFY(k);
 	struct service_info_s *si = lru_tree_get (srv_registered, k);
-	if (si) si->put_score.value = si0->put_score.value;
+	if (si) {
+		si->put_score.value = si0->put_score.value;
+		si->get_score.value = si0->get_score.value;
+	}
 }
 
 static GBytes *
