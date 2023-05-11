@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 from cliff import lister
 from itertools import chain
+from six import iteritems
 from six.moves.urllib_parse import quote, urlparse
 
 from oio.common import exceptions
@@ -29,7 +30,7 @@ from oio.cli.admin.common import (
 )
 
 
-DUMMY_SERVICE = {"addr": None, "score": 0, "tags": {}}
+DUMMY_SERVICE = {"addr": None, "score": 0, "scores": {}, "tags": {}}
 
 
 class ItemLocateCommand(lister.Lister):
@@ -129,7 +130,7 @@ class ItemLocateCommand(lister.Lister):
             for srv in all_acct.values():
                 status = "up=%s, score=%s" % (
                     srv["tags"].get("tag.up", False),
-                    srv["score"],
+                    self.format_scores(srv),
                 )
                 yield (
                     "account",
@@ -159,7 +160,7 @@ class ItemLocateCommand(lister.Lister):
             if error is None:
                 status = "up=%s, score=%s" % (
                     m0["tags"].get("tag.up", False),
-                    m0["score"],
+                    self.format_scores(m0),
                 )
             else:
                 status = "error"
@@ -173,6 +174,19 @@ class ItemLocateCommand(lister.Lister):
                 error,
             )
 
+    def format_scores(self, srv):
+        score = [f"{srv['score']}"]
+        details = " ".join(
+            [
+                f"{k[6:]}={v}"
+                for k, v in iteritems(srv.get("scores", {}))
+                if k.startswith("score.")
+            ]
+        )
+        if details:
+            score.append(f"({details})")
+        return " ".join(score)
+
     def format_m1(self, cid, m1_srv):
         reqid = self.app.request_id(self.reqid_prefix)
         all_m1 = self.all_services("meta1", reqid=reqid)
@@ -180,7 +194,7 @@ class ItemLocateCommand(lister.Lister):
             m1_descr = all_m1.get(m1["host"], DUMMY_SERVICE)
             status = "up=%s, score=%s" % (
                 m1_descr["tags"].get("tag.up", False),
-                m1_descr["score"],
+                self.format_scores(m1_descr),
             )
             yield (
                 "meta1",
@@ -201,7 +215,7 @@ class ItemLocateCommand(lister.Lister):
             m2_descr = all_m2.get(m2["host"], DUMMY_SERVICE)
             status = "up=%s, score=%s" % (
                 m2_descr["tags"].get("tag.up", False),
-                m2_descr["score"],
+                self.format_scores(m2_descr),
             )
             yield (
                 "meta2",
@@ -223,7 +237,7 @@ class ItemLocateCommand(lister.Lister):
             if error is None:
                 status = "up=%s, score=%s" % (
                     descr["tags"].get("tag.up", False),
-                    descr["score"],
+                    self.format_scores(descr),
                 )
             else:
                 status = "error"
