@@ -2,7 +2,7 @@
 OpenIO SDS cluster
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -96,7 +96,7 @@ conscience_get_services (const char *ns, const char *type, gboolean full,
 		g_strlcpy (si->ns_name, ns, sizeof(si->ns_name));
 		g_strlcpy (si->type, type, sizeof(si->type));
 		si->tags = g_ptr_array_new ();
-		si->score.value = score;
+		si->put_score.value = score;
 		service_tag_set_value_string (service_info_ensure_tag (
 					si->tags, "tag.id"), reg->id);
 		grid_string_to_addrinfo (reg->url, &si->addr);

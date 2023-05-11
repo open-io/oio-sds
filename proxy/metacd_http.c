@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -419,7 +419,7 @@ _NOLOCK_local_score_update (const struct service_info_s *si0)
 	gchar *k = service_info_key (si0);
 	STRING_STACKIFY(k);
 	struct service_info_s *si = lru_tree_get (srv_registered, k);
-	if (si) si->score.value = si0->score.value;
+	if (si) si->put_score.value = si0->put_score.value;
 }
 
 static GBytes *

@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -380,7 +381,7 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 	memcpy(api->ns_name, asn->nsName.buf, MIN(asn->nsName.size, (int)sizeof(api->ns_name)));
 	memcpy(api->type, asn->type.buf, MIN(asn->type.size, (int)sizeof(api->type)));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
-	score_ASN2API(&asn->score, &api->score);
+	score_ASN2API(&asn->score, &api->put_score);
 
 	/*tags */
 	if (!asn->tags)
@@ -452,7 +453,7 @@ service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->type), api->type, strnlen(api->type, sizeof(api->type)));
 	OCTET_STRING_fromBuf(&(asn->nsName), api->ns_name, strnlen(api->ns_name, sizeof(api->ns_name)));
 	addr_info_API2ASN(&(api->addr), &(asn->addr));
-	score_API2ASN(&api->score, &asn->score);
+	score_API2ASN(&api->put_score, &asn->score);
 
 	/*tags */
 	if (api->tags) {

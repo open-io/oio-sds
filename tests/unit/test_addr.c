@@ -2,6 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -54,7 +55,7 @@ test_good_connect_address(void)
 	g_strlcpy(si.ns_name, SRV_NS, sizeof(si.ns_name)); \
 	g_strlcpy(si.type, SRV_TYPE, sizeof(si.type)); \
 	g_assert_true(grid_string_to_addrinfo(URL, &si.addr)); \
-	si.score.value = si.score.timestamp = 1; \
+	si.put_score.value = si.put_score.timestamp = 1; \
 	gchar *id = service_info_key(&si); \
 	g_assert_nonnull(id); \
 	g_assert_cmpstr(id, ==, SRV_NS "|" SRV_TYPE "|" URL); \
