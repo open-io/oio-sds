@@ -223,7 +223,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.wait_for_score(("rawx",))
         all_rawx = self.conscience.all_services("rawx")
         one_rawx = all_rawx[0]
-        one_rawx["score"] = 1
+        one_rawx["scores"]["score.put"] = 1
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
 
@@ -247,7 +247,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.wait_for_score(("rawx",))
         all_rawx = self.conscience.all_services("rawx")
         one_rawx = all_rawx[0]
-        one_rawx["score"] = 1
+        one_rawx["scores"]["score.put"] = 1
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
 
