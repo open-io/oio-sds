@@ -16,13 +16,15 @@
 
 from __future__ import print_function
 
-import ctypes
 import os
 import grp
 import hashlib
 import pwd
 import re
 import sys
+from time import monotonic as monotonic_time
+from urllib.parse import parse_qs, quote as _quote, urlparse
+
 from blake3 import blake3
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
@@ -33,9 +35,6 @@ from random import getrandbits
 from io import RawIOBase
 from itertools import chain, islice
 from codecs import getdecoder, getencoder
-from six import binary_type, text_type
-from six.moves import range
-from six.moves.urllib_parse import parse_qs, quote as _quote, urlparse
 from oio.common.constants import MAX_STRLEN_CHUNKID, MIN_STRLEN_CHUNKID
 from oio.common.easy_value import is_hexa
 
@@ -60,7 +59,7 @@ CUSTOM_HASHER = {
 
 
 def quote(value, safe="/"):
-    if isinstance(value, text_type):
+    if isinstance(value, str):
         (value, _len) = utf8_encoder(value, "replace")
     (valid_utf8_str, _len) = utf8_decoder(value, "replace")
     return _quote(valid_utf8_str.encode("utf-8"), safe)
@@ -72,7 +71,7 @@ def encode(input, codec="utf-8"):
         return {key: encode(value, codec) for key, value in input.items()}
     elif isinstance(input, list):
         return [encode(element, codec) for element in input]
-    elif isinstance(input, text_type):
+    elif isinstance(input, str):
         return input.encode(codec)
     else:
         return input
@@ -271,7 +270,7 @@ def cid_from_name(account, ref):
     """
     hash_ = hashlib.new("sha256")
     for v in [account, "\0", ref]:
-        if isinstance(v, text_type):
+        if isinstance(v, str):
             v = v.encode("utf-8")
         hash_.update(v)
     return hash_.hexdigest().upper()
@@ -333,7 +332,7 @@ class GeneratorIO(RawIOBase):
         Wrap the provided generator so it yields bytes objects
         and not single bytes.
         """
-        if isinstance(gen, binary_type):
+        if isinstance(gen, bytes):
             yield gen
             return
         for part in gen:
@@ -471,44 +470,6 @@ def depaginate(
         if listing:
             for item in listing:
                 yield item_key(item)
-
-
-# See <linux/time.h>
-# Glib2 uses CLOCK_MONOTONIC
-__CLOCK_MONOTONIC = 1
-__CLOCK_MONOTONIC_RAW = 4
-__MONOTONIC_TIME = None
-
-
-def monotonic_time():
-    """Get the monotonic time as float seconds"""
-    global __MONOTONIC_TIME
-    if __MONOTONIC_TIME is None:
-        # Taken from https://stackoverflow.com/a/1205762
-        class timespec(ctypes.Structure):
-            _fields_ = [("tv_sec", ctypes.c_long), ("tv_nsec", ctypes.c_long)]
-
-        try:
-            librt = ctypes.CDLL("librt.so.1", use_errno=True)
-            clock_gettime = librt.clock_gettime
-            clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
-
-            def _monotonic_time():
-                ts = timespec()
-                if clock_gettime(__CLOCK_MONOTONIC, ctypes.pointer(ts)):
-                    errno_ = ctypes.get_errno()
-                    raise OSError(errno_, os.strerror(errno_))
-                return ts.tv_sec + ts.tv_nsec * 1e-9
-
-            __MONOTONIC_TIME = _monotonic_time
-        except OSError as exc:
-            from sys import stderr
-            from time import time
-
-            print("Failed to load clock_gettime(): %s" % exc, file=stderr)
-            __MONOTONIC_TIME = time
-
-    return __MONOTONIC_TIME()
 
 
 def deadline_to_timeout(deadline, check=False):
