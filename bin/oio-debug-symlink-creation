@@ -1,0 +1,118 @@
+import random
+import string
+import argparse
+from oio import ObjectStorageApi
+from oio.content.quality import location_constraint_margin
+from io import BytesIO
+RANDOM_CHARS = string.ascii_letters + string.digits
+def random_str(size, chars=RANDOM_CHARS):
+    return "".join(random.choice(chars) for _ in range(size))
+
+
+def make_arg_parser():
+    descr = """
+        Debug non optimal placement symlink creation.
+    """
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument(
+        "account",
+        help="""
+        Account to use
+        """,
+    )
+    parser.add_argument(
+        "container",
+        help="""
+        Container of the objects
+        """,
+    )
+    parser.add_argument(
+        "nb_objects",
+        help="""
+        Number object to create
+        """,
+    )
+    parser.add_argument(
+        "policy",
+        help="""
+        Policy to use
+        """,
+    )
+    parser.add_argument(
+        "namespace",
+        help="""
+        Namespace to use
+        """,
+    )
+    return parser
+
+
+if __name__ == """__main__""":
+    args = make_arg_parser().parse_args()
+    account = args.account
+    container = args.container
+    nb_objects = int(args.nb_objects)
+    policy = args.policy
+    namespace = args.namespace
+    storage_api = ObjectStorageApi(namespace=namespace)
+    ow_wrongly_tagged_chunks = {}
+    nw_wrongly_tagged_chunks = {}
+    for i in range(nb_objects):
+        object_name = "m_chunk-" + random_str(100)
+        obj_meta, _, chunk_prep = storage_api._object_prepare(
+            account,
+            container,
+            obj_name=object_name,
+            source=BytesIO(b"this is a sample bytearray"),
+            sysmeta={},
+            policy=policy,
+        )
+        for chunk_url in obj_meta["qualities"]:
+            qual = obj_meta["qualities"][chunk_url]
+            # Check with warn_dist (old way)
+            if (
+                qual["final_dist"] <= qual["warn_dist"]
+                or qual["expected_slot"] != qual["final_slot"]
+            ):
+                if int(qual["cur_items"].split(".")[2]) <= int(
+                    qual["fair_location_constraint"].split(".")[2]
+                ):
+                    if object_name not in ow_wrongly_tagged_chunks:
+                        ow_wrongly_tagged_chunks[object_name] = {}
+                    ow_wrongly_tagged_chunks[object_name] = (obj_meta["qualities"],
+                                                             chunk_url)
+                    break
+
+            # Check with fair_location_constraint (new way!)
+            if location_constraint_margin(qual)[0] < 0:
+                if int(qual["cur_items"].split(".")[2]) <= int(
+                    qual["fair_location_constraint"].split(".")[2]
+                ):
+                    if object_name not in nw_wrongly_tagged_chunks:
+                        nw_wrongly_tagged_chunks[object_name] = {}
+                    nw_wrongly_tagged_chunks[object_name] = (obj_meta["qualities"],
+                                                             chunk_url)
+                    break
+
+    for object in ow_wrongly_tagged_chunks:
+        print("Object %s" % object)
+        print("List of wrongly tagged chunks using old way:")
+        quals, chunk_url = ow_wrongly_tagged_chunks[object_name]
+        for c_url, qual in quals.items():
+            if c_url == chunk_url:
+                print("Chunk wrongly tagged %s qualities:" % c_url)
+            else:
+                print("Chunk url %s qualities:" % c_url)
+            print(str(qual))
+
+
+    for object in ow_wrongly_tagged_chunks:
+        print("Object %s\n" % object)
+        print("List of wrongly tagged chunks using old way:")
+        quals, chunk_url = nw_wrongly_tagged_chunks[object_name]
+        for c_url, qual in quals.items():
+            if c_url == chunk_url:
+                print("Chunk wrongly tagged %s qualities:" % c_url)
+            else:
+                print("Chunk url %s qualities:" % c_url)
+            print(str(qual))
