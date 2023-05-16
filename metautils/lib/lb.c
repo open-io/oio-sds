@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -128,12 +129,16 @@ oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
 				srv->location = location_from_addr_info(&ai);
 			}
 
-			if (elements > 2)
-				srv->weight = atoi(id_loc[2]);
-			else
-				srv->weight = 80;
-			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
-					srv->id, srv->location, srv->weight);
+			if (elements > 2) {
+				srv->put_weight = atoi(id_loc[2]);
+				srv->get_weight = atoi(id_loc[2]);
+			} else {
+				srv->put_weight = 80;
+				srv->get_weight = 80;
+			}
+			GRID_TRACE(
+				"Built service id=%s,location=%lu,put_weight=%d,get_weight=%d",
+				srv->id, srv->location, srv->put_weight, srv->get_weight);
 			oio_lb_world__feed_slot(self, main_slot, srv);
 
 			if (elements > 3) {

@@ -38,7 +38,8 @@ typedef guint32 oio_weight_acc_t;
 struct oio_lb_item_s
 {
 	oio_location_t location;
-	oio_weight_t weight;
+	oio_weight_t put_weight;
+	oio_weight_t get_weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
 	gchar tls[STRLEN_ADDRINFO];

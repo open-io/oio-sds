@@ -33,7 +33,7 @@ _srv(int i, struct oio_lb_item_s *srv)
 	oio_location_t loc = i+1; // discard 0
 	memset(srv, 0, sizeof(struct oio_lb_item_s));
 	srv->location = ((loc & ~0xFF) << 16) | (loc & 0xFF);
-	srv->weight = 90 + i;
+	srv->put_weight = 90 + i;
 	sprintf(srv->id, "ID-%04d", i);
 }
 
@@ -136,10 +136,10 @@ _srv2(int i, int svc_per_slot)
 	struct oio_lb_item_s *srv = g_malloc0(sizeof(struct oio_lb_item_s));
 	oio_location_t loc = i;
 	srv->location = loc % svc_per_slot + loc / svc_per_slot * 65536 + 1;
-	srv->weight = 80;
+	srv->put_weight = 80;
 	sprintf(srv->id, "ID-%04d", i);
-	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
-			srv->id, srv->location, srv->weight);
+	GRID_TRACE("Built service id=%s,location=%lu,put_weight=%d",
+			srv->id, srv->location, srv->put_weight);
 	return srv;
 }
 
@@ -258,10 +258,10 @@ _srv3(int i, const char *loc, struct oio_lb_item_s *srv)
 {
 	memset(srv, 0, sizeof(struct oio_lb_item_s));
 	srv->location = location_from_dotted_string(loc);
-	srv->weight = 80;
+	srv->put_weight = 80;
 	sprintf(srv->id, "ID-%04d", i);
-	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
-			srv->id, srv->location, srv->weight);
+	GRID_TRACE("Built service id=%s,location=%lu,put_weight=%d",
+			srv->id, srv->location, srv->put_weight);
 }
 
 static struct oio_lb_world_s *
@@ -407,10 +407,10 @@ test_local_feed_twice(void)
 	struct oio_lb_item_s *srv0 = g_malloc0(sizeof(struct oio_lb_item_s));
 	struct oio_lb_item_s *srv1 = g_malloc0(sizeof(struct oio_lb_item_s));
 	srv0->location = 42 + 65536;
-	srv0->weight = 42;
+	srv0->put_weight = 42;
 	g_sprintf(srv0->id, "ID-%d", 42);
 	srv1->location = 43 + 65536;
-	srv1->weight = 42;
+	srv1->put_weight = 42;
 	g_sprintf(srv1->id, "ID-%d", 43);
 
 	oio_lb_world__create_slot(world, "0");
@@ -445,7 +445,7 @@ test_local_feed (void)
 		struct oio_lb_item_s *srv = g_malloc0(sizeof(struct oio_lb_item_s));
 		for (int i = 0; i < 8; ++i) {
 			srv->location = 65430 - i;
-			srv->weight = 90 + i;
+			srv->put_weight = 90 + i;
 			strcpy (srv->id, "ID-");
 			srv->id[strlen(srv->id)] = '0' + i;
 			oio_lb_world__feed_slot (world, "*", srv);
@@ -473,13 +473,13 @@ test_local_feed_zero_scored(void)
 	struct oio_lb_item_s *srv1 = g_malloc0(sizeof(struct oio_lb_item_s));
 	struct oio_lb_item_s *srv2 = g_malloc0(sizeof(struct oio_lb_item_s));
 	srv0->location = 42 + 65536;
-	srv0->weight = 0;
+	srv0->put_weight = 0;
 	g_sprintf(srv0->id, "ID-%d", 42);
 	srv1->location = 43 + 65536;
-	srv1->weight = 42;
+	srv1->put_weight = 42;
 	g_sprintf(srv1->id, "ID-%d", 43);
 	srv2->location = 44 + 65536;
-	srv2->weight = 0;
+	srv2->put_weight = 0;
 	g_sprintf(srv2->id, "ID-%d", 44);
 
 	oio_lb_world__create_slot(world, "0");
@@ -562,7 +562,7 @@ _test_service_info_to_lb_item(const char *source0, oio_location_t expect)
 	struct oio_lb_item_s *item0 = g_alloca(sizeof(struct oio_lb_item_s));
 	service_info_to_lb_item(svc0, item0);
 
-	g_assert_cmpuint(78u, ==, item0->weight);
+	g_assert_cmpuint(78u, ==, item0->put_weight);
 	g_assert_cmpuint(expect, ==, item0->location);
 
 	service_info_clean(svc0);
