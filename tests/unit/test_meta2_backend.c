@@ -2,7 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -257,7 +257,7 @@ _init_lb(int nb_services)
 	memset(item->addr, 0, sizeof(item->addr));
 	for (int i = 0; i < nb_services; i++) {
 		item->location = 65536 + 6000 + i;
-		item->weight = 50;
+		item->put_weight = 50;
 		g_snprintf(item->id, LIMIT_LENGTH_SRVID, "127.0.0.1:%d", 6000+i);
 		oio_lb_world__feed_slot(lb_world, "*", item);
 	}

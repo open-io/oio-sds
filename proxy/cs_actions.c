@@ -734,7 +734,7 @@ action_conscience_score (struct req_args_s *args)
 		return _reply_notfound_error(args, NEWERROR(CODE_NOT_FOUND, "No such item"));
 
 	GString *out = g_string_sized_new(64);
-	g_string_printf(out, "{\"addr\":\"%s\",\"score\":%d}", item->addr, item->weight);
+	g_string_printf(out, "{\"addr\":\"%s\",\"score\":%d}", item->addr, item->put_weight);
 	g_free(item);
 	return _reply_success_json(args, out);
 }
