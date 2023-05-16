@@ -324,7 +324,8 @@ _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 /** @private */
 struct location_and_score_s {
 	oio_location_t location;
-	oio_weight_t score;
+	oio_weight_t put_score;
+	oio_weight_t get_score;
 };
 
 static struct location_and_score_s
@@ -338,7 +339,8 @@ _score_from_chunk_id (const char *id)
 
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	if (item) {
-		res.score = item->weight;
+		res.put_score = item->put_weight;
+		res.get_score = item->get_weight;
 		res.location = item->location;
 	}
 
@@ -415,12 +417,17 @@ _serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr,
 	/* The caller asks us to patch the services so that the client will
 	 * prefer those locals. We do this with a mangling of the score */
 #ifdef HAVE_EXTRA_DEBUG
-	const oio_weight_t pre_score = srv.score;
+	const oio_weight_t pre_put_score = srv.put_score;
+	const oio_weight_t pre_get_score = srv.get_score;
 #endif
-	srv.score = _patch_score(srv.score, srv.location, location);
+	srv.put_score = _patch_score(srv.put_score, srv.location, location);
+	srv.get_score = _patch_score(srv.get_score, srv.location, location);
 #ifdef HAVE_EXTRA_DEBUG
-	if (pre_score != srv.score) {
-		GRID_TRACE("Score changed for %s: %d -> %d", chunk_id, pre_score, srv.score);
+	if (pre_put_score != srv.put_score) {
+		GRID_TRACE("Put score changed for %s: %d -> %d", chunk_id, pre_put_score, srv.put_score);
+	}
+	if (pre_get_score != srv.get_score) {
+		GRID_TRACE("Get score changed for %s: %d -> %d", chunk_id, pre_get_score, srv.get_score);
 	}
 #endif
 
@@ -436,7 +443,7 @@ _serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr,
 	g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size(chunk));
 	g_string_append_static(gstr, ",\"hash\":\"");
 	metautils_gba_to_hexgstr(gstr, CHUNKS_get_hash(chunk));
-	g_string_append_printf(gstr, "\",\"score\":%d}", srv.score);
+	g_string_append_printf(gstr, "\",\"score\":%d}", srv.get_score);
 }
 
 static void
