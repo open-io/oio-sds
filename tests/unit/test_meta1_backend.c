@@ -1,6 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -90,7 +91,7 @@ _init_lb(int nb_services)
 	struct oio_lb_item_s *item = g_alloca(sizeof(*item) + LIMIT_LENGTH_SRVID);
 	for (int i = 0; i < nb_services; i++) {
 		item->location = 65536 + 6000 + i;
-		item->weight = 50;
+		item->put_weight = 50;
 		g_snprintf(item->id, LIMIT_LENGTH_SRVID, "127.0.0.1:%d", 6000+i);
 		oio_lb_world__feed_slot(lb_world, "*", item);
 	}

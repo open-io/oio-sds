@@ -464,7 +464,7 @@ _item_select(const struct _lb_item_s *src)
 		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
 		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
 		res->item->location = src->location;
-		res->item->weight = src->weight;
+		res->item->put_weight = src->weight;
 	}
 	return res;
 }
@@ -1731,7 +1731,7 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 	if (item0) {
 		item = g_malloc0(sizeof(struct oio_lb_item_s));
 		item->location = item0->location;
-		item->weight = item0->weight;
+		item->put_weight = item0->weight;
 		memcpy(item->addr, item0->addr, sizeof(item->addr));
 		g_strlcpy(item->id, id, sizeof(item->id));
 	}
@@ -1898,15 +1898,15 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 
 		/* Item unknown in the world, so we add it */
 		item0 = _item_make (item->location, item->id, item->addr, item->tls);
-		item0->weight = item->weight;
+		item0->weight = item->put_weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
 		_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
 
 	} else {
 
 		/* Item already known in the world, so update it */
-		if (item0->weight != item->weight) {
-			item0->weight = item->weight;
+		if (item0->weight != item->put_weight) {
+			item0->weight = item->put_weight;
 			slot->flag_dirty_weights = 1;
 		}
 
