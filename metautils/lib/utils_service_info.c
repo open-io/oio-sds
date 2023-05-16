@@ -588,6 +588,10 @@ service_info_encode_prometheus(GString *gstr, const struct service_info_s *si)
 	gchar *labels = _service_info_encode_prometheus_labels(si);
 	g_string_append_printf(gstr, "conscience_score{%s} %"G_GINT32_FORMAT"\n",
 			labels, si->put_score.value);
+	g_string_append_printf(gstr, "conscience_put_score{%s} %"G_GINT32_FORMAT"\n",
+			labels, si->put_score.value);
+	g_string_append_printf(gstr, "conscience_get_score{%s} %"G_GINT32_FORMAT"\n",
+			labels, si->get_score.value);
 
 	if (!si->tags || !si->tags->len) {
 		goto end;
