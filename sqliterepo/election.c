@@ -942,8 +942,8 @@ member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 
 #define DUMP(LVL,TAG,M) do { \
 	if (GRID_##LVL##_ENABLED()) { \
-		gchar d[256]; \
-		member_descr(m, d, sizeof(d)); \
+		gchar d[512]; \
+		member_descr(M, d, sizeof(d)); \
 		GRID_##LVL("%s %s", TAG, d); \
 	} \
 } while (0)
