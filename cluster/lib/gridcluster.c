@@ -91,12 +91,14 @@ conscience_get_services (const char *ns, const char *type, gboolean full,
 
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
 	GSList *l = NULL;
-	void _on_reg (const struct oio_cs_registration_s *reg, int score) {
+	void _on_reg (const struct oio_cs_registration_s *reg, int put_score,
+			int get_score) {
 		struct service_info_s *si = g_malloc0 (sizeof(struct service_info_s));
 		g_strlcpy (si->ns_name, ns, sizeof(si->ns_name));
 		g_strlcpy (si->type, type, sizeof(si->type));
 		si->tags = g_ptr_array_new ();
-		si->put_score.value = score;
+		si->put_score.value = put_score;
+		si->get_score.value = get_score;
 		service_tag_set_value_string (service_info_ensure_tag (
 					si->tags, "tag.id"), reg->id);
 		grid_string_to_addrinfo (reg->url, &si->addr);

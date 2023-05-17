@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,7 @@ License along with this library.
 #include <metautils/lib/metautils_macros.h>
 #include <core/oiostr.h>
 #include <core/oioext.h>
+#include <core/oiolog.h>
 
 #include "internals.h"
 #include "cs_internals.h"
@@ -94,7 +96,7 @@ oio_cs_client__flush_services (struct oio_cs_client_s *self,
 GError *
 oio_cs_client__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *, int))
+		void (*on_reg) (const struct oio_cs_registration_s *, int, int))
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -120,16 +122,18 @@ _clean_registration(struct oio_cs_registration_s *preg)
 
 static GError *
 _unpack_registration (json_object *item,
-		struct oio_cs_registration_s *preg, int *pscore)
+		struct oio_cs_registration_s *preg, int *p_put_score, int *p_get_score)
 {
 	EXTRA_ASSERT (preg != NULL);
-	EXTRA_ASSERT (pscore != NULL);
-	struct json_object *id = NULL, *url = NULL, *score = NULL, *tags = NULL;
+	EXTRA_ASSERT (p_put_score != NULL);
+	EXTRA_ASSERT (p_get_score != NULL);
+	struct json_object *id = NULL, *url = NULL, *score = NULL, *scores, *tags = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"id",    &id,    json_type_string, 0},
-		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_int,    0},
-		{"tags",  &tags,  json_type_object, 0},
+		{"id",     &id,     json_type_string, 0},
+		{"addr",   &url,    json_type_string, 1},
+		{"score",  &score,  json_type_int,    0},
+		{"scores", &scores, json_type_object, 0},
+		{"tags",   &tags,   json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (item, mapping);
@@ -147,8 +151,18 @@ _unpack_registration (json_object *item,
 		g_ptr_array_add(tag_arr, NULL);
 		preg->kv_tags = (const char * const *)g_ptr_array_free(tag_arr, FALSE);
 	}
-	if (score)
-		*pscore = json_object_get_int64 (score);
+	if (score) {
+		*p_put_score = json_object_get_int64 (score);
+		*p_get_score = json_object_get_int64 (score);
+	}
+	if (scores) {
+		json_object *score_put_obj;
+		json_object *score_get_obj;
+		if (json_object_object_get_ex(scores, "score.put", &score_put_obj))
+			*p_put_score = json_object_get_int(score_put_obj);
+		if (json_object_object_get_ex(scores, "score.get", &score_get_obj))
+			*p_get_score = json_object_get_int(score_get_obj);
+	}
 
 	return NULL;
 }
@@ -215,7 +229,8 @@ static GError * _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 
 static GError * _cs_PROXY__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *reg, int score));
+		void (*on_reg) (const struct oio_cs_registration_s *reg, int put_score,
+			int get_score));
 
 static GError * _cs_PROXY__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype));
@@ -361,7 +376,7 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 GError *
 _cs_PROXY__list_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *, int))
+		void (*on_reg) (const struct oio_cs_registration_s *, int, int))
 {
 	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
@@ -391,11 +406,12 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 			if (!json_object_is_type(item, json_type_object))
 				err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected item");
 			else {
-				int score = 0;
+				int put_score = 0;
+				int get_score = 0;
 				struct oio_cs_registration_s reg = {0};
-				err = _unpack_registration (item, &reg, &score);
+				err = _unpack_registration (item, &reg, &put_score, &get_score);
 				if (!err && on_reg)
-					(on_reg)(&reg, score);
+					(on_reg)(&reg, put_score, get_score);
 				_clean_registration(&reg);
 			}
 		}

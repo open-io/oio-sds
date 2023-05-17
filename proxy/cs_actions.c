@@ -360,8 +360,10 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 				si->get_score.value = SCORE_UNSET;
 				continue;
 			case REGOP_LOCK:
-				si->put_score.value = CLAMP(si->put_score.value, SCORE_DOWN, SCORE_MAX);
-				si->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
+				if (si->put_score.value != SCORE_UNSET)
+					si->put_score.value = CLAMP(si->put_score.value, SCORE_DOWN, SCORE_MAX);
+				if (si->get_score.value != SCORE_UNSET)
+					si->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
 				continue;
 			case REGOP_UNLOCK:
 				si->put_score.value = SCORE_UNLOCK;

@@ -1,6 +1,7 @@
 /*
 OpenIO SDS oio-event-benchmark
 Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -88,8 +89,10 @@ static GSList *
 get_account_services(void)
 {
 	GSList *services = NULL;
-	void _on_reg(const struct oio_cs_registration_s *reg, int score) {
-		(void) score;
+	void _on_reg(const struct oio_cs_registration_s *reg, int put_score,
+			int get_score) {
+		(void) put_score;
+		(void) get_score;
 
 		struct oio_cs_registration_s *reg_cpy =
 				g_malloc0(sizeof(struct oio_cs_registration_s));
