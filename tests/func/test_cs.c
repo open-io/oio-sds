@@ -1,6 +1,7 @@
 /*
 OpenIO SDS functional tests
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -94,9 +95,9 @@ test_proxied_deregister (void)
 		reg.kv_tags = tags;
 		err = oio_cs_client__register_service (cs, srvtype, &reg);
 		g_assert_no_error (err);
-		void on_reg (const struct oio_cs_registration_s *preg, int score) {
-			GRID_DEBUG("turn=%d id=%s url=%s score=%d",
-					i, preg->id, preg->url, score);
+		void on_reg (const struct oio_cs_registration_s *preg, int put_score, int get_score) {
+			GRID_DEBUG("turn=%d id=%s url=%s put_score=%d get_score=%d",
+					i, preg->id, preg->url, put_score, get_score);
 		}
 		err = oio_cs_client__list_services (cs, srvtype, FALSE, on_reg);
 		g_assert_no_error (err);
