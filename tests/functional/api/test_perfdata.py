@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -71,7 +71,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertIn("overall", perfdata["proxy"])
 
     def test_object_fetch_perfdata(self):
-        perfdata = dict()
+        perfdata = {}
         container = random_str(8)
         obj = random_str(8)
         odata = obj.encode("utf-8")
@@ -85,7 +85,9 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertIn("resolve", perfdata["proxy"])
         self.assertIn("meta2", perfdata["proxy"])
         self.assertIn("overall", perfdata["proxy"])
-        self.assertNotIn("ttfb", perfdata)
+        # The first block was downloaded to verify
+        # that the object was recoverable
+        self.assertIn("ttfb", perfdata)
         self.assertNotIn("ttlb", perfdata)
 
         buf = b"".join(stream)

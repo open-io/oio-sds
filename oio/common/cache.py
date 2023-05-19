@@ -126,6 +126,7 @@ def get_cached_object_metadata(
     version=None,
     properties=False,
     cache=None,
+    force_master=False,
     **kwargs
 ):
     """
@@ -133,6 +134,10 @@ def get_cached_object_metadata(
     """
     if cache is None or version:
         # Cache isn't compatible with versioning
+        return None, None
+
+    if force_master:
+        # Cache cannot be reliably considered up-to-date
         return None, None
 
     cache_key = _get_object_metadata_cache_key(

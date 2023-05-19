@@ -1547,20 +1547,61 @@ class ObjectStorageApi(object):
             **kwargs
         )
 
-        def _data_error_wrapper(buggy_stream):
-            blocks = 0
+        try:
+            # Verify that the first block is recoverable before responding.
+            first_block = next(stream)
+        except exc.UnrecoverableContent:
+            # Maybe we got this error because the cached object
+            # metadata was stale or maybe the metadata is from an out of sync
+            # meta2 database.
+
+            # Clear the cache (if there is one).
+            del_cached_object_metadata(
+                account=account,
+                reference=container,
+                path=obj,
+                version=version,
+                **kwargs
+            )
+            if kwargs.get("force_master"):
+                # Cache was already ignored.
+                raise
+            # Retry the request, retrieving up-to-date metadata.
+            kwargs["force_master"] = True
+            meta, stream = self._object_fetch_impl(
+                account,
+                container,
+                obj,
+                version=version,
+                ranges=ranges,
+                key_file=key_file,
+                **kwargs
+            )
+        except StopIteration:
+
+            def _empty_generator():
+                return
+                yield  # pylint: disable=unreachable
+
+            stream = _empty_generator()
+        else:
+
+            def _prepend_stream(data, remaining_stream):
+                yield data
+                for remaining_data in remaining_stream:
+                    yield remaining_data
+
+            stream = _prepend_stream(first_block, stream)
+
+        def _decache_if_unrecoverable(buggy_stream):
             try:
-                for dat in buggy_stream:
-                    yield dat
-                    blocks += 1
+                for buggy_data in buggy_stream:
+                    yield buggy_data
             except exc.UnrecoverableContent:
                 # Maybe we got this error because the cached object
                 # metadata was stale.
-                cache = kwargs.get("cache", None)
-                if cache is None:
-                    # No cache configured: nothing more to do.
-                    raise
-                # Clear the cache
+
+                # Clear the cache for the next attempts (if there is one).
                 del_cached_object_metadata(
                     account=account,
                     reference=container,
@@ -1568,28 +1609,12 @@ class ObjectStorageApi(object):
                     version=version,
                     **kwargs
                 )
-                if blocks >= 1:
-                    # The first blocks of data were already sent to the
-                    # caller, we cannot start again.
-                    raise
-                # Retry the request without reading from the cache.
-                new_meta, new_stream = self._object_fetch_impl(
-                    account,
-                    container,
-                    obj,
-                    version=version,
-                    ranges=ranges,
-                    key_file=key_file,
-                    **kwargs
-                )
-                # Hack the metadata dictionary which has already been
-                # returned to the caller.
-                meta.update(new_meta)
-                # Send data from the new stream.
-                for dat in new_stream:
-                    yield dat
+                # This exception does not occur on the first block, it was
+                # checked before. So the first block of data was already sent
+                # to the caller, we cannot start again.
+                raise
 
-        return meta, _data_error_wrapper(stream)
+        return meta, _decache_if_unrecoverable(stream)
 
     @handle_object_not_found
     @patch_kwargs

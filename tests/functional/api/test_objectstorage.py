@@ -3177,10 +3177,23 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertListEqual(object_names, [obj["name"] for obj in obj_gen])
 
 
+class Cache(dict):
+    def __setitem__(self, key, value):
+        super(Cache, self).__setitem__(key, copy.deepcopy(value))
+
+    def __getitem__(self, key):
+        value = super(Cache, self).__getitem__(key)
+        return copy.deepcopy(value)
+
+    def get(self, key, default=None):
+        value = super(Cache, self).get(key, default)
+        return copy.deepcopy(value)
+
+
 class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):
     def setUp(self):
         super(TestContainerStorageApiUsingCache, self).setUp()
-        self.cache = dict()
+        self.cache = Cache()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri, cache=self.cache)
 
         self.container = random_str(8)
@@ -3257,7 +3270,7 @@ class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):
 class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
     def setUp(self):
         super(TestObjectStorageApiUsingCache, self).setUp()
-        self.cache = dict()
+        self.cache = Cache()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri, cache=self.cache)
 
         self.container = random_str(8)
@@ -3406,6 +3419,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(1, len(self.cache))
 
     def test_object_fetch(self):
+        # Fetch the original object to make sure the cache is filled
         expected_obj_meta, stream = self.api.object_fetch(
             self.account, self.container, self.path
         )
@@ -3416,7 +3430,17 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(b"cache", data)
         self.assertEqual(1, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
+        expected_cache = copy.deepcopy(self.cache)
+        cached_meta, cached_chunks = get_cached_object_metadata(
+            account=self.account,
+            reference=self.container,
+            path=self.path,
+            cache=self.cache,
+        )
+        self.assertIsNotNone(cached_meta)
+        self.assertIsNotNone(cached_chunks)
 
+        # Use the metadata in cache to fetch object
         obj_meta, stream = self.api.object_fetch(
             self.account, self.container, self.path
         )
@@ -3427,28 +3451,24 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(b"cache", data)
         self.assertEqual(1, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
+        self.assertDictEqual(expected_cache, self.cache)
 
-        # Make the cache invalid
-        self.api.object_delete(self.account, self.container, self.path, cache=None)
+        # Make the cache invalid by deleting the object
+        reqid = request_id()
+        self.api.object_delete(
+            self.account, self.container, self.path, cache=None, reqid=reqid
+        )
         self.assertEqual(2, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
-        self.wait_for_event("oio-preserved", types=[EventTypes.CONTENT_DELETED])
-
-        obj_meta, stream = self.api.object_fetch(
-            self.account, self.container, self.path
-        )
-        self.assertDictEqual(expected_obj_meta, obj_meta)
-        try:
-            data = b""
-            for chunk in stream:
-                data += chunk
-            self.fail("This should not happen with the deleted chunks")
-        except (exc.UnrecoverableContent, exc.NoSuchObject):
-            # A former version raised UnrecoverableContent, but newer versions
-            # do one retry, and thus see that the object does not exist.
-            pass
-        self.assertEqual(3, self.api.container._direct_request.call_count)
-        self.assertEqual(0, len(self.cache))
+        self.assertDictEqual(expected_cache, self.cache)
+        # Wait until all the original chunks are deleted
+        for _ in range(len(cached_chunks)):
+            self.wait_for_event(
+                "oio-preserved",
+                reqid=reqid,
+                types=(EventTypes.CHUNK_DELETED,),
+                timeout=5.0,
+            )
 
         self.assertRaises(
             exc.NoSuchObject,
@@ -3457,12 +3477,22 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.container,
             self.path,
         )
-        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
     def test_object_fetch_dirty_cache(self):
         # Fetch the original object to make sure the cache is filled.
-        self.api.object_fetch(self.account, self.container, self.path)
+        expected_obj_meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path
+        )
+        self.assertIsNotNone(expected_obj_meta)
+        data = b""
+        for chunk in stream:
+            data += chunk
+        self.assertEqual(b"cache", data)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+        expected_cache = copy.deepcopy(self.cache)
         cached_meta, cached_chunks = get_cached_object_metadata(
             account=self.account,
             reference=self.container,
@@ -3474,23 +3504,53 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
 
         # Make the cache invalid by overwriting the object without
         # clearing the cache.
-        self.api.object_create(
+        reqid = request_id()
+        _, _, _, expected_obj_meta = self.api.object_create_ext(
             self.account,
             self.container,
             obj_name=self.path,
             data="overwritten",
             cache=None,
+            reqid=reqid,
         )
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+        self.assertDictEqual(expected_cache, self.cache)
         # Wait until all the original chunks are deleted
         for _ in range(len(cached_chunks)):
             self.wait_for_event(
-                "oio-preserved", types=(EventTypes.CHUNK_DELETED,), timeout=5.0
+                "oio-preserved",
+                reqid=reqid,
+                types=(EventTypes.CHUNK_DELETED,),
+                timeout=5.0,
             )
+
         # Read the object. An error will be raised internally, but the latest
         # object should be fetched.
-        meta, stream = self.api.object_fetch(self.account, self.container, self.path)
+        expected_obj_meta2, stream = self.api.object_fetch(
+            self.account, self.container, self.path
+        )
+        self.assertNotEqual(expected_obj_meta, expected_obj_meta2)
+        self.assertEqual(4, self.api.container._direct_request.call_count)
         data = b""
         for chunk in stream:
             data += chunk
         self.assertEqual(b"overwritten", data)
-        self.assertEqual(len("overwritten"), int(meta["size"]))
+        self.assertNotEqual(expected_obj_meta, expected_obj_meta2)
+        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+        self.assertNotEqual(expected_cache, self.cache)
+        expected_cache = copy.deepcopy(self.cache)
+
+        # Use the metadata in cache to fetch object
+        obj_meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path
+        )
+        self.assertDictEqual(expected_obj_meta2, obj_meta)
+        data = b""
+        for chunk in stream:
+            data += chunk
+        self.assertEqual(b"overwritten", data)
+        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+        self.assertDictEqual(expected_cache, self.cache)
