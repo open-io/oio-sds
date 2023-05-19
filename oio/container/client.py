@@ -118,7 +118,7 @@ class ContainerClient(ProxyClient):
     Intermediate level class to manage containers.
     """
 
-    def __init__(self, conf, refresh_rawx_scores_delay=30.0, **kwargs):
+    def __init__(self, conf, refresh_rawx_scores_delay=2.0, **kwargs):
         super(ContainerClient, self).__init__(
             conf, request_prefix="/container", **kwargs
         )
@@ -128,7 +128,7 @@ class ContainerClient(ProxyClient):
         self.conscience_client = ConscienceClient(
             self.conf, pool_manager=self.pool_manager, **kwargs
         )
-        self.rawx_scores = dict()
+        self.rawx_scores = {}
         self._refresh_rawx_scores_delay = refresh_rawx_scores_delay
         self._last_refresh_rawx_scores = 0.0
 
@@ -177,9 +177,32 @@ class ContainerClient(ProxyClient):
             rawx_scores[rawx_service["id"]] = rawx_service["score"]
         return rawx_scores
 
+    def __refresh_rawx_scores(self, is_async=False):
+        try:
+            self.rawx_scores = self._get_rawx_scores()
+        except OioNetworkException as exc:
+            self.logger.warn("Failed to refresh rawx service scores: %s", exc)
+            if is_async:
+                # The refresh time has already updated,
+                # force refresh scores next time
+                self._last_refresh_rawx_scores = 0.0
+        except Exception:
+            self.logger.exception("Failed to refresh rawx service scores")
+            if is_async:
+                # The refresh time has already updated,
+                # force refresh scores next time
+                self._last_refresh_rawx_scores = 0.0
+
     def _refresh_rawx_scores(self, now=None, **kwargs):
         """Refresh rawx service scores."""
-        self.rawx_scores = self._get_rawx_scores()
+        if not self.rawx_scores and self._last_refresh_rawx_scores == 0.0:
+            # It's the first request, wait the response
+            self.__refresh_rawx_scores()
+        else:
+            # Refresh asynchronously so as not to slow down the current request
+            eventlet.spawn_n(self.__refresh_rawx_scores, is_async=True)
+        # Always update the refresh time to avoid multiple requests
+        # while waiting for the response
         if not now:
             now = time.time()
         self._last_refresh_rawx_scores = now
@@ -189,12 +212,7 @@ class ContainerClient(ProxyClient):
         if self._refresh_rawx_scores_delay >= 0.0 or not self.rawx_scores:
             now = time.time()
             if now - self._last_refresh_rawx_scores > self._refresh_rawx_scores_delay:
-                try:
-                    self._refresh_rawx_scores(now, **kwargs)
-                except OioNetworkException as exc:
-                    self.logger.warn("Failed to refresh rawx service scores: %s", exc)
-                except Exception:
-                    self.logger.exception("Failed to refresh rawx service scores")
+                self._refresh_rawx_scores(now, **kwargs)
 
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
@@ -892,8 +910,7 @@ class ContainerClient(ProxyClient):
             **kwargs
         )
         if content_meta is not None and chunks is not None:
-            # Refresh asynchronously so as not to slow down the current request
-            eventlet.spawn_n(self._maybe_refresh_rawx_scores, **kwargs)
+            self._maybe_refresh_rawx_scores(**kwargs)
             for chunk in chunks:
                 chunk["score"] = self.rawx_scores.get(chunk["url"].split("/")[2], 0)
             return content_meta, chunks
