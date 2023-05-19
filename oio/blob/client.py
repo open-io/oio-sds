@@ -370,3 +370,39 @@ class BlobClient(object):
                 connect=connection_timeout, read=read_timeout
             )
         return self.http_pool.request(method, self.resolve_url(url), **kwargs)
+
+    def tag_misplaced_chunk(self, urls, logger=None):
+        """
+        Tag misplaced chunk by adding a header to the chunk
+
+        :param url: url of the misplaced chunk
+        :type url: str
+        :param logger: logger of the tool calling
+        :type logger: Logger
+        """
+        created_symlinks = 0
+        failed_post = 0
+        if not logger:
+            logger = self.logger
+        for url in urls:
+            try:
+                headers = {CHUNK_HEADERS["non_optimal_placement"]: True}
+                self.chunk_post(url=url, headers=headers)
+                created_symlinks += 1
+            except exc.Conflict as err:
+                # Misplaced tag already on the chunk
+                # and the symlink already created
+                logger.debug(
+                    "Non optimal placement header already added on the chunk %s: %s",
+                    url,
+                    str(err),
+                )
+            except Exception as err:
+                logger.debug(
+                    "Add non optimal placement header"
+                    "to the chunk %s failed due to: %s",
+                    url,
+                    str(err),
+                )
+                failed_post += 1
+        return created_symlinks, failed_post

@@ -14,18 +14,21 @@
 # License along with this library.
 from os import unlink, rename
 from os.path import join
-import re
 import time
 from urllib.parse import urlparse
 from collections import Counter
-from oio.common.constants import CHUNK_HEADERS
 from oio.common.easy_value import int_value
 from oio.common.green import get_watchdog
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.quality import NB_LOCATION_LEVELS, format_location, get_current_items
 from oio.crawler.common.base import Filter
-from oio.common.utils import get_nb_chunks, is_chunk_id_valid, request_id
+from oio.common.utils import (
+    get_nb_chunks,
+    is_chunk_id_valid,
+    request_id,
+    service_pool_to_dict,
+)
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     PlacementImproverCrawlerError,
@@ -77,7 +80,7 @@ class Changelocation(Filter):
         self.api = self.app_env["api"]
         self.conscience_client = self.api.conscience
         watchdog = get_watchdog(called_from_main_application=True)
-        # Getting Content object
+        # Get content object
         self.content_factory = ContentFactory(
             self.conf, logger=self.logger, watchdog=watchdog
         )
@@ -95,7 +98,7 @@ class Changelocation(Filter):
         :type reqid: str
         :raises exc.OrphanChunk: raised in case a orphan chunk is found
         """
-        # Getting all the chunks location of the object
+        # Get all object chunks location
         _, chunks = self.api.container.content_locate(
             content=chunk.meta["content_id"],
             cid=chunk.meta["container_id"],
@@ -106,7 +109,7 @@ class Changelocation(Filter):
         chunkshelper = ChunksHelper(chunks).filter(
             id=chunk.chunk_id, host=self.volume_id
         )
-        # Checking if the chunk object exists
+        # Check if object chunks exist
         if len(chunkshelper.chunks) == 0:
             raise exc.OrphanChunk("Chunk not found in content")
         return chunks
@@ -133,7 +136,7 @@ class Changelocation(Filter):
             cur_items=cur_items,
         )
         self.logger.debug("Chunk %s moved to %s", chunk_id, rawx_dict["url"])
-        # Incrementing the counter of chunks relocated
+        # Increment the counter of chunks relocated
         self.relocated_chunks += 1
 
     def _get_current_items(self, chunk, chunks, reqid):
@@ -170,31 +173,27 @@ class Changelocation(Filter):
                 if service_pool not in cluster_info["service_pools"]:
                     continue
                 pool = cluster_info["service_pools"][service_pool]
-                if "fair_location_constraint" not in pool:
+                pool_dict = service_pool_to_dict(pool)
+                if "fair_location_constraint" not in pool_dict:
                     continue
                 try:
                     # pool = 9,rawx;fair_location_constraint=9.9.2.1;
                     # strict_location_constraint=9.9.2.1;
                     # min_dist=1;warn_dist=0
-                    constraint_service_pool = (
-                        re.findall(
-                            r"fair_location_constraint=\d+\.\d+\.\d+\.\d+",
-                            pool,
-                        )[0]
-                        .split("=")[1]
-                        .split(".")
-                    )
+                    service_pool_constraints = pool_dict[
+                        "fair_location_constraint"
+                    ].split(".")
                     data_security = cluster_info["data_security"][data_security]
                     # Fetch expected chunks for a policy with a specific data security
                     expected_nb_chunks = get_nb_chunks(data_security)
-                    storage_constraints = list(map(int, constraint_service_pool))
+                    storage_constraints = [int(x) for x in service_pool_constraints]
                     self.policy_data[policy] = (
                         expected_nb_chunks,
                         data_security,
                         storage_constraints,
                     )
                 except Exception:
-                    self.logger.exception("Failed to fetch data %s policy", policy)
+                    self.logger.exception("Failed to fetch %s policy data", policy)
                     continue
             self.last_services_update = now
         return get_current_items(
@@ -215,13 +214,12 @@ class Changelocation(Filter):
         :return: list of misplaced chunks ids
         :rtype: list
         """
-        misplaced_chunks_ids = list()
+        misplaced_chunks_ids = []
         counters = {}
         try:
             # Constraint defined for all the chunks object
             fair_location_constraint = self.policy_data[policy][2]
         except KeyError:
-            #
             self.logger.warning(
                 "Policy %s has no fair location constraint defined, \
                     cannot get misplaced chunks for the content %s",
@@ -232,7 +230,7 @@ class Changelocation(Filter):
         for chunk_data in chunks:
             rawx_srv_id = urlparse(chunk_data["url"]).netloc
             chunk_id = chunk_data["url"].split("/", 3)[3]
-            # Location of the rawx of the chunk selected
+            # Location of the chunk selected rawx
             location = format_location(self.rawx_srv_locations[rawx_srv_id])
             for depth in range(NB_LOCATION_LEVELS):
                 # Create a counter for each depth
@@ -243,34 +241,6 @@ class Changelocation(Filter):
                     misplaced_chunks_ids.append(chunk_id)
         return misplaced_chunks_ids
 
-    def _tag_misplaced_chunk(self, url, headers):
-        """
-        Tag misplaced chunk by adding a header to the chunk
-
-        :param url: url of the misplaced chunk
-        :type url: str
-        :param headers: headers to add to the chunk
-        :type headers: dict
-        """
-        try:
-            self.api.blob_client.chunk_post(url=url, headers=headers)
-            self.created_symlinks += 1
-        except exc.Conflict as err:
-            # Misplaced tag already on the chunk
-            # and the symlink already created
-            self.logger.debug(
-                "Header misplaced chunk already added on %s: %s",
-                url,
-                str(err),
-            )
-        except Exception as err:
-            self.logger.debug(
-                "Tag chunk %s as misplaced failed due to: %s",
-                url,
-                str(err),
-            )
-            self.failed_post += 1
-
     def _post_process(self, chunkwrapper):
         """
         Launch post process event: delete symbolic link
@@ -279,10 +249,10 @@ class Changelocation(Filter):
         :type chunkwrapper: ChunkWrapper
         """
         try:
-            # unlinking the symbolic link
+            # Unlink the symbolic link
             symb_link_path = chunkwrapper.chunk_symlink_path
             unlink(symb_link_path)
-            # Incrementing the counter of process which succeeded
+            # Increment the counter of process which succeeded
             self.successes += 1
         except Exception as chunk_exc:
             self.logger.warning(
@@ -301,7 +271,7 @@ class Changelocation(Filter):
         :type cb: function
         """
         chunkwrapper = ChunkWrapper(env)
-        # Getting a request id for chunk placement improvement
+        # Get a request id for chunk placement improvement
         reqid = request_id("placementImprover-")
         chunk_id = chunkwrapper.chunk_id
         try:
@@ -358,7 +328,7 @@ class Changelocation(Filter):
             )
             return resp(env, cb)
         try:
-            # Getting Content object
+            # Get content object
             content = self.content_factory.get_by_path_and_version(
                 container_id=chunkwrapper.meta["container_id"],
                 content_id=chunkwrapper.meta["content_id"],
@@ -382,13 +352,23 @@ class Changelocation(Filter):
                         "Chunk %s is well placed, its symlink has been deleted",
                         chunk_id,
                     )
-                headers = {CHUNK_HEADERS["non_optimal_placement"]: True}
-                chunks_url = {
-                    chunk["url"].split("/", 3)[3]: chunk["url"] for chunk in chunks
-                }
-                for c_id in misplaced_chunks_ids:
-                    # Tag the chunks as misplaced
-                    self._tag_misplaced_chunk(chunks_url[c_id], headers)
+                # As we have encountered in some cases misplaced chunks without
+                # non optimal placement header, for each misplaced chunk we do
+                # a post to add non optimal misplacement header.
+                misplaced_chunk_urls = [
+                    chunk["url"]
+                    for chunk in chunks
+                    if chunk["url"].split("/", 3)[3] in misplaced_chunks_ids
+                ]
+
+                (
+                    created_symlinks,
+                    failed_post,
+                ) = self.api.blob_client.tag_misplaced_chunk(
+                    misplaced_chunk_urls, self.logger
+                )
+                self.created_symlinks += created_symlinks
+                self.failed_post += failed_post
                 return self.app(env, cb)
             self.errors += 1
             resp = PlacementImproverCrawlerError(
@@ -398,8 +378,8 @@ class Changelocation(Filter):
                 ),
             )
             return resp(env, cb)
-        # Deleting the symbolic link refering the chunk as misplaced
-        # This action is called only when the chunks has been moved
+        # Delete the symbolic link refering the chunk as misplaced
+        # This action is called only when the chunk has been moved
         self._post_process(chunkwrapper)
         return self.app(env, cb)
 

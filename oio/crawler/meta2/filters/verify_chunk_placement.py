@@ -13,20 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import re
 import sqlite3
 import time
 from collections import Counter
 from urllib.parse import urlparse
 from oio.blob.operator import ChunkOperator
-from oio.common.constants import CHUNK_HEADERS
 from oio.common.easy_value import int_value
-from oio.common.exceptions import Conflict, NoSuchObject, NotFound
+from oio.common.exceptions import NoSuchObject, NotFound
 from oio.common.green import ratelimit
 from oio.common.utils import (
     cid_from_name,
     get_nb_chunks,
     request_id,
+    service_pool_to_dict,
 )
 from oio.content.quality import NB_LOCATION_LEVELS, format_location
 from oio.crawler.common.base import Filter
@@ -47,8 +46,8 @@ class VerifyChunkPlacement(Filter):
     def init(self):
         self.successes = 0
         self.errors = 0
-        self.symlinks_created = 0
-        self.chunk_rebuilt = 0
+        self.created_symlinks = 0
+        self.rebuilt_chunks = 0
         self.failed_post = 0
         self.failed_rebuild = 0
         # Counter for slaves database
@@ -113,20 +112,16 @@ class VerifyChunkPlacement(Filter):
                 if service_pool not in cluster_info["service_pools"]:
                     continue
                 pool = cluster_info["service_pools"][service_pool]
-                if "fair_location_constraint" not in pool:
+                pool_dict = service_pool_to_dict(pool)
+                if "fair_location_constraint" not in pool_dict:
                     continue
                 try:
                     # pool = 9,rawx;fair_location_constraint=9.9.2.1;
                     # strict_location_constraint=9.9.2.1;
                     # min_dist=1;warn_dist=0
-                    constraint_service_pool = (
-                        re.findall(
-                            r"fair_location_constraint=\d+\.\d+\.\d+\.\d+",
-                            pool,
-                        )[0]
-                        .split("=")[1]
-                        .split(".")
-                    )
+                    constraint_service_pool = pool_dict[
+                        "fair_location_constraint"
+                    ].split(".")
                     data_security = cluster_info["data_security"][data_security]
                     # Fetch expected chunks for a policy with a specific data security
                     expected_nb_chunks = get_nb_chunks(data_security)
@@ -285,7 +280,7 @@ class VerifyChunkPlacement(Filter):
     def _get_misplaced_chunks(self, obj_data, account, container):
         """
         Return the misplaced chunks positions among the list of chunks passed in
-        the parameters. Plus if a chunk needs to be recovered a restore
+        the parameters. In addition to that if a chunk needs to be recovered a restore
         request will be sent.
 
         :param obj_data: object chunks data
@@ -359,7 +354,7 @@ class VerifyChunkPlacement(Filter):
                     content_id,
                     position,
                 )
-                self.chunk_rebuilt += 1
+                self.rebuilt_chunks += 1
             except Exception:
                 self.logger.exception(
                     "Rebuild chunk of object %s at position %s has failed",
@@ -408,37 +403,7 @@ class VerifyChunkPlacement(Filter):
                     raise
 
             url = chunk_urls[pos]
-            # Create the symbolic link of the chunk
-            headers = {CHUNK_HEADERS["non_optimal_placement"]: True}
-            self._tag_misplaced_chunk(url, headers)
-
-    def _tag_misplaced_chunk(self, url, headers):
-        """
-        Tag misplaced chunk by adding a header to the chunk
-
-        :param url: url of the misplaced chunk
-        :type url: str
-        :param headers: headers to add to the chunk
-        :type headers: dict
-        """
-        try:
-            self.api.blob_client.chunk_post(url=url, headers=headers)
-            self.symlinks_created += 1
-        except Conflict as err:
-            # Misplaced tag already on the chunk
-            # and the symlink already created
-            self.logger.debug(
-                "Header misplaced chunk already added on %s: %s",
-                url,
-                str(err),
-            )
-        except Exception as err:
-            self.logger.debug(
-                "Tag chunk %s as misplaced failed due to: %s",
-                url,
-                str(err),
-            )
-            self.failed_post += 1
+            yield url
 
     def _verify_chunks_from_meta2_db(self, account, container, chunks_data):
         """
@@ -475,8 +440,11 @@ class VerifyChunkPlacement(Filter):
                 obj_chunks = chunks[:-1]
                 chunks = chunks[-1:]
                 try:
-                    self._find_and_tag_misplaced_chunks(
+                    misplaced_chunk_urls = self._find_and_tag_misplaced_chunks(
                         chunks=obj_chunks, account=account, container=container
+                    )
+                    self.api.blob_client.tag_misplaced_chunk(
+                        misplaced_chunk_urls, self.logger
                     )
                 except Exception:
                     self.logger.exception(
@@ -490,9 +458,14 @@ class VerifyChunkPlacement(Filter):
             pass
         finally:  # The last object will be handled by the call below
             obj_chunks = chunks
-            self._find_and_tag_misplaced_chunks(
+            misplaced_chunk_urls = self._find_and_tag_misplaced_chunks(
                 chunks=obj_chunks, account=account, container=container
             )
+            created_symlinks, failed_post = self.api.blob_client.tag_misplaced_chunk(
+                misplaced_chunk_urls, self.logger
+            )
+            self.created_symlinks += created_symlinks
+            self.failed_post += failed_post
 
     def _get_all_chunks(self, meta2db_cur):
         """
@@ -659,19 +632,19 @@ class VerifyChunkPlacement(Filter):
         return {
             "successes": self.successes,
             "errors": self.errors,
-            "symlink_created": self.symlinks_created,
+            "symlink_created": self.created_symlinks,
             "slave_volume_skipped": self.slave_volume_skipped,
-            "chunk_rebuilt": self.chunk_rebuilt,
+            "rebuilt_chunks": self.rebuilt_chunks,
             "failed_rebuild": self.failed_rebuild,
         }
 
     def _reset_filter_stats(self):
         self.successes = 0
         self.errors = 0
-        self.symlinks_created = 0
+        self.created_symlinks = 0
         self.failed_post = 0
         self.slave_volume_skipped = 0
-        self.chunk_rebuilt = 0
+        self.rebuilt_chunks = 0
         self.failed_rebuild = 0
 
 

@@ -384,6 +384,31 @@ def get_nb_chunks(data_security):
         return k + m
 
 
+def service_pool_to_dict(service_pool):
+    """
+    Convert service pool string to dict
+
+    :param service_pool: service pool to convert
+    :type service_pool: str
+    """
+    res_dict = {}
+    pool = service_pool.split(";")
+    res_dict["service_distribution"] = []
+    for p in pool:
+        # 1,rawx-even,rawx
+        # 1,account
+        if "," in p:
+            res_dict["service_distribution"].append(p.split(","))
+        else:
+            # fair_location_constraint=9.9.2.1
+            # min_dist=1
+            # warn_dist=0
+            key, value = p.split("=")
+            res_dict[key] = value
+
+    return res_dict
+
+
 def group_chunk_errors(chunk_err_iter):
     """
     Group errors in a dictionary of lists.

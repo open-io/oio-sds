@@ -173,9 +173,9 @@ class TestVerifyChunkPlacement(BaseTestCase):
         self.assertEqual(diff, link_created.count(True))
         if is_already_created:
             # symlink already created at object creation
-            self.assertEqual(verifychunkplacement.symlinks_created, 0)
+            self.assertEqual(verifychunkplacement.created_symlinks, 0)
         else:
-            self.assertEqual(verifychunkplacement.symlinks_created, diff)
+            self.assertEqual(verifychunkplacement.created_symlinks, diff)
 
     def _add_objects(self, cname, number_of_obj, pattern_name="content", policy=None):
         created = []
@@ -568,8 +568,8 @@ class TestVerifyChunkPlacement(BaseTestCase):
             object_name,
             obj_meta["version"],
         )
-        if verifychunkplacement.chunk_rebuilt > 0:
-            self.assertEqual(verifychunkplacement.chunk_rebuilt, 1)
+        if verifychunkplacement.rebuilt_chunks > 0:
+            self.assertEqual(verifychunkplacement.rebuilt_chunks, 1)
             self.assertEqual(len(chunks_loc), len(chunks))
         else:
             # Sometime we get a service busy exception
