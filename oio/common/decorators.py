@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +22,6 @@ from oio.common.exceptions import (
     NoSuchAccount,
     NoSuchObject,
     NoSuchContainer,
-    reraise,
 )
 
 
@@ -84,8 +84,7 @@ def handle_account_not_found(fnc):
         try:
             return fnc(self, account, *args, **kwargs)
         except NotFound as err:
-            err.message = "Account '%s' does not exist." % account
-            reraise(NoSuchAccount, err)
+            raise NoSuchAccount(f"Account '{account}' does not exist.") from err
 
     return _wrapped
 
@@ -96,8 +95,7 @@ def handle_container_not_found(fnc):
         try:
             return fnc(self, account, container, *args, **kwargs)
         except NotFound as err:
-            err.message = "Container '%s' does not exist." % container
-            reraise(NoSuchContainer, err)
+            raise NoSuchContainer(f"Container '{container}' does not exist.") from err
 
     return _wrapped
 
@@ -116,11 +114,11 @@ def handle_object_not_found(fnc):
             return fnc(self, account, container, obj, *args, **kwargs)
         except NotFound as err:
             if err.status in (406, 431):
-                err.message = "Container '%s' does not exist." % container
-                reraise(NoSuchContainer, err)
+                raise NoSuchContainer(
+                    f"Container '{container}' does not exist."
+                ) from err
             else:
-                err.message = "Object '%s' does not exist." % obj
-                reraise(NoSuchObject, err)
+                raise NoSuchObject(f"Object '{obj}' does not exist.") from err
 
     return _wrapped
 
