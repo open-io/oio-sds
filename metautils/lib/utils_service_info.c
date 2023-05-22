@@ -675,8 +675,12 @@ service_info_load_json_object(struct json_object *obj,
 		json_object *score_get_obj;
 		if (json_object_object_get_ex(scores, "score.put", &score_put_obj))
 			si->put_score.value = json_object_get_int(score_put_obj);
+		else
+			si->put_score.value = SCORE_UNSET;
 		if (json_object_object_get_ex(scores, "score.get", &score_get_obj))
 			si->get_score.value = json_object_get_int(score_get_obj);
+		else
+			si->get_score.value = SCORE_UNSET;
 	}
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
