@@ -219,7 +219,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertError(resp, 503, 481)
 
     def test_service_lock_tag(self):
-        """Ensure a 'tag.lock' tag is set on service whose score is locked."""
+        """Ensure a 'tag.putlock' tag is set on service whose score is locked."""
         self.wait_for_score(("rawx",))
         all_rawx = self.conscience.all_services("rawx")
         one_rawx = all_rawx[0]
@@ -229,15 +229,15 @@ class TestConscienceFunctional(BaseTestCase):
 
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
-        self.assertIn("tag.lock", my_rawx["tags"])
-        self.assertTrue(my_rawx["tags"]["tag.lock"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertTrue(my_rawx["tags"]["tag.putlock"])
         self.assertEqual(1, my_rawx["score"])
 
         self.conscience.unlock_score(one_rawx)
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
-        self.assertIn("tag.lock", my_rawx["tags"])
-        self.assertFalse(my_rawx["tags"]["tag.lock"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.putlock"])
         self.assertGreaterEqual(my_rawx["score"], 1)
 
     def test_lock_survives_conscience_restart(self):
@@ -263,8 +263,8 @@ class TestConscienceFunctional(BaseTestCase):
         # Make several attempts in case conscience is slow to start.
         all_rawx = self.conscience.all_services("rawx", request_attempts=4)
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
-        self.assertIn("tag.lock", my_rawx["tags"])
-        self.assertTrue(my_rawx["tags"]["tag.lock"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertTrue(my_rawx["tags"]["tag.putlock"])
         self.assertEqual(1, my_rawx["score"])
         self.conscience.unlock_score(one_rawx)
 
@@ -347,7 +347,7 @@ class TestConscienceFunctional(BaseTestCase):
                     self._reload_proxy()
                     expected_services = self._list_srvs("rawx")
                     for service in expected_services:
-                        if not service["tags"].get("tag.lock"):
+                        if not service["tags"].get("tag.putlock"):
                             break
                     else:
                         continue
