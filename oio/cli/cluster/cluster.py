@@ -46,6 +46,15 @@ def _detailed_score(value):
     return (name, score)
 
 
+def _format_detailed_locks(srv):
+    return " ".join(
+        [
+            f"put={srv['tags'].get('tag.putlock', {})}",
+            f"get={srv['tags'].get('tag.getlock', {})}",
+        ]
+    )
+
+
 def _batches_boundaries(srclen, size):
     for start in range(0, srclen, size):
         end = min(srclen, start + size)
@@ -123,6 +132,7 @@ class ClusterList(Lister):
                 continue
             for srv in data:
                 tags = srv["tags"]
+                locks = _format_detailed_locks(srv)
                 locked = boolean_value(tags.pop("tag.putlock", False), False)
                 if parsed_args.locked and not locked:
                     # User asked for only locked services, skip...
@@ -149,8 +159,8 @@ class ClusterList(Lister):
                     score,
                     scores,
                     locked,
+                    locks,
                 ]
-                print(values)
                 if parsed_args.stats:
                     stats = [
                         "%s=%s" % (k, v)
@@ -180,6 +190,7 @@ class ClusterList(Lister):
             "Score",
             "Scores",
             "Locked",
+            "Locks",
         ]
         if parsed_args.stats:
             columns.append("Stats")
@@ -223,6 +234,7 @@ class ClusterLocalList(Lister):
             score = srv["score"]
             scores = _format_detailed_scores(srv)
             locked = boolean_value(tags.get("tag.putlock"), False)
+            locks = _format_detailed_locks(srv)
             srv_type = srv["type"]
             if not srv_types or srv_type in srv_types:
                 results.append(
@@ -237,6 +249,7 @@ class ClusterLocalList(Lister):
                         score,
                         scores,
                         locked,
+                        locks,
                     )
                 )
         columns = (
@@ -250,6 +263,7 @@ class ClusterLocalList(Lister):
             "Score",
             "Scores",
             "Locked",
+            "Locks",
         )
         result_gen = (r for r in results)
         return columns, result_gen
@@ -566,10 +580,12 @@ class ClusterLock(ClusterUnlock):
         srv_definitions = []
         # Default scores
         scores = {}
-        for score in DETAILED_SCORES:
-            scores[f"score.{score}"] = parsed_args.score
-        for k, v in parsed_args.detail_score:
-            scores[f"score.{k}"] = v
+        if parsed_args.detail_score:
+            for k, v in parsed_args.detail_score:
+                scores[f"score.{k}"] = v
+        else:
+            for score in DETAILED_SCORES:
+                scores[f"score.{score}"] = parsed_args.score
 
         for srv_id in parsed_args.srv_ids:
             srv_definitions.append(
