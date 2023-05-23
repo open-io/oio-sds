@@ -95,6 +95,28 @@ class ClusterTest(CliTestCase):
         for srv in data:
             self.assertEquals(0, srv["Score"])
 
+    def test_detailed_lock_unlock(self):
+        opts = self.get_format_opts("json")
+        # Check lock of get score only
+        output = self.openio("cluster lock rdir 127.0.0.1:666 -S get=0" + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]["Result"], "locked to get=0")
+        # Lock of put score
+        output = self.openio("cluster lock rdir 127.0.0.1:666 -S put=0" + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]["Result"], "locked to put=0")
+        # Check unlock of get score only
+        output = self.openio("cluster unlock rdir 127.0.0.1:666 -U get" + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]["Result"], "unlocked")
+        time.sleep(1.0)
+        # Ensure the proxy reloads its LB pool
+        self._flush_proxy()
+        self._reload_proxy()
+        output = self.openio("cluster list --locked" + opts)
+        data = json.loads(output)
+        self.assertEqual(data[0]["Locks"], "put=True get=False")
+
     def test_cluster_wait(self):
         if self.is_running_on_public_ci():
             self.skipTest("Too long to run on public CI")
