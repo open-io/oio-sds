@@ -354,6 +354,12 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 
 		si->put_score.timestamp = now;
 		si->get_score.timestamp = now;
+
+		struct service_tag_s *tag_put_lock = service_info_get_tag(
+				si->tags, NAME_TAGNAME_PUT_LOCK);
+		struct service_tag_s *tag_get_lock = service_info_get_tag(
+				si->tags, NAME_TAGNAME_GET_LOCK);
+
 		switch (op) {
 			case REGOP_PUSH:
 				si->put_score.value = SCORE_UNSET;
@@ -366,8 +372,21 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 					si->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
 				continue;
 			case REGOP_UNLOCK:
-				si->put_score.value = SCORE_UNLOCK;
-				si->get_score.value = SCORE_UNLOCK;
+				if (tag_put_lock) {
+					si->put_score.value = SCORE_UNLOCK;
+				} else {
+					si->put_score.value = SCORE_UNSET;
+				}
+				if (tag_get_lock) {
+					si->get_score.value = SCORE_UNLOCK;
+				} else {
+					si->get_score.value = SCORE_UNSET;
+				}
+
+				if (!tag_put_lock && !tag_get_lock) {
+					si->put_score.value = SCORE_UNLOCK;
+					si->get_score.value = SCORE_UNLOCK;
+				}
 				continue;
 		}
 	}
