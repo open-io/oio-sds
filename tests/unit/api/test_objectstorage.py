@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -506,7 +506,7 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/content/delete" % self.uri_base
         params = {"acct": self.account, "ref": self.container, "path": name}
         api.container._direct_request.assert_called_once_with(
-            "POST", uri, params=params, autocreate=True, **self.common_kwargs
+            "POST", uri, params=params, data="{}", autocreate=True, **self.common_kwargs
         )
 
     def test_object_delete_not_found(self):

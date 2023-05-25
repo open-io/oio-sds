@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define VERSIONS_LIMITED(V)   ((V) > 1)
 
 #define CHUNK_METHOD_DRAINED "drained"
+#define REPLICATION_DESTS_HEADER "x-oio-replication-destinations"
 
 #define LAST_UNICODE_CHAR "\xf4\x8f\xbf\xbd"
 

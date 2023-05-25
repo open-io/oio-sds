@@ -1880,6 +1880,7 @@ class ObjectStorageApi(object):
             "chunks": ul_chunks,
             "properties": obj_meta["properties"],
             "container_properties": kwargs.get("container_properties"),
+            "replication_destinations": kwargs.get("replication_destinations"),
         }
         try:
             # FIXME: we may just pass **obj_meta

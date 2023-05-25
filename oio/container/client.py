@@ -788,6 +788,7 @@ class ContainerClient(ProxyClient):
         version=None,
         bypass_governance=None,
         create_delete_marker=False,
+        data=None,
         **kwargs
     ):
         """
@@ -818,7 +819,12 @@ class ContainerClient(ProxyClient):
             **kwargs
         )
 
-        resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
+        data = {}
+        dests = kwargs.get("replication_destinations")
+        if dests:
+            data["replication_destinations"] = dests
+        data = json.dumps(data)
+        resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
         delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
         version_id = resp.headers.get(VERSIONID_HEADER)
         return delete_marker, version_id
@@ -1070,6 +1076,10 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid, version=version)
         if clear:
             params["flush"] = 1
+
+        dests = kwargs.get("replication_destinations")
+        if dests:
+            properties["replication_destinations"] = dests
         data = json.dumps(properties)
 
         del_cached_object_metadata(
