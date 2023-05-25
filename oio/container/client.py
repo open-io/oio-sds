@@ -214,6 +214,15 @@ class ContainerClient(ProxyClient):
             if now - self._last_refresh_rawx_scores > self._refresh_rawx_scores_delay:
                 self._refresh_rawx_scores(now, **kwargs)
 
+    def _add_replication_destinations(self, data, **kwargs):
+        """Add replication destinations field to data structure."""
+        if data is None:
+            data = {}
+        dests = kwargs.get("replication_destinations")
+        if dests:
+            data["replication_destinations"] = dests
+        return data
+
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
     ):
@@ -731,7 +740,10 @@ class ContainerClient(ProxyClient):
             # TODO(FVE): change "id" into "content", and other occurrences
             params["id"] = content_id
             uri = self._make_uri("content/update")
+
+        data = self._add_replication_destinations(data, **kwargs)
         data = json.dumps(data)
+
         hdrs = {"x-oio-content-meta-length": str(size)}
         hdrs.update(headers)
         if checksum:
@@ -818,7 +830,9 @@ class ContainerClient(ProxyClient):
             **kwargs
         )
 
-        resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
+        data = self._add_replication_destinations({}, **kwargs)
+        data = json.dumps(data)
+        resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
         delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
         version_id = resp.headers.get(VERSIONID_HEADER)
         return delete_marker, version_id
@@ -1070,7 +1084,9 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid, version=version)
         if clear:
             params["flush"] = 1
-        data = json.dumps(properties)
+
+        data = self._add_replication_destinations(properties, **kwargs)
+        data = json.dumps(data)
 
         del_cached_object_metadata(
             account=account,
@@ -1105,7 +1121,15 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri("content/del_properties")
         params = self._make_params(account, reference, path, cid=cid, version=version)
         # Build a list in case the parameter is a view (not serializable).
-        data = json.dumps([x for x in properties])
+
+        data = self._add_replication_destinations({}, **kwargs)
+        if data:
+            data["properties"] = [x for x in properties]
+        else:
+            # legacy proxy call
+            data = [x for x in properties]
+
+        data = json.dumps(data)
 
         del_cached_object_metadata(
             account=account,

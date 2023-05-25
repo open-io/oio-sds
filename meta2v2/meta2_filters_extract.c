@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -307,6 +307,17 @@ meta2_filter_extract_header_string_maxvers(struct gridd_filter_ctx_s *ctx,
 	gchar buf[64];
 	TRACE_FILTER();
 	EXTRACT_OPT(NAME_MSGKEY_MAXVERS);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_optional_repli_destinations(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64*1000];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_REPLICATION_DESTS);
 	return FILTER_OK;
 }
 

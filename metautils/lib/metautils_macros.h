@@ -58,6 +58,7 @@ License along with this library.
 #define NAME_MSGKEY_CONTENTPATH        "CP"
 #define NAME_MSGKEY_CONTENTID          "CI"
 #define NAME_MSGKEY_DELETE_MARKER      "DELETE_MARKER"
+#define NAME_MSGKEY_REPLICATION_DESTS  "REPLICATION_DESTS"
 #define NAME_MSGKEY_DELIMITER          "DELIMITER"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"

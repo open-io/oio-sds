@@ -236,7 +236,8 @@ m2v2_remote_pack_DEDUP(struct oio_url_s *url, gint64 dl)
 
 
 GByteArray*
-m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, gint64 dl)
+m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, const char* destinations,
+	gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PUT, url, body, dl);
@@ -244,6 +245,10 @@ m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, gint64 dl)
 	if (force_versioning != NULL) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING,
 				force_versioning);
+	}
+	if (destinations) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+				destinations);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
@@ -299,7 +304,7 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 
 GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, gint64 dl)
+		gboolean create_delete_marker, const char* destinations, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
 	if (bypass_governance) {
@@ -313,6 +318,10 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 	if (force_versioning != NULL) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING,
 				force_versioning);
+	}
+	if (destinations) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+				destinations);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
@@ -431,19 +440,35 @@ m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url,
 }
 
 GByteArray*
-m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names, gint64 dl)
+m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names,
+		const char* destinations, gint64 dl)
 {
 	GByteArray *body = g_bytes_unref_to_array(
 			g_string_free_to_bytes(STRV_encode_gstr(names)));
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PROP_DEL, url, body, dl);
+
+	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PROP_DEL, url, body, dl);
+	if (destinations) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+				destinations);
+	}
+
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
 m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags,
-		GSList *beans, gint64 dl)
+		GSList *beans, const char *destinations, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_PROP_SET, url, body, flags, dl);
+	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PROP_SET, url, body, dl);
+	flags = g_htonl(flags);
+	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
+
+	if (destinations) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+				destinations);
+	}
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*

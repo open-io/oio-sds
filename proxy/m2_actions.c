@@ -1150,7 +1150,9 @@ static GError * _load_content_from_json_object(struct req_args_s *args,
 			if (!(err = _load_content_from_json_array(args, jchunks, out))) {
 				GSList *beans = _load_properties_from_strv(props);
 				for (GSList *l = beans; l; l = l->next)
+				{
 					PROPERTIES_set2_alias(l->data, oio_url_get(args->url, OIOURL_PATH));
+				}
 				*out = metautils_gslist_precat(*out, beans);
 			}
 		}
@@ -3853,12 +3855,14 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		return _reply_m2_error (args, BADREQ("Content. not allowed in the URL"));
 
 	GSList *beans = NULL;
+	const gchar *destinations = NULL;
 
 	if (jargs) {
 		gchar **kv = NULL;
 		GError *err = KV_read_properties(jargs, &kv, "properties", TRUE);
-		if (err)
+		if (err) {
 			return _reply_format_error (args, err);
+		}
 		for (gchar **p=kv; *p && *(p+1) ;p+=2) {
 			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
 			PROPERTIES_set2_key (prop, *p);
@@ -3868,13 +3872,19 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 			beans = g_slist_prepend (beans, prop);
 		}
 		g_strfreev(kv);
+		struct json_object *jdests = NULL;
+		json_object_object_get_ex(jargs, "replication_destinations", &jdests);
+		if (jdests) {
+			destinations = json_object_get_string(jdests);
+		}
 	}
 
 	guint32 flags = 0;
-	if (OPT("flush"))
+	if (OPT("flush")) {
 		flags |= M2V2_FLAG_FLUSH;
+	}
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, destinations, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2 (beans);
 	return _reply_m2_error (args, err);
@@ -3882,16 +3892,29 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 
 static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 		struct json_object *jargs) {
-	if (!json_object_is_type(jargs, json_type_array))
-		return _reply_format_error (args, BADREQ("Array argument expected"));
+	struct json_object * jprops = jargs;
+	const gchar *destinations = NULL;
+
+	// Payload with replication destinations
+	if (json_object_is_type(jargs, json_type_object)) {
+		json_object_object_get_ex(jargs, "properties", &jprops);
+		struct json_object *jdests = NULL;
+		json_object_object_get_ex(jargs, "replication_destinations", &jdests);
+		if (jdests) {
+			destinations =json_object_get_string(jdests);
+		}
+	} else if (!json_object_is_type(jargs, json_type_array)) {
+		return _reply_format_error (args, BADREQ("Array or object argument expected"));
+	}
 
 	gchar **namev = NULL;
-	GError *err = STRV_decode_object(jargs, &namev);
+	GError *err = STRV_decode_object(jprops, &namev);
 	EXTRA_ASSERT((err != NULL) ^ (namev != NULL));
-	if (err)
+	if (err){
 		return _reply_format_error(args, err);
+	}
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev, destinations, DL()); }
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	g_strfreev(namev);
 	return _reply_m2_error (args, err);
@@ -3907,8 +3930,9 @@ static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 
 static GError *_m2_json_put (struct req_args_s *args,
 		struct json_object *jbody) {
-	if (!jbody)
+	if (!jbody) {
 		return BADREQ("Invalid JSON body");
+	}
 
 	const gboolean append = _request_get_flag (args, "append");
 	const gboolean force = _request_get_flag (args, "force");
@@ -3936,16 +3960,21 @@ static GError *_m2_json_put (struct req_args_s *args,
 		}
 	}
 
+	struct json_object *jdests = NULL;
+	json_object_object_get_ex(jbody, "replication_destinations", &jdests);
+	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
+
 	PACKER_VOID(_pack) {
 		if (force) return m2v2_remote_pack_OVERWRITE(args->url, ibeans, DL());
 		if (append) return m2v2_remote_pack_APPEND(args->url, ibeans, DL());
 		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY(args->url, ibeans, DL());
 		if (restore_drained) return m2v2_remote_pack_RESTORE_DRAINED(args->url, ibeans, DL());
-		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
+		return m2v2_remote_pack_PUT (args->url, ibeans, destinations, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (obeans);
 	_bean_cleanl2 (ibeans);
+
 	return err;
 }
 
@@ -4344,6 +4373,76 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 	return _reply_simplified_beans_legacy(args, err, beans);
 }
 
+static GError *_m2_json_delete (struct req_args_s *args,
+		struct json_object *jbody) {
+	GError *err = NULL;
+	const gboolean create_delete_marker =
+			_request_get_flag(args, "delete_marker");
+	gboolean bypass_governance = _request_get_flag(args, "bypass_governance");
+
+	/* used from oio-swift for "sharding" in containers */
+	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
+			PROXYD_HEADER_FORCE_VERSIONING);
+	oio_ext_set_force_versioning(force_versioning);
+
+	struct json_object *jdests = NULL;
+	json_object_object_get_ex(jbody, "replication_destinations", &jdests);
+	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
+
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
+			bypass_governance, create_delete_marker, destinations, DL()); }
+	gboolean delete_marker = FALSE;
+	gint64 version = -1;
+	struct list_result_s del_result = {0};
+	m2v2_list_result_init(&del_result);
+	err = _resolve_meta2(args, _prefer_master(), _pack,
+			&del_result, m2v2_list_result_extract);
+
+	for (GSList *l = del_result.beans; !err && l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_ALIASES) {
+			continue;
+		}
+
+		delete_marker = ALIASES_get_deleted(bean);
+		version = ALIASES_get_version(bean);
+	}
+
+	if (!err) {
+		gchar *version_str = NULL;
+		if (version == -1) {
+			/* XXX: we did not receive any alias bean.
+			 * This happens when we remove a delete marker: the meta2 does not
+			 * want to emit any object event because both the object creation
+			 * and "removal" have already been notified. */
+			if (!oio_url_has(args->url, OIOURL_VERSION)) {
+				GRID_WARN("BUG: a deletion without version id did not return "
+						"the deleted alias or any delete marker (reqid=%s)",
+						oio_ext_get_reqid());
+				version_str = g_strdup("-1");
+			} else {
+				delete_marker = TRUE;
+				version_str = g_strdup(oio_url_get(args->url, OIOURL_VERSION));
+			}
+		} else {
+			version_str = g_strdup_printf("%"G_GUINT64_FORMAT, version);
+		}
+		if (delete_marker)
+			args->rp->add_header(PROXYD_HEADER_DELETE_MARKER, g_strdup("true"));
+		args->rp->add_header(PROXYD_HEADER_VERSION_ID, version_str);
+	}
+
+	m2v2_list_result_clean(&del_result);
+	return err;
+}
+
+static enum http_rc_e action_m2_content_delete (struct req_args_s *args,
+		struct json_object *jbody) {
+	GError *err = NULL;
+	err = _m2_json_delete(args, jbody);
+	return _reply_m2_error (args, err);
+}
+
 // CONTENT{{
 // POST /v3.0/{NS}/content/delete?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -4383,60 +4482,7 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
-	const gboolean create_delete_marker =
-			_request_get_flag(args, "delete_marker");
-	gboolean bypass_governance = _request_get_flag(args, "bypass_governance");
-
-	/* used from oio-swift for "sharding" in containers */
-	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
-			PROXYD_HEADER_FORCE_VERSIONING);
-	oio_ext_set_force_versioning(force_versioning);
-
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, DL()); }
-	gboolean delete_marker = FALSE;
-	gint64 version = -1;
-	struct list_result_s del_result = {0};
-	m2v2_list_result_init(&del_result);
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack,
-			&del_result, m2v2_list_result_extract);
-
-	for (GSList *l = del_result.beans; !err && l; l = l->next) {
-		gpointer bean = l->data;
-		if (DESCR(bean) != &descr_struct_ALIASES) {
-			continue;
-		}
-
-		delete_marker = ALIASES_get_deleted(bean);
-		version = ALIASES_get_version(bean);
-	}
-
-	if (!err) {
-		gchar *version_str = NULL;
-		if (version == -1) {
-			/* XXX: we did not receive any alias bean.
-			 * This happens when we remove a delete marker: the meta2 does not
-			 * want to emit any object event because both the object creation
-			 * and "removal" have already been notified. */
-			if (!oio_url_has(args->url, OIOURL_VERSION)) {
-				GRID_WARN("BUG: a deletion without version id did not return "
-						"the deleted alias or any delete marker (reqid=%s)",
-						oio_ext_get_reqid());
-				version_str = g_strdup("-1");
-			} else {
-				delete_marker = TRUE;
-				version_str = g_strdup(oio_url_get(args->url, OIOURL_VERSION));
-			}
-		} else {
-			version_str = g_strdup_printf("%"G_GUINT64_FORMAT, version);
-		}
-		if (delete_marker)
-			args->rp->add_header(PROXYD_HEADER_DELETE_MARKER, g_strdup("true"));
-		args->rp->add_header(PROXYD_HEADER_VERSION_ID, version_str);
-	}
-
-	m2v2_list_result_clean(&del_result);
-	return _reply_m2_error (args, err);
+	return rest_action(args, action_m2_content_delete);
 }
 
 static enum http_rc_e
@@ -4452,7 +4498,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, DL()); }
+			bypass_governance, create_delete_marker, NULL, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,

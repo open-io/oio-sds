@@ -46,6 +46,7 @@ from oio.common.constants import (
     VERSIONID_HEADER,
 )
 from oio.common.easy_value import boolean_value
+from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
 
 
@@ -1898,3 +1899,72 @@ class TestMeta2Contents(BaseTestCase):
         chunks = self.json_loads(resp.data)
         for chunk in chunks:
             self.assertTrue(chunk["real_url"].startswith("https://"))
+
+    def test_replication_destinations(self):
+        cname = "test_repli_" + random_str(8)
+        reqid = request_id()
+        # Create a container
+        self.storage.container_create(self.account, cname, reqid=reqid)
+
+        # Create an object
+        self.storage.object_create_ext(
+            self.account,
+            cname,
+            obj_name=cname,
+            data=cname,
+            reqid=reqid,
+            replication_destinations="dst1;dst2",
+        )
+        event = self.wait_for_event(
+            "oio-preserved", reqid=reqid, types=("storage.content.new",)
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual("dst1;dst2", event.destinations)
+
+        # Set properties
+        reqid = request_id()
+        self.storage.object_set_properties(
+            self.account,
+            cname,
+            obj=cname,
+            properties={"foo": "bar"},
+            reqid=reqid,
+            replication_destinations="dst1;dst2",
+        )
+        event = self.wait_for_event(
+            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual("dst1;dst2", event.destinations)
+
+        # Delete properties
+        reqid = request_id()
+        self.storage.object_del_properties(
+            self.account,
+            cname,
+            obj=cname,
+            properties=["foo"],
+            reqid=reqid,
+            replication_destinations="dst1;dst2",
+        )
+        event = self.wait_for_event(
+            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual("dst1;dst2", event.destinations)
+
+        # Delete object
+        self.storage.object_delete(
+            self.account,
+            cname,
+            obj=cname,
+            reqid=reqid,
+            version="3",
+            replication_destinations="dst1;dst2",
+            create_delete_marker=True,
+        )
+        event = self.wait_for_event(
+            "oio-preserved", reqid=reqid, types=("storage.content.new",)
+        )
+        self.assertIsNotNone(event)
+        self.assertEqual("dst1;dst2", event.destinations)

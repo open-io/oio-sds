@@ -66,6 +66,13 @@ void
 _m2b_notify_beans(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
 {
+	_m2b_notify_beans2(notifier, url, beans, name, send_chunks, NULL);
+}
+
+void
+_m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
+		GSList *beans, const char *name, gboolean send_chunks, const char* dests)
+{
 	if (!notifier)
 		return;
 
@@ -88,14 +95,20 @@ _m2b_notify_beans(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		oio_str_gstring_append_json_pair_int(gs, "parts", n_events);
 		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
-		g_string_append_static (gs, "]}");
+		g_string_append_static (gs, "]");
+		if (dests) {
+			g_string_append_static(gs, ",\"destinations\":");
+			oio_str_gstring_append_json_quote(gs, dests);
+		}
+		g_string_append_static (gs, "}");
 		oio_events_queue__send (notifier, g_string_free (gs, FALSE));
 	}
 
-	if (url == NULL)
+	if (url == NULL) {
 		url2 = oio_url_empty();
-	else
+	} else {
 		url2 = oio_url_dup(url);
+	}
 
 	m2v2_sort_content(beans, &sorted);
 
@@ -283,7 +296,8 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		for (GSList *l=deleted; l; l=l->next) {
 			_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		}
-		_m2b_notify_beans(m2b->notifier_content_created, url, added, "content.new", FALSE);
+		const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+		_m2b_notify_beans2(m2b->notifier_content_created, url, added, "content.new", FALSE, dests);
 		meta2_filter_send_deferred_events(ctx, m2b->notifier_content_created);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
@@ -438,7 +452,8 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		break;
 	}
 	if (delete_marker_created) {
-		_m2b_notify_beans(m2b->notifier_content_created, url, obc->l, "content.new", FALSE);
+		const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+		_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l, "content.new", FALSE, dests);
 	} else {
 		_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
 	}
@@ -507,8 +522,9 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b->notifier_content_updated, url, modified,
-			"content.update", FALSE);
+	const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+	_m2b_notify_beans2(m2b->notifier_content_updated, url, modified,
+			"content.update", FALSE, dests);
 	_bean_cleanl2(modified);
 	return FILTER_OK;
 }
@@ -565,8 +581,9 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		/* Notify only if we changed something. */
 		gint prop_count = g_slist_length(deleted) - 1;  // Do not count alias
 		if (prop_count > 0) {
-			_m2b_notify_beans(m2b->notifier_content_updated, url, deleted,
-					"content.update", FALSE);
+			const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+			_m2b_notify_beans2(m2b->notifier_content_updated, url, deleted,
+					"content.update", FALSE, dests);
 		}
 		g_slist_free_full(deleted, _bean_clean);
 	}

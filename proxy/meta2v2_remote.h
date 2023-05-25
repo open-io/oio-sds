@@ -104,6 +104,7 @@ GByteArray* m2v2_remote_pack_DEDUP(
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
 		GSList *beans,
+		const char* destinations,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_OVERWRITE(
@@ -139,6 +140,7 @@ GByteArray* m2v2_remote_pack_DEL(
 		struct oio_url_s *url,
 		gboolean bypass_governance,
 		gboolean create_delete_marker,
+		const char *destinations,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(
@@ -196,12 +198,14 @@ GByteArray* m2v2_remote_pack_RAW_SUBST(
 GByteArray* m2v2_remote_pack_PROP_DEL(
 		struct oio_url_s *url,
 		gchar **names,
+		const char* destinations,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PROP_SET(
 		struct oio_url_s *url,
 		guint32 flags,
 		GSList *beans,
+		const char* destinations,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PROP_GET(
