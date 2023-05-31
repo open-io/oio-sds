@@ -575,6 +575,71 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 	return TRUE;
 }
 
+static void
+conscience_update_srv(gboolean first, time_t now, gint32 si_score,
+		enum score_type_e score_type, struct conscience_srv_s *p_srv)
+{
+	gboolean locked;
+	gchar score_type_name[4];
+	if (score_type == PUT) {
+		locked = p_srv->put_locked;
+		strcpy(score_type_name, "put");
+	} else if (score_type == GET) {
+		locked = p_srv->get_locked;
+		strcpy(score_type_name, "get");
+	}
+
+	if (si_score == SCORE_UNSET || si_score == SCORE_UNLOCK) {
+		if (first) {
+			GRID_TRACE2("SRV %s score first [%s]", score_type_name, p_srv->description);
+			p_srv->lock_mtime = now;
+			if (score_type == PUT) {
+				p_srv->put_score.value = 0;
+			} else if (score_type == GET) {
+				p_srv->get_score.value = 0;
+			}
+			locked = TRUE;
+		} else {
+			if (si_score == SCORE_UNLOCK) {
+				p_srv->lock_mtime = now;
+				if (locked) {
+					GRID_TRACE2("SRV %s score unlocked [%s]", score_type_name, p_srv->description);
+					locked = FALSE;
+					conscience_srv_compute_score(p_srv, score_type);
+				} else {
+					GRID_TRACE2("SRV %s score already unlocked [%s]", score_type_name, p_srv->description);
+				}
+			} else { /* UNSET, a.k.a. regular computation */
+				if (locked) {
+					GRID_TRACE2("SRV %s score untouched [%s]", score_type_name, p_srv->description);
+				} else {
+					if (conscience_srv_compute_score(p_srv, score_type)) {
+						GRID_TRACE2("SRV %s score refreshed [%s]", score_type_name, p_srv->description);
+					} /* else ... a trace is already written */
+				}
+			}
+		}
+	} else { /* LOCK */
+		p_srv->lock_mtime = now;
+		if (locked) {
+			GRID_TRACE2("SRV %s score already locked [%s]", score_type_name, p_srv->description);
+		} else {
+			GRID_TRACE2("SRV %s score locked [%s]", score_type_name, p_srv->description);
+			locked = TRUE;
+		}
+		if (score_type == PUT) {
+			p_srv->put_score.value = CLAMP(si_score, SCORE_DOWN, SCORE_MAX);
+		} else if (score_type == GET) {
+			p_srv->get_score.value = CLAMP(si_score, SCORE_DOWN, SCORE_MAX);
+		}
+	}
+	if (score_type == PUT) {
+		p_srv->put_locked = locked;
+	} else if (score_type == GET) {
+		p_srv->get_locked = locked;
+	}
+}
+
 static struct conscience_srv_s *
 conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_info_s *si)
 {
@@ -636,78 +701,10 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 		p_srv->get_score.timestamp = now / G_TIME_SPAN_SECOND;
 	}
 
-	if (si->put_score.value == SCORE_UNSET || si->put_score.value == SCORE_UNLOCK) {
-		if (really_first && srvtype->lock_at_first_register) {
-			GRID_TRACE2("SRV first [%s]", p_srv->description);
-			p_srv->put_score.value = 0;
-			p_srv->lock_mtime = now;
-			p_srv->put_locked = TRUE;
-		} else {
-			if (si->put_score.value == SCORE_UNLOCK) {
-				p_srv->lock_mtime = now;
-				if (p_srv->put_locked) {
-					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
-					p_srv->put_locked = FALSE;
-					conscience_srv_compute_score(p_srv, PUT);
-				} else {
-					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
-				}
-			} else { /* UNSET, a.k.a. regular computation */
-				if (p_srv->put_locked) {
-					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
-				} else {
-					if (conscience_srv_compute_score(p_srv, PUT)) {
-						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
-					} /* else ... a trace is already written */
-				}
-			}
-		}
-	} else { /* LOCK */
-		p_srv->lock_mtime = now;
-		if (p_srv->put_locked) {
-			GRID_TRACE2("SRV already locked [%s]", p_srv->description);
-		} else {
-			GRID_TRACE2("SRV locked [%s]", p_srv->description);
-			p_srv->put_locked = TRUE;
-		}
-		p_srv->put_score.value = CLAMP(si->put_score.value, SCORE_DOWN, SCORE_MAX);
-	}
-	if (si->get_score.value == SCORE_UNSET || si->get_score.value == SCORE_UNLOCK) {
-		if (really_first && srvtype->lock_at_first_register) {
-			GRID_TRACE2("SRV first [%s]", p_srv->description);
-			p_srv->get_score.value = 0;
-			p_srv->lock_mtime = now;
-			p_srv->get_locked = TRUE;
-		} else {
-			if (si->get_score.value == SCORE_UNLOCK) {
-				p_srv->lock_mtime = now;
-				if (p_srv->get_locked) {
-					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
-					p_srv->get_locked = FALSE;
-					conscience_srv_compute_score(p_srv, GET);
-				} else {
-					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
-				}
-			} else { /* UNSET, a.k.a. regular computation */
-				if (p_srv->get_locked) {
-					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
-				} else {
-					if (conscience_srv_compute_score(p_srv, GET)) {
-						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
-					} /* else ... a trace is already written */
-				}
-			}
-		}
-	} else { /* LOCK */
-		p_srv->lock_mtime = now;
-		if (p_srv->get_locked) {
-			GRID_TRACE2("SRV already locked [%s]", p_srv->description);
-		} else {
-			GRID_TRACE2("SRV locked [%s]", p_srv->description);
-			p_srv->get_locked = TRUE;
-		}
-		p_srv->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
-	}
+	gboolean first = really_first && srvtype->lock_at_first_register;
+	conscience_update_srv(first, now, si->put_score.value, PUT, p_srv);
+	conscience_update_srv(first, now, si->get_score.value, GET, p_srv);
+
 	/* Set a tag to reflect the locked/unlocked state of the service.
 	 * Modifying service_info_s would cause upgrade issues. */
 	struct service_tag_s *put_lock_tag = service_info_ensure_tag(
