@@ -580,14 +580,18 @@ conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 		enum score_type_e score_type, struct conscience_srv_s *p_srv)
 {
 	gboolean locked;
-	if (score_type == PUT)
+	gchar score_type_name[4];
+	if (score_type == PUT) {
 		locked = p_srv->put_locked;
-	else if (score_type == GET) {
+		strcpy(score_type_name, "put");
+	} else if (score_type == GET) {
 		locked = p_srv->get_locked;
+		strcpy(score_type_name, "get");
 	}
+
 	if (si_score == SCORE_UNSET || si_score == SCORE_UNLOCK) {
 		if (first) {
-			GRID_TRACE2("SRV first [%s]", p_srv->description);
+			GRID_TRACE2("SRV %s score first [%s]", score_type_name, p_srv->description);
 			p_srv->lock_mtime = now;
 			if (score_type == PUT) {
 				p_srv->put_score.value = 0;
@@ -599,18 +603,18 @@ conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 			if (si_score == SCORE_UNLOCK) {
 				p_srv->lock_mtime = now;
 				if (locked) {
-					GRID_TRACE2("SRV unlocked [%s]", p_srv->description);
+					GRID_TRACE2("SRV %s score unlocked [%s]", score_type_name, p_srv->description);
 					locked = FALSE;
 					conscience_srv_compute_score(p_srv, score_type);
 				} else {
-					GRID_TRACE2("SRV already unlocked [%s]", p_srv->description);
+					GRID_TRACE2("SRV %s score already unlocked [%s]", score_type_name, p_srv->description);
 				}
 			} else { /* UNSET, a.k.a. regular computation */
 				if (locked) {
-					GRID_TRACE2("SRV untouched [%s]", p_srv->description);
+					GRID_TRACE2("SRV %s score untouched [%s]", score_type_name, p_srv->description);
 				} else {
 					if (conscience_srv_compute_score(p_srv, score_type)) {
-						GRID_TRACE2("SRV refreshed [%s]", p_srv->description);
+						GRID_TRACE2("SRV %s score refreshed [%s]", score_type_name, p_srv->description);
 					} /* else ... a trace is already written */
 				}
 			}
@@ -618,9 +622,9 @@ conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 	} else { /* LOCK */
 		p_srv->lock_mtime = now;
 		if (locked) {
-			GRID_TRACE2("SRV already locked [%s]", p_srv->description);
+			GRID_TRACE2("SRV %s score already locked [%s]", score_type_name, p_srv->description);
 		} else {
-			GRID_TRACE2("SRV locked [%s]", p_srv->description);
+			GRID_TRACE2("SRV %s score locked [%s]", score_type_name, p_srv->description);
 			locked = TRUE;
 		}
 		if (score_type == PUT) {
