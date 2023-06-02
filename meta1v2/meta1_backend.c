@@ -2,6 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -60,7 +61,6 @@ _init_notifiers(struct meta1_backend_s *m1, const char *ns)
 
 	GError *err = NULL;
 	INIT(m1->notifier_srv, oio_meta1_tube_services);
-	INIT(m1->notifier_ref, oio_meta1_tube_references);
 	return err;
 }
 
@@ -118,7 +118,6 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 		return;
 
 	CLEAN(m1->notifier_srv);
-	CLEAN(m1->notifier_ref);
 
 	if (m1->prefixes) {
 		meta1_prefixes_clean(m1->prefixes);

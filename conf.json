@@ -164,11 +164,6 @@
 				"limit": 256, "def": "oio", "descr": "" },
 
 			{ "type": "string",
-				"name": "oio_meta1_tube_references",
-				"key": "meta1.tube.references",
-				"limit": 256, "def": "oio", "descr": "" },
-
-			{ "type": "string",
 				"name": "oio_meta1_tube_services",
 				"key": "meta1.tube.services",
 				"limit": 256, "def": "oio", "descr": "" },

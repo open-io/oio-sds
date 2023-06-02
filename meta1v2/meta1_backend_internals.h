@@ -2,6 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -26,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <events/oio_events_queue.h>
 
 #define M1_SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
-		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
+		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unknown error")
 
 struct meta1_backend_s
 {
@@ -38,7 +39,6 @@ struct meta1_backend_s
 	struct meta1_prefixes_set_s *prefixes;
 
 	struct oio_events_queue_s *notifier_srv;
-	struct oio_events_queue_s *notifier_ref;
 
 	guint nb_digits;
 	gchar ns_name[LIMIT_LENGTH_NSNAME];

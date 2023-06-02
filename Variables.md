@@ -451,14 +451,6 @@ Used by `gcc`
  * cmake directive: *OIO_META1_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
-### meta1.tube.references
-
-> TODO: to be documented
-
- * default: **oio**
- * type: string
- * cmake directive: *OIO_META1_TUBE_REFERENCES*
-
 ### meta1.tube.services
 
 > TODO: to be documented
