@@ -649,7 +649,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 	/* register the service if necessary, excepted if unlocking */
 	struct conscience_srv_s *p_srv = g_hash_table_lookup(srvtype->services_ht, &si->addr);
 	if (!p_srv) {
-		if (si->put_score.value == SCORE_UNLOCK || si->get_score.value == SCORE_UNLOCK) {
+		if (si->put_score.value == SCORE_UNLOCK && si->get_score.value == SCORE_UNLOCK) {
 			return NULL;
 		} else {
 			p_srv = conscience_srvtype_register_srv(srvtype, &si->addr);
