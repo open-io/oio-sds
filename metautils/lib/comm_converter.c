@@ -382,6 +382,7 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 	memcpy(api->type, asn->type.buf, MIN(asn->type.size, (int)sizeof(api->type)));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	score_ASN2API(&asn->score, &api->put_score);
+	// This condition is temporary, it allows to continue communicating with outdated service
 	if (!asn->getScore)
 		score_ASN2API(&asn->score, &api->get_score);
 	else {
