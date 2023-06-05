@@ -252,12 +252,10 @@ conscience_srv_compute_score(struct conscience_srv_s *service, enum score_type_e
 	EXTRA_ASSERT(srvtype != NULL);
 
 	gboolean ret = TRUE;
-	if (score_type & PUT && !service->put_locked)
-	{
+	if (score_type & PUT && !service->put_locked) {
 		ret = compute_score(&service->put_score.value, srvtype->put_score_expr, service->put_score.value);
 	}
-	if (score_type & GET && !service->get_locked)
-	{
+	if (score_type & GET && !service->get_locked) {
 		ret &= compute_score(&service->get_score.value, srvtype->get_score_expr, service->get_score.value);
 	}
 	return ret;
