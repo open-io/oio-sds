@@ -642,12 +642,13 @@ service_info_load_json_object(struct json_object *obj,
 
 	struct json_object *ns, *type, *url, *score, *scores, *tags;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_string, !permissive},
-		{"type",  &type,  json_type_string, !permissive},
-		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_int,    !permissive},
-		{"scores", &scores, json_type_object,    !permissive},
-		{"tags",  &tags,  json_type_object, 0},
+		{"ns",     &ns,     json_type_string, !permissive},
+		{"type",   &type,   json_type_string, !permissive},
+		{"addr",   &url,    json_type_string, 1},
+		{"score",  &score,  json_type_int,    !permissive},
+		// "scores" is not mandatory in order to continue communicating with outdated service
+		{"scores", &scores, json_type_object, 0},
+		{"tags",   &tags,   json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (obj, mapping);
@@ -668,13 +669,13 @@ service_info_load_json_object(struct json_object *obj,
 		si->get_score.value = json_object_get_int(score);
 	}
 	if (scores) {
-		json_object *score_put_obj = json_object_object_get(scores, "score.put");
-		if (score_put_obj)
+		json_object *score_put_obj;
+		json_object *score_get_obj;
+		if (json_object_object_get_ex(scores, "score.put", &score_put_obj))
 			si->put_score.value = json_object_get_int(score_put_obj);
 		else
 			si->put_score.value = SCORE_UNSET;
-		json_object *score_get_obj = json_object_object_get(scores, "score.get");
-		if (score_get_obj)
+		if (json_object_object_get_ex(scores, "score.get", &score_get_obj))
 			si->get_score.value = json_object_get_int(score_get_obj);
 		else
 			si->get_score.value = SCORE_UNSET;
