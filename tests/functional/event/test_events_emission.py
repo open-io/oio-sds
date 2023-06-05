@@ -164,9 +164,8 @@ class TestEventRouting(BaseTestCase):
         """
         Test the forwarding of events from Beanstalkd to RabbitMQ.
         """
-        # XXX: "event-agent.meta2" has a query string, and we don't want it.
-        # And "event-agent" is a Beanstalkd endpoint.
-        rab_endpoint = self.ns_conf.get("event-agent.rawx")
+        # "event-agent" (without suffix) is a Beanstalkd endpoint.
+        rab_endpoint = self.ns_conf.get("event-agent.meta2")
         if not rab_endpoint or not rab_endpoint.startswith("amqp://"):
             self.skipTest("This test requires a RabbitMQ event-agent")
         cmdline = [

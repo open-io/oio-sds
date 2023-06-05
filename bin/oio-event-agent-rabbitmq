@@ -18,15 +18,17 @@ import argparse
 from urllib.parse import parse_qsl
 
 from oio.cli.common.utils import KeyValueAction
-from oio.common.configuration import read_conf
+from oio.common.amqp import (
+    DEFAULT_ENDPOINT,
+    DEFAULT_EXCHANGE,
+    DEFAULT_QUEUE,
+    DEFAULT_QUEUE_ARGS,
+)
+from oio.common.configuration import read_conf, load_namespace_conf
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.event.amqp_agent import AmqpEventWorker
 from oio.event.amqp_consumer import AmqpConsumerPool
-
-
-DEFAULT_ENDPOINT = "amqp://guest:guest@127.0.0.1:5672/%2F"
-DEFAULT_QUEUE = "oio"
 
 
 def make_arg_parser():
@@ -45,15 +47,35 @@ def make_arg_parser():
 def main():
     args = make_arg_parser().parse_args()
     conf = read_conf(args.configuration, "event-agent")
-    endpoint = conf.get("queue_url", DEFAULT_ENDPOINT)
-    input_queue = conf.get("queue_name", conf.get("tube", DEFAULT_QUEUE))
+    ns_conf = load_namespace_conf(conf["namespace"])
+
+    # Configuration from dedicated file
     logger = get_logger(conf, verbose=args.verbose)
     workers = int_value(conf.get("workers"), 0)
 
-    routing_key = conf.get("routing_key")
-    exchange_name = conf.get("exchange_name")
-    bind_args = dict(parse_qsl(conf.get("bind_args", ""), separator=","))
-    queue_args = dict(parse_qsl(conf.get("queue_args", ""), separator=","))
+    # Configuration either from dedicated file or central file (in that order)
+    endpoint = conf.get("queue_url", ns_conf.get("event-agent", DEFAULT_ENDPOINT))
+    input_queue = conf.get(
+        "queue_name",
+        conf.get("tube", ns_conf.get("events.amqp.queue_name", DEFAULT_QUEUE)),
+    )
+    routing_key = conf.get(
+        "routing_key", ns_conf.get("events.amqp.bind_routing_key", "#")
+    )
+    exchange_name = conf.get(
+        "exchange_name", ns_conf.get("events.amqp.exchange_name", DEFAULT_EXCHANGE)
+    )
+    if "bind_args" in conf:
+        bind_conf = conf.get("bind_args")
+    else:
+        bind_conf = ns_conf.get("events.amqp.bind_args", "")
+    bind_args = dict(parse_qsl(bind_conf, separator=","))
+
+    if "queue_args" in conf:
+        queue_conf = conf.get("queue_args", DEFAULT_QUEUE_ARGS)
+    else:
+        queue_conf = ns_conf.get("events.amqp.queue_args", DEFAULT_QUEUE_ARGS)
+    queue_args = dict(parse_qsl(queue_conf, separator=","))
 
     pool = AmqpConsumerPool(
         endpoint,

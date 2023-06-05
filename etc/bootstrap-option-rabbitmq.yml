@@ -1,16 +1,23 @@
 rabbitmq:
   endpoint:
-    - 'amqp://guest:guest@127.0.0.1:5672/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
-    - 'amqp://guest:guest@127.0.0.1:5673/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
-    - 'amqp://guest:guest@127.0.0.1:5674/%2F?routing_key=oio&exchange=oio&exchange_type=topic&queue_name=oio&queue_x-queue-type=quorum'
+    - 'amqp://guest:guest@127.0.0.1:5672/%2F'
+    - 'amqp://guest:guest@127.0.0.1:5673/%2F'
+    - 'amqp://guest:guest@127.0.0.1:5674/%2F'
 config:
   events.beanstalkd.check_period: "5s"
-  # Not necessary ("oio" is the default), just to provide an example
-  event-agent.amqp_exchange: "oio"
-  # These events will be used for the asynchronous replication:
-  # we must be able to route them separately.
+  events.amqp.exchange_name: "oio"
   # If the string we set here does not look like a URL, it is considered as a
   # tube/routing key.
+  meta2.tube.container_deleted: "storage.container.deleted"
+  meta2.tube.container_new: "storage.container.new"
+  meta2.tube.container_state: "storage.container.state"
+  meta2.tube.container_updated: "storage.container.update"
+  meta2.tube.content_appended: "storage.content.append"
+  meta2.tube.content_broken: "storage.content.broken"
   meta2.tube.content_created: "storage.content.new"
   meta2.tube.content_deleted: "storage.content.deleted"
+  meta2.tube.content_drained: "storage.content.drained"
   meta2.tube.content_updated: "storage.content.update"
+  meta2.tube.meta2_deleted: "storage.meta2.deleted"
+  rawx.tube.chunk_created: "storage.chunk.new"
+  rawx.tube.chunk_deleted: "storage.chunk.deleted"

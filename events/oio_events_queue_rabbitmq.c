@@ -55,13 +55,11 @@ static _queue_BEANSTALKD_intercept_error_f intercept_errors = NULL;
 
 GError *
 oio_events_queue_factory__create_rabbitmq(
-		const char *endpoint, const char *queue_name, const char *tube,
-		const char *exchange_name, const char *exchange_type,
-		char **extra_args,
+		const char *endpoint, const char *routing_key,
 		struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT(endpoint != NULL);
-	EXTRA_ASSERT(tube != NULL);
+	EXTRA_ASSERT(routing_key != NULL);
 	EXTRA_ASSERT(out != NULL);
 	*out = NULL;
 
@@ -97,11 +95,11 @@ oio_events_queue_factory__create_rabbitmq(
 	self->endpoint = g_strdup(real_endpoint);
 	self->username = g_strdup(username);  // NULL-safe
 	self->password = g_strdup(password);  // NULL-safe
-	self->queue_name = g_strdup(queue_name?:"oio");
-	self->tube = g_strdup(tube);
-	self->exchange_name = g_strdup(exchange_name?:"oio");
-	self->exchange_type = g_strdup(exchange_type?:"topic");
-	self->extra_args = extra_args;
+	self->queue_name = g_strdup(oio_events_amqp_queue_name);
+	self->routing_key = g_strdup(routing_key);
+	self->exchange_name = g_strdup(oio_events_amqp_exchange_name);
+	self->exchange_type = g_strdup(oio_events_amqp_exchange_type);
+	self->extra_args = NULL;
 	// self->pending_events = 0;  // Already 0
 	self->running = FALSE;
 	self->healthy = FALSE;
@@ -172,16 +170,16 @@ _q_declare_exchange_and_queue(struct _queue_with_endpoint_s *q,
 		return FALSE;
 	}
 
-	/* Then bind it to the configured exchange with a routing key
-	 * equal to the tube name. */
-	err = rabbitmq_bind_queue(ctx->rabbitmq, q->queue_name, q->tube);
+	/* Then bind it to the configured exchange with a routing key */
+	err = rabbitmq_bind_queue(ctx->rabbitmq, q->queue_name,
+			oio_events_amqp_bind_routing_key);
 #ifdef HAVE_EXTRA_DEBUG
 	if (intercept_errors)
 		(*intercept_errors) (err);
 #endif
 	if (err) {
 		GRID_WARN("Failed to bind RabbitMQ queue %s with routing key %s: %s",
-				q->queue_name, q->tube, err->message);
+				q->queue_name, oio_events_amqp_bind_routing_key, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
@@ -217,7 +215,6 @@ _q_reconnect(struct _queue_with_endpoint_s *q UNUSED, struct _running_ctx_s *ctx
 			_q_declare_exchange_and_queue(q, ctx);
 			ctx->attempts_connect = 0;
 		}
-		
 		return TRUE;
 	}
 }
@@ -244,7 +241,7 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 	/* forward the event as a RabbitMQ message */
 	const size_t msglen = strlen(msg);
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = rabbitmq_send_msg(ctx->rabbitmq, msg, msglen, q->tube);
+	GError *err = rabbitmq_send_msg(ctx->rabbitmq, msg, msglen, q->routing_key);
 	gint64 end = oio_ext_monotonic_time();
 	time_t end_seconds = end / G_TIME_SPAN_SECOND;
 	/* count the operation whether it's a success or a failure */
@@ -313,7 +310,7 @@ _q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 	const gint64 alert = oio_events_beanstalkd_check_level_alert;
 	if (alert > 0 && q->pending_events > alert) {
 		GRID_WARN("RabbitMQ load alert (current=%" G_GINT64_FORMAT
-				" > limit=%" G_GINT64_FORMAT ", tube=%s)",
+				" > limit=%" G_GINT64_FORMAT ", queue=%s)",
 				q->pending_events, alert, q->queue_name);
 	}
 

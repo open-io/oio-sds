@@ -24,29 +24,29 @@ License along with this library.
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/internals.h>
+#include <events/events_variables.h>
 
 #include "rabbitmq.h"
 
+
 static amqp_table_t *
-_parse_extra_args(const gchar **extra_args, const gchar *prefix)
+_parse_args(const gchar *args_str)
 {
-	int prefix_len = prefix? strlen(prefix) : 0;
 	amqp_table_t *args_table = g_malloc0(sizeof(amqp_table_t));
 	GArray *entries = g_array_new(FALSE, TRUE, sizeof(amqp_table_entry_t));
-	for (const gchar **entry = extra_args; entry && *entry; entry++) {
-		if (g_str_has_prefix(*entry, prefix) && strchr(*entry, '=')) {
-			gchar **kv_toks = g_strsplit(*entry + prefix_len, "=", 2);
-			GRID_DEBUG("%s extra param: %s", prefix, *entry + prefix_len);
-			// Notice the use of strdup(), NOT g_strdup().
-			amqp_table_entry_t aentry =  {
-					.key = amqp_cstring_bytes(strdup(kv_toks[0])),
-					.value.kind = AMQP_FIELD_KIND_UTF8,
-					.value.value.bytes = amqp_cstring_bytes(strdup(kv_toks[1]))
-			};
-			g_array_append_vals(entries, &aentry, 1);
-			g_strfreev(kv_toks);
-		}
+	gchar **tokens = g_strsplit(args_str, ",", -1);
+	for (gchar **entry = tokens; entry && *entry; entry++) {
+		gchar **kv_toks = g_strsplit(*entry, "=", 2);
+		// Notice the use of strdup(), NOT g_strdup().
+		amqp_table_entry_t aentry =  {
+				.key = amqp_cstring_bytes(strdup(kv_toks[0])),
+				.value.kind = AMQP_FIELD_KIND_UTF8,
+				.value.value.bytes = amqp_cstring_bytes(strdup(kv_toks[1]))
+		};
+		g_array_append_vals(entries, &aentry, 1);
+		g_strfreev(kv_toks);
 	}
+	g_strfreev(tokens);
 	args_table->num_entries = entries->len;
 	args_table->entries = (amqp_table_entry_t*) g_array_free(entries, FALSE);
 	return args_table;
@@ -69,7 +69,7 @@ _free_extra_args(amqp_table_t *args_table)
 GError*
 rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		const gchar *username, const gchar *password,
-		const gchar **extra_args,
+		const gchar **extra_args UNUSED,
 		struct rabbitmq_s **out)
 {
 	g_assert_nonnull(out);
@@ -102,9 +102,9 @@ rabbitmq_create(const gchar *endpoint, const gchar *exchange,
 		out1.username = g_strdup(username);
 		out1.password = g_strdup(password);
 
-		out1.exchange_args = _parse_extra_args(extra_args, "exchange_");
-		out1.queue_args = _parse_extra_args(extra_args, "queue_");
-		out1.bind_args = _parse_extra_args(extra_args, "bind_");
+		out1.exchange_args = _parse_args(oio_events_amqp_exchange_args);
+		out1.queue_args = _parse_args(oio_events_amqp_queue_args);
+		out1.bind_args = _parse_args(oio_events_amqp_bind_args);
 	}
 	g_strfreev(host_and_port);
 	g_strfreev(netloc_and_vhost);

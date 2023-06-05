@@ -17,7 +17,13 @@
 import re
 from urllib.parse import parse_qsl, unquote
 
-from oio.common.amqp import AMQPError, ExchangeType, AmqpConnector
+from oio.common.amqp import (
+    AMQPError,
+    ExchangeType,
+    AmqpConnector,
+    DEFAULT_EXCHANGE,
+    DEFAULT_QUEUE_ARGS,
+)
 from oio.common.json import json
 from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.beanstalk import Beanstalk, BeanstalkError
@@ -255,10 +261,10 @@ class AmqpNotifyFilter(AmqpConnector, NotifyFilter):
 
     def init(self):
         super().init()
-        self.exchange_name = self.conf.get("exchange_name") or "oio"
+        self.exchange_name = self.conf.get("exchange_name") or DEFAULT_EXCHANGE
         self.bind_args = dict(parse_qsl(self.conf.get("bind_args", ""), separator=","))
         self.queue_args = dict(
-            parse_qsl(self.conf.get("queue_args", ""), separator=",")
+            parse_qsl(self.conf.get("queue_args", DEFAULT_QUEUE_ARGS), separator=",")
         )
 
     def send_event(self, event, data):

@@ -182,58 +182,23 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		return _parse_and_create_multi(cfg, tube, out);
 	} else {
 		GError *err = NULL;
-		const char *final_tube = NULL;
 		const char *netloc;
-		const char *param_value = NULL;
-		const char *queue_name = NULL;
-		const char *exchange_name = NULL, *exchange_type = NULL;
-		gchar **extra_args = g_malloc0(sizeof(gchar*));
+		/* For a short period we accepted query-string parameters, hence the
+		 * parsing. Notice that the "path" contains the scheme and hostname. */
 		struct oio_requri_s queue_uri = {0};
-
-		// Look for a tube name in the optional query string
 		oio_requri_parse(cfg, &queue_uri);
-		for (gchar **tok = queue_uri.query_tokens;
-				queue_uri.query_tokens && *tok;
-				tok++) {
-			if ((param_value = _has_prefix(*tok, "tube=")))
-				final_tube = param_value;
-			else if ((param_value = _has_prefix(*tok, "queue_name=")))
-				queue_name = param_value;
-			else if ((param_value = _has_prefix(*tok, "routing_key=")))
-				final_tube = param_value;
-			else if ((param_value = _has_prefix(*tok, "exchange=")))
-				exchange_name = param_value;
-			else if ((param_value = _has_prefix(*tok, "exchange_type=")))
-				exchange_type = param_value;
-			else {
-				// Generic parameter
-				extra_args = oio_strv_append(extra_args, g_strdup(*tok));
-			}
-		}
 
-		// A tube/routing key specified in its own configuration line
-		// takes precedence over the one configured in the endpoint URL.
-		if (oio_str_is_set(tube))
-			final_tube = tube;
-
-		if (!oio_str_is_set(final_tube)) {
-			err = BADREQ("missing 'tube' or 'routing_key' parameter: %s", cfg);
+		// Choose the right queue connector
+		if ((netloc = _has_prefix(queue_uri.path, BEANSTALKD_PREFIX))) {
+			err = oio_events_queue_factory__create_beanstalkd(
+					netloc, tube, out);
+		} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
+			err = oio_events_queue_factory__create_rabbitmq(
+					netloc, tube, out);
 		} else {
-			// Choose the right queue connector
-			if ((netloc = _has_prefix(queue_uri.path, BEANSTALKD_PREFIX))) {
-				err = oio_events_queue_factory__create_beanstalkd(
-						netloc, final_tube, out);
-			} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
-				err = oio_events_queue_factory__create_rabbitmq(
-						netloc, queue_name, final_tube, exchange_name,
-						exchange_type, extra_args, out);
-				extra_args = NULL;
-			} else {
-				err = BADREQ("implementation not recognized: %s", cfg);
-			}
+			err = BADREQ("implementation not recognized: %s", cfg);
 		}
 
-		g_strfreev(extra_args);  // cleaned only if not used (!= NULL)
 		oio_requri_clear(&queue_uri);
 		return err;
 	}

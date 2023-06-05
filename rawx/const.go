@@ -199,7 +199,7 @@ const (
 const (
 	oioConfigEventAgent     = "event-agent"
 	oioConfigEventAgentRawx = "event-agent.rawx"
-	oioConfigEventExchange  = "event-agent.amqp_exchange"
+	oioConfigEventExchange  = "events.amqp.exchange_name"
 )
 
 const (

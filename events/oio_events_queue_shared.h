@@ -41,8 +41,8 @@ struct _queue_with_endpoint_s
 	gchar *endpoint;
 	gchar *username;
 	gchar *password;
-	gchar *queue_name;  // only for RabbitMQ
-	gchar *tube;  // tube for Beanstalkd, routing key for RabbitMQ
+	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ
+	gchar *routing_key;  // only for RabbitMQ
 	gchar *exchange_name;  // only for RabbitMQ
 	gchar *exchange_type;  // only for RabbitMQ
 	gchar **extra_args;  // only for RabbitMQ

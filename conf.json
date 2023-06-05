@@ -91,67 +91,67 @@
 				"name": "oio_meta2_tube_container_new",
 				"key": "meta2.tube.container_new",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.container.new' events."
+				"descr": "Tube name (or routing key) for 'storage.container.new' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_deleted",
 				"key": "meta2.tube.container_deleted",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.container.deleted' events."
+				"descr": "Tube name (or routing key) for 'storage.container.deleted' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_state",
 				"key": "meta2.tube.container_state",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.container.state' events."
+				"descr": "Tube name (or routing key) for 'storage.container.state' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_container_updated",
 				"key": "meta2.tube.container_updated",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.container.update' events."
+				"descr": "Tube name (or routing key) for 'storage.container.update' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_created",
 				"key": "meta2.tube.content_created",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.new' events."
+				"descr": "Tube name (or routing key) for 'storage.content.new' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_appended",
 				"key": "meta2.tube.content_appended",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.append' events."
+				"descr": "Tube name (or routing key) for 'storage.content.append' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_deleted",
 				"key": "meta2.tube.content_deleted",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.deleted' events."
+				"descr": "Tube name (or routing key) for 'storage.content.deleted' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_updated",
 				"key": "meta2.tube.content_updated",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.update' events."
+				"descr": "Tube name (or routing key) for 'storage.content.update' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_drained",
 				"key": "meta2.tube.content_drained",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.drained' events."
+				"descr": "Tube name (or routing key) for 'storage.content.drained' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_content_broken",
 				"key": "meta2.tube.content_broken",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.content.broken' events."
+				"descr": "Tube name (or routing key) for 'storage.content.broken' events."
 			},
 			{ "type": "string",
 				"name": "oio_meta2_tube_meta2_deleted",
 				"key": "meta2.tube.meta2_deleted",
 				"limit": 256, "def": "oio",
-				"descr": "Tube name or full URI where to send 'storage.meta2.deleted' events."
+				"descr": "Tube name (or routing key) for 'storage.meta2.deleted' events."
 			},
 			{ "type": "string",
 				"name": "oio_rawx_tube_chunk_created",
@@ -167,6 +167,49 @@
 				"name": "oio_meta1_tube_services",
 				"key": "meta1.tube.services",
 				"limit": 256, "def": "oio", "descr": "" },
+
+			{ "type": "string",
+				"name": "oio_events_amqp_exchange_args",
+				"key": "events.amqp.exchange_args",
+				"limit": 1024, "def": "",
+				"descr": "Parameters to pass when declaring the exchange, separated by ','."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_exchange_name",
+				"key": "events.amqp.exchange_name",
+				"limit": 64, "def": "oio",
+				"descr": "Name of the exchange to declare."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_exchange_type",
+				"key": "events.amqp.exchange_type",
+				"limit": 64, "def": "topic",
+				"descr": "Type of the exchange to declare."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_queue_args",
+				"key": "events.amqp.queue_args",
+				"limit": 1024, "def": "x-queue-type=quorum",
+				"descr": "Parameters to pass when declaring a queue, separated by ','."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_queue_name",
+				"key": "events.amqp.queue_name",
+				"limit": 64, "def": "oio",
+				"descr": "Name of the queue to declare."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_bind_args",
+				"key": "events.amqp.bind_args",
+				"limit": 1024, "def": "",
+				"descr": "Parameters to pass when binding a queue to an exchange, separated by ','."
+			},
+			{ "type": "string",
+				"name": "oio_events_amqp_bind_routing_key",
+				"key": "events.amqp.bind_routing_key",
+				"limit": 64, "def": "#",
+				"descr": "Routing key used when binding a queue to an exchange (should not be confused with the routing key used when sending an event)."
+			},
 
 			{ "type": "monotonic", "name": "oio_events_common_buffer_delay",
 				"key": "events.common.pending.delay",

@@ -1384,10 +1384,11 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 queue_url=${QUEUE_URL}
-queue_args = ${QUEUE_ARGS}
-queue_name = ${QUEUE_NAME}
-exchange_name = ${EXCHANGE_NAME}
+# Commented out on purpuse: use the parameters defined in the namespace conf
+#queue_args = ${QUEUE_ARGS}
+#queue_name = ${QUEUE_NAME}
 routing_key = ${ROUTING_KEY}
+exchange_name = ${EXCHANGE_NAME}
 tube = ${QUEUE_NAME}
 
 rdir_connection_timeout = 0.5
@@ -1504,7 +1505,7 @@ use = egg:oio#noop
 use = egg:oio#notify
 tube = oio-delete
 queue_url = ${QUEUE_URL}
-queue_args = ${QUEUE_ARGS}
+#queue_args = ${QUEUE_ARGS}
 # In exchange "oio", all messages are routed to the queue "oio". To prevent
 # loops, we need another exchange.
 exchange_name = oio-delete
@@ -1513,7 +1514,7 @@ exchange_name = oio-delete
 [filter:notify_drained]
 use = egg:oio#notify
 queue_url = ${QUEUE_URL}
-queue_args = ${QUEUE_ARGS}
+queue_args = x-queue-type=classic
 tube = oio-drained
 policy_regex_EC = ^EC.*
 tube_EC = oio-drained-ec
@@ -2300,7 +2301,7 @@ def generate(options):
                 raise Exception("Arguments of rabbitmq queues are not the same")
         ENV.update(
             {
-                "EVENT_CNXSTRING_M2": ";".join(endpoints),
+                "EVENT_CNXSTRING_M2": ";".join(queue_url_list),
                 "EVENT_CNXSTRING_RAWX": ";".join(queue_url_list),
                 "RABBIT_QUEUE_ARGS": ",".join(
                     "=".join((k, v)) for k, v in first_args.items()

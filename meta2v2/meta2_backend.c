@@ -178,10 +178,7 @@ static GError *
 _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 {
 #define INIT(Out,Tube) if (!err) { \
-	if (strstr(Tube, "://")) \
-		err = oio_events_queue_factory__create((Tube), NULL, &(Out)); \
-	else \
-		err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
 	if (!err) {\
 		err = oio_events_queue__start((Out)); \

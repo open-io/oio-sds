@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,17 @@ from tests.functional.cli import CliTestCase
 
 
 class ServiceCheckTest(CliTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Prevent the chunks' rebuilds by the crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super().tearDownClass()
+
     def test_rawx_check(self):
         """
         Perform basic tests of the 'openio-admin rawx check' command.

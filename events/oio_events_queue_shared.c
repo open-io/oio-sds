@@ -57,7 +57,7 @@ _q_destroy(struct oio_events_queue_s *self)
 	oio_str_clean(&q->username);
 	oio_str_clean(&q->password);
 	oio_str_clean(&q->queue_name);
-	oio_str_clean(&q->tube);
+	oio_str_clean(&q->routing_key);
 	oio_str_clean(&q->exchange_name);
 	oio_str_clean(&q->exchange_type);
 	g_strfreev(q->extra_args);
@@ -221,7 +221,7 @@ _q_get_health(struct oio_events_queue_s *self)
 	EXTRA_ASSERT(q != NULL && q->vtable != NULL);
 
 	if (!q->healthy) {
-		/* Queue is explicitely unhealthy */
+		/* Queue is explicitly unhealthy */
 		return SCORE_DOWN;
 	}
 	double max_score = ((double)SCORE_MAX);

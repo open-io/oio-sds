@@ -9,23 +9,29 @@ queue_url = beanstalk://127.0.0.1:11300
 # When using Beanstalkd, listen to this tube.
 tube = oio
 
-# When using AMQP, this is the queue name
-#(will also read "tube" for compatibility).
-queue_name = oio
+# When using AMQP, this is the queue name (will also read "tube"
+# for compatibility). This parameter takes precedence over
+# "events.amqp.queue_name" in namespace's configuration.
+#queue_name = oio
 
 # Comma-separated list of key-value arguments to pass when declaring the queue.
-# The default queue type is "classic".
-queue_args = x-queue-type=quorum
+# The default queue type is "classic". This parameter takes precedence over
+# "events.amqp.queue_args" in namespace's configuration.
+#queue_args = x-queue-type=quorum
 
-# Name of the (topic) exchange to bind the queue to.
+# Name of the (topic) exchange to bind the queue to. This parameter takes
+# precedence over "events.amqp.exchange_name" in namespace's configuration.
 #exchange_name = oio
 
 # Routing key to use when binding the queue to the exchange.
 # The character '#' is a wildcard and will match everything.
+# This parameter takes precedence over "events.amqp.bind_routing_key"
+# in namespace's configuration.
 #routing_key = #
 
 # Arguments to use when binding the queue to the exchange.
-# Only useful with header exchanges.
+# Only useful with header exchanges. This parameter takes precedence over
+# "events.amqp.bind_args" in namespace's configuration.
 #bind_args =
 
 # Number of worker processes, based on CPU count if not set or zero

@@ -307,6 +307,62 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_CORE_SDS_VERSION*
 
+### events.amqp.bind_args
+
+> Parameters to pass when binding a queue to an exchange, separated by ','.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_BIND_ARGS*
+
+### events.amqp.bind_routing_key
+
+> Routing key used when binding a queue to an exchange (should not be confused with the routing key used when sending an event).
+
+ * default: **#**
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_BIND_ROUTING_KEY*
+
+### events.amqp.exchange_args
+
+> Parameters to pass when declaring the exchange, separated by ','.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_EXCHANGE_ARGS*
+
+### events.amqp.exchange_name
+
+> Name of the exchange to declare.
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_EXCHANGE_NAME*
+
+### events.amqp.exchange_type
+
+> Type of the exchange to declare.
+
+ * default: **topic**
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_EXCHANGE_TYPE*
+
+### events.amqp.queue_args
+
+> Parameters to pass when declaring a queue, separated by ','.
+
+ * default: **x-queue-type=quorum**
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_QUEUE_ARGS*
+
+### events.amqp.queue_name
+
+> Name of the queue to declare.
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_EVENTS_AMQP_QUEUE_NAME*
+
 ### events.beanstalkd.check_level_alert
 
 > Set a threshold for the number of items in the beanstalkd, so that the service will alert past that value. Set to 0 for no alert sent.
@@ -584,7 +640,7 @@ Used by `gcc`
 
 ### meta2.tube.container_deleted
 
-> Tube name or full URI where to send 'storage.container.deleted' events.
+> Tube name (or routing key) for 'storage.container.deleted' events.
 
  * default: **oio**
  * type: string
@@ -592,7 +648,7 @@ Used by `gcc`
 
 ### meta2.tube.container_new
 
-> Tube name or full URI where to send 'storage.container.new' events.
+> Tube name (or routing key) for 'storage.container.new' events.
 
  * default: **oio**
  * type: string
@@ -600,7 +656,7 @@ Used by `gcc`
 
 ### meta2.tube.container_state
 
-> Tube name or full URI where to send 'storage.container.state' events.
+> Tube name (or routing key) for 'storage.container.state' events.
 
  * default: **oio**
  * type: string
@@ -608,7 +664,7 @@ Used by `gcc`
 
 ### meta2.tube.container_updated
 
-> Tube name or full URI where to send 'storage.container.update' events.
+> Tube name (or routing key) for 'storage.container.update' events.
 
  * default: **oio**
  * type: string
@@ -616,7 +672,7 @@ Used by `gcc`
 
 ### meta2.tube.content_appended
 
-> Tube name or full URI where to send 'storage.content.append' events.
+> Tube name (or routing key) for 'storage.content.append' events.
 
  * default: **oio**
  * type: string
@@ -624,7 +680,7 @@ Used by `gcc`
 
 ### meta2.tube.content_broken
 
-> Tube name or full URI where to send 'storage.content.broken' events.
+> Tube name (or routing key) for 'storage.content.broken' events.
 
  * default: **oio**
  * type: string
@@ -632,7 +688,7 @@ Used by `gcc`
 
 ### meta2.tube.content_created
 
-> Tube name or full URI where to send 'storage.content.new' events.
+> Tube name (or routing key) for 'storage.content.new' events.
 
  * default: **oio**
  * type: string
@@ -640,7 +696,7 @@ Used by `gcc`
 
 ### meta2.tube.content_deleted
 
-> Tube name or full URI where to send 'storage.content.deleted' events.
+> Tube name (or routing key) for 'storage.content.deleted' events.
 
  * default: **oio**
  * type: string
@@ -648,7 +704,7 @@ Used by `gcc`
 
 ### meta2.tube.content_drained
 
-> Tube name or full URI where to send 'storage.content.drained' events.
+> Tube name (or routing key) for 'storage.content.drained' events.
 
  * default: **oio**
  * type: string
@@ -656,7 +712,7 @@ Used by `gcc`
 
 ### meta2.tube.content_updated
 
-> Tube name or full URI where to send 'storage.content.update' events.
+> Tube name (or routing key) for 'storage.content.update' events.
 
  * default: **oio**
  * type: string
@@ -664,7 +720,7 @@ Used by `gcc`
 
 ### meta2.tube.meta2_deleted
 
-> Tube name or full URI where to send 'storage.meta2.deleted' events.
+> Tube name (or routing key) for 'storage.meta2.deleted' events.
 
  * default: **oio**
  * type: string

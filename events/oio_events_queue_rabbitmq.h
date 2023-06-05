@@ -24,9 +24,7 @@ struct oio_events_queue_s;
  * of events "not yet acknowledged".
  * The function will take ownership of extra_args. */
 GError * oio_events_queue_factory__create_rabbitmq(
-		const char *endpoint, const char *queue_name, const char *tube,
-		const char *exchange_name, const char *exchange_type,
-		char **extra_args,
+		const char *endpoint, const char *routing_key,
 		struct oio_events_queue_s **out);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_rabbitmq_h*/

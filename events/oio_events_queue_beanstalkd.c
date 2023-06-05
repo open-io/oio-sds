@@ -73,7 +73,7 @@ oio_events_queue_factory__create_beanstalkd (
 	struct _queue_with_endpoint_s *self = g_malloc0 (sizeof(*self));
 	self->vtable = &vtable_BEANSTALKD;
 	self->queue = g_async_queue_new ();
-	self->tube = g_strdup(tube);
+	self->queue_name = g_strdup(tube);
 	self->endpoint = g_strdup (endpoint);
 	self->running = FALSE;
 	self->healthy = FALSE;
@@ -246,7 +246,7 @@ static GError *
 _q_run (struct _queue_with_endpoint_s *q)
 {
 	struct _running_ctx_s ctx = {0};
-	beanstalkd_create(q->endpoint, q->tube, &(ctx.beanstalkd));
+	beanstalkd_create(q->endpoint, q->queue_name, &(ctx.beanstalkd));
 
 	/* Loop until the (asked) end or until there is no event */
 	while (_q_is_running(q)) {
