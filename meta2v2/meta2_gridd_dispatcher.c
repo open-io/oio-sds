@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -169,6 +169,7 @@ static gridd_filter M2V2_PURGE_CONTENT_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_purge_content,
 	meta2_filter_reply_success,
 	NULL
@@ -187,6 +188,7 @@ static gridd_filter M2V2_PURGE_CONTAINER_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_purge_container,
 	meta2_filter_reply_success,
 	NULL
@@ -203,6 +205,7 @@ static gridd_filter M2V2_FLUSH_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_flush_container,
 	meta2_filter_reply_success,
 	NULL
@@ -220,6 +223,7 @@ static gridd_filter M2V2_DRAIN_CONTAINER_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_not_wormed,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_drain_container,
 	meta2_filter_reply_success,
 	NULL
@@ -419,6 +423,7 @@ static gridd_filter M2V2_PROPSET_FILTERS[] =
 	meta2_filter_extract_header_flags32,
 	meta2_filter_extract_body_beans,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_set_content_properties,
 	meta2_filter_reply_success,
 	NULL
@@ -449,6 +454,7 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_del_content_properties,
 	meta2_filter_reply_success,
 	NULL
@@ -519,6 +525,7 @@ static gridd_filter M2V2_FILTERS_touch_content[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_action_touch_content,
 	meta2_filter_reply_success,
 	NULL
@@ -533,6 +540,7 @@ static gridd_filter M2V2_FILTERS_touch_container[] =
 	meta2_filter_check_url_cid,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_extract_header_flags32,
 	meta2_filter_action_touch_container,
 	meta2_filter_reply_success,
