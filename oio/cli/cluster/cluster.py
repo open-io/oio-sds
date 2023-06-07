@@ -28,7 +28,7 @@ DETAILED_SCORES = ("get", "put")
 def _format_detailed_scores(srv):
     return " ".join(
         [
-            f"{k[6:]}={v}"
+            f"{k[len('scores'):]}={v}"
             for k, v in iteritems(srv.get("scores", {}))
             if k.startswith("score.")
         ]
