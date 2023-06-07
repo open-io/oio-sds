@@ -156,11 +156,11 @@ _unpack_registration (json_object *item,
 		*p_get_score = json_object_get_int64 (score);
 	}
 	if (scores) {
-		json_object *score_put_obj = json_object_object_get(scores, "score.put");
-		if (score_put_obj)
+		json_object *score_put_obj;
+		json_object *score_get_obj;
+		if (json_object_object_get_ex(scores, "score.put", &score_put_obj))
 			*p_put_score = json_object_get_int(score_put_obj);
-		json_object *score_get_obj = json_object_object_get(scores, "score.get");
-		if (score_get_obj)
+		if (json_object_object_get_ex(scores, "score.get", &score_get_obj))
 			*p_get_score = json_object_get_int(score_get_obj);
 	}
 
