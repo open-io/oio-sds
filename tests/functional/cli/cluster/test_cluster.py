@@ -109,8 +109,10 @@ class ClusterTest(CliTestCase):
         output = self.openio("cluster unlock rdir 127.0.0.1:666 -U get" + opts)
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "unlocked")
+        time.sleep(2.0)
         output = self.openio("cluster list --locked" + opts)
         data = json.loads(output)
+        print(data)
         self.assertEqual(data[0]["Locks"], "put=True get=False")
 
     def test_cluster_wait(self):
