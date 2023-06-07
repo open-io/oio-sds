@@ -308,7 +308,8 @@ test_cli () {
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	cd $SRCDIR
-	tox -e cli
+	#tox -e cli.cluster.test_cluster.ClusterTest.test_detailed_lock_unlock
+	${PYTHON} $(command -v nosetests) tests.functional.cli.cluster.test_cluster.py
 
 	$SYSTEMCTL stop oio-cluster.target
 	$OPENIOCTL stop

@@ -109,7 +109,10 @@ class ClusterTest(CliTestCase):
         output = self.openio("cluster unlock rdir 127.0.0.1:666 -U get" + opts)
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "unlocked")
-        time.sleep(2.0)
+        time.sleep(1.0)
+        # Ensure the proxy reloads its LB pool
+        self._flush_proxy()
+        self._reload_proxy()
         output = self.openio("cluster list --locked" + opts)
         data = json.loads(output)
         print(data)

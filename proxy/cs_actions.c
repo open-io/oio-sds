@@ -360,6 +360,7 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 		struct service_tag_s *tag_get_lock = service_info_get_tag(
 				si->tags, NAME_TAGNAME_GET_LOCK);
 
+		gchar straddr[STRLEN_ADDRINFO];
 		switch (op) {
 			case REGOP_PUSH:
 				si->put_score.value = SCORE_UNSET;
@@ -372,6 +373,9 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 					si->get_score.value = CLAMP(si->get_score.value, SCORE_DOWN, SCORE_MAX);
 				continue;
 			case REGOP_UNLOCK:
+				grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
+				GRID_ERROR("LME: %s [%s] unlcok: put=%d get=%d tag_put=%p tag_get=%p",
+						si->type, straddr, si->put_score.value, si->get_score.value, tag_put_lock, tag_get_lock);
 				if (tag_put_lock) {
 					si->put_score.value = SCORE_UNLOCK;
 				} else {
