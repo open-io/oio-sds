@@ -963,7 +963,8 @@ push_service_dated(struct service_info_dated_s *sid)
 					srv->put_score.value = 0;
 				if (!srv->get_locked)
 					srv->get_score.value = 0;
-				_alert_service_with_zeroed_score(srv);
+				if (!srv->put_locked || !srv->get_locked)
+					_alert_service_with_zeroed_score(srv);
 			}
 			/* Prepare the serialized form of the service */
 			_conscience_srv_prepare_cache (srv);
