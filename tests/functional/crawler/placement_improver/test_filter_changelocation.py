@@ -131,7 +131,7 @@ class TestFilterChangelocation(BaseTestCase):
         """
         print("Move chunk failed due to error %s, %s", status, msg)
 
-    def _init_test_objects(self, container=None, object_name=None):
+    def _init_test_objects(self, container=None, object_name=None, in_mtime=False):
         """
         Initialize different objects used to test change location filter
         """
@@ -167,6 +167,8 @@ class TestFilterChangelocation(BaseTestCase):
         app.app_env["api"] = self.api
         chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
         changelocation = Changelocation(app=app, conf=self.conf)
+        if not in_mtime:
+            changelocation.min_delay_secs = 0
         return (
             chunk,
             container,
@@ -375,6 +377,7 @@ class TestFilterChangelocation(BaseTestCase):
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
             changelocation = Changelocation(app=app, conf=self.conf)
+            changelocation.min_delay_secs = 0
             # Launch filter to change location of misplaced chunk
             changelocation.process(chunk_env, self._cb)
         _, new_chunks = self.api.container.content_locate(
@@ -413,6 +416,7 @@ class TestFilterChangelocation(BaseTestCase):
                 app.app_env["api"] = self.api
                 chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
                 changelocation = Changelocation(app=app, conf=self.conf)
+                changelocation.min_delay_secs = 0
                 # Launch filter to change location of misplaced chunk
                 changelocation.process(chunk_env, self._cb)
         _, new_chunks = self.api.container.content_locate(
@@ -453,6 +457,7 @@ class TestFilterChangelocation(BaseTestCase):
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
             changelocation = Changelocation(app=app, conf=self.conf)
+            changelocation.min_delay_secs = 0
             # Launch filter to change location of misplaced chunk
             changelocation.process(chunk_env, self._cb)
             removed_symlinks += changelocation.removed_symlinks
@@ -512,6 +517,7 @@ class TestFilterChangelocation(BaseTestCase):
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
             changelocation = Changelocation(app=app, conf=self.conf)
+            changelocation.min_delay_secs = 0
             # Launch filter to change location of misplaced chunk
             changelocation.process(chunk_env, self._cb)
         _, new_chunks = self.api.container.content_locate(
@@ -561,6 +567,7 @@ class TestFilterChangelocation(BaseTestCase):
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
             changelocation = Changelocation(app=app, conf=self.conf)
+            changelocation.min_delay_secs = 0
             # Launch filter to change location of misplaced chunk
             changelocation.process(chunk_env, self._cb)
         # Check if the right misplaced chunk has been tagged
@@ -692,6 +699,27 @@ class TestFilterChangelocation(BaseTestCase):
         for shard in show_shards:
             self.api.container.container_flush(cid=shard["cid"])
             self.api.container.container_delete(cid=shard["cid"])
+
+    def test_change_location_mtime_delay(self):
+        """
+        Test if symlink nearly created is skipped by the improver
+        """
+        (
+            _,
+            _,
+            _,
+            chunk_path,
+            chunk_symlink_path,
+            chunk_env,
+            changelocation,
+            _,
+        ) = self._init_test_objects(in_mtime=True)
+        # Launch filter to change location of misplaced chunk
+        changelocation.process(chunk_env, self._cb)
+        # Chunk relocation not done
+        self.assertTrue(islink(chunk_symlink_path))
+        self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
+        self.assertEqual(1, changelocation.waiting_new_attempt)
 
     def test_change_location_after_first_failed_attempt(self):
         """Test if the filter does nothing before the timeout set is passed"""

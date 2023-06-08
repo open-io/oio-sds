@@ -25,6 +25,10 @@ pipeline = changelocation
 
 [filter:changelocation]
 use = egg:oio#changelocation
+# Minimum time after the creation of non optimal symlink before
+# improver process it, to make sure that all meta2 entry are updated.
+# By default equals to 300 seconds.
+min_delay_secs = 300
 # Delay in second before next attempt by the improver to move
 # a chunk that we were not able to move at previous pass.
 # first attemp -> 15 min

@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from os import unlink, rename
+from os import lstat, unlink, rename
 from os.path import join
 import time
 from urllib.parse import urlparse
@@ -44,6 +44,7 @@ class Changelocation(Filter):
 
     NAME = "Changelocation"
     NEW_ATTEMPT_DELAY = 900
+    MIN_DELAY_SECS = 300
     SERVICE_UPDATE_INTERVAL = 3600
 
     def init(self):
@@ -67,6 +68,12 @@ class Changelocation(Filter):
         self.waiting_new_attempt = 0
         self.new_attempt_delay = int_value(
             self.conf.get("new_attempt_delay"), self.NEW_ATTEMPT_DELAY
+        )
+        # Minimum time after the creation of non optimal symlink
+        # before improver process it, to make sure that all meta2 entry are updated.
+        # By default equal to 300 seconds.
+        self.min_delay_secs = int_value(
+            self.conf.get("min_delay_secs"), self.MIN_DELAY_SECS
         )
         # Interval of time in sec after which the services are updated
         self.service_update_interval = int_value(
@@ -277,6 +284,11 @@ class Changelocation(Filter):
         try:
             now = time.time()
             path = chunkwrapper.chunk_symlink_path
+            # get mtime
+            mtime = lstat(path).st_mtime
+            if (now - mtime) < self.min_delay_secs:
+                self.waiting_new_attempt += 1
+                return self.app(env, cb)
             is_symlink_new_format = self.has_new_format(path)
             # Check if the symlink name file is in chunkid.nb_attempt.timestamp format
             if is_symlink_new_format:
