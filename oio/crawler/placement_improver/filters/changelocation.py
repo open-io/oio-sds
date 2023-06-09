@@ -12,9 +12,10 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from os import lstat, unlink, rename
-from os.path import join
 import time
+from os import lstat, makedirs, unlink, rename
+from os.path import join, isdir
+from shutil import move
 from urllib.parse import urlparse
 from collections import Counter
 from oio.common.easy_value import int_value
@@ -32,7 +33,6 @@ from oio.common.utils import (
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     PlacementImproverCrawlerError,
-    PlacementImproverCrawlerChunkNotFound,
 )
 from oio.common import exceptions as exc
 
@@ -46,6 +46,8 @@ class Changelocation(Filter):
     NEW_ATTEMPT_DELAY = 900
     MIN_DELAY_SECS = 300
     SERVICE_UPDATE_INTERVAL = 3600
+    ORPHANS_DIR = "orphans"
+    NON_OPTIMAL_DIR = "non_optimal_placement"
 
     def init(self):
         """
@@ -95,7 +97,7 @@ class Changelocation(Filter):
         self.rawx_srv_locations = {}
         self.policy_data = {}
 
-    def _check_chunk_location(self, chunk, reqid):
+    def _check_chunk_location(self, chunk, reqid, force_master=False):
         """
         Verify if the misplaced chunk exists
 
@@ -103,6 +105,8 @@ class Changelocation(Filter):
         :type chunk: ChunkWrapper
         :param reqid: request id
         :type reqid: str
+        :param force_master: force the request to the master if True
+        :type force_master: bool
         :raises exc.OrphanChunk: raised in case a orphan chunk is found
         """
         # Get all object chunks location
@@ -112,6 +116,7 @@ class Changelocation(Filter):
             path=chunk.meta["content_path"],
             version=chunk.meta["content_version"],
             reqid=reqid,
+            force_master=force_master,
         )
         chunkshelper = ChunksHelper(chunks).filter(
             id=chunk.chunk_id, host=self.volume_id
@@ -268,6 +273,48 @@ class Changelocation(Filter):
                 str(chunk_exc),
             )
 
+    def _get_new_symlink_path(self, chunk_id, path, is_symlink_new_format, now):
+        """
+        Return new symlink file path after changing in the file name the number of
+        attempt and the timestamp representing the next time we will try to change
+        the location of misplaced chunk.
+
+        :param chunk_id: id of the chunk
+        :type chunk_id: str
+        :param path: path of the symlink path
+        :type path: str
+        :param is_symlink_new_format: True if symlink name has new
+            format and False if not
+        :type is_symlink_new_format: bool
+        :param now: now time
+        :type now: timestamp
+        :return: new symlink file path
+        :rtype: str
+        """
+        # Check if the symlink name file is in
+        # chunkid.nb_attempt.timestamp format
+        # TODO (FIR) remove this verification as of now the symlink
+        # created will always be on this format. This verification
+        # was set up to be compatible with symlinks created prior
+        # this change.
+        if is_symlink_new_format:
+            attempt_counter = int(path.rsplit(".", 2)[1]) + 1
+            next_attempt_time = int(path.rsplit(".", 2)[2])
+        else:
+            attempt_counter = 1
+        # Define the next time we will be allowed to move the misplaced chunk
+        seconds = self.get_timedelta(attempt_counter, delay=self.new_attempt_delay)
+        next_attempt_time = str(int(now + seconds))
+        new_symlink_name = ".".join(
+            [
+                chunk_id,
+                str(attempt_counter),
+                next_attempt_time,
+            ]
+        )
+        new_symlink_path = join(path.rsplit("/", 1)[0], new_symlink_name)
+        return new_symlink_path
+
     def process(self, env, cb):
         """
         Change location of a misplaced chunk
@@ -281,6 +328,8 @@ class Changelocation(Filter):
         # Get a request id for chunk placement improvement
         reqid = request_id("placementImprover-")
         chunk_id = chunkwrapper.chunk_id
+        content_id = chunkwrapper.meta["content_id"]
+        content_version = chunkwrapper.meta["content_version"]
         try:
             now = time.time()
             path = chunkwrapper.chunk_symlink_path
@@ -302,40 +351,59 @@ class Changelocation(Filter):
             cur_items = self._get_current_items(chunkwrapper, chunks, reqid)
         except Exception as chunk_exc:
             if isinstance(chunk_exc, (exc.OrphanChunk, exc.NotFound)):
-                self.logger.warning("Orphan chunk %s: %s", chunk_id, str(chunk_exc))
-                self.orphan_chunks_found += 1
-                # Check if the symlink name file is in
-                # chunkid.nb_attempt.timestamp format
-                # TODO (FIR) remove this verification as of now the symlink
-                # created will always be on this format. This verification
-                # was set up to be compatible with symlinks created prior
-                # this change.
-                if is_symlink_new_format:
-                    attempt_counter = int(path.rsplit(".", 2)[1]) + 1
-                    next_attempt_time = int(path.rsplit(".", 2)[2])
-                else:
-                    attempt_counter = 1
-                # Define the next time we will be allowed to move the misplaced chunk
-                seconds = self.get_timedelta(
-                    attempt_counter, delay=self.new_attempt_delay
+                # Content not found or container not found
+                self.logger.warning(
+                    "Possible orphan chunk %s found: %s", chunk_id, str(chunk_exc)
                 )
-                next_attempt_time = str(int(now + seconds))
-                new_symlink_name = ".".join(
-                    [
-                        chunk_id,
-                        str(attempt_counter),
-                        next_attempt_time,
-                    ]
-                )
-                new_symlink_path = join(path.rsplit("/", 1)[0], new_symlink_name)
-                rename(chunkwrapper.chunk_symlink_path, new_symlink_path)
-            else:
-                self.errors += 1
-            resp = PlacementImproverCrawlerChunkNotFound(
+                try:
+                    # Double check by forcing the request to the master
+                    chunks = self._check_chunk_location(
+                        chunkwrapper, reqid, force_master=True
+                    )
+                    return self.app(env, cb)
+                except Exception as c_exc:
+                    if isinstance(c_exc, (exc.OrphanChunk, exc.NotFound)):
+                        self.logger.warning(
+                            "Chunk %s still considered as orphan chunk after request to"
+                            " the master: %s",
+                            chunk_id,
+                            str(chunk_exc),
+                        )
+                        orphan_chunk_symlink_path = self.ORPHANS_DIR.join(
+                            chunkwrapper.chunk_symlink_path.rsplit(
+                                self.NON_OPTIMAL_DIR, 1
+                            )
+                        )
+                        orphan_chunk_symlink_path = self._get_new_symlink_path(
+                            chunk_id,
+                            orphan_chunk_symlink_path,
+                            is_symlink_new_format,
+                            now,
+                        )
+                        self.orphan_chunks_found += 1
+                        orphan_chunk_folder = orphan_chunk_symlink_path.rsplit("/", 1)[
+                            0
+                        ]
+                        if not isdir(orphan_chunk_folder):
+                            # Create orphan folder if it does not exist
+                            makedirs(orphan_chunk_folder)
+                        # Move orphan chunk symlink to orphan chunk symlink folder
+                        move(chunkwrapper.chunk_symlink_path, orphan_chunk_symlink_path)
+                        self.logger.warning(
+                            "Orphan chunk symlink %s moved to orphans folder %s.",
+                            chunk_id,
+                            orphan_chunk_folder,
+                        )
+                        return self.app(env, cb)
+
+            self.errors += 1
+            resp = PlacementImproverCrawlerError(
                 chunk=chunkwrapper,
                 body=(
                     f"Error while looking for chunks location: {chunk_exc} "
-                    f"reqid={reqid}, chunk_id={chunk_id}"
+                    f"reqid={reqid}, chunk_id={chunk_id}, "
+                    f"content_id={content_id}, "
+                    f"content_version={content_version}"
                 ),
             )
             return resp(env, cb)
@@ -343,50 +411,64 @@ class Changelocation(Filter):
             # Get content object
             content = self.content_factory.get_by_path_and_version(
                 container_id=chunkwrapper.meta["container_id"],
-                content_id=chunkwrapper.meta["content_id"],
+                content_id=content_id,
                 path=chunkwrapper.meta["content_path"],
-                version=chunkwrapper.meta["content_version"],
+                version=content_version,
                 reqid=reqid,
             )
             self._move_chunk(chunkwrapper, content, reqid, cur_items=cur_items)
         except Exception as chunk_exc:
             if isinstance(chunk_exc, exc.SpareChunkException):
-                # Check if symlink found is actually a misplaced chunk
+                # Get misplaced chunks
                 misplaced_chunks_ids = self._get_misplaced_chunks(
                     chunks, policy=content.policy, content_id=content.content_id
                 )
+                # Check if symlink found, links actually to a misplaced chunk
                 if chunk_id not in misplaced_chunks_ids:
-                    # Remove symlink
+                    # Chunk is well placed, remove symlink
                     symb_link_path = chunkwrapper.chunk_symlink_path
                     unlink(symb_link_path)
                     self.removed_symlinks += 1
-                    self.logger.warning(
-                        "Chunk %s is well placed, its symlink has been deleted",
-                        chunk_id,
-                    )
-                # As we have encountered in some cases misplaced chunks without
-                # non optimal placement header, for each misplaced chunk we do
-                # a post to add non optimal misplacement header.
-                misplaced_chunk_urls = [
-                    chunk["url"]
-                    for chunk in chunks
-                    if chunk["url"].split("/", 3)[3] in misplaced_chunks_ids
-                ]
+                    # As we have encountered in some cases misplaced chunks without
+                    # non optimal placement header, for each misplaced chunk we do
+                    # a post to add non optimal placement header.
+                    misplaced_chunk_urls = [
+                        chunk["url"]
+                        for chunk in chunks
+                        if (
+                            chunk["url"].split("/", 3)[3] in misplaced_chunks_ids
+                            and chunk["url"].split("/", 3)[3] != chunk_id
+                        )
+                    ]
 
-                (
-                    created_symlinks,
-                    failed_post,
-                ) = self.api.blob_client.tag_misplaced_chunk(
-                    misplaced_chunk_urls, self.logger
-                )
-                self.created_symlinks += created_symlinks
-                self.failed_post += failed_post
-                return self.app(env, cb)
+                    (
+                        created_symlinks,
+                        failed_post,
+                    ) = self.api.blob_client.tag_misplaced_chunk(
+                        misplaced_chunk_urls, self.logger
+                    )
+                    self.created_symlinks += created_symlinks
+                    self.failed_post += failed_post
+                    return self.app(env, cb)
+                else:
+                    # An error occured when moving the chunk, we need to set
+                    # a time after which we will retry.
+                    new_symlink_path = self._get_new_symlink_path(
+                        chunk_id,
+                        chunkwrapper.chunk_symlink_path,
+                        is_symlink_new_format,
+                        now,
+                    )
+                    rename(chunkwrapper.chunk_symlink_path, new_symlink_path)
+
             self.errors += 1
             resp = PlacementImproverCrawlerError(
                 chunk=chunkwrapper,
-                body="Error while moving the chunk {0}: {1}".format(
-                    chunk_id, str(chunk_exc)
+                body=(
+                    f"Error while moving the chunk {chunk_exc}"
+                    f"reqid={reqid}, chunk_id={chunk_id}, "
+                    f"content_id={content_id}, "
+                    f"content_version={content_version}"
                 ),
             )
             return resp(env, cb)

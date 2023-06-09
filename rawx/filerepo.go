@@ -45,6 +45,7 @@ type fileRepository struct {
 	fadviseUpload                 int
 	fadviseDownload               int
 	nonOptimalPlacementFolderPath string
+	orphansFolderPath             string
 }
 
 func (fr *fileRepository) openFlagsRO() int {
@@ -82,6 +83,10 @@ func (fr *fileRepository) init(root string) error {
 	fr.fadviseDownload = configDefaultFadviseDownload
 	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, nonOptimalPlacementFolderName}, "/")
 	if err = os.MkdirAll(fr.nonOptimalPlacementFolderPath, fr.putMkdirMode); err != nil {
+		return err
+	}
+	fr.orphansFolderPath = strings.Join([]string{fr.root, orphansFolderName}, "/")
+	if err = os.MkdirAll(fr.orphansFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
 	fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|fr.openFlagsRO(), 0)
