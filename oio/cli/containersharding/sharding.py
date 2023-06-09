@@ -66,8 +66,11 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
     """
     Abort a sharding operation.
 
-    Conditions: the container metadata has a sharding.state field
-    and a sharding operation is in progress.
+    You are advised to do some checks on the container before running this command.
+
+    Conditions: the container metadata has a sharding.state field,
+    a sharding operation is in progress, and the shard is not fully registered in
+    its root container.
 
     If the container is in "saving writes" state, the associated queue will
     be drained.
@@ -83,34 +86,70 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
         self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            "--force",
+            default=False,
+            help=(
+                "Force sharding abortion, even if the checks fail "
+                "or if they say the sharding is ok."
+            ),
+            action="store_true",
+        )
         return parser
 
-    def container_meta_to_shard_struct(self, meta):
-        pass
-
     def take_action(self, parsed_args):
+        logger = self.app.client_manager.logger
         obsto = self.app.client_manager.storage
         cs = ContainerSharding(
             self.app.client_manager.sds_conf,
-            logger=self.app.client_manager.logger,
+            logger=logger,
             pool_manager=self.app.client_manager.pool_manager,
         )
         acct, cont = self.account_and_container(parsed_args)
+        cid = cid_from_name(acct, cont)
         raw_meta = obsto.container_get_properties(acct, cont)
-        _, shard = cs.meta_to_shard(raw_meta)
+        root_cid, shard = cs.meta_to_shard(raw_meta)
+        healthy = True
         # meta_to_shard() does not work on root containers
         if not shard:
             shard = {"cid": cid_from_name(acct, cont)}
+        else:
+            try:
+                registered = list(
+                    cs.show_shards(
+                        None,
+                        None,
+                        root_cid=root_cid,
+                        marker=shard["lower"],
+                        no_paging=False,
+                    )
+                )
+                matching = [c for c in registered if c["cid"] == cid]
+                healthy = (
+                    len(matching) == 1
+                    and matching[0]["lower"] == shard["lower"]
+                    and matching[0]["upper"] == shard["upper"]
+                )
+            except Exception as exc:
+                logger.warning("Could not check %s: %s", cid, exc)
         if M2_PROP_SHARDING_QUEUE in raw_meta["system"]:
             shard["sharding"] = {
                 "queue": raw_meta["system"][M2_PROP_SHARDING_QUEUE],
                 "timestamp": raw_meta["system"][M2_PROP_SHARDING_TIMESTAMP],
             }
         aborted = drained = False
-        if shard:
+        if not healthy or parsed_args.force:
             aborted = cs.abort_sharding(shard)
             if aborted and "sharding" in shard:
                 drained = cs.drain_sharding_queue(shard)
+        else:
+            logger.warning(
+                "Container %s seems healthy (or was not checked). "
+                "After checking, try 'container-sharding clean', "
+                "or add --force to run the operation anyway.",
+                cid,
+            )
+            self.success = False
         return self.columns, (acct, cont, aborted, drained)
 
 

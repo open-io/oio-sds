@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -549,3 +549,31 @@ class ContainerTest(CliTestCase):
         stats = self.beanstalkd0.stats_tube(tube)
         self.assertEqual(stats["current-jobs-ready"], 0)
         self.assertIn("Drained", drain)
+
+
+class TestContainerSharding(CliTestCase):
+    NAME = uuid.uuid4().hex
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        opts = cls.get_format_opts(fields=("Name",))
+        output = cls.openio("container create " + cls.NAME + opts)
+        cls.CID = cid_from_name(cls.account_from_env(), cls.NAME)
+        cls.assertOutput(cls.NAME + "\n", output)
+
+    @classmethod
+    def tearDownClass(cls):
+        output = cls.openio("container delete " + cls.NAME)
+        cls.assertOutput("", output)
+        super().tearDownClass()
+
+    def test_abort_no_sharding_yet(self):
+        opts = self.get_format_opts(format_="json")
+        output = self.openio(
+            "container-sharding abort " + self.NAME + opts, expected_returncode=1
+        )
+        result = self.json_loads(output)
+        self.assertEqual(self.NAME, result.get("container"))
+        self.assertFalse(result.get("aborted"))
+        self.assertFalse(result.get("drained"))
