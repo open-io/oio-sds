@@ -26,7 +26,7 @@ class RawxWorker(CrawlerWorker):
     """
 
     SERVICE_TYPE = "rawx"
-    EXCLUDED_DIRS = ("non_optimal_placement",)
+    EXCLUDED_DIRS = ("non_optimal_placement", "orphans")
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
         super(RawxWorker, self).__init__(
