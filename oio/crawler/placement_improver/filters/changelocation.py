@@ -13,41 +13,27 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import time
-from os import lstat, makedirs, unlink, rename
-from os.path import join, isdir
+from os import lstat, makedirs, rename, unlink
+from os.path import isdir
 from shutil import move
-from urllib.parse import urlparse
-from collections import Counter
+
+from oio.common import exceptions as exc
 from oio.common.easy_value import int_value
-from oio.common.green import get_watchdog
-from oio.content.content import ChunksHelper
-from oio.content.factory import ContentFactory
-from oio.content.quality import NB_LOCATION_LEVELS, format_location, get_current_items
-from oio.crawler.common.base import Filter
-from oio.common.utils import (
-    get_nb_chunks,
-    is_chunk_id_valid,
-    request_id,
-    service_pool_to_dict,
-)
+from oio.common.utils import request_id
+from oio.crawler.common.base import ChunkSymlinkFilter
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     PlacementImproverCrawlerError,
 )
-from oio.common import exceptions as exc
 
 
-class Changelocation(Filter):
+class Changelocation(ChunkSymlinkFilter):
     """
     Initialize the filter used to relocate misplaced chunks
     """
 
     NAME = "Changelocation"
-    NEW_ATTEMPT_DELAY = 900
     MIN_DELAY_SECS = 300
-    SERVICE_UPDATE_INTERVAL = 3600
-    ORPHANS_DIR = "orphans"
-    NON_OPTIMAL_DIR = "non_optimal_placement"
 
     def init(self):
         """
@@ -68,63 +54,12 @@ class Changelocation(Filter):
         # Count orphans chunks found
         self.orphan_chunks_found = 0
         self.waiting_new_attempt = 0
-        self.new_attempt_delay = int_value(
-            self.conf.get("new_attempt_delay"), self.NEW_ATTEMPT_DELAY
-        )
         # Minimum time after the creation of non optimal symlink
         # before improver process it, to make sure that all meta2 entry are updated.
         # By default equal to 300 seconds.
         self.min_delay_secs = int_value(
             self.conf.get("min_delay_secs"), self.MIN_DELAY_SECS
         )
-        # Interval of time in sec after which the services are updated
-        self.service_update_interval = int_value(
-            self.conf.get("service_update_interval"), self.SERVICE_UPDATE_INTERVAL
-        )
-        self.last_services_update = 0.0
-        # Path of the volume in which the chunk is located
-        self.volume_path = self.app_env["volume_path"]
-        self.volume_id = self.app_env["volume_id"]
-        self.working_dir = self.app_env["working_dir"]
-        self.api = self.app_env["api"]
-        self.conscience_client = self.api.conscience
-        watchdog = get_watchdog(called_from_main_application=True)
-        # Get content object
-        self.content_factory = ContentFactory(
-            self.conf, logger=self.logger, watchdog=watchdog
-        )
-        self.rawx_srv_data = None
-        self.rawx_srv_locations = {}
-        self.policy_data = {}
-
-    def _check_chunk_location(self, chunk, reqid, force_master=False):
-        """
-        Verify if the misplaced chunk exists
-
-        :param chunk: chunk representation
-        :type chunk: ChunkWrapper
-        :param reqid: request id
-        :type reqid: str
-        :param force_master: force the request to the master if True
-        :type force_master: bool
-        :raises exc.OrphanChunk: raised in case a orphan chunk is found
-        """
-        # Get all object chunks location
-        _, chunks = self.api.container.content_locate(
-            content=chunk.meta["content_id"],
-            cid=chunk.meta["container_id"],
-            path=chunk.meta["content_path"],
-            version=chunk.meta["content_version"],
-            reqid=reqid,
-            force_master=force_master,
-        )
-        chunkshelper = ChunksHelper(chunks).filter(
-            id=chunk.chunk_id, host=self.volume_id
-        )
-        # Check if object chunks exist
-        if len(chunkshelper.chunks) == 0:
-            raise exc.OrphanChunk("Chunk not found in content")
-        return chunks
 
     def _move_chunk(self, chunkwrapper, content, reqid, cur_items=None):
         """
@@ -151,108 +86,6 @@ class Changelocation(Filter):
         # Increment the counter of chunks relocated
         self.relocated_chunks += 1
 
-    def _get_current_items(self, chunk, chunks, reqid):
-        """Calculate current items on the host of the chunk tagged as misplaced
-
-        :param chunk: chunk representation.
-        :type chunk: ChunkWrapper
-        :param chunks: list of chunks of an object
-        :type chunks: list of dict
-        :param reqid: request id
-        :type reqid: str
-        :return: the current items on the host, e.g: 12.12.4.1
-        :rtype: str
-        """
-        now = time.time()
-        if self.rawx_srv_data is None or (
-            (now - self.last_services_update) >= self.service_update_interval
-        ):
-            self.rawx_srv_data = self.conscience_client.all_services(
-                service_type="rawx",
-                reqid=reqid,
-            )
-            for data in self.rawx_srv_data:
-                # Fetch location of each rawx service
-                loc = tuple(data["tags"]["tag.loc"].split("."))
-                # Here data["id"] represents the rawx service id
-                self.rawx_srv_locations[data["id"]] = loc
-            cluster_info = self.conscience_client.info()
-            for policy in cluster_info["storage_policy"]:
-                # Fetch constraints of each rawx service
-                service_pool, data_security = cluster_info["storage_policy"][
-                    policy
-                ].split(":")
-                if service_pool not in cluster_info["service_pools"]:
-                    continue
-                pool = cluster_info["service_pools"][service_pool]
-                pool_dict = service_pool_to_dict(pool)
-                if "fair_location_constraint" not in pool_dict:
-                    continue
-                try:
-                    # pool = 9,rawx;fair_location_constraint=9.9.2.1;
-                    # strict_location_constraint=9.9.2.1;
-                    # min_dist=1;warn_dist=0
-                    service_pool_constraints = pool_dict[
-                        "fair_location_constraint"
-                    ].split(".")
-                    data_security = cluster_info["data_security"][data_security]
-                    # Fetch expected chunks for a policy with a specific data security
-                    expected_nb_chunks = get_nb_chunks(data_security)
-                    storage_constraints = [int(x) for x in service_pool_constraints]
-                    self.policy_data[policy] = (
-                        expected_nb_chunks,
-                        data_security,
-                        storage_constraints,
-                    )
-                except Exception:
-                    self.logger.exception("Failed to fetch %s policy data", policy)
-                    continue
-            self.last_services_update = now
-        return get_current_items(
-            chunk, None, chunks, self.rawx_srv_locations, self.logger
-        )
-
-    def _get_misplaced_chunks(self, chunks, policy, content_id):
-        """
-        Return the misplaced chunks ids among the list of chunks passed in
-        the parameters.
-
-        :param chunks: list of object chunks
-        :type chunks: list
-        :param account: accout name
-        :type account: str
-        :param container: container name
-        :type container: str
-        :return: list of misplaced chunks ids
-        :rtype: list
-        """
-        misplaced_chunks_ids = []
-        counters = {}
-        try:
-            # Constraint defined for all the chunks object
-            fair_location_constraint = self.policy_data[policy][2]
-        except KeyError:
-            self.logger.warning(
-                "Policy %s has no fair location constraint defined, \
-                    cannot get misplaced chunks for the content %s",
-                policy,
-                content_id,
-            )
-            return misplaced_chunks_ids
-        for chunk_data in chunks:
-            rawx_srv_id = urlparse(chunk_data["url"]).netloc
-            chunk_id = chunk_data["url"].split("/", 3)[3]
-            # Location of the chunk selected rawx
-            location = format_location(self.rawx_srv_locations[rawx_srv_id])
-            for depth in range(NB_LOCATION_LEVELS):
-                # Create a counter for each depth
-                depth_counter = counters.setdefault(depth, Counter())
-                subloc = location[: depth + 1]
-                depth_counter[subloc] += 1
-                if depth_counter[subloc] > fair_location_constraint[depth]:
-                    misplaced_chunks_ids.append(chunk_id)
-        return misplaced_chunks_ids
-
     def _post_process(self, chunkwrapper):
         """
         Launch post process event: delete symbolic link
@@ -272,48 +105,6 @@ class Changelocation(Filter):
                 symb_link_path,
                 str(chunk_exc),
             )
-
-    def _get_new_symlink_path(self, chunk_id, path, is_symlink_new_format, now):
-        """
-        Return new symlink file path after changing in the file name the number of
-        attempt and the timestamp representing the next time we will try to change
-        the location of misplaced chunk.
-
-        :param chunk_id: id of the chunk
-        :type chunk_id: str
-        :param path: path of the symlink path
-        :type path: str
-        :param is_symlink_new_format: True if symlink name has new
-            format and False if not
-        :type is_symlink_new_format: bool
-        :param now: now time
-        :type now: timestamp
-        :return: new symlink file path
-        :rtype: str
-        """
-        # Check if the symlink name file is in
-        # chunkid.nb_attempt.timestamp format
-        # TODO (FIR) remove this verification as of now the symlink
-        # created will always be on this format. This verification
-        # was set up to be compatible with symlinks created prior
-        # this change.
-        if is_symlink_new_format:
-            attempt_counter = int(path.rsplit(".", 2)[1]) + 1
-            next_attempt_time = int(path.rsplit(".", 2)[2])
-        else:
-            attempt_counter = 1
-        # Define the next time we will be allowed to move the misplaced chunk
-        seconds = self.get_timedelta(attempt_counter, delay=self.new_attempt_delay)
-        next_attempt_time = str(int(now + seconds))
-        new_symlink_name = ".".join(
-            [
-                chunk_id,
-                str(attempt_counter),
-                next_attempt_time,
-            ]
-        )
-        new_symlink_path = join(path.rsplit("/", 1)[0], new_symlink_name)
-        return new_symlink_path
 
     def process(self, env, cb):
         """
@@ -476,41 +267,6 @@ class Changelocation(Filter):
         # This action is called only when the chunk has been moved
         self._post_process(chunkwrapper)
         return self.app(env, cb)
-
-    @staticmethod
-    def get_timedelta(nb_attempt, delay=NEW_ATTEMPT_DELAY):
-        """
-        Return time to wait before another improver attempt
-
-        :param nb_attempt: number of attempt by placement Improver
-        :type nb_attempt: int
-        :return: time in second
-        :rtype: int
-        """
-        # first attemp -> 15 min
-        # second attemp -> 30 min
-        # third attemp -> 1h
-        # fourth attemp -> 2h
-        # fifth attemp -> 2h
-        # sixth attemp -> 2h ...
-        res = 2 ** (nb_attempt - 1)
-        times = res if res < 8 else 8
-        return delay * times
-
-    @staticmethod
-    def has_new_format(path):
-        """
-        Verify if the symlink path has the new format
-        chunk_id.nb_attempt.timestamp
-
-        :param path: symlink
-        :type path: str
-        :return: True if it has the new format and False if not
-        :rtype: boolean
-        """
-        res = path.rsplit("/", 1)[1].split(".")
-        chunk_id = res[0]
-        return len(res) == 3 and is_chunk_id_valid(chunk_id)
 
     def _get_filter_stats(self):
         return {
