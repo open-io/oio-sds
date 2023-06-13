@@ -40,6 +40,11 @@ use = egg:oio#checksum
 # In seconds, the interval between two requests to the conscience (to check if
 # rawx services are up). Defaults to 30.
 conscience_cache = 30
+
+# Maximum size passed to read() calls. Bigger reads increase memory consumption
+# but decrease the number of syscalls.
+#max_read_size = 262144
+
 # Boolean, indicates if the quarantine folder should be at the mountpoint
 # of the rawx or under the corresponding volume path defined in <volume_list>
 # Defaults to True

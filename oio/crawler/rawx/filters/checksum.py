@@ -18,7 +18,7 @@ from os import makedirs, remove
 from os.path import isdir
 from shutil import move
 
-from oio.api.io import READ_CHUNK_SIZE
+from oio.api.io import READ_CHUNK_SIZE, exp_ramp_gen
 from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
 from oio.common.constants import CHUNK_SUFFIX_CORRUPT, CHUNK_QUARANTINE_FOLDER_NAME
@@ -47,6 +47,7 @@ class Checksum(Filter):
         self.unrecoverable_content = 0
 
         self.conscience_cache = int_value(self.conf.get("conscience_cache"), 30)
+        self.max_read_size = int_value(self.conf.get("max_read_size"), 256 * 1024)
         self.quarantine_mountpoint = boolean_value(
             self.conf.get("quarantine_mountpoint"), True
         )
@@ -94,12 +95,12 @@ class Checksum(Filter):
         self._rawx_service = RawxService(status, now)
         return status
 
-    @staticmethod
-    def _get_file_hash(chunk_path, chunk_checksum_algo, buf_size=READ_CHUNK_SIZE):
+    def _get_file_hash(self, chunk_path, chunk_checksum_algo):
+        buf_size_gen = exp_ramp_gen(READ_CHUNK_SIZE, self.max_read_size)
         with open(chunk_path, "rb") as chunk_file:
             hasher = get_hasher(chunk_checksum_algo)
             while True:
-                data = chunk_file.read(buf_size)
+                data = chunk_file.read(next(buf_size_gen))
                 if not data:
                     break
                 hasher.update(data)
