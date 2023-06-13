@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,8 @@ from eventlet.semaphore import Semaphore  # noqa
 
 
 def eventlet_monkey_patch():
-    eventlet.monkey_patch(os=False)
+    # XXX: we used to disable "os" monkey-patching here.
+    eventlet.monkey_patch()
 
 
 logging.thread = eventlet.green.thread
@@ -77,7 +78,7 @@ class ChunkReadTimeout(OioTimeout):
 
 
 def eventlet_yield():
-    """Swith to another eventlet coroutine."""
+    """Switch to another eventlet coroutine."""
     sleep(0)
 
 
@@ -209,7 +210,7 @@ def ratelimit_policy_from_string(policy_str):
             td = timedelta(0)
             rate = int(policy_str)
         except ValueError as err:
-            raise ValueError("Unparseable rate limit '%s': %s" % (policy_str, err))
+            raise ValueError("Unparsable rate limit '%s': %s" % (policy_str, err))
         policy.append((td, rate))
         return policy
     changes = policy_str.split(";")
@@ -220,7 +221,7 @@ def ratelimit_policy_from_string(policy_str):
             td = timedelta(hours=int(hour_str), minutes=int(min_str))
             rate = int(rate_str)
         except ValueError as err:
-            raise ValueError("Unparseable rate change '%s': %s" % (change, err))
+            raise ValueError("Unparsable rate change '%s': %s" % (change, err))
         policy.append((td, rate))
     policy.sort()
     return policy
@@ -287,7 +288,7 @@ except ImportError:
         Exception),
         then unschedule them if the timeouts are cancelled.
         1. at T+0, request timeout(10)
-            => wathdog greenlet sleeps 10 seconds
+            => watchdog greenlet sleeps 10 seconds
         2. at T+1, request timeout(15)
             => the timeout will expire after the current, no need to wake up
                the watchdog greenlet
