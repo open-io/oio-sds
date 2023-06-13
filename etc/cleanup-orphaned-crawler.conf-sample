@@ -1,0 +1,48 @@
+[cleanup-orphaned-crawler]
+namespace = OPENIO
+user = openio
+volume_list =  /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
+
+# Wait random time before starting
+# to avoid all the crawlers from working at the same time.
+wait_random_time_before_starting = True
+# In seconds, the interval between two full scans. Defaults to half an hour.
+interval = 1800
+# In seconds, the interval between two logs entries (for each volume)
+# Defaults to 300 seconds.
+report_interval = 300
+# Maximum chunks to be scanned per second. Defaults to 30.
+scanned_per_second = 30
+
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,rawx-crawler
+
+[pipeline:main]
+pipeline = cleanup_orphaned
+
+[filter:cleanup_orphaned]
+use = egg:oio#cleanup_orphaned
+# Delay in seconds we have to wait before deleting an orphan chunk
+delete_delay = 2592000
+# Used to exclude chunks created/modified within a time window
+# excluded_chunk_upload_time_ranges = "timestamp_1-timestamp_2, t3-t4, ..."
+excluded_chunk_upload_time_ranges = ""
+# Used to exclude chunks from specific account/container
+# excluded_container = "account_1/container_1,account_2/container_2, ..."
+excluded_containers = ""
+# Delay in second before next attempt to check orphan chunk location
+# first attemp -> 15 min
+# second attemp -> 30 min
+# third attemp -> 1h
+# fourth attemp -> 2h
+# fifth attemp -> 2h
+# sixth attemp -> 2h ...
+new_attempt_delay = 900
+# Time interval after which service data are updated
+service_update_interval = 3600
+
+[filter:logger]
+use = egg:oio#logger

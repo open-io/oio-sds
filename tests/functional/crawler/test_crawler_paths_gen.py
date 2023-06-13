@@ -14,12 +14,14 @@
 # License along with this library.
 
 import random
+import time
 from os import listdir, remove, walk
-from os.path import join, islink
+from os.path import islink, join
+
 from oio.common.exceptions import Conflict
 from oio.common.utils import paths_gen, request_id
-from oio.event.evob import EventTypes
 from oio.crawler.rawx.crawler import RawxWorker
+from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 
 
@@ -113,14 +115,25 @@ class TestCrawlerPathGen(BaseTestCase):
         volume_id = url.split("/", 3)[2]
         volume_path = self.rawx_volumes[volume_id]
         misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
-        # Get number of already created chunks and symbolic links
-        nb_link = sum(
-            len(files) for _, _, files in walk(join(volume_path, misplaced_chunk_dir))
+        nb_link = {}
+        for folder in RawxWorker.EXCLUDED_DIRS:
+            # Get number of already existing symbolic links
+            nb_link[folder] = sum(
+                len(files) for _, _, files in walk(join(volume_path, folder))
+            )
+        # Get number of already existing markers
+        nb_markers = sum(
+            len(files)
+            for _, _, files in walk(join(volume_path, RawxWorker.MARKERS_DIR))
         )
-        nb_chunk = sum(len(files) for _, _, files in walk(volume_path)) - nb_link
+        # Get number of already existing chunks
+        nb_chunk = sum(len(files) for _, _, files in walk(volume_path)) - (
+            sum(nb_link.values()) + nb_markers
+        )
         self.logger.debug(
-            "%d chunks and %d symlinks before the test", nb_chunk, nb_link
+            "%d chunks and %d symlinks before the test", nb_chunk, sum(nb_link.values())
         )
+        not_chunk_folders = RawxWorker.EXCLUDED_DIRS + (RawxWorker.MARKERS_DIR,)
         try:
             # Create the symbolic link of the chunk
             headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}
@@ -135,28 +148,22 @@ class TestCrawlerPathGen(BaseTestCase):
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
             len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),
-            nb_link + symlink_sup,
+            nb_link[misplaced_chunk_dir] + symlink_sup,
         )
-        self.assertEqual(
-            len(list(paths_gen(volume_path, RawxWorker.EXCLUDED_DIRS))), nb_chunk
-        )
+        self.assertEqual(len(list(paths_gen(volume_path, not_chunk_folders))), nb_chunk)
 
         # Case 2: delete the chunk but the symbolic link is still there
         del_reqid = request_id("testpathsgen-")
         self.api.object_delete(self.account, container, object_name, reqid=del_reqid)
-        self.wait_for_event(
-            "oio-preserved",
-            reqid=del_reqid,
-            timeout=5.0,
-            types=(EventTypes.CHUNK_DELETED,),
-        )
+        time.sleep(2)
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
             len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),
-            nb_link + symlink_sup,
+            nb_link[misplaced_chunk_dir] + symlink_sup,
         )
         self.assertEqual(
-            len(list(paths_gen(volume_path, RawxWorker.EXCLUDED_DIRS))), nb_chunk - 1
+            len(list(paths_gen(volume_path, not_chunk_folders))),
+            (nb_chunk - 1),
         )
         # remove sybomlic link created before
         remove(chunk_symlink_path)

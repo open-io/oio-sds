@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,6 +82,12 @@ class PlacementImproverCrawlerResponseException(RawxCrawlerResponseException):
     """
 
 
+class CleanupOrphanedCrawlerResponseException(RawxCrawlerResponseException):
+    """
+    Cleanup Orphaned Crawler ResponseException
+    """
+
+
 class StatusMap(object):
     def __init__(self, cls=RawxCrawlerResponseException) -> None:
         self.cls = cls
@@ -95,7 +101,13 @@ RawxCrawlerOk = status_map[200]
 RawxCrawlerNotFound = status_map[404]
 RawxCrawlerError = status_map[500]
 
-status_map_bis = StatusMap(cls=PlacementImproverCrawlerResponseException)
-PlacementImproverCrawlerError = status_map_bis[500]
-PlacementImproverCrawlerChunkNotFound = status_map[404]
-PlacementImproverCrawlerOk = status_map[200]
+status_map_improver = StatusMap(cls=PlacementImproverCrawlerResponseException)
+PlacementImproverCrawlerError = status_map_improver[500]
+PlacementImproverCrawlerChunkNotFound = status_map_improver[404]
+PlacementImproverCrawlerOk = status_map_improver[200]
+
+
+status_map_orphaned = StatusMap(cls=CleanupOrphanedCrawlerResponseException)
+CleanupOrphanedCrawlerError = status_map_orphaned[500]
+CleanupOrphanedCrawlerChunkNotFound = status_map_orphaned[404]
+CleanupOrphanedCrawlerOk = status_map_orphaned[200]

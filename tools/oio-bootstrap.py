@@ -524,6 +524,46 @@ quarantine_mountpoint = False
 use = egg:oio#logger
 """
 
+template_cleanup_orphaned_crawler_service = """
+[cleanup-orphaned-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${RAWX_VOLUMES}
+
+wait_random_time_before_starting = True
+use_marker = False
+interval = 300
+report_interval = 75
+scanned_per_second = 10
+# represents 30 seconds at max rate
+# scanned_between_markers = 300
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = logger cleanup_orphaned
+
+[filter:cleanup_orphaned]
+use = egg:oio#cleanup_orphaned
+# Delay in seconds we have to wait before deleting an orphan chunk
+delete_delay = 604800
+# Delay in second before next attempt to check orphan chunk location
+# first attemp -> 15 min
+# second attemp -> 30 min
+# third attemp -> 1h
+# fourth attemp -> 2h
+# fifth attemp -> 2h
+# sixth attemp -> 2h ...
+new_attempt_delay = 900
+# Time interval after which service data are updated
+service_update_interval = 3600
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
 template_rawx_service = """
 listen ${IP}:${PORT}
 
@@ -1237,6 +1277,26 @@ template_systemd_service_checksum_checker_crawler = """
 Description=[OpenIO] Service checksum checker crawler
 PartOf=${PARENT}
 OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
+template_systemd_service_cleanup_orphaned_crawler = """
+[Unit]
+Description=[OpenIO] Service cleanup orphaned crawler
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -2638,6 +2698,29 @@ def generate(options):
         register_service(
             env,
             template_systemd_service_placement_improver_crawler,
+            crawler_target,
+            add_service_to_conf=False,
+        )
+
+        # oio-cleanup-orphaned-crawler
+        env.update(
+            {
+                "RAWX_VOLUMES": ",".join(rawx_volumes),
+                "SRVTYPE": "cleanup-orphaned-crawler",
+                "EXE": "oio-cleanup-orphaned-crawler",
+                "GROUPTYPE": "crawler",
+                "SRVNUM": "1",
+            }
+        )
+        tpl = Template(template_cleanup_orphaned_crawler_service)
+        to_write = tpl.safe_substitute(env)
+        path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
+        with open(path, "w+") as f:
+            f.write(to_write)
+        tpl = Template(template_systemd_service_cleanup_orphaned_crawler)
+        register_service(
+            env,
+            template_systemd_service_cleanup_orphaned_crawler,
             crawler_target,
             add_service_to_conf=False,
         )
