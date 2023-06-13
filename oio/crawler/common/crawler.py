@@ -30,11 +30,15 @@ from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
 from oio.crawler.placement_improver.loader import (
     loadpipeline as placement_improver_loadpipeline,
 )
+from oio.crawler.cleanup_orphaned.loader import (
+    loadpipeline as cleanup_orphaned_loadpipeline,
+)
 
 LOAD_PIPELINES = {
     "RawxWorker": rawx_loadpipeline,
     "Meta2Worker": meta2_loadpipeline,
     "PlacementImproverWorker": placement_improver_loadpipeline,
+    "CleanupOrphanedWorker": cleanup_orphaned_loadpipeline,
 }
 
 TAGS_TO_DEBUG = ["starting"]
