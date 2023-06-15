@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -53,5 +54,10 @@ int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 
 /** g_free(p) if p is not NULL */
 void g_free0(gpointer p);
+
+/* Create a string compatible with the LTSV format
+ * (replace the tabulation and newline characters).
+ * The result must be freed with g_free(). */
+gchar * string_to_ltsv_value(const gchar *value);
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

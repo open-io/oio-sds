@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -59,4 +60,20 @@ gchar ** g_strdupv_inline(gchar **src) {
 	}
 
 	return (gchar**)raw;
+}
+
+gchar*
+string_to_ltsv_value(const gchar *value)
+{
+	if (value == NULL) {
+		return NULL;
+	}
+	char **split = g_strsplit(value, "\n", -1);
+	gchar *ltsv_value = g_strjoinv("#012", split);
+	g_strfreev(split);
+	split = g_strsplit(ltsv_value, "\t", -1);
+	g_free(ltsv_value);
+	ltsv_value = g_strjoinv("#009", split);
+	g_strfreev(split);
+	return ltsv_value;
 }

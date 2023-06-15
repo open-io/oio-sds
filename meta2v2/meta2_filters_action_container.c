@@ -414,10 +414,17 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
 		lp->maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
-	reply->subject("max=%"G_GINT64_FORMAT", marker=%s, version_marker=%s, "
-			"end=%s, prefix=%s, delimiter=%s", lp->maxkeys, lp->marker_start,
-			lp->version_marker, lp->marker_end, lp->prefix,
-			lp->delimiter);
+	gchar *marker_start = string_to_ltsv_value(lp->marker_start);
+	gchar *marker_end = string_to_ltsv_value(lp->marker_end);
+	gchar *prefix = string_to_ltsv_value(lp->prefix);
+	gchar *delimiter = string_to_ltsv_value(lp->delimiter);
+	reply->subject("max:%"G_GINT64_FORMAT"\tmarker:%s\tversion_marker:%s\t"
+			"end:%s\tprefix:%s\tdelimiter:%s", lp->maxkeys, marker_start,
+			lp->version_marker, marker_end, prefix, delimiter);
+	g_free(marker_start);
+	g_free(marker_end);
+	g_free(prefix);
+	g_free(delimiter);
 }
 
 int
