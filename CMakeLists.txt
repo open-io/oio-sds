@@ -36,6 +36,11 @@ set(PYTHON python)
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
 
+# g_memdup is deprecated, to replace with g_memdump2 availble in 2.68
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
+# Enum conversions
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-enum-conversion")
+
 if (CMAKE_COMPILER_IS_GNUCC)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-variadic-macros")

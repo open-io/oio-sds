@@ -258,7 +258,7 @@ enum oio_header_case_e
 	OIO_HDRCASE_RANDOM = 3,
 };
 
-enum oio_header_case_e oio_header_case;
+extern enum oio_header_case_e oio_header_case;
 
 /* http://www.cse.yorku.ca/~oz/hash.html */
 guint32 djb_hash_buf(const guint8 * b, register gsize bs);
