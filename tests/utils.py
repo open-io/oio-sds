@@ -602,8 +602,12 @@ class BaseTestCase(CommonTestCase):
     def tearDownClass(cls):
         super(BaseTestCase, cls).tearDownClass()
 
-    def wait_for_score(self, types, timeout=12.0, score_threshold=35):
-        """Wait for services to have a score greater than the threshold."""
+    def wait_for_score(self, types, timeout=12.0, score_threshold=35, score_type="put"):
+        """Wait for services to have a score greater than the threshold.
+
+        :param score_type: The type of score to wait, can be "put", get or
+            "both".
+        """
         deadline = time.time() + timeout
         while time.time() < deadline:
             wait = False
@@ -611,7 +615,23 @@ class BaseTestCase(CommonTestCase):
                 try:
                     all_svcs = self.conscience.all_services(type_)
                     for service in all_svcs:
-                        if int(service["score"]) < score_threshold:
+                        if (
+                            score_type == "put"
+                            and int(service["score"]) < score_threshold
+                        ):
+                            wait = True
+                            break
+                        elif (
+                            score_type == "get"
+                            and int(service["scores"]["score.get"]) < score_threshold
+                        ):
+                            wait = True
+                            break
+                        elif (
+                            score_type == "both"
+                            and int(service["scores"]["score.put"]) < score_threshold
+                            and int(service["scores"]["score.get"]) < score_threshold
+                        ):
                             wait = True
                             break
                     else:
