@@ -294,9 +294,9 @@ class Content(object):
                     raise exc.ChunkException(
                         "Several chunks with ID %s and no service ID" % (chunk_id,)
                     )
-                candidates = candidates.filter(host=service_id)
+            # Force Check host
+            candidates = candidates.filter(host=service_id)
             current_chunk = candidates.one()
-
         if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 

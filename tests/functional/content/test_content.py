@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -303,14 +303,14 @@ class TestContentFactory(BaseTestCase):
         old_content.create(BytesIO(data))
         return self.content_factory.get(self.container_id, old_content.content_id)
 
-    def _test_move_chunk(self, policy):
+    def _test_move_chunk(self, policy, host=None):
         data = random_data(self.chunk_size)
         content = self._new_content(policy, data)
 
         mc = content.chunks.filter(metapos=0)
         chunk_id = mc[0].id
         chunk_url = mc[0].url
-        chunk_host = mc[0].host
+        chunk_host = mc[0].host if host is None else host
         chunk_meta, chunk_stream = self.blob_client.chunk_get(chunk_url)
         chunk_hash = hash_stream(chunk_stream)
         new_chunk = content.move_chunk(chunk_id, service_id=chunk_host)
@@ -354,6 +354,15 @@ class TestContentFactory(BaseTestCase):
         content = self._new_content(self.stgpol_twocopies, data)
         with ExpectedException(OrphanChunk):
             content.move_chunk("1234")
+
+    @ec
+    def test_move_chunk_not_right_service_id_ec(self):
+        with ExpectedException(OrphanChunk):
+            self._test_move_chunk(self.stgpol_ec, host="123")
+
+    def test_twocopies_move_chunk_not_right_service_id_2copies(self):
+        with ExpectedException(OrphanChunk):
+            self._test_move_chunk(self.stgpol_twocopies, host="123")
 
     def test_strange_paths(self):
         answers = dict()
