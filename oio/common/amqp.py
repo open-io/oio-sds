@@ -15,7 +15,10 @@
 from time import monotonic as monotonic_time
 
 import pika
-from pika.exceptions import AMQPError  # noqa: F401, pylint: disable=unused-import
+from pika.exceptions import (
+    AMQPError,
+    StreamLostError,
+)
 from pika.exchange_type import ExchangeType  # noqa: F401, pylint: disable=unused-import
 
 from oio.common.utils import rotate_list
@@ -95,11 +98,21 @@ class AmqpConnector:
             try:
                 try:
                     if self._channel.is_open:
-                        self._channel.cancel()
+                        self._channel.close()
                 except AMQPError:
                     pass
                 if self._conn.is_open:
                     self._conn.close()
+            except StreamLostError as err:
+                # We were already disconnected
+                self.logger.debug(
+                    "Got error while disconnecting from RabbitMQ: %s", err
+                )
+            except AMQPError as err:
+                self.logger.warning(
+                    "Got error while disconnecting from RabbitMQ: %s", err
+                )
+                after_error = True
             except Exception:
                 self.logger.exception("Failed to disconnect from RabbitMQ")
                 after_error = True
