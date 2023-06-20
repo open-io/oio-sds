@@ -1,5 +1,6 @@
 [project]
-name = "oio-sds"
+name = "oio"
+dynamic = ["version"]
 
 [build-system]
 requires = ["black", "setuptools >= 47.1.0", "wheel"]
