@@ -1081,7 +1081,6 @@ configure_request_handlers (void)
 	// Conscience
 	SET("/$NS/conscience/info/#GET", action_conscience_info);
 	SET("/$NS/conscience/list/#GET", action_conscience_list);
-	SET("/$NS/conscience/score/#GET", action_conscience_score);
 	SET("/$NS/conscience/register/#POST", action_conscience_register);
 	SET("/$NS/conscience/deregister/#POST", action_conscience_deregister);
 	SET("/$NS/conscience/flush/#POST", action_conscience_flush);
