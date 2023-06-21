@@ -187,6 +187,9 @@ GLOBAL_RATELIMIT_GROUP = "ALL"
 
 BUCKET_PROP_REPLI_ENABLED = "replication_enabled"
 
+# Account beta feature prefix
+ACCOUNT_BETA_FEATURE_PREFIX = "beta-feature-"
+
 # Account name
 M2_PROP_ACCOUNT_NAME = "sys.account"
 # When the container is part of a bucket, this property holds the bucket's name

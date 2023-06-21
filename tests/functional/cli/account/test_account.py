@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 import uuid
 import re
+from oio.account.backend_fdb import AccountBackendFdb
 from tests.functional.cli import CliTestCase
 from testtools.matchers import Equals
 
@@ -107,3 +108,32 @@ class AccountTest(CliTestCase):
         self.assertEqual(data["objects"], 0)
         self.openio("container delete " + self.NAME)
         self.openio("account delete " + self.NAME)
+
+    def test_account_set_properties(self):
+        self.openio("account create " + self.NAME)
+        self.openio(
+            "account set "
+            + self.NAME
+            + " --beta-feature replication --beta-feature lifecycle"
+        )
+        opts = self.get_opts([], "json")
+        output = self.openio("account show " + self.NAME + opts)
+        data = self.json_loads(output)
+        expected_properties = {"enabled-beta-features": ["lifecycle", "replication"]}
+        expected_properties[
+            "max-buckets"
+        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        self.assertDictEqual(data["metadata"], expected_properties)
+
+        self.openio(
+            "account unset "
+            + self.NAME
+            + " --beta-feature replication --beta-feature lifecycle"
+        )
+        opts = self.get_opts([], "json")
+        output = self.openio("account show " + self.NAME + opts)
+        data = self.json_loads(output)
+        self.assertDictEqual(
+            data["metadata"],
+            {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
+        )

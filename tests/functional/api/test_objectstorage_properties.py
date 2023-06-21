@@ -18,6 +18,7 @@ import logging
 
 from oio import ObjectStorageApi
 from oio.account.backend_fdb import AccountBackendFdb
+from oio.common.constants import ACCOUNT_BETA_FEATURE_PREFIX
 from tests.utils import random_str, BaseTestCase
 
 
@@ -59,7 +60,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
     def _test_set_account_property_with_size(self, ksize=None, vsize=None):
         aname = "test_account_" + random_str(8)
         res = self.api.account_create(aname)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         properties = dict((self._sized_prop(ksize, vsize),))
         self.api.account_set_properties(aname, properties)
@@ -100,11 +101,35 @@ class ObjectStoragePropertiesTest(BaseTestCase):
     # def test_account_set_properties_key_1Mi(self):
     #    self._test_set_account_property_with_size(ksize=1024*1024)
 
+    def test_account_set_beta_features(self):
+        aname = "test_account_beta_features_" + random_str(8)
+        res = self.api.account_create(aname)
+        self.assertTrue(res)
+        properties = {
+            ACCOUNT_BETA_FEATURE_PREFIX + "replication": "enabled",
+            ACCOUNT_BETA_FEATURE_PREFIX + "lifecycle": "enabled",
+        }
+        self.api.account_set_properties(aname, properties)
+        data = self.api.account_get_properties(aname)
+        expected_properties = {"enabled-beta-features": ["lifecycle", "replication"]}
+        expected_properties[
+            "max-buckets"
+        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        self.assertDictEqual(data["properties"], expected_properties)
+
+        self.api.account_del_properties(aname, properties.keys())
+        data = self.api.account_get_properties(aname)
+        self.assertDictEqual(
+            data["properties"],
+            {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
+        )
+        self.api.account_delete(aname)
+
     def test_account_set_many_properties(self):
         aname = "test_account_many_properties_" + random_str(8)
         properties = self._many_props()
         res = self.api.account_create(aname)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
@@ -127,7 +152,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
     def _test_set_reference_property_with_size(self, ksize=None, vsize=None):
         cname = "test_ref_" + random_str(8)
         res = self.api.directory.create(self.account, cname)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         properties = dict((self._sized_prop(ksize, vsize),))
         # Not accessible directly, must use low-level directory client.
@@ -161,7 +186,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         cname = "test_ref_many_properties_" + random_str(8)
         properties = self._many_props()
         res = self.api.directory.create(self.account, cname, properties=properties)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         data = self.api.directory.get_properties(self.account, cname)
         self.assertDictEqual(data["properties"], properties)
@@ -184,7 +209,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
     def _test_set_container_property_with_size(self, ksize=None, vsize=None):
         cname = "test_container_" + random_str(8)
         res = self.api.container_create(self.account, cname)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         properties = dict((self._sized_prop(ksize, vsize),))
         self.api.container_set_properties(self.account, cname, properties)
@@ -217,7 +242,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         cname = "test_container_many_properties_" + random_str(8)
         properties = self._many_props()
         res = self.api.container_create(self.account, cname, properties=properties)
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
         data = self.api.container_get_properties(self.account, cname)
         self.assertDictEqual(data["properties"], properties)

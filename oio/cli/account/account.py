@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@
 from logging import getLogger
 
 from oio.cli import Command, Lister, ShowOne
+from oio.common.constants import ACCOUNT_BETA_FEATURE_PREFIX
 from oio.common.utils import depaginate, request_id
 
 
@@ -106,6 +107,13 @@ class SetAccount(Command):
             help="Account to modify",
         )
         parser.add_argument(
+            "--beta-feature",
+            action="append",
+            metavar="<beta-feature>",
+            type=str,
+            help="Add beta-feature to enabled beta-features for this account",
+        )
+        parser.add_argument(
             "-p",
             "--property",
             metavar="<key=value>",
@@ -127,6 +135,11 @@ class SetAccount(Command):
             properties = {}
         else:
             properties = parsed_args.property.copy()
+
+        if parsed_args.beta_feature is not None:
+            for prop in parsed_args.beta_feature:
+                properties[ACCOUNT_BETA_FEATURE_PREFIX + prop] = "enabled"
+
         if parsed_args.max_buckets is not None:
             properties["max-buckets"] = str(parsed_args.max_buckets)
         if not properties:
@@ -158,6 +171,13 @@ class UnsetAccount(Command):
             help="Property to delete from account",
         )
         parser.add_argument(
+            "--beta-feature",
+            metavar="<beta-feature>",
+            action="append",
+            type=str,
+            help="Remove beta-feature to enabled beta-features for this account",
+        )
+        parser.add_argument(
             "--max-buckets",
             action="store_true",
             help="Reset the maximum number of buckets per account.",
@@ -171,6 +191,9 @@ class UnsetAccount(Command):
             properties = []
         else:
             properties = parsed_args.property.copy()
+        if parsed_args.beta_feature is not None:
+            for prop in parsed_args.beta_feature:
+                properties.append(ACCOUNT_BETA_FEATURE_PREFIX + prop)
         if parsed_args.max_buckets:
             properties.append("max-buckets")
         if not properties:

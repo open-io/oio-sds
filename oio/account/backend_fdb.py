@@ -23,6 +23,7 @@ from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import (
+    ACCOUNT_BETA_FEATURE_PREFIX,
     BUCKET_PROP_RATELIMIT,
     BUCKET_PROP_REPLI_ENABLED,
     SHARDING_ACCOUNT_PREFIX,
@@ -835,9 +836,17 @@ class AccountBackendFdb(object):
         for key, value in iterator:
             key = metadata_space.unpack(key)
             if len(key) == 1:
-                metadata[key[0]] = value.decode("utf-8")
+                if key[0].startswith(ACCOUNT_BETA_FEATURE_PREFIX):
+                    # It is beta-feature, lets remove the prefix and
+                    # store it in a list
+                    metadata.setdefault("enabled-beta-features", []).append(
+                        key[0][len(ACCOUNT_BETA_FEATURE_PREFIX) :]
+                    )
+                else:
+                    metadata[key[0]] = value.decode("utf-8")
             else:
                 self.logger.warning('Unknown key: "%s"', key)
+
         max_buckets = metadata.get("max-buckets", self.max_buckets_per_account)
         metadata["max-buckets"] = int(max_buckets)
         return metadata
