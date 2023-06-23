@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -227,3 +227,76 @@ class TestObjectLock(BaseTestCase):
                 bucket=self.cname,
                 properties={"x-object-sysmeta-s3api-legal-hold-status": "OFF"},
             )
+
+    def test_object_legal_hold_several_versions(self):
+        self._create(
+            self.cname,
+            bucket=self.cname,
+            system={
+                "sys.m2.bucket.objectlock.enabled": "1",
+                "sys.m2.policy.version": "-1",
+            },
+        )
+
+        version = 1687985166687660
+        obj_name = "object_versioned"
+        # Add objects and set legal-hold on some versions
+        for i in range(4):
+            reqid = request_id()
+            if (version % 2) == 0:
+                properties = {"x-object-sysmeta-s3api-legal-hold-status": "ON"}
+            else:
+                properties = {"x-object-sysmeta-s3api-legal-hold-status": "OFF"}
+            self.storage.object_create(
+                self.account,
+                self.cname,
+                obj_name=obj_name,
+                data=obj_name.encode("utf-8"),
+                reqid=reqid,
+                version=version,
+                properties=properties,
+            )
+            version = version + 1
+
+        object_list = self.storage.object_list(
+            self.account,
+            self.cname,
+            bucket=self.cname,
+            versions=True,
+        )
+        for el in object_list.get("objects", {}):
+            reqid = request_id()
+            if el["version"] % 2 == 0:
+                self.assertRaises(
+                    Forbidden,
+                    self.storage.object_delete,
+                    self.account,
+                    self.cname,
+                    el["name"],
+                    reqid=reqid,
+                    version=el["version"],
+                    bucket=self.cname,
+                )
+            else:
+                self.storage.object_delete(
+                    self.account,
+                    self.cname,
+                    el["name"],
+                    reqid=reqid,
+                    version=el["version"],
+                    bucket=self.cname,
+                )
+
+        # Set legal-hold to OFF for teardown cleaning
+        for el in object_list.get("objects", {}):
+            reqid = request_id()
+            if el["version"] % 2 == 0:
+                self.storage.object_set_properties(
+                    self.account,
+                    self.cname,
+                    el["name"],
+                    reqid=reqid,
+                    version=el["version"],
+                    bucket=self.cname,
+                    properties={"x-object-sysmeta-s3api-legal-hold-status": "OFF"},
+                )

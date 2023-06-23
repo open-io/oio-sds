@@ -170,7 +170,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TRIGGER_RETAIN_UNTIL_NAME "trigger_objectlock_retain_until"
 
 #define LEGAL_HOLD_ON "SELECT 1 FROM properties pr WHERE " \
-	"pr.alias=old.alias AND pr.key='" OBJ_PROP_LEGAL_HOLD_STATUS "'" \
+	"pr.alias=old.alias AND pr.version=old.version AND pr.key='" OBJ_PROP_LEGAL_HOLD_STATUS "'" \
 	" AND CAST(pr.value AS TEXT) = 'ON'"
 
 #define DELETED_FLAG "SELECT 1 FROM aliases WHERE " \
@@ -224,7 +224,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define TRIGGER_LEGAL_HOLD \
 	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_LEGAL_HOLD_NAME \
-	"BEFORE DELETE ON aliases BEGIN " \
+	" BEFORE DELETE ON aliases BEGIN " \
 	"SELECT CASE WHEN " \
 	 "NOT EXISTS (" DISABLED_TRIGGERS ") " \
 	 "AND (NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE ")) " \
@@ -236,7 +236,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define TRIGGER_RETAIN_UNTIL \
 	"CREATE TRIGGER IF NOT EXISTS " TRIGGER_RETAIN_UNTIL_NAME \
-	"BEFORE DELETE ON aliases BEGIN " \
+	" BEFORE DELETE ON aliases BEGIN " \
 	"SELECT CASE WHEN " \
 	 "NOT EXISTS (" DISABLED_TRIGGERS ") " \
 	 "AND (NOT EXISTS (" CLEANING_ROOT " OR " SHARD_OUT_OF_RANGE")) " \
