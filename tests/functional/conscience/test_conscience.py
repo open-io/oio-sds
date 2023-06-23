@@ -21,6 +21,7 @@ import time
 
 from flaky import flaky
 from oio.common.json import json
+from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED
 
@@ -40,6 +41,7 @@ class TestConscienceFunctional(BaseTestCase):
         # There is at least one test restarting the proxy,
         # as a security we set this before each test.
         self._cls_set_proxy_config({"proxy.cache.enabled": "off"})
+        self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
 
     @classmethod
     def tearDownClass(cls):
@@ -219,26 +221,97 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertError(resp, 503, 481)
 
     def test_service_lock_tag(self):
-        """Ensure a 'tag.putlock' tag is set on service whose score is locked."""
+        """Ensure lock tags are set on service whose both scores are locked."""
         self.wait_for_score(("rawx",))
         all_rawx = self.conscience.all_services("rawx")
         one_rawx = all_rawx[0]
         one_rawx["scores"]["score.put"] = 1
+        one_rawx["scores"]["score.get"] = 1
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
 
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+        self.assertIn("tag.lock", my_rawx["tags"])
         self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertIn("tag.getlock", my_rawx["tags"])
+        self.assertTrue(my_rawx["tags"]["tag.lock"])
         self.assertTrue(my_rawx["tags"]["tag.putlock"])
+        self.assertTrue(my_rawx["tags"]["tag.getlock"])
         self.assertEqual(1, my_rawx["score"])
+        self.assertEqual(1, my_rawx["scores"]["score.put"])
+        self.assertEqual(1, my_rawx["scores"]["score.get"])
+
+        self.conscience.unlock_score(one_rawx)
+        all_rawx = self.conscience.all_services("rawx")
+        my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+        self.assertIn("tag.lock", my_rawx["tags"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertIn("tag.getlock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.lock"])
+        self.assertFalse(my_rawx["tags"]["tag.putlock"])
+        self.assertFalse(my_rawx["tags"]["tag.getlock"])
+        self.assertGreaterEqual(my_rawx["score"], 1)
+        self.assertGreaterEqual(my_rawx["scores"]["score.put"], 1)
+        self.assertGreaterEqual(my_rawx["scores"]["score.get"], 1)
+
+    def test_service_putlock_tag(self):
+        """Ensure a 'tag.putlock' tag is set on service whose put score is locked."""
+        self.wait_for_score(("rawx",))
+        all_rawx = self.conscience.all_services("rawx")
+        one_rawx = all_rawx[0]
+        one_rawx["scores"]["score.put"] = 1
+        one_rawx["scores"].pop("score.get")
+        one_rawx["type"] = "rawx"
+        self.conscience.lock_score(one_rawx)
+
+        all_rawx = self.conscience.all_services("rawx")
+        my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+        self.assertIn("tag.lock", my_rawx["tags"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertIn("tag.getlock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.lock"])
+        self.assertTrue(my_rawx["tags"]["tag.putlock"])
+        self.assertFalse(my_rawx["tags"]["tag.getlock"])
+        self.assertEqual(1, my_rawx["score"])
+        self.assertEqual(1, my_rawx["scores"]["score.put"])
+        self.assertNotEqual(1, my_rawx["scores"]["score.get"])
 
         self.conscience.unlock_score(one_rawx)
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
         self.assertIn("tag.putlock", my_rawx["tags"])
         self.assertFalse(my_rawx["tags"]["tag.putlock"])
-        self.assertGreaterEqual(my_rawx["score"], 1)
+        self.assertGreaterEqual(my_rawx["scores"]["score.put"], 1)
+
+    def test_service_getlock_tag(self):
+        """Ensure a 'tag.getlock' tag is set on service whose getscore is locked."""
+        self.wait_for_score(("rawx",))
+        all_rawx = self.conscience.all_services("rawx")
+        one_rawx = all_rawx[0]
+        one_rawx["scores"].pop("score.put")
+        one_rawx["scores"]["score.get"] = 1
+        one_rawx["type"] = "rawx"
+        self.conscience.lock_score(one_rawx)
+
+        all_rawx = self.conscience.all_services("rawx")
+        my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+        self.assertIn("tag.lock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.lock"])
+        self.assertIn("tag.putlock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.putlock"])
+        self.assertIn("tag.getlock", my_rawx["tags"])
+        self.assertTrue(my_rawx["tags"]["tag.getlock"])
+        self.assertNotEqual(1, my_rawx["score"])
+        self.assertNotEqual(1, my_rawx["scores"]["score.put"])
+        self.assertEqual(1, my_rawx["scores"]["score.get"])
+
+        self.conscience.unlock_score(one_rawx)
+        all_rawx = self.conscience.all_services("rawx")
+        my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+        self.assertIn("tag.getlock", my_rawx["tags"])
+        self.assertFalse(my_rawx["tags"]["tag.getlock"])
+        self.assertGreaterEqual(my_rawx["scores"]["score.get"], 1)
 
     def test_lock_survives_conscience_restart(self):
         """
@@ -248,6 +321,7 @@ class TestConscienceFunctional(BaseTestCase):
         all_rawx = self.conscience.all_services("rawx")
         one_rawx = all_rawx[0]
         one_rawx["scores"]["score.put"] = 1
+        one_rawx["scores"]["score.get"] = 2
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
 
@@ -265,7 +339,10 @@ class TestConscienceFunctional(BaseTestCase):
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
         self.assertIn("tag.putlock", my_rawx["tags"])
         self.assertTrue(my_rawx["tags"]["tag.putlock"])
+        self.assertTrue(my_rawx["tags"]["tag.getlock"])
         self.assertEqual(1, my_rawx["score"])
+        self.assertEqual(1, my_rawx["scores"]["score.put"])
+        self.assertEqual(2, my_rawx["scores"]["score.get"])
         self.conscience.unlock_score(one_rawx)
 
     @flaky()
@@ -327,6 +404,19 @@ class TestConscienceFunctional(BaseTestCase):
         self._flush_proxy()
         self._reload_proxy()
         check(False)
+
+    def test_get_score(self):
+        """
+        Test getscore is 100 even if stat.space is low
+        """
+        srv0 = self._srv(
+            "rawx",
+            lowport=7000,
+            highport=7000,
+            extra_tags={"stat.cpu": 100, "stat.space": 10, "stat.io": 100},
+        )
+        self._register_srv(srv0)
+        self.wait_for_score(["rawx"], score_threshold=100, score_type="get")
 
     def test_restart_conscience_with_locked_services(self):
         services = self._list_srvs("rawx")
