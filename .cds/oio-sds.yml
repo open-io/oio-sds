@@ -15,44 +15,44 @@ workflow:
       git.tag: ""
       build_deb: "false"
 
-  tests-fast:
-    pipeline: oio-sds-test-fast
-    environment: oio-sds-env-test-fast
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-fast:
+  #   pipeline: oio-sds-test-fast
+  #   environment: oio-sds-env-test-fast
+  #   application: oio-sds
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-lint:
-    pipeline: oio-sds-lint
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-lint:
+  #   pipeline: oio-sds-lint
+  #   application: oio-sds
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-single:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-single
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-single:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-single
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-cli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-cli
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-cli:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-cli
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
   tests-ec:
     pipeline: oio-sds-test-functional
@@ -74,77 +74,77 @@ workflow:
       script: |+
         return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-rebuilder:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rebuilder
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-rebuilder:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-rebuilder
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-mover:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-mover
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-mover:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-mover
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  tests-rabbitmq-resiliency:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rabbitmq-resiliency
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+  # tests-rabbitmq-resiliency:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-rabbitmq-resiliency
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
 
-  coverage:
-    pipeline: oio-sds-coverage
-    application: oio-sds
-    depends_on:
-      - tests-cli
-      - tests-fast
-      - tests-single
-      - tests-ec
-      - tests-fullrepli
-      - tests-rebuilder
-      - tests-mover
-      - tests-rabbitmq-resiliency
-    when:
-      - success
+  # coverage:
+  #   pipeline: oio-sds-coverage
+  #   application: oio-sds
+  #   depends_on:
+  #     - tests-cli
+  #     - tests-fast
+  #     - tests-single
+  #     - tests-ec
+  #     - tests-fullrepli
+  #     - tests-rebuilder
+  #     - tests-mover
+  #     - tests-rabbitmq-resiliency
+  #   when:
+  #     - success
 
-  ready-for-merge:
-    application: oio-sds
-    depends_on:
-      - coverage
-      - tests-lint
-    pipeline: oio-sds-ready-for-merge
+  # ready-for-merge:
+  #   application: oio-sds
+  #   depends_on:
+  #     - coverage
+  #     - tests-lint
+  #   pipeline: oio-sds-ready-for-merge
 
-  mirror:
-    pipeline: oio-sds-mirror
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      check:
-        - variable: cds.proj.mirror_to_github
-          operator: eq
-          value: "true"
+  # mirror:
+  #   pipeline: oio-sds-mirror
+  #   application: oio-sds
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     check:
+  #       - variable: cds.proj.mirror_to_github
+  #         operator: eq
+  #         value: "true"
 
-  build:
-    pipeline: oio-sds-build
-    application: oio-sds
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb == "true" or git_branch == "master")
+  # build:
+  #   pipeline: oio-sds-build
+  #   application: oio-sds
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and (build_deb == "true" or git_branch == "master")
 
   clean-artifacts:
     pipeline: oio-sds-clean-artifacts

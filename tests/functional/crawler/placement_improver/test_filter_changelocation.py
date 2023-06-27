@@ -220,6 +220,29 @@ class TestFilterChangelocation(BaseTestCase):
                 return join(symlink_folder, file)
         return symlink_folder
 
+    def _process_filter(
+        self,
+        misplaced_chunk_dir,
+        chunk_id,
+        chunk_path,
+        chunk_symlink_path,
+        volume_path,
+        volume_id,
+    ):
+        self.assertTrue(isfile(chunk_symlink_path))
+        app = FilterApp
+        app.app_env["volume_path"] = volume_path
+        app.app_env["volume_id"] = volume_id
+        app.app_env["watchdog"] = self.watchdog
+        app.app_env["working_dir"] = misplaced_chunk_dir
+        app.app_env["api"] = self.api
+        chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
+        changelocation = Changelocation(app=app, conf=self.conf)
+        changelocation.min_delay_secs = 0
+        # Launch filter to change location of misplaced chunk
+        changelocation.process(chunk_env, self._cb)
+        return changelocation
+
     def test_get_timedelta(self):
         """test if get_timedelta works as expected"""
         expected = [900, 1800, 3600, 7200, 7200]
@@ -336,18 +359,14 @@ class TestFilterChangelocation(BaseTestCase):
             volume_path,
             volume_id,
         ) in misplaced_chunks:
-            self.assertTrue(isfile(chunk_symlink_path))
-            app = FilterApp
-            app.app_env["volume_path"] = volume_path
-            app.app_env["volume_id"] = volume_id
-            app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = misplaced_chunk_dir
-            app.app_env["api"] = self.api
-            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-            changelocation = Changelocation(app=app, conf=self.conf)
-            changelocation.min_delay_secs = 0
-            # Launch filter to change location of misplaced chunk
-            changelocation.process(chunk_env, self._cb)
+            _ = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
         _, new_chunks = self.api.container.content_locate(
             self.account, container, object_name
         )
@@ -359,12 +378,48 @@ class TestFilterChangelocation(BaseTestCase):
         """Test placement improver in case of symlinks on well located chunks"""
         if self.nb_rawx < 16:
             self.skipTest("need at least 16 rawx to run")
+        address, _ = self.rawx_srv_list[0]["addr"].split(":")
+        # lock rawx services on selected host
+        # The objective is to be sure that some chunks are
+        # misplaced.
+        for rawx in self.rawx_srv_list:
+            if address in rawx["addr"]:
+                rawx["score"] = 0
+                rawx["type"] = "rawx"
+                self.locked_svc.append(rawx)
+        self._lock_services("rawx", self.locked_svc, wait=2.0)
         # Create object
         container = "rawx_crawler_m_chunk_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
         chunks = self._create(container, object_name, policy="ANY-E93")
-        # Get misplaced chunks
-        misplaced_chunks, well_placed = self._get_misplaced_chunks(chunks)
+        misplaced_chunks, _ = self._get_misplaced_chunks(chunks)
+        misplaced_chunk_dir = Changelocation.NON_OPTIMAL_DIR
+        # Unlock rawx services before running the improver
+        self.conscience.unlock_score(self.locked_svc)
+        # wait until the services are unlocked
+        time.sleep(5)
+        # For each misplaced chunk apply the improver
+        for (
+            chunk_id,
+            chunk_path,
+            chunk_symlink_path,
+            volume_path,
+            volume_id,
+        ) in misplaced_chunks:
+            changelocation = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
+        _, new_chunks = self.api.container.content_locate(
+            self.account, container, object_name
+        )
+        # Check if there is no more misplaced chunk
+        misplaced_chunks, well_placed = self._get_misplaced_chunks(new_chunks)
+        self.assertEqual(len(misplaced_chunks), 0)
         # Add symlink on well located chunks
         n = random.randint(0, len(well_placed))
         nb_success = 0
@@ -379,9 +434,9 @@ class TestFilterChangelocation(BaseTestCase):
                 # The symlink already exists
                 pass
 
-        # Check if we have the right amount of non optimal tags
-        misplaced_chunks_bis, _ = self._get_misplaced_chunks(chunks)
-        self.assertEqual(len(misplaced_chunks), len(misplaced_chunks_bis) - nb_success)
+        # Check if we have the right amount of false non optimal chunks
+        misplaced_chunks_bis, _ = self._get_misplaced_chunks(new_chunks)
+        self.assertEqual(len(misplaced_chunks_bis), nb_success)
         removed_symlinks = 0
         # For each misplaced chunk apply the improver
         for (
@@ -391,18 +446,14 @@ class TestFilterChangelocation(BaseTestCase):
             volume_path,
             volume_id,
         ) in misplaced_chunks_bis:
-            self.assertTrue(isfile(chunk_symlink_path))
-            app = FilterApp
-            app.app_env["volume_path"] = volume_path
-            app.app_env["volume_id"] = volume_id
-            app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = Changelocation.NON_OPTIMAL_DIR
-            app.app_env["api"] = self.api
-            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-            changelocation = Changelocation(app=app, conf=self.conf)
-            changelocation.min_delay_secs = 0
-            # Launch filter to change location of misplaced chunk
-            changelocation.process(chunk_env, self._cb)
+            changelocation = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
             removed_symlinks += changelocation.removed_symlinks
         self.assertEqual(nb_success, removed_symlinks)
 
@@ -441,18 +492,14 @@ class TestFilterChangelocation(BaseTestCase):
             volume_path,
             volume_id,
         ) in misplaced_chunks:
-            self.assertTrue(isfile(chunk_symlink_path))
-            app = FilterApp
-            app.app_env["volume_path"] = volume_path
-            app.app_env["volume_id"] = volume_id
-            app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = misplaced_chunk_dir
-            app.app_env["api"] = self.api
-            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-            changelocation = Changelocation(app=app, conf=self.conf)
-            changelocation.min_delay_secs = 0
-            # Launch filter to change location of misplaced chunk
-            changelocation.process(chunk_env, self._cb)
+            changelocation = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
             self.assertEqual(changelocation.errors, 1)
             # Renamed by changin next time attempt
             self.assertFalse(isfile(chunk_symlink_path))
@@ -508,18 +555,14 @@ class TestFilterChangelocation(BaseTestCase):
             volume_path,
             volume_id,
         ) in misplaced_chunks[:-1]:
-            self.assertTrue(isfile(chunk_symlink_path))
-            app = FilterApp
-            app.app_env["volume_path"] = volume_path
-            app.app_env["volume_id"] = volume_id
-            app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = misplaced_chunk_dir
-            app.app_env["api"] = self.api
-            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-            changelocation = Changelocation(app=app, conf=self.conf)
-            changelocation.min_delay_secs = 0
-            # Launch filter to change location of misplaced chunk
-            changelocation.process(chunk_env, self._cb)
+            changelocation = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
         _, new_chunks = self.api.container.content_locate(
             self.account, container, object_name
         )
@@ -558,18 +601,14 @@ class TestFilterChangelocation(BaseTestCase):
             volume_path,
             volume_id,
         ) in corrupted_misplaced_chunks:
-            self.assertTrue(isfile(chunk_symlink_path))
-            app = FilterApp
-            app.app_env["volume_path"] = volume_path
-            app.app_env["volume_id"] = volume_id
-            app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = misplaced_chunk_dir
-            app.app_env["api"] = self.api
-            chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-            changelocation = Changelocation(app=app, conf=self.conf)
-            changelocation.min_delay_secs = 0
-            # Launch filter to change location of misplaced chunk
-            changelocation.process(chunk_env, self._cb)
+            changelocation = self._process_filter(
+                misplaced_chunk_dir,
+                chunk_id,
+                chunk_path,
+                chunk_symlink_path,
+                volume_path,
+                volume_id,
+            )
         # Check if the right misplaced chunk has been tagged
         self.assertEqual(changelocation.created_symlinks, 1)
         # Check if the irrelevant symlink has been deleted
