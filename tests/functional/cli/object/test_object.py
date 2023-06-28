@@ -36,7 +36,6 @@ CONTAINER_FIELDS = [
     "location",
     "max_versions",
     "objects",
-    "quota",
     "sharding.state",
     "sharding.timestamp",
     "shards",

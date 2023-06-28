@@ -42,7 +42,6 @@ from oio.common.constants import (
     M2_PROP_CTIME,
     M2_PROP_DEL_EXC_VERSIONS,
     M2_PROP_OBJECTS,
-    M2_PROP_QUOTA,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_MASTER,
     M2_PROP_SHARDING_PREVIOUS_LOWER,
@@ -66,7 +65,7 @@ from oio.common.easy_value import boolean_value, int_value, float_value
 
 
 class SetPropertyCommandMixin(object):
-    """Command setting quota, storage policy or generic property"""
+    """Command setting storage policy or generic property"""
 
     def patch_parser(self, parser):
         from oio.cli.common.utils import KeyValueAction
@@ -76,12 +75,6 @@ class SetPropertyCommandMixin(object):
             metavar="<key=value>",
             action=KeyValueAction,
             help="Property to add/update for the container(s)",
-        )
-        parser.add_argument(
-            "--quota",
-            metavar="<bytes>",
-            type=int,
-            help="Set the quota on the container",
         )
         parser.add_argument(
             "--storage-policy",
@@ -277,8 +270,6 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
         system = {}
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
-        if parsed_args.quota is not None:
-            system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
             system[M2_PROP_STORAGE_POLICY] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
@@ -385,7 +376,7 @@ class SetBucket(Command):
 
 class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
     """
-    Set container properties, quota, storage policy, status or versioning.
+    Set container properties, storage policy, status or versioning.
     """
 
     log = getLogger(__name__ + ".SetContainer")
@@ -427,8 +418,6 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
         system = {}
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
-        if parsed_args.quota is not None:
-            system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
             system[M2_PROP_STORAGE_POLICY] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
@@ -733,7 +722,6 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             "bytes_usage": bytes_usage,
             "objects": objects,
             "shards": shards,
-            "quota": sys.get(M2_PROP_QUOTA, "Namespace default"),
             "storage_policy": sys.get(M2_PROP_STORAGE_POLICY, "Namespace default"),
             "max_versions": sys.get(M2_PROP_VERSIONING_POLICY, "Namespace default"),
             "status": OIO_DB_STATUS_NAME.get(sys.get("sys.status"), "Unknown"),
@@ -880,7 +868,7 @@ class ListBuckets(Lister):
             action="store_true",
             dest="humanize",
             default=False,
-            help="Display bytes size in a human-redable format",
+            help="Display bytes size in a human-readable format",
         )
         return parser
 
@@ -1080,11 +1068,6 @@ class UnsetContainer(ContainerCommandMixin, Command):
             ),
         )
         parser.add_argument(
-            "--quota",
-            action="store_true",
-            help="Reset the quota of the container to the namespace default",
-        )
-        parser.add_argument(
             "--delete-exceeding-versions",
             action="store_true",
             help="Reset the deletion of the exceeding versions to the default value",
@@ -1103,8 +1086,6 @@ class UnsetContainer(ContainerCommandMixin, Command):
             system[M2_PROP_STORAGE_POLICY] = ""
         if parsed_args.max_versions:
             system[M2_PROP_VERSIONING_POLICY] = ""
-        if parsed_args.quota:
-            system[M2_PROP_QUOTA] = ""
         if parsed_args.delete_exceeding_versions:
             system[M2_PROP_DEL_EXC_VERSIONS] = ""
 
