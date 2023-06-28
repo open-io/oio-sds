@@ -12,7 +12,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
+import os
 from oio.blob.utils import read_chunk_metadata
 from oio.common import exceptions as exc
 from oio.common.utils import is_chunk_id_valid
@@ -26,7 +26,6 @@ class RawxWorker(CrawlerWorker):
     """
 
     SERVICE_TYPE = "rawx"
-    EXCLUDED_DIRS = ("non_optimal_placement", "orphans")
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
         super(RawxWorker, self).__init__(
@@ -52,6 +51,21 @@ class RawxWorker(CrawlerWorker):
         :param chunk: chunk representation
         :type chunk: ChunkWrapper
         """
+        if self.working_dir:
+            # if working_dir is defined, we are dealing with
+            # crawler analyzing symlink
+            if chunk.chunk_symlink_path:
+                # if chunk_symlink_path is defined
+                return self._is_chunk_valid_symlink(chunk)
+            self.errors += 1
+            self.logger.error(
+                "Skip not valid chunk: when working_dir is defined: %s,"
+                " path: %s must be symlink",
+                self.working_dir,
+                chunk.chunk_path,
+            )
+            return False
+
         try:
             if not is_chunk_id_valid(chunk.chunk_id):
                 self.logger.info("Skip not valid chunk path %s", chunk.chunk_path)
@@ -70,10 +84,66 @@ class RawxWorker(CrawlerWorker):
             return False
         return True
 
+    def _is_chunk_valid_symlink(self, chunk):
+        """
+        Verify the chunk validity
+
+        :param chunk: chunk representation
+        :type chunk: ChunkWrapper
+        """
+        try:
+            if not is_chunk_id_valid(chunk.chunk_id):
+                self.logger.warning("Skip not valid chunk path %s", chunk.chunk_path)
+                self.invalid_paths += 1
+                return False
+            with open(chunk.chunk_path, "rb") as chunk_file:
+                # A supposition is made: metadata will not change during the
+                # process of all filters
+                chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
+        except FileNotFoundError:
+            # unlink the symbolic link
+            os.unlink(chunk.chunk_symlink_path)
+            self.logger.info(
+                "Chunk %s no longer exists, symlink %s removed.",
+                chunk.chunk_id,
+                chunk.chunk_symlink_path,
+            )
+            return False
+        except (exc.MissingAttribute, exc.FaultyChunk):
+            self.errors += 1
+            self.logger.error("Skip not valid chunk %s", chunk.chunk_path)
+            return False
+        return True
+
     def _get_chunk_info(self, path):
+        if self.working_dir:
+            if os.path.islink(path):
+                # if working_dir is defined, we are dealing with
+                # crawler analyzing symlink
+                return self._get_chunk_info_symlink(path)
         chunk = ChunkWrapper({})
         chunk.chunk_id = path.rsplit("/", 1)[-1]
         chunk.chunk_path = path
+        return chunk
+
+    def _get_chunk_info_symlink(self, path):
+        """
+        Build chunkwrapper object with chunk info
+
+        :param path: _description_
+        :type path: _type_
+        :return: _description_
+        :rtype: _type_
+        """
+        chunk = ChunkWrapper({})
+        chunk_id = path.rsplit("/", 1)[-1]
+        if "." in chunk_id:
+            # New symlink format
+            chunk_id = chunk_id.split(".")[0]
+        chunk.chunk_id = chunk_id
+        chunk.chunk_symlink_path = path
+        # Resolve the real chunk path which is initially a symbolic link
+        chunk.chunk_path = os.path.realpath(chunk.chunk_symlink_path)
         return chunk
 
     def process_path(self, path):

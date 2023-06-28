@@ -23,7 +23,7 @@ from shutil import copy, copystat, move
 from oio.common.exceptions import ConfigurationException
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.cleanup_orphaned.filters.cleanup_orphaned import CleanupOrphaned
+from oio.crawler.rawx.filters.cleanup_orphaned import CleanupOrphaned
 from oio.event.evob import EventTypes
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
 from tests.utils import BaseTestCase, random_str

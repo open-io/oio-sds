@@ -95,7 +95,7 @@ class TestCrawlerPathGen(BaseTestCase):
         chunk_id = url.split("/", 3)[3]
         volume_path = self.rawx_volumes[volume_id]
         chunk_path = join(volume_path, chunk_id[:3], chunk_id)
-        symlink_folder = join(volume_path, RawxWorker.EXCLUDED_DIRS[0], chunk_id[:3])
+        symlink_folder = join(volume_path, "non_optimal_placement", chunk_id[:3])
         chunk_symlink_path = join(
             symlink_folder,
             [file for file in listdir(symlink_folder) if chunk_id in file][0],
@@ -114,9 +114,10 @@ class TestCrawlerPathGen(BaseTestCase):
         url = chunk["url"]
         volume_id = url.split("/", 3)[2]
         volume_path = self.rawx_volumes[volume_id]
-        misplaced_chunk_dir = RawxWorker.EXCLUDED_DIRS[0]
+        misplaced_chunk_dir = "non_optimal_placement"
+        orphans_dir = "orphans"
         nb_link = {}
-        for folder in RawxWorker.EXCLUDED_DIRS:
+        for folder in (misplaced_chunk_dir, orphans_dir):
             # Get number of already existing symbolic links
             nb_link[folder] = sum(
                 len(files) for _, _, files in walk(join(volume_path, folder))
@@ -133,7 +134,9 @@ class TestCrawlerPathGen(BaseTestCase):
         self.logger.debug(
             "%d chunks and %d symlinks before the test", nb_chunk, sum(nb_link.values())
         )
-        not_chunk_folders = RawxWorker.EXCLUDED_DIRS + (RawxWorker.MARKERS_DIR,)
+        not_chunk_folders = (misplaced_chunk_dir, orphans_dir) + (
+            RawxWorker.MARKERS_DIR,
+        )
         try:
             # Create the symbolic link of the chunk
             headers = {"x-oio-chunk-meta-non-optimal-placement": "True"}

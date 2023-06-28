@@ -27,18 +27,10 @@ from oio.common.logger import get_logger
 from oio.common.utils import paths_gen
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
-from oio.crawler.placement_improver.loader import (
-    loadpipeline as placement_improver_loadpipeline,
-)
-from oio.crawler.cleanup_orphaned.loader import (
-    loadpipeline as cleanup_orphaned_loadpipeline,
-)
 
 LOAD_PIPELINES = {
     "RawxWorker": rawx_loadpipeline,
     "Meta2Worker": meta2_loadpipeline,
-    "PlacementImproverWorker": placement_improver_loadpipeline,
-    "CleanupOrphanedWorker": cleanup_orphaned_loadpipeline,
 }
 
 TAGS_TO_DEBUG = ["starting"]
@@ -73,7 +65,18 @@ class CrawlerWorker(object):
         self.volume = volume_path
         self.logger = logger or get_logger(self.conf)
         self.running = True
-        self.working_dir = self.WORKING_DIR
+        self.working_dir = self.conf.get("working_dir", self.WORKING_DIR)
+        self.excluded_dirs = self.conf.get("excluded_dirs", self.EXCLUDED_DIRS)
+        if self.excluded_dirs:
+            # format excluded directories to tuple
+            try:
+                self.excluded_dirs = tuple(
+                    d.strip() for d in self.excluded_dirs.split(",") if d.strip()
+                )
+            except Exception as exc:
+                raise ConfigurationException(
+                    f"Error in excluded directories definition: {exc}"
+                )
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
         )
@@ -246,10 +249,10 @@ class CrawlerWorker(object):
         # EXCLUDED_DIRS can be used to avoid scanning the non optimal
         # placement folder for rawx crawler
         excluded_dirs = (self.MARKERS_DIR,)
-        if self.EXCLUDED_DIRS:
-            excluded_dirs = excluded_dirs + self.EXCLUDED_DIRS
+        if self.excluded_dirs:
+            excluded_dirs = excluded_dirs + self.excluded_dirs
         paths = paths_gen(
-            volume_path=join(self.volume, self.WORKING_DIR),
+            volume_path=join(self.volume, self.working_dir),
             excluded_dirs=excluded_dirs,
             marker=self.marker_current,
             hash_width=self.hash_width,

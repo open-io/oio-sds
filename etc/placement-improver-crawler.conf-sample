@@ -1,4 +1,4 @@
-[placement-improver-crawler]
+[rawx-crawler]
 namespace = OPENIO
 user = openio
 volume_list =  /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
@@ -13,6 +13,8 @@ interval = 1800
 report_interval = 300
 # Maximum chunks to be scanned per second. Defaults to 30.
 scanned_per_second = 30
+# Working directory in the volume to crawle
+working_dir = non_optimal_placement
 
 # Common log stuff
 log_level = INFO

@@ -23,7 +23,7 @@ from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.exceptions import Conflict
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.placement_improver.filters.changelocation import Changelocation
+from oio.crawler.rawx.filters.changelocation import Changelocation
 from oio.event.evob import EventTypes
 
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env

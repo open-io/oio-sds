@@ -393,7 +393,7 @@ service_update_interval = 3600
 """
 
 template_placement_improver_crawler_service = """
-[placement-improver-crawler]
+[rawx-crawler]
 namespace = ${NS}
 user = ${USER}
 volume_list = ${RAWX_VOLUMES}
@@ -409,6 +409,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
+working_dir = non_optimal_placement
 
 [pipeline:main]
 pipeline = logger changelocation
@@ -474,6 +475,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
+excluded_dirs = non_optimal_placement, orphans
 
 [pipeline:main]
 pipeline = logger indexer
@@ -525,7 +527,7 @@ use = egg:oio#logger
 """
 
 template_cleanup_orphaned_crawler_service = """
-[cleanup-orphaned-crawler]
+[rawx-crawler]
 namespace = ${NS}
 user = ${USER}
 volume_list = ${RAWX_VOLUMES}
@@ -541,6 +543,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
+working_dir = orphans
 
 [pipeline:main]
 pipeline = logger cleanup_orphaned
@@ -2684,7 +2687,7 @@ def generate(options):
             {
                 "RAWX_VOLUMES": ",".join(rawx_volumes),
                 "SRVTYPE": "placement-improver-crawler",
-                "EXE": "oio-placement-improver-crawler",
+                "EXE": "oio-rawx-crawler",
                 "GROUPTYPE": "crawler",
                 "SRVNUM": "1",
             }
@@ -2707,7 +2710,7 @@ def generate(options):
             {
                 "RAWX_VOLUMES": ",".join(rawx_volumes),
                 "SRVTYPE": "cleanup-orphaned-crawler",
-                "EXE": "oio-cleanup-orphaned-crawler",
+                "EXE": "oio-rawx-crawler",
                 "GROUPTYPE": "crawler",
                 "SRVNUM": "1",
             }

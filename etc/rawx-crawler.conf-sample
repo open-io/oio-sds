@@ -21,6 +21,8 @@ scanned_per_second = 30
 # (not used if <use_marker> is disabled). Default to 900.
 # This value represents 60s at max rate.
 # scanned_between_markers = 900
+# Excluded directories in the volume to crawl
+excluded_dirs = non_optimal_placement,orphans
 
 # Common log stuff
 log_level = INFO
