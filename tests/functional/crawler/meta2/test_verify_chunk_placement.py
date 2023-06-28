@@ -29,7 +29,6 @@ from oio.crawler.meta2.filters.verify_chunk_placement import (
     VerifyChunkPlacement,
 )
 from oio.crawler.meta2.meta2db import Meta2DB
-from oio.crawler.rawx.crawler import RawxWorker
 from oio.directory.admin import AdminClient
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
@@ -156,8 +155,9 @@ class TestVerifyChunkPlacement(BaseTestCase):
             server_constraints = verifychunkplacement.policy_data[policy][2][2]
             chunk_test_path = srv_ids[rawx_srv_id]
             chunk_test_id = urlparse(test_chunk["url"]).path[1:]
+            misplaced_chunk_dir = "non_optimal_placement"
             symlink_folder = join(
-                chunk_test_path, RawxWorker.EXCLUDED_DIRS[0], chunk_test_id[:3]
+                chunk_test_path, misplaced_chunk_dir, chunk_test_id[:3]
             )
             if exists(symlink_folder):
                 symlinks = [
@@ -247,8 +247,9 @@ class TestVerifyChunkPlacement(BaseTestCase):
                 if srv["id"] == urlparse(chunk_test["url"]).netloc
             ][0]
             chunk_test_id = urlparse(chunk_test["url"]).path[1:]
+            misplaced_chunk_dir = "non_optimal_placement"
             symlink_folder = join(
-                chunk_test_path, RawxWorker.EXCLUDED_DIRS[0], chunk_test_id[:3]
+                chunk_test_path, misplaced_chunk_dir, chunk_test_id[:3]
             )
             if exists(symlink_folder):
                 symlinks = [
