@@ -888,6 +888,13 @@ conscience_srvtype_refresh_dated(
 				(int)LIMIT_LENGTH_SRVDESCR, p_srv->description);
 		p_srv->lock_mtime = sid->lock_mtime;
 
+		struct service_tag_s *tag_lock = service_info_get_tag(
+			sid->si->tags, NAME_TAGNAME_LOCK);
+		p_srv->put_locked = tag_lock && tag_lock->type == STVT_BOOL
+				&& tag_lock->value.b;
+		p_srv->get_locked = tag_lock && tag_lock->type == STVT_BOOL
+				&& tag_lock->value.b;
+
 		struct service_tag_s *tag_put_lock = service_info_get_tag(
 			sid->si->tags, NAME_TAGNAME_PUT_LOCK);
 		p_srv->put_locked = tag_put_lock && tag_put_lock->type == STVT_BOOL
