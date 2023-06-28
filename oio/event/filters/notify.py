@@ -42,6 +42,7 @@ class NotifyFilter(Filter):
 
     def __init__(self, *args, **kwargs):
         self.queue_url = None
+        self.strip_fields = ()
         # Called "tube" for compatibility, this is the name of the main queue
         self.tube = None
         super().__init__(*args, **kwargs)
@@ -52,6 +53,7 @@ class NotifyFilter(Filter):
         if not self.queue_url:
             raise ValueError("Missing 'queue_url' in the configuration")
 
+        self.strip_fields = tuple(self.conf.get("strip_fields", "").split(","))
         self.tube = self.conf.get("tube", self.conf.get("queue_name", "notif"))
         self.tube_rules = {}
         self._load_policy_regex()
@@ -141,6 +143,16 @@ class NotifyFilter(Filter):
         Must be implemented by subclasses."""
         raise NotImplementedError
 
+    def strip_event(self, data):
+        """Remove unneeded fields from event."""
+        if not self.strip_fields:
+            return data
+        if isinstance(data, list):
+            return [item for item in data if item.get("type") not in self.strip_fields]
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in self.strip_fields}
+        return data
+
     def process(self, env, cb):
         event = Event(env)
         if self.should_notify(event):
@@ -148,6 +160,7 @@ class NotifyFilter(Filter):
             # to exceed the maximum size of the event (default: 65535)
             payload = env.copy()
             payload.pop("queue_connector", None)
+            payload["data"] = self.strip_event(payload["data"])
             data = json.dumps(payload, separators=(",", ":"))  # compact encoding
             # If there is an error, do not continue
             err_resp = self.send_event(event, data)

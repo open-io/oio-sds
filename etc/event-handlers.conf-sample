@@ -96,8 +96,13 @@ exclude = AUTH_demo1,AUTH_demo2/trash
 [filter:notify_delete]
 use = egg:oio#notify
 queue_url = ${QUEUE_URL}
+
+# Strip some fields from the event.
+strip_fields = aliases,contents_headers
+
 # Default tube
 tube = oio-delete
+
 # Regex and tube for EC storage policies.
 policy_regex_EC = ^EC.*
 tube_EC = oio-delete-ec

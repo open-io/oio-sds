@@ -82,8 +82,10 @@ class ContentReaperFilter(Filter):
             for item in event.data:
                 if item.get("type") == "chunks":
                     # The event contains "id" whereas the API uses "url".
-                    item["url"] = item["id"]
-                    chunks.append(item)
+                    # We make a copy so the next filter sees the original event.
+                    chunk = item.copy()
+                    chunk["url"] = chunk.pop("id")
+                    chunks.append(chunk)
                 if item.get("type") == "contents_headers":
                     content_headers.append(item)
             if chunks:

@@ -1509,6 +1509,7 @@ queue_url = ${QUEUE_URL}
 # In exchange "oio", all messages are routed to the queue "oio". To prevent
 # loops, we need another exchange.
 exchange_name = oio-delete
+strip_fields = aliases,contents_headers
 
 # This filter is only to demonstrate policy regexes
 [filter:notify_drained]
