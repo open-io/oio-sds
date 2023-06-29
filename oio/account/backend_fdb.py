@@ -123,6 +123,8 @@ class AccountBackendFdb(object):
     CONTAINER_LIST_PREFIX = "container"
     # Remaining keys for deletex containers prefix
     CTS_TO_DELETE_LIST_PREFIX = "deleted-container"
+    # Prefix for the KMS subspace (bucket secret keys)
+    KMS_PREFIX = "kms"
     # Metadata prefix
     METADATA_PREFIX = "metadata"
     # Prefix for bucket db
@@ -173,6 +175,7 @@ class AccountBackendFdb(object):
             self.ct_to_delete_space = self.namespace.create_or_open(
                 self.db, self.ct_to_delete_prefix
             )
+            # Saves bucket reservations: values are reservation time and account
             self.bucket_db_space = self.namespace.create_or_open(
                 self.db, self.reserve_bucket_prefix
             )
@@ -191,6 +194,8 @@ class AccountBackendFdb(object):
             self.rankings_space = self.namespace.create_or_open(
                 self.db, self.rankings_prefix
             )
+            # Save secret keys for buckets
+            self.kms_space = self.namespace.create_or_open(self.db, self.kms_prefix)
         except Exception as exc:
             self.logger.warning("Directory create exception %s", exc)
             raise
@@ -222,6 +227,7 @@ class AccountBackendFdb(object):
         self.ct_to_delete_prefix = conf.get(
             "containers_to_delete_prefix", self.CTS_TO_DELETE_LIST_PREFIX
         )
+        self.kms_prefix = conf.get("kms_prefix", self.KMS_PREFIX)
         self.metadata_prefix = conf.get("metadata_prefix", self.METADATA_PREFIX)
         self.metrics_prefix = conf.get("metrics_prefix", self.METRICS_PREFIX)
         self.rankings_prefix = conf.get("rankings_prefix", self.RANKINGS_PREFIX)
@@ -300,7 +306,7 @@ class AccountBackendFdb(object):
                     value = self._unmarshal_field_value(field, value)
                     if len(details) == 2:
                         dict_values = dict_values.setdefault(f"{field}-details", {})
-                        field = details[1]  # polciy
+                        field = details[1]  # policy
                     dict_values[field] = value
                 else:
                     self.logger.warning('Unknown key: "%s"', key)
@@ -2700,3 +2706,72 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _is_element(self, tr, space, key):
         return tr[space.pack((key,))].present()
+
+    # KMS ---------------------------------------------------------------------
+
+    @catch_service_errors
+    def delete_bucket_secret(self, account, bucket, secret_id="1", **kwargs):
+        # FIXME(FVE): accept integers?
+        if not isinstance(secret_id, str) or len(secret_id) < 1:
+            raise ValueError("secret_id")
+        return self._delete_bucket_secret(
+            self.db, account, bucket, secret_id=secret_id, **kwargs
+        )
+
+    @fdb.transactional
+    def _delete_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
+        account_space = self.kms_space[account]
+        tr.clear(account_space.pack((bucket, "secret", secret_id)))
+
+    @catch_service_errors
+    def get_bucket_secret(self, account, bucket, secret_id="1", **kwargs) -> bytes:
+        if not isinstance(secret_id, str) or len(secret_id) < 1:
+            raise ValueError("secret_id")
+        return self._get_bucket_secret(
+            self.db, account, bucket, secret_id=secret_id, **kwargs
+        )
+
+    @fdb.transactional
+    def _get_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
+        account_space = self.kms_space[account]
+        secret = tr[account_space.pack((bucket, "secret", secret_id))]
+        if not secret.present():
+            raise NotFound(
+                f"No secret for {account}/{bucket} with secret_id={secret_id}"
+            )
+        return secret.value
+
+    @catch_service_errors
+    def list_bucket_secrets(self, account, bucket, **kwargs):
+        return self._list_bucket_secrets(self.db, account, bucket, **kwargs)
+
+    @fdb.transactional
+    def _list_bucket_secrets(self, tr, account, bucket, **kwargs):
+        secrets_range = self.kms_space[account][bucket]["secret"].range()
+        iterator = tr.get_range(
+            secrets_range.start,
+            secrets_range.stop,
+        )
+        return [
+            {"secret_id": self.kms_space.unpack(k)[-1], "secret_bytes": len(v)}
+            for k, v in iterator
+        ]
+
+    @catch_service_errors
+    def save_bucket_secret(
+        self, account, bucket, secret: bytes, secret_id="1", **kwargs
+    ):
+        if not isinstance(secret_id, str) or len(secret_id) < 1:
+            raise ValueError("secret_id")
+        return self._save_bucket_secret(
+            self.db, account, bucket, secret, secret_id=secret_id, **kwargs
+        )
+
+    @fdb.transactional
+    def _save_bucket_secret(
+        self, tr, account, bucket, secret: bytes, secret_id, **kwargs
+    ):
+        account_space = self.kms_space[account]
+        if tr[account_space.pack((bucket, "secret", secret_id))].present():
+            raise Conflict(f"A secret with secret_id={secret_id} already exists")
+        tr[account_space.pack((bucket, "secret", secret_id))] = secret

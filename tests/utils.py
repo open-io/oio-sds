@@ -312,6 +312,10 @@ class CommonTestCase(testtools.TestCase):
         return self.storage.bucket
 
     @property
+    def kms(self):
+        return self.storage.kms
+
+    @property
     def rdir(self):
         if self._rdir_client is None:
             from oio.rdir.client import RdirClient

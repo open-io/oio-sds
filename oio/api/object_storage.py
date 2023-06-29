@@ -150,6 +150,7 @@ class ObjectStorageApi(object):
         self._account_metrics_client = None
         self._bucket_client = None
         self._iam_client = None
+        self._kms_client = None
         self._blob_client = None
         self._conscience_client = None
         self._directory_client = None
@@ -219,6 +220,22 @@ class ObjectStorageApi(object):
             # Share the connection pool
             self._acct_kwargs["pool_manager"] = self._iam_client.pool_manager
         return self._iam_client
+
+    @property
+    def kms(self):
+        """
+        Get an instance of KmsClient.
+
+        :rtype: `oio.account.iam_client.KmsClient`
+        """
+        if self._kms_client is None:
+            from oio.account.kms_client import KmsClient
+
+            self._kms_client = KmsClient(
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
+            self._acct_kwargs["pool_manager"] = self._kms_client.pool_manager
+        return self._kms_client
 
     @property
     def blob_client(self):
@@ -1635,7 +1652,7 @@ class ObjectStorageApi(object):
              'ctime': '1481031763',
              'deleted': 'False',
              'properties': {
-                 u'projet': u'OpenIO-SDS'},
+                 u'project': u'OpenIO-SDS'},
              'length': '43518',
              'hash_method': 'md5',
              'chunk_method': 'ec/algo=liberasurecode_rs_vand,k=6,m=3',

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,9 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+import base64
+import secrets
 
 from functools import wraps
 
@@ -29,6 +32,9 @@ from oio.common.wsgi import WerkzeugApp
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
+KMS_SECRET_BYTES_DEFAULT = 32
+KMS_SECRET_BYTES_MIN = 8
+KMS_SECRET_BYTES_MAX = 512
 
 
 def force_master(func):
@@ -174,6 +180,27 @@ class Account(WerkzeugApp):
                     endpoint="iam_load_merged_user_policies",
                     methods=["GET"],
                 ),
+                # KMS
+                Rule(
+                    "/v1.0/kms/create-secret",
+                    endpoint="kms_create_secret",
+                    methods=["PUT"],
+                ),
+                Rule(
+                    "/v1.0/kms/delete-secret",
+                    endpoint="kms_delete_secret",
+                    methods=["DELETE"],
+                ),
+                Rule(
+                    "/v1.0/kms/get-secret",
+                    endpoint="kms_get_secret",
+                    methods=["GET"],
+                ),
+                Rule(
+                    "/v1.0/kms/list-secrets",
+                    endpoint="kms_list_secrets",
+                    methods=["GET"],
+                ),
             ]
         )
         super(Account, self).__init__(self.url_map, self.logger)
@@ -193,7 +220,7 @@ class Account(WerkzeugApp):
     # GET /status
     # ~~~~~~~~~~~
     # Return a summary of the target account service. The body of the reply
-    # will present a count of the objects in the databse, formatted as a JSON
+    # will present a count of the objects in the database, formatted as a JSON
     # object.
     #
     # Sample request:
@@ -455,7 +482,7 @@ class Account(WerkzeugApp):
             end_marker=end_marker,
             stats=stats,
             sharding_accounts=sharding_accounts,
-            **kwargs
+            **kwargs,
         )
 
         info = {}
@@ -702,7 +729,7 @@ class Account(WerkzeugApp):
             marker=marker,
             end_marker=end_marker,
             region=region,
-            **kwargs
+            **kwargs,
         )
         if not account_info:
             return NotFound("Account not found")
@@ -804,7 +831,7 @@ class Account(WerkzeugApp):
             end_marker=end_marker,
             region=region,
             bucket=bucket,
-            **kwargs
+            **kwargs,
         )
         if not account_info:
             return NotFound("Account not found")
@@ -945,7 +972,7 @@ class Account(WerkzeugApp):
         kwargs["objects_details"] = data.get("objects-details")
         kwargs["bytes_details"] = data.get("bytes-details")
 
-        # Exceptions are catched by dispatch_request
+        # Exceptions are caught by dispatch_request
         self.backend.update_container(
             account_id,
             cname,
@@ -955,7 +982,7 @@ class Account(WerkzeugApp):
             bytes_used,
             bucket_name=bucket_name,
             region=region,
-            **kwargs
+            **kwargs,
         )
         return Response(
             json.dumps(cname, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
@@ -1016,7 +1043,7 @@ class Account(WerkzeugApp):
         object_count = 0
         bytes_used = 0
 
-        # Exceptions are catched by dispatch_request
+        # Exceptions are caught by dispatch_request
         self.backend.update_container(
             account_id,
             cname,
@@ -1025,7 +1052,7 @@ class Account(WerkzeugApp):
             object_count,
             bytes_used,
             autocreate_container=False,
-            **kwargs
+            **kwargs,
         )
         return Response(status=204)
 
@@ -1083,7 +1110,7 @@ class Account(WerkzeugApp):
         object_count = 0
         bytes_used = 0
 
-        # Exceptions are catched by dispatch_request
+        # Exceptions are caught by dispatch_request
         self.backend.update_container(
             account_id, cname, mtime, dtime, object_count, bytes_used, **kwargs
         )
@@ -1543,6 +1570,87 @@ class Account(WerkzeugApp):
         res = self.iam.load_merged_user_policies(account, user)
         return Response(
             json.dumps(res, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+        )
+
+    # --- KMS -----------------------------------------------------------------
+
+    @force_master
+    def on_kms_create_secret(self, req, **kwargs):
+        """Create (and return) a secret for the specified bucket."""
+        bname = self._get_item_id(req, key="bucket", what="bucket")
+        account_id = self._get_item_id(req, key="account", what="account")
+        secret_id = req.args.get("secret_id", "1")
+        try:
+            secret_bytes = int(req.args.get("secret_bytes", KMS_SECRET_BYTES_DEFAULT))
+            if not KMS_SECRET_BYTES_MIN <= secret_bytes <= KMS_SECRET_BYTES_MAX:
+                raise ValueError(
+                    f"secret_bytes must be between "
+                    f"{KMS_SECRET_BYTES_MIN} and {KMS_SECRET_BYTES_MAX}"
+                )
+        except ValueError as err:
+            return BadRequest(str(err))
+        secret = secrets.token_bytes(secret_bytes)
+        try:
+            self.backend.save_bucket_secret(
+                account_id, bname, secret, secret_id=secret_id
+            )
+            status = 201
+        except Conflict:
+            secret = self.backend.get_bucket_secret(
+                account_id, bname, secret_id=secret_id
+            )
+            status = 200
+        resp = {
+            "account": account_id,
+            "bucket": bname,
+            "secret_id": secret_id,
+            "secret": base64.b64encode(secret),
+        }
+        return Response(
+            json.dumps(resp, separators=(",", ":")),
+            mimetype=HTTP_CONTENT_TYPE_JSON,
+            status=status,
+        )
+
+    @force_master
+    def on_kms_delete_secret(self, req, **kwargs):
+        """Delete the secret of the specified bucket."""
+        bname = self._get_item_id(req, key="bucket", what="bucket")
+        account_id = self._get_item_id(req, key="account", what="account")
+        secret_id = req.args.get("secret_id", "1")
+        self.backend.delete_bucket_secret(account_id, bname, secret_id=secret_id)
+        return Response(status=204)
+
+    @force_master
+    def on_kms_get_secret(self, req, **kwargs):
+        """Get the secret of the specified bucket."""
+        bname = self._get_item_id(req, key="bucket", what="bucket")
+        account_id = self._get_item_id(req, key="account", what="account")
+        secret_id = req.args.get("secret_id", "1")
+        secret = self.backend.get_bucket_secret(account_id, bname, secret_id=secret_id)
+        resp = {
+            "account": account_id,
+            "bucket": bname,
+            "secret_id": secret_id,
+            "secret": base64.b64encode(secret),
+        }
+        return Response(
+            json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+        )
+
+    @force_master
+    def on_kms_list_secrets(self, req, **kwargs):
+        """List the secrets of the specified bucket."""
+        bname = self._get_item_id(req, key="bucket", what="bucket")
+        account_id = self._get_item_id(req, key="account", what="account")
+        secret_list = self.backend.list_bucket_secrets(account_id, bname)
+        resp = {
+            "account": account_id,
+            "bucket": bname,
+            "secrets": secret_list,
+        }
+        return Response(
+            json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
         )
 
 
