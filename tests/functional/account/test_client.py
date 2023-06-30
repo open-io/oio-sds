@@ -20,8 +20,6 @@ from mock import MagicMock as Mock
 from urllib3 import exceptions as urllibexc
 
 from oio.account.backend_fdb import AccountBackendFdb
-from oio.account.client import AccountClient
-from oio.account.bucket_client import BucketClient
 from oio.common.exceptions import (
     BadRequest,
     NotFound,
@@ -51,10 +49,7 @@ class TestAccountClient(BaseTestCase):
         self.containers = set()
         self.buckets = set()
 
-        self.account_client = AccountClient(self.conf, logger=self.logger)
-        self.bucket_client = BucketClient(
-            self.conf, logger=self.logger, pool_manager=self.account_client.pool_manager
-        )
+        self.account_client = self.storage.account
         self.region = self.bucket_client.region.upper()
 
         self._create_account(self.account_id)
@@ -95,10 +90,8 @@ class TestAccountClient(BaseTestCase):
     def _create_bucket(self, account, bucket, region=None):
         if (account, bucket, region) in self.buckets:
             return
-        if region:
-            self.bucket_client.region = region
         try:
-            self.bucket_client.bucket_create(bucket, account)
+            self.bucket_client.bucket_create(bucket, account, region=region)
         finally:
             if region:
                 self.bucket_client.region = self.region
@@ -106,10 +99,8 @@ class TestAccountClient(BaseTestCase):
         self.buckets.add((account, bucket, region))
 
     def _delete_bucket(self, account, bucket, region=None):
-        if region:
-            self.bucket_client.region = region
         try:
-            self.bucket_client.bucket_delete(bucket, account)
+            self.bucket_client.bucket_delete(bucket, account, region=region)
         finally:
             if region:
                 self.bucket_client.region = self.region

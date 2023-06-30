@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 
 import time
 
-from oio.account.bucket_client import BucketClient
 from oio.common.exceptions import Forbidden, NotFound
 from tests.utils import BaseTestCase
 
@@ -26,7 +25,6 @@ class TestBucketClient(BaseTestCase):
         self.account_id1 = f"account-{time.time()}"
         self.account_id2 = f"account-{time.time()}"
         self.bucket_name = f"bucket-{time.time()}"
-        self.bucket_client = BucketClient(self.conf)
 
     def tearDown(self):
         for account in (self.account_id1, self.account_id2):

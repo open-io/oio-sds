@@ -29,7 +29,7 @@ class TestRabbitmqCluster(BaseTestCase):
         self.bucket_name = random_id(16).lower()
         self.beanstalkd0.drain_tube("oio-preserved")
         self.rabbitmq_nodes = ["rabbit-1", "rabbit-2", "rabbit-3"]
-        self.bucket.bucket_create(self.bucket_name, self.account_id)
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id)
 
     def tearDown(self):
         super(TestRabbitmqCluster, self).tearDown()

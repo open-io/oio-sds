@@ -465,7 +465,7 @@ class TestBillingAgent(BaseTestCase):
                 bucket_name,
                 system={M2_PROP_BUCKET_NAME: bucket_name},
             )
-            self.bucket.bucket_create(bucket_name, account_name)
+            self.bucket_client.bucket_create(bucket_name, account_name)
             for _ in range(nb_objects):
                 reqid = request_id()
                 self.storage.object_create(

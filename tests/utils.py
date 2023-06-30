@@ -28,7 +28,6 @@ from urllib.parse import urlencode
 
 import yaml
 import testtools
-from oio.account.bucket_client import BucketClient
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
@@ -309,10 +308,8 @@ class CommonTestCase(testtools.TestCase):
         return self._beanstalkd0
 
     @property
-    def bucket(self):
-        if not self._bucket:
-            self._bucket = BucketClient(self.conf)
-        return self._bucket
+    def bucket_client(self):
+        return self.storage.bucket
 
     @property
     def rdir(self):
