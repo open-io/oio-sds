@@ -167,9 +167,9 @@ get_status() {
         GRAY=$'\e[1;37m'
         NC=$'\e[0m'
         case "$_STATUS" in
-            active) _STATUS=$"${GREEN}$_STATUS${NC}";;
-            failed) _STATUS="${RED}$_STATUS${NC}";;
+            running) _STATUS=$"${GREEN}$_STATUS${NC}";;
             inactive) _STATUS=$"${GRAY}$_STATUS${NC}";;
+            *) _STATUS="${RED}$_STATUS${NC}";;
         esac
     fi
     echo "$_STATUS"
