@@ -22,7 +22,12 @@ from oio.common.constants import (
     MAX_STRLEN_CHUNKID,
     MIN_STRLEN_CHUNKID,
 )
-from oio.common.utils import is_chunk_id_valid, rotate_list
+from oio.common.utils import (
+    is_chunk_id_valid,
+    oio_versionid_to_str_versionid,
+    rotate_list,
+    str_versionid_to_oio_versionid,
+)
 from tests.utils import random_id
 
 
@@ -65,3 +70,11 @@ class TestUtils(unittest.TestCase):
         self.assertListEqual([3, 4, 1, 2], rotate_list(mylist, shift=2))
         rotate_list(mylist, inplace=True)
         self.assertListEqual([2, 3, 4, 1], mylist)
+
+    def test_str_versionid_to_oio_versionid(self):
+        self.assertEqual(None, str_versionid_to_oio_versionid("null"))
+        self.assertEqual(123456, str_versionid_to_oio_versionid("0.123456"))
+
+    def test_oio_versionid_to_str_versionid(self):
+        self.assertEqual("null", oio_versionid_to_str_versionid(None))
+        self.assertEqual("0.123456", oio_versionid_to_str_versionid(123456))

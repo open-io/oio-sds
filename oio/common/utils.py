@@ -684,3 +684,29 @@ def rotate_list(mylist, shift=1, inplace=False):
         mylist[:] = mylist[shift:] + mylist[:shift]
         return mylist
     return mylist[shift:] + mylist[:shift]
+
+
+def str_versionid_to_oio_versionid(version_id):
+    """
+    Convert string version id to an oio-style version id.
+
+    :param version_id: the string version id
+    :returns: the oio integer version id
+    """
+    if not version_id or version_id == "null":
+        return None
+    else:
+        return int(float(version_id) * 1000000)
+
+
+def oio_versionid_to_str_versionid(version_id):
+    """
+    Convert an oio-style version id to string version id.
+
+    :param version_id: the oio integer version id
+    :returns: the string version id
+    """
+    if version_id:
+        return "%.6f" % (int(version_id) / 1000000.0)
+    else:
+        return "null"
