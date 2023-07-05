@@ -27,7 +27,13 @@ from oio.common.constants import (
     DRAINING_STATE_NEEDED,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
+    M2_PROP_OBJECTS,
+    M2_PROP_SHARDING_LOWER,
 )
+
+
+def fake_cb(_status, _msg):
+    pass
 
 
 class FilterApp(object):
@@ -147,11 +153,12 @@ class TestDrainingFilter(BaseTestCase):
         self,
         nb_objects=0,
         meta2db_env=None,
-        callback=None,
+        callback=fake_cb,
         nb_passes=1,
         drain_limit=None,
         drain_limit_per_pass=None,
         cid=None,
+        out_of_range_objects=[],
     ):
         if not meta2db_env:
             cid = cid or cid_from_name(self.account, self.cname)
@@ -171,14 +178,17 @@ class TestDrainingFilter(BaseTestCase):
 
             # Get all chunk urls of the container
             resp = self.storage.object_list(None, None, cid=cid)
-            self.assertEqual(nb_objects, len(resp["objects"]))
+            self.assertEqual(
+                nb_objects + len(out_of_range_objects), len(resp["objects"])
+            )
             chunk_urls = []
             for object_ in resp["objects"]:
                 _, chunks = self.storage.object_locate(
                     None, None, object_["name"], cid=cid
                 )
-                for chunk in chunks:
-                    chunk_urls.append(chunk["url"])
+                if object_["name"] not in out_of_range_objects:
+                    for chunk in chunks:
+                        chunk_urls.append(chunk["url"])
 
         # Process the draining
         if not meta2db_env:
@@ -202,6 +212,10 @@ class TestDrainingFilter(BaseTestCase):
                         self.logger.debug("Drain event for %s received", chunk_url)
                         chunk_urls.remove(chunk_url)
             self.assertEqual(0, len(chunk_urls))
+            # Check if the out-of-range objects are not drained
+            for obj_name in out_of_range_objects:
+                _, chunks = self.storage.object_locate(None, None, obj_name, cid=cid)
+                self.assertGreater(len(chunks), 0)
 
     def test_drain_container(self):
         nb_obj_to_add = 10
@@ -315,5 +329,45 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
-        for _, shard in enumerate(show_shards):
+        for shard in show_shards:
             self._process_draining(2, cid=shard["cid"])
+
+    def test_drain_on_shard_containing_out_of_range_objects(self):
+        nb_obj_to_add = 8
+
+        self._add_objects(self.cname, nb_obj_to_add)
+
+        # Make sharding (split in 2)
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account,
+            self.cname,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True, reqid="testingisdoubting"
+        )
+        self.assertTrue(modified)
+
+        self._set_draining_flag()
+
+        show_shards = self.container_sharding.show_shards(self.account, self.cname)
+        shard_id = next(show_shards)["cid"]
+
+        self.storage.container_set_properties(
+            None,
+            None,
+            cid=shard_id,
+            system={
+                M2_PROP_SHARDING_LOWER: ">1content",
+                M2_PROP_OBJECTS: "2",
+            },
+        )
+
+        self.expected_successes = 1
+        self.expected_skipped = 0
+        self.expected_errors = 0
+        self._process_draining(
+            2, cid=shard_id, out_of_range_objects=["0content", "1content"]
+        )

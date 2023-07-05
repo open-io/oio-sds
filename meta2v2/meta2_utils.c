@@ -3578,14 +3578,18 @@ _real_drain_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
 }
 
 static GVariant **
-_build_drain_container_clause(gchar *marker_start, GString *clause,
-		gint64 limit)
+_build_drain_container_clause(gchar *marker_start, gchar *marker_end,
+		GString *clause, gint64 limit)
 {
 	GPtrArray *params = g_ptr_array_new ();
 	g_string_append_static(clause, " deleted == 0");
 	if (marker_start != NULL) {
 		g_string_append_static(clause, " AND alias > ?");
 		g_ptr_array_add(params, g_variant_new_string(marker_start));
+	}
+	if (marker_end != NULL) {
+		g_string_append_static(clause, " AND alias < ?");
+		g_ptr_array_add(params, g_variant_new_string(marker_end));
 	}
 
 	g_string_append_static(clause, " ORDER BY alias ASC, version DESC");
@@ -3603,39 +3607,63 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		gint64 limit, gboolean *truncated)
 {
 	GError *err = NULL;
+	gint64 drain_count = 0;
 	gchar *marker_start = NULL;
-
-	if (sqlx_admin_has(sq3, M2V2_ADMIN_DRAINING_STATE)) {
-		err = SYSERR("No draining in progress");
-		return err;
-	}
-
-	err = m2db_get_drain_marker(sq3, &marker_start);
-	if (err) {
-		g_free(marker_start);
-		return err;
-	}
+	gchar *marker_end = NULL;
 	gchar *next_marker = NULL;
-	gint64 obj_count = 0;
-	gint64 drain_count = m2db_get_drain_obj_count(sq3);
-	GPtrArray *tmp = g_ptr_array_new();
-	g_ptr_array_add(tmp, NULL);
-	GSList *beans = NULL;
-	GSList *deleted_beans = NULL;
+	GPtrArray *tmp = NULL;
+	GPtrArray *aliases = NULL;
 
-	GPtrArray *aliases = g_ptr_array_new();
-	guint nb_aliases = 0;
+	gint64 draining_state = m2db_get_drain_state(sq3);
+	if (draining_state == DRAINING_STATE_NEEDED) {
+		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // shard
+			// Drain only objects managed by this shard.
+			// Other objects will be drained by their respective shard.
+			err = m2db_get_sharding_lower(sq3, &marker_start);
+			if (err) {
+				goto end;
+			}
+			gchar *upper = NULL;
+			err = m2db_get_sharding_upper(sq3, &upper);
+			if (err) {
+				goto end;
+			}
+			if (*upper) {
+				/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+				marker_end = g_strdup_printf("%s\x01", upper);
+			}
+			g_free(upper);
+		}
+	} else if (draining_state == DRAINING_STATE_IN_PROGRESS) {
+		drain_count = m2db_get_drain_obj_count(sq3);
+		err = m2db_get_drain_marker(sq3, &marker_start);
+		if (err) {
+			g_free(marker_start);
+			goto end;
+		}
+		if (marker_start == NULL) {
+			err = SYSERR("Marker is missing");
+			goto end;
+		}
+	} else {
+        err = BADREQ("No draining in progress");
+		goto end;
+	}
+
+	tmp = g_ptr_array_new();
+	g_ptr_array_add(tmp, NULL);
 
 	GString *clause = g_string_sized_new(128);
-	GVariant **params = _build_drain_container_clause(marker_start, clause,
-		limit + 1);
+	GVariant **params = _build_drain_container_clause(marker_start, marker_end,
+			clause, limit + 1);
 
+	aliases = g_ptr_array_new();
 	err = ALIASES_load(sq3, clause->str, params, _bean_buffer_cb, aliases);
 	metautils_gvariant_unrefv(params);
 	g_free(params), params = NULL;
 	g_string_free(clause, TRUE);
 
-	nb_aliases = aliases->len;
+	guint nb_aliases = aliases->len;
 	if (nb_aliases == limit + 1) {
 		next_marker = g_strdup(ALIASES_get_alias(aliases->pdata[limit-1])->str);
 		_bean_clean(aliases->pdata[limit]);
@@ -3644,6 +3672,8 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		*truncated = TRUE;
 	}
 
+	GSList *beans = NULL;
+	GSList *deleted_beans = NULL;
 	for (guint i = 0; !err && i < aliases->len; i++) {
 		tmp->pdata[0] = aliases->pdata[i];
 		beans = NULL;
@@ -3659,14 +3689,13 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 			} else {
 				err = _real_drain_beans(sq3, beans, NULL, NULL);
 			}
-			drain_count ++;
+			drain_count++;
 		}
 
 		aliases->pdata[i] = NULL;
 	}
 
-	obj_count = m2db_get_obj_count(sq3);
-
+	gint64 obj_count = m2db_get_obj_count(sq3);
 	if (drain_count < obj_count) {
 		if (!*truncated) {
 			err = SYSERR("Error during draining (not all expected objects "
@@ -3696,10 +3725,13 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 	}
 
 end:
-	tmp->pdata[0] = NULL;
-	g_ptr_array_free(tmp, TRUE);
+	if (tmp != NULL) {
+		tmp->pdata[0] = NULL;
+		g_ptr_array_free(tmp, TRUE);
+	}
 	_bean_cleanv2(aliases);
 	g_free(marker_start);
+	g_free(marker_end);
 	g_free(next_marker);
 
 	return err;
