@@ -33,7 +33,6 @@ In addition, there some dependencies at runtime (the up-to-date list is in [requ
 * python-redis
 * python-requests
 * python-simplejson
-* pyxattr (python-xattr on Debian/Ubuntu)
 * python-cliff
 * python-pyeclib
 * python-futures

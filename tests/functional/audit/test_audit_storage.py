@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,6 @@ import time
 
 from oio.common.easy_value import boolean_value
 from oio.common.utils import cid_from_name, compute_chunk_id, get_hasher
-from oio.common.xattr import xattr
 from oio.common.logger import get_logger
 from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
@@ -188,7 +187,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_metachunk_size(self):
         self.init_content()
-        xattr.setxattr(
+        os.setxattr(
             self.chunk.path, "user." + CHUNK_XATTR_KEYS["metachunk_size"], b"320"
         )
 
@@ -198,7 +197,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_metachunk_hash(self):
         self.init_content()
-        xattr.setxattr(
+        os.setxattr(
             self.chunk.path,
             "user." + CHUNK_XATTR_KEYS["metachunk_hash"],
             b"0123456789ABCDEF0123456789ABCDEF",
@@ -210,11 +209,11 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_chunk_id(self):
         self.init_content()
-        xattr.removexattr(
+        os.removexattr(
             self.chunk.path,
             "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + str(self.chunk.id),
         )
-        xattr.setxattr(
+        os.setxattr(
             self.chunk.path,
             "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + "WRONG_ID",
             self.content.fullpath.encode("utf-8"),
@@ -226,7 +225,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_content_container(self):
         self.init_content()
-        xattr.setxattr(
+        os.setxattr(
             self.chunk.path,
             "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + str(self.chunk.id),
             encode_fullpath(
@@ -244,7 +243,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_content_id(self):
         self.init_content()
-        xattr.setxattr(
+        os.setxattr(
             self.chunk.path,
             "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + str(self.chunk.id),
             encode_fullpath(
@@ -262,7 +261,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_xattr_bad_xattr_chunk_position(self):
         self.init_content()
-        xattr.setxattr(self.chunk.path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"42")
+        os.setxattr(self.chunk.path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"42")
 
         self.assertRaises(
             exc.FaultyChunk, self.auditor.chunk_audit, self.chunk.path, self.chunk.id

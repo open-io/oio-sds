@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,19 +14,18 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six import text_type
-from six.moves.urllib_parse import quote, unquote, quote_plus, unquote_plus
+from urllib.parse import quote, unquote
 
 
 def encode_fullpath(account, container, path, version, content_id):
     for k, v in locals().items():
         if not v:
             raise ValueError("Can't encode fullpath: missing %s" % k)
-    if isinstance(account, text_type):
+    if isinstance(account, str):
         account = account.encode("utf-8")
-    if isinstance(container, text_type):
+    if isinstance(container, str):
         container = container.encode("utf-8")
-    if isinstance(path, text_type):
+    if isinstance(path, str):
         path = path.encode("utf-8")
     return "{0}/{1}/{2}/{3}/{4}".format(
         quote(account, ""),
@@ -46,28 +46,7 @@ def decode_fullpath(fullpath):
     fp = fullpath.split("/")
     if len(fp) != 5:
         raise ValueError("fullpath: invalid format")
-    decoded = list()
+    decoded = []
     for part in fp:
         decoded.append(unquote(part))
-    return tuple(decoded)
-
-
-def encode_old_fullpath(account, container, path, version):
-    if not account or not container or not path or not version:
-        raise ValueError("Can't encode old fullpath")
-    return "{0}/{1}/{2}/{3}".format(
-        quote_plus(account, ""),
-        quote_plus(container, ""),
-        quote_plus(path, ""),
-        quote_plus(str(version), ""),
-    )
-
-
-def decode_old_fullpath(fullpath):
-    fp = fullpath.split("/")
-    if len(fp) != 4:
-        raise ValueError("old fullpath: Wrong format")
-    decoded = list()
-    for part in fp:
-        decoded.append(unquote_plus(part))
     return tuple(decoded)

@@ -25,7 +25,6 @@ from oio.common.easy_value import true_value
 from oio.common.exceptions import FaultyChunk
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
-from oio.common.xattr import xattr
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 from oio.crawler.rawx.filters.indexer import Indexer
 from oio.event.evob import EventTypes
@@ -347,37 +346,33 @@ class TestBlobIndexer(BaseTestCase):
             chunk_file.write(b"toto")
 
         # pylint: disable=no-member
-        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_hash"], 32 * b"0")
-        xattr.setxattr(
-            chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_id"], enc(chunk_id)
-        )
-        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"0")
-        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_size"], b"4")
-        xattr.setxattr(
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_hash"], 32 * b"0")
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_id"], enc(chunk_id))
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"0")
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_size"], b"4")
+        os.setxattr(
             chunk_path, "user." + CHUNK_XATTR_KEYS["content_policy"], b"TESTPOLICY"
         )
-        xattr.setxattr(
+        os.setxattr(
             chunk_path,
             "user." + CHUNK_XATTR_KEYS["content_chunkmethod"],
             b"plain/nb_copy=3",
         )
-        xattr.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_version"], b"1")
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_version"], b"1")
         # Old (oio-sds < 4.2) extended attributes
-        xattr.setxattr(
+        os.setxattr(
             chunk_path, "user." + CHUNK_XATTR_KEYS["container_id"], enc(container_id)
         )
-        xattr.setxattr(
+        os.setxattr(
             chunk_path, "user." + CHUNK_XATTR_KEYS["content_id"], enc(content_id)
         )
-        xattr.setxattr(
-            chunk_path, "user." + CHUNK_XATTR_KEYS["content_path"], enc(alias)
-        )
+        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_path"], enc(alias))
         # New (oio-sds >= 4.2) extended attributes
-        xattr.setxattr(
+        os.setxattr(
             chunk_path, "user." + CHUNK_XATTR_KEYS["oio_version"], enc(OIO_VERSION)
         )
         fullpath = encode_fullpath(self.account, cname, alias, 1, content_id)
-        xattr.setxattr(
+        os.setxattr(
             chunk_path,
             "user.%s%s" % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, chunk_id),
             enc(fullpath),
@@ -436,7 +431,7 @@ class TestBlobIndexer(BaseTestCase):
 
         # remove mandatory xattr
         # pylint: disable=no-member
-        xattr.removexattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"])
+        os.removexattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"])
 
         with open(chunk_path, "rb") as chunk_file:
             self.assertRaises(FaultyChunk, read_chunk_metadata, chunk_file, chunk_id)

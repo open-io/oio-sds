@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 from __future__ import absolute_import
 import errno
+import os
 
 from oio.common.constants import (
     CHUNK_XATTR_KEYS,
@@ -25,30 +26,24 @@ from oio.common.constants import (
 from oio.common.easy_value import debinarize
 
 
-xattr = None
-try:
-    # try python-pyxattr
-    import xattr
-except ImportError:
-    pass
-if xattr:
-    try:
-        xattr.get_all
-    except AttributeError:
-        # fallback to pyxattr compat mode
-        from xattr import pyxattr_compat as xattr
-
-
 def read_user_xattr(fd):
-    it = {}
+    """Read all extended attributes starting with "user." """
+    if hasattr(fd, "fileno"):
+        fd = fd.fileno()
+    meta = {}
     try:
-        it = xattr.get_all(fd)
+        meta = debinarize(
+            {
+                k[5:]: os.getxattr(fd, k)
+                for k in os.listxattr(fd)
+                if k.startswith("user.")
+            }
+        )
     except IOError as err:
         for code in ("ENOTSUP", "EOPNOTSUPP", "ENOENT"):
             if hasattr(errno, code) and err.errno == getattr(errno, code):
                 raise err
 
-    meta = debinarize({k[5:]: v for k, v in it if k.startswith(b"user.")})
     return meta
 
 
@@ -64,8 +59,10 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False, xattr_to_remov
     :param xattr_to_remove: list of extra extended attributes
         that should be removed from file
     """
+    if hasattr(fd, "fileno"):
+        fd = fd.fileno()
     for chunk_id, new_fullpath in new_fullpaths.items():
-        xattr.setxattr(
+        os.setxattr(
             fd,
             "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
             new_fullpath.encode("utf-8"),
@@ -74,7 +71,7 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False, xattr_to_remov
     if xattr_to_remove:
         for key in xattr_to_remove:
             try:
-                xattr.removexattr(fd, "user." + key)
+                os.removexattr(fd, "user." + key)
             except IOError:
                 pass
 
@@ -87,10 +84,10 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False, xattr_to_remov
             "content_id",
         ]:
             try:
-                xattr.removexattr(fd, "user." + CHUNK_XATTR_KEYS[key])
+                os.removexattr(fd, "user." + CHUNK_XATTR_KEYS[key])
             except IOError:
                 pass
 
-        xattr.setxattr(
+        os.setxattr(
             fd, "user." + CHUNK_XATTR_KEYS["oio_version"], OIO_VERSION.encode("utf-8")
         )
