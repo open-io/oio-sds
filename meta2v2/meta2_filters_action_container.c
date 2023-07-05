@@ -229,6 +229,22 @@ meta2_filter_action_drain_container(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+int
+meta2_filter_action_abort_drain_container(struct gridd_filter_ctx_s *ctx UNUSED,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+
+	GError *err = meta2_backend_abort_drain_container(m2b, url);
+	if (err != NULL) {
+		GRID_DEBUG("Container abort drain failed (%d): %s", err->code, err->message);
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+	return FILTER_OK;
+}
+
 static int
 _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		struct list_params_s *lp, GSList *headers)

@@ -59,6 +59,7 @@ from oio.common.constants import (
     SHARDING_STATE_NAME,
     M2_PROP_DRAINING_STATE,
     DRAINING_STATE_NEEDED,
+    DRAINING_STATE_TO_ABORT,
     DRAINING_STATE_NAME,
     M2_PROP_DRAINING_TIMESTAMP,
 )
@@ -639,6 +640,40 @@ class DrainContainer(ContainersCommandMixin, Command):
         system = {
             M2_PROP_DRAINING_STATE: str(DRAINING_STATE_NEEDED),
             M2_PROP_DRAINING_TIMESTAMP: str(round(now() * 1000000)),
+        }
+        for container in parsed_args.containers:
+            account = self.app.client_manager.account
+            cid = None
+            if parsed_args.is_cid:
+                cid = container
+
+            self.app.client_manager.storage.container_set_properties(
+                account, container, cid=cid, system=system, propagate_to_shards=True
+            )
+
+
+class AbortDrainContainer(ContainersCommandMixin, Command):
+    """
+    Set the draining state to 'to_abort'. Abort is not performed here,
+    the meta2-crawler will do it on his next pass.
+
+    There is no check about the current draining state.
+    In case of sharding, root and shards may not have the same status, so
+    "to abort" status is set to the root container and all shards.
+    """
+
+    log = getLogger(__name__ + ".AbortDrainContainer")
+
+    def get_parser(self, prog_name):
+        parser = super(AbortDrainContainer, self).get_parser(prog_name)
+        self.patch_parser_container(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+
+        system = {
+            M2_PROP_DRAINING_STATE: str(DRAINING_STATE_TO_ABORT),
         }
         for container in parsed_args.containers:
             account = self.app.client_manager.account

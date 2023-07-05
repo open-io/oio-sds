@@ -560,6 +560,24 @@ class ObjectStorageApi(object):
         resp["truncated"] = true_value(hdrs.get(HEADER_PREFIX + "truncated"))
         return resp
 
+    @handle_container_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def container_abort_drain(self, account, container, **kwargs):
+        """
+        Abort a draining operation on a container.
+        This method is usually called by the meta2-crawler.
+        The container must be in the correct draining state (to abort),
+        this state can be set with the cli.
+
+        :param account: account from which to drain the container
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        """
+        self.container.container_abort_drain(account, container, **kwargs)
+
     @handle_account_not_found
     @patch_kwargs
     @ensure_headers

@@ -3606,9 +3606,13 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 	gchar *marker_start = NULL;
 	gint64 draining_state = m2db_get_drain_state(sq3);
 
+	if (draining_state == DRAINING_STATE_TO_ABORT) {
+		err = BADREQ("Draining can't be run but must be aborted");
+		return err;
+	}
 	if (draining_state != DRAINING_STATE_NEEDED &&
 			draining_state != DRAINING_STATE_IN_PROGRESS) {
-		err = SYSERR("draining_state=%ld invalid for draining", draining_state);
+		err = BADREQ("draining_state=%ld invalid to drain", draining_state);
 		return err;
 	}
 
@@ -3672,7 +3676,8 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 	if (drain_count < obj_count) {
 		if (!*truncated) {
 			err = SYSERR("Error during draining (not all expected objects "
-					"have been processed)");
+					"have been processed). New objects may have been created "
+					"during draining. Please abort and try again.");
 			goto end;
 		}
 		GRID_DEBUG("Draining not over yet: %ld/%ld", drain_count, obj_count);
@@ -3703,6 +3708,24 @@ end:
 	_bean_cleanv2(aliases);
 	g_free(marker_start);
 	g_free(next_marker);
+
+	return err;
+}
+
+GError*
+m2db_abort_drain_container(struct sqlx_sqlite3_s *sq3) {
+	GError *err = NULL;
+	gint64 draining_state = m2db_get_drain_state(sq3);
+
+	if (draining_state != DRAINING_STATE_TO_ABORT ) {
+		err = SYSERR("draining_state=%ld invalid to abort draining", draining_state);
+		return err;
+	}
+
+	m2db_del_drain_state(sq3);
+	m2db_del_drain_timestamp(sq3);
+	m2db_del_drain_obj_count(sq3);
+	m2db_del_drain_marker(sq3);
 
 	return err;
 }

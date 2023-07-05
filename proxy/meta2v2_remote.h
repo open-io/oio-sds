@@ -60,6 +60,10 @@ GByteArray* m2v2_remote_pack_container_DRAIN(
 		const char *limit_str,
 		gint64 deadline);
 
+GByteArray* m2v2_remote_pack_container_ABORT_DRAIN(
+		struct oio_url_s *url,
+		gint64 dl);
+
 /* deadline known from thread-local
  * Locally destroy a container on several services. */
 GError* m2v2_remote_execute_DESTROY_many(

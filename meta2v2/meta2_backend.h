@@ -93,6 +93,9 @@ GError *meta2_backend_drain_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, gint64 limit, m2_onbean_cb cb,
 		gpointer u0, gboolean *truncated);
 
+GError *meta2_backend_abort_drain_container(struct meta2_backend_s *m2,
+		struct oio_url_s *url);
+
 /* -------------------------------------------------------------------------- */
 
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,

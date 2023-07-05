@@ -266,6 +266,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_GET              "M2_GET"
 # define NAME_MSGNAME_M2V2_CONTENT_DRAIN    "M2_DRAIN"
 # define NAME_MSGNAME_M2V2_CONTAINER_DRAIN  "M2_BDRAIN"
+# define NAME_MSGNAME_M2V2_CONTAINER_ABORT_DRAIN  "M2_BABORTDRAIN"
 # define NAME_MSGNAME_M2V2_DEL              "M2_DEL"
 # define NAME_MSGNAME_M2V2_TRUNC            "M2_TRUNC"
 # define NAME_MSGNAME_M2V2_LIST             "M2_LST"
@@ -372,6 +373,7 @@ enum draining_state_e {
 	// Container to drain
 	DRAINING_STATE_NEEDED = 1,
 	DRAINING_STATE_IN_PROGRESS,
+	DRAINING_STATE_TO_ABORT,
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

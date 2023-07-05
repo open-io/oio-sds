@@ -23,8 +23,8 @@ from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.draining import Draining
 from oio.event.evob import EventTypes
 from oio.common.constants import (
-    DRAINING_STATE_IN_PROGRESS,
     DRAINING_STATE_NEEDED,
+    DRAINING_STATE_TO_ABORT,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
 )
@@ -75,6 +75,7 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 0
         self.expected_skipped = 0
         self.expected_errors = 0
+        self.expected_aborted = 0
 
     def tearDown(self):
         try:
@@ -143,7 +144,7 @@ class TestDrainingFilter(BaseTestCase):
         )
         self.assertEqual(b"", output)
 
-    def _process_draining(
+    def _handle_draining(
         self,
         nb_objects=0,
         meta2db_env=None,
@@ -153,6 +154,8 @@ class TestDrainingFilter(BaseTestCase):
         drain_limit_per_pass=None,
         cid=None,
     ):
+        chunk_urls = []
+
         if not meta2db_env:
             cid = cid or cid_from_name(self.account, self.cname)
         else:
@@ -166,13 +169,12 @@ class TestDrainingFilter(BaseTestCase):
         draining = Draining(app=self.app, conf=conf)
 
         # pylint: disable=protected-access
-        if self.expected_successes >= 1:
+        if self.expected_successes >= 1 or self.expected_aborted >= 1:
             self.beanstalkd0.drain_tube("oio-preserved")
 
             # Get all chunk urls of the container
             resp = self.storage.object_list(None, None, cid=cid)
             self.assertEqual(nb_objects, len(resp["objects"]))
-            chunk_urls = []
             for object_ in resp["objects"]:
                 _, chunks = self.storage.object_locate(
                     None, None, object_["name"], cid=cid
@@ -189,6 +191,7 @@ class TestDrainingFilter(BaseTestCase):
         self.assertEqual(self.expected_successes, draining.successes)
         self.assertEqual(self.expected_skipped, draining.skipped)
         self.assertEqual(self.expected_errors, draining.errors)
+        self.assertEqual(self.expected_aborted, draining.aborted)
 
         if self.expected_successes >= 1:
             # All chunks should have received a draining event
@@ -202,23 +205,39 @@ class TestDrainingFilter(BaseTestCase):
                         self.logger.debug("Drain event for %s received", chunk_url)
                         chunk_urls.remove(chunk_url)
             self.assertEqual(0, len(chunk_urls))
+        elif self.expected_aborted >= 1:
+            # Check chunks are still in meta2
+            chunk_urls_aborted = []
+            resp = self.storage.object_list(None, None, cid=cid)
+            for object_ in resp["objects"]:
+                _, chunks = self.storage.object_locate(
+                    None, None, object_["name"], cid=cid
+                )
+                for chunk in chunks:
+                    chunk_urls_aborted.append(chunk["url"])
+            # Sort lists (of strings) for consistency
+            chunk_urls.sort()
+            chunk_urls_aborted.sort()
+            self.assertListEqual(chunk_urls, chunk_urls_aborted)
 
     def test_drain_container(self):
         nb_obj_to_add = 10
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
+        self.expected_aborted = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
         self._set_draining_flag()
-        self._process_draining(nb_obj_to_add)
+        self._handle_draining(nb_obj_to_add)
 
         # Flag draining done should have been set,
         # nothing should be done anymore
         self.expected_successes = 0
         self.expected_skipped = 1
         self.expected_errors = 0
-        self._process_draining()
+        self.expected_aborted = 0
+        self._handle_draining()
 
     def test_drain_without_flag(self):
         """
@@ -229,9 +248,10 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 0
         self.expected_skipped = 1
         self.expected_errors = 0
+        self.expected_aborted = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._process_draining(nb_obj_to_add)
+        self._handle_draining(nb_obj_to_add)
 
     def test_drain_with_bad_flag(self):
         """
@@ -242,10 +262,11 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 0
         self.expected_skipped = 1
         self.expected_errors = 0
+        self.expected_aborted = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._set_draining_flag(flag=DRAINING_STATE_IN_PROGRESS + 1)
-        self._process_draining(nb_obj_to_add)
+        self._set_draining_flag(flag=-1)
+        self._handle_draining(nb_obj_to_add)
 
     def test_drain_bad_meta2(self):
         """
@@ -260,6 +281,7 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 0
         self.expected_skipped = 0
         self.expected_errors = 1
+        self.expected_aborted = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
         cid = cid_from_name(self.account, self.cname)
@@ -267,7 +289,7 @@ class TestDrainingFilter(BaseTestCase):
         meta2db_env["path"] = "%s-wrong" % meta2db_env["path"]
         self.assertRaises(
             FileNotFoundError,
-            self._process_draining,
+            self._handle_draining,
             nb_obj_to_add,
             meta2db_env=meta2db_env,
             callback=_cb,
@@ -284,10 +306,11 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 3
         self.expected_skipped = 1
         self.expected_errors = 0
+        self.expected_aborted = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
         self._set_draining_flag()
-        self._process_draining(
+        self._handle_draining(
             nb_obj_to_add, nb_passes=nb_passes, drain_limit=5, drain_limit_per_pass=42
         )
 
@@ -315,5 +338,17 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
+        self.expected_aborted = 0
         for _, shard in enumerate(show_shards):
-            self._process_draining(2, cid=shard["cid"])
+            self._handle_draining(2, cid=shard["cid"])
+
+    def test_abort_drain(self):
+        nb_obj_to_add = 2  # no need to have a lot of objects
+        self.expected_successes = 0
+        self.expected_skipped = 0
+        self.expected_errors = 0
+        self.expected_aborted = 1
+
+        self._add_objects(self.cname, nb_obj_to_add)
+        self._set_draining_flag(flag=DRAINING_STATE_TO_ABORT)
+        self._handle_draining(nb_obj_to_add)

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 from oio.common.constants import (
     DRAINING_STATE_IN_PROGRESS,
     DRAINING_STATE_NEEDED,
+    DRAINING_STATE_TO_ABORT,
     M2_PROP_ACCOUNT_NAME,
     M2_PROP_CONTAINER_NAME,
     M2_PROP_DRAINING_STATE,
@@ -55,11 +56,12 @@ class Draining(Filter):
         )
 
         self.successes = 0
+        self.aborted = 0
         self.skipped = 0
         self.errors = 0
 
-    def _process_draining(self, meta2db):
-        self.logger.debug("Draining for the container (CID=%s)", meta2db.cid)
+    def _handle_draining(self, meta2db):
+        self.logger.debug("Draining CID=%s", meta2db.cid)
         account = meta2db.system[M2_PROP_ACCOUNT_NAME]
         container = meta2db.system[M2_PROP_CONTAINER_NAME]
 
@@ -82,10 +84,12 @@ class Draining(Filter):
 
         return True, None
 
-    def _process_draining_root(self, meta2db):
+    def _handle_draining_root(self, meta2db):
         account = meta2db.system[M2_PROP_ACCOUNT_NAME]
         container = meta2db.system[M2_PROP_CONTAINER_NAME]
         shards_drained = True
+
+        # Loop over each shards to determine if at least one shard is not drained yet
         try:
             shards = self.container_sharding.show_shards(account, container)
             for shard in shards:
@@ -96,6 +100,7 @@ class Draining(Filter):
                     DRAINING_STATE_IN_PROGRESS,
                 ):
                     shards_drained = False
+                    break
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(
@@ -103,27 +108,82 @@ class Draining(Filter):
             )
             return False, resp
 
+        # If all shards are drained, the root can be drained (it has no objects, but
+        # draining properties will be deleted to symbolize its completion).
         if shards_drained:
-            return self._process_draining(meta2db)
+            return self._handle_draining(meta2db)
+        else:
+            return True, None
+
+    def _handle_abort_draining(self, meta2db):
+        self.logger.debug("Abort draining for CID=%s", meta2db.cid)
+        account = meta2db.system[M2_PROP_ACCOUNT_NAME]
+        container = meta2db.system[M2_PROP_CONTAINER_NAME]
+
+        try:
+            resp = self.api.container_abort_drain(account, container)
+        except Exception as exc:
+            self.errors += 1
+            resp = Meta2DBError(
+                meta2db=meta2db, body="Failed to abort draining container: %s" % exc
+            )
+            return False, resp
+
+        return True, None
+
+    def _handle_abort_draining_root(self, meta2db):
+        account = meta2db.system[M2_PROP_ACCOUNT_NAME]
+        container = meta2db.system[M2_PROP_CONTAINER_NAME]
+        shards_aborted = True
+
+        # Loop over each shards to determine if at least one shard is not aborted yet.
+        # A shard is considered as aborted if no state is present.
+        try:
+            shards = self.container_sharding.show_shards(account, container)
+            for shard in shards:
+                props = self.api.container_get_properties(None, None, cid=shard["cid"])
+                draining_state = int(props["system"].get(M2_PROP_DRAINING_STATE))
+                if draining_state:
+                    shards_aborted = False
+                    break
+        except Exception as exc:
+            self.errors += 1
+            resp = Meta2DBError(
+                meta2db=meta2db, body="Failed to drain root container: %s" % exc
+            )
+            return False, resp
+
+        # If all shards are aborted, the root can be aborted too.
+        if shards_aborted:
+            return self._handle_abort_draining(meta2db)
         else:
             return True, None
 
     def process(self, env, cb):
         meta2db = Meta2DB(self.app_env, env)
+
         # Check if the meta2 needs draining
         draining_state = int_value(meta2db.system.get(M2_PROP_DRAINING_STATE), 0)
         if draining_state in (DRAINING_STATE_NEEDED, DRAINING_STATE_IN_PROGRESS):
             nb_shards = int_value(meta2db.system.get(M2_PROP_SHARDS), 0)
             if nb_shards > 0:
-                success, resp = self._process_draining_root(meta2db)
+                success, resp = self._handle_draining_root(meta2db)
             else:
-                success, resp = self._process_draining(meta2db)
+                success, resp = self._handle_draining(meta2db)
             if not success:
-                self.logger.warning(
-                    "Failed to drain the container (CID=%s)", meta2db.cid
-                )
+                self.logger.warning("Failed to drain CID=%s", meta2db.cid)
                 return resp(env, cb)
             self.successes += 1
+        elif draining_state == DRAINING_STATE_TO_ABORT:
+            nb_shards = int_value(meta2db.system.get(M2_PROP_SHARDS), 0)
+            if nb_shards > 0:
+                success, resp = self._handle_abort_draining_root(meta2db)
+            else:
+                success, resp = self._handle_abort_draining(meta2db)
+            if not success:
+                self.logger.warning("Failed to abort draining for CID=%s)", meta2db.cid)
+                return resp(env, cb)
+            self.aborted += 1
         else:
             self.skipped += 1
         return self.app(env, cb)
@@ -131,12 +191,14 @@ class Draining(Filter):
     def _get_filter_stats(self):
         return {
             "successes": self.successes,
+            "aborted": self.aborted,
             "skipped": self.skipped,
             "errors": self.errors,
         }
 
     def _reset_filter_stats(self):
         self.successes = 0
+        self.aborted = 0
         self.skipped = 0
         self.errors = 0
 

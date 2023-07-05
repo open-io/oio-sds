@@ -1526,6 +1526,19 @@ action_m2_container_drain(struct req_args_s *args, struct json_object *j UNUSED)
 }
 
 static enum http_rc_e
+action_m2_container_abort_drain(struct req_args_s *args, struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_container_ABORT_DRAIN(args->url, DL());
+	}
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+
+	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
 action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED)
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEDUP (args->url, DL()); }
@@ -2387,16 +2400,17 @@ enum http_rc_e action_container_destroy (struct req_args_s *args) {
 }
 
 // CONTAINER{{
-// POST /v3.0/{NS}/container/drain?acct={account}&ref={container}
+// POST /v3.0/{NS}/container/drain?acct={account}&ref={container}&limit={int}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Remove all the objects of a container but keep the properties. We can
+// Remove <x> objects of a container but keep the properties. We can
 // replace the data or the properties of the content but no action needing
 // the removed chunks are accepted.
+// <x> is equal to the limit provided or the limit in the configuration.
 //
 // .. code-block:: http
 //
-//    POST /v3.0/OPENIO/container/drain?acct=my_account&ref=mycontainer HTTP/1.1
+//    POST /v3.0/OPENIO/container/drain?acct=my_account&ref=mycontainer&limit=1000 HTTP/1.1
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.68.0
 //    Accept: */*
@@ -2410,6 +2424,30 @@ enum http_rc_e action_container_destroy (struct req_args_s *args) {
 // }}CONTAINER
 enum http_rc_e action_container_drain(struct req_args_s *args) {
 	return rest_action(args, action_m2_container_drain);
+}
+
+// CONTAINER{{
+// POST /v3.0/{NS}/container/drain/abort?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// If a container draining is in progress, abort it.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/drain/abort?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.68.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
+enum http_rc_e action_container_abort_drain(struct req_args_s *args) {
+	return rest_action(args, action_m2_container_abort_drain);
 }
 
 // CONTAINER{{

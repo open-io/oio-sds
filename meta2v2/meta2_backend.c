@@ -1252,8 +1252,6 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 	err = m2b_open(m2, url, M2V2_OPEN_LOCAL|M2V2_OPEN_URGENT, &sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
-
 		if (!force)
 			err = _check_if_container_empty (sq3);
 
@@ -1307,7 +1305,6 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
 			|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_flush_container(sq3, cb, u0, truncated);
 			err = sqlx_transaction_end(repctx, err);
@@ -1344,7 +1341,6 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			gint64 maxvers;
 			if (pmaxvers)
@@ -1374,9 +1370,29 @@ meta2_backend_drain_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
 			|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_drain_container(sq3, cb, u0, limit, truncated);
+			err = sqlx_transaction_end(repctx, err);
+		}
+
+		m2b_close(m2, sq3, url);
+	}
+
+	return err;
+}
+
+GError *
+meta2_backend_abort_drain_container(struct meta2_backend_s *m2, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
+			|M2V2_OPEN_FROZEN, &sq3);
+	if (!err) {
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			err = m2db_abort_drain_container(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
 
@@ -1549,7 +1565,6 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 	err = m2b_open_for_object(m2, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_drain_content(sq3, url, cb, u0);
 			err = sqlx_transaction_end(repctx, err);
@@ -1867,7 +1882,6 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 	err = m2b_open_for_object(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
-		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			gint64 maxvers;
 			if (pmaxvers)
