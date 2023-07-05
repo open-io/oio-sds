@@ -29,6 +29,8 @@ from oio.common.constants import (
     M2_PROP_SHARDING_UPPER,
     NEW_SHARD_STATE_CLEANED_UP,
     M2_PROP_VERSIONING_POLICY,
+    OIO_DB_ENABLED,
+    OIO_DB_FROZEN,
 )
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import eventlet
@@ -1652,6 +1654,87 @@ class TestSharding(BaseTestCase):
             self.account, self.cname, delimiter="/", limit=4
         )
         self.assertIn("dir/", list_res["prefixes"])
+
+    def test_sharding_with_frozen_container(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 4)
+
+        # freeze the container
+        self.storage.container_set_properties(
+            self.account, self.cname, system={"sys.status": str(OIO_DB_FROZEN)}
+        )
+
+        try:
+            test_shards = [
+                {"index": 0, "lower": "", "upper": "content_0."},
+                {"index": 1, "lower": "content_0.", "upper": ""},
+            ]
+            new_shards = self.container_sharding.format_shards(
+                test_shards, are_new=True
+            )
+            modified = self.container_sharding.replace_shard(
+                self.account, self.cname, new_shards, enable=True
+            )
+            self.assertTrue(modified)
+
+            # check objects
+            self._check_objects(self.cname)
+
+            # check shards
+            show_shards = self.container_sharding.show_shards(self.account, self.cname)
+            shards_content = [{"content_0"}, {"content_1", "content_2", "content_3"}]
+            self._check_shards(show_shards, test_shards, shards_content)
+
+            # check root container properties
+            resp = self.storage.container.container_get_properties(
+                self.account, self.cname
+            )
+            self.assertEqual(int(resp["system"][M2_PROP_OBJECTS]), 0)
+            self.assertEqual(int(resp["system"]["sys.m2.shards"]), len(test_shards))
+        finally:
+            # unfreeze the container for the deletion
+            self.storage.container_set_properties(
+                self.account, self.cname, system={"sys.status": str(OIO_DB_ENABLED)}
+            )
+
+    def test_shrinking_with_frozen_container(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 10)
+
+        # Split it in 5
+        params = {"partition": "30,10,20,30,10", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account,
+            self.cname,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True
+        )
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(self.account, self.cname))
+        self.assertEqual(5, len(shards))
+
+        # Freeze the container
+        self.storage.container_set_properties(
+            self.account, self.cname, system={"sys.status": str(OIO_DB_FROZEN)}
+        )
+
+        try:
+            # First shard
+            shards = self._shrink_and_check(self.cname, shards, shards[1], shards[0], 4)
+            # Middle shard
+            shards = self._shrink_and_check(self.cname, shards, shards[1], shards[2], 5)
+            # Last shard
+            shards = self._shrink_and_check(
+                self.cname, shards, shards[-1], shards[-2], 6
+            )
+        finally:
+            # unfreeze the container for the deletion
+            self.storage.container_set_properties(
+                self.account, self.cname, system={"sys.status": str(OIO_DB_ENABLED)}
+            )
 
 
 class TestShardingObjectLockRetention(TestSharding):

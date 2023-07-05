@@ -2926,7 +2926,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	}
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
@@ -3056,7 +3056,7 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 	}
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
@@ -3257,7 +3257,7 @@ meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
 
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN,
 			NULL,
 			0
 		};
@@ -3355,7 +3355,7 @@ meta2_backend_update_shard(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
@@ -3440,7 +3440,7 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
@@ -3503,7 +3503,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
@@ -3664,7 +3664,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	struct sqlx_repctx_s *repctx = NULL;
 
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN
 			|(urgent ? M2V2_OPEN_URGENT : 0),
 			NULL,
 			0
@@ -3860,7 +3860,7 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 
 	// Open the meta2 database ignoring the sharding lock
 	struct m2_open_args_s open_args = {
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN|M2V2_OPEN_URGENT,
 			NULL,
 			0
 		};
