@@ -1120,7 +1120,7 @@ template_systemd_service_meta2_indexer = """
 Description=[OpenIO] Service meta2 indexer
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1140,7 +1140,7 @@ template_systemd_service_meta2_crawler = """
 Description=[OpenIO] Service meta2 crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1159,7 +1159,7 @@ template_systemd_service_placement_checker_crawler = """
 [Unit]
 Description=[OpenIO] Service meta2 crawler to check chunks placement
 After=network.target
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1175,7 +1175,7 @@ template_systemd_service_placement_improver_crawler = """
 Description=[OpenIO] Service placement improver crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1213,7 +1213,7 @@ template_systemd_service_rawx_crawler = """
 [Unit]
 Description=[OpenIO] Service rawx crawler
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1232,7 +1232,7 @@ template_systemd_service_checksum_checker_crawler = """
 [Unit]
 Description=[OpenIO] Service checksum checker crawler
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
