@@ -1188,6 +1188,44 @@ class TestMeta2Containers(BaseTestCase):
         self._create_content(path, version=12345)
         self._create_content(path, version=12345, create_status=409)
 
+    def test_drain_during_sharding(self):
+        path = random_content()
+        params_container = self.param_ref(self.ref)
+        self._create_content(path)
+
+        system = [
+            {"sys.m2.sharding.state": "129"},  # sharding in progress
+            {
+                "sys.m2.sharding.root": "1" * 64,
+                "sys.m2.sharding.state": "3",
+            },  # root container
+        ]
+        for sys in system:
+            props = {"system": sys}
+            resp = self.request(
+                "POST",
+                self.url_container("set_properties"),
+                params=params_container,
+                data=json.dumps(props),
+            )
+            self.assertEqual(204, resp.status)
+
+            # Try to drain
+            resp = self.request(
+                "POST",
+                self.url_container("drain"),
+                params=params_container,
+            )
+            self.assertEqual(400, resp.status)
+
+            # No object drain
+            params_content = params_container.copy()
+            params_content["path"] = path
+            resp = self.request(
+                "GET", self.url_content("locate"), params=params_content
+            )
+            self.assertEqual(resp.status, 200)
+
 
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):

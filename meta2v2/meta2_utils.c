@@ -3604,11 +3604,9 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 {
 	GError *err = NULL;
 	gchar *marker_start = NULL;
-	gint64 draining_state = m2db_get_drain_state(sq3);
 
-	if (draining_state != DRAINING_STATE_NEEDED &&
-			draining_state != DRAINING_STATE_IN_PROGRESS) {
-		err = SYSERR("draining_state=%ld invalid for draining", draining_state);
+	if (sqlx_admin_has(sq3, M2V2_ADMIN_DRAINING_STATE)) {
+		err = SYSERR("No draining in progress");
 		return err;
 	}
 
@@ -3706,6 +3704,8 @@ end:
 
 	return err;
 }
+
+
 
 /* Sharding ----------------------------------------------------------------- */
 
