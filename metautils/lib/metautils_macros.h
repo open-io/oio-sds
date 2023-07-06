@@ -36,10 +36,10 @@ License along with this library.
 # define NAME_TAGNAME_VOL "tag.vol"
 # define NAME_TAGNAME_UP "tag.up"
 # define NAME_TAGNAME_FIRST "tag.1"
+# define NAME_TAGNAME_LOCK "tag.lock"
 # define NAME_TAGNAME_PUT_LOCK "tag.putlock"
 # define NAME_TAGNAME_GET_LOCK "tag.getlock"
 # define NAME_TAGNAME_SLOTS "tag.slots"
-# define NAME_TAGNAME_PUT_LOCK "tag.putlock"
 
 #define NAME_MSGNAME_METAREPLY         "RP"
 

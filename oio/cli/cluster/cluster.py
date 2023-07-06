@@ -131,6 +131,7 @@ class ClusterList(Lister):
                 tags = srv["tags"]
                 locks = _format_detailed_locks(srv)
                 locked = boolean_value(tags.pop("tag.putlock", False), False)
+                locked = locked or boolean_value(tags.pop("tag.lock", False), False)
                 getlocked = boolean_value(tags.pop("tag.getlock", False), False)
                 if parsed_args.locked and not (locked or getlocked):
                     # User asked for only locked services, skip...
@@ -231,7 +232,9 @@ class ClusterLocalList(Lister):
             up = tags.get("tag.up", "n/a")
             score = srv["score"]
             scores = format_detailed_scores(srv)
-            locked = boolean_value(tags.get("tag.putlock"), False)
+            locked = boolean_value(tags.get("tag.putlock"), False) or boolean_value(
+                tags.get("tag.lock"), False
+            )
             locks = _format_detailed_locks(srv)
             srv_type = srv["type"]
             if not srv_types or srv_type in srv_types:
