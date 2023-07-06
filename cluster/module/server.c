@@ -890,10 +890,14 @@ conscience_srvtype_refresh_dated(
 				(int)LIMIT_LENGTH_SRVDESCR, p_srv->description);
 		p_srv->lock_mtime = sid->lock_mtime;
 
+		struct service_tag_s *tag_lock = service_info_get_tag(
+			sid->si->tags, NAME_TAGNAME_LOCK);
+
 		struct service_tag_s *tag_put_lock = service_info_get_tag(
 			sid->si->tags, NAME_TAGNAME_PUT_LOCK);
-		p_srv->put_locked = tag_put_lock && tag_put_lock->type == STVT_BOOL
-				&& tag_put_lock->value.b;
+		p_srv->put_locked = (tag_put_lock && tag_put_lock->type == STVT_BOOL
+				&& tag_put_lock->value.b)
+				|| (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b);
 
 		struct service_tag_s *tag_get_lock = service_info_get_tag(
 			sid->si->tags, NAME_TAGNAME_GET_LOCK);
@@ -1667,9 +1671,13 @@ restart_srv_from_file(gchar *path)
 					conscience_srvtype_refresh_dated(srvtype, sid);
 
 			/* If the put score was locked, lock it again. */
+			struct service_tag_s *tag_lock = service_info_get_tag(
+					si_data->tags, NAME_TAGNAME_LOCK);
 			struct service_tag_s *tag_put_lock = service_info_get_tag(
 					si_data->tags, NAME_TAGNAME_PUT_LOCK);
 			if (tag_put_lock) {
+				if (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b)
+					tag_put_lock->value.b = TRUE;
 				service_tag_get_value_boolean(tag_put_lock, &(p_srv->put_locked), &err);
 				if (err) {
 					GRID_WARN("Failed to read put lock tag: %s", err->message);
