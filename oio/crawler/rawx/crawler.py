@@ -105,7 +105,7 @@ class RawxWorker(CrawlerWorker):
             os.unlink(chunk.chunk_symlink_path)
             self.logger.info(
                 "Chunk %s no longer exists, symlink %s removed.",
-                chunk.chunk_id,
+                chunk.chunk_path,
                 chunk.chunk_symlink_path,
             )
             return False
@@ -155,9 +155,11 @@ class RawxWorker(CrawlerWorker):
         try:
             self.pipeline(chunk.env, self.cb)
             self.successes += 1
-        except Exception:
+        except Exception as c_exc:
             self.errors += 1
-            self.logger.exception("Failed to apply pipeline on path='%s'", path)
+            self.logger.exception(
+                "Failed to apply pipeline on path='%s': %s", path, c_exc
+            )
         self.scanned_since_last_report += 1
 
         return True
