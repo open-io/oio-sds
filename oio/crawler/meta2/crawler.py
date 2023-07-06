@@ -66,9 +66,11 @@ class Meta2Worker(CrawlerWorker):
         try:
             self.pipeline(meta2db.env, self.cb)
             self.successes += 1
-        except Exception:
+        except Exception as c_exc:
             self.errors += 1
-            self.logger.exception("Failed to apply pipeline on path='%s'", path)
+            self.logger.exception(
+                "Failed to apply pipeline on path='%s': %s", path, c_exc
+            )
         self.scanned_since_last_report += 1
         return True
 
