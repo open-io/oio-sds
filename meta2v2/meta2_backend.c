@@ -1010,7 +1010,7 @@ _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 	GError *err = NULL;
 
 	// Check if the container contains data
-	err = _table_is_empty(sq3, "contents");
+	err = _table_is_empty(sq3, "aliases");
 
 	if (!err) {
 		/* Check if the container is sharded.

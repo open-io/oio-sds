@@ -1851,6 +1851,41 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         res = self.api.object_delete_many(self.account, container, ["dahu"])
         self.assertFalse(res[0][1])
 
+    def test_container_delete_with_delete_marker(self):
+        container = random_str(6)
+        obj = random_str(6)
+        self._create(container, versioning=True)
+        obj_meta = self._upload_empty(container, obj)[0]
+
+        # Create a delete marker
+        is_marker, delete_marker_version_id = self.api.object_delete(
+            self.account, container, obj
+        )
+        self.assertTrue(is_marker)
+        self.assertEqual(int(obj_meta["version"]) + 1, int(delete_marker_version_id))
+
+        # Delete the object
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, version=obj_meta["version"]
+        )
+        self.assertFalse(is_marker)
+        self.assertEqual(obj_meta["version"], version_id)
+
+        # Try to delete the container (with a remaining delete marker)
+        self.assertRaises(
+            exc.ContainerNotEmpty, self.api.container_delete, self.account, container
+        )
+
+        # Delete the delete marker
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, version=delete_marker_version_id
+        )
+        self.assertTrue(is_marker)
+        self.assertEqual(int(delete_marker_version_id), int(version_id))
+
+        # Now, we can delete the container
+        self.api.container_delete(self.account, container)
+
     def test_container_snapshot_failure(self):
         cname = "container-" + random_str(6)
         cname2 = cname + ".snapshot"
