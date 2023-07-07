@@ -902,14 +902,21 @@ conscience_srvtype_refresh_dated(
 
 		struct service_tag_s *tag_put_lock = service_info_get_tag(
 				sid->si->tags, NAME_TAGNAME_PUT_LOCK);
-		p_srv->put_locked = (tag_put_lock && tag_put_lock->type == STVT_BOOL
-				&& tag_put_lock->value.b)
-				|| (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b);
+		if (tag_put_lock) {
+			p_srv->put_locked = tag_put_lock->type == STVT_BOOL && tag_put_lock->value.b;
+		} else {
+			// The put_locked tag does not exist, use the original tag to not change the behavior
+			p_srv->put_locked = tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b;
+		}
 
 		struct service_tag_s *tag_get_lock = service_info_get_tag(
 				sid->si->tags, NAME_TAGNAME_GET_LOCK);
-		p_srv->get_locked = tag_get_lock && tag_get_lock->type == STVT_BOOL
-				&& tag_get_lock->value.b;
+		if (tag_get_lock) {
+			p_srv->get_locked = tag_get_lock->type == STVT_BOOL && tag_get_lock->value.b;
+		} else {
+			// The get_locked tag does not exist, use the original tag to not change the behavior
+			p_srv->get_locked = tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b;
+		}
 
 		if (p_srv->put_locked)
 			p_srv->put_score.value = CLAMP(sid->si->put_score.value, SCORE_DOWN,
@@ -1684,14 +1691,17 @@ restart_srv_from_file(gchar *path)
 			struct conscience_srv_s *p_srv =
 					conscience_srvtype_refresh_dated(srvtype, sid);
 
-			/* If the put score was locked, lock it again. */
+			/* If the lock tag exist and is true, lock both scores. */
 			struct service_tag_s *tag_lock = service_info_get_tag(
 					si_data->tags, NAME_TAGNAME_LOCK);
+			if (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b) {
+				p_srv->get_locked = tag_lock->value.b;
+				p_srv->get_locked = tag_lock->value.b;
+			}
+			/* If the put score was locked, lock it again. */
 			struct service_tag_s *tag_put_lock = service_info_get_tag(
 					si_data->tags, NAME_TAGNAME_PUT_LOCK);
 			if (tag_put_lock) {
-				if (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b)
-					tag_put_lock->value.b = TRUE;
 				service_tag_get_value_boolean(tag_put_lock, &(p_srv->put_locked), &err);
 				if (err) {
 					GRID_WARN("Failed to read put lock tag: %s", err->message);
