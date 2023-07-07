@@ -28,6 +28,7 @@ DEFAULT_ENDPOINT = "amqp://guest:guest@127.0.0.1:5672/%2F"
 DEFAULT_EXCHANGE = "oio"
 DEFAULT_QUEUE = "oio"
 DEFAULT_QUEUE_ARGS = "x-queue-type=quorum"
+DEFAULT_REPLICATION_EXCHANGE = "oio-async-replication"
 
 
 def amqp_connect(conn_params, logger=None):

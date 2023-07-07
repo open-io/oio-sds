@@ -1464,45 +1464,45 @@ rdir_read_timeout = 5.0
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
-# pipeline = replication
+# pipeline = async_replication
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.update]
-# pipeline = replication webhook
+# pipeline = async_replication webhook
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.append]
-# pipeline = replication
-pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
+# pipeline = webhook
+pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.broken]
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
-# pipeline = replication content_cleaner
+# pipeline = content_cleaner
 
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${REPLICATION} ${WEBHOOK} notify_deleted
+pipeline = ${WEBHOOK} notify_deleted
 
 # Old pipeline with deletion done by the main oio-event-agent
-# pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
+# pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
-# pipeline = replication content_cleaner
-pipeline = ${REPLICATION} notify_deleted notify_drained
-# pipeline = ${REPLICATION} content_cleaner notify_drained ${PRESERVE}
+# pipeline = content_cleaner
+pipeline = notify_deleted notify_drained
+# pipeline = content_cleaner notify_drained ${PRESERVE}
 
 [handler:storage.container.new]
-# pipeline = replication account_update
-pipeline = ${REPLICATION} account_update ${PRESERVE}
+# pipeline = account_update
+pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.update]
-# pipeline = replication
-pipeline = ${REPLICATION} ${PRESERVE}
+# pipeline =
+pipeline = ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = replication account_update
-pipeline = ${REPLICATION} account_update ${PRESERVE}
+# pipeline = account_update
+pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.state]
 pipeline = account_update ${PRESERVE}
@@ -1546,16 +1546,10 @@ use = egg:oio#volume_index
 use = egg:oio#webhook
 endpoint = ${WEBHOOK_ENDPOINT}
 
-[filter:replication]
-use = egg:oio#replicate
-tube = oio-repli
+[filter:async_replication]
+use = egg:oio#async_replication
 queue_url = ${QUEUE_URL}
-# This must be explicitly enabled
-check_replication_enabled=true
-#cache_duration=30.0
-#cache_size=10000
-#connection_timeout=2.0
-#read_timeout=30.0
+exchange_name = oio-async-repli
 
 [filter:bury]
 use = egg:oio#bury
@@ -2074,7 +2068,7 @@ def generate(options):
         PRESERVE="preserve" if options.get("preserve_events") else "",
         PYTHON_VERSION=PYTHON_VERSION,
         REGION=options["config"].get("ns.region"),
-        REPLICATION="replication" if options.get("replication_events") else "",
+        REPLICATION="async_replication" if options.get("replication_events") else "",
         WANT_SERVICE_ID=want_service_id,
         WEBHOOK=WEBHOOK,
         WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
