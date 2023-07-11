@@ -1,0 +1,632 @@
+{
+    "type": "object",
+    "required": [
+        "Statement"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "Version": {
+            "type": "string",
+            "enum": [
+                "2008-10-17",
+                "2012-10-17"
+            ]
+        },
+        "Id": {
+            "$ref": "#/definitions/not-empty-string"
+        },
+        "Statement": {
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/Statement"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Statement"
+                    }
+                }
+            ]
+        }
+    },
+    "definitions": {
+        "string-array": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "maxLength": 1224
+            },
+            "minItems": 1,
+            "uniqueItems": true
+        },
+        "string-or-string-array": {
+            "anyOf": [
+                {
+                    "type": "string",
+                    "maxLength": 1224
+                },
+                {
+                    "$ref": "#/definitions/string-array"
+                }
+            ]
+        },
+        "not-empty-string": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1224
+        },
+        "not-empty-string-array": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/not-empty-string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+        },
+        "wildcard": {
+            "const": "*"
+        },
+        "not-empty-string-or-string-array": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/not-empty-string"
+                },
+                {
+                    "$ref": "#/definitions/not-empty-string-array"
+                }
+            ]
+        },
+        "aws-arn": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/wildcard"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^arn:aws:[^:]+:[^:]*:(?:\\d{12}|\\*)?:.+$",
+                    "maxLength": 1224
+                }
+            ]
+        },
+        "aws-principal-arn": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/wildcard"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^arn:aws:iam::\\d{12}:(?:root|user|group|role)",
+                    "maxLength": 1224
+                }
+            ]
+        },
+        "aws-action": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/wildcard"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^.+:.+$",
+                    "maxLength": 256
+                }
+            ]
+        },
+        "condition-set-value": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/string-array"
+            }
+        },
+        "condition-value": {
+            "type": "object",
+            "additionalProperties": {
+                "anyOf": [
+                    {
+                        "$ref": "#/definitions/string-or-string-array"
+                    },
+                    {
+                        "type": "boolean"
+                    },
+                    {
+                        "type": "number"
+                    }
+                ]
+            }
+        },
+        "Statement": {
+            "allOf": [
+                {
+                    "oneOf": [
+                        {
+                            "required": [
+                                "Action"
+                            ]
+                        },
+                        {
+                            "required": [
+                                "NotAction"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "oneOf": [
+                        {
+                            "required": [
+                                "Resource"
+                            ]
+                        },
+                        {
+                            "required": [
+                                "NotResource"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "anyOf": [
+                        {
+                            "not": {
+                                "required": [
+                                    "Principal",
+                                    "NotPrincipal"
+                                ]
+                            }
+                        },
+                        {
+                            "oneOf": [
+                                {
+                                    "required": [
+                                        "Principal"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "NotPrincipal"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "Effect"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "Sid": {
+                            "$ref": "#/definitions/not-empty-string"
+                        },
+                        "Effect": {
+                            "type": "string",
+                            "enum": [
+                                "Allow",
+                                "Deny"
+                            ]
+                        },
+                        "Action": {
+                            "$ref": "#/definitions/Action"
+                        },
+                        "NotAction": {
+                            "$ref": "#/definitions/Action"
+                        },
+                        "Principal": {
+                            "$ref": "#/definitions/Principal"
+                        },
+                        "NotPrincipal": {
+                            "$ref": "#/definitions/Principal"
+                        },
+                        "Resource": {
+                            "$ref": "#/definitions/Resource"
+                        },
+                        "NotResource": {
+                            "$ref": "#/definitions/Resource"
+                        },
+                        "Condition": {
+                            "$ref": "#/definitions/Condition"
+                        }
+                    }
+                }
+            ]
+        },
+        "Action": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/aws-action"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aws-action"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                }
+            ]
+        },
+        "Principal": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/wildcard"
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "AWS": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/definitions/aws-principal-arn"
+                                },
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/aws-principal-arn"
+                                    },
+                                    "minItems": 1,
+                                    "uniqueItems": true
+                                }
+                            ]
+                        },
+                        "Federated": {
+                            "$ref": "#/definitions/not-empty-string-or-string-array"
+                        },
+                        "CanonicalUser": {
+                            "$ref": "#/definitions/not-empty-string-or-string-array"
+                        }
+                    }
+                }
+            ]
+        },
+        "Resource": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/aws-arn"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aws-arn"
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                }
+            ]
+        },
+        "Condition": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "Null": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "enum": [
+                            "true",
+                            "false",
+                            true,
+                            false
+                        ]
+                    }
+                },
+                "StringEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringLike": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotLike": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericNotEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericLessThan": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericLessThanEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericGreaterThan": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateNotEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateLessThan": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateLessThanEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateGreaterThan": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "Bool": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "BinaryEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "IpAddress": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NotIpAddress": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnNotEquals": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnLike": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnNotLike": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringEqualsIgnoreCaseIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotEqualsIgnoreCaseIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringLikeIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "StringNotLikeIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericNotEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericLessThanIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericLessThanEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericGreaterThanIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NumericGreaterThanEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateNotEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateLessThanIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateLessThanEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateGreaterThanIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "DateGreaterThanEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "BoolIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "BinaryEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "IpAddressIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "NotIpAddressIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnNotEqualsIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnLikeIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ArnNotLikeIfExists": {
+                    "$ref": "#/definitions/condition-value"
+                },
+                "ForAllValues:StringEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:StringNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:StringEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:StringNotEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:StringLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:StringNotLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericLessThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericLessThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericGreaterThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NumericGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateLessThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateLessThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateGreaterThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:DateGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:Bool": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:BinaryEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:IpAddress": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:NotIpAddress": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:ArnEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:ArnNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:ArnLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAllValues:ArnNotLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringNotEqualsIgnoreCase": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:StringNotLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericLessThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericLessThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericGreaterThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NumericGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateLessThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateLessThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateGreaterThan": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:DateGreaterThanEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:Bool": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:BinaryEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:IpAddress": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:NotIpAddress": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:ArnEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:ArnNotEquals": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:ArnLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                },
+                "ForAnyValues:ArnNotLike": {
+                    "$ref": "#/definitions/condition-set-value"
+                }
+            }
+        }
+    }
+}

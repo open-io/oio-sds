@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import copy
 import os
 import re
 import time
@@ -733,21 +734,11 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(expected_metdata, metadata)
 
 
-IAM_POLICY_FULLACCESS = """{
+IAM_POLICY_FULLACCESS = {
     "Statement": [
-        {
-            "Sid": "FullAccess",
-            "Action": [
-                "s3:*"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-                "*"
-            ]
-        }
+        {"Sid": "FullAccess", "Action": ["s3:*"], "Effect": "Allow", "Resource": ["*"]}
     ]
 }
-"""
 
 
 class TestIamServer(TestAccountServerBase):
@@ -760,17 +751,30 @@ class TestIamServer(TestAccountServerBase):
         self.user1 = self.account_id + ":user1"
         self.user2 = self.account_id + ":user2"
 
-    def test_put_user_policy(self):
+    def _put_policy(self, account, user, policy_name, policy):
         resp = self.app.put(
             "/v1.0/iam/put-user-policy",
             query_string={
-                "account": self.account_id,
-                "user": self.user1,
-                "policy-name": "mypolicy",
+                "account": account,
+                "user": user,
+                "policy-name": policy_name,
             },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=policy,
         )
         self.assertEqual(resp.status_code, 201)
+
+    def _get_and_compare_policy(self, account, user, policy_name, expected):
+        resp = self.app.get(
+            "/v1.0/iam/get-user-policy",
+            query_string={
+                "account": account,
+                "user": user,
+                "policy-name": policy_name,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        actual = json.loads(resp.data.decode("utf-8"))
+        self.assertListEqual(expected.get("Statement"), actual.get("Statement"))
 
     def test_put_user_policy_no_body(self):
         resp = self.app.put(
@@ -788,10 +792,10 @@ class TestIamServer(TestAccountServerBase):
         resp = self.app.put(
             "/v1.0/iam/put-user-policy",
             query_string={"account": self.account_id, "user": self.user1},
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=IAM_POLICY_FULLACCESS,
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn(b"policy name cannot be empty", resp.data)
+        self.assertIn(b"Policy name cannot be empty", resp.data)
 
     def test_put_user_policy_invalid_name(self):
         resp = self.app.put(
@@ -801,10 +805,10 @@ class TestIamServer(TestAccountServerBase):
                 "user": self.user1,
                 "policy-name": "invalid:policy",
             },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=IAM_POLICY_FULLACCESS,
         )
-        self.assertIn(b"policy name does not match", resp.data)
         self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Policy name does not match", resp.data)
 
     def test_put_user_policy_not_json(self):
         resp = self.app.put(
@@ -816,8 +820,306 @@ class TestIamServer(TestAccountServerBase):
             },
             data="FullAccess",
         )
-        self.assertIn(b"policy is not JSON-formatted", resp.data)
         self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Policy is not JSON-formatted", resp.data)
+
+    def test_put_user_policy_with_unknown_field(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Test"] = "test"
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_no_statement(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy.pop("Statement")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_no_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0].pop("Action")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_no_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0].pop("Resource")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_null_statement(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"] = None
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_null_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"] = None
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_null_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"] = None
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_actions_list(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"] = []
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_resources_list(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"] = []
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_prefixes_list(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = {
+            "StringEquals": {"s3:prefix": []},
+        }
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_statement(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"].append({})
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"].append("")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_empty_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"].append("")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_duplicate_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"] = ["s3:GetObject", "s3:GetObject"]
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_duplicate_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"] = [
+            "arn:aws:s3:::test",
+            "arn:aws:s3:::test/*",
+            "arn:aws:s3:::test",
+        ]
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_duplicate_delimiter(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = {
+            "StringEquals": {"s3:delimiter": ["test0", "test1", "test1"]},
+        }
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_wrong_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"].append("test")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_wrong_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"].append("test")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_too_large_user_policy(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        first_statement = policy["Statement"][0]
+        statements = policy["Statement"]
+        for i in range(256):
+            statement = copy.deepcopy(first_statement)
+            statement["Sid"] = "%32d" % i
+            statements.append(statement)
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"User policy is too large", resp.data)
 
     def test_put_user_policy_wrong_method(self):
         resp = self.app.get(
@@ -827,16 +1129,13 @@ class TestIamServer(TestAccountServerBase):
                 "user": self.user1,
                 "policy-name": "mypolicy",
             },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=IAM_POLICY_FULLACCESS,
         )
         self.assertEqual(resp.status_code, 405)
 
-    def _compare_policies(self, expected, actual):
-        exp_st = expected.get("Statement", {})
-        act_st = actual.get("Statement", {})
-        self.assertEqual(exp_st[0], act_st[0])
-
-    def test_get_user_policy(self):
+    def test_put_user_policy_with_unimplemented_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"].append("iam:PassRole")
         resp = self.app.put(
             "/v1.0/iam/put-user-policy",
             query_string={
@@ -844,20 +1143,266 @@ class TestIamServer(TestAccountServerBase):
                 "user": self.user1,
                 "policy-name": "mypolicy",
             },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=policy,
         )
-        resp = self.app.get(
-            "/v1.0/iam/get-user-policy",
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_unimplemented_resource(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Resource"].append("arn:aws:iam:::123456789:role/test")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
             query_string={
                 "account": self.account_id,
                 "user": self.user1,
                 "policy-name": "mypolicy",
             },
+            json=policy,
         )
-        self.assertEqual(resp.status_code, 200)
-        expected = json.loads(IAM_POLICY_FULLACCESS)
-        actual = json.loads(resp.data.decode("utf-8"))
-        self._compare_policies(expected, actual)
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_unimplemented_condition(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = {
+            "NumericEquals": {"s3:max-keys": "2"},
+        }
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_not_action_filed(self):
+        policy = {
+            "Statement": [
+                {
+                    "Sid": "ReadOnly",
+                    "NotAction": ["s3:Get*"],
+                    "Effect": "Allow",
+                    "Resource": ["*"],
+                }
+            ]
+        }
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_not_resource_filed(self):
+        policy = {
+            "Statement": [
+                {
+                    "Sid": "AlmostFullAccess",
+                    "Action": ["s3:*"],
+                    "Effect": "Allow",
+                    "NotResource": ["arn:aws:s3:::personal*"],
+                }
+            ]
+        }
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_principal_and_not_principal(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Principal"] = "*"
+        policy["Statement"][0]["NotPrincipal"] = "*"
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn(b"Invalid policy", resp.data)
+
+    def test_put_user_policy_with_principal(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Principal"] = "*"
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_user_policy_with_not_principal(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["NotPrincipal"] = "*"
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_and_get_user_policy_with_unimplemented_action(self):
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"].append("s3:GetAccelerateConfiguration")
+        resp = self.app.put(
+            "/v1.0/iam/put-user-policy",
+            query_string={
+                "account": self.account_id,
+                "user": self.user1,
+                "policy-name": "mypolicy",
+            },
+            json=policy,
+        )
+        self.assertEqual(resp.status_code, 501)
+        self.assertIn(b"Some fields are not yet managed", resp.data)
+
+    def test_put_and_get_user_policy(self):
+        policy_name = "mypolicy"
+        self._put_policy(
+            self.account_id, self.user1, policy_name, IAM_POLICY_FULLACCESS
+        )
+        self._get_and_compare_policy(
+            self.account_id, self.user1, policy_name, IAM_POLICY_FULLACCESS
+        )
+
+    def test_put_and_get_user_policy_with_condition(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = {
+            "StringEquals": {"s3:prefix": ["", "XXXXX"]},
+            "StringLike": {"s3:prefix": ["XXXXX/*"]},
+        }
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_user_policy_with_no_list(self):
+        policy_name = "mypolicy"
+        policy = {
+            "Statement": {
+                "Sid": "FullAccess",
+                "Action": "s3:*",
+                "Effect": "Allow",
+                "Resource": "*",
+            }
+        }
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        self._get_and_compare_policy(
+            self.account_id, self.user1, policy_name, IAM_POLICY_FULLACCESS
+        )
+
+    def test_put_user_policy_with_empty_statements_list(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"] = []
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_user_policy_with_duplicate_statement(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"].append(policy["Statement"][0])
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        policy["Statement"].pop(1)
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_user_policy_with_null_condition_object(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = None
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        policy["Statement"][0].pop("Condition")
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_user_policy_with_empty_condition_object(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Condition"] = {}
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        policy["Statement"][0].pop("Condition")
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_with_several_item_in_lists(self):
+        policy_name = "mypolicy"
+        policy = {
+            "Statement": [
+                {
+                    "Sid": "Test1",
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetLifecycleConfiguration",
+                        "s3:GetBucketTagging",
+                        "s3:GetBucketWebsite",
+                        "s3:GetBucketLogging",
+                        "s3:GetBucketVersioning",
+                        "s3:GetBucketAcl",
+                        "s3:GetReplicationConfiguration",
+                        "s3:GetBucketObjectLockConfiguration",
+                        "s3:GetIntelligentTieringConfiguration",
+                        "s3:GetBucketCORS",
+                        "s3:GetBucketLocation",
+                    ],
+                    "Resource": [
+                        "arn:aws:s3:::test1",
+                        "arn:aws:s3:::test2",
+                    ],
+                },
+                {
+                    "Sid": "Test2",
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetObjectRetention",
+                        "s3:GetObjectLegalHold",
+                        "s3:GetObjectAcl",
+                        "s3:GetObject",
+                        "s3:GetObjectTagging",
+                    ],
+                    "Resource": [
+                        "arn:aws:s3:::test1/*",
+                        "arn:aws:s3:::test2/*",
+                    ],
+                },
+            ],
+        }
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
+
+    def test_put_and_get_user_policy_with_action_ending_with_wildcard(self):
+        policy_name = "mypolicy"
+        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
+        policy["Statement"][0]["Action"] = ["s3:Get*"]
+        self._put_policy(self.account_id, self.user1, policy_name, policy)
+        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
 
     def test_get_user_policy_no_name(self):
         resp = self.app.get(
@@ -883,16 +1428,7 @@ class TestIamServer(TestAccountServerBase):
 
     def test_list_user_policies(self):
         # First policy
-        resp = self.app.put(
-            "/v1.0/iam/put-user-policy",
-            query_string={
-                "account": self.account_id,
-                "user": self.user1,
-                "policy-name": "mypolicy",
-            },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
-        )
-        self.assertEqual(resp.status_code, 201)
+        self._put_policy(self.account_id, self.user1, "mypolicy", IAM_POLICY_FULLACCESS)
         resp = self.app.get(
             "/v1.0/iam/list-user-policies",
             query_string={"account": self.account_id, "user": self.user1},
@@ -903,17 +1439,9 @@ class TestIamServer(TestAccountServerBase):
         self.assertEqual(actual["PolicyNames"], ["mypolicy"])
 
         # Second policy
-        resp = self.app.put(
-            "/v1.0/iam/put-user-policy",
-            query_string={
-                "account": self.account_id,
-                "user": self.user1,
-                "policy-name": "mysecondpolicy",
-            },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+        self._put_policy(
+            self.account_id, self.user1, "mysecondpolicy", IAM_POLICY_FULLACCESS
         )
-
-        self.assertEqual(resp.status_code, 201)
         resp = self.app.get(
             "/v1.0/iam/list-user-policies",
             query_string={"account": self.account_id, "user": self.user1},
@@ -942,7 +1470,7 @@ class TestIamServer(TestAccountServerBase):
                 "user": self.user1,
                 "policy-name": "mypolicy",
             },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+            json=IAM_POLICY_FULLACCESS,
         )
         self.assertEqual(resp.status_code, 201)
         resp = self.app.get(
@@ -954,16 +1482,7 @@ class TestIamServer(TestAccountServerBase):
         self.assertEqual(actual["Users"], [self.user1])
 
         # Second user
-        resp = self.app.put(
-            "/v1.0/iam/put-user-policy",
-            query_string={
-                "account": self.account_id,
-                "user": self.user2,
-                "policy-name": "mypolicy",
-            },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
-        )
-        self.assertEqual(resp.status_code, 201)
+        self._put_policy(self.account_id, self.user2, "mypolicy", IAM_POLICY_FULLACCESS)
         resp = self.app.get(
             "/v1.0/iam/list-users", query_string={"account": self.account_id}
         )
@@ -983,26 +1502,10 @@ class TestIamServer(TestAccountServerBase):
 
     def test_delete_user_policy(self):
         # Put a bunch of policies
-        resp = self.app.put(
-            "/v1.0/iam/put-user-policy",
-            query_string={
-                "account": self.account_id,
-                "user": self.user1,
-                "policy-name": "mypolicy",
-            },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
+        self._put_policy(self.account_id, self.user1, "mypolicy", IAM_POLICY_FULLACCESS)
+        self._put_policy(
+            self.account_id, self.user1, "mysecondpolicy", IAM_POLICY_FULLACCESS
         )
-        self.assertEqual(resp.status_code, 201)
-        resp = self.app.put(
-            "/v1.0/iam/put-user-policy",
-            query_string={
-                "account": self.account_id,
-                "user": self.user1,
-                "policy-name": "mysecondpolicy",
-            },
-            data=IAM_POLICY_FULLACCESS.encode("utf-8"),
-        )
-        self.assertEqual(resp.status_code, 201)
         resp = self.app.get(
             "/v1.0/iam/list-user-policies",
             query_string={"account": self.account_id, "user": self.user1},

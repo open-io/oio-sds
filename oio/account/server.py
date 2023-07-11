@@ -1534,7 +1534,9 @@ class Account(WerkzeugApp):
         policy = self.iam.get_user_policy(account, user, policy_name)
         if not policy:
             return NotFound("User policy not found")
-        return Response(policy, mimetype=HTTP_CONTENT_TYPE_JSON)
+        return Response(
+            json.dumps(policy, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+        )
 
     def on_iam_list_users(self, req, **kwargs):
         account = self._get_item_id(req, key="account", what="account")
@@ -1560,7 +1562,11 @@ class Account(WerkzeugApp):
         policy = req.get_data()
         if not policy:
             return BadRequest("Missing policy document")
-        policy = policy.decode("utf-8")
+        try:
+            policy = json.loads(policy.decode("utf-8"))
+        except ValueError as exc:
+            raise BadRequest(f"Policy is not JSON-formatted: {exc}") from exc
+
         self.iam.put_user_policy(account, user, policy, policy_name)
         return Response(status=201)
 

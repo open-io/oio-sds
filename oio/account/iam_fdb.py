@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,18 +13,136 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import copy
+from functools import wraps
+from jsonschema import ValidationError, validate
+import os
 import re
 import time
 
 import fdb
 from fdb.tuple import unpack
-from functools import wraps
-from oio.common.easy_value import boolean_value
 
-from oio.common.json import json
-from oio.common.exceptions import ServiceBusy
+from werkzeug.exceptions import NotImplemented
+
 from oio.account.common_fdb import CommonFdb
+from oio.common.easy_value import boolean_value
+from oio.common.exceptions import ServiceBusy
+from oio.common.json import json
 from oio.common.logger import get_logger
+
+
+# As AWS, 10 (user policy per user) * 2048 (max user policy size)
+MAX_USER_POLICY_SIZE = 10 * 2048
+
+with open(
+    f"{os.path.dirname(os.path.realpath(__file__))}/user-policy-schema.json", "r"
+) as f:
+    # null condition is allowed to be compatible with legacy user policies
+    USER_POLICY_SCHEMA = json.loads(f.read())
+
+
+def _clear_unimplemented_properties(properties, implemented_properties):
+    for prop in list(properties.keys()):
+        if prop not in implemented_properties:
+            properties.pop(prop)
+            continue
+        implemented_prop_schema = implemented_properties[prop]
+        if implemented_prop_schema is not None:
+            properties[prop] = implemented_prop_schema
+
+
+IMPLEMENTED_USER_POLICY_SCHEMA = copy.deepcopy(USER_POLICY_SCHEMA)
+IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["aws-arn"]["anyOf"][-1] = {
+    "type": "string",
+    "pattern": "^arn:aws:s3:::.+$",
+    "maxLength": 1224,
+}
+IMPLEMENTED_S3_ACTIONS = [
+    "AbortMultipartUpload",
+    "BypassGovernanceRetention",
+    "CreateBucket",
+    "DeleteBucket",
+    "DeleteBucketTagging",
+    "DeleteBucketWebsite",
+    "DeleteIntelligentTieringConfiguration",
+    "DeleteObject",
+    "DeleteObjectTagging",
+    "GetBucketAcl",
+    "GetBucketCORS",
+    "GetBucketLocation",
+    "GetBucketLogging",
+    "GetBucketObjectLockConfiguration",
+    "GetBucketTagging",
+    "GetBucketVersioning",
+    "GetBucketWebsite",
+    "GetIntelligentTieringConfiguration",
+    "GetLifecycleConfiguration",
+    "GetObject",
+    "GetObjectAcl",
+    "GetObjectLegalHold",
+    "GetObjectRetention",
+    "GetObjectTagging",
+    "GetReplicationConfiguration",
+    "ListBucket",
+    "ListBucketMultipartUploads",
+    "ListBucketVersions",
+    "ListMultipartUploadParts",
+    "PutBucketAcl",
+    "PutBucketCORS",
+    "PutBucketLogging",
+    "PutBucketObjectLockConfiguration",
+    "PutBucketTagging",
+    "PutBucketVersioning",
+    "PutBucketWebsite",
+    "PutIntelligentTieringConfiguration",
+    "PutLifecycleConfiguration",
+    "PutObject",
+    "PutObjectAcl",
+    "PutObjectLegalHold",
+    "PutObjectRetention",
+    "PutObjectTagging",
+    "PutReplicationConfiguration",
+]
+IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["aws-action"]["anyOf"][-1] = {
+    "anyOf": [
+        {
+            "type": "string",
+            "pattern": f"^s3:({'|'.join(IMPLEMENTED_S3_ACTIONS)})$",
+        },
+        {
+            "type": "string",
+            "pattern": r"^s3:.*\*$",
+            "maxLength": 256,
+        },
+    ]
+}
+_clear_unimplemented_properties(
+    IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["Statement"]["allOf"][-1][
+        "properties"
+    ],
+    {"Sid": None, "Effect": None, "Action": None, "Resource": None, "Condition": None},
+)
+IMPLEMENTED_CONDITION_STRING_VALUE = {
+    "condition-string-value": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "s3:delimiter": {"$ref": "#/definitions/string-or-string-array"},
+            "s3:prefix": {"$ref": "#/definitions/string-or-string-array"},
+        },
+    }
+}
+_clear_unimplemented_properties(
+    IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["Condition"]["properties"],
+    {
+        "StringEquals": IMPLEMENTED_CONDITION_STRING_VALUE,
+        "StringNotEquals": IMPLEMENTED_CONDITION_STRING_VALUE,
+        "StringLike": IMPLEMENTED_CONDITION_STRING_VALUE,
+        "StringNotLike": IMPLEMENTED_CONDITION_STRING_VALUE,
+    },
+)
+
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 
@@ -149,7 +267,9 @@ class FdbIamDb(object):
         :rtype: str
         """
         policy = self._get_user_policy(self.db, account, user, policy_name)
-        return policy.decode("utf-8") if policy else None
+        if policy is not None:
+            policy = json.loads(policy.decode("utf-8"))
+        return policy
 
     def load_rules_str_for_user(self, account, user):
         """
@@ -166,31 +286,76 @@ class FdbIamDb(object):
         :type policy: str
         :param policy_name: name of the policy (empty string if not set)
         """
-        if not isinstance(policy, str):
-            raise TypeError("policy parameter must be a string")
         if not policy_name and not self.allow_empty_policy_name:
-            raise ValueError("policy name cannot be empty")
+            raise ValueError("Policy name cannot be empty")
         if policy_name and not self.name_regex.fullmatch(policy_name):
-            raise ValueError(
-                "policy name does not match %s" % (self.name_regex.pattern)
-            )
-        # XXX: we should also match user name, but unfortunately, when using
+            raise ValueError(f"Policy name does not match {self.name_regex.pattern}")
+
+        # Check if the policy is valid with the schema defined by AWS
+        try:
+            validate(instance=policy, schema=USER_POLICY_SCHEMA)
+        except ValidationError as exc:
+            raise ValueError(f"Invalid policy: {exc}") from exc
+
+        # Check if the policy only uses implemented fields
+        try:
+            validate(instance=policy, schema=IMPLEMENTED_USER_POLICY_SCHEMA)
+        except ValidationError as exc:
+            raise NotImplemented(  # noqa: F901
+                f"Some fields are not yet managed: {exc}"
+            ) from exc
+
+        # FIXME: we should also match user name, but unfortunately, when using
         # tempauth, user names have the ':' character between the project name
         # and the actual user name.
-        try:
-            policy_obj = json.loads(policy)
 
-            # for export compatibliy
-            if update_date is None:
-                policy_obj["UpdateDate"] = time.strftime(
-                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-                )
-            else:
-                policy_obj["UpdateDate"] = update_date
-            # Strip spaces and new lines
-            policy = json.dumps(policy_obj, separators=(",", ":"))
-        except ValueError as err:
-            raise ValueError("policy is not JSON-formatted: %s" % err)
+        # Convert single items to item lists for ease of use
+        # and remove duplicates
+        uniqu_statements = set()
+        cleaned_statements = []
+        statements = policy["Statement"]
+        if not isinstance(statements, list):
+            policy["Statement"] = [statements]
+        for statement in policy["Statement"]:
+            actions = statement["Action"]
+            if not isinstance(actions, list):
+                statement["Action"] = [actions]
+            resources = statement["Resource"]
+            if not isinstance(resources, list):
+                statement["Resource"] = [resources]
+            conditions = statement.get("Condition")
+            if not conditions:
+                if "Condition" in statement:
+                    # Don't keep a null or empty condition
+                    statement.pop("Condition")
+                conditions = {}
+            for operands in conditions.values():
+                for condition_key in list(operands.keys()):
+                    values = operands[condition_key]
+                    if not isinstance(values, list):
+                        operands[condition_key] = [values]
+            # Remove the statement if it already exists
+            statement_str = json.dumps(statement, separators=(",", ":"), sort_keys=True)
+            if statement_str in uniqu_statements:
+                continue
+            uniqu_statements.add(statement_str)
+            cleaned_statements.append(statement)
+        policy["Statement"] = cleaned_statements
+
+        # For export compatibility
+        if update_date is None:
+            policy["UpdateDate"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        else:
+            policy["UpdateDate"] = update_date
+        # Strip spaces and new lines
+        policy = json.dumps(policy, separators=(",", ":"), sort_keys=True)
+
+        # Check the user policy size
+        if len(policy) > MAX_USER_POLICY_SIZE + 36:  # ignore the update date
+            raise ValueError(
+                f"User policy is too large (max: {MAX_USER_POLICY_SIZE} characters)"
+            )
+
         self._put_user_policy(self.db, account, user, policy_name, policy)
 
     def save_rules_str_for_user(self, account, user, rules):
