@@ -13,7 +13,6 @@ workflow:
       git.message: ""
       git.repository: "OPENIO/oio-sds"
       git.tag: ""
-      build_deb: "false"
 
   tests-fast:
     pipeline: oio-sds-test-fast
@@ -22,8 +21,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-lint:
     pipeline: oio-sds-lint
@@ -31,8 +32,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-single:
     pipeline: oio-sds-test-functional
@@ -41,8 +44,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-cli:
     pipeline: oio-sds-test-functional
@@ -51,8 +56,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-ec:
     pipeline: oio-sds-test-functional
@@ -61,8 +68,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-fullrepli:
     pipeline: oio-sds-test-functional
@@ -71,8 +80,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-rebuilder:
     pipeline: oio-sds-test-functional
@@ -81,8 +92,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-mover:
     pipeline: oio-sds-test-functional
@@ -91,8 +104,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-rabbitmq-resiliency:
     pipeline: oio-sds-test-functional
@@ -101,8 +116,10 @@ workflow:
     depends_on:
       - root
     conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb ~= "true" or git_branch == "master")
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   coverage:
     pipeline: oio-sds-coverage
@@ -144,7 +161,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (build_deb == "true" or git_branch == "master")
+        return cds_triggered_by_username ~= "cds.scheduler" and (cds_manual == "true" or git_branch == "master")
 
   clean-artifacts:
     pipeline: oio-sds-clean-artifacts
