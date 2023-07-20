@@ -99,9 +99,9 @@ class ClusterList(Lister):
                 continue
             for srv in data:
                 tags = srv["tags"]
-                locked = boolean_value(tags.pop("tag.lock"), False) or boolean_value(
-                    tags.pop("tag.putlock"), False
-                )
+                locked = boolean_value(
+                    tags.pop("tag.lock", False), False
+                ) or boolean_value(tags.pop("tag.putlock", False), False)
                 if parsed_args.locked and not locked:
                     # User asked for only locked services, skip...
                     continue
