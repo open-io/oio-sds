@@ -1383,9 +1383,6 @@ meta2_backend_drain_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 				 * The sharding or shrinking will make that marker obsolete
 				 * for the resulting shards. */
 				err = BADREQ("Sharding is in progress");
-			} else if (sharding_state && !sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
-				// root container
-				err = BADREQ("Cannot drain a root container");
 			} else {
 				err = m2db_drain_container(sq3, cb, u0, limit, truncated);
 				err = sqlx_transaction_end(repctx, err);
