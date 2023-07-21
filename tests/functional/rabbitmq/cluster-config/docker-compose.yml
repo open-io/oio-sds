@@ -16,8 +16,7 @@ services:
       - ./rabbit-1/:/config/
     healthcheck:
       test: ["CMD", "rabbitmqctl", "cluster_status"]
-      interval: 60s
-      retries: 1
+      interval: 10s
       timeout: 10s
   rabbit-2:
     container_name: rabbit-2
@@ -35,8 +34,7 @@ services:
       - ./rabbit-2/:/config/
     healthcheck:
       test: ["CMD", "rabbitmqctl", "cluster_status"]
-      interval: 60s
-      retries: 1
+      interval: 10s
       timeout: 10s
   rabbit-3:
     container_name: rabbit-3
@@ -54,8 +52,7 @@ services:
       - ./rabbit-3/:/config/
     healthcheck:
       test: ["CMD", "rabbitmqctl", "cluster_status"]
-      interval: 60s
-      retries: 1
+      interval: 10s
       timeout: 10s
 networks:
   rabbits-net:
