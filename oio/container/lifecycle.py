@@ -342,7 +342,7 @@ class LifecycleRule(object):
             transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
-            elif not isinstance(transition.filter, action_filter_type):
+            elif type(transition.filter) is not action_filter_type:
                 raise ValueError("'Date' and 'Days' in the same Rule")
             transitions.append(transition)
         if transitions:
@@ -395,7 +395,7 @@ class LifecycleRule(object):
             )
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
-            elif not isinstance(transition.filter, action_filter_type):
+            elif type(transition.filter) is not action_filter_type:
                 raise ValueError(
                     "'NoncurrentDays' and 'NoncurrentCount' in the same Rule"
                 )

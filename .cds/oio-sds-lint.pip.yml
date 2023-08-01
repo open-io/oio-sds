@@ -19,6 +19,7 @@ jobs:
 
       - name: Run coding style tests
         script:
+          - set -x
           - . $HOME/venv/bin/activate
           - black --check --diff --quiet --exclude "/(venv|\.local)/" --config pyproject.toml "oio" "tests" "tools" "bin"
           - pylint --rcfile=.pylintrc --exit-zero -E "oio" "tests" "tools" "bin"
