@@ -83,7 +83,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 	// Need the alias to build a complete object URL
 	struct bean_ALIASES_s *alias = NULL;
 
-	void forward(GSList *list_of_beans) {
+	void forward(GSList *list_of_beans, gboolean send_dst) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
@@ -96,7 +96,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append_static (gs, "]");
-		if (dests) {
+		if (dests && send_dst) {
 			g_string_append_static(gs, ",\"destinations\":");
 			oio_str_gstring_append_json_quote(gs, dests);
 		}
@@ -139,11 +139,13 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 	if (alias)
 		non_chunks = g_slist_prepend(non_chunks, alias);
 	non_chunks = g_slist_concat(non_chunks, g_slist_copy(sorted->properties));
-
+	gboolean send_dst = TRUE;
 	if (!send_chunks) {
-		forward(non_chunks);
+		forward(non_chunks, send_dst);
+		send_dst = FALSE;
 	} else if (beans_len <= _MAX_BEANS_BY_EVENT) {
-		forward(beans);
+		forward(beans, send_dst);
+		send_dst = FALSE;
 	} else {
 		/* first, notify everything but the chunks */
 
@@ -151,7 +153,8 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		n_events += (beans_len - g_slist_length(non_chunks)
 				+ _MAX_BEANS_BY_EVENT - 1) / _MAX_BEANS_BY_EVENT;
 		if (non_chunks) {
-			forward (non_chunks);
+			forward (non_chunks, send_dst);
+			send_dst = FALSE;
 		}
 
 		if (!sorted->header)
@@ -171,7 +174,8 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 					batch = g_slist_prepend(batch, sorted->header);
 				if (alias)
 					batch = g_slist_prepend(batch, alias);
-				forward (batch);
+				forward (batch, send_dst);
+				send_dst = FALSE;
 				g_slist_free (batch);
 				batch = NULL;
 				count = 0;
@@ -182,7 +186,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 				batch = g_slist_prepend(batch, sorted->header);
 			if (alias)
 				batch = g_slist_prepend(batch, alias);
-			forward (batch);
+			forward (batch, send_dst);
 			g_slist_free (batch);
 			batch = NULL;
 		}
