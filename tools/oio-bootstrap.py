@@ -1479,10 +1479,10 @@ pipeline = ${WEBHOOK} ${PRESERVE}
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
-# pipeline = content_cleaner
+# pipeline = async_replication content_cleaner
 
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${WEBHOOK} notify_deleted
+pipeline = ${WEBHOOK} ${REPLICATION} notify_deleted
 
 # Old pipeline with deletion done by the main oio-event-agent
 # pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
