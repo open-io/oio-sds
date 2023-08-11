@@ -3,6 +3,7 @@
 blake3~=0.3.4
 cliff~=3.10.1
 confluent_kafka~=2.3.0
+cryptography>=2.0.2
 eventlet~=0.38.2
 foundationdb~=6.3.15
 gevent>=22.10.2
