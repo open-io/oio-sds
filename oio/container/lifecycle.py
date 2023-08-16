@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -342,7 +342,7 @@ class LifecycleRule(object):
             transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
-            elif type(transition.filter) != action_filter_type:
+            elif not isinstance(transition.filter, action_filter_type):
                 raise ValueError("'Date' and 'Days' in the same Rule")
             transitions.append(transition)
         if transitions:
@@ -395,7 +395,7 @@ class LifecycleRule(object):
             )
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
-            elif type(transition.filter) != action_filter_type:
+            elif not isinstance(transition.filter, action_filter_type):
                 raise ValueError(
                     "'NoncurrentDays' and 'NoncurrentCount' in the same Rule"
                 )
