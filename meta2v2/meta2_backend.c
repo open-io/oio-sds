@@ -1153,7 +1153,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 		oio_str_gstring_append_json_quote(peers_array, *peer);
 	}
 	g_string_append(peers_array, "]");
-	g_free(peers);
+	g_strfreev(peers);
 	return err;
 }
 
