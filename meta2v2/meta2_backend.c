@@ -1571,7 +1571,8 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, m2_onbean_cb cb, gpointer u0)
+		gboolean create_delete_marker, gboolean dryrun,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1596,10 +1597,17 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 					create_delete_marker, url, cb, u0))) {
 				m2db_increment_version(sq3);
 			}
-			err = sqlx_transaction_end(repctx, err);
+			if (dryrun) {
+				/* In case of dryrun, let's rollback the transaction. 
+				 * The deletion must not be effective */
+				err = sqlx_transaction_rollback(repctx, err);
+			} else {
+				err = sqlx_transaction_end(repctx, err);
+			}
 		}
-		if (!err)
+		if (!err && !dryrun) {
 			m2b_add_modified_container(m2b, sq3);
+		}
 		m2b_close(m2b, sq3, url);
 	}
 

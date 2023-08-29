@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -102,13 +102,15 @@ class ProxyClient(HttpApi):
         if request_attempts <= 0:
             raise OioException(f"Negative request attempts: {request_attempts}")
         if kwargs.get("autocreate"):
-            if not headers:
-                headers = {}
+            headers = headers or {}
             headers[HEADER_PREFIX + "action-mode"] = "autocreate"
             kwargs.pop("autocreate")
         if kwargs.get("tls"):
             headers = headers or {}
             headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
+        if kwargs.get("dry_run"):
+            headers = headers or {}
+            headers[HEADER_PREFIX + "dry-run"] = kwargs.pop("dry_run")
 
         for i in range(request_attempts):
             try:

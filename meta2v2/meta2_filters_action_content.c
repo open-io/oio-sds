@@ -423,11 +423,13 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+	gboolean dryrun = BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DRYRUN));
 
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url,
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
+		dryrun,
 		_bean_list_cb, &obc->l);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
@@ -455,11 +457,14 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		delete_marker_created = TRUE;
 		break;
 	}
-	const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
-	if (delete_marker_created) {
-		_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l, "content.new", FALSE, dests);
-	} else {
-		_m2b_notify_beans2(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE, dests);
+	// do not notify if dryrun is activated
+	if (!dryrun) {
+		const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+		if (delete_marker_created) {
+			_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l, "content.new", FALSE, dests);
+		} else {
+			_m2b_notify_beans2(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE, dests);
+		}
 	}
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);

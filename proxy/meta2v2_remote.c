@@ -304,7 +304,8 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 
 GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, const char* destinations, gint64 dl)
+		gboolean create_delete_marker, gboolean dryrun,
+		const char* destinations, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
 	if (bypass_governance) {
@@ -313,6 +314,9 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 	}
 	if (create_delete_marker) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_DELETE_MARKER, "1");
+	}
+	if (dryrun) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_DRYRUN, "1");
 	}
 	const gchar *force_versioning = oio_ext_get_force_versioning();
 	if (force_versioning != NULL) {

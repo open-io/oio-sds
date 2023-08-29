@@ -602,6 +602,147 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 	g_slice_free(struct sqlx_repctx_s, ctx);
 }
 
+static void
+_sqlx_transaction_rollback(struct sqlx_repctx_s *ctx, GError *err)
+{
+	int rc;
+
+	if (err) {
+		if (g_strrstr(err->message, "SQLITE_NOTADB") != NULL
+				|| g_strrstr(err->message, "SQLITE_CORRUPT") != NULL) {
+			ctx->sq3->corrupted = TRUE;
+		}
+	}
+
+	ctx->any_change = 0;
+	rc = sqlx_exec(ctx->sq3->db, "ROLLBACK");
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_WARN("ROLLBACK failed! (%d/%s) %s reqid=%s", rc,
+				sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
+				oio_ext_get_reqid());
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			ctx->sq3->corrupted = TRUE;
+		}
+	}
+	sqlx_admin_reload(ctx->sq3);
+}
+
+static GError*
+_sqlx_transaction_validate(struct sqlx_repctx_s *ctx, GError *err)
+{
+	int rc;
+
+	/* Ensure that newly created tables have versions now referenced
+	 * in the admin table. */
+	sqlx_admin_ensure_versions (ctx->sq3);
+
+	/* Ensure any operation happening during the request handler on the
+	 * admin table, will be stored in the replication context and will
+	 * trigger an increment in the version numbers. */
+	sqlx_admin_save_lazy (ctx->sq3);
+
+	/* Special management for the big changes (it is big when we could
+	 * not capture each row change, so that we need to trigger a whole
+	 * resync. */
+	if (!ctx->hollow) {
+		int changes = sqlite3_total_changes(ctx->sq3->db);
+		if (changes != ctx->changes) {
+			GRID_DEBUG("HUGE change detected [%s][%s] (%d vs %d)",
+					ctx->sq3->name.base, ctx->sq3->name.type,
+					changes, ctx->changes);
+			ctx->huge = 1;
+		}
+	}
+
+	if (!ctx->hollow) {
+		if (ctx->huge) {
+			sqlx_admin_inc_all_versions(ctx->sq3, 2);
+		} else if (ctx->local_changes) {
+			context_pending_inc_versions(ctx);
+		}
+	}
+
+	/* If anything changed in the admin table, then save it */
+	sqlx_admin_save_lazy (ctx->sq3);
+
+	/* Prepare the changes to be sent to the slave peers */
+	if (!ctx->hollow && !ctx->huge) {
+		context_pending_to_rowset(ctx->sq3->db, ctx);
+	} else {
+		context_flush_pending(ctx);
+	}
+
+	/* Apply the changes on the slaves. */
+	rc = sqlx_exec(ctx->sq3->db, "COMMIT");
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s%s",
+				sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
+				ctx->errors->str);
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			ctx->sq3->corrupted = TRUE;
+		}
+		// Restore the in-RAM cache
+		sqlx_admin_reload(ctx->sq3);
+	}
+	if (ctx->errors->len > 0) {
+		GRID_WARN("COMMIT errors on [%s.%s]:%s reqid=%s",
+				ctx->sq3->name.base, ctx->sq3->name.type,
+				ctx->errors->str, oio_ext_get_reqid());
+	}
+	if (ctx->resync_todo && ctx->resync_todo->len) {
+		// Detected the need of an explicit RESYNC on some SLAVES.
+		g_ptr_array_add(ctx->resync_todo, NULL);
+		sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
+	}
+
+	return err;
+}
+
+static GError*
+_sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err, gboolean force_rollback)
+{
+	GRID_TRACE2("%s (%p)", __FUNCTION__, ctx);
+
+	if (NULL == ctx) {
+		if (!err)
+			err = SYSERR("no tnx");
+		g_prefix_error(&err, "transaction error: ");
+		return err;
+	}
+
+	EXTRA_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx->sq3 != NULL);
+	EXTRA_ASSERT(ctx->sq3->db != NULL);
+
+	if (err || force_rollback) {
+		_sqlx_transaction_rollback(ctx, err);
+	} else {
+		_sqlx_transaction_validate(ctx, err);
+	}
+
+	if (ctx->sq3->admin_dirty)
+		sqlx_alert_dirty_base (ctx->sq3, "still dirty after transaction");
+
+	if (ctx->any_change) {
+		sqlx_repository_call_change_callback(ctx->sq3);
+		ctx->any_change = 0;
+	}
+
+	sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
+	sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
+	sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
+	ctx->sq3->transaction = 0;
+	if (!err) {
+		ctx->sq3->update_queries = g_list_concat(ctx->sq3->update_queries,
+				ctx->sq3->transaction_update_queries);
+	} else {
+		g_list_free_full(ctx->sq3->transaction_update_queries, g_free);
+	}
+	ctx->sq3->transaction_update_queries = NULL;
+	sqlx_replication_free_context(ctx);
+	return err;
+}
+
 // Public API -----------------------------------------------------------------
 
 GError *
@@ -690,123 +831,13 @@ sqlx_transaction_notify_huge_changes(struct sqlx_repctx_s *ctx)
 }
 
 GError*
+sqlx_transaction_rollback(struct sqlx_repctx_s *ctx, GError *err)
+{
+	return _sqlx_transaction_end(ctx, err, TRUE);
+}
+
+GError*
 sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 {
-	int rc;
-
-	GRID_TRACE2("%s (%p)", __FUNCTION__, ctx);
-
-	if (NULL == ctx) {
-		if (!err)
-			err = SYSERR("no tnx");
-		g_prefix_error(&err, "transaction error: ");
-		return err;
-	}
-
-	EXTRA_ASSERT(ctx != NULL);
-	EXTRA_ASSERT(ctx->sq3 != NULL);
-	EXTRA_ASSERT(ctx->sq3->db != NULL);
-
-	if (err) {
-		if (g_strrstr(err->message, "SQLITE_NOTADB") != NULL
-				|| g_strrstr(err->message, "SQLITE_CORRUPT") != NULL) {
-			ctx->sq3->corrupted = TRUE;
-		}
-		ctx->any_change = 0;
-		rc = sqlx_exec(ctx->sq3->db, "ROLLBACK");
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			GRID_WARN("ROLLBACK failed! (%d/%s) %s reqid=%s", rc,
-					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
-					oio_ext_get_reqid());
-			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
-				ctx->sq3->corrupted = TRUE;
-			}
-		}
-		sqlx_admin_reload(ctx->sq3);
-	} else {
-		/* Ensure that newly created tables have versions now referenced
-		 * in the admin table. */
-		sqlx_admin_ensure_versions (ctx->sq3);
-
-		/* Ensure any operation happening during the request handler on the
-		 * admin table, will be stored in the replication context and will
-		 * trigger an increment in the version numbers. */
-		sqlx_admin_save_lazy (ctx->sq3);
-
-		/* Special management for the big changes (it is big when we could
-		 * not capture each row change, so that we need to trigger a whole
-		 * resync. */
-		if (!ctx->hollow) {
-			int changes = sqlite3_total_changes(ctx->sq3->db);
-			if (changes != ctx->changes) {
-				GRID_DEBUG("HUGE change detected [%s][%s] (%d vs %d)",
-						ctx->sq3->name.base, ctx->sq3->name.type,
-						changes, ctx->changes);
-				ctx->huge = 1;
-			}
-		}
-
-		if (!ctx->hollow) {
-			if (ctx->huge) {
-				sqlx_admin_inc_all_versions(ctx->sq3, 2);
-			} else if (ctx->local_changes) {
-				context_pending_inc_versions(ctx);
-			}
-		}
-
-		/* If anything changed in the admin table, then save it */
-		sqlx_admin_save_lazy (ctx->sq3);
-
-		/* Prepare the changes to be sent to the slave peers */
-		if (!ctx->hollow && !ctx->huge) {
-			context_pending_to_rowset(ctx->sq3->db, ctx);
-		} else {
-			context_flush_pending(ctx);
-		}
-
-		/* Apply the changes on the slaves. */
-		rc = sqlx_exec(ctx->sq3->db, "COMMIT");
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s%s",
-					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
-					ctx->errors->str);
-			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
-				ctx->sq3->corrupted = TRUE;
-			}
-			// Restore the in-RAM cache
-			sqlx_admin_reload(ctx->sq3);
-		}
-		if (ctx->errors->len > 0) {
-			GRID_WARN("COMMIT errors on [%s.%s]:%s reqid=%s",
-					ctx->sq3->name.base, ctx->sq3->name.type,
-					ctx->errors->str, oio_ext_get_reqid());
-		}
-		if (ctx->resync_todo && ctx->resync_todo->len) {
-			// Detected the need of an explicit RESYNC on some SLAVES.
-			g_ptr_array_add(ctx->resync_todo, NULL);
-			sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
-		}
-	}
-
-	if (ctx->sq3->admin_dirty)
-		sqlx_alert_dirty_base (ctx->sq3, "still dirty after transaction");
-
-	if (ctx->any_change) {
-		sqlx_repository_call_change_callback(ctx->sq3);
-		ctx->any_change = 0;
-	}
-
-	sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
-	sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
-	sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
-	ctx->sq3->transaction = 0;
-	if (!err) {
-		ctx->sq3->update_queries = g_list_concat(ctx->sq3->update_queries,
-				ctx->sq3->transaction_update_queries);
-	} else {
-		g_list_free_full(ctx->sq3->transaction_update_queries, g_free);
-	}
-	ctx->sq3->transaction_update_queries = NULL;
-	sqlx_replication_free_context(ctx);
-	return err;
+	return _sqlx_transaction_end(ctx, err, FALSE);
 }

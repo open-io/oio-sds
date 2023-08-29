@@ -1720,7 +1720,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             link_obj,
             properties={"BBB": "2"},
         )
-        metadata, _ = self.api.object_fetch(self.account, link_container, link_obj)
+        metadata, data = self.api.object_fetch(self.account, link_container, link_obj)
+        b"".join(data)  # drain the data stream
         self.assertDictEqual(metadata.get("properties", {}), {"AAA": "1", "BBB": "1"})
 
         self.api.object_link(
@@ -1733,7 +1734,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             properties={"BBB": "2"},
             properties_directive="REPLACE",
         )
-        metadata, _ = self.api.object_fetch(self.account, link_container, link_obj)
+        metadata, data = self.api.object_fetch(self.account, link_container, link_obj)
+        b"".join(data)  # drain the data stream
         self.assertDictEqual(metadata.get("properties", {}), {"BBB": "2"})
 
     def test_object_create_then_truncate(self):
@@ -1805,9 +1807,21 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         container = random_str(6)
         obj = random_str(6)
         obj_meta = self._upload_empty(container, obj)[0]
+
+        # Try first to delete with dryrun=True (object still exists)
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, dryrun=True
+        )
+        _meta, data = self.api.object_fetch(self.account, container, obj)
+        b"".join(data)  # drain the data stream
+
+        # Now delete the object (object does not exist anymore)
         is_marker, version_id = self.api.object_delete(self.account, container, obj)
         self.assertFalse(is_marker)  # versioning is not enabled
         self.assertEqual(obj_meta["version"], version_id)
+        self.assertRaises(
+            exc.NoSuchObject, self.api.object_fetch, self.account, container, obj
+        )
 
     def test_object_delete_with_versioning(self):
         container = random_str(6)
@@ -1815,10 +1829,30 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._create(container, versioning=True)
         obj_meta = self._upload_empty(container, obj)[0]
 
-        # Create a delete marker
+        # Create a delete marker with dryrun=True (marker not created)
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, dryrun=True
+        )
+        self.assertTrue(is_marker)
+        self.assertEqual(int(obj_meta["version"]) + 1, int(version_id))
+        _meta, data = self.api.object_fetch(self.account, container, obj)
+        b"".join(data)  # drain the data stream
+        self.assertRaises(
+            exc.NoSuchObject,
+            self.api.object_get_properties,
+            self.account,
+            container,
+            obj,
+            version=int(obj_meta["version"]) + 1,
+        )
+
+        # Now, really create a delete marker (object cannot be fetched without version)
         is_marker, version_id = self.api.object_delete(self.account, container, obj)
         self.assertTrue(is_marker)
         self.assertEqual(int(obj_meta["version"]) + 1, int(version_id))
+        self.assertRaises(
+            exc.NoSuchObject, self.api.object_fetch, self.account, container, obj
+        )
 
         # Delete the delete marker
         is_marker, version_id = self.api.object_delete(
@@ -1827,12 +1861,22 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertTrue(is_marker)
         self.assertEqual(int(obj_meta["version"]) + 1, int(version_id))
 
-        # Delete the object
+        # Try to delete the object with dryrun=True (object still exists)
+        is_marker, version_id = self.api.object_delete(
+            self.account, container, obj, version=obj_meta["version"], dryrun=True
+        )
+        _meta, data = self.api.object_fetch(self.account, container, obj)
+        b"".join(data)  # drain the data stream
+
+        # Now, delete the object
         is_marker, version_id = self.api.object_delete(
             self.account, container, obj, version=obj_meta["version"]
         )
         self.assertFalse(is_marker)
         self.assertEqual(obj_meta["version"], version_id)
+        self.assertRaises(
+            exc.NoSuchObject, self.api.object_fetch, self.account, container, obj
+        )
 
     def test_object_delete_many(self):
         container = random_str(8)

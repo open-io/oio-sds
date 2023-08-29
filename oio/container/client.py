@@ -154,6 +154,7 @@ class ContainerClient(ProxyClient):
         content=None,
         version=None,
         bypass_governance=None,
+        dryrun=None,
         **kwargs
     ):
         if cid:
@@ -168,6 +169,8 @@ class ContainerClient(ProxyClient):
             params.update({"version": version})
         if bypass_governance:
             params.update({"bypass_governance": bypass_governance})
+        if dryrun:
+            params.update({"dryrun": dryrun})
         return params
 
     def _get_rawx_scores(self):
@@ -800,6 +803,7 @@ class ContainerClient(ProxyClient):
         version=None,
         bypass_governance=None,
         create_delete_marker=False,
+        dryrun=None,
         **kwargs
     ):
         """
@@ -818,6 +822,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             bypass_governance=bypass_governance,
+            dryrun=dryrun,
         )
         if create_delete_marker:
             params["delete_marker"] = create_delete_marker

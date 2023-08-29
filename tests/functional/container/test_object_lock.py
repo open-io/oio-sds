@@ -96,6 +96,22 @@ class TestObjectLock(BaseTestCase):
                 "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
             )
 
+    def _check_no_deletion(self, object_name, version, reqid):
+        # Check the object still exists
+        _meta, data = self.storage.object_fetch(
+            self.account, self.cname, object_name, version=version
+        )
+        b"".join(data)  # drain the data stream
+
+        # Check not events has been created
+        events = self.wait_for_event(
+            "oio-preserved",
+            reqid=reqid,
+            types=(EventTypes.CONTENT_DELETED, EventTypes.CHUNK_DELETED),
+            timeout=5.0,
+        )
+        self.assertIsNone(events)
+
     def test_object_retain_until(self):
         now = datetime.now(timezone.utc) + timedelta(minutes=20)
         now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -119,6 +135,18 @@ class TestObjectLock(BaseTestCase):
         )
         for el in object_list.get("objects", {}):
             reqid = request_id()
+            # Try first with dryrun, then without (both raises Forbidden)
+            self.assertRaises(
+                Forbidden,
+                self.storage.object_delete,
+                self.account,
+                self.cname,
+                el["name"],
+                reqid=reqid,
+                version=el["version"],
+                bucket=self.cname,
+                dryrun=True,
+            )
             self.assertRaises(
                 Forbidden,
                 self.storage.object_delete,
@@ -129,6 +157,7 @@ class TestObjectLock(BaseTestCase):
                 version=el["version"],
                 bucket=self.cname,
             )
+            self._check_no_deletion(el["name"], el["version"], reqid)
 
     def test_object_retain_until_delete(self):
         """
@@ -204,6 +233,18 @@ class TestObjectLock(BaseTestCase):
         )
         for el in object_list.get("objects", {}):
             reqid = request_id()
+            # Try first with dryrun, then without (both raises Forbidden)
+            self.assertRaises(
+                Forbidden,
+                self.storage.object_delete,
+                self.account,
+                self.cname,
+                el["name"],
+                reqid=reqid,
+                version=el["version"],
+                bucket=self.cname,
+                dryrun=True,
+            )
             self.assertRaises(
                 Forbidden,
                 self.storage.object_delete,
@@ -214,6 +255,7 @@ class TestObjectLock(BaseTestCase):
                 version=el["version"],
                 bucket=self.cname,
             )
+            self._check_no_deletion(el["name"], el["version"], reqid)
 
         # Set legal-hold to OFF for teardown cleaning
         for el in object_list.get("objects", {}):
@@ -267,6 +309,18 @@ class TestObjectLock(BaseTestCase):
         for el in object_list.get("objects", {}):
             reqid = request_id()
             if el["version"] % 2 == 0:
+                # Try first with dryrun, then without (both raises Forbidden)
+                self.assertRaises(
+                    Forbidden,
+                    self.storage.object_delete,
+                    self.account,
+                    self.cname,
+                    el["name"],
+                    reqid=reqid,
+                    version=el["version"],
+                    bucket=self.cname,
+                    drynrun=True,
+                )
                 self.assertRaises(
                     Forbidden,
                     self.storage.object_delete,
@@ -277,6 +331,7 @@ class TestObjectLock(BaseTestCase):
                     version=el["version"],
                     bucket=self.cname,
                 )
+                self._check_no_deletion(el["name"], el["version"], reqid)
             else:
                 self.storage.object_delete(
                     self.account,

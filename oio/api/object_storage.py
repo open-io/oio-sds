@@ -1085,7 +1085,14 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_delete(
-        self, account, container, obj, version=None, bypass_governance=None, **kwargs
+        self,
+        account,
+        container,
+        obj,
+        version=None,
+        bypass_governance=None,
+        dryrun=None,
+        **kwargs
     ):
         """
         Delete an object from a container. If versioning is enabled and no
@@ -1098,6 +1105,8 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param obj: name of the object to delete
         :param version: version of the object to delete
+        :param dryrun: if True delete not effective (allows to test if
+            triggers would deny the deletion).
         :returns:
             - True if a delete marker has been created or removed
             - and the version id which has been deleted
@@ -1109,6 +1118,7 @@ class ObjectStorageApi(object):
             obj,
             version=version,
             bypass_governance=bypass_governance,
+            dryrun=dryrun,
             **kwargs
         )
 

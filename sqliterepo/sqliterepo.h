@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -348,6 +348,12 @@ GError* sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_repctx_s **result);
 
+/**
+ * Rollback the transaction. */
+GError* sqlx_transaction_rollback(struct sqlx_repctx_s *repctx, GError *err);
+
+/**
+ * Validate the transaction if no error, otherwise, rollback it. */
 GError* sqlx_transaction_end(struct sqlx_repctx_s *repctx, GError *err);
 
 /** Tells it will be necessary to immediately perform a RESYNC instead

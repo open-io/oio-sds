@@ -4386,6 +4386,7 @@ static GError *_m2_json_delete (struct req_args_s *args,
 	const gboolean create_delete_marker =
 			_request_get_flag(args, "delete_marker");
 	gboolean bypass_governance = _request_get_flag(args, "bypass_governance");
+	const gboolean dryrun = _request_get_flag(args, "dryrun");
 
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
@@ -4397,7 +4398,7 @@ static GError *_m2_json_delete (struct req_args_s *args,
 	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, destinations, DL()); }
+			bypass_governance, create_delete_marker, dryrun, destinations, DL()); }
 	gboolean delete_marker = FALSE;
 	gint64 version = -1;
 	struct list_result_s del_result = {0};
@@ -4498,6 +4499,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 			_request_get_flag(args, "delete_marker");
 	const gboolean bypass_governance =
 			_request_get_flag(args, "bypass_governance");
+	const gboolean dryrun = _request_get_flag(args, "dryrun");
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
@@ -4505,7 +4507,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, NULL, DL()); }
+			bypass_governance, create_delete_marker, dryrun, NULL, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,
