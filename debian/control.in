@@ -26,6 +26,7 @@ Build-Depends:
   libattr1-dev,
   libleveldb-dev,
   libsystemd-dev,
+  libprotobuf-c-dev,
 Standards-Version: 3.9.5
 Homepage: https://openio.io
 

@@ -21,6 +21,7 @@ libglib2.0-dev
 libjson-c-dev
 libleveldb-dev
 liblzo2-dev
+libprotobuf-c-dev
 librabbitmq-dev
 libsqlite3-dev
 libsystemd-dev
