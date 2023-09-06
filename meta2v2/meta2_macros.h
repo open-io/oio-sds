@@ -296,6 +296,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define M2V2_FLAG_NODELETED        0x00000001
 #define M2V2_FLAG_ALLVERSION       0x00000002
 #define M2V2_FLAG_NOPROPS          0x00000004
+#define M2V2_FLAG_MPUMARKER_ONLY   0x00000008
 #define M2V2_FLAG_ALLPROPS         0x00000010
 
 /* when listing */

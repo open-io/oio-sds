@@ -3033,6 +3033,22 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertFalse(res["prefixes"])
         self.assertFalse(res["truncated"])
 
+    def test_object_list_mpu_marker_only(self):
+        objects = [
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi",
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi/1",
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi/2",
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi/3",
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi/4",
+            "mpu_object/OGRmY2YwNDEtMjExYy00ZTQ1LTk3N2EtNTE2NGM0Yjk3M2Vi/5",
+        ]
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname, mpu_marker_only=True)
+        self.assertIn("objects", res)
+        self.assertIn("prefixes", res)
+        self.assertIn("truncated", res)
+        self.assertListEqual(objects[:1], [x["name"] for x in res["objects"]])
+
     def test_object_list_limit(self):
         objects = ["a", "b", "c"]
         self._upload_empty(*objects)

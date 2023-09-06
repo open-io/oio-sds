@@ -246,9 +246,10 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		lp->maxkeys = meta2_batch_maxlen;
 
 	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s delimiter:%s marker:%s "
-			"version_marker:%s end:%s max:%"G_GINT64_FORMAT,
+			"mpu_marker_only:%d version_marker:%s end:%s max:%"G_GINT64_FORMAT,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
 			lp->prefix, lp->delimiter, lp->marker_start,
+			lp->flag_mpu_marker_only,
 			lp->version_marker, lp->marker_end, lp->maxkeys);
 
 	// XXX the underlying meta2_backend_list_aliases() function MUST
@@ -395,6 +396,7 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 		lp->flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
 		lp->flag_properties = BOOL(flags & M2V2_FLAG_ALLPROPS);
 		lp->flag_local = BOOL(flags & M2V2_FLAG_LOCAL);
+		lp->flag_mpu_marker_only = BOOL(flags & M2V2_FLAG_MPUMARKER_ONLY);
 		// Beware of the negation of the flag
 		lp->flag_recursion = ! BOOL(flags & M2V2_FLAG_NORECURSION);
 	}

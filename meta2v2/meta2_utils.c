@@ -1008,6 +1008,10 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 		g_ptr_array_add (params, g_variant_new_string (lp->marker_end));
 	}
 
+	if (lp->flag_mpu_marker_only) {
+		lazy_and();
+		g_string_append_static (clause, " SUBSTR(alias, -10, 10) NOT LIKE '%_/_%'");
+	}
 	if (headers) {
 		lazy_and();
 		if (headers->next) {

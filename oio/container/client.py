@@ -642,6 +642,7 @@ class ContainerClient(ProxyClient):
         deleted=False,
         params=None,
         chunks=False,
+        mpu_marker_only=False,
         **kwargs
     ):
         """
@@ -669,6 +670,8 @@ class ContainerClient(ProxyClient):
             params["deleted"] = 1
         if kwargs.get("local"):
             params["local"] = 1
+        if mpu_marker_only:
+            params["mpu_marker_only"] = 1
         resp, body = self._request("GET", "/list", params=params, **kwargs)
         return resp.headers, body
 

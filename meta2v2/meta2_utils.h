@@ -50,6 +50,7 @@ struct list_params_s
 	const char *marker_start;
 	const char *version_marker;
 	const char *marker_end;
+	guint8 flag_mpu_marker_only:1;
 	guint8 flag_nodeleted :1;
 	guint8 flag_allversion:1;
 	guint8 flag_headers   :1;

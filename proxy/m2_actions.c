@@ -2487,20 +2487,28 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.delimiter = _delimiter(args);
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("end_marker");
-	if (!list_in.marker_end)
+	if (!list_in.marker_end){
 		list_in.marker_end = OPT("marker_end");  // backward compatibility
-	if (OPT("deleted"))
+	}
+	if (oio_str_parse_bool(OPT("mpu_marker_only"), FALSE)){
+		list_in.flag_mpu_marker_only = 1;
+	}
+	if (OPT("deleted")){
 		list_in.flag_nodeleted = 0;
+	}
 	if (OPT("all")) {
 		list_in.version_marker = OPT("version_marker");
 		list_in.flag_allversion = 1;
 	}
-	if (oio_str_parse_bool(OPT("properties"), FALSE))
+	if (oio_str_parse_bool(OPT("properties"), FALSE)){
 		list_in.flag_properties = 1;
-	if (oio_str_parse_bool(OPT("chunks"), FALSE))
+	}
+	if (oio_str_parse_bool(OPT("chunks"), FALSE)){
 		list_in.flag_recursion = 1;
-	if (!err)
+	}
+	if (!err){
 		err = _max(args, &list_in.maxkeys);
+	}
 	if (!err) {
 		tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
 		m2v2_list_result_init (&list_out);
