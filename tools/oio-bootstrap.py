@@ -336,7 +336,6 @@ sharding_threshold = 1000
 sharding_partition = 50,50
 sharding_preclean_new_shards = True
 sharding_preclean_timeout = 60
-sharding_preclean_max_db_size = 157286400
 sharding_create_shard_timeout = 60
 sharding_save_writes_timeout = 60
 shrinking_db_size = 26214400

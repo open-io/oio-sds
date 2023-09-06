@@ -20,7 +20,6 @@ from oio.common.constants import (
     M2_PROP_SHARDING_TIMESTAMP,
     NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
     NEW_SHARD_STATE_CLEANING_UP,
-    EXISTING_SHARD_STATE_ABORTED,
     EXISTING_SHARD_STATE_LOCKED,
 )
 from oio.common.easy_value import int_value
@@ -37,7 +36,6 @@ class AutomaticSharding(Filter):
 
     NAME = "AutomaticSharding"
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
-    DEFAULT_SHARDING_PRECLEAN_MAX_DB_SIZE = 1536 * 1024 * 1024
     DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
     DEFAULT_STEP_TIMEOUT = 960
 
@@ -70,15 +68,6 @@ class AutomaticSharding(Filter):
         kwargs["preclean_timeout"] = self.sharding_strategy_params.pop(
             "preclean_timeout", None
         )
-        self.preclean_max_db_size = int_value(
-            self.sharding_strategy_params.pop("preclean_max_db_size", None),
-            self.DEFAULT_SHARDING_PRECLEAN_MAX_DB_SIZE,
-        )
-        if preclean_new_shards and self.preclean_max_db_size <= self.sharding_db_size:
-            raise ValueError(
-                "The database size for preclean must be larger than the size "
-                "for sharding (or precleaning should be disabled)"
-            )
         kwargs["create_shard_timeout"] = self.sharding_strategy_params.pop(
             "create_shard_timeout", None
         )
@@ -222,41 +211,11 @@ class AutomaticSharding(Filter):
             self.cleaning_errors += 1
 
     def _sharding(self, meta2db):
-        meta2db_size = meta2db.file_status["st_size"]
         self.logger.info(
             "Sharding container %s (db size: %d bytes)",
             meta2db.cid,
             meta2db.file_status["st_size"],
         )
-        replace_kwargs = {}
-        if self.container_sharding.preclean_new_shards:
-            no_preclean = False
-            if meta2db_size > self.preclean_max_db_size:
-                self.logger.warning(
-                    "Container %s is too large to be precleaned (db size: %d bytes)",
-                    meta2db.cid,
-                    meta2db.file_status["st_size"],
-                )
-                no_preclean = True
-            else:
-                sharding_state = int_value(
-                    meta2db.system.get(M2_PROP_SHARDING_STATE), 0
-                )
-                if sharding_state == EXISTING_SHARD_STATE_ABORTED:
-                    self.logger.warning(
-                        "Container %s failed on its previous attempt, "
-                        "let's try without precleaning",
-                        meta2db.cid,
-                    )
-                    no_preclean = True
-            if no_preclean:
-                replace_kwargs["preclean_new_shards"] = False
-                # As the base copy will be larger, give the precleanup time
-                # to the creation of the new shard
-                replace_kwargs["create_shard_timeout"] = (
-                    self.container_sharding.create_shard_timeout
-                    + self.container_sharding.preclean_timeout
-                )
         try:
             shards = self.container_sharding.find_shards(
                 meta2db.system[M2_PROP_ACCOUNT_NAME],
@@ -269,7 +228,6 @@ class AutomaticSharding(Filter):
                 meta2db.system[M2_PROP_CONTAINER_NAME],
                 shards,
                 enable=True,
-                **replace_kwargs,
             )
             if modified:
                 self.sharding_successes += 1
