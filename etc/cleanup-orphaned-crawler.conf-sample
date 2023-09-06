@@ -36,12 +36,12 @@ excluded_chunk_upload_time_ranges = ""
 # excluded_container = "account_1/container_1,account_2/container_2, ..."
 excluded_containers = ""
 # Delay in second before next attempt to check orphan chunk location
-# first attemp -> 15 min
-# second attemp -> 30 min
-# third attemp -> 1h
-# fourth attemp -> 2h
-# fifth attemp -> 2h
-# sixth attemp -> 2h ...
+# first attempt -> 15 min
+# second attempt -> 30 min
+# third attempt -> 1h
+# fourth attempt -> 2h
+# fifth attempt -> 2h
+# sixth attempt -> 2h ...
 new_attempt_delay = 900
 # Time interval after which service data are updated
 service_update_interval = 3600

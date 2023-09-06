@@ -552,12 +552,12 @@ use = egg:oio#cleanup_orphaned
 # Delay in seconds we have to wait before deleting an orphan chunk
 delete_delay = 604800
 # Delay in second before next attempt to check orphan chunk location
-# first attemp -> 15 min
-# second attemp -> 30 min
-# third attemp -> 1h
-# fourth attemp -> 2h
-# fifth attemp -> 2h
-# sixth attemp -> 2h ...
+# first attempt -> 15 min
+# second attempt -> 30 min
+# third attempt -> 1h
+# fourth attempt -> 2h
+# fifth attempt -> 2h
+# sixth attempt -> 2h ...
 new_attempt_delay = 900
 # Time interval after which service data are updated
 service_update_interval = 3600
