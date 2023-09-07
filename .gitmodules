@@ -1,9 +1,3 @@
-[submodule "vendor/asn1c"]
-	path = vendor/asn1c
-	url = https://github.com/vlm/asn1c.git
-[submodule "vendor/curl"]
-	path = vendor/curl
-	url = https://github.com/curl/curl.git
 [submodule "vendor/statsd-c-client"]
 	path = vendor/statsd-c-client
 	url = https://github.com/romanbsd/statsd-c-client.git
