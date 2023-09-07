@@ -590,12 +590,30 @@ class FlushContainer(ContainerCommandMixin, Command):
             action="store_true",
             dest="quick",
             help="""Flush container quickly, may put high pressure
- on the event system""",
+ on the event system.""",
+        )
+        parser.add_argument(
+            "--limit",
+            help="Limit the number of objects per iteration.",
+        )
+        parser.add_argument(
+            "--delay",
+            default=0.0,
+            type=float,
+            help="""Delay between each iteration (default: 0.0s),
+ not relevant with "quickly" option.""",
         )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
+
+        kwargs = {}
+        if parsed_args.limit:
+            kwargs["limit"] = parsed_args.limit
+        if parsed_args.delay:
+            kwargs["delay"] = parsed_args.delay
+
         self.take_action_container(parsed_args)
         if parsed_args.cid is None:
             account = self.app.client_manager.account
@@ -605,7 +623,7 @@ class FlushContainer(ContainerCommandMixin, Command):
                 parsed_args.cid
             )
         self.app.client_manager.storage.container_flush(
-            account, container, fast=parsed_args.quick
+            account, container, fast=parsed_args.quick, **kwargs
         )
 
 

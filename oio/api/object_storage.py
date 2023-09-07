@@ -37,6 +37,7 @@ from oio.common.utils import (
     compute_perfdata_stats,
 )
 from oio.common.easy_value import float_value, true_value
+from oio.common.green import sleep
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id, ensure_request_id2
 from oio.common.storage_method import STORAGE_METHODS
@@ -524,7 +525,7 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_flush(self, account, container, fast=False, **kwargs):
+    def container_flush(self, account, container, fast=False, delay=None, **kwargs):
         """
         Flush a container
 
@@ -535,6 +536,9 @@ class ObjectStorageApi(object):
         :param fast: flush container quickly, may put high pressure
             on the event system
         :type fast: `bool`
+        :param delay: delay (in seconds) between each iteration
+            (not relevant with fast option)
+        :type delay: `float`
         """
         if fast:
             truncated = True
@@ -554,6 +558,8 @@ class ObjectStorageApi(object):
                 raise exc.OioException(
                     "None of the %d objects could be deleted" % len(deleted)
                 )
+            if delay:
+                sleep(delay)
 
     @handle_container_not_found
     @patch_kwargs
