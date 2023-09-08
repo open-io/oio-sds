@@ -87,7 +87,8 @@ static void transport_gridd_notify_error(struct network_client_s *clt);
 
 static void transport_gridd_clean_context(struct transport_client_context_s *);
 
-static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba);
+static gboolean _client_manage_l4v(struct network_client_s *clt,
+		struct transport_client_context_s *ctx);
 
 /* XXX(jfs): ugly quirk, ok, but helpful to keep simple the stats support in
  * the server but allow it to reply "config volume /path/to/docroot" in its
@@ -427,7 +428,7 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		data_slab_sequence_unshift(&(clt->input), ds);
 
 		if (ctx->gba_l4v->len >= 4 + payload_size) { /* complete */
-			if (!_client_manage_l4v(clt, ctx->gba_l4v)) {
+			if (!_client_manage_l4v(clt, ctx)) {
 				network_client_close_output(clt, FALSE);
 				GRID_WARN("fd=%d Transport error", clt->fd);
 				return RC_ERROR;
@@ -677,14 +678,15 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 }
 
 static gboolean
-_client_manage_l4v(struct network_client_s *client, GByteArray *gba)
+_client_manage_l4v(struct network_client_s *client,
+		struct transport_client_context_s *ctx)
 {
 	gchar reqid[LIMIT_LENGTH_REQID];
 	struct req_ctx_s req_ctx = {0};
 	gboolean rc = FALSE;
 	GError *err = NULL;
 
-	EXTRA_ASSERT(gba != NULL);
+	EXTRA_ASSERT(ctx->gba_l4v != NULL);
 	EXTRA_ASSERT(client != NULL);
 
 	req_ctx.client = client;
@@ -692,7 +694,8 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.clt_ctx = req_ctx.transport->client_context;
 	req_ctx.disp = req_ctx.clt_ctx->dispatcher;
 
-	MESSAGE request = message_unmarshall(gba->data, gba->len, &err);
+	MESSAGE request = message_unmarshall(
+			ctx->gba_l4v->data, ctx->gba_l4v->len, &err);
 
 	// take the encoding into account
 	req_ctx.tv_start = client->time.evt_in;
@@ -714,7 +717,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.reqid = _req_get_ID(request, reqid, sizeof(reqid));
 	oio_ext_set_reqid(req_ctx.reqid);
-	req_ctx.reqsize = gba->len;
+	req_ctx.reqsize = ctx->gba_l4v->len;
 	rc = TRUE;
 
 	/* TODO check the socket is still active, specially if it seems old (~long
@@ -725,6 +728,10 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 		_client_reply_fixed(&req_ctx, CODE_BAD_REQUEST, "Invalid/No request name");
 		goto label_exit;
 	}
+
+	/* Request has been decoded, we can get rid of the "raw" request buffer
+	 * and keep only the decoded request. */
+	_ctx_reset(ctx);
 
 	GRID_TRACE("fd=%d ACCESS [%s]", client->fd, hashstr_str(req_ctx.reqname));
 
