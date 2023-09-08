@@ -1352,6 +1352,15 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### server.request.max_memory
+
+> Maximum amount of memory used to decode ASN.1 requests. This MUST be more than server.request.max_size, or big requests will always be denied.
+
+ * default: **4294967296**
+ * type: guint64
+ * cmake directive: *OIO_SERVER_REQUEST_MAX_MEMORY*
+ * range: 1048576 -> 68719476736
+
 ### server.request.max_run_time
 
 > How long a request might take to run on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.

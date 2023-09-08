@@ -163,6 +163,31 @@ network_server_get_memory_usage(struct network_server_s *srv UNUSED)
 	return usage.ru_maxrss * 1024;
 }
 
+gboolean
+network_server_request_memory(struct network_server_s *srv, guint64 how_much)
+{
+	gboolean rc = TRUE;
+	g_mutex_lock(&srv->req_mem_lock);
+	if (((srv->req_mem_usage + how_much) < server_request_max_memory)
+			|| server_request_max_memory == 0) {
+		srv->req_mem_usage += how_much;
+	} else {
+		// TODO(FVE): wait on srv->req_mem_cond, retry
+		rc = FALSE;
+	}
+	g_mutex_unlock(&srv->req_mem_lock);
+	return rc;
+}
+
+void
+network_server_release_memory(struct network_server_s *srv, guint64 how_much)
+{
+	g_mutex_lock(&srv->req_mem_lock);
+	srv->req_mem_usage -= how_much;
+	// TODO(FVE): g_cond_broadcast(srv->req_mem_cond)
+	g_mutex_unlock(&srv->req_mem_lock);
+}
+
 void
 network_server_reconfigure(struct network_server_s *srv)
 {
@@ -221,6 +246,9 @@ network_server_init(void)
 	result->gq_gauge_cnx_current =  g_quark_from_static_string ("gauge cnx.client");
 	result->gq_counter_cnx_accept = g_quark_from_static_string ("counter cnx.accept");
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
+
+	g_mutex_init(&result->req_mem_lock);
+	g_cond_init(&result->req_mem_cond);
 
 	/* no limit at the creation ... */
 	result->pool_tcp = g_thread_pool_new(
@@ -304,6 +332,9 @@ network_server_clean(struct network_server_s *srv)
 		g_async_queue_unref(srv->queue_monitor);
 		srv->queue_monitor = NULL;
 	}
+
+	g_cond_clear(&srv->req_mem_cond);
+	g_mutex_clear(&srv->req_mem_lock);
 
 	g_free(srv);
 }

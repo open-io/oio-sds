@@ -929,6 +929,11 @@
 				"def": "300s", "min": "1ms", "max": "1h",
 				"aliases": ["server.request.max_delay_start"] },
 
+			{ "type": "uint64", "name": "server_request_max_memory",
+				"key": "server.request.max_memory",
+				"descr": "Maximum amount of memory used to decode ASN.1 requests. This MUST be more than server.request.max_size, or big requests will always be denied.",
+				"def": "4Gi", "min": "1Mi", "max": "64Gi" },
+
 			{ "type": "uint", "name": "server_request_max_size",
 				"key": "server.request.max_size",
 				"descr": "Maximum size of an ASN.1 request to a 'meta' service. A service will refuse to serve a request bigger than this. Be careful to have enough memory on the system.",

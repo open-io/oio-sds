@@ -2,6 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -81,6 +82,10 @@ struct network_server_s
 	volatile gboolean flag_continue;
 	gboolean abort_allowed;
 	gboolean udp_allowed;
+
+	GCond req_mem_cond;
+	GMutex req_mem_lock;
+	guint64 req_mem_usage;
 };
 
 enum

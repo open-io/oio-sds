@@ -81,6 +81,10 @@ struct req_ctx_s
 
 static int is_code_final(int code) { return CODE_IS_FINAL(code); }
 
+static MESSAGE metaXServer_reply_simple(MESSAGE request UNUSED, gint code, const gchar *message);
+
+static gsize _reply_message(struct network_client_s *clt, MESSAGE reply);
+
 static int transport_gridd_notify_input(struct network_client_s *clt);
 
 static void transport_gridd_notify_error(struct network_client_s *clt);
@@ -424,11 +428,29 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			}
 		}
 
+		/* This may not read the whole request body. */
 		gba_read(ctx->gba_l4v, ds, payload_size + 4);
 		data_slab_sequence_unshift(&(clt->input), ds);
 
 		if (ctx->gba_l4v->len >= 4 + payload_size) { /* complete */
-			if (!_client_manage_l4v(clt, ctx)) {
+			/* FIXME(FVE): this check should be done earlier!
+			 * Unfortunately, this function has many return statements,
+			 * and must be refactored before... */
+			if (!network_server_request_memory(clt->server, payload_size)) {
+				GRID_WARN("Memory usage too high "
+						"(server.request.max_memory=%"G_GUINT64_FORMAT"), "
+						"cannot decode request of size %u bytes",
+						server_request_max_memory, payload_size);
+				MESSAGE answer = metaXServer_reply_simple(
+						NULL, CODE_UNAVAILABLE, "Memory exhausted");
+				_reply_message(clt, answer);
+				_ctx_reset(ctx);
+				network_client_close_output(clt, FALSE);
+				return RC_ERROR;
+			}
+			gboolean reply_sent = _client_manage_l4v(clt, ctx);
+			network_server_release_memory(clt->server, payload_size);
+			if (!reply_sent) {
 				network_client_close_output(clt, FALSE);
 				GRID_WARN("fd=%d Transport error", clt->fd);
 				return RC_ERROR;
