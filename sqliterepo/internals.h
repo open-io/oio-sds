@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -30,7 +31,7 @@ License along with this library.
 # include <TableSequence.h>
 
 /* Size of buffer for reading dump file */
-#define SQLX_DUMP_BUFFER_SIZE 32768
+#define SQLX_DUMP_BUFFER_SIZE (64 * 1024)
 
 #define MEMBER(D)   ((struct election_member_s*)(D))
 #define MMANAGER(D) MEMBER(D)->manager

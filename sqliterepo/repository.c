@@ -1545,8 +1545,9 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	g_mutex_lock(&context.mutex);
 retry:
 	if (context.counter <= 0) {
-		if (g_cond_wait_until(&context.cond, &context.mutex,
-					g_get_monotonic_time() + sqliterepo_dumps_timeout)) {
+		gint64 deadline = MIN(oio_ext_get_deadline(),
+				g_get_monotonic_time() + sqliterepo_dumps_timeout);
+		if (g_cond_wait_until(&context.cond, &context.mutex, deadline)) {
 			/* Signaled! */
 			goto retry;
 		} else {
@@ -1573,7 +1574,6 @@ retry:
 			GRID_TRACE("DUMP to [%s] fd=%d from bd=[%s][%s]", path, fd,
 					sq3->name.base, sq3->name.type);
 
-			/* TODO : provides a VFS dumping everything in memory */
 			rc = sqlite3_open_v2(path, &dst, SQLITE_OPEN_PRIVATECACHE
 					|SQLITE_OPEN_CREATE|SQLITE_OPEN_READWRITE, NULL);
 
@@ -1763,8 +1763,9 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		if (rc < 0)
 			return NEWERROR(errno,
 					"Failed to stat the database file (fd=%d)", fd);
+		gint alloc_size = MIN(chunk_size, st.st_size);
 		do {
-			GByteArray *gba = g_byte_array_sized_new(128 * 1024);
+			GByteArray *gba = g_byte_array_sized_new(alloc_size);
 			err = _read_file_chunk(fd, chunk_size, gba);
 			if (!err) {
 				bytes_read += gba->len;
