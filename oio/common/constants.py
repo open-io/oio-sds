@@ -230,6 +230,8 @@ M2_PROP_SHARDING_QUEUE = "sys.m2.sharding.queue"
 M2_PROP_STORAGE_POLICY = "sys.m2.policy.storage"
 # Total number of bytes of objects held by the container.
 M2_PROP_USAGE = "sys.m2.usage"
+# Meta2 version
+M2_PROP_VERSION = "sys.m2.version"
 # Number of object versions to keep. -1 for unlimited.
 M2_PROP_VERSIONING_POLICY = "sys.m2.policy.version"
 # Draining state for the container and its shards.

@@ -54,6 +54,7 @@ from oio.common.constants import (
     M2_PROP_SHARDS,
     M2_PROP_STORAGE_POLICY,
     M2_PROP_USAGE,
+    M2_PROP_VERSION,
     M2_PROP_VERSIONING_POLICY,
     SHARDING_STATE_NAME,
     M2_PROP_DRAINING_STATE,
@@ -706,6 +707,13 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
 
     def get_parser(self, prog_name):
         parser = super(ShowContainer, self).get_parser(prog_name)
+        parser.add_argument(
+            "--full",
+            dest="full",
+            default=False,
+            help="Add more system information",
+            action="store_true",
+        )
         self.patch_parser_container(parser)
         return parser
 
@@ -751,6 +759,9 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             elif key.startswith(M2_PROP_OBJECTS + "."):
                 key = f'objects.{key[len(M2_PROP_OBJECTS + "."):]}'
                 value = convert_size(int(value))
+            elif parsed_args.full:
+                if key != M2_PROP_VERSION and not key.startswith("version:"):
+                    continue
             else:
                 continue
             info[key] = value
