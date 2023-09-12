@@ -1101,6 +1101,7 @@ _task_malloc_trim(gpointer p)
 		return;
 
 	gint64 ram_before = network_server_get_memory_usage(PSRV(p)->server);
+	g_thread_pool_stop_unused_threads();
 	malloc_trim(sqlx_periodic_malloctrim_size);
 	gint64 ram_after = network_server_get_memory_usage(PSRV(p)->server);
 	if (ram_before > 0 && ram_after > 0) {

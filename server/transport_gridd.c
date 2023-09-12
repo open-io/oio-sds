@@ -842,8 +842,8 @@ dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
 	gint64 ram_before = network_server_get_memory_usage(reply->client->server);
-	malloc_trim(malloc_trim_size_ondemand);
 	g_thread_pool_stop_unused_threads();
+	malloc_trim(malloc_trim_size_ondemand);
 	gint64 ram_after = network_server_get_memory_usage(reply->client->server);
 	if (ram_before > 0 && ram_after > 0) {
 		GRID_INFO("malloc_trim released %"G_GINT64_FORMAT
