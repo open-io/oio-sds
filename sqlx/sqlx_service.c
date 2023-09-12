@@ -1094,13 +1094,20 @@ _task_read_memory_usage(gpointer p)
 }
 
 static void
-_task_malloc_trim(gpointer p UNUSED)
+_task_malloc_trim(gpointer p)
 {
 	VARIABLE_PERIOD_DECLARE();
 	if (VARIABLE_PERIOD_SKIP(sqlx_periodic_malloctrim_period))
 		return;
 
-	malloc_trim (sqlx_periodic_malloctrim_size);
+	gint64 ram_before = network_server_get_memory_usage(PSRV(p)->server);
+	malloc_trim(sqlx_periodic_malloctrim_size);
+	gint64 ram_after = network_server_get_memory_usage(PSRV(p)->server);
+	if (ram_before > 0 && ram_after > 0) {
+		GRID_INFO("malloc_trim released %"G_GINT64_FORMAT
+				" bytes to the system (auto)",
+				ram_before - ram_after);
+	}
 }
 
 static void
