@@ -1250,9 +1250,9 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
-	EXTRACT_STRING("SRC", source);
+	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
 	_maybe_override_check_type(reply, &check_type);
-	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
+	reply->subject("base:%s.%s\tcopy_source:%s", name.base, name.type, source);
 
 	if ((err = _pipe_from(source, repo, &n0, check_type)))
 		reply->send_error(0, err);
@@ -1302,8 +1302,8 @@ _handler_LOCAL_COPY(struct gridd_reply_ctx_s *reply,
 	g_free(copy_path);
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
-	EXTRACT_STRING("SRC", source);
-	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
+	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
+	reply->subject("base:%s.%s\tcopy_source:%s", name.base, name.type, source);
 
 	reply->send_reply(CODE_FINAL_OK, "OK");
 
@@ -1340,7 +1340,7 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 	EXTRACT_STRING(NAME_MSGKEY_SRC_BASE, src_base);
 	EXTRACT_STRING2(NAME_MSGKEY_SRC_SUFFIX, src_suffix, TRUE);
 
-	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, src_addr);
+	reply->subject("base:%s.%s\tcopy_source:%s", name.base, name.type, src_addr);
 	_load_sqlx_peers(reply, &dest_peers);
 
 	struct sqlx_name_s src = {name.ns, src_base, name.type, src_suffix};
