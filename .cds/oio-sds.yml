@@ -100,6 +100,9 @@ workflow:
     environment: oio-sds-env-rabbitmq-resiliency
     depends_on:
       - root
+    conditions:
+      script: |+
+        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
   coverage:
     pipeline: oio-sds-coverage
