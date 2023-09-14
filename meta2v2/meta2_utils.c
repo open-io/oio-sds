@@ -4383,7 +4383,7 @@ end:
 static GError*
 _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 		const struct bean_descriptor_s *descr, const gchar *select_clause,
-		gint64 *allowed_changes)
+		gint64 *allowed_changes, gint64 deadline)
 {
 	gint64 changes = 1;
 	GError *err = NULL;
@@ -4391,7 +4391,8 @@ _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 	gchar *clause_str = g_strdup_printf(
 			"%s LIMIT %"G_GINT64_FORMAT,
 			select_clause, MIN(1000, *allowed_changes));
-	while (!err && changes > 0 && *allowed_changes > 0) {
+	while (!err && changes > 0 && *allowed_changes > 0
+			&& oio_ext_monotonic_time() < deadline) {
 		err = _db_delete(descr, sq3, clause_str, NULL);
 		changes = sqlite3_changes(sq3->db);
 		*allowed_changes -= changes;
@@ -4404,14 +4405,15 @@ static GError*
 _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 		const struct bean_descriptor_s *descr,
 		const gchar *lower, const gchar *upper,
-		gint64 *allowed_changes)
+		gint64 *allowed_changes, gint64 deadline)
 {
 	gint64 changes = 1;
 	GError *err = NULL;
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _build_aliases_sql_clause(
 			lower, upper, MIN(1000, *allowed_changes), clause);
-	while (!err && changes > 0 && *allowed_changes > 0) {
+	while (!err && changes > 0 && *allowed_changes > 0
+			&& oio_ext_monotonic_time() < deadline) {
 		err = _db_delete(descr, sq3, clause->str, params);
 		changes = sqlite3_changes(sq3->db);
 		*allowed_changes -= changes;
@@ -4422,6 +4424,28 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 	return err;
 }
 
+/** Shorten the deadline so we don't start a costly operation,
+ * right before the actual deadline is reached,
+ * and also keep some time to replicate the operation to other peers
+ * and to compute the response payload. */
+static gint64
+_compute_reasonable_deadline(gboolean is_replicated)
+{
+	gint64 now = oio_ext_monotonic_time();
+	gint64 available = oio_ext_get_deadline() - now;
+	if (is_replicated) {
+		/* After the request is executed locally, we have to replicate the
+		 * diff to other peers. If the time we are given is shorter than the
+		 * replication timeout, cut it in half. */
+		/* XXX(FVE): we should use oio_election_replicate_timeout_req,
+		 * but we cannot access this variable from here. */
+		available -= MIN(available / 2, 5 * G_TIME_SPAN_SECOND);
+	}
+	/* Keep a little time to compute the response payload. */
+	available -= 5 * G_TIME_SPAN_MILLISECOND;
+	return now + MAX(available, 0);
+}
+
 GError*
 m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 		gchar *lower, gchar *upper, gboolean *truncated)
@@ -4429,7 +4453,6 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 	GError *err = NULL;
 	gchar *current_lower = NULL;
 	gchar *current_upper = NULL;
-	gboolean in_one_go = max_entries_cleaned <= 0;
 
 	if (!lower) {
 		err = m2db_get_sharding_lower(sq3, &current_lower);
@@ -4445,44 +4468,38 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 		}
 		upper = current_upper;
 	}
-	if (in_one_go)
+	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
+	}
+
+	gint64 dl = _compute_reasonable_deadline(sq3->election != 0);
 
 	// Remove orphan properties
 	if ((err = _clean_shard_aliases(
-			sq3, &descr_struct_PROPERTIES, lower, upper, &max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			sq3, &descr_struct_PROPERTIES, lower, upper, &max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove aliases out of range
 	if ((err = _clean_shard_aliases(
-			sq3, &descr_struct_ALIASES, lower, upper, &max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			sq3, &descr_struct_ALIASES, lower, upper, &max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove orphan contents
 	if ((err = _clean_shard_beans(
 			sq3, &descr_struct_CONTENTS_HEADERS,
 			"id NOT IN (SELECT content FROM aliases)",
-			&max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			&max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove orphan chunks
 	err = _clean_shard_beans(
 			sq3, &descr_struct_CHUNKS,
 			"content NOT IN (SELECT content FROM aliases)",
-			&max_entries_cleaned);
+			&max_entries_cleaned, dl);
 
 end:
 	if (!err) {
-		if (in_one_go || max_entries_cleaned > 0) {
+		if (max_entries_cleaned > 0 && oio_ext_monotonic_time() < dl) {
 			sqlx_admin_del_all_user(sq3, NULL, NULL);
 			m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 			*truncated = FALSE;
@@ -4500,45 +4517,37 @@ m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
 		gint64 max_entries_cleaned, gboolean *truncated)
 {
 	GError *err = NULL;
-	gboolean in_one_go = max_entries_cleaned <= 0;
 
-	if (in_one_go)
+	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
+	}
+
+	gint64 dl = _compute_reasonable_deadline(sq3->election != 0);
 
 	// Remove all chunks
 	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_CHUNKS, "1", &max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			sq3, &descr_struct_CHUNKS, "1", &max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove all contents
 	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_CONTENTS_HEADERS, "1", &max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			sq3, &descr_struct_CONTENTS_HEADERS, "1", &max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove all properties
 	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_PROPERTIES, "1", &max_entries_cleaned))) {
-		goto end;
-	}
-	if (!in_one_go && max_entries_cleaned <= 0) {
+			sq3, &descr_struct_PROPERTIES, "1", &max_entries_cleaned, dl))) {
 		goto end;
 	}
 	// Remove all aliases
-	max_entries_cleaned -= sqlite3_changes(sq3->db);
 	err = _clean_shard_beans(
-			sq3, &descr_struct_ALIASES, "1", &max_entries_cleaned);
+			sq3, &descr_struct_ALIASES, "1", &max_entries_cleaned, dl);
 
 end:
 	if (!err) {
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
-		*truncated = !in_one_go && max_entries_cleaned <= 0;
+		*truncated = max_entries_cleaned <= 0 || oio_ext_monotonic_time() >= dl;
 	}
 	return err;
 }

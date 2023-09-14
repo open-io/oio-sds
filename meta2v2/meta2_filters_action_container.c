@@ -830,7 +830,7 @@ meta2_filter_action_replace_sharding(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
+		struct gridd_reply_ctx_s *reply)
 {
 	gboolean truncated = FALSE;
 	GError *err = NULL;
@@ -839,6 +839,7 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
 	gboolean local = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL;
+	reply->subject("op_type:%s", local? "local" : "replicated");
 	if (local) {
 		// Manipulate the database locally (without replication)
 		// to clean it up once
@@ -853,6 +854,7 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
+	reply->subject("truncated:%s", truncated ? "true" : "false");
 	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
 	return FILTER_OK;
 }
