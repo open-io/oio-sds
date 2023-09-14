@@ -4401,11 +4401,11 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 		upper = current_upper;
 	}
 
-	// Remove aliases out of range
+	// Remove orphan properties
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _build_aliases_sql_clause(
 			lower, upper, max_entries_cleaned, clause);
-	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
+	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
 	metautils_gvariant_unrefv(params);
 	g_free(params), params = NULL;
 	g_string_free(clause, TRUE);
@@ -4416,11 +4416,11 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 	if (!in_one_go && max_entries_cleaned <= 0) {
 		goto end;
 	}
-	// Remove orphan properties
+	// Remove aliases out of range
 	clause = g_string_sized_new(128);
 	params = _build_aliases_sql_clause(
 			lower, upper, max_entries_cleaned, clause);
-	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
+	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
 	metautils_gvariant_unrefv(params);
 	g_free(params), params = NULL;
 	g_string_free(clause, TRUE);
