@@ -45,7 +45,12 @@ from oio.common.exceptions import (
 )
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import cid_from_name, depaginate, monotonic_time
+from oio.common.utils import (
+    cid_from_name,
+    depaginate,
+    monotonic_time,
+    timeout_to_deadline,
+)
 from oio.container.client import ContainerClient
 from oio.common.decorators import ensure_request_id
 from oio.directory.admin import AdminClient
@@ -313,6 +318,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_PRECLEAN_TIMEOUT = 120
     DEFAULT_CREATE_SHARD_TIMEOUT = 120
     DEFAULT_SAVE_WRITES_TIMEOUT = 120
+    PRECLEAN_OP_TIMEOUT = 2.0
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -938,18 +944,23 @@ class ContainerSharding(ProxyClient):
             # The first request must take priority to be sure to start cleaning
             params["urgent"] = 1
         timeout = kwargs.get("timeout")
-        preclean_deadline = monotonic_time() + timeout if timeout else None
+        preclean_deadline = timeout_to_deadline(
+            timeout if timeout else self.DEFAULT_PRECLEAN_TIMEOUT
+        )
         truncated = True
         request_kwargs = kwargs.copy()
-        request_kwargs.pop("timeout", None)
-        if preclean_deadline:
-            request_kwargs["deadline"] = int(preclean_deadline)
+        # If the request is not to be replicated, we accept it takes a long time
+        if params.get("local"):
+            request_kwargs["timeout"] = timeout or self.DEFAULT_PRECLEAN_TIMEOUT
+        else:
+            request_kwargs["timeout"] = self.PRECLEAN_OP_TIMEOUT
+
         while truncated:
-            if preclean_deadline and monotonic_time() >= preclean_deadline:
+            if timeout and monotonic_time() >= preclean_deadline:
                 break
             for i in range(attempts):
                 # Ensure some timeleft for preclean
-                if preclean_deadline and monotonic_time() >= preclean_deadline:
+                if timeout and monotonic_time() >= preclean_deadline:
                     self.logger.warning(f"Failed to clean the container in {timeout}s")
                     break
                 try:
