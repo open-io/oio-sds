@@ -1852,7 +1852,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		goto cleanup;
 
 	/* The header is required to compute the chunk IDs,
-	 * make a copy before modifiying it. */
+	 * make a copy before modifying it. */
 	struct bean_CONTENTS_HEADERS_s *original_header = _bean_dup(content.header);
 	discarded = g_slist_prepend(discarded, original_header);
 	/* Update size and mtime in header */
@@ -3917,8 +3917,8 @@ _sharding_list_params_to_sql_clause(struct list_params_s *lp, GString *clause)
 }
 
 static GVariant **
-_sharding_clean_shard_aliases_to_sql_clause(const gchar *lower,
-		const gchar *upper, gint64 max_entries_cleaned, GString *clause)
+_build_aliases_sql_clause(const gchar *lower,
+		const gchar *upper, gint64 limit, GString *clause)
 {
 	void lazy_or() {
 		if (clause->len > 0) g_string_append_static(clause, " OR");
@@ -3939,9 +3939,9 @@ _sharding_clean_shard_aliases_to_sql_clause(const gchar *lower,
 
 	if (clause->len == 0)
 		clause = g_string_append_static(clause, " 0");
-	if (max_entries_cleaned > 0) {
+	if (limit > 0) {
 		g_string_append_static(clause, " LIMIT ?");
-		g_ptr_array_add(params, g_variant_new_int64(max_entries_cleaned));
+		g_ptr_array_add(params, g_variant_new_int64(limit));
 	}
 
 	g_ptr_array_add(params, NULL);
@@ -4403,7 +4403,7 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 
 	// Remove aliases out of range
 	GString *clause = g_string_sized_new(128);
-	GVariant **params = _sharding_clean_shard_aliases_to_sql_clause(
+	GVariant **params = _build_aliases_sql_clause(
 			lower, upper, max_entries_cleaned, clause);
 	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
 	metautils_gvariant_unrefv(params);
@@ -4418,7 +4418,7 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 	}
 	// Remove orphan properties
 	clause = g_string_sized_new(128);
-	params = _sharding_clean_shard_aliases_to_sql_clause(
+	params = _build_aliases_sql_clause(
 			lower, upper, max_entries_cleaned, clause);
 	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
 	metautils_gvariant_unrefv(params);

@@ -1598,7 +1598,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				m2db_increment_version(sq3);
 			}
 			if (dryrun) {
-				/* In case of dryrun, let's rollback the transaction. 
+				/* In case of dryrun, let's rollback the transaction.
 				 * The deletion must not be effective */
 				err = sqlx_transaction_rollback(repctx, err);
 			} else {
@@ -3703,8 +3703,8 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
 				NULL, NULL, truncated);
 	} else if (m2db_get_shard_count(sq3)) {  // Root
-		err = m2db_clean_root_container(sq3, meta2_sharding_max_entries_cleaned,
-				truncated);
+		err = m2db_clean_root_container(
+				sq3, meta2_sharding_max_entries_cleaned, truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
 		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;
