@@ -27,12 +27,11 @@ from oio.event.filters.base import Filter
 EVENT_TYPES = (
     EventTypes.CONTENT_NEW,
     EventTypes.CONTENT_UPDATE,
-    EventTypes.CONTENT_DELETED,
 )
 
 
 class AsyncReplicationFilter(AmqpConnector, Filter):
-    """Propagate create, delete and update events for replication"""
+    """Propagate create and update events for replication"""
 
     def __init__(self, *args, endpoints=None, **kwargs):
         self.exchange_name = None
