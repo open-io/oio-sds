@@ -55,6 +55,9 @@ class NotifyFilter(Filter):
 
         self.strip_fields = tuple(self.conf.get("strip_fields", "").split(","))
         self.tube = self.conf.get("tube", self.conf.get("queue_name", "notif"))
+        self.required_fields = [
+            f for f in self.conf.get("required_fields", "").split(",") if f
+        ]
         self.tube_rules = {}
         self._load_policy_regex()
 
@@ -95,6 +98,12 @@ class NotifyFilter(Filter):
         return True
 
     def should_notify(self, event):
+        # Verify all required fields
+        if self.required_fields:
+            for field in self.required_fields:
+                if field not in event.env:
+                    return False
+
         # Some events do not have a URL (e.g. chunk events),
         # we cannot filter them easily, so we let them pass.
         return not event.url or self._should_notify(
