@@ -107,6 +107,9 @@ tube = oio-delete
 policy_regex_EC = ^EC.*
 tube_EC = oio-delete-ec
 
+# Ensure fields are present in events (values are not checked)
+required_fields = destinations
+
 # -----------------------------------------------------------------
 # Redirect event to the replication queue (deprecated).
 [filter:replication]

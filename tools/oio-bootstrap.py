@@ -1546,9 +1546,11 @@ use = egg:oio#webhook
 endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:async_replication]
-use = egg:oio#async_replication
+use = egg:oio#notify
+tube = oio-replication
 queue_url = ${QUEUE_URL}
-exchange_name = oio-async-repli
+required_fields = destinations
+exchange_name = oio-replication
 
 [filter:bury]
 use = egg:oio#bury
