@@ -65,6 +65,16 @@ def make_arg_parser():
         help="Endpoint of the Beanstalkd server",
     )
     parser.add_argument(
+        "--declare-exchange",
+        action="store_true",
+        help="Declare the exchange before binding it",
+    )
+    parser.add_argument(
+        "--declare-queue",
+        action="store_true",
+        help="Declare the queue before binding it",
+    )
+    parser.add_argument(
         "--dst-endpoint",
         default=os.environ.get(
             "OIO_RABBITMQ_ENDPOINT", "amqp://guest:guest@127.0.0.1:5672/%2F"
@@ -78,24 +88,24 @@ def make_arg_parser():
     parser.add_argument(
         "--dst-exchange",
         default="oio",
-        help=(
-            "Name of the RabbitMQ exchange to send messages to "
-            "(default is 'oio')"
-        ),
+        help="Name of the RabbitMQ exchange to send messages to (default is 'oio')",
     )
     parser.add_argument(
         "--dst-queue",
         default="oio",
-        help=(
-            "Name of the RabbitMQ queue to send messages to "
-            "(default is 'oio')"
-        ),
+        help="Name of the RabbitMQ queue to send messages to (default is 'oio')",
     )
     parser.add_argument(
         "--namespace",
         "--ns",
         default=os.environ.get("OIO_NS", "OPENIO"),
         help="Namespace name",
+    )
+    parser.add_argument(
+        "--no-unbind",
+        action="store_false",
+        dest="unbind",
+        help="Do not unbind the queue from the exchange when quitting",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="More verbose output"
@@ -110,25 +120,32 @@ def main():
     routing_key = f"oio-beanstalkd-to-rabbitmq-{hostname}-{os.getpid()}"
     bsl = BeanstalkdListener(args.src_endpoint, args.src_tube, logger=logger)
     rab = AmqpSender(endpoints=args.dst_endpoint, logger=logger)
+
+    if args.declare_exchange:
+        rab.maybe_reconnect()
+        try:
+            rab._channel.exchange_declare(
+                exchange=args.dst_exchange,
+                exchange_type=ExchangeType.topic,
+                durable=True,
+            )
+        except AMQPError as err:
+            # We do not fail here, we suppose it already exists with other parameters
+            logger.warning("Failed to declare exchange: %s", err)
+
+    if args.declare_queue:
+        rab.maybe_reconnect()
+        try:
+            rab._channel.queue_declare(
+                queue=args.dst_queue,
+                arguments={"x-queue-type": "quorum"},
+                durable=True,
+            )
+        except AMQPError as err:
+            # We do not fail here, we suppose it already exists with other parameters
+            logger.warning("Failed to declare queue: %s", err)
+
     rab.maybe_reconnect()
-    try:
-        rab._channel.exchange_declare(
-            exchange=args.dst_exchange,
-            exchange_type=ExchangeType.topic,
-            durable=True,
-        )
-    except AMQPError as err:
-        # We do not fail here, we suppose it already exists with other parameters
-        logger.warning("Failed to declare exchange: %s", err)
-    try:
-        rab._channel.queue_declare(
-            queue=args.dst_queue,
-            arguments={"x-queue-type": "quorum"},
-            durable=True,
-        )
-    except AMQPError as err:
-        # We do not fail here, we suppose it already exists with other parameters
-        logger.warning("Failed to declare queue: %s", err)
     rab._channel.queue_bind(
         exchange=args.dst_exchange,
         queue=args.dst_queue,
@@ -147,10 +164,13 @@ def main():
     except KeyboardInterrupt:
         logger.info("%d messages copied", jobs)
     finally:
-        rab.maybe_reconnect()
-        rab._channel.queue_unbind(
-            queue=args.dst_queue, exchange=args.dst_exchange, routing_key=routing_key
-        )
+        if args.unbind:
+            rab.maybe_reconnect()
+            rab._channel.queue_unbind(
+                queue=args.dst_queue,
+                exchange=args.dst_exchange,
+                routing_key=routing_key,
+            )
 
 
 if __name__ == "__main__":

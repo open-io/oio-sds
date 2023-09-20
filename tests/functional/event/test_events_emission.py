@@ -183,8 +183,10 @@ class TestEventRouting(BaseTestCase):
             self.conf["main_queue_url"],
             "--dst-endpoint",
             rab_endpoint,
+            "--declare-exchange",
             "--dst-exchange",
             "oio-preserved",
+            "--declare-queue",
             "--dst-queue",
             "oio-preserved",
         ]
