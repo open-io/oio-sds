@@ -18,7 +18,7 @@ import time
 
 from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import boolean_value, float_value, int_value
-from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentDrained, ContentNotFound, OrphanChunk
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
 from oio.xcute.jobs.common import XcuteRdirJob
@@ -67,7 +67,7 @@ class RawxRebuildTask(XcuteTask):
                 allow_same_rawx=self.allow_same_rawx,
                 reqid=reqid,
             )
-        except (ContentNotFound, OrphanChunk):
+        except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
 
         return {"rebuilt_chunks": 1, "rebuilt_bytes": chunk_size}

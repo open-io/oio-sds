@@ -18,7 +18,7 @@ import math
 
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
-from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
+from oio.common.exceptions import ContentDrained, ContentNotFound, NotFound, OrphanChunk
 from oio.common.green import time
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
@@ -93,7 +93,7 @@ class RawxDecommissionTask(XcuteTask):
             )
         chunk_size = int(meta["chunk_size"])
 
-        # Maybe skip the chunk because it doesn't match the size constaint
+        # Maybe skip the chunk because it doesn't match the size constraint
         if chunk_size < self.min_chunk_size:
             self.logger.debug("[reqid=%s] SKIP %s too small", reqid, chunk_url)
             return {"skipped_chunks_too_small": 1}
@@ -116,7 +116,7 @@ class RawxDecommissionTask(XcuteTask):
                 service_id=self.service_id,
                 reqid=reqid,
             )
-        except (ContentNotFound, OrphanChunk):
+        except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
 
         return {"moved_chunks": 1, "moved_bytes": chunk_size}

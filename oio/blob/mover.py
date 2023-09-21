@@ -18,7 +18,7 @@ from oio.common.green import get_watchdog, ratelimit, time, GreenPool
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
-from oio.common.exceptions import ContentNotFound
+from oio.common.exceptions import ContentDrained, ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
@@ -191,7 +191,7 @@ class BlobMoverWorker(object):
         version = meta["content_version"]
         chunk_id = meta["chunk_id"]
 
-        # Maybe skip the chunk because it doesn't match the size constaint
+        # Maybe skip the chunk because it doesn't match the size constraint
         chunk_size = int(meta["chunk_size"])
         min_chunk_size = int(self.conf.get("min_chunk_size", 0))
         max_chunk_size = int(self.conf.get("max_chunk_size", 0))
@@ -210,8 +210,8 @@ class BlobMoverWorker(object):
                 path=obj_name,
                 version=version,
             )
-        except ContentNotFound:
-            raise exc.OrphanChunk("Content not found")
+        except (ContentDrained, ContentNotFound) as err:
+            raise exc.OrphanChunk(f"{err}: possible orphan chunk") from err
 
         new_chunk = content.move_chunk(
             chunk_id,
@@ -242,8 +242,8 @@ class BlobMoverWorker(object):
                         path=obj_name,
                         version=version,
                     )
-                except ContentNotFound:
-                    raise exc.OrphanChunk("Content not found")
+                except (ContentDrained, ContentNotFound) as err:
+                    raise exc.OrphanChunk(f"{err}: possible orphan chunk") from err
 
                 new_linked_chunk = content.move_linked_chunk(chunk_id, new_chunk["url"])
 

@@ -16,7 +16,7 @@
 
 from six.moves.urllib_parse import urlparse
 
-from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentDrained, ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
 from oio.content.quality import get_current_items
@@ -59,7 +59,7 @@ class ChunkOperator(object):
         try_chunk_delete=False,
         allow_frozen_container=True,
         allow_same_rawx=True,
-        **kwargs
+        **kwargs,
     ):
         """
         Try to find the chunk in the metadata of the specified object,
@@ -73,8 +73,8 @@ class ChunkOperator(object):
                 version=version,
                 **kwargs,
             )
-        except ContentNotFound:
-            raise OrphanChunk("Content not found: possible orphan chunk")
+        except (ContentDrained, ContentNotFound) as err:
+            raise OrphanChunk(f"{err}: possible orphan chunk") from err
 
         chunk_pos = None
         if looks_like_chunk_position(chunk_id_or_pos):

@@ -20,6 +20,7 @@ import time
 
 from oio.common.utils import cid_from_name
 from oio.common.constants import OIO_VERSION
+from oio.common.exceptions import OrphanChunk
 from oio.common.fullpath import encode_fullpath
 from oio.blob.rebuilder import BlobRebuilder
 from tests.utils import BaseTestCase, random_str
@@ -226,3 +227,22 @@ class TestBlobRebuilder(BaseTestCase):
         self.assertEqual(chunk["size"], new_chunk["size"])
         self.assertEqual(chunk["hash"], new_chunk["hash"])
         self.blob_client.chunk_head(new_chunk["url"])
+
+    def test_rebuild_drained_object(self):
+        chunk = random.choice(self.chunks)
+        rawx_id = chunk["url"].split("/")[2]
+        chunk_id = chunk["url"].split("/")[3]
+        self.api.object_drain(self.account, self.container, self.path)
+        conf = self.conf.copy()
+        conf["allow_same_rawx"] = True
+        rebuilder = BlobRebuilder(conf, service_id=rawx_id, watchdog=self.watchdog)
+        rebuilder_worker = rebuilder.create_worker(None, None)
+        # Once an object is "drained", all chunks are removed, and we are not
+        # supposed to rebuild them. If we happen to find one, we can consider
+        # it is "orphan".
+        self.assertRaisesRegex(
+            OrphanChunk,
+            "possible orphan chunk",
+            rebuilder_worker._process_item,
+            (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id),
+        )
