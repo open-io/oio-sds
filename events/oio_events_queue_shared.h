@@ -41,11 +41,13 @@ struct _queue_with_endpoint_s
 	gchar *endpoint;
 	gchar *username;
 	gchar *password;
-	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ
+	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ, topic for Kafka
 	gchar *routing_key;  // only for RabbitMQ
 	gchar *exchange_name;  // only for RabbitMQ
 	gchar *exchange_type;  // only for RabbitMQ
 	gchar **extra_args;  // only for RabbitMQ
+	gchar *topic_prefix; // only for Kafka
+
 	gint64 pending_events;
 
 	volatile gboolean running;  // used to control the infinite loop

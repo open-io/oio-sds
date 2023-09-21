@@ -952,7 +952,7 @@ Used by `gcc`
 
 ### proxy.prefer.master_for_write
 
-> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB 
+> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB
 
  * default: **TRUE**
  * type: gboolean
@@ -1644,7 +1644,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_none
 
-> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten 
+> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten
 
  * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -2093,7 +2093,7 @@ the cmake command line.
 
 ### enbug.sqliterepo.synchro.failure
 
-> Fake Error rate on synchronism RPC (a.k.a. ZK) 
+> Fake Error rate on synchronism RPC (a.k.a. ZK)
 
  * default: **0**
  * type: gint32

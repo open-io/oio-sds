@@ -26,10 +26,12 @@ License along with this library.
 #include <metautils/lib/metautils_resolv.h>
 
 #include "beanstalkd.h"
+#include "kafka.h"
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_fanout.h"
 #include "oio_events_queue_beanstalkd.h"
+#include "oio_events_queue_kafka.h"
 #include "oio_events_queue_rabbitmq.h"
 #include "rabbitmq.h"
 
@@ -195,6 +197,8 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
 			err = oio_events_queue_factory__create_rabbitmq(
 					netloc, tube, out);
+		} else if ((netloc = _has_prefix(queue_uri.path, KAFKA_PREFIX))) {
+			err = oio_events_queue_factory__create_kafka(netloc, tube, out);
 		} else {
 			err = BADREQ("implementation not recognized: %s", cfg);
 		}
