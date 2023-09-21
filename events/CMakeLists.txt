@@ -27,11 +27,13 @@ add_custom_command(
 
 add_library(oioevents STATIC
 	beanstalkd.c
+	kafka.c
 	oio_events_queue.c
 	oio_events_queue_buffer.c
 	oio_events_queue_internals.c
 	oio_events_queue_fanout.c
 	oio_events_queue_beanstalkd.c
+	oio_events_queue_kafka.c
 	oio_events_queue_rabbitmq.c
 	oio_events_queue_shared.c
 	rabbitmq.c
@@ -42,4 +44,5 @@ target_link_libraries(
 	metautils
 	${GLIB2_LIBRARIES}
 	${RABBIMQ_LIBRARIES}
+	${KAFKA_LIBRARIES}
 )
