@@ -25,7 +25,7 @@ from oio.common.daemon import Daemon
 from oio.common.green import get_watchdog, ratelimit, time, ContextPool
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
-from oio.common.logger import get_logger
+from oio.common.logger import get_logger, logging
 from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -35,7 +35,7 @@ RawxService = namedtuple("RawxService", ("status", "last_time"))
 
 class RdirWorker(object):
     """
-    Blob indexer worker responsible for a single volume.
+    Rdir crawler worker responsible for a single volume.
     """
 
     def __init__(
@@ -149,8 +149,9 @@ class RdirWorker(object):
         self.last_report_time = now
         self.scanned_since_last_report = 0
 
-    def error(self, container_id, chunk_id, msg, reqid=None):
-        self.logger.error(
+    def error(self, container_id, chunk_id, msg, reqid=None, level=logging.ERROR):
+        self.logger.log(
+            level,
             "volume_id=%s container_id=%s chunk_id=%s request_id=%s %s",
             self.volume_id,
             container_id,
@@ -194,8 +195,14 @@ class RdirWorker(object):
                 # increment a counter for stats. Another tool could be
                 # responsible for those tagged chunks.
                 self.orphans += 1
+            elif isinstance(err, exc.ContentDrained):
+                self.orphans += 1
+                error = f"{err}, chunk considered as orphan"
+                self.error(
+                    container_id, chunk_id, error, reqid=reqid, level=logging.INFO
+                )
             else:
-                error = "%(err)s, not possible to get list of rawx" % {"err": str(err)}
+                error = f"{err}, not possible to get list of rawx"
                 self.error(container_id, chunk_id, error, reqid=reqid)
 
     def process_entry(self, container_id, chunk_id, value, reqid):

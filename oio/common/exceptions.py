@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -81,6 +81,15 @@ class SpareChunkException(Meta2Exception):
 
 
 class ContentException(OioException):
+    pass
+
+
+class ContentDrained(ContentException):
+    """
+    Exception raised when requesting an object which has been drained
+    (backed-up in another storage system, chunks removed).
+    """
+
     pass
 
 
@@ -346,6 +355,8 @@ _http_status_map = {
     404: NotFound,
     405: MethodNotAllowed,
     409: Conflict,
+    # CODE_CONTENT_DRAINED is 427, but oio-proxy transforms it into 410
+    410: ContentDrained,
     412: ClientPreconditionFailed,
     413: TooLarge,
     416: UnsatisfiableRange,
