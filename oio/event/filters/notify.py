@@ -25,6 +25,7 @@ from oio.common.amqp import (
     DEFAULT_QUEUE_ARGS,
 )
 from oio.common.json import json
+from oio.common.kafka import Producer, KafkaException
 from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.filters.base import Filter
@@ -316,14 +317,52 @@ class AmqpNotifyFilter(AmqpConnector, NotifyFilter):
         return None
 
 
+class KafkaNotifyFilter(NotifyFilter):
+    def __init__(self, *args, endpoints=None, **kwargs):
+        self.endpoints = endpoints
+        self.producer = None
+        super().__init__(*args, **kwargs)
+
+    def init(self):
+        super().init()
+        endpoints = ";".join(
+            [ep[8:] for ep in self.endpoints.split(";") if ep.startswith("kafka://")]
+        )
+
+        conf = {"bootstrap.servers": endpoints}
+        self.producer = Producer(conf)
+
+    def send_event(self, event, data):
+        topic = self.tube
+        if self.tube_rules:
+            policy = self._lookup_policy(event)
+            if policy:
+                for name in sorted(self.tube_rules.keys()):
+                    rule = self.tube_rules[name]
+                    if rule["regex"].match(policy):
+                        topic = rule["tube"]
+                        break
+        try:
+            self.producer.produce(topic, data)
+            self.producer.poll(0)
+
+        except KafkaException as err:
+            msg = f"notify failure: {err!r}"
+            resp = RetryableEventError(event=event, body=msg)
+            return resp
+        return None
+
+
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
-    queue_url = local_conf.get("queue_url")
+    queue_url = conf.get("queue_url")
 
     def make_filter(app):
         if queue_url.startswith("amqp"):
             return AmqpNotifyFilter(app, conf, endpoints=queue_url)
+        elif queue_url.startswith("kafka"):
+            return KafkaNotifyFilter(app, conf, endpoints=queue_url)
         return BeanstalkdNotifyFilter(app, conf)
 
     return make_filter
