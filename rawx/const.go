@@ -195,6 +195,7 @@ const (
 	oioConfigEventAgent     = "event-agent"
 	oioConfigEventAgentRawx = "event-agent.rawx"
 	oioConfigEventExchange  = "events.amqp.exchange_name"
+	oioConfigEventTopic     = "events.kafka.topic_name"
 )
 
 const (
@@ -234,7 +235,7 @@ const (
 	eventTypeDelChunk = "storage.chunk.deleted"
 
 	// Parallelism factor in situations of single targets
-	notifierSingleMultiplier = 4
+	notifierSingleMultiplier = 1
 
 	// Parallelism factor in situations of multiple targets
 	notifierMultipleMultiplier = 1
