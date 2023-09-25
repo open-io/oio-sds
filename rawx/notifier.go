@@ -22,11 +22,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -71,6 +73,12 @@ type amqpBackend struct {
 	conn_attempts int
 	conn_timeout  time.Duration
 	send_timeout  time.Duration
+}
+
+type kafkaBackend struct {
+	endpoint string
+	topic    string
+	producer *kafka.Producer
 }
 
 var (
@@ -226,6 +234,72 @@ func (backend *amqpBackend) close() {
 	}
 }
 
+func (backend *kafkaBackend) connect() error {
+
+	if backend.producer != nil {
+		// Producer is already initialized
+		return nil
+	}
+
+	LogDebug("Connecting to event broker #%s", backend.endpoint)
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": strings.ReplaceAll(backend.endpoint, "kafka://", ""),
+		"acks":              "all",
+	})
+
+	if err != nil {
+		LogDebug("Failed to connect %v", err)
+		return err
+	}
+
+	backend.producer = producer
+
+	go func() {
+		for e := range producer.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					fmt.Printf("Failed to deliver message: %v\n", ev.TopicPartition)
+				} else {
+					fmt.Printf("Produced event to topic %s: key = %-10s value = %s\n",
+						*ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (backend *kafkaBackend) push(event []byte, routingKey string) {
+
+	err := backend.connect()
+
+	if err == nil {
+
+		err = backend.producer.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &backend.topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value: event,
+		}, nil)
+
+		if err != nil {
+			LogDebug("Failed to push event: %v", err)
+		}
+	}
+}
+
+func (backend *kafkaBackend) close() {
+	if backend.producer == nil {
+		return
+	}
+
+	backend.producer.Flush(int(10 * 1000))
+	backend.producer.Close()
+}
+
 func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error) {
 	conn_attempts := options.getInt("event_conn_attempts", eventConnAttempts)
 	conn_timeout := time.Duration(
@@ -254,9 +328,18 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 		out.conn_timeout = conn_timeout
 		out.send_timeout = send_timeout
 		return out, nil
+	} else if _, ok := hasPrefix(url, "kafka://"); ok {
+		out := new(kafkaBackend)
+		out.endpoint = url
+		out.topic = oioGetConfigValue(
+			options.getString("ns", "OIO"), oioConfigEventTopic)
+		if out.topic == "" {
+			out.topic = "oio"
+		}
+		return out, nil
 	}
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://" +
-		"and `amqp://` are accepted")
+		"`kafka://` and `amqp://` are accepted")
 }
 
 func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notifier, error) {
