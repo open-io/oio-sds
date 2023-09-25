@@ -12,6 +12,7 @@ require (
 
 require (
 	github.com/cactus/go-statsd-client/v5 v5.1.0 // indirect
+	github.com/confluentinc/confluent-kafka-go v1.9.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
 )

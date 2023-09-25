@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -195,6 +195,7 @@ const (
 	oioConfigEventAgent     = "event-agent"
 	oioConfigEventAgentRawx = "event-agent.rawx"
 	oioConfigEventExchange  = "events.amqp.exchange_name"
+	oioConfigEventTopic     = "events.kafka.topic_name"
 )
 
 const (
@@ -234,7 +235,7 @@ const (
 	eventTypeDelChunk = "storage.chunk.deleted"
 
 	// Parallelism factor in situations of single targets
-	notifierSingleMultiplier = 4
+	notifierSingleMultiplier = 1
 
 	// Parallelism factor in situations of multiple targets
 	notifierMultipleMultiplier = 1
@@ -249,4 +250,8 @@ const (
 	// Error code returned when the client closes the connection before
 	// sending the whole request body
 	httpStatusClientClosedRequest = 499
+)
+
+const (
+	kafka_conf_prefix = "kafka_"
 )
