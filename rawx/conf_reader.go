@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -72,6 +72,7 @@ var loadedOpts = map[string]string{
 	"sock_tcp_nodelay": "nodelay",
 
 	"events": "events",
+	"topic":  "topic",
 
 	"tls_cert_file": "tls_cert_file",
 	"tls_key_file":  "tls_key_file",
@@ -83,6 +84,7 @@ var loadedOpts = map[string]string{
 	"log_access_format":  "log_access_format",
 	"log_request_format": "log_request_format",
 	"log_format":         "log_format",
+	"log_level":          "log_level",
 	// TODO(jfs): also implement a cachedir
 
 	"statsd_addr":   "statsd_addr",
@@ -112,6 +114,10 @@ var deprecatedOpts = map[string]string{
 	"grid_fadvise_download": "fadvise_download",
 }
 
+var prefixOpts = map[string]string{
+	kafka_conf_prefix: kafka_conf_prefix,
+}
+
 // readConfig -- fetch options from conf file and remap their name
 // to a shorter form. This helps managing several aliases to the
 // same variable.
@@ -137,6 +143,12 @@ func readConfig(conf string) (optionsMap, error) {
 					continue
 				}
 				optionValue = s
+			}
+			for prefix, v := range prefixOpts {
+				if strings.HasPrefix(optionName, prefix) {
+					opts[strings.Replace(optionName, prefix, v, 1)] = optionValue
+					break
+				}
 			}
 			if v, found := loadedOpts[optionName]; found {
 				opts[v] = optionValue

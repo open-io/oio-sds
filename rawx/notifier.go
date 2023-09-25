@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -71,6 +72,14 @@ type amqpBackend struct {
 	conn_attempts int
 	conn_timeout  time.Duration
 	send_timeout  time.Duration
+}
+
+type kafkaBackend struct {
+	endpoint    string
+	topic       string
+	producer    *kafka.Producer
+	conf        map[string]string
+	logsChannel chan kafka.LogEvent
 }
 
 var (
@@ -226,6 +235,102 @@ func (backend *amqpBackend) close() {
 	}
 }
 
+func (backend *kafkaBackend) connect() error {
+
+	if backend.producer != nil {
+		// Producer is already initialized
+		return nil
+	}
+
+	LogDebug("Connecting to event broker #%s (%v)", backend.endpoint, backend.conf)
+
+	conf := kafka.ConfigMap{}
+	for k, v := range backend.conf {
+		conf[k] = v
+	}
+	conf["bootstrap.servers"] = strings.ReplaceAll(backend.endpoint, "kafka://", "")
+	conf["acks"] = "all"
+	conf["go.logs.channel.enable"] = true
+	conf["go.logs.channel"] = backend.logsChannel
+
+	producer, err := kafka.NewProducer(&conf)
+
+	if err != nil {
+		LogDebug("Failed to connect %v", err)
+		return err
+	}
+	LogDebug("Connected to event broker #%s", backend.endpoint)
+
+	backend.producer = producer
+
+	go func() {
+		var logFunction func(string, ...interface{}) = nil
+		for {
+			log := <-backend.logsChannel
+
+			switch {
+			case log.Level <= 3:
+				logFunction = LogError
+			case log.Level <= 4:
+				logFunction = LogWarning
+			case log.Level <= 6:
+				logFunction = LogInfo
+			case log.Level <= 7:
+				logFunction = LogDebug
+			default:
+				logFunction = LogDebug
+			}
+
+			logFunction("librdkafka(name=%s tag=%s) %s", log.Name, log.Tag, log.Message)
+		}
+	}()
+
+	go func() {
+		for e := range producer.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
+				} else {
+					LogDebug("Event has been pushed to topic %s sucessfully (%s)", *ev.TopicPartition.Topic, string(ev.Value))
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (backend *kafkaBackend) push(event []byte, routingKey string) {
+
+	err := backend.connect()
+
+	if err == nil {
+
+		LogDebug("Trying to push an event (%s)", string(event))
+		err = backend.producer.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{
+				Topic:     &backend.topic,
+				Partition: kafka.PartitionAny,
+			},
+			Value: event,
+		}, nil)
+
+		if err != nil {
+			LogError("Failed to push an event to the topic %s (%s): %v", backend.topic, string(event), err)
+		}
+	}
+}
+
+func (backend *kafkaBackend) close() {
+	if backend.producer == nil {
+		return
+	}
+
+	backend.producer.Flush(int(10 * 1000))
+	backend.producer.Close()
+}
+
 func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error) {
 	conn_attempts := options.getInt("event_conn_attempts", eventConnAttempts)
 	conn_timeout := time.Duration(
@@ -254,9 +359,24 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 		out.conn_timeout = conn_timeout
 		out.send_timeout = send_timeout
 		return out, nil
+	} else if _, ok := hasPrefix(url, "kafka://"); ok {
+		out := new(kafkaBackend)
+		out.endpoint = url
+		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), oioConfigEventTopic))
+		if out.topic == "" {
+			out.topic = "oio"
+		}
+		out.conf = map[string]string{}
+		for k, v := range *options {
+			if strings.HasPrefix(k, kafka_conf_prefix) {
+				out.conf[strings.TrimPrefix(k, kafka_conf_prefix)] = v
+			}
+		}
+		out.logsChannel = make(chan kafka.LogEvent)
+		return out, nil
 	}
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://" +
-		"and `amqp://` are accepted")
+		"`kafka://` and `amqp://` are accepted")
 }
 
 func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notifier, error) {

@@ -23,6 +23,7 @@ import (
 	"log"
 	"log/syslog"
 	"os"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -108,6 +109,29 @@ type LogRequestTemplateInventory struct {
 	Message  string
 }
 
+func LogLevelToSeverity(level string) syslog.Priority {
+	switch strings.ToLower(level) {
+	case "emerg", "emergency":
+		return syslog.LOG_EMERG
+	case "alert":
+		return syslog.LOG_ALERT
+	case "crit", "critical":
+		return syslog.LOG_CRIT
+	case "err", "error":
+		return syslog.LOG_ERR
+	case "warn", "warning":
+		return syslog.LOG_WARNING
+	case "notice":
+		return syslog.LOG_NOTICE
+	case "info":
+		return syslog.LOG_INFO
+	case "debug":
+		return syslog.LOG_DEBUG
+	}
+	log.Fatalf("Unknown log level '%s'", level)
+	return syslog.LOG_EMERG
+}
+
 func InitLogTemplates() error {
 	var err error
 	log_funcs := template.FuncMap{
@@ -161,7 +185,7 @@ func resetVerbosity() {
 
 func getSeverity(priority syslog.Priority) (bool, string) {
 	switch priority {
-	case syslog.LOG_EMERG, syslog.LOG_CRIT, syslog.LOG_ERR:
+	case syslog.LOG_EMERG, syslog.LOG_ALERT, syslog.LOG_CRIT, syslog.LOG_ERR:
 		return true, "ERR"
 	case syslog.LOG_WARNING:
 		return false, "WRN"
@@ -389,7 +413,6 @@ type SysLogger struct {
 }
 
 func InitSysLogger(syslogID string) {
-	initVerbosity(syslog.LOG_INFO)
 	l := &SysLogger{}
 	l.alertThrottle = PeriodicThrottle{period: 1000000000}
 	l.queue = make(chan string, configAccessLogQueueDefaultLength)

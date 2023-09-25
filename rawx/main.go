@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -353,6 +353,9 @@ func main() {
 		log.Fatalf("Exiting with error: %v", err.Error())
 	}
 
+	if opts["log_level"] != "" {
+		initVerbosity(LogLevelToSeverity(opts["log_level"]))
+	}
 	if opts["log_format"] != "" {
 		logFormat = opts["log_format"]
 	}

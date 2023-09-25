@@ -12,6 +12,9 @@ docroot           /srv/node/disk-00-123/OPENIO/rawx-12345
 # Set to false to disable the emission of chunk events
 #events            true
 
+# kafka topic where to push events to
+#topic oio
+
 # The following format strings demonstrate the templating possibilities,
 # not the default log format.
 #
@@ -97,3 +100,8 @@ timeout_conn_event     0.5
 
 # Timeout (in seconds) for sending an event (this includes connection time)
 timeout_send_event     5
+
+# kafka configuration
+# all librdkafka configuration options can be set using the "kafka_" prefix
+# https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
+# kafka_client.id the-greatest-client.id-ever
