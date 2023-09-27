@@ -786,6 +786,12 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 {
 	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
 
+	/* version_id will be "(null)" if not passed in request. We will
+	 * rewrite the whole "tail" later when we have more information. */
+	args->rp->access_tail("hexid:%s\tversion_id:%s",
+			oio_url_get(args->url, OIOURL_HEXID),
+			oio_url_get(args->url, OIOURL_VERSION));
+
 	if (err)
 		return _reply_m2_error(args, err);
 
@@ -891,6 +897,9 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 	}
 	_bean_cleanl2 (beans);
 
+	args->rp->access_tail("hexid:%s\tversion_id:%s",
+			oio_url_get(args->url, OIOURL_HEXID),
+			oio_url_get(args->url, OIOURL_VERSION));
 	return _reply_success_json (args, gstr);
 }
 

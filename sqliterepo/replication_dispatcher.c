@@ -762,7 +762,12 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	propagate_to_shards = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_PROPAGATE_SHARDS, FALSE);
 
-	ctx->subject("base:%s.%s\top_type:%s", base, type, local ? "local" : "replicated");
+	ctx->subject(
+			"base:%s.%s\thexid:%.*s\top_type:%s",
+			base, type,
+			STRLEN_CONTAINERID - 1, base,
+			local ? "local" : "replicated"
+	);
 
 	memset(n, 0, sizeof(*n));
 	g_strlcpy(n->ns, ns, sizeof(n->ns));
