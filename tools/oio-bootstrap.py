@@ -2797,6 +2797,7 @@ def generate(options):
 
     event_agent_bin = "oio-event-agent"
     event_agent_count = getint(options["event-agent"].get(SVC_NB), len(all_beanstalkd))
+<<<<<<< HEAD
 
     def get_instance(kafka=False):
         if kafka:
@@ -2806,6 +2807,17 @@ def generate(options):
             for i, host, port in all_beanstalkd:
                 yield i, "beanstalk://{0}:{1}".format(host, port), "oio-event-agent"
 
+=======
+
+    def get_instance(kafka=False):
+        if kafka:
+            for i in range(event_agent_count):
+                yield i + 1, ENV["KAFKA_QUEUE_URL"], "oio-event-agent-kafka"
+        else:
+            for i, host, port in all_beanstalkd:
+                yield i, "beanstalk://{0}:{1}".format(host, port), "oio-event-agent"
+
+>>>>>>> tools: adapt oio-bootstrap to support Kafka
     # Event agent configuration -> one per beanstalkd
     for num, url, event_agent_bin in get_instance(use_kafka):
         env = subenv(
