@@ -129,7 +129,6 @@ class RawxDecommissionJob(XcuteRdirJob):
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
-    DEFAULT_USAGE_TARGET = 0
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
 
     @classmethod
@@ -163,10 +162,7 @@ class RawxDecommissionJob(XcuteRdirJob):
             excluded_rawx = list()
         sanitized_job_params["excluded_rawx"] = excluded_rawx
 
-        sanitized_job_params["usage_target"] = int_value(
-            job_params.get("usage_target"), cls.DEFAULT_USAGE_TARGET
-        )
-
+        # usage_target is parsed by parent class
         sanitized_job_params["usage_check_interval"] = float_value(
             job_params.get("usage_check_interval"), cls.DEFAULT_USAGE_CHECK_INTERVAL
         )

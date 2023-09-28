@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,6 +67,14 @@ class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
             % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND,
         )
         parser.add_argument(
+            "--decommission-percentage",
+            type=int,
+            help=(
+                "Percentage of databases to decommission (default=%d)."
+                % (100 - self.JOB_CLASS.DEFAULT_USAGE_TARGET)
+            ),
+        )
+        parser.add_argument(
             "--dst", metavar="<service_id>", help="ID of the destination meta2."
         )
 
@@ -77,5 +86,7 @@ class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "dst": parsed_args.dst,
             "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
             "rdir_timeout": parsed_args.rdir_timeout,
+            # We kept "usage_target" for the sake of code factorization
+            "usage_target": 100 - parsed_args.decommission_percentage,
         }
         return {"tasks_per_second": parsed_args.bases_per_second, "params": job_params}

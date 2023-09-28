@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,8 @@
 # License along with this library.
 
 from collections import Counter
+from itertools import islice
+from random import sample
 
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
@@ -76,20 +78,32 @@ class Meta2DecommissionJob(XcuteRdirJob):
         self.rdir_client = RdirClient(conf, logger=self.logger)
 
     def get_tasks(self, job_params, marker=None):
+        usage_target = job_params.get("usage_target", 0)
+        task_percentage = 100 - usage_target
         containers = self._containers_from_rdir(job_params, marker)
 
-        for marker, container_id in containers:
-            yield marker, dict(container_id=container_id)
+        while True:
+            batch = list(islice(containers, 100))
+            wanted = (len(batch) * task_percentage) // 100
+            if wanted == 0:
+                break
+            for marker, container_id in sample(batch, wanted):
+                yield marker, dict(container_id=container_id)
 
     def get_total_tasks(self, job_params, marker=None):
         containers = self._containers_from_rdir(job_params, marker)
+        usage_target = job_params.get("usage_target", 0)
+        task_percentage = 100 - usage_target
 
         i = 0
         for i, (marker, _) in enumerate(containers, 1):
             if i % 1000 == 0:
-                yield marker, 1000
+                yield (
+                    marker,
+                    10 * task_percentage,  # percent to per-thousand
+                )
 
-        remaining = i % 1000
+        remaining = (i * task_percentage) // 100
         if remaining == 0:
             return
 
