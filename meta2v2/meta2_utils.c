@@ -4377,6 +4377,21 @@ end:
 	return err;
 }
 
+/** Compute an iteration limit for the loop which will check the request
+ * deadline while cleaning databases. */
+static gint64
+_compute_reasonable_limit(gint64 allowed_changes)
+{	gint64 limit;
+	if (allowed_changes == G_MAXINT64) {
+		/* Check the deadline from time to time. */
+		limit = meta2_sharding_max_entries_cleaned * 10;
+	} else {
+		/* Check the deadline half-way. */
+		limit = MAX(1, allowed_changes / 2);
+	}
+	return limit;
+}
+
 /** Clean "beans" of the specified type matching the provided SELECT clause.
  * The cleaning is done in several iterations, until the allow number
  * of changes is exceeded. */
@@ -4387,10 +4402,11 @@ _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 {
 	gint64 changes = 1;
 	GError *err = NULL;
+	gint64 limit = _compute_reasonable_limit(*allowed_changes);
+
 	// XXX: we generate the clause once, *allowed_changes can go negative
 	gchar *clause_str = g_strdup_printf(
-			"%s LIMIT %"G_GINT64_FORMAT,
-			select_clause, MIN(1000, *allowed_changes));
+			"%s LIMIT %"G_GINT64_FORMAT, select_clause, limit);
 	while (!err && changes > 0 && *allowed_changes > 0
 			&& oio_ext_monotonic_time() < deadline) {
 		err = _db_delete(descr, sq3, clause_str, NULL);
@@ -4409,9 +4425,10 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 {
 	gint64 changes = 1;
 	GError *err = NULL;
+	gint64 limit = _compute_reasonable_limit(*allowed_changes);
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _build_aliases_sql_clause(
-			lower, upper, MIN(1000, *allowed_changes), clause);
+			lower, upper, limit, clause);
 	while (!err && changes > 0 && *allowed_changes > 0
 			&& oio_ext_monotonic_time() < deadline) {
 		err = _db_delete(descr, sq3, clause->str, params);
