@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -156,9 +156,6 @@ class HttpApi(object):
             out_kwargs["timeout"] = urllib3.Timeout(
                 connect=kwargs.get("connection_timeout", CONNECTION_TIMEOUT), read=to
             )
-            # Shorten the deadline by 1% to compensate for the time spent
-            # connecting and reading response.
-            out_headers[TIMEOUT_HEADER] = int(to * 990000.0)
 
         # Ensure there is a timeout
         if "timeout" not in out_kwargs:
@@ -172,7 +169,9 @@ class HttpApi(object):
                 to = to.read_timeout
             else:
                 to = float(to)
-            out_headers[TIMEOUT_HEADER] = int(to * 1000000.0)
+            # Shorten the deadline by 1% to compensate for the time spent
+            # connecting and reading response.
+            out_headers[TIMEOUT_HEADER] = int(to * 990000.0)
 
         # Look for a region
         if kwargs.get("region") is not None:
