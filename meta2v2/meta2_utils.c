@@ -4382,7 +4382,10 @@ end:
 static gint64
 _compute_reasonable_limit(gint64 allowed_changes)
 {	gint64 limit;
-	if (allowed_changes == G_MAXINT64) {
+	/** This condition checks if the request is local or not.
+	 * Starting with a "allowed_changes" at G_MAXINT64,
+	 * this test will always be true for local requests. */
+	if (allowed_changes > meta2_sharding_max_entries_cleaned) {
 		/* Check the deadline from time to time. */
 		limit = meta2_sharding_max_entries_cleaned * 10;
 	} else {
