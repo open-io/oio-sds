@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -206,7 +206,7 @@ class XcuteOrchestrator(object):
             return
 
         job_class = JOB_TYPES[job_type]
-        job = job_class(self.conf, logger=self.logger)
+        job = job_class(self.conf, job_id=job_id, logger=self.logger)
 
         if (
             job_info["tasks"]["total"] == 0

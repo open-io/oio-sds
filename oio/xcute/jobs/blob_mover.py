@@ -45,24 +45,24 @@ class RawxDecommissionTask(XcuteTask):
         self.content_factory = ContentFactory(
             self.conf, blob_client=self.blob_client, watchdog=self.watchdog
         )
-        self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
+        self.conscience_client = self.blob_client.conscience_client
 
         self.fake_excluded_chunks = self._generate_fake_excluded_chunks(
             self.excluded_rawx
         )
 
     def _generate_fake_excluded_chunks(self, excluded_rawx):
-        fake_excluded_chunks = list()
+        fake_excluded_chunks = []
         fake_chunk_id = "0" * 64
-        for service_id in excluded_rawx:
+        for service_id in excluded_rawx.keys():
             service_addr = self.conscience_client.resolve_service_id("rawx", service_id)
-            chunk = dict()
+            chunk = {}
             chunk["hash"] = "0000000000000000000000000000000000"
             chunk["pos"] = "0"
             chunk["size"] = 1
             chunk["score"] = 1
-            chunk["url"] = "http://{}/{}".format(service_id, fake_chunk_id)
-            chunk["real_url"] = "http://{}/{}".format(service_addr, fake_chunk_id)
+            chunk["url"] = f"http://{service_id}/{fake_chunk_id}"
+            chunk["real_url"] = f"http://{service_addr}/{fake_chunk_id}"
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
@@ -155,11 +155,13 @@ class RawxDecommissionJob(XcuteRdirJob):
             job_params.get("max_chunk_size"), cls.DEFAULT_MAX_CHUNK_SIZE
         )
 
+        # Transform the list into a dictionary: when the value is True,
+        # the service has been explicitly excluded.
         excluded_rawx = job_params.get("excluded_rawx")
         if excluded_rawx:
-            excluded_rawx = excluded_rawx.split(",")
+            excluded_rawx = {s: True for s in excluded_rawx.split(",")}
         else:
-            excluded_rawx = list()
+            excluded_rawx = {}
         sanitized_job_params["excluded_rawx"] = excluded_rawx
 
         # usage_target is parsed by parent class
@@ -167,36 +169,79 @@ class RawxDecommissionJob(XcuteRdirJob):
             job_params.get("usage_check_interval"), cls.DEFAULT_USAGE_CHECK_INTERVAL
         )
 
-        return sanitized_job_params, "rawx/%s" % service_id
+        return sanitized_job_params, f"rawx/{service_id}"
 
-    def __init__(self, conf, logger=None):
-        super(RawxDecommissionJob, self).__init__(conf, logger=logger)
+    def __init__(self, conf, logger=None, **kwargs):
+        super(RawxDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
+        self.must_auto_exclude_rawx = False
 
-    def get_usage(self, service_id):
-        services = self.conscience_client.all_services("rawx", full=True)
+    def auto_exclude_rawx(self, job_params, services):
+        to_keep = {s: keep for s, keep in job_params["excluded_rawx"].items() if keep}
+        new_excluded = {
+            svc["tags"].get("tag.service_id", svc["addr"]): False
+            for svc in services
+            if svc["tags"].get("stat.space", 0) < (100 - job_params["usage_target"])
+        }
+        # We must do operations in this order, or we may lose some "to_keep"
+        job_params["excluded_rawx"].clear()
+        job_params["excluded_rawx"].update(new_excluded)
+        job_params["excluded_rawx"].update(to_keep)
+        self.logger.info(
+            "[job_id=%s] excluded_rawx=%s",
+            self.job_id,
+            ",".join(job_params["excluded_rawx"].keys()),
+        )
+
+    def get_usage(self, service_id, services=None):
+        if services is None:
+            services = self.conscience_client.all_services("rawx", full=True)
         for service in services:
             if service_id == service["tags"].get("tag.service_id", service["addr"]):
                 return 100 - service["tags"]["stat.space"]
-        raise ValueError("No rawx service this ID (%s)" % service_id)
+        raise ValueError(f"No rawx service this ID ({service_id})")
+
+    def check_usage_and_excludes(self, job_params):
+        """
+        Check the current space usage and update the list of excluded services.
+
+        :returns: True if the decommission should continue, False if the target
+                  usage is reached.
+        """
+        all_rawx = self.conscience_client.all_services("rawx", full=True)
+        current_usage = self.get_usage(job_params["service_id"], all_rawx)
+        if current_usage <= job_params["usage_target"]:
+            self.logger.info(
+                "current usage %.2f%%: target reached (%.2f%%)",
+                current_usage,
+                job_params["usage_target"],
+            )
+            return False
+
+        if self.must_auto_exclude_rawx:
+            self.auto_exclude_rawx(job_params, all_rawx)
+
+        return True
 
     def get_tasks(self, job_params, marker=None):
-        service_id = job_params["service_id"]
+        last_usage_check = 0.0
         usage_target = job_params["usage_target"]
         usage_check_interval = job_params["usage_check_interval"]
+        # Set the boolean now, and the "auto" will be removed from the list
+        if "auto" in job_params["excluded_rawx"]:
+            self.must_auto_exclude_rawx = True
+            job_params["excluded_rawx"].pop("auto")
+            self.logger.info(
+                "[job_id=%s] Will auto exclude rawx with usage > %.2f%%",
+                self.job_id,
+                usage_target,
+            )
 
-        if usage_target > 0:
-            now = time.time()
-            current_usage = self.get_usage(service_id)
-            if current_usage <= usage_target:
-                self.logger.info(
-                    "current usage %.2f%%: target already reached (%.2f%%)",
-                    current_usage,
-                    usage_target,
-                )
-                return
-            last_usage_check = now
+        now = time.time()
+        if not self.check_usage_and_excludes(job_params):
+            return
+        last_usage_check = now
 
         chunk_info = self.get_chunk_info(job_params, marker=marker)
         for container_id, chunk_id, descr in chunk_info:
@@ -209,21 +254,12 @@ class RawxDecommissionJob(XcuteRdirJob):
                 "chunk_id": chunk_id,
             }
 
-            if usage_target <= 0:
-                continue
             now = time.time()
             if now - last_usage_check < usage_check_interval:
                 continue
-            current_usage = self.get_usage(service_id)
-            if current_usage > usage_target:
-                last_usage_check = now
-                continue
-            self.logger.info(
-                "current usage %.2f%%: target reached (%.2f%%)",
-                current_usage,
-                usage_target,
-            )
-            return
+            if not self.check_usage_and_excludes(job_params):
+                return
+            last_usage_check = now
 
     def get_total_tasks(self, job_params, marker=None):
         service_id = job_params["service_id"]

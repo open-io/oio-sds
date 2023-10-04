@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -137,11 +137,18 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             help="Only move chunks smaller than the given size.",
         )
         parser.add_argument(
-            "--excluded-rawx", help="List of rawx not to use to move the chunks."
+            "--excluded-rawx",
+            help=(
+                "List of rawx (comma-separated) to exclude from possible "
+                + 'destinations. The list can include "auto" '
+                + "to exclude all rawx whose usage is already higher "
+                + 'than "usage target".'
+            ),
         )
         parser.add_argument(
             "--usage-target",
             type=float,
+            default=self.JOB_CLASS.DEFAULT_USAGE_TARGET,
             help="Target percentage of volume usage. (default=%f)"
             % self.JOB_CLASS.DEFAULT_USAGE_TARGET,
         )

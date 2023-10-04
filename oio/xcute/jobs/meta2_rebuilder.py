@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -68,8 +68,8 @@ class Meta2RebuildJob(XcuteRdirJob):
 
         return sanitized_job_params, "meta2"
 
-    def __init__(self, conf, logger=None):
-        super(Meta2RebuildJob, self).__init__(conf, logger=logger)
+    def __init__(self, conf, logger=None, **kwargs):
+        super(Meta2RebuildJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(conf, logger=logger)
 
     def get_tasks(self, job_params, marker=None):

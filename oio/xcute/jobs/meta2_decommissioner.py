@@ -73,8 +73,8 @@ class Meta2DecommissionJob(XcuteRdirJob):
 
         return sanitized_job_params, "meta2"
 
-    def __init__(self, conf, logger=None):
-        super(Meta2DecommissionJob, self).__init__(conf, logger=logger)
+    def __init__(self, conf, logger=None, **kwargs):
+        super(Meta2DecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(conf, logger=self.logger)
 
     def get_tasks(self, job_params, marker=None):

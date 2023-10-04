@@ -606,7 +606,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._flush_and_check(name, fast=True)
 
     def test_container_del_properties(self):
-        name = random_str(32)
+        name = "del-prop-" + random_str(6)
 
         metadata = {
             random_str(32): random_str(32),
@@ -631,9 +631,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             [],
         )
 
-        res = self._create(name, metadata)
+        reqid = request_id()
+        res = self._create(name, metadata, reqid=reqid)
         self.assertEqual(res, True)
-        event = self.wait_for_event("oio-preserved", types=[EventTypes.CONTAINER_NEW])
+        event = self.wait_for_event(
+            "oio-preserved", types=[EventTypes.CONTAINER_NEW], reqid=reqid
+        )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])

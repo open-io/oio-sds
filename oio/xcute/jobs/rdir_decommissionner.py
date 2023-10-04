@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -125,8 +125,8 @@ class RdirDecommissionJob(XcuteRdirJob):
 
         return sanitized_job_params, "rdir/%s" % service_id
 
-    def __init__(self, conf, logger=None):
-        super(RdirDecommissionJob, self).__init__(conf, logger=logger)
+    def __init__(self, conf, logger=None, **kwargs):
+        super(RdirDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_dispatcher = RdirDispatcher(self.conf, logger=self.logger)
 
     def get_tasks_for_type(self, job_params, service_type):

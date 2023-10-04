@@ -130,8 +130,8 @@ class RawxRebuildJob(XcuteRdirJob):
 
         return sanitized_job_params, "rawx/%s" % service_id
 
-    def __init__(self, conf, logger=None):
-        super(RawxRebuildJob, self).__init__(conf, logger=logger)
+    def __init__(self, conf, logger=None, **kwargs):
+        super(RawxRebuildJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
 
     def prepare(self, job_params):

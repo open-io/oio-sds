@@ -24,17 +24,52 @@ from tests.functional.cli import CliTestCase
 
 
 class ServiceDecommissionTest(CliTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super(ServiceDecommissionTest, cls).setUpClass()
+        # Prevent the chunks' indexation by crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super(ServiceDecommissionTest, cls).tearDownClass()
+
     def setUp(self):
-        self._containers = []
         super().setUp()
+        self._containers = []
+        self.beanstalkd0.drain_tube("oio-preserved")
 
     def tearDown(self):
         for ct in self._containers:
             try:
+                self.storage.container_flush(self.account, ct)
                 self.storage.container_delete(self.account, ct)
             except Exception as exc:
                 self.logger.info("Failed to clean %s/%s: %s", self.account, ct, exc)
         super().tearDown()
+
+    def create_objects(self, cname, n_obj=10, reqid=None):
+        self._containers.append(cname)
+        for i in range(n_obj):
+            name = f"xcute-decom-{i:0>5}"
+            self.storage.object_create(
+                self.account,
+                cname,
+                obj_name=name,
+                data=b"yes",
+                policy="THREECOPIES",
+                reqid=reqid,
+            )
+
+    def wait_for_chunk_events(self, n_obj, reqid=None, event=EventTypes.CHUNK_NEW):
+        for _ in range(n_obj * 3):
+            self.wait_for_event(
+                "oio-preserved",
+                reqid=reqid,
+                types=(event,),
+                timeout=1.0,
+            )
 
     def _test_meta2_decommission(self, decommission_percentage=None):
         """
@@ -96,6 +131,116 @@ class ServiceDecommissionTest(CliTestCase):
 
     def test_meta2_decommission_percentage(self):
         return self._test_meta2_decommission(decommission_percentage=50)
+
+    def _run_rawx_decommission(self, service, usage_target=0, exclude=None):
+        """
+        Run a decommission task, then wait for it to be finished.
+
+        :returns: the job description (dict)
+        """
+        # Start decommission
+        opts = self.get_format_opts(fields=["job.id"])
+        if exclude:
+            opts = f"--excluded-rawx {exclude} " + opts
+        job_id = self.openio_admin(
+            "xcute rawx decommission --chunks-per-second 1000 "
+            f"--usage-target {usage_target} {service} {opts}"
+        )
+        # Wait for the decommission to be finished
+        attempts = 15
+        status = None
+        opts = self.get_format_opts("json")
+        for _ in range(attempts):
+            res = self.openio_admin(f"xcute job show {job_id} {opts}")
+            decoded = json.loads(res)
+            status = decoded["job.status"]
+            if status == "FINISHED":
+                break
+            time.sleep(1.0)
+        else:
+            self.fail(f"xcute job {job_id}%s did not finish within {attempts}s")
+
+        # Wait for the chunk deletion events (if any expected)
+        if usage_target < 100:
+            self.wait_for_chunk_events(
+                decoded["tasks.processed"] - decoded["errors.total"],
+                event=EventTypes.CHUNK_DELETED,
+            )
+        else:
+            time.sleep(1.0)
+
+        return decoded
+
+    def _test_rawx_decommission(self, usage_target=0, exclude=None):
+        """
+        Test the 'openio-admin xcute rawx decommission' command actually
+        decommissions a rawx service.
+        """
+        if len(self.conf["services"]["rawx"]) < 4:
+            self.skip("This test requires at least 4 rawx services")
+
+        cname = "xcute-decom-{time.time()}"
+        create_reqid = request_id("xcute-decom-")
+        self.create_objects(cname, 15, reqid=create_reqid)
+        self.wait_for_chunk_events(15, reqid=create_reqid)
+
+        list_reqid = request_id("xcute-decom-")
+        candidate = self.storage.conscience.next_instance("rawx")["addr"]
+        total_chunks = len(
+            list(self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid))
+        )
+
+        job_result = self._run_rawx_decommission(
+            service=candidate, usage_target=usage_target, exclude=exclude
+        )
+
+        all_chunks_after = list(
+            self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid)
+        )
+        total_chunks_after = len(all_chunks_after)
+        if usage_target == 0:
+            if not exclude:
+                # Rawx should be empty. We compare lists here (not just length)
+                # so that if the assertion fails we get debug information.
+                if job_result["errors.total"] == 0:
+                    self.assertListEqual(all_chunks_after, [])
+                else:
+                    # Well, there were some errors. This happens because some other
+                    # tests do not clean what they create. Hopefully we moved a large
+                    # majority of chunks.
+                    self.assertLessEqual(
+                        job_result["errors.total"], max(1, total_chunks // 2)
+                    )
+            elif exclude == "auto":
+                # Nothing should have moved because all rawx are excluded
+                self.assertEqual(job_result["tasks.total"], total_chunks)
+                self.assertEqual(job_result["errors.total"], total_chunks)
+                self.assertEqual(total_chunks_after, total_chunks)
+        elif usage_target == 100:
+            # Nothing should have moved
+            self.assertEqual(job_result["tasks.total"], 0)
+            self.assertEqual(total_chunks_after, total_chunks)
+
+    def test_rawx_decommission_target_0(self):
+        """
+        Test the 'openio-admin xcute rawx decommission' command actually
+        decommissions a rawx service.
+        """
+        self._test_rawx_decommission(usage_target=0)
+
+    def test_rawx_decommission_target_0_auto_exclude(self):
+        """
+        Test the 'openio-admin xcute rawx decommission' command actually
+        decommissions a rawx service.
+        """
+        self._test_rawx_decommission(usage_target=0, exclude="auto")
+
+    def test_rawx_decommission_target_100(self):
+        """
+        Test the 'openio-admin xcute rawx decommission' command actually
+        decommissions a rawx service.
+        """
+        self._test_rawx_decommission(usage_target=100)
 
     def test_rdir_decommission(self):
         """

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -52,8 +52,9 @@ class XcuteJob(object):
     DEFAULT_TASKS_PER_SECOND = 32
     MAX_TASKS_BATCH_SIZE = 32
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, job_id=None, logger=None):
         self.conf = conf
+        self.job_id = job_id
         self.logger = logger or get_logger(self.conf)
 
     @classmethod
@@ -109,7 +110,7 @@ class XcuteJob(object):
             # If it is not set in the new configuration,
             # recompute the new value
             merged_config.pop("tasks_batch_size", None)
-            # Udpate configuration
+            # Update configuration
             merged_config.update(new_config)
             # Update parameters
             merged_params = (current_config.get("params") or dict()).copy()
