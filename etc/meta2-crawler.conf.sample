@@ -93,6 +93,12 @@ drain_limit = 1000
 # Drain limit for each pass/iteration of the crawler. It aims to limit the 
 # meta2 usage and to smooth out the calls over time. Default to 100000.
 drain_limit_per_pass = 100000
+# Beanstalk tube which be polled to throttle drain
+drain_beanstalk_tube = oio-delete
+# Drain process will be skipped if queue size exceeds this value
+drain_beanstalk_max_queue_size = 1000000
+# Beanstalk queue url
+queue_url = ${QUEUE_URL}
 
 [filter:verify_chunk_placement]
 # Identify misplaced chunks after meta2db scan and tag them with misplaced header.

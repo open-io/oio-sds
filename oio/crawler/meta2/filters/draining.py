@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,7 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
+from oio.event.beanstalk import Beanstalk
 
 
 class Draining(Filter):
@@ -35,6 +36,8 @@ class Draining(Filter):
     NAME = "Draining"
     DEFAULT_DRAIN_LIMIT = 1000
     DEFAULT_DRAIN_LIMIT_PER_PASS = 100000
+    DEFAULT_DRAIN_BEANSTALK_TUBE = "oio-delete"
+    DEFAULT_DRAIN_BEANSTALK_MAX_QUEUE_SIZE = 1000000
 
     def init(self):
         self.api = self.app_env["api"]
@@ -49,6 +52,19 @@ class Draining(Filter):
             raise ValueError(
                 "Drain limit should never be greater than the limit per pass"
             )
+
+        url = self.conf.get("queue_url")
+        if not url:
+            raise ValueError("filter:draining queue_url value is not set")
+        self.beanstalk = Beanstalk.from_url(url)
+        self.tube = self.conf.get(
+            "drain_beanstalk_tube",
+            Draining.DEFAULT_DRAIN_BEANSTALK_TUBE,
+        )
+        self.max_queue_size = self.conf.get(
+            "drain_beanstalk_max_queue_size",
+            Draining.DEFAULT_DRAIN_BEANSTALK_MAX_QUEUE_SIZE,
+        )
 
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
@@ -109,6 +125,15 @@ class Draining(Filter):
             return True, None
 
     def process(self, env, cb):
+        # Skip draining if queue length is too high
+        remaining_jobs = self.beanstalk.stats_tube(self.tube)["current-jobs-ready"]
+        if remaining_jobs > self.max_queue_size:
+            self.logger.warning(
+                "Skipping drain, %s queue length is too high", self.tube
+            )
+            self.skipped += 1
+            return self.app(env, cb)
+
         meta2db = Meta2DB(self.app_env, env)
         # Check if the meta2 needs draining
         draining_state = int_value(meta2db.system.get(M2_PROP_DRAINING_STATE), 0)
