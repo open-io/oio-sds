@@ -81,6 +81,15 @@ class TestRdirClient(BaseTestCase):
                     expected_entries.append(entry)
         self.expected_entries = sorted(expected_entries)
 
+    def _delete_chunks(self):
+        for cid, chunk_id, body in self.expected_entries:
+            self.rdir.chunk_delete(
+                self.rawx_id,
+                cid,
+                body["content_id"],
+                chunk_id,
+            )
+
     def _push_containers(self, max_containers=16):
         mtime = 1  # don't care
         for num in range(max_containers):
@@ -106,6 +115,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir._direct_request = Mock(side_effect=self.rdir._direct_request)
 
     def tearDown(self):
+        self._delete_chunks()
         for entry in self.expected_m2_entries:
             try:
                 self.rdir.meta2_index_delete(
