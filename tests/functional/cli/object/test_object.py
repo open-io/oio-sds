@@ -335,7 +335,7 @@ class ObjectTest(CliTestCase):
         self.assertEqual(True, self.json_loads(output)[0]["Deleted"])
 
     def _test_drain(self, with_cid=False):
-        cname = random_str(16)
+        cname = "test-drain-" + random_str(6)
         cid_opt = ""
         if with_cid:
             self.openio(" ".join(["container create", cname]))
@@ -346,7 +346,7 @@ class ObjectTest(CliTestCase):
             f.write(b"test_exists")
             f.flush()
             obj = f.name
-            obj_name = random_str(16)
+            obj_name = "test-drain-" + random_str(6)
             self.openio(
                 " ".join(["object create ", cid_opt, cname, obj, "--name ", obj_name])
             )
@@ -449,8 +449,8 @@ class ObjectTest(CliTestCase):
         if not true_value(self.conf.get("shallow_copy")):
             self.skipTest("Shallow copy disabled")
 
-        cont_name = random_str(8)
-        obj_name = random_str(8)
+        cont_name = "test-object-link-" + random_str(6)
+        obj_name = "test-object-link-" + random_str(6)
         lk_name = obj_name + "-link"
         cid_opt = ""
 
@@ -495,8 +495,8 @@ class ObjectTest(CliTestCase):
         self._test_object_link(with_cid=True)
 
     def _test_object_set_properties(self, with_cid=False):
-        cont_name = random_str(8)
-        obj_name = random_str(8)
+        cont_name = "test-prop-" + random_str(6)
+        obj_name = "test-prop-" + random_str(6)
         cid_opt = ""
 
         output = self.openio("container create " + cont_name)
@@ -586,4 +586,4 @@ class ObjectTest(CliTestCase):
             test_content = b"test content"
             f.write(test_content)
             f.flush()
-            self._test_obj(f.name, test_content, random_str(10), with_tls=True)
+            self._test_obj(f.name, test_content, "tls-" + random_str(6), with_tls=True)

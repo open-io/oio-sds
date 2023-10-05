@@ -28,7 +28,6 @@ from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 from oio.crawler.rawx.filters.indexer import Indexer
 from oio.event.evob import EventTypes
-from oio.rdir.client import RdirClient
 
 from tests.functional.blob import random_chunk_id, random_buffer, convert_to_old_chunk
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
@@ -53,7 +52,7 @@ class TestBlobIndexer(BaseTestCase):
 
     def setUp(self):
         super(TestBlobIndexer, self).setUp()
-        self.rdir_client = RdirClient(self.conf)
+        self.rdir_client = self.rdir
         self.blob_client = BlobClient(self.conf, watchdog=self.watchdog)
         _, self.rawx_path, rawx_addr, _ = self.get_service_url("rawx")
         services = self.conscience.all_services("rawx")
@@ -76,10 +75,10 @@ class TestBlobIndexer(BaseTestCase):
         self.beanstalkd0.drain_tube("oio-preserved")
 
     def _put_chunk(self):
-        account = random_str(16)
-        container = random_str(16)
+        account = "blob-indexer-" + random_str(6)
+        container = "blob-indexer-" + random_str(6)
         cid = cid_from_name(account, container)
-        content_path = random_str(16)
+        content_path = "blob-indexer-" + random_str(6)
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
@@ -131,10 +130,10 @@ class TestBlobIndexer(BaseTestCase):
         )
 
     def _link_chunk(self, target_chunk_id):
-        account = random_str(16)
-        container = random_str(16)
+        account = "blob-indexer-" + random_str(6)
+        container = "blob-indexer-" + random_str(6)
         cid = cid_from_name(account, container)
-        content_path = random_str(16)
+        content_path = "blob-indexer-" + random_str(6)
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
@@ -332,7 +331,7 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(0, len(chunks))
 
     def _write_chunk(self, rawx_path, alias="toto", suffix=""):
-        cname = random_str(8)
+        cname = "blob-indexer-" + random_str(6)
         container_id = cid_from_name(self.account, cname)
         content_id = random_id(32)
         chunk_id = random_id(64)

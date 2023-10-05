@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -61,6 +61,16 @@ class TestBlobMover(BaseTestCase):
         self.version = meta["version"]
         self.content_id = meta["id"]
         self.chunk_method = meta["chunk_method"]
+
+    def tearDown(self):
+        try:
+            self.storage.container_flush(self.account, self.container)
+            self.storage.container_delete(self.account, self.container)
+        except Exception as exc:
+            self.logger.info(
+                "Failed to clean %s/%s: %s", self.account, self.container, exc
+            )
+        super(TestBlobMover, self).tearDown()
 
     def _chunk_path(self, chunk):
         url = chunk["url"]

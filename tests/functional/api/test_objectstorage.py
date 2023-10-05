@@ -56,21 +56,23 @@ class ObjectStorageApiTestBase(BaseTestCase):
     def setUp(self):
         super(ObjectStorageApiTestBase, self).setUp()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
-        self.created = list()
+        self.created = []
         self.created_containers = set()
         self.beanstalkd0.drain_tube("oio-preserved")
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()
-        for ct, name in self.created:
+        for ct, name, ver in self.created:
             try:
-                self.api.object_delete(self.account, ct, name)
+                self.created_containers.add((self.account, ct))
+                self.api.object_delete(self.account, ct, name, version=ver)
             except Exception:
                 logging.exception(
                     "Failed to delete %s/%s/%s//%s", self.ns, self.account, ct, name
                 )
         for acct, name in self.created_containers:
             try:
+                self.api.container_flush(acct, name)
                 self.api.container_delete(acct, name)
             except Exception as err:
                 logging.warning("Failed to destroy %s/%s: %s", acct, name, err)
@@ -111,7 +113,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
             _, _, _, obj_meta = self.api.object_create_ext(
                 self.account, container, obj_name=obj, data="", **kwargs
             )
-            self.created.append((container, obj))
+            self.created.append((container, obj, obj_meta["version"]))
             created.append(obj_meta)
         return created
 
@@ -274,25 +276,26 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.api.container_delete(self.account, container)
 
     def test_container_autocreate_properties(self):
-        cname = random_str(16)
+        cname = "autocreate-properties-" + random_str(6)
         path = random_str(8)
         props = {
             "properties": {"is_admin": "false"},
             "system": {"sys.m2.bucket.name": cname},
         }
-        self.api.object_create(
+        _, _, _, obj_meta = self.api.object_create_ext(
             self.account,
             cname,
             data=b"1" * 128,
             obj_name=path,
             container_properties=props,
         )
+        self.created.append((cname, path, obj_meta["version"]))
         data = self._get_properties(cname)
         self.assertEqual(cname, data["system"].get("sys.m2.bucket.name"))
         self.assertEqual("false", data["properties"].get("is_admin"))
 
     def test_container_delete(self):
-        name = random_str(32)
+        name = "ct-del-" + random_str(6)
 
         # container_delete on unknown container
         self.assertRaises(
@@ -320,7 +323,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_container_get_properties(self):
-        name = random_str(32)
+        name = "ct-prop-" + random_str(6)
 
         # container_get_properties on unknown container
         self.assertRaises(
@@ -382,7 +385,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._clean(name, True)
 
     def test_container_set_properties(self):
-        name = random_str(32)
+        name = "ct-prop-" + random_str(6)
 
         metadata = {
             random_str(32): random_str(32),
@@ -477,7 +480,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_container_del_set_same_property(self):
-        name = random_str(32)
+        name = "ct-prop-" + random_str(6)
 
         metadata = {random_str(32): random_str(32), random_str(32): random_str(32)}
         event_url = {
@@ -543,39 +546,39 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     # These tests are numbered to force them to be run in order
     def test_container_flush_0_no_container(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_flush, self.account, name
         )
 
     def test_container_flush_0_no_container_fast(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_flush, self.account, name, True
         )
 
     def test_container_flush_1_empty_container(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.api.container_create(self.account, name)
         self._flush_and_check(name)
 
     def test_container_flush_1_empty_container_fast(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.api.container_create(self.account, name)
         self._flush_and_check(name, fast=True)
 
     def test_container_flush_1_object(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.api.object_create(self.account, name, obj_name="content", data="data")
         self._flush_and_check(name)
 
     def test_container_flush_1_object_fast(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
         self.api.object_create(self.account, name, obj_name="content", data="data")
         self._flush_and_check(name, fast=True)
 
     def test_container_flush_2_many_objects(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
 
         # many contents (must be more than the listing limit)
         for i in range(128):
@@ -589,7 +592,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._flush_and_check(name)
 
     def test_container_flush_2_many_objects_fast(self):
-        name = random_str(16)
+        name = "flush-" + random_str(6)
 
         # many contents (must be more than the listing limit)
         for i in range(128):
@@ -687,7 +690,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_container_touch(self):
-        name = random_str(32)
+        name = "ct-touch-" + random_str(32)
 
         self._create(name)
         reqid = None
@@ -757,7 +760,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         _check_stats_touch(expected_containers=1, reqid=reqid)
 
     def test_object_create_ext(self):
-        name = random_str(32)
+        name = "obj-create-" + random_str(6)
         self._create(name)
 
         def props_cb(**_kwargs):
@@ -772,6 +775,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
         self.assertEqual(metadata["ns"], self.ns)
         self.assertIn("version", metadata)
+        self.created.append((name, name, metadata["version"]))
 
         props = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(metadata["version"], props["version"])
@@ -781,7 +785,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual("yes", props["properties"]["trailing_prop"])
 
     def test_object_create_ext_limit_name(self):
-        name = random_str(32)
+        name = "obj-create-" + random_str(6)
         obj_name = random_str(1087)
         self._create(name)
 
@@ -797,6 +801,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
         self.assertEqual(metadata["ns"], self.ns)
         self.assertIn("version", metadata)
+        self.created.append((name, obj_name, metadata["version"]))
 
         props = self.api.object_get_properties(self.account, name, obj_name)
         self.assertEqual(metadata["version"], props["version"])
@@ -806,7 +811,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual("yes", props["properties"]["trailing_prop"])
 
     def test_object_create_name_too_long(self):
-        ct = random_str(32)
+        ct = "obj-create-" + random_str(6)
         obj = random_str(1088)
         self._create(ct)
         self.assertRaises(
@@ -820,7 +825,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._clean(ct)
 
     def test_object_create_invalid_name(self):
-        ct = random_str(32)
+        ct = "obj-create-" + random_str(6)
         obj = "Beno\xeet".encode("latin1")
         self._create(ct)
         self.assertRaises(
@@ -834,10 +839,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._clean(ct)
 
     def test_object_create_mime_type(self):
-        name = random_str(32)
+        name = "obj-create-" + random_str(6)
         self.api.object_create(
             self.account, name, data="data", obj_name=name, mime_type="text/custom"
         )
+        self.created_containers.add((self.account, name))
         meta, _ = self.api.object_locate(self.account, name, name)
         self.assertEqual(meta["mime_type"], "text/custom")
 
@@ -845,8 +851,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         chunksize = int(self.conf["chunk_size"])
         size = chunksize * 12
         data = random_data(size)
-        self.api.object_create(self.account, name, obj_name=name, data=data)
-        self.created.append((name, name))
+        _, _, _, obj_meta = self.api.object_create_ext(
+            self.account, name, obj_name=name, data=data
+        )
+        self.created.append((name, name, obj_meta["version"]))
         _, chunks = self.api.object_locate(self.account, name, name)
         logging.debug("Chunks: %s", chunks)
         return sort_chunks(chunks, False), data
@@ -862,7 +870,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_fetch_range_start(self):
         """From 0 to somewhere"""
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         _, data = self._upload_data(name)
         end = 666
         fdata = self._fetch_range(name, (0, end))
@@ -871,7 +879,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_fetch_range_end(self):
         """From somewhere to end"""
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         chunks, data = self._upload_data(name)
         start = 666
         last = max(chunks.keys())
@@ -882,7 +890,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_fetch_range_metachunk_start(self):
         """From the start of the second metachunk to somewhere"""
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         chunks, data = self._upload_data(name)
         start = chunks[1][0]["offset"]
         end = start + 666
@@ -892,7 +900,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_fetch_range_metachunk_end(self):
         """From somewhere to end of the first metachunk"""
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         chunks, data = self._upload_data(name)
         start = 666
         end = chunks[0][0]["size"] - 1
@@ -905,7 +913,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         From somewhere in the first metachunk
         to somewhere in the second metachunk
         """
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         chunks, data = self._upload_data(name)
         start = 666
         end = start + chunks[0][0]["size"] - 1
@@ -917,7 +925,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         """
         Download several ranges at once.
         """
-        name = random_str(16)
+        name = "fetch-range-" + random_str(6)
         chunks, data = self._upload_data(name)
         start = 666
         end = start + chunks[0][0]["size"] - 1
@@ -972,8 +980,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_then_append(self):
         """Create an object then append data"""
-        name = random_str(16)
+        name = "create-append-" + random_str(6)
         self.api.object_create(self.account, name, data=b"1" * 64, obj_name=name)
+        self.created_containers.add((self.account, name))
         _, size, _ = self.api.object_create(
             self.account, name, data=b"2" * 128, obj_name=name, append=True
         )
@@ -985,8 +994,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_from_append(self):
         """Create an object with append operation"""
-        name = random_str(16)
-        self.api.container_create(self.account, name)
+        name = "create-append-" + random_str(6)
+        self._create(name)
         self.api.object_create(
             self.account, name, data=b"1" * 128, obj_name=name, append=True
         )
@@ -997,18 +1006,19 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_object_create_from_append(self):
         """Try to create container and object with append operation"""
-        name = random_str(16)
+        name = "create-append-" + random_str(6)
         _chunks, size, checksum = self.api.object_create(
             self.account, name, data=b"1" * 128, obj_name=name, append=True
         )
         self.assertEqual(size, 128)
+        self.created_containers.add((self.account, name))
 
         meta = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(meta.get("hash", "").lower(), checksum.lower())
 
     def test_object_create_conflict_keep_chunks(self):
         # pylint: disable=no-member
-        name = random_str(16)
+        name = "create-conflict-" + random_str(6)
         # Simulate a conflict error
         self.api.container.content_create = Mock(side_effect=exc.Conflict(409))
         self.api._blob_client = Mock(wraps=self.api.blob_client)
@@ -1033,7 +1043,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_commit_deadline_keep_chunks(self):
         # pylint: disable=no-member
-        name = random_str(16)
+        name = "create-deadline-" + random_str(6)
         # Simulate a deadline during commit
         self.api.container.content_create = Mock(
             wraps=partial(self.api.container.content_create, deadline=0.0)
@@ -1060,7 +1070,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_prepare_deadline_delete_chunks(self):
         # pylint: disable=no-member
-        name = random_str(16)
+        name = "create-deadline-" + random_str(6)
 
         class _Preparer(object):
             def __init__(self, func):
@@ -1492,32 +1502,31 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.assertEqual(chunk["pos"], meta["chunk_pos"])
 
     def test_object_link_different_container(self):
-        target_container = random_str(16)
-        target_obj = random_str(16)
+        target_container = "tgt" + random_str(6)
+        target_obj = "tgt-" + random_str(6)
         target_content_id = random_id(32)
 
-        self.api.object_create(
+        _, _, _, obj_meta = self.api.object_create_ext(
             self.account,
             target_container,
             data="1" * 128,
             obj_name=target_obj,
             content_id=target_content_id,
         )
-        obj = self.api.object_get_properties(
-            self.account, target_container, target_obj, content=target_content_id
-        )
-        target_version = obj["version"]
+        target_version = obj_meta["version"]
+        self.created.append((target_container, target_obj, target_version))
 
         # send target path
-        link_container = random_str(16)
-        link_obj = random_str(16)
+        link_container = "lnk-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container, target_obj, link_container, link_obj, b"1" * 128
         )
+        self.created_containers.add((self.account, link_container))
 
         # send target content ID
-        link_container = random_str(16)
-        link_obj = random_str(16)
+        link_container = "lnk-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container,
             None,
@@ -1526,10 +1535,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             b"1" * 128,
             target_content_id=target_content_id,
         )
+        self.created_containers.add((self.account, link_container))
 
         # send target path and version
-        link_container = random_str(16)
-        link_obj = random_str(16)
+        link_container = "lnk-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container,
             target_obj,
@@ -1538,10 +1548,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             b"1" * 128,
             target_version=target_version,
         )
+        self.created_containers.add((self.account, link_container))
 
         # send target path and wrong version
-        link_container = random_str(16)
-        link_obj = random_str(16)
+        link_container = "lnk-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         self.assertRaises(
             exc.NoSuchObject,
             self.api.object_link,
@@ -1555,8 +1566,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
         # send link content ID
-        link_container = random_str(16)
-        link_obj = random_str(16)
+        link_container = "lnk-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         link_content_id = random_id(32)
         self._link_and_check(
             target_container,
@@ -1566,15 +1577,17 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             b"1" * 128,
             link_content_id=link_content_id,
         )
+        self.created_containers.add((self.account, link_container))
 
     def test_object_link_different_container_no_autocreate(self):
-        target_container = random_str(16)
-        link_container = random_str(16)
-        target_obj = random_str(16)
-        link_obj = random_str(16)
+        target_container = "tgt" + random_str(6)
+        link_container = "lnk-" + random_str(6)
+        target_obj = "tgt-" + random_str(6)
+        link_obj = "lnk-" + random_str(6)
         self.api.object_create(
             self.account, target_container, data="1" * 128, obj_name=target_obj
         )
+        self.created_containers.add((self.account, target_container))
         expected = exc.NotFound
         if not true_value(self.conf.get("shallow_copy")):
             expected = exc.MethodNotAllowed
@@ -1592,31 +1605,30 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_object_link_same_container(self):
-        target_container = random_str(16)
-        target_obj = random_str(16)
+        target_container = "tgt" + random_str(6)
+        target_obj = "tgt-" + random_str(6)
         link_container = target_container
         target_content_id = random_id(32)
 
-        self.api.object_create(
+        _, _, _, obj_meta = self.api.object_create_ext(
             self.account,
             target_container,
             data="1" * 128,
             obj_name=target_obj,
             content_id=target_content_id,
         )
-        obj = self.api.object_get_properties(
-            self.account, target_container, target_obj, content=target_content_id
-        )
-        target_version = obj["version"]
+        target_version = obj_meta["version"]
+        self.created.append((target_container, target_obj, target_version))
 
         # send target path
-        link_obj = random_str(16)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container, target_obj, link_container, link_obj, b"1" * 128
         )
+        self.created_containers.add((self.account, link_container))
 
         # send target content ID
-        link_obj = random_str(16)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container,
             None,
@@ -1627,7 +1639,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
         # send target path and version
-        link_obj = random_str(16)
+        link_obj = "lnk-" + random_str(6)
         self._link_and_check(
             target_container,
             target_obj,
@@ -1638,7 +1650,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
         # send target and wrong version
-        link_obj = random_str(16)
+        link_obj = "lnk-" + random_str(6)
         self.assertRaises(
             exc.NoSuchObject,
             self.api.object_link,
@@ -1652,7 +1664,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
         # send link content ID
-        link_obj = random_str(16)
+        link_obj = "lnk-" + random_str(6)
         link_content_id = random_id(32)
         self._link_and_check(
             target_container,
@@ -1665,31 +1677,34 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_link_same_name_same_container(self):
         """Considered as a rename"""
-        container = random_str(16)
-        obj = random_str(16)
+        container = "lnk-" + random_str(6)
+        obj = "lnk-" + random_str(6)
         self.api.object_create(self.account, container, data="1" * 128, obj_name=obj)
+        self.created_containers.add((self.account, container))
         self._link_and_check(container, obj, container, obj, b"1" * 128)
 
     def test_object_link_with_already_existing_name(self):
-        target_container = random_str(16)
-        link_container = random_str(16)
-        target_obj = random_str(16)
-        link_obj = random_str(16)
+        target_container = "tgt-" + random_str(6)
+        link_container = "lnk-" + random_str(6)
+        target_obj = "tgt-" + random_str(6)
+        link_obj = "tgt-" + random_str(6)
         self.api.object_create(
             self.account, target_container, data="1" * 128, obj_name=target_obj
         )
+        self.created_containers.add((self.account, target_container))
         self.api.object_create(
             self.account, target_container, data="0" * 128, obj_name=link_obj
         )
         self._link_and_check(
             target_container, target_obj, link_container, link_obj, b"1" * 128
         )
+        self.created_containers.add((self.account, link_container))
 
     def test_object_link_with_metadata(self):
-        target_container = random_str(16)
-        link_container = random_str(16)
-        target_obj = random_str(16)
-        link_obj = random_str(16)
+        target_container = "tgt-" + random_str(6)
+        link_container = "lnk-" + random_str(6)
+        target_obj = "tgt-" + random_str(6)
+        link_obj = "tgt-" + random_str(6)
         self.api.object_create(
             self.account,
             target_container,
@@ -1697,6 +1712,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             obj_name=target_obj,
             properties={"AAA": "1", "BBB": "1"},
         )
+        self.created_containers.add((self.account, target_container))
         if not true_value(self.conf.get("shallow_copy")):
             self.assertRaises(
                 exc.MethodNotAllowed,
@@ -1720,6 +1736,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             link_obj,
             properties={"BBB": "2"},
         )
+        self.created_containers.add((self.account, link_container))
         metadata, data = self.api.object_fetch(self.account, link_container, link_obj)
         b"".join(data)  # drain the data stream
         self.assertDictEqual(metadata.get("properties", {}), {"AAA": "1", "BBB": "1"})
@@ -1740,8 +1757,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_then_truncate(self):
         """Create an object then truncate data"""
-        name = random_str(16)
+        name = "truncate-" + random_str(6)
         self.api.object_create(self.account, name, data=b"1" * 128, obj_name=name)
+        self.created_containers.add((self.account, name))
         self.api.object_truncate(self.account, name, name, size=64)
         _, data = self.api.object_fetch(self.account, name, name)
         data = b"".join(data)
@@ -1750,8 +1768,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_append_then_truncate(self):
         """Create an object, append data then truncate on chunk boundary"""
-        name = random_str(16)
+        name = "truncate-" + random_str(6)
         self.api.object_create(self.account, name, data=b"1" * 128, obj_name=name)
+        self.created_containers.add((self.account, name))
         _, size, _ = self.api.object_create(
             self.account, name, data=b"2" * 128, obj_name=name, append=True
         )
@@ -1769,8 +1788,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         """
         Create an object, append data then try to truncate outside object range
         """
-        name = random_str(16)
+        name = "truncate-" + random_str(6)
         self.api.object_create(self.account, name, data=b"1" * 128, obj_name=name)
+        self.created_containers.add((self.account, name))
         self.assertRaises(
             exc.OioException,
             self.api.object_truncate,
@@ -1804,8 +1824,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         _check_content_id(content_id=random_id(32))
 
     def test_object_delete(self):
-        container = random_str(6)
+        container = "obj-del-" + random_str(6)
         obj = random_str(6)
+        self._create(container)
         obj_meta = self._upload_empty(container, obj)[0]
 
         # Try first to delete with dryrun=True (object still exists)
@@ -1824,7 +1845,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_object_delete_with_versioning(self):
-        container = random_str(6)
+        container = "obj-del-" + random_str(6)
         obj = random_str(6)
         self._create(container, versioning=True)
         obj_meta = self._upload_empty(container, obj)[0]
@@ -1896,7 +1917,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertFalse(res[0][1])
 
     def test_container_delete_with_delete_marker(self):
-        container = random_str(6)
+        container = "cont-del-" + random_str(6)
         obj = random_str(6)
         self._create(container, versioning=True)
         obj_meta = self._upload_empty(container, obj)[0]
@@ -2071,12 +2092,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_long_name(self):
         """Create an object whose name has the maximum length allowed"""
-        cname = random_str(16)
+        cname = "long-name-" + random_str(6)
         path = random_str(1023)
         self.api.object_create(self.account, cname, data=b"1" * 128, obj_name=path)
+        self.created_containers.add((self.account, cname))
 
     def test_object_head_trust_level_0(self):
-        cname = random_str(16)
+        cname = "object-head-" + random_str(6)
         path = random_str(1023)
 
         # object doesn't exist
@@ -2087,7 +2109,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertTrue(self.api.object_head(self.account, cname, path))
 
     def test_object_head_trust_level_2(self):
-        cname = random_str(16)
+        cname = "object-head-" + random_str(6)
         path = random_str(1023)
 
         # object doesn't exist
@@ -2116,7 +2138,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_object_create_without_autocreate_and_existing_container(self):
-        name = random_str(32)
+        name = "obj-create-" + random_str(6)
         self._create(name)
         self.api.object_create(
             self.account, name, data="data", obj_name=name, autocreate=False
@@ -2131,6 +2153,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         chunks, _, _, metadata = self.api.object_create_ext(
             self.account, cname, data=data, obj_name=name, chunk_checksum_algo="md5"
         )
+        self.created.append((cname, name, metadata["version"]))
         chunk_method_t, params = parse_chunk_method(metadata["chunk_method"])
         if chunk_method_t == "ec":
             for chunk in chunks:
@@ -2172,12 +2195,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 self.api.blob_client.chunk_delete(chunk_url)
 
     def test_stats(self):
-        name = random_str(32)
+        name = "test-stats-" + random_str(6)
         self._create(name)
         expected_count = 0
         expected_size = 0
-        expected_count_by_policy = dict()
-        expected_size_by_policy = dict()
+        expected_count_by_policy = {}
+        expected_size_by_policy = {}
         # Add first object
         reqid = request_id()
         self.api.object_create(
@@ -2354,15 +2377,16 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
         expected_count = 0
         expected_size = 0
-        expected_count_by_policy = dict()
-        expected_size_by_policy = dict()
+        expected_count_by_policy = {}
+        expected_size_by_policy = {}
         if versioning:
             self.api.container_set_properties(
                 self.account, name, system={"sys.m2.policy.version": "-1"}
             )
-            self.api.object_create(
+            _, _, _, obj_meta = self.api.object_create_ext(
                 self.account, name, obj_name=name, data=random_data(42), policy="SINGLE"
             )
+            self.created.append((name, name, obj_meta["version"]))
             expected_count += 1
             expected_size += 42
             expected_count_by_policy["SINGLE"] = (
@@ -2373,7 +2397,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             )
         data = random_data(data_size)
         reqid = request_id()
-        self.api.object_create(
+        _, _, _, obj_meta = self.api.object_create_ext(
             self.account,
             name,
             obj_name=name,
@@ -2382,6 +2406,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             properties={"test": "it works"},
             reqid=reqid,
         )
+        self.created.append((name, name, obj_meta["version"]))
         expected_count += 1
         expected_size += data_size
         expected_count_by_policy[old_policy] = (
@@ -2536,7 +2561,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         self._test_change_policy(1, "SINGLE", "TWOCOPIES", versioning=True)
 
     def test_change_policy_unknown_storage_policy(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
 
         self.api.object_create(self.account, name, obj_name=name, data="data")
@@ -2552,7 +2577,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_with_delete_marker(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
         self.api.container_set_properties(
             self.account, name, system={"sys.m2.policy.version": "-1"}
@@ -2583,7 +2608,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_without_version(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
 
         self.api.object_create(self.account, name, data="data", obj_name=name)
@@ -2599,7 +2624,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_with_unknow_version(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
 
         self.api.object_create(self.account, name, data="data", obj_name=name)
@@ -2616,7 +2641,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_with_unknow_object(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
 
         self.assertRaises(
@@ -2632,7 +2657,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_with_unknow_container(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
 
         self.assertRaises(
             exc.NoSuchContainer,
@@ -2647,7 +2672,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
 
     def test_change_policy_with_different_data(self):
-        name = random_str(32)
+        name = "change-policy-" + random_str(6)
         self._create(name)
 
         self.api.object_create(self.account, name, obj_name=name, data="data")
@@ -3010,7 +3035,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
 class TestObjectList(ObjectStorageApiTestBase):
     def setUp(self):
         super(TestObjectList, self).setUp()
-        self.cname = random_str(16)
+        self.cname = "object-list-" + random_str(6)
 
     def tearDown(self):
         super(TestObjectList, self).tearDown()
@@ -3239,7 +3264,7 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertFalse(res["truncated"])
 
     def test_depaginate_object_list_with_service_busy(self):
-        container = random_str(32)
+        container = "test-list-" + random_str(6)
 
         object_names = list()
         for i in range(8):
@@ -3250,6 +3275,8 @@ class TestObjectList(ObjectStorageApiTestBase):
                 obj_name="depaginate-%d" % i,
             )
             object_names.append(meta["name"])
+
+        self.created_containers.add((self.account, container))
 
         def my_object_list(*args, **kwargs):
             my_object_list.i += 1
@@ -3370,10 +3397,10 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
 
         self.container = random_str(8)
         self.path = random_str(8)
-        self.api.object_create(
+        _, _, _, obj_meta = self.api.object_create_ext(
             self.account, self.container, obj_name=self.path, data="cache"
         )
-        self.created.append((self.container, self.path))
+        self.created.append((self.container, self.path, obj_meta["version"]))
         self.assertEqual(0, len(self.cache))
 
         self.api.container._direct_request = Mock(
