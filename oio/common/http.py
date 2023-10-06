@@ -18,7 +18,7 @@ import re
 from six import text_type
 from six.moves.urllib_parse import quote
 
-from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
+from oio.common.constants import CHUNK_HEADERS
 from oio.content.quality import location_constraint_margin
 
 
@@ -111,7 +111,8 @@ def headers_from_object_metadata(metadata, chunk_url):
     headers[CHUNK_HEADERS["content_chunkmethod"]] = metadata["chunk_method"]
     headers[CHUNK_HEADERS["content_policy"]] = metadata["policy"]
     headers[CHUNK_HEADERS["container_id"]] = metadata["container_id"]
-    headers[CHUNK_HEADERS["oio_version"]] = metadata.get("oio_version", OIO_VERSION)
+    if "oio_version" in metadata:
+        headers[CHUNK_HEADERS["oio_version"]] = metadata.get("oio_version")
 
     for key in ("metachunk_hash", "metachunk_size", "chunk_hash"):
         val = metadata.get(key)

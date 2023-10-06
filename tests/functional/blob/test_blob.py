@@ -22,7 +22,7 @@ from os.path import isfile
 from urllib.parse import unquote, urlparse
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.easy_value import true_value
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, request_id
@@ -69,7 +69,6 @@ class RawxTestSuite(CommonTestCase):
                 "container_id": self.cid,
                 "chunk_hash": checksum(data).hexdigest(),
                 "full_path": self.fullpath,
-                "oio_version": OIO_VERSION,
                 "properties": {},
             },
             f"{self.rawx}/{chunk_id}",

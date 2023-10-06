@@ -19,7 +19,6 @@ import random
 import time
 
 from oio.common.utils import cid_from_name
-from oio.common.constants import OIO_VERSION
 from oio.common.exceptions import OrphanChunk
 from oio.common.fullpath import encode_fullpath
 from oio.blob.rebuilder import BlobRebuilder
@@ -155,9 +154,8 @@ class TestBlobRebuilder(BaseTestCase):
         self.assertEqual(new_chunk_id, new_chunk_headers["chunk_id"])
         del chunk_headers["chunk_id"]
         del new_chunk_headers["chunk_id"]
-        self.assertEqual(OIO_VERSION, new_chunk_headers["oio_version"])
         del chunk_headers["oio_version"]
-        del new_chunk_headers["oio_version"]
+        new_chunk_headers.pop("oio_version", None)
         del chunk_headers["chunk_mtime"]
         del new_chunk_headers["chunk_mtime"]
         self.assertEqual(chunk_headers, new_chunk_headers)

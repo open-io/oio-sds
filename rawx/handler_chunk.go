@@ -209,7 +209,12 @@ func (rr *rawxRequest) uploadChunk() {
 	default:
 		err = errCompressionNotManaged
 	}
-	rr.chunk.compression = rr.rawx.compression
+	switch rr.rawx.compression {
+	case "", compressionOff:
+		rr.chunk.compression = ""
+	default:
+		rr.chunk.compression = rr.rawx.compression
+	}
 
 	// Destined to be called before the last chunk is written;
 	final := func(written int64) error {

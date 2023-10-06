@@ -18,7 +18,6 @@ import random
 from mock import MagicMock as Mock
 
 from oio.common.utils import GeneratorIO, cid_from_name
-from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
 from oio.common.exceptions import ChunkException
 from oio.blob.mover import BlobMoverWorker
@@ -146,9 +145,8 @@ class TestBlobMover(BaseTestCase):
         self.assertEqual(new_chunk_id, new_chunk_headers["chunk_id"])
         del chunk_headers["chunk_id"]
         del new_chunk_headers["chunk_id"]
-        self.assertEqual(OIO_VERSION, new_chunk_headers["oio_version"])
         del chunk_headers["oio_version"]
-        del new_chunk_headers["oio_version"]
+        new_chunk_headers.pop("oio_version", None)
         self.assertEqual(chunk_headers, new_chunk_headers)
 
     def test_move_with_wrong_size(self):

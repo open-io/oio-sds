@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -128,7 +128,6 @@ class TestPlainContent(BaseTestCase):
                     meta["content_id"],
                 )
                 self.assertEqual(meta["full_path"], full_path)
-                self.assertEqual(meta["oio_version"], "4.2")
 
     def test_twocopies_create_0_byte(self):
         self._test_create(self.stgpol_twocopies, 0)
