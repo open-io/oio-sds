@@ -318,7 +318,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_PRECLEAN_TIMEOUT = 120
     DEFAULT_CREATE_SHARD_TIMEOUT = 120
     DEFAULT_SAVE_WRITES_TIMEOUT = 120
-    PRECLEAN_OP_TIMEOUT = 2.0
+    DEFAULT_REPLICATED_CLEAN_TIMEOUT = 2.0
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -344,6 +344,10 @@ class ContainerSharding(ProxyClient):
         )
         self.preclean_timeout = int_value(
             kwargs.get("preclean_timeout"), self.DEFAULT_PRECLEAN_TIMEOUT
+        )
+        self.replicated_clean_timeout = int_value(
+            kwargs.get("replicated_clean_timeout"),
+            self.DEFAULT_REPLICATED_CLEAN_TIMEOUT,
         )
         self.create_shard_timeout = int_value(
             kwargs.get("create_shard_timeout"), self.DEFAULT_CREATE_SHARD_TIMEOUT
@@ -953,7 +957,7 @@ class ContainerSharding(ProxyClient):
         if params.get("local"):
             request_kwargs["timeout"] = timeout or self.DEFAULT_PRECLEAN_TIMEOUT
         else:
-            request_kwargs["timeout"] = self.PRECLEAN_OP_TIMEOUT
+            request_kwargs["timeout"] = self.replicated_clean_timeout
 
         while truncated:
             if timeout and monotonic_time() >= preclean_deadline:
