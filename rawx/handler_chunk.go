@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"compress/flate"
 	"compress/lzw"
 	"compress/zlib"
@@ -34,6 +35,8 @@ import (
 	"time"
 
 	"lukechampine.com/blake3"
+
+	"golang.org/x/sync/semaphore"
 )
 
 var (
@@ -62,6 +65,12 @@ type rangeInfo struct {
 }
 
 var RangeRegex = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
+
+var (
+	concurrentDelete int
+	concurrentDeleteTimeout int
+	deleteSemaphore *semaphore.Weighted = nil
+)
 
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
@@ -555,6 +564,51 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 
 func (rr *rawxRequest) removeChunk() {
 	var err error
+
+	// is there a concurrent limitation on delete ?
+	if deleteSemaphore != nil {
+
+		// concurrentDeleteTimeout < 0    wait forever for an available semaphore
+		// concurrentDeleteTimeout = 0    don't wait for an available semaphore and return 429
+		// concurrentDeleteTimeout > 0    wait for concurrentDeleteTimeout seconds
+		//                                for an available semaphore and return 429
+
+		if concurrentDeleteTimeout == 0 {
+
+			// try to aquire an available  semaphore
+			// it returns immediately if not available
+
+			if !deleteSemaphore.TryAcquire(1) {
+
+				// no semaphore were available
+				// let's reply with a 429 (Too Many Requests)
+				rr.replyCode(http.StatusTooManyRequests)
+				return
+			}
+		} else {
+			// TODO handle request timeout somehow ?
+			ctx := context.Background()
+
+			// set the context to set a timeout
+			if concurrentDeleteTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Duration(concurrentDeleteTimeout) * time.Second)
+				defer cancel()
+			}
+
+			// acquire the semaphore and wait for the context
+			if err := deleteSemaphore.Acquire(ctx, 1); err != nil {
+
+				// return 429 if ctx expires/done/cancel
+				rr.replyCode(http.StatusTooManyRequests)
+				return
+			}
+		}
+
+		// a semaphore has been aquire, let's continue
+		// and release the semaphore once finished
+		defer deleteSemaphore.Release(1)
+	}
 
 	if notifAllowed {
 		rr.chunk = chunkInfo{}

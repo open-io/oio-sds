@@ -73,6 +73,9 @@ var loadedOpts = map[string]string{
 
 	"events": "events",
 
+	"concurrent_delete": "concurrent_delete",
+	"concurrent_delete_timeout": "concurrent_delete_timeout",
+
 	"tls_cert_file": "tls_cert_file",
 	"tls_key_file":  "tls_key_file",
 	"tls_rawx_url":  "tls_rawx_url",

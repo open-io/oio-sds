@@ -112,6 +112,11 @@ const (
 	// Are events allowed
 	configDefaultEvents = true
 
+	// Concurrent delete are not limit by default
+	configDefaultConcurrentDelete = 0
+	// in case of concurrent delete limitation, requests are dropped by default
+	configDefaultConcurrentDeleteTimeout = 0
+
 	// By default, should the Nagle algorithm be suspended when a connection
 	// is established. Only works for HTTP/1.* when a raw TCP connection is
 	// used.

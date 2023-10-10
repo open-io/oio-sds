@@ -36,6 +36,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 )
 
 var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
@@ -188,6 +190,12 @@ func main() {
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
 	notifAllowed = opts.getBool("events", configDefaultEvents)
+
+	concurrentDelete = opts.getInt("concurrent_delete", configDefaultConcurrentDelete)
+	concurrentDeleteTimeout = opts.getInt("concurrent_delete_timeout", configDefaultConcurrentDeleteTimeout)
+	if concurrentDelete > 0 {
+		deleteSemaphore = semaphore.NewWeighted(int64(concurrentDelete))
+	}
 
 	accessLogPut = opts.getBool("log_access_put", configAccessLogDefaultPut)
 	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
