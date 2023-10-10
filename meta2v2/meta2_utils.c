@@ -4403,19 +4403,34 @@ _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 		const struct bean_descriptor_s *descr, const gchar *select_clause,
 		gint64 *allowed_changes, gint64 deadline)
 {
+	/* A previous call may force this function to return early. */
+	if (*allowed_changes <= 0) {
+		return NULL;
+	}
+
 	gint64 changes = 1;
+	gboolean dl_ok = TRUE;
 	GError *err = NULL;
 	gint64 limit = _compute_reasonable_limit(*allowed_changes);
 
 	// XXX: we generate the clause once, *allowed_changes can go negative
 	gchar *clause_str = g_strdup_printf(
 			"%s LIMIT %"G_GINT64_FORMAT, select_clause, limit);
-	while (!err && changes > 0 && *allowed_changes > 0
-			&& oio_ext_monotonic_time() < deadline) {
+	do {
 		err = _db_delete(descr, sq3, clause_str, NULL);
 		changes = sqlite3_changes(sq3->db);
 		*allowed_changes -= changes;
+	} while (!err && changes > 0 && *allowed_changes > 0
+			&& (dl_ok = oio_ext_monotonic_time() < deadline));
+
+	/* We left the loop because of the deadline,
+	 * force the next calls to return early.
+	 * Notice that we check the deadline only if there has been
+	 * at least one change, or an error. */
+	if (!dl_ok) {
+		*allowed_changes = 0;
 	}
+
 	g_free(clause_str);
 	return err;
 }
@@ -4426,18 +4441,33 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 		const gchar *lower, const gchar *upper,
 		gint64 *allowed_changes, gint64 deadline)
 {
+	/* A previous call may force this function to return early. */
+	if (*allowed_changes <= 0) {
+		return NULL;
+	}
+
 	gint64 changes = 1;
+	gboolean dl_ok = TRUE;
 	GError *err = NULL;
 	gint64 limit = _compute_reasonable_limit(*allowed_changes);
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _build_aliases_sql_clause(
 			lower, upper, limit, clause);
-	while (!err && changes > 0 && *allowed_changes > 0
-			&& oio_ext_monotonic_time() < deadline) {
+	do {
 		err = _db_delete(descr, sq3, clause->str, params);
 		changes = sqlite3_changes(sq3->db);
 		*allowed_changes -= changes;
+	} while (!err && changes > 0 && *allowed_changes > 0
+			&& (dl_ok = oio_ext_monotonic_time() < deadline));
+
+	/* We left the loop because of the deadline,
+	 * force the next calls to return early.
+	 * Notice that we check the deadline only if there has been
+	 * at least one change, or an error. */
+	if (!dl_ok) {
+		*allowed_changes = 0;
 	}
+
 	metautils_gvariant_unrefv(params);
 	g_free(params), params = NULL;
 	g_string_free(clause, TRUE);
