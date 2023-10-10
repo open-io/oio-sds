@@ -3426,9 +3426,9 @@ _m2b_delete_shard_copies(struct meta2_backend_s *m2b,
 				"Failed to remove a shard copy %s: (%d) %s",
 				suffix, err->code, err->message);
 			g_error_free(err);
-			continue;
+		} else {
+			m2b_destroy(sq3);
 		}
-		m2b_destroy(sq3);
 		oio_url_clean(copy_url);
 		g_free(suffix);
 	}
