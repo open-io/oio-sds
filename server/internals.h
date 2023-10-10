@@ -24,6 +24,10 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
 
+#ifndef OIO_SERVER_HTTP_READAHEAD
+#define OIO_SERVER_HTTP_READAHEAD 4096
+#endif
+
 #ifndef OIO_SERVER_UDP_QUEUE_MAXLEN
 #define OIO_SERVER_UDP_QUEUE_MAXLEN 8192
 #endif

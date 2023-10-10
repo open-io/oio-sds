@@ -357,7 +357,10 @@ detect_http(guint32 payload_size, GByteArray *gba)
 	case 1347375956:  // POST
 	case 1347769376:  // PUT
 		line_end = g_strstr_len(
-				(const gchar*)(gba->data + 4), MIN(gba->len, 4096), " HTTP/1.");
+				(const gchar*)(gba->data + 4),
+				MIN(gba->len, OIO_SERVER_HTTP_READAHEAD),
+				" HTTP/1."
+		);
 		is_http = line_end != NULL;
 		break;
 	default:
@@ -411,12 +414,13 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			_ctx_reset(ctx);
 			network_client_close_output(clt, FALSE);
 			return RC_ERROR;
-		} else if (payload_size > 1024 * 1024 * 1024) {
+		} else if (ctx->gba_l4v->len < OIO_SERVER_HTTP_READAHEAD
+				&& payload_size > 1024 * 1024 * 1024) {
 			/* Sometimes the server will receive HTTP requests. The HTTP verb
 			 * is interpreted as the request size (>1GiB). We must check for
 			 * this case or the next read will wait a long time before giving
 			 * up. The 4096 bytes readahead is harmless for the next read. */
-			gba_read(ctx->gba_l4v, ds, 4096);
+			gba_read(ctx->gba_l4v, ds, OIO_SERVER_HTTP_READAHEAD);
 			data_slab_sequence_unshift(&(clt->input), ds);
 			if (detect_http(payload_size, ctx->gba_l4v)) {
 				network_client_send_slab(clt, data_slab_make_gba(
@@ -426,6 +430,8 @@ transport_gridd_notify_input(struct network_client_s *clt)
 						clt->fd);
 				return RC_ERROR;
 			}
+			/* We must continue because "ds" is no more valid here. */
+			continue;
 		}
 
 		/* This may not read the whole request body. */
