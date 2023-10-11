@@ -25,7 +25,7 @@ from oio.common.amqp import (
     DEFAULT_QUEUE_ARGS,
 )
 from oio.common.json import json
-from oio.common.kafka import Producer, KafkaException
+from oio.common.kafka import KafkaSendException, KafkaSender
 from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.filters.base import Filter
@@ -323,16 +323,11 @@ class KafkaNotifyFilter(NotifyFilter):
         self.producer = None
         super().__init__(*args, **kwargs)
 
-    def init(self):
-        super().init()
-        endpoints = ";".join(
-            [ep[8:] for ep in self.endpoints.split(";") if ep.startswith("kafka://")]
-        )
-
-        conf = {"bootstrap.servers": endpoints}
-        self.producer = Producer(conf)
-
     def send_event(self, event, data):
+        if not self.producer:
+            self.producer = KafkaSender(self.endpoints, self.logger)
+            self.producer.ensure_topics_exist([self.tube])
+
         topic = self.tube
         if self.tube_rules:
             policy = self._lookup_policy(event)
@@ -343,10 +338,8 @@ class KafkaNotifyFilter(NotifyFilter):
                         topic = rule["tube"]
                         break
         try:
-            self.producer.produce(topic, data)
-            self.producer.poll(0)
-
-        except KafkaException as err:
+            self.producer.send(topic, data, flush=True)
+        except KafkaSendException as err:
             msg = f"notify failure: {err!r}"
             resp = RetryableEventError(event=event, body=msg)
             return resp
