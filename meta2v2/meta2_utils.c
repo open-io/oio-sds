@@ -4549,7 +4549,13 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 
 end:
 	if (!err) {
-		if (max_entries_cleaned > 0 && oio_ext_monotonic_time() < dl) {
+		/* We don't check the deadline here, on purpose: there is a chance
+		 * that the last check of an already cleaned database finishes after
+		 * the deadline. If we get here whereas the cleaning is not finished:
+		 * - either we exhausted our "changes" budget,
+		 * - or the deadline is reached and the changes budget has been
+		 *   set to zero. */
+		if (max_entries_cleaned > 0) {
 			sqlx_admin_del_all_user(sq3, NULL, NULL);
 			m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 			*truncated = FALSE;
@@ -4597,7 +4603,9 @@ end:
 	if (!err) {
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
-		*truncated = max_entries_cleaned <= 0 || oio_ext_monotonic_time() >= dl;
+		/* There is an explanation in m2db_clean_shard
+		 * about why we do not check the deadline here. */
+		*truncated = max_entries_cleaned <= 0;
 	}
 	return err;
 }
