@@ -18,7 +18,7 @@ import time
 
 from multiprocessing import Event, Process
 
-from oio.common.kafka import KafkaConsumer, KafkaSender
+from oio.common.kafka import DEFAULT_DEADLETTER_TOPIC, KafkaConsumer, KafkaSender
 from oio.common.logger import get_logger
 
 
@@ -99,7 +99,7 @@ class KafkaConsumerWorker(Process):
                 self.endpoint, [self.topic_name], logger=self.logger, conf=configuration
             )
         if self._producer is None:
-            self._producer = KafkaSender(self.endpoint, conf={})
+            self._producer = KafkaSender(self.endpoint, self.logger)
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
@@ -138,12 +138,18 @@ class KafkaConsumerWorker(Process):
     def reject_message(self, message, retry_later=False):
         try:
             self._consumer.commit(message)
+
+            if not self._producer:
+                self._connect()
+            if not self._producer:
+                raise SystemError("No producer available")
+
             if retry_later:
-                if not self._producer:
-                    self._connect()
-                if not self._producer:
-                    raise Exception("No Producer available")
-                self._producer.send(message.topic(), message.value())
+                self._producer.send(message.topic(), message.value(), 60)
+            else:
+                self._producer.send(
+                    DEFAULT_DEADLETTER_TOPIC, message.value(), flush=True
+                )
             return True
         except Exception:
             self.logger.exception("Failed to reject message %s", message)

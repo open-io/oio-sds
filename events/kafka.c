@@ -132,23 +132,25 @@ kafka_publish_message(struct kafka_s *kafka,
 {
 	GError *err = NULL;
 
-	rd_kafka_resp_err_t rd_err;
-
-	rd_err = rd_kafka_producev(kafka->producer,
+		rd_kafka_resp_err_t rc = rd_kafka_producev(kafka->producer,
 				RD_KAFKA_V_TOPIC(topic),
 				RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
 				RD_KAFKA_V_VALUE(msg, msglen),
 				RD_KAFKA_V_END);
-
-	if (rd_err) {
-		err = BUSY("Failed to produce to topic %s: %s", topic,
-			rd_kafka_err2str(rd_err));
-	}
-
-	if (oio_events_kafka_flush){
+	if (rc != 0) {
+		rd_kafka_resp_err_t rd_err = rd_kafka_last_error();
+		if (rd_err == RD_KAFKA_RESP_ERR__QUEUE_FULL) {
+			// Queue is full retry later
+			err = BUSY("Failed to produce to topic %s: %s", topic,
+				rd_kafka_err2str(rd_err));
+		} else {
+			err = BADREQ("Failed to produce to topic %s: %s", topic,
+				rd_kafka_err2str(rd_err));
+		}
+	} else {
 		rd_kafka_flush(kafka->producer, oio_events_kafka_timeouts_flush);
+		rd_kafka_poll(kafka->producer, 0);
 	}
-	rd_kafka_poll(kafka->producer, 0);
 
 	return err;
 }
