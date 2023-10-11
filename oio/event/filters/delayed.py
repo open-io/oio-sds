@@ -15,7 +15,7 @@
 # License along with this library.
 
 from datetime import datetime
-from time import sleep
+from time import sleep, time
 
 from oio.common.kafka import DEFAULT_DELAYED_TOPIC, KafkaSender
 from oio.event.evob import EventError
@@ -37,18 +37,21 @@ class DelayedFilter(Filter):
         self.queue_url = self.conf.get("queue_url")
         if not self.queue_url:
             raise ValueError("Missing 'queue_url' in the configuration")
-        self._producer = KafkaSender(self.queue_url)
         self.topic = self.conf.get("tube", DEFAULT_DELAYED_TOPIC)
 
     def process(self, env, cb):
-        due_time = env.get("due_time", 0)
-        delay = env.get("delay", 1)
-        destination_topic = env.get("dest_topic")
+        if not self._producer:
+            self._producer = KafkaSender(self.queue_url, self.logger)
+
+        data = env.get("data", {})
+        due_time = data.get("due_time", 0)
+        delay = data.get("delay", 1)
+        destination_topic = data.get("dest_topic")
 
         if not destination_topic:
             return EventError(body="'dest_topic' field is missing")(env, cb)
 
-        now = datetime.timestamp()
+        now = datetime.now().timestamp()
 
         delta_time = due_time - now
         if delta_time > 0:
@@ -57,11 +60,15 @@ class DelayedFilter(Filter):
         if delay > 1:
             # Requeue
             new_env = env.copy()
-            new_env["delay"] = delay - 1
-            print(new_env)
+            data = new_env.get("data", {})
+            data["delay"] = delay - 1
             self._producer.send(self.topic, new_env)
         else:
-            self._producer.send(destination_topic, env.get("data"))
+            # Restore original event data
+            source_event = env["data"]["source_event"]
+            # Update time
+            source_event["when"] = time()
+            self._producer.send(destination_topic, source_event)
 
         return self.app(env, cb)
 
