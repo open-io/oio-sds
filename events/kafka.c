@@ -29,7 +29,7 @@ static void dr_msg_cb (rd_kafka_t *kafka_handle UNUSED,
                        const rd_kafka_message_t *rkmessage,
                        void *opaque UNUSED) {
     if (rkmessage->err) {
-        g_error("Message delivery failed: %s", rd_kafka_err2str(rkmessage->err));
+        g_warning("Message delivery failed: %s", rd_kafka_err2str(rkmessage->err));
     }
 }
 
