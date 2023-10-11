@@ -96,6 +96,7 @@ class EventTypes(object):
     CONTENT_UPDATE = "storage.content.update"
     CONTENT_NEW = "storage.content.new"
     CONTENT_REBUILT = "storage.content.rebuilt"
+    DELAYED = "delayed"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
 
@@ -114,6 +115,7 @@ class EventTypes(object):
         CONTENT_UPDATE,
         CONTENT_NEW,
         CONTENT_REBUILT,
+        DELAYED,
         META2_DELETED,
         XCUTE_TASKS,
     )
