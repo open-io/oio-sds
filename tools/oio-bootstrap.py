@@ -1402,6 +1402,7 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
 ${NOBS}event-agent=${EVENT_CNXSTRING}
+${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
 
@@ -1411,6 +1412,12 @@ meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
 
 admin=${IP}:${PORT_ADMIN}
+"""
+
+
+template_meta_config = """
+[${NS}]
+events.kafka.options=client.id=${SERVICE_ID}
 """
 
 template_systemd_service_event_agent = """
@@ -2338,9 +2345,21 @@ def generate(options):
         beanstalkd_cnxstring = ";".join(
             "beanstalk://" + str(h) + ":" + str(p) for _, h, p in all_beanstalkd
         )
-        ENV.update({"EVENT_CNXSTRING": beanstalkd_cnxstring, "NOBS": ""})
+        ENV.update(
+            {
+                "BEANSTALK_CNXSTRING": beanstalkd_cnxstring,
+                "EVENT_CNXSTRING": beanstalkd_cnxstring,
+                "NOBS": "",
+            }
+        )
     else:
-        ENV.update({"EVENT_CNXSTRING": "***disabled***", "NOBS": "#"})
+        ENV.update(
+            {
+                "EVENT_CNXSTRING": "***disabled***",
+                "BEANSTALK_CNXSTRING": "***disabled***",
+                "NOBS": "#",
+            }
+        )
 
     # Kafka
     use_kafka = False
@@ -2371,6 +2390,7 @@ def generate(options):
                 "PORT": next(ports),
                 "EXE": "oio-" + t + "-server",
                 "EXTRA": ext_opt,
+                "OPTARGS": "",
             }
         )
         if service_id:
@@ -2379,7 +2399,6 @@ def generate(options):
             env["OPTARGS"] = "-O ServiceId=%s" % env["SERVICE_ID"]
         else:
             env["WANT_SERVICE_ID"] = "#"
-            env["OPTARGS"] = ""
         register_service(env, tpl, parent_target)
         # watcher
         tpl = Template(template_meta_watch)
@@ -2388,6 +2407,13 @@ def generate(options):
 
         if t == "meta2":
             meta2_volumes.append("{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(**env))
+
+        if t in ("meta1", "meta2"):
+            if env.get("SERVICE_ID"):
+                tpl = Template(template_meta_config)
+                with open(config(env), "w+") as f:
+                    f.write(tpl.safe_substitute(env))
+                env["OPTARGS"] += " -O Config=%s" % config(env)
 
     # meta0
     nb_meta0 = max(
