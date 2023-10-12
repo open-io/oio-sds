@@ -85,8 +85,11 @@ if __name__ == '__main__':
         try:
             orchestrator.safe_run_forever()
         finally:
-            server_process.terminate()
-            server_process.join()
+            server_process.join(10.0)
+            if server_process.exitcode is None:
+                orchestrator_logger.warning("Stopping server subprocess with force")
+                server_process.kill()
+                server_process.join(5.0)
     elif orchestrator is not None:
         signal.signal(signal.SIGINT, orchestrator.exit_gracefully)
         signal.signal(signal.SIGTERM, orchestrator.exit_gracefully)

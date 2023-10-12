@@ -477,7 +477,7 @@ func_tests_rebuilder_mover () {
 	fi
 
 	$SYSTEMCTL stop oio-cluster.target
-	sleep 5
+	sleep 8
 }
 
 if is_running_test_suite "rebuilder" ; then

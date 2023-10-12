@@ -2887,6 +2887,8 @@ def generate(options):
             template_systemd_service_xcute_event_agent,
             xcute_agents_target,
             add_service_to_conf=False,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context xcute --concurrency=eventlet -p ",
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_xcute_event_agent)
@@ -2938,7 +2940,13 @@ def generate(options):
             "EXE": "oio-xcute",
         }
     )
-    register_service(env, template_systemd_service_xcute, root_target)
+    register_service(
+        env,
+        template_systemd_service_xcute,
+        root_target,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context xcute --concurrency=eventlet -p ",
+    )
     with open(config(env), "w+") as f:
         tpl = Template(template_xcute)
         f.write(tpl.safe_substitute(env))
