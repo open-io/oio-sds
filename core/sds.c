@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1631,9 +1631,6 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 			oio_url_get(url, OIOURL_FULLPATH));
 	oio_url_clean(url);
 
-	http_put_dest_add_header (dest, RAWX_HEADER_OIO_VERSION, "%s",
-			oio_sds_client_version);
-
 	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_POLICY,
 			"%s", ul->stgpol);
 	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_CHUNK_METHOD,
@@ -2043,7 +2040,7 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 					oio_error_code(err) == CODE_CONTENT_PRECONDITION) {
 				_upload_abort_no_error(ul);
 			} else {
-				GRID_WARN("Conditons unsafe to abort the upload: (%d) %s",
+				GRID_WARN("Conditions unsafe to abort the upload: (%d) %s",
 						oio_error_code(err), oio_error_message(err));
 			}
 		}

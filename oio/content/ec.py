@@ -20,7 +20,6 @@ from oio.api.ec import ECWriteHandler, ECRebuildHandler
 from oio.common.exceptions import ChunkException
 from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
 from oio.common.utils import GeneratorIO, request_id
-from oio.common.constants import OIO_VERSION
 from oio.common.storage_functions import _get_weighted_random_score
 
 
@@ -118,7 +117,6 @@ class ECContent(Content):
         meta["metachunk_hash"] = current_chunk.checksum
         meta["metachunk_size"] = current_chunk.size
         meta["full_path"] = self.full_path
-        meta["oio_version"] = OIO_VERSION
         bytes_transferred, _ = self.blob_client.chunk_put(
             spare_url[0], meta, GeneratorIO(stream), reqid=reqid
         )

@@ -42,7 +42,6 @@ from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id, ensure_request_id2
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import (
-    OIO_VERSION,
     HEADER_PREFIX,
     TIMEOUT_KEYS,
     SHARDING_ACCOUNT_PREFIX,
@@ -1790,7 +1789,6 @@ class ObjectStorageApi(object):
         obj_meta["full_path"] = encode_fullpath(
             account, container, obj_name, obj_meta["version"], obj_meta["id"]
         )
-        obj_meta["oio_version"] = obj_meta.get("oio_version") or OIO_VERSION
         if obj_meta.get("properties"):
             obj_meta["qualities"] = pop_chunk_qualities(obj_meta["properties"])
 

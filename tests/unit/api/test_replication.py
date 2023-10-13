@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,6 @@ from tests.unit.api import (
 )
 from oio.api import io
 from tests.unit import set_http_connect, set_http_requests
-from oio.common.constants import OIO_VERSION
 from oio.common.decorators import ensure_headers
 from oio.common.utils import get_hasher
 
@@ -61,7 +60,6 @@ class TestReplication(unittest.TestCase):
             "policy": "REPLI3",
             "content_path": "test",
             "full_path": ["account/container/test"],
-            "oio_version": OIO_VERSION,
         }
 
         self._meta_chunk = [
@@ -136,7 +134,7 @@ class TestReplication(unittest.TestCase):
             for i in range(quorum_size):
                 self.assertEqual(chunks[i].get("error"), None)
 
-            # # JFS: starting at branche 3.x, it has been preferred to save
+            # # JFS: starting at branch 3.x, it has been preferred to save
             # #      only the chunks that succeeded.
             # for i in xrange(quorum_size, len(meta_chunk)):
             #     self.assertEqual(chunks[i].get('error'), 'HTTP 500')
@@ -184,7 +182,7 @@ class TestReplication(unittest.TestCase):
         for i in range(len(meta_chunk) - 1):
             self.assertEqual(chunks[i].get("error"), None)
 
-        # # JFS: starting at branche 3.x, it has been preferred to save only
+        # # JFS: starting at branch 3.x, it has been preferred to save only
         # #      the chunks that succeeded.
         # self.assertEqual(
         #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
@@ -212,7 +210,7 @@ class TestReplication(unittest.TestCase):
         self.assertEqual(len(chunks), len(meta_chunk) - 1)
         for i in range(len(meta_chunk) - 1):
             self.assertEqual(chunks[i].get("error"), None)
-        # # JFS: starting at branche 3.x, it has been preferred to save only
+        # # JFS: starting at branch 3.x, it has been preferred to save only
         # #      the chunks that succeeded.
         # self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
 

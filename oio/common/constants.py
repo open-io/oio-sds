@@ -51,9 +51,6 @@ MIN_STRLEN_CHUNKID = 24
 MAX_STRLEN_CHUNKID = 64
 STRLEN_REQID = 63
 
-# Version of the format of chunk extended attributes
-OIO_VERSION = "4.2"
-
 OIO_DB_ENABLED = 0
 OIO_DB_FROZEN = 2**32 - 1
 OIO_DB_DISABLED = 2**32 - 2
@@ -129,7 +126,6 @@ CHUNK_HEADERS = {
     "metachunk_size": "%smetachunk-size" % CHUNK_METADATA_PREFIX,
     "metachunk_hash": "%smetachunk-hash" % CHUNK_METADATA_PREFIX,
     "full_path": "%sfull-path" % CHUNK_METADATA_PREFIX,
-    "oio_version": "%soio-version" % CHUNK_METADATA_PREFIX,
     "non_optimal_placement": "%snon-optimal-placement" % CHUNK_METADATA_PREFIX,
 }
 
@@ -147,7 +143,6 @@ CHUNK_XATTR_KEYS = {
     "metachunk_hash": "grid.metachunk.hash",
     "metachunk_size": "grid.metachunk.size",
     "compression": "grid.compression",
-    "oio_version": "grid.oio.version",
 }
 
 CHUNK_XATTR_CONTENT_FULLPATH_PREFIX = "oio.content.fullpath:"
@@ -161,7 +156,6 @@ CHUNK_XATTR_KEYS_OPTIONAL = {
     "metachunk_size": True,
     "metachunk_hash": True,
     "non_optimal_placement": True,
-    "oio_version": True,
     # Superseded by full_path
     "container_id": True,
     "content_id": True,

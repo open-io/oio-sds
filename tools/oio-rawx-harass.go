@@ -1,6 +1,6 @@
 // OpenIO SDS oio-rawx-harass
 // Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -157,7 +157,6 @@ func (rc *RawxClient) put() (int, int64) {
 	req.Header.Add(PFX+"content-mime-type", "octet/stream")
 	req.Header.Add(PFX+"content-chunk-method", "repli/k=6,m=3")
 	req.Header.Add(PFX+"chunk-pos", strconv.FormatUint(uint64(rc.index), 10))
-	req.Header.Add(PFX+"oio-version", "4.2")
 
 	resp, err := client.Do(req)
 	if resp != nil {

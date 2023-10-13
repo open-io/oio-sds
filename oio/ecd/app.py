@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -47,7 +47,6 @@ sys_headers = {
     "content_version": "%scontent-version" % SYS_PREFIX,
     "content_policy": "%scontent-storage-policy" % SYS_PREFIX,
     "container_id": "%scontainer-id" % SYS_PREFIX,
-    "oio_version": "%soio-version" % SYS_PREFIX,
     "full_path": "%sfull-path" % SYS_PREFIX,
 }
 
@@ -80,7 +79,6 @@ def load_sysmeta(request):
     sysmeta["content_chunksnb"] = safe_get_header(request, "content_chunksnb", "1")
     sysmeta["container_id"] = safe_get_header(request, "container_id")
     sysmeta["full_path"] = safe_get_header(request, "full_path")
-    sysmeta["oio_version"] = safe_get_header(request, "oio_version")
     return sysmeta
 
 

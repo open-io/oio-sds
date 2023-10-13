@@ -18,11 +18,6 @@ from __future__ import absolute_import
 import errno
 import os
 
-from oio.common.constants import (
-    CHUNK_XATTR_KEYS,
-    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
-    OIO_VERSION,
-)
 from oio.common.easy_value import debinarize
 
 
@@ -45,49 +40,3 @@ def read_user_xattr(fd):
                 raise err
 
     return meta
-
-
-def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False, xattr_to_remove=None):
-    """
-    Insert new fullpath extended attributes, remove deprecated ones.
-
-    :param new_fullpaths: dictionary of "fullpath" extended attributes
-        that should be set on file. The key is the chunk ID (required
-        to generate the attribute key), the value is the "fullpath".
-    :param remove_old_xattr: remove legacy attributes from file
-    :type remove_old_xattr: `bool`
-    :param xattr_to_remove: list of extra extended attributes
-        that should be removed from file
-    """
-    if hasattr(fd, "fileno"):
-        fd = fd.fileno()
-    for chunk_id, new_fullpath in new_fullpaths.items():
-        os.setxattr(
-            fd,
-            "user." + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
-            new_fullpath.encode("utf-8"),
-        )
-
-    if xattr_to_remove:
-        for key in xattr_to_remove:
-            try:
-                os.removexattr(fd, "user." + key)
-            except IOError:
-                pass
-
-    if remove_old_xattr:
-        for key in [
-            "chunk_id",
-            "container_id",
-            "content_path",
-            "content_version",
-            "content_id",
-        ]:
-            try:
-                os.removexattr(fd, "user." + CHUNK_XATTR_KEYS[key])
-            except IOError:
-                pass
-
-        os.setxattr(
-            fd, "user." + CHUNK_XATTR_KEYS["oio_version"], OIO_VERSION.encode("utf-8")
-        )

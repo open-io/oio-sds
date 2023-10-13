@@ -26,7 +26,7 @@ from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
 from oio.common.constants import CHUNK_XATTR_KEYS
 from tests.utils import BaseTestCase, random_str, random_id
-from oio.common.constants import OIO_VERSION, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.fullpath import encode_fullpath
 
 
@@ -107,7 +107,6 @@ class TestBlobAuditorFunctional(BaseTestCase):
             "chunk_size": self.chunk.metachunk_size,
             "metachunk_hash": self.chunk.metachunk_hash,
             "metachunk_size": self.chunk.metachunk_size,
-            "oio_version": OIO_VERSION,
         }
         self.blob_client.chunk_put(self.chunk.url, chunk_meta, self.content.data)
 

@@ -133,10 +133,6 @@ extern "C" {
 #  define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 # endif
 
-# ifndef RAWX_HEADER_OIO_VERSION
-#  define RAWX_HEADER_OIO_VERSION RAWX_HEADER_PREFIX "oio-version"
-# endif
-
 # ifndef RAWX_HEADER_CHUNK_ID
 #  define RAWX_HEADER_CHUNK_ID RAWX_HEADER_PREFIX "chunk-id"
 # endif

@@ -46,7 +46,6 @@ type chunkInfo struct {
 	ChunkHash          string `json:"chunk_hash,omitempty"`
 	ChunkHashAlgo      string `json:"chunk_hash_algo,omitempty"`
 	ChunkSize          string `json:"chunk_size,omitempty"`
-	OioVersion         string `json:"oio_version,omitempty"`
 
 	compression         string
 	mtime               time.Time
@@ -210,7 +209,6 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 		{AttrNameChunkPosition, &chunk.ChunkPosition},
 		{AttrNameChunkChecksum, &chunk.ChunkHash},
 		{AttrNameChunkSize, &chunk.ChunkSize},
-		{AttrNameOioVersion, &chunk.OioVersion},
 		{AttrNameCompression, &chunk.compression},
 	}
 
@@ -483,7 +481,6 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		chunk.nonOptimalPlacement = true
 	}
 
-	chunk.OioVersion = OioVersion
 	err := chunk.retrieveContentFullpathHeader(headers)
 	return chunk, err
 }
@@ -566,7 +563,6 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkPosition, chunk.ChunkPosition)
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
-	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
 }
 
@@ -574,5 +570,4 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 func (chunk chunkInfo) fillHeadersLight(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
-	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 }

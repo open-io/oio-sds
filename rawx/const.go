@@ -18,10 +18,6 @@
 package main
 
 const (
-	OioVersion = "4.2"
-)
-
-const (
 	AttrNameFullPrefix = "user.oio.content.fullpath:"
 )
 
@@ -38,7 +34,6 @@ const (
 	AttrNameChunkPosition      = "user.grid.chunk.position"
 	AttrNameChunkChecksum      = "user.grid.chunk.hash"
 	AttrNameChunkSize          = "user.grid.chunk.size"
-	AttrNameOioVersion         = "user.grid.oio.version"
 	AttrNameCompression        = "user.grid.compression"
 )
 
@@ -64,7 +59,6 @@ const (
 	HeaderNameMetachunkChecksum   = "X-oio-Chunk-Meta-Metachunk-Hash"
 	HeaderNameNonOptimalPlacement = "X-oio-Chunk-Meta-Non-Optimal-Placement"
 	HeaderNameChunkID             = "X-oio-Chunk-Meta-Chunk-Id"
-	HeaderNameXattrVersion        = "X-oio-Chunk-Meta-Oio-Version"
 )
 
 const (

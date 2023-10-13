@@ -344,7 +344,6 @@ type EventPayload struct {
 	ChunkPosition  string `json:"chunk_position"`
 	ChunkHash      string `json:"chunk_hash"`
 	ChunkSize      string `json:"chunk_size"`
-	OioVersion     string `json:"oio_version"`
 }
 
 func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
@@ -370,7 +369,6 @@ func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 			ChunkPosition:  chunk.ChunkPosition,
 			ChunkHash:      chunk.ChunkHash,
 			ChunkSize:      chunk.ChunkSize,
-			OioVersion:     chunk.OioVersion,
 		},
 	}
 

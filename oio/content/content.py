@@ -18,7 +18,6 @@ from oio.common import exceptions as exc
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
-from oio.common.constants import OIO_VERSION
 from oio.common.exceptions import UnrecoverableContent
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_functions import _get_weighted_random_score
@@ -225,7 +224,6 @@ class Content(object):
         sysmeta["mime_type"] = self.mime_type
         sysmeta["chunk_method"] = self.chunk_method
         sysmeta["chunk_size"] = self.metadata["chunk_size"]
-        sysmeta["oio_version"] = OIO_VERSION
         sysmeta["full_path"] = self.full_path
         sysmeta["content_path"] = self.path
         sysmeta["container_id"] = self.container_id

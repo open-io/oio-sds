@@ -20,7 +20,7 @@ from oio.common.green import GreenPile
 import random
 from email.utils import parsedate
 from functools import wraps
-from six.moves.urllib_parse import unquote
+from urllib.parse import unquote
 from time import mktime
 
 from oio.common.logger import get_logger
@@ -34,7 +34,6 @@ from oio.common.constants import (
     CHUNK_HEADERS,
     CHUNK_XATTR_KEYS_OPTIONAL,
     FETCHXATTR_HEADER,
-    OIO_VERSION,
     REQID_HEADER,
     CHECKHASH_HEADER,
 )
@@ -281,7 +280,6 @@ class BlobClient(object):
         kwargs["check_headers"] = not bool(fullpath)
         try:
             meta, stream = self.chunk_get(from_url, verify_checksum=True, **kwargs)
-            meta["oio_version"] = OIO_VERSION
             meta["chunk_id"] = chunk_id or to_url.split("/")[-1]
             meta["full_path"] = fullpath or meta["full_path"]
             meta["container_id"] = cid or meta.get("container_id")

@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 
 import string
 from oio.check_service.common import CheckService, random_buffer
-from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
+from oio.common.constants import CHUNK_HEADERS
 from oio.common.utils import get_hasher
 
 
@@ -47,7 +47,6 @@ class CheckRawx(CheckService):
             CHUNK_HEADERS["chunk_hash"]: hash_.hexdigest().upper(),
             CHUNK_HEADERS["chunk_pos"]: 0,
             CHUNK_HEADERS["full_path"]: "test/test/test,test1/test1/test1",
-            CHUNK_HEADERS["oio_version"]: OIO_VERSION,
         }
 
     def _chunk_url(self, rawx_host, chunk_id):

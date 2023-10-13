@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,6 @@ from tests.unit.api import (
     EMPTY_SHA256,
 )
 from tests.unit import set_http_connect, set_http_requests
-from oio.common.constants import OIO_VERSION
 from oio.common.utils import get_hasher
 
 
@@ -60,7 +59,6 @@ class TestEC(unittest.TestCase):
             "policy": "EC",
             "content_path": "test",
             "full_path": ["account/container/test"],
-            "oio_version": OIO_VERSION,
         }
         self._meta_chunk = [
             {"url": "http://127.0.0.1:7000/0", "pos": "0.0", "num": 0},

@@ -92,7 +92,6 @@ class TestContentFactory(BaseTestCase):
             "name": "tox.ini",
             "policy": self.stgpol_ec,
             "version": "1450176946676289",
-            "oio_version": "4.2",
         }
         chunks = [
             {
@@ -164,7 +163,6 @@ class TestContentFactory(BaseTestCase):
             "name": "tox.ini",
             "policy": self.stgpol_twocopies,
             "version": "1450176946676289",
-            "oio_version": "4.2",
         }
         chunks = [
             {
@@ -227,7 +225,6 @@ class TestContentFactory(BaseTestCase):
             "name": "titi",
             "policy": self.stgpol_ec,
             "version": "1450341162332663",
-            "oio_version": "4.2",
         }
         chunks = [
             {
