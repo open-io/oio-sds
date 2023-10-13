@@ -1366,25 +1366,6 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
-template_systemd_service_blob_rebuilder = """
-[Unit]
-Description=[OpenIO] Service blob rebuilder ${SRVNUM}
-PartOf=${PARENT}
-OioGroup=${NS},${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_local_header = """
 [default]
 """
@@ -1533,7 +1514,7 @@ timeout = 4.5
 [filter:content_rebuild]
 use = egg:oio#notify
 tube = oio-rebuild
-queue_url = ${MAIN_QUEUE_URL}
+queue_url = ${QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -1638,6 +1619,17 @@ topic_name = oio-delay
 use = egg:oio#logger
 """
 
+template_event_agent_rebuilder_handlers = """
+[handler:storage.content.broken]
+pipeline = rebuild
+
+[filter:rebuild]
+use = egg:oio#blob_rebuilder
+topic_name = oio-rebuild
+
+[filter:logger]
+use = egg:oio#logger
+"""
 
 template_systemd_service_xcute_event_agent = """
 [Unit]
@@ -2927,6 +2919,40 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to content broken events
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        env = subenv(
+            {
+                "SRVTYPE": "event-agent",
+                "SRVNUM": num,
+                "QUEUE_NAME": "oio-rebuild",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
+                "EVENT_WORKERS": "1",
+                "GROUP_ID": "event-agent-rebuild",
+            }
+        )
+        register_service(
+            env,
+            template_systemd_service_event_agent,
+            event_agents_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent --concurrency=eventlet -p ",
+        )
+        with open(config(env), "w+", encoding="utf8") as outf:
+            tpl = Template(template_event_agent)
+            outf.write(tpl.safe_substitute(env))
+        with open(
+            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+        ) as outf:
+            tpl = Template(template_event_agent_rebuilder_handlers)
+            outf.write(tpl.safe_substitute(env))
+
+        # We need only one service
+        break
+
     # Xcute event-agent
     # -------------------------------------------------------------------------
     # TODO(TPE): Adapt when we will add kafka support to xcute
@@ -3008,20 +3034,6 @@ def generate(options):
         crawler_target,
         add_service_to_conf=False,
     )
-
-    # blob-rebuilder configuration -> one per beanstalkd
-    rebuilder_target = register_target("blob-rebuilder", root_target)
-    for num, host, port in all_beanstalkd:
-        bnurl = "beanstalk://{0}:{1}".format(host, port)
-        env = subenv(
-            {
-                "SRVTYPE": "blob-rebuilder",
-                "SRVNUM": num,
-                "QUEUE_URL": bnurl,
-                "EXE": "oio-blob-rebuilder",
-            }
-        )
-        register_service(env, template_systemd_service_blob_rebuilder, rebuilder_target)
 
     # webhook test server
     if WEBHOOK:
