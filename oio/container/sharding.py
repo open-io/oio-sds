@@ -22,6 +22,7 @@ from urllib.parse import unquote
 from oio.common import exceptions
 from oio.common.client import ProxyClient
 from oio.common.constants import (
+    CONNECTION_TIMEOUT,
     EXISTING_SHARD_STATE_ABORTED,
     EXISTING_SHARD_STATE_SHARDED,
     HEADER_PREFIX,
@@ -43,6 +44,7 @@ from oio.common.exceptions import (
     OioTimeout,
     from_multi_responses,
 )
+from oio.common.http_urllib3 import urllib3
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import (
@@ -318,7 +320,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_PRECLEAN_TIMEOUT = 120
     DEFAULT_CREATE_SHARD_TIMEOUT = 120
     DEFAULT_SAVE_WRITES_TIMEOUT = 120
-    DEFAULT_REPLICATED_CLEAN_TIMEOUT = 2.0
+    DEFAULT_REPLICATED_CLEAN_TIMEOUT = 30.0
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -785,7 +787,6 @@ class ContainerSharding(ProxyClient):
                 shard,
                 parent_shard=parent_shard,
                 attempts=1,
-                timeout=self.preclean_timeout,
                 **kwargs,
             )
 
@@ -927,6 +928,8 @@ class ContainerSharding(ProxyClient):
     def _clean(self, shard, parent_shard=None, no_vacuum=False, attempts=1, **kwargs):
         data = None
         service_id = None
+        timeout = kwargs.get("timeout")
+        request_kwargs = kwargs.copy()
         if parent_shard:
             # It's a local shard copy
             cid = parent_shard["cid"]
@@ -942,29 +945,34 @@ class ContainerSharding(ProxyClient):
             params["service_id"] = service_id
             params["local"] = 1
             data = shard
+            # If the request is local, we accept it takes a long time
+            timeout = timeout if timeout else self.preclean_timeout
+            global_deadline = timeout_to_deadline(timeout)
+            # Recalculate the timeout on each attempt
+            request_kwargs.pop("timeout", None)
+            request_kwargs["deadline"] = global_deadline
         else:
             cid = shard["cid"]
             params = self._make_params(cid=cid, **kwargs)
             # The first request must take priority to be sure to start cleaning
             params["urgent"] = 1
-        timeout = kwargs.get("timeout")
-        preclean_deadline = timeout_to_deadline(
-            timeout if timeout else self.DEFAULT_PRECLEAN_TIMEOUT
-        )
+            # Clean until done
+            timeout = timeout if timeout else self.replicated_clean_timeout
+            global_deadline = None
+            # Although a long timeout can be used, the operation will not lock
+            # the database for more than 1 second
+            request_kwargs["timeout"] = urllib3.Timeout(
+                connect=CONNECTION_TIMEOUT,
+                read=timeout,
+            )
+            request_kwargs.pop("deadline", None)
         truncated = True
-        request_kwargs = kwargs.copy()
-        # If the request is not to be replicated, we accept it takes a long time
-        if params.get("local"):
-            request_kwargs["timeout"] = timeout or self.DEFAULT_PRECLEAN_TIMEOUT
-        else:
-            request_kwargs["timeout"] = self.replicated_clean_timeout
-
         while truncated:
-            if timeout and monotonic_time() >= preclean_deadline:
+            if global_deadline and monotonic_time() >= global_deadline:
                 break
             for i in range(attempts):
                 # Ensure some timeleft for preclean
-                if timeout and monotonic_time() >= preclean_deadline:
+                if global_deadline and monotonic_time() >= global_deadline:
                     self.logger.warning(f"Failed to clean the container in {timeout}s")
                     break
                 try:

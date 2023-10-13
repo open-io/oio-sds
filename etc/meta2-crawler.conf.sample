@@ -54,8 +54,9 @@ sharding_preclean_new_shards = True
 # Maximum amount of time the sharding process is allowed
 # to preclean shard copie
 sharding_preclean_timeout = 120
-# A short deadline when cleaning database during sharding (write lock)
-sharding_replicated_clean_timeout = 2
+# Maximum waiting time on the client side.
+# But on server side, the request will not lock the database for more than 1 second.
+sharding_replicated_clean_timeout = 30
 # Maximum amount of time the sharding process is allowed to create new shard
 sharding_create_shard_timeout = 120
 # Maximum amount of time the sharding process is allowed to save writes

@@ -3149,10 +3149,12 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 		if (beans && g_slist_length(beans) != 1) {
 			err = BADREQ("Only one shard can be cleaned");
 		} else {
-			if (local) {
-				// The database is cleaned in one go and it may take some time
-				oio_ext_allow_long_timeout(TRUE);
-			}
+			/* If it's a local request, the database is cleaned in one go
+			 * and it may take some time.
+			 * Otherwise, it is better to avoid replaying this rather expensive
+			 * request.
+			 */
+			oio_ext_allow_long_timeout(TRUE);
 			PACKER_VOID(_pack) {
 				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans,
 						local, urgent, DL());

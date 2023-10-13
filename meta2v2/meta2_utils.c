@@ -4428,7 +4428,9 @@ _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 	 * Notice that we check the deadline only if there has been
 	 * at least one change, or an error. */
 	if (!dl_ok) {
-		*allowed_changes = 0;
+		/* By changing the sign, this allows the value to be retained
+		 * to calculate the number of cleaned entries. */
+		*allowed_changes *= -1;
 	}
 
 	g_free(clause_str);
@@ -4465,7 +4467,9 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 	 * Notice that we check the deadline only if there has been
 	 * at least one change, or an error. */
 	if (!dl_ok) {
-		*allowed_changes = 0;
+		/* By changing the sign, this allows the value to be retained
+		 * to calculate the number of cleaned entries. */
+		*allowed_changes *= -1;
 	}
 
 	metautils_gvariant_unrefv(params);
@@ -4479,30 +4483,37 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
  * and also keep some time to replicate the operation to other peers
  * and to compute the response payload. */
 static gint64
-_compute_reasonable_deadline(gboolean is_replicated)
+_compute_reasonable_deadline(gint64 now, gboolean local)
 {
-	gint64 now = oio_ext_monotonic_time();
 	gint64 available = oio_ext_get_deadline() - now;
-	if (is_replicated) {
+	if (local) {
+		/* Keep a little time to compute the response payload. */
+		available -= 5 * G_TIME_SPAN_MILLISECOND;
+	} else {
 		/* After the request is executed locally, we have to replicate the
 		 * diff to other peers. If the time we are given is shorter than the
 		 * replication timeout, cut it in half. */
 		/* XXX(FVE): we should use oio_election_replicate_timeout_req,
 		 * but we cannot access this variable from here. */
 		available -= MIN(available / 2, 5 * G_TIME_SPAN_SECOND);
+		/* The request is made on a database accessible to the client.
+		 * Do not lock the meta2 database for more than 1 second. */
+		available = MIN(available, meta2_sharding_replicated_clean_timeout);
 	}
-	/* Keep a little time to compute the response payload. */
-	available -= 5 * G_TIME_SPAN_MILLISECOND;
 	return now + MAX(available, 0);
 }
 
 GError*
-m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
-		gchar *lower, gchar *upper, gboolean *truncated)
+m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
+		gint64 max_entries_cleaned, gchar *lower, gchar *upper,
+		gboolean *truncated)
 {
 	GError *err = NULL;
 	gchar *current_lower = NULL;
 	gchar *current_upper = NULL;
+	gint64 now = 0;
+	gint64 entries_cleaned = 0;
+	gint64 duration = 0;
 
 	if (!lower) {
 		err = m2db_get_sharding_lower(sq3, &current_lower);
@@ -4521,8 +4532,10 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
 	}
+	gint64 _max_entries_cleaned = max_entries_cleaned;
 
-	gint64 dl = _compute_reasonable_deadline(sq3->election != 0);
+	now = oio_ext_monotonic_time();
+	gint64 dl = _compute_reasonable_deadline(now, local);
 
 	// Remove orphan properties
 	if ((err = _clean_shard_aliases(
@@ -4548,7 +4561,13 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gint64 max_entries_cleaned,
 			&max_entries_cleaned, dl);
 
 end:
+	if (now) {
+		duration = oio_ext_monotonic_time() - now;
+	}
 	if (!err) {
+		// max_entries_cleaned will be negative if the deadline is reached
+		entries_cleaned = _max_entries_cleaned - labs(max_entries_cleaned);
+
 		/* We don't check the deadline here, on purpose: there is a chance
 		 * that the last check of an already cleaned database finishes after
 		 * the deadline. If we get here whereas the cleaning is not finished:
@@ -4557,28 +4576,45 @@ end:
 		 *   set to zero. */
 		if (max_entries_cleaned > 0) {
 			sqlx_admin_del_all_user(sq3, NULL, NULL);
-			m2db_recompute_container_size_and_obj_count(sq3, FALSE);
+			if (!local) {
+				m2db_recompute_container_size_and_obj_count(sq3, FALSE);
+			}
+			/* else {
+			 *   In the following operations, the counters will be reset
+			 *   (container/sharding/create_shard) and recalculated
+			 *   (replcated container/sharding/clean).
+			 *   So there's no point spending time doing it here.
+			 * } */
 			*truncated = FALSE;
 		} else {
 			*truncated = TRUE;
 		}
 	}
+	GRID_INFO("%"G_GINT64_FORMAT" entries cleaned in %"G_GINT64_FORMAT" ms "
+			"(truncated=%d) [%s] reqid=%s",
+			entries_cleaned, duration / G_TIME_SPAN_MILLISECOND,
+			*truncated, sq3->name.base, oio_ext_get_reqid());
 	g_free(current_lower);
 	g_free(current_upper);
 	return err;
 }
 
 GError*
-m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
+m2db_clean_root_container(struct sqlx_sqlite3_s *sq3, gboolean local,
 		gint64 max_entries_cleaned, gboolean *truncated)
 {
 	GError *err = NULL;
+	gint64 now = 0;
+	gint64 entries_cleaned = 0;
+	gint64 duration = 0;
 
 	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
 	}
+	gint64 _max_entries_cleaned = max_entries_cleaned;
 
-	gint64 dl = _compute_reasonable_deadline(sq3->election != 0);
+	now = oio_ext_monotonic_time();
+	gint64 dl = _compute_reasonable_deadline(now, local);
 
 	// Remove all chunks
 	if ((err = _clean_shard_beans(
@@ -4600,13 +4636,23 @@ m2db_clean_root_container(struct sqlx_sqlite3_s *sq3,
 			sq3, &descr_struct_ALIASES, "1", &max_entries_cleaned, dl);
 
 end:
+	if (now) {
+		duration = oio_ext_monotonic_time() - now;
+	}
 	if (!err) {
+		// max_entries_cleaned will be negative if the deadline is reached
+		entries_cleaned = _max_entries_cleaned - labs(max_entries_cleaned);
+
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
 		/* There is an explanation in m2db_clean_shard
 		 * about why we do not check the deadline here. */
 		*truncated = max_entries_cleaned <= 0;
 	}
+	GRID_INFO("%"G_GINT64_FORMAT" entries cleaned in %"G_GINT64_FORMAT" ms "
+			"(truncated=%d) [%s] reqid=%s",
+			entries_cleaned, duration / G_TIME_SPAN_MILLISECOND,
+			*truncated, sq3->name.base, oio_ext_get_reqid());
 	return err;
 }
 

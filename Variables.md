@@ -621,6 +621,15 @@ Used by `gcc`
  * cmake directive: *OIO_META2_SHARDING_MAX_ENTRIES_MERGED*
  * range: 10000 -> 1000000
 
+### meta2.sharding.replicated_clean_timeout
+
+> Maximum time to clean a shard (in replicated mode) from the moment the lock is taken.
+
+ * default: **1 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_META2_SHARDING_REPLICATED_CLEAN_TIMEOUT*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
+
 ### meta2.sharding.timeout
 
 > Maximum time allowed between the preparation phase and the locking phase to shard a container.

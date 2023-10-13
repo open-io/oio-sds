@@ -3622,10 +3622,11 @@ meta2_backend_clean_locally_sharding(struct meta2_backend_s *m2b,
 	gint64 timestamp = oio_ext_real_time();
 	if (suffix || sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 		// Local shard copy or shard, allow to clean until deadline (-1)
-		err = m2db_clean_shard(sq3, -1, shard_lower, shard_upper, truncated);
+		err = m2db_clean_shard(sq3, TRUE, -1, shard_lower, shard_upper,
+				truncated);
 	} else if (m2db_get_shard_count(sq3)) {
 		// Root, allow to clean until deadline (-1)
-		err = m2db_clean_root_container(sq3, -1, truncated);
+		err = m2db_clean_root_container(sq3, TRUE, -1, truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
 		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;
@@ -3699,11 +3700,11 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	}
 	gint64 timestamp = oio_ext_real_time();
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
-		err = m2db_clean_shard(sq3, meta2_sharding_max_entries_cleaned,
+		err = m2db_clean_shard(sq3, FALSE, meta2_sharding_max_entries_cleaned,
 				NULL, NULL, truncated);
 	} else if (m2db_get_shard_count(sq3)) {  // Root
-		err = m2db_clean_root_container(
-				sq3, meta2_sharding_max_entries_cleaned, truncated);
+		err = m2db_clean_root_container(sq3, FALSE,
+				meta2_sharding_max_entries_cleaned, truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
 		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;
