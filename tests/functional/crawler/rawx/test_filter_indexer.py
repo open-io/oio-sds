@@ -20,7 +20,7 @@ from mock import MagicMock as Mock, patch
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import CHUNK_XATTR_KEYS, read_chunk_metadata
-from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
+from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.easy_value import true_value
 from oio.common.exceptions import FaultyChunk
 from oio.common.fullpath import encode_fullpath
@@ -29,7 +29,7 @@ from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 from oio.crawler.rawx.filters.indexer import Indexer
 from oio.event.evob import EventTypes
 
-from tests.functional.blob import random_chunk_id, random_buffer, convert_to_old_chunk
+from tests.functional.blob import random_chunk_id, random_buffer
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
 from tests.utils import BaseTestCase, random_id, random_str
 
@@ -98,7 +98,6 @@ class TestBlobIndexer(BaseTestCase):
             "chunk_method": "ec/algo=liberasurecode_rs_vand,k=6,m=3,cca=blake3",
             "policy": "TESTPOLICY",
             "chunk_hash": hex_checksum.upper(),
-            "oio_version": OIO_VERSION,
             "chunk_pos": 0,
             "metachunk_hash": hex_checksum,
             "metachunk_size": 1024,
@@ -214,51 +213,6 @@ class TestBlobIndexer(BaseTestCase):
         chunks = list(chunks)
         self.assertEqual(previous_nb_chunk, len(chunks))
 
-    def test_indexer_with_old_chunk(self):
-        (
-            expected_account,
-            expected_container,
-            expected_cid,
-            expected_content_path,
-            expected_content_version,
-            expected_content_id,
-            expected_chunk_id,
-        ) = self._put_chunk()
-
-        chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
-        self.assertEqual(1, len(chunks))
-        cid, chunk_id, descr = chunks[0]
-        self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr["content_id"])
-        self.assertEqual(expected_chunk_id, chunk_id)
-
-        convert_to_old_chunk(
-            self._chunk_path(chunk_id),
-            expected_account,
-            expected_container,
-            expected_content_path,
-            expected_content_version,
-            expected_content_id,
-        )
-
-        self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
-        self._index_pass()
-        self.assertEqual(1, self.indexer.successes)
-        self.assertEqual(0, self.indexer.errors)
-
-        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
-        chunks = list(chunks)
-        self.assertEqual(1, len(chunks))
-        cid, chunk_id, descr = chunks[0]
-        self.assertEqual(expected_cid, cid)
-        self.assertEqual(expected_content_id, descr["content_id"])
-        self.assertEqual(expected_chunk_id, chunk_id)
-
-        self._delete_chunk(expected_chunk_id)
-        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
-        chunks = list(chunks)
-        self.assertEqual(0, len(chunks))
-
     def test_indexer_with_linked_chunk(self):
         if not true_value(self.conf.get("shallow_copy")):
             self.skipTest("Shallow copy disabled")
@@ -346,7 +300,6 @@ class TestBlobIndexer(BaseTestCase):
 
         # pylint: disable=no-member
         os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_hash"], 32 * b"0")
-        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_id"], enc(chunk_id))
         os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_pos"], b"0")
         os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["chunk_size"], b"4")
         os.setxattr(
@@ -356,19 +309,6 @@ class TestBlobIndexer(BaseTestCase):
             chunk_path,
             "user." + CHUNK_XATTR_KEYS["content_chunkmethod"],
             b"plain/nb_copy=3",
-        )
-        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_version"], b"1")
-        # Old (oio-sds < 4.2) extended attributes
-        os.setxattr(
-            chunk_path, "user." + CHUNK_XATTR_KEYS["container_id"], enc(container_id)
-        )
-        os.setxattr(
-            chunk_path, "user." + CHUNK_XATTR_KEYS["content_id"], enc(content_id)
-        )
-        os.setxattr(chunk_path, "user." + CHUNK_XATTR_KEYS["content_path"], enc(alias))
-        # New (oio-sds >= 4.2) extended attributes
-        os.setxattr(
-            chunk_path, "user." + CHUNK_XATTR_KEYS["oio_version"], enc(OIO_VERSION)
         )
         fullpath = encode_fullpath(self.account, cname, alias, 1, content_id)
         os.setxattr(
