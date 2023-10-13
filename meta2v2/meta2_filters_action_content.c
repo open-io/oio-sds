@@ -369,14 +369,29 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 		goto cleanup;
 	}
 
+	gboolean content_found = FALSE;
+	gboolean chunks_found = FALSE;
+	gboolean is_deleted = FALSE;
 	for (GSList *l = obc->l; l; l = l->next) {
-		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS &&
-				!strcmp(CONTENTS_HEADERS_get_chunk_method(l->data)->str,
-						CHUNK_METHOD_DRAINED)) {
-			meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CONTENT_DRAINED,
-					"The content is drained"));
-			goto cleanup;
+		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			GString *method = CONTENTS_HEADERS_get_chunk_method(l->data);
+			content_found = TRUE;
+			if (!strcmp(method->str, CHUNK_METHOD_DRAINED)) {
+				meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CONTENT_DRAINED,
+						"The content is drained"));
+				goto cleanup;
+			}
+		} else if (DESCR(l->data) == &descr_struct_ALIASES && ALIASES_get_deleted(l->data)) {
+			is_deleted = TRUE;
+		} else if (DESCR(l->data) == &descr_struct_CHUNKS) {
+			chunks_found = TRUE;
 		}
+	}
+
+	if (!is_deleted && (!content_found || !chunks_found)) {
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CORRUPT_DATABASE,
+				"content or chunks are missing"));
+		goto cleanup;
 	}
 
 	const gchar *root_hexid = oio_url_get(url, OIOURL_ROOT_HEXID);

@@ -27,6 +27,9 @@ from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import BeanstalkdNotifyFilter
 from oio.event.filters.replicate import ReplicateFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
+from testtools.testcase import ExpectedException
+
+from oio.common.exceptions import ServiceBusy
 
 
 class _App(object):
@@ -261,7 +264,8 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
+        with ExpectedException(ServiceBusy):
+            self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
 
     def test_missing_all_chunks_of_a_pos(self):
         content_name = "test_missing_2_chunks"
@@ -281,7 +285,8 @@ class TestContentRebuildFilter(BaseTestCase):
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
+        with ExpectedException(ServiceBusy):
+            self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
 
     def test_missing_multiple_chunks(self):
         content_name = "test_missing_multiple_chunks"
