@@ -1366,25 +1366,6 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
-template_systemd_service_blob_rebuilder = """
-[Unit]
-Description=[OpenIO] Service blob rebuilder ${SRVNUM}
-PartOf=${PARENT}
-OioGroup=${NS},${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_local_header = """
 [default]
 """
