@@ -68,7 +68,7 @@ class XcuteBackend(RedisConnection):
             "The job cannot be paused anymore, all jobs have been sent",
         ),
         "job_on_hold": (Forbidden, "The job is on hold"),
-        "job_running": (Forbidden, "The job running"),
+        "job_running": (Forbidden, "The job is running"),
         "job_finished": (Forbidden, "The job is finished"),
     }
 

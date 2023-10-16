@@ -38,7 +38,7 @@ class Meta2DecommissionTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload["container_id"]
 
-        moved = self.meta2.move(container_id, self.src, dst=self.dst)
+        moved = self.meta2.move(container_id, self.src, dst=self.dst, reqid=reqid)
 
         resp = Counter()
 

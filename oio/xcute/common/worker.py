@@ -42,13 +42,13 @@ class XcuteWorker(object):
         job_id = beanstalkd_job["job_id"]
         job_config = beanstalkd_job["job_config"]
         job_params = job_config["params"]
+        job_type = beanstalkd_job["job_type"]
 
         init_error = None
         task = self.tasks.get(job_id)
         if task is not None and task.params_have_changed(job_params):
             task = None
         if task is None:
-            job_type = beanstalkd_job["job_type"]
             task_class = JOB_TYPES[job_type].TASK_CLASS
             try:
                 task = task_class(
@@ -71,7 +71,7 @@ class XcuteWorker(object):
             for task_id, task_payload in iteritems(tasks):
                 tasks_run_time = ratelimit(tasks_run_time, tasks_per_second)
 
-                reqid = job_id + request_id("-")
+                reqid = job_id + request_id(f"-{job_type[:10]}-")
                 reqid = reqid[:STRLEN_REQID]
                 try:
                     task_result = task.process(task_id, task_payload, reqid=reqid)
