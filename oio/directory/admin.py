@@ -386,7 +386,9 @@ class AdminClient(ProxyClient):
         """
         return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
 
-    def service_balance_elections(self, svc_id, max_ops=0, inactivity=0, **kwargs):
+    def service_balance_elections(
+        self, svc_id, max_ops=0, inactivity=0, rejoin=True, **kwargs
+    ):
         """
         Balance elections to get an acceptable slave/master ratio.
 
@@ -395,7 +397,12 @@ class AdminClient(ProxyClient):
         :param inactivity: avoid expiring election whose last activity is
                            younger than the specified value.
         """
-        params = {"inactivity": int(inactivity), "max": int(max_ops), "id": svc_id}
+        params = {
+            "inactivity": int(inactivity),
+            "max": int(max_ops),
+            "id": svc_id,
+            "rejoin": rejoin,
+        }
         _resp, body = self.forwarder._request(
             "POST", "/balance-masters", params=params, **kwargs
         )

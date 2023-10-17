@@ -2,7 +2,7 @@
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -59,6 +59,7 @@ static gboolean sqlx_service_configure(int argc, char **argv);
 static void sqlx_service_action(void);
 static void sqlx_service_set_defaults(void);
 static void sqlx_service_specific_fini(void);
+static void sqlx_service_specific_interrupt(void);
 static void sqlx_service_specific_stop(void);
 
 // Periodic tasks & thread's workers
@@ -78,6 +79,7 @@ static GError* _reload_lb_world(
 		struct oio_lb_world_s *lbw, struct oio_lb_s *lb);
 
 // Static variables
+static gboolean fast_shutdown = FALSE;
 static struct sqlx_service_s SRV = {{0}};
 static struct replication_config_s replication_config = {0};
 static struct grid_main_callbacks sqlx_service_callbacks =
@@ -88,6 +90,7 @@ static struct grid_main_callbacks sqlx_service_callbacks =
 	.specific_fini = sqlx_service_specific_fini,
 	.configure = sqlx_service_configure,
 	.usage = sqlx_service_usage,
+	.specific_interrupt = sqlx_service_specific_interrupt,
 	.specific_stop = sqlx_service_specific_stop,
 };
 
@@ -761,6 +764,8 @@ sqlx_service_action(void)
 static void
 sqlx_service_specific_stop(void)
 {
+	sqliterepo_allow_master = FALSE;
+
 	if (SRV.server)
 		network_server_stop(SRV.server);
 
@@ -769,6 +774,14 @@ sqlx_service_specific_stop(void)
 	if (SRV.gtq_reload)
 		grid_task_queue_stop(SRV.gtq_reload);
 }
+
+static void
+sqlx_service_specific_interrupt(void)
+{
+	fast_shutdown = TRUE;
+	sqlx_service_specific_stop();
+}
+
 
 static gboolean
 sqlx_service_configure(int argc, char **argv)
@@ -832,9 +845,16 @@ sqlx_service_specific_fini(void)
 		if (cache)
 			sqlx_cache_expire(cache, G_MAXUINT, 0);
 	}
-	if (election_manager_is_operational(SRV.election_manager))
-		election_manager_exit_all(SRV.election_manager,
-				sqliterepo_server_exit_ttl);
+	if (election_manager_is_operational(SRV.election_manager)) {
+		if (!fast_shutdown) {
+			// 90% of the time for the "clean" exit,
+			election_manager_exit_all(SRV.election_manager, TRUE,
+					90 * sqliterepo_server_exit_ttl / 100);
+			// then 10% for the "fast" exit.
+		}
+		election_manager_exit_all(SRV.election_manager, FALSE,
+				sqliterepo_server_exit_ttl / 10);
+	}
 	if (SRV.sync_tab) {
 		for (guint i=0; i<SRV.sync_tab->len ;++i)
 			sqlx_sync_close(SRV.sync_tab->pdata[i]);

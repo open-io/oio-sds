@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -373,6 +373,12 @@ class ElectionBalance(Lister):
             help="Only rebalance on services higher than the average",
         )
         parser.add_argument(
+            "--no-rejoin",
+            action="store_false",
+            dest="rejoin",
+            help="When leaving an election, do not rejoin it right after",
+        )
+        parser.add_argument(
             "--timeout",
             default=32.0,
             type=float,
@@ -380,9 +386,12 @@ class ElectionBalance(Lister):
         )
         return parser
 
-    def _balance(self, id_, max_, inactivity):
+    def _balance(self, id_, max_, inactivity, rejoin):
         return self.app.client_manager.admin.service_balance_elections(
-            id_, max_ops=max_, inactivity=inactivity
+            id_,
+            max_ops=max_,
+            inactivity=inactivity,
+            rejoin=rejoin,
         )
 
     def _srvtypes(self, parsed_args):
@@ -438,7 +447,9 @@ class ElectionBalance(Lister):
             allids = self._above_average(allids)
         for id_, max_, inactivity in allids:
             if max_ > 0:
-                rc, count = self._balance(id_, max_, inactivity)
+                rc, count = self._balance(
+                    id_, max_, inactivity, rejoin=parsed_args.rejoin
+                )
             else:
                 rc, count = 0, 0
             data.append((id_, rc, count))

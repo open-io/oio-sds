@@ -126,7 +126,7 @@ struct election_manager_vtable_s
 			const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 	/** Prepare the internal memory for the election context, but without
-	 * starting the election. Usefull to prepare. */
+	 * starting the election. Useful to prepare. */
 	GError* (*election_init) (struct election_manager_s *manager,
 			const struct sqlx_name_s *n,
 			const gchar *peers,
@@ -201,9 +201,11 @@ void election_manager_dump_delays(void);
 struct election_counts_s election_manager_count (struct election_manager_s *m);
 
 /* Make some elections leave their MASTER state if they are inactive since
- * longer than `inactivity`, but not more than `max` elections. */
+ * longer than `inactivity`, but not more than `max` elections.
+ * If rejoin is FALSE, do not schedule to join the election again
+ * (will be joined only when needed). */
 guint election_manager_balance_masters(struct election_manager_s *M,
-		guint max, gint64 inactivity);
+		guint max, gint64 inactivity, gboolean rejoin);
 
 /* When is the next action to fire (timer or expiration).
  * Return 0 if there is none. */
@@ -217,7 +219,11 @@ void election_manager_play_expirations(struct election_manager_s *m, const gint6
  * and returns a boolean instead of asserting. */
 gboolean election_manager_is_operational(struct election_manager_s *manager);
 
-void election_manager_exit_all (struct election_manager_s *m, gint64 oldest);
+/** Exit all established elections. If leave_cleanly is TRUE, send an
+ * "election leave" request, otherwise just quit the election locally
+ * without telling other peers (as if we were disconnected). */
+void election_manager_exit_all(struct election_manager_s *m,
+		gboolean leave_cleanly, gint64 oldest);
 
 void election_manager_whatabout (struct election_manager_s *m,
 		const struct sqlx_name_s *n, GString *out);

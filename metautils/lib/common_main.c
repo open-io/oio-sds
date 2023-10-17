@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -423,7 +423,11 @@ grid_main_sighandler_exception(int s)
 static void
 grid_main_sighandler_stop(int s)
 {
-	grid_main_stop();
+	if (s == SIGINT) {
+		grid_main_interrupt();
+	} else {
+		grid_main_stop();
+	}
 	signal(s, grid_main_sighandler_stop);
 }
 
@@ -650,6 +654,18 @@ grid_main_fini(void)
 	user_callbacks->specific_fini();
 	grid_main_delete_pid_file();
 	GRID_DEBUG("Exiting");
+}
+
+void
+grid_main_interrupt(void)
+{
+	flag_running = FALSE;
+	sd_notify(0, "STATUS=stopping\nSTOPPING=1");
+	if (user_callbacks->specific_interrupt) {
+		user_callbacks->specific_interrupt();
+	} else {
+		user_callbacks->specific_stop();
+	}
 }
 
 void

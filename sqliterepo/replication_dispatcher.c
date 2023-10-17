@@ -2094,6 +2094,8 @@ _handler_BALM(struct gridd_reply_ctx_s *reply,
 {
 	guint max = 0;
 	gint64 inactivity = 0;
+	gboolean rejoin = TRUE;
+	gchar rejoin_str[16] = {0};
 	GError *err = NULL;
 
 	err = metautils_message_extract_struint(
@@ -2110,13 +2112,18 @@ _handler_BALM(struct gridd_reply_ctx_s *reply,
 		inactivity = 0;
 	}
 
-	max = CLAMP(max,1,9999);
+	/* Shall we join as slave an election we were previously master on?
+	 * If not, we will join the election only if needed. */
+	EXTRACT_STRING2(NAME_MSGKEY_REJOIN, rejoin_str, TRUE);
+	rejoin = oio_str_parse_bool(rejoin_str, rejoin);
+
+	max = CLAMP(max, 1, 9999);
 	inactivity = CLAMP(inactivity, 0, 86400);
 	reply->subject("max_int:%u\tinactivity_int:%"G_GINT64_FORMAT, max, inactivity);
 
 	guint count = election_manager_balance_masters(
 			sqlx_repository_get_elections_manager(repo),
-			max, inactivity * G_TIME_SPAN_SECOND);
+			max, inactivity * G_TIME_SPAN_SECOND, rejoin);
 
 	gchar *out = g_strdup_printf("%u", count);
 	reply->add_body(metautils_gba_from_string(out));

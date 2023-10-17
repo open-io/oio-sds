@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -301,6 +301,7 @@ action_forward_balance_masters(struct req_args_s *args)
 	const gchar *opt_keys[] = {
 		"max", NAME_MSGKEY_SIZE,
 		"inactivity", NAME_MSGKEY_TIMEOUT,
+		"rejoin", NAME_MSGKEY_REJOIN,
 		NULL
 	};
 	return _forward_XXX(args, NAME_MSGNAME_SQLX_BALM, opt_keys,

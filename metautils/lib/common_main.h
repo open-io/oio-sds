@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -91,6 +91,7 @@ struct grid_main_callbacks
 	void (*specific_fini) (void);
 	gboolean (*configure) (int argc, char **argv);
 	const char * (*usage) (void);
+	void (*specific_interrupt) (void);
 	void (*specific_stop) (void);
 };
 
@@ -101,6 +102,10 @@ gboolean logger_udp_open (const char *target);
 
 /* Activate syslog logging */
 void logger_syslog_open (void);
+
+/** Stops the execution of the processus. This is called by SIGINT signal,
+ * and is supposed to implement a "fast" shutdown. */
+void grid_main_interrupt(void);
 
 /** Stops the execution of the processus */
 void grid_main_stop(void);

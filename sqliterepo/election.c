@@ -1235,7 +1235,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 			 * Now, imagine the current base gives {id_shard=1, id_mux=1}, we
 			 * MUST use the second connection to the shard B, i.e. B1, to remain
 			 * backward compliant with the previous implementation that was not
-			 * consistant between the uses with and without `mux_factor`.
+			 * consistent between the uses with and without `mux_factor`.
 			 */
 			id_shard = id_shard % manager->nb_shards;
 			id_mux = id_mux % manager->mux_factor;
@@ -1278,12 +1278,13 @@ manager_count_active(struct election_manager_s *manager)
 static gboolean
 _run_exit (gpointer k, gpointer v, gpointer i)
 {
-	(void) k, (void) i;
+	(void) k;
+	enum event_type_e evt_type = GPOINTER_TO_INT(i);
 	struct election_member_s *m = v;
 	oio_ext_set_prefixed_random_reqid("exit-");
 	if (m->step != STEP_NONE
 			&& m->step != STEP_LEAVING)
-		transition(m, EVT_DISCONNECTED, NULL);
+		transition(m, evt_type, NULL);
 	return FALSE;
 }
 
@@ -1298,31 +1299,41 @@ election_manager_is_operational(struct election_manager_s *manager)
 }
 
 void
-election_manager_exit_all(struct election_manager_s *manager, gint64 duration)
+election_manager_exit_all(struct election_manager_s *manager,
+		gboolean leave_cleanly, gint64 duration)
 {
-	GRID_INFO("Voluntarily exiting all the elections...");
+	if (leave_cleanly) {
+		GRID_INFO("Voluntarily exiting all the elections...");
+	} else {
+		GRID_INFO("Killing all left-over elections...");
+	}
 	MANAGER_CHECK(manager);
 	EXTRA_ASSERT (manager->vtable == &VTABLE);
-	gint64 pivot = oio_ext_monotonic_time () + duration;
+	gint64 deadline = oio_ext_monotonic_time() + duration;
 
 	/* Order the nodes to exit */
 	_manager_lock(manager);
 	manager->exiting = TRUE;
-	g_tree_foreach (manager->members_by_key, _run_exit, NULL);
+	g_tree_foreach(manager->members_by_key, _run_exit,
+			leave_cleanly?
+				GINT_TO_POINTER(EVT_LEAVE_REQ)
+				: GINT_TO_POINTER(EVT_DISCONNECTED)
+	);
 	_manager_unlock(manager);
 
 	guint count = manager_count_active(manager);
 	if (duration <= 0) {
 		GRID_INFO("%u elections still active", count);
 	} else {
-		do {
-			GRID_INFO("Waiting for %u active elections", count);
-			if (oio_ext_monotonic_time() > pivot) {
+		while ((count = manager_count_active(manager)) > 0) {
+			gint64 now = oio_ext_monotonic_time();
+			if (now > deadline) {
 				GRID_WARN("TIMEOUT while waiting for active elections");
 				break;
 			}
-			g_usleep(500 * G_TIME_SPAN_MILLISECOND);
-		} while ((count = manager_count_active(manager)) > 0);
+			GRID_INFO("Waiting for %u active elections", count);
+			g_usleep(MIN(500 * G_TIME_SPAN_MILLISECOND, deadline - now));
+		}
 		if (count == 0)
 			GRID_INFO("No more active elections");
 	}
@@ -2411,7 +2422,7 @@ defer_USE(struct election_member_s *member, const gboolean master)
 	 * JFS: However, having a hard limit to a minimum of 1s between 2 USE for
 	 * the same election is a good thing, IMO.
 	 * JFS: However, when preventing the double MASTER problem we do not want
-	 * to prevent that message, whatever the last occurence. */
+	 * to prevent that message, whatever the last occurrence. */
 	if (!master && (now - member->last_USE) < G_TIME_SPAN_SECOND) {
 		member_trace("avoid:USE", member);
 		return TRUE;
@@ -2783,7 +2794,7 @@ member_action_to_LISTING(struct election_member_s *member)
 		return member_leave_on_error(member, zrc);
 	}
 
-	// if comming from a stable state like SLAVE
+	// if coming from a stable state like SLAVE
 	if (!member->when_unstable)
 		member->when_unstable = oio_ext_monotonic_time();
 
@@ -3422,7 +3433,7 @@ _member_react_NONE(struct election_member_s *member, enum event_type_e evt)
 			if (member->manager->exiting)
 				return;
 			/* Right now, we start an election cycle. We consider this point
-			 * as the real start of the "unstable" phasis of the election. */
+			 * as the real start of the "unstable" phase of the election. */
 			return member_action_START(member);
 
 			/* Interruptions */
@@ -3634,7 +3645,9 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 			/* nominal flow */
 			if (member->local_id == *p_masterid) {
 				/* We are 1st, the probable future master */
-				if(!sqliterepo_allow_master) {
+				if (!sqliterepo_allow_master) {
+					GRID_NOTICE("Refusing to be MASTER on %s",
+							member->inline_name.base);
 					member->requested_USE = 1;
 					return member_action_to_LEAVING(member);
 				} else {
@@ -4422,7 +4435,7 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
 
 guint
 election_manager_balance_masters(struct election_manager_s *M, guint max,
-		gint64 inactivity)
+		gint64 inactivity, gboolean rejoin)
 {
 	guint count = 0;
 	gint64 pivot = 0;
@@ -4438,7 +4451,7 @@ election_manager_balance_masters(struct election_manager_s *M, guint max,
 		} else {
 			/* Tell the first base to leave its MASTER position but to re-join
 			 * immediately after. */
-			current->requested_USE = 1;
+			current->requested_USE = rejoin;
 			transition(current, EVT_LEAVE_REQ, NULL);
 			++ count;
 		}
