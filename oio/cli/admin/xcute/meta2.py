@@ -69,6 +69,7 @@ class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
         parser.add_argument(
             "--decommission-percentage",
             type=int,
+            default=100 - self.JOB_CLASS.DEFAULT_USAGE_TARGET,
             help=(
                 "Percentage of databases to decommission (default=%d)."
                 % (100 - self.JOB_CLASS.DEFAULT_USAGE_TARGET)

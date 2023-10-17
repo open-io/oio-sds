@@ -36,7 +36,7 @@ class ServiceDecommissionTest(CliTestCase):
                 self.logger.info("Failed to clean %s/%s: %s", self.account, ct, exc)
         super().tearDown()
 
-    def test_meta2_decommission(self):
+    def _test_meta2_decommission(self, decommission_percentage=None):
         """
         Test the 'openio-admin xcute meta2 decommission' command actually
         decommissions a meta2 service.
@@ -59,12 +59,13 @@ class ServiceDecommissionTest(CliTestCase):
             list(self.rdir.meta2_index_fetch_all(candidate, reqid=list_reqid))
         )
 
-        decommission_percentage = 50
         opts = self.get_format_opts(fields=["job.id"])
-        job_id = self.openio_admin(
-            "xcute meta2 decommission --decommission-percentage %d %s %s"
-            % (decommission_percentage, candidate, opts)
-        )
+        if decommission_percentage is not None:
+            opts = f"--decommission-percentage {decommission_percentage} " + opts
+        else:
+            # Do not pass the parameter, but use 100 for result analyzis
+            decommission_percentage = 100
+        job_id = self.openio_admin("xcute meta2 decommission %s %s" % (candidate, opts))
         attempts = 10
         status = None
         opts = self.get_format_opts("json")
@@ -79,7 +80,9 @@ class ServiceDecommissionTest(CliTestCase):
             self.fail("xcute job %s did not finish within %ds" % (job_id, attempts))
 
         expected_tasks = total_bases * decommission_percentage / 100
-        self.assertEqual(decoded["config.params.usage_target"], 50)
+        self.assertEqual(
+            decoded["config.params.usage_target"], 100 - decommission_percentage
+        )
         self.assertGreaterEqual(decoded["tasks.sent"], expected_tasks - 1)
         self.assertLessEqual(decoded["tasks.sent"], expected_tasks)
         # Hopefully we moved some databases, but we don't know how the cluster is
@@ -87,6 +90,12 @@ class ServiceDecommissionTest(CliTestCase):
         # (because of distance constraints).
         self.assertGreaterEqual(decoded["results.moved_seq"], expected_tasks / 4)
         self.assertLessEqual(decoded["results.moved_seq"], expected_tasks)
+
+    def test_meta2_decommission(self):
+        return self._test_meta2_decommission(decommission_percentage=None)
+
+    def test_meta2_decommission_percentage(self):
+        return self._test_meta2_decommission(decommission_percentage=50)
 
     def test_rdir_decommission(self):
         """
