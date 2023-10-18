@@ -1,5 +1,5 @@
-version: "3.7"
-name: redpanda-quickstart
+version: "3.3"
+# name: redpanda-quickstart
 networks:
   redpanda_network:
     driver: bridge
