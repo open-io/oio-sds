@@ -1,5 +1,5 @@
-version: "3.7"
-name: redpanda-quickstart
+version: "3.3"
+# name: redpanda-quickstart
 networks:
   redpanda_network:
     driver: bridge
@@ -32,7 +32,7 @@ services:
       - --mode dev-container
       # enable logs for debugging.
       - --default-log-level=warn
-    image: docker.redpanda.com/redpandadata/redpanda:v23.2.8
+    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/redpanda:v23.2.8
     container_name: redpanda-0
     volumes:
       - redpanda-0:/var/lib/redpanda/data
@@ -45,7 +45,7 @@ services:
       - 19644:9644
   console:
     container_name: redpanda-console
-    image: docker.redpanda.com/redpandadata/console:v2.3.1
+    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/console:v2.3.1
     networks:
       - redpanda_network
     entrypoint: /bin/sh
