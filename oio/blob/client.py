@@ -135,6 +135,7 @@ class BlobClient(object):
         chunk_method = meta.get("chunk_method", meta.get("content_chunkmethod"))
         storage_method = STORAGE_METHODS.load(chunk_method)
         fake_checksum = utils.FakeChecksum("Don't care")
+        headers = kwargs.pop("headers", None)
         writer = ReplicatedMetachunkWriter(
             meta,
             [chunk],
@@ -144,6 +145,7 @@ class BlobClient(object):
             perfdata=self.perfdata,
             logger=self.logger,
             watchdog=self.watchdog,
+            headers=headers,
             **kwargs
         )
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
@@ -273,6 +275,7 @@ class BlobClient(object):
         path=None,
         version=None,
         content_id=None,
+        headers=None,
         **kwargs
     ):
         stream = None
@@ -298,7 +301,8 @@ class BlobClient(object):
             if not chunk_checksum_algo and chunk_hash:
                 chunk_checksum_algo = "md5" if len(chunk_hash) == 32 else "blake3"
             kwargs.pop("chunk_checksum_algo", None)
-
+            # Adding extra headers to pass to put request
+            kwargs["headers"] = headers
             bytes_transferred, chunk_hash = self.chunk_put(
                 to_url, meta, stream, chunk_checksum_algo=chunk_checksum_algo, **kwargs
             )

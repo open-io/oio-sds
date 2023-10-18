@@ -166,6 +166,26 @@ def format_location(location, levels=NB_LOCATION_LEVELS):
     return location
 
 
+def get_distance(loc_1, loc_2):
+    """Compute the distance between the two location
+
+    :param loc_1: first location
+    :type loc_1: str
+    :param loc_2: second location
+    :type loc_2: str
+    :return: distance between two location
+    :rtype: int
+    """
+    common = 0
+    loc_1 = format_location(tuple(loc_1.split(".")))
+    loc_2 = format_location(tuple(loc_2.split(".")))
+    for i in range(NB_LOCATION_LEVELS):
+        if loc_1[i] != loc_2[i]:
+            break
+        common += 1
+    return NB_LOCATION_LEVELS - common
+
+
 def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=None):
     """
     Calculate current items on the host of the chunk passed in parameters

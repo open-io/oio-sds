@@ -109,7 +109,8 @@ class Content(object):
         max_attempts=3,
         check_quality=False,
         fake_excluded_chunks=None,
-        moving_data=False,
+        force_fair_constraints=False,
+        adjacent_mode=False,
         **kwargs
     ):
         notin = ChunksHelper(chunks_notin, False).raw()
@@ -124,7 +125,8 @@ class Content(object):
         spare_data = {
             "notin": notin,
             "broken": broken,
-            "force_fair_constraints": moving_data,
+            "force_fair_constraints": force_fair_constraints,
+            "adjacent_mode": adjacent_mode,
         }
         last_exc = None
         bal = 0
@@ -275,6 +277,9 @@ class Content(object):
         dry_run=False,
         max_attempts=3,
         cur_items=None,
+        force_fair_constraints=True,
+        adjacent_mode=False,
+        headers={},
         **kwargs
     ):
         """
@@ -318,7 +323,8 @@ class Content(object):
             position=current_chunk.pos,
             check_quality=check_quality,
             max_attempts=max_attempts,
-            moving_data=True,
+            force_fair_constraints=force_fair_constraints,
+            adjacent_mode=adjacent_mode,
             **kwargs
         )
 
@@ -356,6 +362,7 @@ class Content(object):
                         path=self.path,
                         version=self.version,
                         content_id=self.content_id,
+                        headers=headers,
                         **kwargs
                     )
                     break

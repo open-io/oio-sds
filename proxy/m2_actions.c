@@ -3661,7 +3661,8 @@ action_container_sharding_abort(struct req_args_s *args)
 
 static GError*
 _get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
-		const char *polname, GSList *notin, GSList *broken, gboolean force_fair_constraints, GSList **beans)
+		const char *polname, GSList *notin, GSList *broken,
+		gboolean force_fair_constraints, gboolean adjacent_mode, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
@@ -3671,7 +3672,8 @@ _get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err = get_conditioned_spare_chunks(url, position,
-			lb_rawx, policy, ns_name, notin, broken, force_fair_constraints, beans);
+			lb_rawx, policy, ns_name, notin, broken, force_fair_constraints,
+			adjacent_mode, beans);
 	storage_policy_clean(policy);
 	return err;
 }
@@ -3795,10 +3797,11 @@ action_m2_content_prepare_v2(struct req_args_s *args, struct json_object *jargs)
 
 static GError *_m2_json_spare (struct req_args_s *args,
 		struct json_object *jbody, GSList ** out) {
-	struct json_object *jnotin = NULL, *jbroken = NULL, *jforce_fair_constraints = NULL;
+	struct json_object *jnotin = NULL, *jbroken = NULL;
+	struct json_object *jforce_fair_constraints = NULL, *jadjacent_mode = NULL;
 	GSList *notin = NULL, *broken = NULL, *obeans = NULL;
 	GError *err = NULL;
-	gboolean force_fair_constraints;
+	gboolean force_fair_constraints, adjacent_mode;
 
 	*out = NULL;
 	const char *stgpol = OPT("stgpol");
@@ -3811,15 +3814,25 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		return BADREQ("'notin' field missing");
 	if (!json_object_object_get_ex (jbody, "broken", &jbroken))
 		return BADREQ("'broken' field missing");
-	if (!json_object_object_get_ex (jbody, "force_fair_constraints", &jforce_fair_constraints)){
+	if (json_object_object_get_ex (jbody, "force_fair_constraints", &jforce_fair_constraints)) {
+		if (json_object_is_type(jforce_fair_constraints, json_type_boolean)) {
+			force_fair_constraints = json_object_get_boolean(jforce_fair_constraints);
+		} else {
+			goto label_exit;
+		}
+	} else {
 		/* use default value */
 		force_fair_constraints = FALSE;
-	}else{
-		if (!json_object_is_type(jforce_fair_constraints, json_type_boolean)){
+	}
+	if (json_object_object_get_ex (jbody, "adjacent_mode", &jadjacent_mode)) {
+		if (json_object_is_type(jadjacent_mode, json_type_boolean)) {
+			adjacent_mode = json_object_get_boolean(jadjacent_mode);
+		} else {
 			goto label_exit;
-		} else{
-			force_fair_constraints = json_object_get_boolean(jforce_fair_constraints);
 		}
+	} else {
+		/* use default value */
+		adjacent_mode = FALSE;
 	}
 	if (!json_object_is_type(jnotin, json_type_null)
 			&& NULL != (err = _load_simplified_chunks (jnotin, &notin)))
@@ -3838,7 +3851,7 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		err = _get_spare_chunks(args->url, OPT("position"), stgpol, &obeans);
 	} else {
 		err = _get_conditioned_spare_chunks(args->url, OPT("position"),
-				stgpol, notin, broken, force_fair_constraints, &obeans);
+				stgpol, notin, broken, force_fair_constraints, adjacent_mode, &obeans);
 	}
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 

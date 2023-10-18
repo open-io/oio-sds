@@ -220,7 +220,8 @@ _poll(struct req_args_s *args, struct json_object *body)
 	}
 	gboolean flawed = FALSE;
 	gboolean force_fair_constraints = FALSE;
-	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, force_fair_constraints, &flawed);
+	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id,
+			force_fair_constraints, FALSE, &flawed);
 	if (err) {
 		g_prefix_error(&err,
 				"found only %u services matching the criteria: ", ids->len);

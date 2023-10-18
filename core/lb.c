@@ -53,7 +53,8 @@ struct oio_lb_pool_vtable_s
 	GError* (*patch) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
 			const oio_location_t * known,
-			oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
+			oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+			gboolean adjacent_mode, gboolean *flawed);
 
 	struct oio_lb_item_s* (*get_item) (struct oio_lb_pool_s *self,
 			const char *id);
@@ -97,9 +98,11 @@ GError*
 oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		gboolean adjacent_mode, gboolean *flawed)
 {
-	CFG_CALL(self, patch)(self, avoids, known, on_id, force_fair_constraints, flawed);
+	CFG_CALL(self, patch)(self, avoids, known, on_id,
+	force_fair_constraints, adjacent_mode, flawed);
 }
 
 struct oio_lb_item_s *
@@ -378,9 +381,13 @@ struct polling_ctx_s
 
 	/* Did we use a fallback slot while polling? */
 	gboolean fallback_used : 8;
-	
+
 	/* are we moving data while polling? */
 	gboolean force_fair_constraints : 8;
+
+	/* If true, look for items adjacent to the one that should be avoided.
+	* We need this when removing a service: moving to adjacent services is fast. */
+	gboolean adjacent_mode : 8;
 
 	/* Shall we check the distance requirements? This will be disabled
 	 * automagically if we detect a case where it is not possible to
@@ -410,7 +417,8 @@ static GError *_local__poll (struct oio_lb_pool_s *self,
 static GError *_local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed);
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		gboolean adjacent_mode, gboolean *flawed);
 
 static struct oio_lb_item_s *_local__get_item(struct oio_lb_pool_s *self,
 		const char *id);
@@ -914,6 +922,12 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 	// Check the item is not in "avoids" list
 	if (_item_is_too_close(ctx->avoids, loc, 1))
 		return NULL;
+	if (ctx->adjacent_mode){
+		// Check the item is adjacent
+		if (_item_is_too_far(ctx->avoids, loc, distance)){
+			return NULL;
+		}
+	}
 	if (reversed) {
 		// Check the item is not too far from already polled items
 		if (_item_is_too_far(ctx->polled, loc, distance))
@@ -1075,7 +1089,8 @@ _local__poll (struct oio_lb_pool_s *self,
 		gboolean *flawed)
 {
 	gboolean force_fair_constraints = FALSE;
-	return _local__patch(self, avoids, NULL, on_id, force_fair_constraints, flawed);
+	return _local__patch(self, avoids, NULL, on_id,
+			force_fair_constraints, FALSE, flawed);
 }
 
 static struct oio_lb_selected_item_s*
@@ -1218,7 +1233,8 @@ _debug_service_selection(struct polling_ctx_s *ctx)
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		gboolean adjacent_mode, gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -1269,6 +1285,7 @@ _local__patch(struct oio_lb_pool_s *self,
 			(GDestroyNotify)oio_lb_selected_item_free),
 		.strict_max_items = lb->strict_max_items,
 		.fair_max_items = lb->fair_max_items,
+		.adjacent_mode = adjacent_mode,
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -2250,14 +2267,16 @@ oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 GError*
 oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints, gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		gboolean adjacent_mode, gboolean *flawed)
 {
 	EXTRA_ASSERT(name != NULL);
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__patch(pool, avoids, known, on_id, force_fair_constraints, flawed);
+		res = oio_lb_pool__patch(pool, avoids, known, on_id,
+				force_fair_constraints, adjacent_mode, flawed);
 	else
 		res = BADREQ("pool [%s] not found", name);
 	g_rw_lock_reader_unlock(&lb->lock);
@@ -2454,7 +2473,8 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		}
 		known[selection->len] = 0;
 		gboolean force_fair_constraints = FALSE;
-		err = _local__patch(self, NULL, known, _select, force_fair_constraints, flawed);
+		err = _local__patch(self, NULL, known, _select,
+				force_fair_constraints, FALSE, flawed);
 	}
 
 	if (flawed && nb_locals > 0)

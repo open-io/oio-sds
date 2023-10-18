@@ -86,6 +86,8 @@ GError* get_spare_chunks_focused(
  *   location should be avoided (do not count when computing distance)
  * @param force_fair_constraints True if spare chunks are selected regarding
  *   fair location constraints, false if not
+ * @param adjacent_mode True if spare chunks are selected from adjacent
+ * services and false if not
  * @param result Pointer to a list where spare chunks will be inserted
  * @return A GError in case of error
  */
@@ -95,6 +97,7 @@ GError* get_conditioned_spare_chunks(
 		struct storage_policy_s *stgpol, const gchar *ns_name,
 		GSList *notin, GSList *broken,
 		gboolean force_fair_constraints,
+		gboolean adjacent_mode,
 		GSList **result);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_lb_h*/

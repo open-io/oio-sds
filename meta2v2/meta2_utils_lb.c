@@ -137,6 +137,7 @@ get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 		struct oio_lb_s *lb,
 		struct storage_policy_s *policy,
 		const gchar *ns_name, GSList *already, GSList *broken, gboolean force_fair_constraints,
+		gboolean adjacent_mode,
 		GSList **result)
 {
 	GError *err = NULL;
@@ -162,7 +163,8 @@ get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 		beans = g_slist_prepend(beans, prop);
 		beans = g_slist_prepend(beans, chunk);
 	}
-	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, force_fair_constraints, NULL);
+	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id,
+			force_fair_constraints, adjacent_mode, NULL);
 	guint chunks_count = g_slist_length(beans) / 2;
 	if (err) {
 		g_prefix_error(&err,

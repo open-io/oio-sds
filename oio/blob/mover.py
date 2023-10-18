@@ -14,15 +14,22 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
+from collections import OrderedDict
+from oio.common.constants import CHUNK_HEADERS
 from oio.common.green import get_watchdog, ratelimit, time, GreenPool
-
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
-from oio.common.exceptions import ContentDrained, ContentNotFound
+from oio.common.exceptions import ContentDrained, ContentNotFound, SpareChunkException
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import is_chunk_id_valid, paths_gen, statfs, cid_from_name
+from oio.common.utils import (
+    is_chunk_id_valid,
+    paths_gen,
+    statfs,
+    cid_from_name,
+)
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.fullpath import decode_fullpath
@@ -33,6 +40,9 @@ SLEEP_TIME = 30
 
 
 class BlobMoverWorker(object):
+    ORPHANS_DIR = "orphans"
+    NON_OPTIMAL_DIR = "non_optimal_placement"
+
     def __init__(self, conf, logger, volume, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
@@ -41,6 +51,7 @@ class BlobMoverWorker(object):
         self.running = False
         self.run_time = 0
         self.passes = 0
+        self.adjacent_services_unavailable = 0
         self.errors = 0
         self.last_reported = 0
         self.last_usage_check = 0
@@ -56,6 +67,7 @@ class BlobMoverWorker(object):
         self.max_chunks_per_second = int_value(conf.get("chunks_per_second"), 30)
         self.limit = int_value(conf.get("limit"), 0)
         self.allow_links = true_value(conf.get("allow_links", True))
+        self.adjacent_mode = true_value(conf.get("adjacent_mode", True))
         self.blob_client = BlobClient(conf, watchdog=watchdog)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(
@@ -82,71 +94,57 @@ class BlobMoverWorker(object):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def mover_pass(self, **kwargs):
+    def process(self, **kwargs):
         start_time = report_time = time.time()
 
         total_errors = 0
         mover_time = 0
 
         pool = GreenPool(self.concurrency)
-
-        paths = paths_gen(self.volume)
-
-        for path in paths:
-            loop_time = time.time()
-
-            now = time.time()
-            if now - self.last_usage_check >= self.usage_check_interval:
-                free_ratio = statfs(self.volume)
-                usage = (1 - float(free_ratio)) * 100
-                if usage <= self.usage_target:
-                    self.logger.info(
-                        "current usage %.2f%%: target reached (%.2f%%)",
-                        usage,
-                        self.usage_target,
-                    )
-                    break
-                self.last_usage_check = now
-
-            # Spawn a chunk move task.
-            # The call will block if no green thread is available.
-            pool.spawn_n(self.safe_chunk_move, path)
-
-            self.chunks_run_time = ratelimit(
-                self.chunks_run_time, self.max_chunks_per_second
-            )
-            self.total_chunks_processed += 1
-            now = time.time()
-
-            if now - self.last_reported >= self.report_interval:
-                self.logger.info(
-                    "%(start_time)s "
-                    "%(passes)d "
-                    "%(errors)d "
-                    "%(c_rate).2f "
-                    "%(b_rate).2f "
-                    "%(total).2f "
-                    "%(mover_time).2f"
-                    "%(mover_rate).2f"
-                    % {
-                        "start_time": time.ctime(report_time),
-                        "passes": self.passes,
-                        "errors": self.errors,
-                        "c_rate": self.passes / (now - report_time),
-                        "b_rate": self.bytes_processed / (now - report_time),
-                        "total": (now - start_time),
-                        "mover_time": mover_time,
-                        "mover_rate": mover_time / (now - start_time),
-                    }
+        paths_list = OrderedDict()
+        paths_list["chunks"] = {"paths": [], "symlink_folder": None}
+        paths_list["misplaced_chunks"] = {
+            "paths": [],
+            "symlink_folder": self.NON_OPTIMAL_DIR,
+        }
+        paths_list["orphaned_chunks"] = {
+            "paths": [],
+            "symlink_folder": self.ORPHANS_DIR,
+        }
+        paths_list["misplaced_chunks"]["paths"] = [
+            (os.path.realpath(item), item)
+            for item in paths_gen(os.path.join(self.volume, self.NON_OPTIMAL_DIR))
+        ]
+        paths_list["orphaned_chunks"]["paths"] = [
+            (os.path.realpath(item), item)
+            for item in paths_gen(os.path.join(self.volume, self.ORPHANS_DIR))
+        ]
+        # The list of chunk here contains all chunks path that
+        # does not have any symlink
+        paths_list["chunks"]["paths"] = list(
+            set(
+                paths_gen(
+                    self.volume, excluded_dirs=(self.NON_OPTIMAL_DIR, self.ORPHANS_DIR)
                 )
-                report_time = now
-                total_errors += self.errors
-                self.passes = 0
-                self.bytes_processed = 0
-                self.last_reported = now
-            mover_time += now - loop_time
-            if self.limit != 0 and self.total_chunks_processed >= self.limit:
-                break
+            ).difference(
+                [
+                    path[0]
+                    for path in paths_list["misplaced_chunks"]["paths"]
+                    + paths_list["orphaned_chunks"]["paths"]
+                ]
+            )
+        )
+        for value in paths_list.values():
+            self.mover_pass(
+                report_time,
+                start_time,
+                total_errors,
+                mover_time,
+                pool,
+                value["paths"],
+                symlink_folder=value["symlink_folder"],
+            )
+
         pool.waitall()
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
@@ -166,24 +164,99 @@ class BlobMoverWorker(object):
             }
         )
 
-    def safe_chunk_move(self, path):
-        chunk_id = path.rsplit("/", 1)[-1]
+    def mover_pass(
+        self,
+        report_time,
+        start_time,
+        total_errors,
+        mover_time,
+        pool,
+        paths,
+        symlink_folder,
+    ):
+        for path in paths:
+            loop_time = time.time()
+
+            now = time.time()
+            if now - self.last_usage_check >= self.usage_check_interval:
+                free_ratio = statfs(self.volume)
+                usage = (1 - float(free_ratio)) * 100
+                if usage <= self.usage_target:
+                    self.logger.info(
+                        "current usage %.2f%%: target reached (%.2f%%)",
+                        usage,
+                        self.usage_target,
+                    )
+                    break
+                self.last_usage_check = now
+
+            # Spawn a chunk move task.
+            # The call will block if no green thread is available.
+            pool.spawn_n(self.safe_chunk_move, path, symlink_folder)
+
+            self.chunks_run_time = ratelimit(
+                self.chunks_run_time, self.max_chunks_per_second
+            )
+            self.total_chunks_processed += 1
+            now = time.time()
+
+            if now - self.last_reported >= self.report_interval:
+                self.logger.info(
+                    "%(start_time)s "
+                    "%(passes)d "
+                    "%(adjacent_services_unavailable)d "
+                    "%(errors)d "
+                    "%(c_rate).2f "
+                    "%(b_rate).2f "
+                    "%(total).2f "
+                    "%(mover_time).2f"
+                    "%(mover_rate).2f"
+                    % {
+                        "start_time": time.ctime(report_time),
+                        "passes": self.passes,
+                        "adjacent_services_unavailable": (
+                            self.adjacent_services_unavailable
+                        ),
+                        "errors": self.errors,
+                        "c_rate": self.passes / (now - report_time),
+                        "b_rate": self.bytes_processed / (now - report_time),
+                        "total": (now - start_time),
+                        "mover_time": mover_time,
+                        "mover_rate": mover_time / (now - start_time),
+                    }
+                )
+                report_time = now
+                total_errors += self.errors
+                self.passes = 0
+                self.bytes_processed = 0
+                self.last_reported = now
+            mover_time += now - loop_time
+            if self.limit != 0 and self.total_chunks_processed >= self.limit:
+                break
+
+    def safe_chunk_move(self, path, symlink_folder):
+        chunk_path = path
+        chunk_symlink = None
+        if isinstance(path, tuple):
+            chunk_path, chunk_symlink = path
+        chunk_id = chunk_path.rsplit("/", 1)[-1]
         if not is_chunk_id_valid(chunk_id):
-            self.logger.warn("WARN Not a chunk %s" % path)
+            self.logger.warn("WARN Not a chunk %s" % chunk_path)
             return
         try:
-            self.chunk_move(path, chunk_id)
+            self.chunk_move(chunk_path, chunk_id, symlink_folder, chunk_symlink)
         except Exception as err:
             self.errors += 1
-            self.logger.error("ERROR while moving chunk %s: %s", path, err)
+            self.logger.error("ERROR while moving chunk %s: %s", chunk_path, err)
         self.passes += 1
 
     def load_chunk_metadata(self, path, chunk_id):
+        """Reads and returns chunk metadata"""
         with open(path) as file_:
             meta, _ = read_chunk_metadata(file_, chunk_id)
             return meta
 
-    def chunk_move(self, path, chunk_id):
+    def chunk_move(self, path, chunk_id, symlink_folder=None, chunk_symlink=None):
         meta = self.load_chunk_metadata(path, chunk_id)
         container_id = meta["container_id"]
         content_id = meta["content_id"]
@@ -212,18 +285,65 @@ class BlobMoverWorker(object):
             )
         except (ContentDrained, ContentNotFound) as err:
             raise exc.OrphanChunk(f"{err}: possible orphan chunk") from err
-
-        new_chunk = content.move_chunk(
-            chunk_id,
-            service_id=self.service_id,
-            fake_excluded_chunks=self.fake_excluded_chunks,
-        )
+        try:
+            headers = {}
+            if symlink_folder and chunk_symlink:
+                if symlink_folder == self.NON_OPTIMAL_DIR:
+                    # Here we recreate the non optimal symlink at the new location
+                    # because the current location is known as not ideal and by moving
+                    # locally the chunk, the new location will still not be ideal.
+                    # Later the improver will pass over the new location and correct it.
+                    headers = {CHUNK_HEADERS["non_optimal_placement"]: True}
+            # First try, we want a local location
+            # regardless of whether it's ideal or not.
+            new_chunk = content.move_chunk(
+                chunk_id,
+                service_id=self.service_id,
+                fake_excluded_chunks=self.fake_excluded_chunks,
+                force_fair_constraints=False,
+                adjacent_mode=self.adjacent_mode,
+                headers=headers,
+            )
+            new_url = new_chunk["url"]
+            if symlink_folder and chunk_symlink:
+                if symlink_folder == self.NON_OPTIMAL_DIR:
+                    msg = f"{new_url} non optimal symlink creation succeeded"
+                # TODO (FIR): recreate orphan chunk sylink if needed.
+                self.logger.info(msg)
+                try:
+                    # Remove the later symlink
+                    os.unlink(chunk_symlink)
+                except FileNotFoundError:
+                    # The improver/cleanup may have already removed this symlink
+                    pass
+        except Exception as err:
+            if not isinstance(err, SpareChunkException):
+                raise
+            if not self.adjacent_mode:
+                raise
+            self.logger.debug(
+                "No adjacent services are available to host %s, "
+                "we are moving to distant services",
+                path,
+            )
+            self.adjacent_services_unavailable += 1
+            # We did not find spare chunks in adjacent services
+            # lets fallback and try distant services too.
+            # On this second try, we absolutely want an ideal location
+            new_chunk = content.move_chunk(
+                chunk_id,
+                service_id=self.service_id,
+                fake_excluded_chunks=self.fake_excluded_chunks,
+                force_fair_constraints=True,
+                adjacent_mode=False,
+            )
+            new_url = new_chunk["url"]
 
         self.logger.info(
             "moved chunk http://%s/%s to %s",
             self.service_id,
             chunk_id,
-            new_chunk["url"],
+            new_url,
         )
 
         if self.allow_links:
@@ -275,7 +395,7 @@ class BlobMover(Daemon):
                 worker = BlobMoverWorker(
                     self.conf, self.logger, self.volume, watchdog=self.watchdog
                 )
-                worker.mover_pass(**kwargs)
+                worker.process(**kwargs)
                 work = False
             except Exception as err:
                 self.logger.exception("ERROR in mover: %s", err)

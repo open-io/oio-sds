@@ -60,6 +60,8 @@ def make_arg_parser():
                         help="Only move chunks smaller than the given size.")
     parser.add_argument('--excluded-rawx',
                         help="List of rawx not to use to move the chunks.")
+    parser.add_argument("--adjacent-mode", action='store_true',
+                        help="Location polled in adjacent services")
     levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
     parser.add_argument('--log-level', choices=levels,
                         help="Log level")
@@ -103,6 +105,7 @@ def generate_config_file(path, mode):
         add_value(cont, 'user', args.user)
         add_value(cont, 'limit', args.limit)
         add_value(cont, 'excluded_rawx', args.excluded_rawx)
+        add_value(cont, 'adjacent_mode', args.adjacent_mode)
         return dic_to_string(cont, header)
 
     with open(path, mode) as conf:
