@@ -281,7 +281,7 @@ _patch_configuration_fd(void)
 				"please reconfigure the service or extend the system limit "
 				"(currently set to %u).", reserved, maxfd);
 		if (!sqliterepo_repo_max_bases_hard) {
-			sqliterepo_repo_max_bases_hard = 1024;
+			sqliterepo_repo_max_bases_hard = MAX((48 * total) / 100, 16);
 			GRID_WARN("maximum # of bases not set, arbitrarily set to %u",
 					sqliterepo_repo_max_bases_hard);
 		}

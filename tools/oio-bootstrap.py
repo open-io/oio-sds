@@ -1408,9 +1408,6 @@ ns.meta1_digits=${M1_DIGITS}
 meta2.flush_limit=64
 meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
-# Limit the maximum number of databases open simultaneously
-# to avoid using too much RAM
-sqliterepo.repo.hard_max=1024
 
 admin=${IP}:${PORT_ADMIN}
 """
