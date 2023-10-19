@@ -89,7 +89,7 @@ if ( ENABLE_CODECOVERAGE )
 	if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 		find_program( CODECOV_GCOV gcov )
 		find_program( CODECOV_LCOV lcov )
-		add_definitions( -fprofile-arcs -ftest-coverage )
+		add_definitions( -fprofile-arcs -ftest-coverage -fprofile-abs-path )
 		link_libraries( gcov )
 		set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
 

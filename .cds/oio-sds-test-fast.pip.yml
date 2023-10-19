@@ -3,14 +3,13 @@ name: oio-sds-test-fast
 jobs:
   - job: Run fast tests
     steps:
-
       - gitClone:
-          branch: '{{ .git.branch }}'
-          commit: '{{ .git.hash }}'
+          branch: "{{ .git.branch }}"
+          commit: "{{ .git.hash }}"
           depth: "false"
-          directory: '{{ .cds.workspace }}'
+          directory: "{{ .cds.workspace }}"
           privateKey: proj-ssh-openio
-          url: '{{ .git.url }}'
+          url: "{{ .git.url }}"
 
       - name: Install dependencies
         script: |+
@@ -49,13 +48,16 @@ jobs:
           . $HOME/oiovenv/bin/activate
           # FIXME(adu): Fix tox configuration file to support the new versions
           pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
-
           fdbtag="fdb-${FDB_VERSION}"
           worker cache pull $fdbtag
           dpkg -i fdb-packages/*.deb
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service
           rm -rf fdb-packages
+
+          # Build wrapper for Sonarqube
+          (cd /opt && wget --content-disposition https://sonarqube.ovhcloud.tools/static/cpp/build-wrapper-linux-x86.zip)
+          (cd /opt && unzip build-wrapper-linux-x86.zip)
 
       - name: Run fast tests
         script:
@@ -64,6 +66,7 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-failfast.sh
           - coverage combine .coverage.*.*
+          - coverage xml -o .coverage.build.xml
           - mv .coverage .coverage.build
           - rm -f .coverage.*-vm*
 
@@ -73,14 +76,25 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-unit.sh
           - coverage combine .coverage.*.*
+          - coverage xml -o .coverage.unit.xml
           - mv .coverage .coverage.unit
           - rm -f .coverage.*-vm*
 
       - name: Save coverage and test information
         script:
           - . $HOME/oiovenv/bin/activate
-          - 'worker upload {{.cds.workspace}}/.coverage.build {{.cds.workspace}}/.coverage.unit'
-          - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
+          - "worker upload {{.cds.workspace}}/.coverage.build* {{.cds.workspace}}/.coverage.unit*"
+          - "[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml"
+
+      - name: Build debug for Sonar
+        script:
+          - . $HOME/oio-env.sh
+          - . $HOME/oiovenv/bin/activate
+          - mkdir -p build_debug
+          - cmake -DENABLE_CODECOVERAGE=on -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DCMAKE_BUILD_TYPE=Debug ${CMAKE_OPTS} -B build_debug
+          - /opt/build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir build_debug cmake --build build_debug
+          - tar czvf {{.cds.workspace}}/oio-sds.build_sonar.tar.gz build_debug
+          - worker upload {{.cds.workspace}}/oio-sds.build_sonar.tar.gz
 
     requirements:
       - model: Ubuntu-20.04-VM-b2-07

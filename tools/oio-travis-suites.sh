@@ -32,6 +32,7 @@ fold() {
 	time ( fold_start "$tag" ; set -x ; $@ ; set +x ; fold_end "$tag" )
 }
 
+
 fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
 fold build      make -j 8 all
 fold install    make install
