@@ -4,9 +4,8 @@ environment: oio-sds-env
 jobs:
   - job: Collect code coverage and tests statistics
     steps:
-
       - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+        checkout: "{{ .cds.workspace }}"
 
       - name: Install dependencies
         script:
@@ -24,9 +23,9 @@ jobs:
 
       - name: Download test result artifacts
         artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: 'nosetests-.*.xml'
-          tag: '{{.cds.version}}'
+          path: "{{.cds.workspace}}"
+          pattern: "nosetests-.*.xml"
+          tag: "{{.cds.version}}"
 
       - name: Aggregate test results
         optional: true
@@ -53,15 +52,16 @@ jobs:
 
       - name: Download code coverage artifacts (Python)
         artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: '.coverage.*'
-          tag: '{{.cds.version}}'
+          path: "{{.cds.workspace}}"
+          pattern: ".coverage.*"
+          tag: "{{.cds.version}}"
 
       - name: Aggregate Python coverage statistics
         script:
           - . $HOME/oiovenv/bin/activate
           - cd {{.cds.workspace}}
           - coverage combine .coverage.*
+          - coverage xml -o .coverage.xml
           - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
           - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
           - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
@@ -78,9 +78,9 @@ jobs:
 
       - name: Download code coverage artifacts (Golang)
         artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: 'go_coverage.*'
-          tag: '{{.cds.version}}'
+          path: "{{.cds.workspace}}"
+          pattern: "go_coverage.*"
+          tag: "{{.cds.version}}"
 
       - name: Aggregate Golang coverage statistics
         optional: true
@@ -145,7 +145,20 @@ jobs:
       - name: Publish test reports on CDS
         optional: true
         always_executed: true
-        jUnitReport: '{{.cds.workspace}}/nosetests-*.xml'
+        jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
+
+      - name: Download build analysis for sonar
+        script:
+          - set -x
+          - worker download --pattern "oio-sds.build_sonar.tar.gz" --tag="{{.cds.version}}"
+          - tar xzfv oio-sds.build_sonar.tar.gz
+          - worker download --pattern "c-coverage-*.tar.gz"
+          - find . -name "c-coverage-*.tar.gz" | xargs -n1 tar xzfv
+          - mv c-coverage build_debug
+          - cp .coverage*.xml build_debug
+          - find . -name "go_coverage.*" | xargs -I {} cp {} build_debug
+          - tar czvf {{.cds.workspace}}/oio-sds.sonar.tar.gz build_debug
+          - worker upload {{.cds.workspace}}/oio-sds.sonar.tar.gz
 
     requirements:
-        - model: ubuntu-focal
+      - model: ubuntu-focal

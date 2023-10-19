@@ -109,6 +109,12 @@ jobs:
           - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - "[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml"
           - "[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json"
+          - mkdir -p c-coverage/coverage-.{{.cds.env.TEST_SUITE}}
+          - cd c-coverage/coverage-.{{.cds.env.TEST_SUITE}}
+          - find ../.. -name '*.o' | xargs gcov --preserve-paths
+          - cd ../..
+          - tar czvf c-coverage-{{.cds.env.TEST_SUITE}}.tar.gz c-coverage
+          - worker upload '{{.cds.workspace}}/c-coverage-{{.cds.env.TEST_SUITE}}.tar.gz'
 
       - name: Publish test reports on CDS
         optional: true
