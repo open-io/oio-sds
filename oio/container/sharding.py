@@ -40,8 +40,10 @@ from oio.common.constants import (
 from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
 from oio.common.exceptions import (
     BadRequest,
+    DeadlineReached,
     OioException,
     OioTimeout,
+    ServiceBusy,
     from_multi_responses,
 )
 from oio.common.http_urllib3 import urllib3
@@ -987,11 +989,22 @@ class ContainerSharding(ProxyClient):
                 except Exception as exc:
                     if i >= attempts - 1:
                         raise
-                    self.logger.warning(
-                        "Failed to clean the container (CID=%s), retrying...: %s",
-                        shard["cid"],
-                        exc,
-                    )
+                    if isinstance(exc, (OioTimeout, ServiceBusy, DeadlineReached)):
+                        self.logger.warning(
+                            "Failed to clean the container (CID=%s), "
+                            "the previous request probably failed due "
+                            "to too many (customer) requests on the container, "
+                            "retrying with urgent mode...: %s",
+                            shard["cid"],
+                            exc,
+                        )
+                        params["urgent"] = 1
+                    else:
+                        self.logger.warning(
+                            "Failed to clean the container (CID=%s), retrying...: %s",
+                            shard["cid"],
+                            exc,
+                        )
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
             truncated = boolean_value(resp.getheader("x-oio-truncated"), False)

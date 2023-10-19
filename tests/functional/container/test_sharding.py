@@ -17,7 +17,9 @@
 
 import random
 import time
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
+from oio.common.client import ProxyClient
 
 from oio.common.constants import (
     M2_PROP_BUCKET_NAME,
@@ -37,6 +39,7 @@ from oio.common.green import eventlet
 from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
+from tests.unit.api import FakeResponse
 from tests.utils import BaseTestCase
 
 
@@ -274,7 +277,7 @@ class TestSharding(BaseTestCase):
             sorted_objects = sorted(list_objects)
             self.assertListEqual(sorted_objects, list_objects)
 
-    def test_shard_container(self):
+    def _shard_container(self):
         self._create(self.cname)
         self._add_objects(self.cname, 4)
 
@@ -293,6 +296,7 @@ class TestSharding(BaseTestCase):
 
         # check shards
         show_shards = self.container_sharding.show_shards(self.account, self.cname)
+        show_shards = list(show_shards)
         shards_content = [{"content_0"}, {"content_1", "content_2", "content_3"}]
         self._check_shards(show_shards, test_shards, shards_content)
 
@@ -300,6 +304,11 @@ class TestSharding(BaseTestCase):
         resp = self.storage.container.container_get_properties(self.account, self.cname)
         self.assertEqual(int(resp["system"][M2_PROP_OBJECTS]), 0)
         self.assertEqual(int(resp["system"]["sys.m2.shards"]), len(test_shards))
+
+        return show_shards
+
+    def test_shard_container(self):
+        self._shard_container()
 
     def test_shard_container_with_versioning(self):
         self._create(self.cname, versioning=True)
@@ -575,7 +584,6 @@ class TestSharding(BaseTestCase):
             {"index": 1, "lower": "content", "upper": ""},
         ]
         new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
-        print(self.container_sharding.preclean_new_shards)
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True
         )
@@ -1735,6 +1743,64 @@ class TestSharding(BaseTestCase):
             self.storage.container_set_properties(
                 self.account, self.cname, system={"sys.status": str(OIO_DB_ENABLED)}
             )
+
+    def test_clean_with_timeout(self):
+        """
+        1st request: clean with urgent mode to be sure to start cleaning
+            -> success (truncated)
+        2nd request: clean without urgent mode to have less impact
+            -> timeout
+        3rd request: clean with urgent mode because the previous request has timeout
+            -> success (truncated)
+        4th request: clean without urgent mode to have less impact
+            -> 503
+        5th request: clean with urgent mode because the previous request returned 503
+            -> timeout
+        6th request: clean with urgent mode because the previous request has timeout
+            -> success (truncated)
+        7th request: clean without urgent mode to have less impact
+            -> 500
+        8th request: clean without urgent mode to have less impact
+            -> success
+        """
+        shards = self._shard_container()
+
+        nb_requests = {"count": 0}
+        proxy_client = ProxyClient(
+            {"namespace": self.ns}, request_prefix="/container/sharding"
+        )
+
+        def _request(*args, **kwargs):
+            nb_requests["count"] = nb_requests["count"] + 1
+            # Check number of requests and method parameters
+            if nb_requests["count"] > 8:
+                raise Exception("Too many requests")
+            self.assertEqual(("POST", "/clean"), args)
+            expected_params = {"cid": shard_cid}
+            if nb_requests["count"] in (1, 3, 5, 6):
+                expected_params["urgent"] = 1
+            self.assertDictEqual(expected_params, kwargs.get("params"))
+            # Change the request and the response
+            if nb_requests["count"] in (2, 5):
+                kwargs["timeout"] = 0.001
+            elif nb_requests["count"] in (4,):
+                return FakeResponse(503), b""
+            elif nb_requests["count"] in (7,):
+                return FakeResponse(500), b""
+            resp, body = proxy_client._request(*args, **kwargs)
+            if nb_requests["count"] < 8:
+                resp.headers["x-oio-truncated"] = "true"
+            return resp, body
+
+        # Clean (again) the first shard
+        shard_cid = shards[0]["cid"]
+        with patch(
+            "oio.container.sharding.ContainerSharding._request", wraps=_request
+        ) as mock_request:
+            self.container_sharding.clean_container(
+                None, None, cid=shards[0]["cid"], attempts=3
+            )
+        self.assertEqual(8, mock_request.call_count)
 
 
 class TestShardingObjectLockRetention(TestSharding):
