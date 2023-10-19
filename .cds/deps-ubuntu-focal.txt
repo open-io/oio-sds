@@ -37,4 +37,5 @@ redis-tools
 rsyslog
 sqlite3
 tox
+unzip
 virtualenv

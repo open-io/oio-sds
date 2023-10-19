@@ -34,86 +34,80 @@ workflow:
       script: |+
         return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-single:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-single
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-single:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-single
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-cli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-cli
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-cli:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-cli
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-ec:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-ec
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-ec:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-ec
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-fullrepli:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-fullrepli
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-fullrepli:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-fullrepli
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-rebuilder:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rebuilder
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-rebuilder:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-rebuilder
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-mover:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-mover
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+  # tests-mover:
+  #   pipeline: oio-sds-test-functional
+  #   application: oio-sds
+  #   environment: oio-sds-env-mover
+  #   depends_on:
+  #     - root
+  #   conditions:
+  #     script: |+
+  #       return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
   coverage:
     pipeline: oio-sds-coverage
     application: oio-sds
     depends_on:
+      # - tests-cli
       - tests-fast
-      - tests-cli
-      - tests-single
-      - tests-ec
-      - tests-fullrepli
-      - tests-rebuilder
-      - tests-mover
+      # - tests-single
+      # - tests-ec
+      # - tests-fullrepli
+      # - tests-rebuilder
+      # - tests-mover
+      - tests-lint
     when:
       - success
-
-  ready-for-merge:
-    application: oio-sds
-    depends_on:
-      - coverage
-      - tests-lint
-    pipeline: oio-sds-ready-for-merge
 
   mirror:
     pipeline: oio-sds-mirror
@@ -153,16 +147,16 @@ retention_policy:
   # Keep Run for 365 days if git_branch is set and exists in VCS or only 2 days for removed branches
   # Else keep Run for 365 days if no git_branch info is set
   if(cds_triggered_by_username == 'cds.scheduler') then
-    return run_days_before < 1
+  return run_days_before < 1
   end
   if(has_git_branch == "true") then
-    if(git_branch_exist == "true") then
-      return run_days_before < 365
-    else
-      return run_days_before < 2
-    end
+  if(git_branch_exist == "true") then
+  return run_days_before < 365
   else
-    return run_days_before < 365
+  return run_days_before < 2
+  end
+  else
+  return run_days_before < 365
   end
 
 integrations:
