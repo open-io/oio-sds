@@ -4,9 +4,8 @@ environment: oio-sds-env
 jobs:
   - job: Collect code coverage and tests statistics
     steps:
-
       - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+        checkout: "{{ .cds.workspace }}"
 
       - name: Install dependencies
         script:
@@ -22,130 +21,139 @@ jobs:
           - pip install --progress-bar off --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
           - go install github.com/axw/gocov/gocov@latest
 
-      - name: Download test result artifacts
-        artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: 'nosetests-.*.xml'
-          tag: '{{.cds.version}}'
+      # - name: Download test result artifacts
+      #   artifactDownload:
+      #     path: "{{.cds.workspace}}"
+      #     pattern: "nosetests-.*.xml"
+      #     tag: "{{.cds.version}}"
 
-      - name: Aggregate test results
-        optional: true
-        script: |+
-          #!/bin/bash
-          . $HOME/oiovenv/bin/activate
-          export TEST_COUNT=0
-          export TEST_FUNC=0
-          export TEST_UNIT=0
-          shopt -s nullglob
-          for TEST_RESULT in nosetests-*.xml
-          do
-            count=$(xq -r "/testsuite/@tests" $TEST_RESULT)
-            if [[ "$TEST_RESULT" =~ .+unit.* ]]
-            then
-              ((TEST_UNIT+=$count))
-            else
-              ((TEST_FUNC+=$count))
-            fi
-            ((TEST_COUNT+=$count))
-          done
-          shopt -u nullglob
-          echo "{\"tests\": {\"Python\": {\"functional\": $TEST_FUNC, \"total\": $TEST_COUNT, \"unit\": $TEST_UNIT}}}" > test-report-py.json
+      # - name: Aggregate test results
+      #   optional: true
+      #   script: |+
+      #     #!/bin/bash
+      #     . $HOME/oiovenv/bin/activate
+      #     export TEST_COUNT=0
+      #     export TEST_FUNC=0
+      #     export TEST_UNIT=0
+      #     shopt -s nullglob
+      #     for TEST_RESULT in nosetests-*.xml
+      #     do
+      #       count=$(xq -r "/testsuite/@tests" $TEST_RESULT)
+      #       if [[ "$TEST_RESULT" =~ .+unit.* ]]
+      #       then
+      #         ((TEST_UNIT+=$count))
+      #       else
+      #         ((TEST_FUNC+=$count))
+      #       fi
+      #       ((TEST_COUNT+=$count))
+      #     done
+      #     shopt -u nullglob
+      #     echo "{\"tests\": {\"Python\": {\"functional\": $TEST_FUNC, \"total\": $TEST_COUNT, \"unit\": $TEST_UNIT}}}" > test-report-py.json
 
-      - name: Download code coverage artifacts (Python)
-        artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: '.coverage.*'
-          tag: '{{.cds.version}}'
+      # - name: Download code coverage artifacts (Python)
+      #   artifactDownload:
+      #     path: "{{.cds.workspace}}"
+      #     pattern: ".coverage.*"
+      #     tag: "{{.cds.version}}"
 
-      - name: Aggregate Python coverage statistics
+      # - name: Aggregate Python coverage statistics
+      #   script:
+      #     - . $HOME/oiovenv/bin/activate
+      #     - cd {{.cds.workspace}}
+      #     - coverage combine .coverage.*
+      #     - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
+      #     - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
+      #     - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
+
+      # - name: Aggregate C coverage statistics
+      #   script:
+      #     - cd {{.cds.workspace}}
+      #     - worker download --pattern="cmake_coverage.*"
+      #     - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
+      #     - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
+      #     - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
+      #     - . $HOME/oiovenv/bin/activate
+      #     - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
+
+      # - name: Download code coverage artifacts (Golang)
+      #   artifactDownload:
+      #     path: "{{.cds.workspace}}"
+      #     pattern: "go_coverage.*"
+      #     tag: "{{.cds.version}}"
+
+      # - name: Aggregate Golang coverage statistics
+      #   optional: true
+      #   script:
+      #     - . $HOME/oio-env.sh
+      #     - cd {{.cds.workspace}}/rawx
+      #     - $HOME/go/bin/gocov report ../go_coverage.* >> ../go_coverage.txt
+
+      # - name: Create code coverage directory
+      #   script:
+      #     - cd {{.cds.workspace}}
+      #     - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_total)"' coverage-report-py.json >coverage-summary.openmetrics
+      #     - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_percent)"' coverage-report-py.json >>coverage-summary.openmetrics
+      #     - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_total)"' coverage-report-c.json >>coverage-summary.openmetrics
+      #     - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_percent)"' coverage-report-c.json >>coverage-summary.openmetrics
+      #     - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"functional\"} \(.tests.Python.functional)"' test-report-py.json >>coverage-summary.openmetrics
+      #     - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"unit\"} \(.tests.Python.unit)"' test-report-py.json >>coverage-summary.openmetrics
+      #     - tail -n 1 go_coverage.txt | sed -E -e 's/[^[:digit:]]+([[:digit:]]+\.[[:digit:]]+)%.*/obsto_kpi_dev_coverage_line_percentage{language="go",repository="oio-sds"} \1/g' >>coverage-summary.openmetrics
+      #     - worker upload coverage-summary.openmetrics
+      #     - mkdir coverage
+      #     - mv coverage-report-c coverage-report-py coverage-summary.openmetrics go_coverage.txt coverage/
+      #     - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./go_coverage.txt">Golang coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
+
+      # - name: Publish code coverage reports on S3 public cloud
+      #   script: |+
+      #     #!/bin/bash
+      #     . $HOME/oiovenv/bin/activate
+      #     cd {{.cds.workspace}}
+      #     mkdir -p "$HOME/.aws"
+      #     cat <<EOF >>"$HOME/.aws/credentials"
+      #     [kpi]
+      #     aws_access_key_id={{.cds.proj.kpi_s3_access_key}}
+      #     aws_secret_access_key={{.cds.proj.kpi_s3_access_secret}}
+      #     region=gra
+      #     EOF
+      #     cat <<EOF >>"$HOME/.aws/config"
+      #     [plugins]
+      #     endpoint = awscli_plugin_endpoint
+      #     [profile kpi]
+      #     s3 =
+      #         endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
+      #         signature_version = s3v4
+      #         addressing_style = virtual
+      #         multipart_threshold = 100MB
+      #     s3api =
+      #         endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
+      #     EOF
+      #     # There may be a more elegant way in bash to filter out the name of
+      #     # development branches, but this weird method also applies to the
+      #     # OVH_Serve_Static_Files step (where we cannot use bash).
+      #     aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.openmetrics
+      #     # If we re-run an old build, this will overwrite the report of the
+      #     # actual latest merged code. This will not happen often.
+      #     [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.openmetrics || true
+
+      # - name: Publish code coverage reports on Artifactory
+      #   optional: true
+      #   OVH_Serve_Static_Files:
+      #     destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
+      #     source: coverage
+
+      # - name: Publish test reports on CDS
+      #   optional: true
+      #   always_executed: true
+      #   jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
+
+      - name: Download build analysis for sonar
         script:
-          - . $HOME/oiovenv/bin/activate
-          - cd {{.cds.workspace}}
-          - coverage combine .coverage.*
-          - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
-          - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json
-          - jq -f .cds/python-coverage-filter.jq coverage-report-py-full.json > coverage-report-py.json
-
-      - name: Aggregate C coverage statistics
-        script:
-          - cd {{.cds.workspace}}
-          - worker download --pattern="cmake_coverage.*"
-          - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
-          - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
-          - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
-          - . $HOME/oiovenv/bin/activate
-          - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
-
-      - name: Download code coverage artifacts (Golang)
-        artifactDownload:
-          path: '{{.cds.workspace}}'
-          pattern: 'go_coverage.*'
-          tag: '{{.cds.version}}'
-
-      - name: Aggregate Golang coverage statistics
-        optional: true
-        script:
-          - . $HOME/oio-env.sh
-          - cd {{.cds.workspace}}/rawx
-          - $HOME/go/bin/gocov report ../go_coverage.* >> ../go_coverage.txt
-
-      - name: Create code coverage directory
-        script:
-          - cd {{.cds.workspace}}
-          - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_total)"' coverage-report-py.json >coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"python\",repository=\"oio-sds\"} \(.coverage.Python.line_percent)"' coverage-report-py.json >>coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_coverage_line_total{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_total)"' coverage-report-c.json >>coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_coverage_line_percentage{language=\"c\",repository=\"oio-sds\"} \(.coverage.C.line_percent)"' coverage-report-c.json >>coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"functional\"} \(.tests.Python.functional)"' test-report-py.json >>coverage-summary.openmetrics
-          - jq -r '"obsto_kpi_dev_tests_total{repository=\"oio-sds\",type=\"unit\"} \(.tests.Python.unit)"' test-report-py.json >>coverage-summary.openmetrics
-          - tail -n 1 go_coverage.txt | sed -E -e 's/[^[:digit:]]+([[:digit:]]+\.[[:digit:]]+)%.*/obsto_kpi_dev_coverage_line_percentage{language="go",repository="oio-sds"} \1/g' >>coverage-summary.openmetrics
-          - worker upload coverage-summary.openmetrics
-          - mkdir coverage
-          - mv coverage-report-c coverage-report-py coverage-summary.openmetrics go_coverage.txt coverage/
-          - echo '<!DOCTYPE html><html><a href="./coverage-report-c/">C coverage report</a><br/><a href="./go_coverage.txt">Golang coverage report</a><br/><a href="./coverage-report-py/">Python coverage report</a><br/><a href="./coverage-summary.openmetrics">Coverage summary (OpenMetrics format)</a></body></html>' > coverage/index.html
-
-      - name: Publish code coverage reports on S3 public cloud
-        script: |+
-          #!/bin/bash
-          . $HOME/oiovenv/bin/activate
-          cd {{.cds.workspace}}
-          mkdir -p "$HOME/.aws"
-          cat <<EOF >>"$HOME/.aws/credentials"
-          [kpi]
-          aws_access_key_id={{.cds.proj.kpi_s3_access_key}}
-          aws_secret_access_key={{.cds.proj.kpi_s3_access_secret}}
-          region=gra
-          EOF
-          cat <<EOF >>"$HOME/.aws/config"
-          [plugins]
-          endpoint = awscli_plugin_endpoint
-          [profile kpi]
-          s3 =
-              endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
-              signature_version = s3v4
-              addressing_style = virtual
-              multipart_threshold = 100MB
-          s3api =
-              endpoint_url = {{.cds.proj.kpi_s3_endpoint}}
-          EOF
-          # There may be a more elegant way in bash to filter out the name of
-          # development branches, but this weird method also applies to the
-          # OVH_Serve_Static_Files step (where we cannot use bash).
-          aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.openmetrics
-          # If we re-run an old build, this will overwrite the report of the
-          # actual latest merged code. This will not happen often.
-          [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.openmetrics || true
-
-      - name: Publish code coverage reports on Artifactory
-        optional: true
-        OVH_Serve_Static_Files:
-          destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
-          source: coverage
-
-      - name: Publish test reports on CDS
-        optional: true
-        always_executed: true
-        jUnitReport: '{{.cds.workspace}}/nosetests-*.xml'
+          - set -x
+          - worker download --pattern "oio-sds.build_sonar.tar.gz" --tag="{{.cds.version}}"
+          - tar xzfv oio-sds.build_sonar.tar.gz
+          - pwd
+          - ls -la
+          - ls -la build/debug
 
     requirements:
-        - model: ubuntu-focal
+      - model: ubuntu-focal
