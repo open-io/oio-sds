@@ -46,6 +46,9 @@ decrypter = Decrypter(
     obj=args.obj,
     metadata=metadata,
 )
+decrypted_metadata = decrypter.decrypt_metadata()
+with open("metadata.json", "w") as outfile:
+    json.dump(decrypted_metadata, outfile)
 
 while 1:
     chunk = sys.stdin.buffer.read()

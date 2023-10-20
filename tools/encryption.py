@@ -21,6 +21,7 @@ import json
 import os
 import string
 
+from cgi import parse_header
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from urllib import parse as urlparse
@@ -28,18 +29,55 @@ from urllib import parse as urlparse
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound
 
-CRYPTO_META_KEY = "x-object-sysmeta-crypto-body-meta"
-
+CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"
+TRANSIENT_CRYPTO_META_KEY = "x-object-transient-sysmeta-crypto-meta"
+CRYPTO_ETAG_KEY = "x-object-sysmeta-crypto-etag"
+CONTAINER_UPDATE_OVERRIDE_ETAG_KEY = "x-object-sysmeta-container-update-override-etag"
+CRYPTO_ETAG_MAC_KEY = "x-object-sysmeta-crypto-etag-mac"
 
 # This tool is in the oio-sds repository because it needs to be able to update
 # metadata. To decrypt and re-encrypt the data, some encryption functions have
 # been copied from the swift code.
+
 
 # Functions copied from swift/common/swob.py
 
 
 def bytes_to_wsgi(byte_str):
     return byte_str.decode("latin1")
+
+
+# Functions copied from swift/common/request_helpers.py
+
+
+OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
+
+
+def get_user_meta_prefix(server_type):
+    """
+    Returns the prefix for user metadata headers for given server type.
+
+    This prefix defines the namespace for headers that will be persisted
+    by backend servers.
+
+    :param server_type: type of backend server i.e. [account|container|object]
+    :returns: prefix string for server type's user metadata headers
+    """
+    return "x-%s-%s-" % (server_type.lower(), "meta")
+
+
+def get_object_transient_sysmeta(key):
+    """
+    Returns the Object Transient System Metadata header for key.
+    The Object Transient System Metadata namespace will be persisted by
+    backend object servers. These headers are treated in the same way as
+    object user metadata i.e. all headers in this namespace will be
+    replaced on every POST request.
+
+    :param key: metadata key
+    :returns: the entire object transient system metadata header for key
+    """
+    return "%s%s" % (OBJECT_TRANSIENT_SYSMETA_PREFIX, key)
 
 
 # Functions copied from swift/common/utils.py
@@ -140,6 +178,21 @@ def load_crypto_meta(value, b64decode=True):
         raise Exception(msg)
 
 
+def extract_crypto_meta(value):
+    """
+    Extract and deserialize any crypto meta from the end of a value.
+
+    :param value: string that may have crypto meta at end
+    :return: a tuple of the form:
+            (<value without crypto meta>, <deserialized crypto meta> or None)
+    """
+    swift_meta = None
+    value, meta = parse_header(value)
+    if "swift_meta" in meta:
+        swift_meta = load_crypto_meta(meta["swift_meta"])
+    return value, swift_meta
+
+
 def decode_secret(b64_secret):
     """Decode and check a base64 encoded secret key."""
     binary_secret = strict_b64decode(b64_secret, allow_line_breaks=True)
@@ -199,6 +252,23 @@ class Crypto(object):
         # Adjust decryption boundary within current AES block
         dec.update(b"*" * offset_in_block)
         return dec
+
+    def check_crypto_meta(self, meta):
+        """
+        Check that crypto meta dict has valid items.
+
+        :param meta: a dict
+        :raises EncryptionException: if an error is found in the crypto meta
+        """
+        try:
+            if meta["cipher"] != self.cipher:
+                raise Exception("Bad crypto meta: Cipher must be %s" % self.cipher)
+            if len(meta["iv"]) != self.iv_length:
+                raise Exception(
+                    "Bad crypto meta: IV must be length %s bytes" % self.iv_length
+                )
+        except KeyError as err:
+            raise Exception("Bad crypto meta: Missing %s" % err)
 
     def unwrap_key(self, wrapping_key, context):
         # unwrap a key from dict of form returned by wrap_key
@@ -272,6 +342,26 @@ class Decrypter:
         self.body_key = None
         self.iv = None
 
+    def decrypt_metadata(self, metadata=None):
+        """
+        Add decrypted user metadata to the metadata dict.
+
+        :param metadata: object metadata
+        :return metadata with decrypted user metadata
+        """
+        if metadata is None:
+            metadata = self.metadata
+
+        crypto_meta = metadata.get("properties").get(TRANSIENT_CRYPTO_META_KEY)
+        if crypto_meta is not None:
+            self.body_key, _, keys = self.get_cipher_keys(crypto_meta)
+            decrypted_user_metadata = self._decrypt_user_metadata(keys)
+
+            for k, v in decrypted_user_metadata:
+                metadata["properties"][k] = v
+
+        return metadata
+
     def decrypt(self, chunk, metadata=None):
         """
         Decrypt chunk with root_secret and metadata
@@ -282,7 +372,8 @@ class Decrypter:
         if self.body_key is None or self.iv is None:
             if metadata is None:
                 metadata = self.metadata
-            self.body_key, self.iv, _ = self.get_cipher_keys(metadata)
+            crypto_meta = metadata.get("properties").get(CRYPTO_BODY_META_KEY)
+            self.body_key, self.iv, _ = self.get_cipher_keys(crypto_meta)
 
         offset = 0
         decrypt_ctxt = self.crypto.create_decryption_ctxt(
@@ -290,19 +381,17 @@ class Decrypter:
         )
         return decrypt_ctxt.update(chunk)
 
-    def get_cipher_keys(self, meta):
+    def get_cipher_keys(self, crypto_meta):
         """
         Create object_key with path and root key or fetch key from kms.
-        Returns body_key and iv.
+        Returns body_key, iv and keys.
 
-        :param meta: object metadata
-        :return body_key and iv
+        :param crypto_meta: crypto metadata
+        :return body_key, iv and put_keys
         """
-        raw_crypto_meta = meta.get("properties").get(CRYPTO_META_KEY)
-        crypto_meta_json = json.loads(urlparse.unquote_plus(raw_crypto_meta))
-        if crypto_meta_json is None:
-            return None
-        crypto_meta = load_crypto_meta(raw_crypto_meta)
+        if crypto_meta is None:
+            raise ValueError("empty crypto_meta is not acceptable")
+        crypto_meta = load_crypto_meta(crypto_meta)
 
         iv = crypto_meta.get("iv")
         key_id = crypto_meta.get("key_id")
@@ -330,5 +419,81 @@ class Decrypter:
         container_key = create_key(path, self.root_key)
         put_keys["container"] = container_key
 
-        body_key = self.crypto.unwrap_key(object_key, crypto_meta["body_key"])
+        body_key = None
+        wrapped_body_key = crypto_meta.get("body_key")
+        if wrapped_body_key:
+            body_key = self.crypto.unwrap_key(object_key, wrapped_body_key)
         return body_key, iv, put_keys
+
+    # Functions copied and modified from the class BaseDecrypterContext in
+    # swift/common/middleware/crypto/decrypter.py
+
+    # EncryptionException is replaced with Exception
+
+    def _decrypt_value_with_meta(self, value, key, required, decoder):
+        """
+        Base64-decode and decrypt a value if crypto meta can be extracted from
+        the value itself, otherwise return the value unmodified.
+
+        A value should either be a string that does not contain the ';'
+        character or should be of the form:
+
+            <base64-encoded ciphertext>;swift_meta=<crypto meta>
+
+        :param value: value to decrypt
+        :param key: crypto key to use
+        :param required: if True then the value is required to be decrypted
+                         and an Exception will be raised if the header cannot
+                         be decrypted due to missing crypto meta.
+        :param decoder: function to turn the decrypted bytes into useful data
+        :returns: decrypted value if crypto meta is found, otherwise the
+                  unmodified value
+        :raises Exception: if an error occurs while parsing crypto meta or if
+                           the header value was required to be decrypted but
+                           crypto meta was not found.
+        """
+        extracted_value, crypto_meta = extract_crypto_meta(value)
+        if crypto_meta:
+            self.crypto.check_crypto_meta(crypto_meta)
+            value = self._decrypt_value(extracted_value, key, crypto_meta, decoder)
+        elif required:
+            raise Exception("Missing crypto meta in value %s" % value)
+
+        return value
+
+    def _decrypt_value(self, value, key, crypto_meta, decoder):
+        """
+        Base64-decode and decrypt a value using the crypto_meta provided.
+
+        :param value: a base64-encoded value to decrypt
+        :param key: crypto key to use
+        :param crypto_meta: a crypto-meta dict of form returned by
+            :py:func:`~swift.common.middleware.crypto.Crypto.get_crypto_meta`
+        :param decoder: function to turn the decrypted bytes into useful data
+        :returns: decrypted value
+        """
+        if not value:
+            return decoder(b"")
+        crypto_ctxt = self.crypto.create_decryption_ctxt(key, crypto_meta["iv"], 0)
+        return decoder(crypto_ctxt.update(base64.b64decode(value)))
+
+    # Function copied and modified from the class DecrypterObjContext
+    # in swift/common/middleware/crypto/decrypter.py
+
+    # self.server_type has been replaced with 'object'
+    # self._response_header has been replaced with self.metadata['property']
+    # self._decrypt_value_with_meta is called instead of self._decrypt_header
+
+    def _decrypt_user_metadata(self, keys):
+        prefix = get_object_transient_sysmeta("crypto-meta-")
+        prefix_len = len(prefix)
+        new_prefix = get_user_meta_prefix("object").title()
+        result = []
+        for name, val in self.metadata["properties"].items():
+            if name.lower().startswith(prefix) and val:
+                short_name = name[prefix_len:]
+                decrypted_value = self._decrypt_value_with_meta(
+                    val, keys["object"], True, bytes_to_wsgi
+                )
+                result.append((new_prefix + short_name, decrypted_value))
+        return result
