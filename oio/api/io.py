@@ -77,6 +77,19 @@ def close_source(source, logger=None):
         logger.exception("Failed to close %s", source)
 
 
+def get_file_hash(chunk_path, chunk_checksum_algo, max_read_size):
+    """Returns chunk hash generated with the given check sum algorithm"""
+    buf_size_gen = exp_ramp_gen(READ_CHUNK_SIZE, max_read_size)
+    with open(chunk_path, "rb") as chunk_file:
+        hasher = get_hasher(chunk_checksum_algo)
+        while True:
+            data = chunk_file.read(next(buf_size_gen))
+            if not data:
+                break
+            hasher.update(data)
+        return hasher.hexdigest().upper()
+
+
 class IOBaseWrapper(RawIOBase):
     """
     Wrap any object that has a `read` method into an `io.IOBase`.

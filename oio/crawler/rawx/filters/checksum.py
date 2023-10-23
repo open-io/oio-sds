@@ -18,14 +18,14 @@ from os import makedirs, remove
 from os.path import isdir
 from shutil import move
 
-from oio.api.io import READ_CHUNK_SIZE, exp_ramp_gen
+from oio.api.io import get_file_hash
 from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
 from oio.common.constants import CHUNK_SUFFIX_CORRUPT, CHUNK_QUARANTINE_FOLDER_NAME
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.green import time
 from oio.common.storage_method import parse_chunk_method
-from oio.common.utils import find_mount_point, get_hasher
+from oio.common.utils import find_mount_point
 from oio.conscience.client import ConscienceClient
 from oio.crawler.common.base import Filter
 from oio.crawler.rawx.chunk_wrapper import (
@@ -94,17 +94,6 @@ class Checksum(Filter):
 
         self._rawx_service = RawxService(status, now)
         return status
-
-    def _get_file_hash(self, chunk_path, chunk_checksum_algo):
-        buf_size_gen = exp_ramp_gen(READ_CHUNK_SIZE, self.max_read_size)
-        with open(chunk_path, "rb") as chunk_file:
-            hasher = get_hasher(chunk_checksum_algo)
-            while True:
-                data = chunk_file.read(next(buf_size_gen))
-                if not data:
-                    break
-                hasher.update(data)
-            return hasher.hexdigest().upper()
 
     def error(self, chunk, container_id, msg):
         self.logger.error(
@@ -190,7 +179,9 @@ class Checksum(Filter):
         if not chunk_checksum_algo:
             chunk_checksum_algo = "md5" if len(chunk_hash) == 32 else "blake3"
         try:
-            file_hash = self._get_file_hash(chunk.chunk_path, chunk_checksum_algo)
+            file_hash = get_file_hash(
+                chunk.chunk_path, chunk_checksum_algo, self.max_read_size
+            )
 
             self.logger.debug(
                 "chunk_hash=%s file_hash=%s algo=%s",
