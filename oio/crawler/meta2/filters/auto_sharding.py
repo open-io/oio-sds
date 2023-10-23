@@ -110,7 +110,11 @@ class AutomaticSharding(Filter):
         meta2db = Meta2DB(self.app_env, env)
 
         try:
-            self._clean(meta2db)
+            if self._clean(meta2db):
+                # If there was a cleaning, do nothing else
+                # and let the "auto_vacuum" pass
+                self.skipped += 1
+                return self.app(env, cb)
 
             if self.container_sharding.sharding_in_progress({"system": meta2db.system}):
                 self.logger.info("Sharding in progress for container %s", meta2db.cid)
@@ -180,7 +184,7 @@ class AutomaticSharding(Filter):
             )
             recent_change = time.time() - sharding_timestamp < self.step_timeout
             if recent_change:
-                return
+                return False
             sharding_state = int_value(meta2db.system.get(M2_PROP_SHARDING_STATE), 0)
             if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
                 self.logger.warning(
@@ -188,18 +192,23 @@ class AutomaticSharding(Filter):
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
-                return
+                return False
             if sharding_state == EXISTING_SHARD_STATE_LOCKED:
                 self.logger.warning(
                     "Shard remained locked or container %s is a possible orphan shard",
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
-                return
+                return False
             if sharding_state != NEW_SHARD_STATE_CLEANING_UP:
-                return
+                return False
+            # Let "auto_vacuum" decide whether VACUUM is relevant
             self.container_sharding.clean_container(
-                None, None, cid=meta2db.cid, attempts=3
+                None,
+                None,
+                cid=meta2db.cid,
+                attempts=3,
+                vacuum=False,
             )
             self.cleaning_successes += 1
 
@@ -212,6 +221,7 @@ class AutomaticSharding(Filter):
         except Exception as exc:
             self.logger.exception("Failed to clean container %s: %s", meta2db.cid, exc)
             self.cleaning_errors += 1
+        return True
 
     def _sharding(self, meta2db):
         self.logger.info(

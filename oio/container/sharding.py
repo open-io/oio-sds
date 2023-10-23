@@ -789,6 +789,7 @@ class ContainerSharding(ProxyClient):
                 shard,
                 parent_shard=parent_shard,
                 attempts=1,
+                vacuum=True,
                 **kwargs,
             )
 
@@ -927,7 +928,12 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
-    def _clean(self, shard, parent_shard=None, no_vacuum=False, attempts=1, **kwargs):
+    def _clean(self, shard, parent_shard=None, attempts=1, vacuum=False, **kwargs):
+        """
+        :param vacuum: Trigger a VACUUM after cleaning the shard (even partially).
+            By default, VACUUM is disabled because there is "auto_vacuum" which
+            can do it afterwards (taking care not to disturb the client too much).
+        """
         data = None
         service_id = None
         timeout = kwargs.get("timeout")
@@ -1008,8 +1014,7 @@ class ContainerSharding(ProxyClient):
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
             truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
-        success = True
-        if not no_vacuum:
+        if vacuum:
             params = {}
             suffix = None
             if parent_shard:
@@ -1035,11 +1040,6 @@ class ContainerSharding(ProxyClient):
                 self.logger.warning(
                     "Failed to vacuum container (CID=%s): %s", shard["cid"], exc
                 )
-                success = False
-        if success and parent_shard:
-            parent_shard["sharding"].setdefault("cleaning_done", set()).add(
-                shard["index"]
-            )
 
     @ensure_request_id
     def clean_container(self, account, container, cid=None, **kwargs):
@@ -1184,7 +1184,6 @@ class ContainerSharding(ProxyClient):
                 creator_exceptions.append(exc)
         if creator_exceptions:
             raise Exception(creator_exceptions)
-        cleaning_done = parent_shard["sharding"].pop("cleaning_done", set())
 
         # Apply saved writes on the new shards in the background
         saved_writes_applicator = SavedWritesApplicator(
@@ -1217,7 +1216,9 @@ class ContainerSharding(ProxyClient):
         if parent_shard["cid"] == root_cid:
             # Clean up root container
             root_shard = {"cid": root_cid}
-            cleaners.append(eventlet.spawn(self._safe_clean, root_shard, **kwargs))
+            cleaners.append(
+                eventlet.spawn(self._safe_clean, root_shard, vacuum=True, **kwargs)
+            )
         else:
             # Delete parent shard
             try:
@@ -1234,12 +1235,18 @@ class ContainerSharding(ProxyClient):
 
         # Clean up new shards
         for new_shard in new_shards:
-            # If a pre-cleaning has been performed,
-            # this cleaning should only recalculate the counters
-            no_vacuum = new_shard["index"] in cleaning_done
+            # If a pre-cleaning has been performed, this cleaning should only
+            # recalculate the counters.
+            # Otherwise, if there is sharding, it is because the parent shard
+            # was growing. So VACUUM is not necessarily mandatory if this has
+            # already been done at the time of pre-cleaning, let "auto_vacuum"
+            # decide.
             cleaners.append(
                 eventlet.spawn(
-                    self._safe_clean, new_shard, no_vacuum=no_vacuum, **kwargs
+                    self._safe_clean,
+                    new_shard,
+                    vacuum=(not self.preclean_new_shards),
+                    **kwargs,
                 )
             )
         for cleaner in cleaners:
@@ -1794,7 +1801,7 @@ class ContainerSharding(ProxyClient):
             )
 
         # Clean new shard to recompute stats
-        self._safe_clean(new_shard, no_vacuum=True, **kwargs)
+        self._safe_clean(new_shard, vacuum=False, **kwargs)
 
         # Delete the copy
         if smaller_shard_info["master"] != bigger_shard_info["master"]:

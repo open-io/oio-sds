@@ -169,6 +169,12 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
             default=1,
             help="Number of attempts for each clean up request. (default: 1)",
         )
+        parser.add_argument(
+            "--vacuum",
+            default=False,
+            action="store_true",
+            help="Trigger a VACUUM after cleaning the shard (even partially).",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -180,6 +186,7 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
         container_sharding.clean_container(
             self.app.client_manager.account,
             parsed_args.container,
+            vacuum=parsed_args.vacuum,
             attempts=parsed_args.attempts,
         )
         return ("Status",), [("Ok",)]
