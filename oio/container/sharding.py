@@ -928,11 +928,13 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
-    def _clean(self, shard, parent_shard=None, attempts=1, vacuum=False, **kwargs):
+    def _clean(self, shard, parent_shard=None, attempts=1, **kwargs):
         """
-        :param vacuum: Trigger a VACUUM after cleaning the shard (even partially).
-            By default, VACUUM is disabled because there is "auto_vacuum" which
-            can do it afterwards (taking care not to disturb the client too much).
+        Clean up any out-of-range entries in the shard.
+
+        :param parent_shard: Parent shard information to clean up local copies.
+        :param attempts: Number of attempts for each cleaning request.
+        :param timeout: Maximum time to complete all cleaning.
         """
         data = None
         service_id = None
@@ -975,6 +977,7 @@ class ContainerSharding(ProxyClient):
             )
             request_kwargs.pop("deadline", None)
         truncated = True
+        successes = 0
         while truncated:
             if global_deadline and monotonic_time() >= global_deadline:
                 break
@@ -989,60 +992,95 @@ class ContainerSharding(ProxyClient):
                     )
                     if resp.status != 204:
                         raise exceptions.from_response(resp, body)
+                    successes += 1
                     break
                 except BadRequest:
                     raise
+                except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+                    if i >= attempts - 1:
+                        if (
+                            successes
+                            and global_deadline
+                            and monotonic_time() >= global_deadline
+                        ):
+                            # Do not raise an exception if the last cleaning request
+                            # has timeout
+                            break
+                        else:
+                            exc.successes = successes
+                            raise
+                    self.logger.warning(
+                        "Failed to clean the container (CID=%s), "
+                        "the previous request probably failed due "
+                        "to too many (customer) requests on the container, "
+                        "retrying with urgent mode...: %s",
+                        shard["cid"],
+                        exc,
+                    )
+                    params["urgent"] = 1
                 except Exception as exc:
                     if i >= attempts - 1:
+                        exc.successes = successes
                         raise
-                    if isinstance(exc, (OioTimeout, ServiceBusy, DeadlineReached)):
-                        self.logger.warning(
-                            "Failed to clean the container (CID=%s), "
-                            "the previous request probably failed due "
-                            "to too many (customer) requests on the container, "
-                            "retrying with urgent mode...: %s",
-                            shard["cid"],
-                            exc,
-                        )
-                        params["urgent"] = 1
-                    else:
-                        self.logger.warning(
-                            "Failed to clean the container (CID=%s), retrying...: %s",
-                            shard["cid"],
-                            exc,
-                        )
+                    self.logger.warning(
+                        "Failed to clean the container (CID=%s), retrying...: %s",
+                        shard["cid"],
+                        exc,
+                    )
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
             truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
-        if vacuum:
-            params = {}
-            suffix = None
-            if parent_shard:
-                # It's a local shard copy
-                suffix = "-".join(
-                    (
-                        "sharding",
-                        str(parent_shard["sharding"]["timestamp"]),
-                        str(shard["index"]),
-                    )
+
+    def _safe_vacuum(self, shard, parent_shard=None, **kwargs):
+        """
+        Try to trigger a VACUUM to reduce database size.
+
+        :param parent_shard: Parent shard information to vacuum local copies.
+        """
+        params = {}
+        service_id = None
+        suffix = None
+        if parent_shard:
+            # It's a local shard copy
+            cid = parent_shard["cid"]
+            service_id = parent_shard["sharding"]["master"]
+            suffix = "-".join(
+                (
+                    "sharding",
+                    str(parent_shard["sharding"]["timestamp"]),
+                    str(shard["index"]),
                 )
-                params["local"] = 1
-            try:
-                self.admin.vacuum_base(
-                    "meta2",
-                    cid=cid,
-                    suffix=suffix,
-                    service_id=service_id,
-                    params=params,
-                    **kwargs,
-                )
-            except Exception as exc:
-                self.logger.warning(
-                    "Failed to vacuum container (CID=%s): %s", shard["cid"], exc
-                )
+            )
+            params["local"] = 1
+        else:
+            cid = shard["cid"]
+        try:
+            self.admin.vacuum_base(
+                "meta2",
+                cid=cid,
+                suffix=suffix,
+                service_id=service_id,
+                params=params,
+                **kwargs,
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to vacuum container (CID=%s): %s", shard["cid"], exc
+            )
 
     @ensure_request_id
-    def clean_container(self, account, container, cid=None, **kwargs):
+    def clean_container(
+        self, account, container, cid=None, attempts=1, vacuum=False, **kwargs
+    ):
+        """
+        Clean up any out-of-range entries in the container (corresponding to a shard)
+        and (optionally) vacuum to reduce the database size.
+
+        :param attempts: Number of attempts for each cleaning request.
+        :param vacuum: Trigger a VACUUM after cleaning the shard (even partially).
+            By default, VACUUM is disabled because there is "auto_vacuum" which
+            can do it afterwards (taking care not to disturb the client too much).
+        """
         fake_shard = {
             "index": -1,
             "lower": "",
@@ -1050,9 +1088,21 @@ class ContainerSharding(ProxyClient):
             "cid": cid or cid_from_name(account, container),
             "metadata": None,
         }
-        self._clean(fake_shard, **kwargs)
+        self._clean(fake_shard, attempts=attempts, **kwargs)
+        if vacuum:
+            self._safe_vacuum(fake_shard, **kwargs)
 
-    def _safe_clean(self, shard, attempts=3, **kwargs):
+    def _safe_clean(self, shard, attempts=3, vacuum=False, **kwargs):
+        """
+        Clean up any out-of-range entries in the shard and (optionally) vacuum
+        to reduce the database size.
+        This method will never raise an exception.
+
+        :param attempts: Number of attempts for each cleaning request.
+        :param vacuum: Trigger a VACUUM after cleaning the shard (even partially).
+            By default, VACUUM is disabled because there is "auto_vacuum" which
+            can do it afterwards (taking care not to disturb the client too much).
+        """
         try:
             self._clean(shard, attempts=attempts, **kwargs)
         except Exception as exc:
@@ -1061,6 +1111,10 @@ class ContainerSharding(ProxyClient):
                 shard.get("cid", "copy"),
                 exc,
             )
+            # Trigger a vacuum only if cleaning has worked once
+            vacuum = vacuum and hasattr(exc, "successes") and exc.successes > 0
+        if vacuum:
+            self._safe_vacuum(shard, **kwargs)
 
     def _show_shards(
         self,
