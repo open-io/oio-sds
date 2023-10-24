@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -615,7 +615,12 @@ class TestRdirServerWithSubproces(RdirTestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(
             self.json_loads(resp.data),
-            {"opened_db_count": 0, "service_id": self.service_id},
+            {
+                "opened_db_count": 0,
+                "service_id": self.service_id,
+                "meta2_volumes": [],
+                "rawx_volumes": [],
+            },
         )
 
         # DB creation
@@ -627,7 +632,12 @@ class TestRdirServerWithSubproces(RdirTestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(
             self.json_loads(resp.data),
-            {"opened_db_count": 1, "service_id": self.service_id},
+            {
+                "opened_db_count": 1,
+                "service_id": self.service_id,
+                "meta2_volumes": [],
+                "rawx_volumes": [vol],
+            },
         )
 
     def test_bad_routes(self):

@@ -405,6 +405,37 @@ _record_parse(struct rdir_record_s *rec, const char *value, size_t length)
 	return err;
 }
 
+static gint
+_strptrcmp(const gchar **a, const gchar **b)
+{
+	return g_strcmp0(*a, *b);
+}
+
+static GError *
+_db_list_volumes(gchar ***volumes)
+{
+	GError *err = NULL;
+	GDir *gdir = g_dir_open(basedir, 0, &err);
+	if (!err) {
+		GPtrArray *vols = g_ptr_array_sized_new(16);
+		const gchar *fname = NULL;
+		while ((fname = g_dir_read_name(gdir)) != NULL) {
+			if (fname[0] == '.') {
+				continue;
+			} else if (g_str_has_prefix(fname, "meta2-")) {
+				g_ptr_array_add(vols, g_strdup(fname + 6));
+			} else {
+				g_ptr_array_add(vols, g_strdup(fname));
+			}
+		}
+		g_ptr_array_sort(vols, (GCompareFunc)_strptrcmp);
+		g_ptr_array_add(vols, NULL);
+		*volumes = (gchar**)g_ptr_array_free(vols, FALSE);
+		g_dir_close(gdir);
+	}
+	return err;
+}
+
 static GError *
 _db_open(const char *volid, gboolean autocreate, leveldb_t **pdb)
 {
@@ -2714,6 +2745,7 @@ _route_srv_info(struct req_args_s *args)
 static enum http_rc_e
 _route_srv_status(struct req_args_s *args)
 {
+	enum http_rc_e res = 0;
 	g_mutex_lock(&lock_bases);
 	guint count = g_tree_nnodes(tree_bases);
 	g_mutex_unlock(&lock_bases);
@@ -2721,6 +2753,9 @@ _route_srv_status(struct req_args_s *args)
 	g_mutex_lock(&meta2_db_lock);
 	count += g_tree_nnodes(meta2_db_tree);
 	g_mutex_unlock(&meta2_db_lock);
+
+	gchar **volumes = NULL;
+	GError *err = _db_list_volumes(&volumes);
 
 	const gchar *format = OPT("format");
 	GString *gstr = g_string_sized_new(128);
@@ -2731,21 +2766,38 @@ _route_srv_status(struct req_args_s *args)
 			g_string_append_c(gstr, ',');
 			oio_str_gstring_append_json_pair(gstr, "service_id", service_id);
 		}
+		if (volumes) {
+			g_string_append_static(gstr, ",\"volumes\":[");
+			for (gchar **cur = volumes; cur && *cur; cur++) {
+				if (cur != volumes) {
+					g_string_append_c(gstr, ',');
+				}
+				oio_str_gstring_append_json_quote(gstr, *cur);
+			}
+			g_string_append_c(gstr, ']');
+		} else {
+			g_string_append_static(gstr, ",\"error\":");
+			oio_str_gstring_append_json_quote(gstr, err->message);
+		}
 		g_string_append_c(gstr, '}');
+		res = _reply_ok(args->rp, gstr);
 	} else if (!g_strcmp0(format, "prometheus")) {
 		// FIXME(FVE): find something more appropriate than syslog_id
 		g_string_append_printf(gstr,
 				"rdir_opened_db{namespace=\"%s\", service=\"%s\"} "
 				"%u",
 				ns_name, syslog_id, count);
+		res = _reply_bytes(args->rp, HTTP_CODE_OK, "OK", HTTP_CONTENT_TYPE_TEXT,
+				g_string_free_to_bytes(gstr));
 	} else {
 		g_string_free(gstr, TRUE);
-		return _reply_format_error(
+		res = _reply_format_error(
 				args->rp, BADREQ("Unknown format: %s", format));
 	}
 
-	// FIXME(FVE): fix Content-Type response header
-	return _reply_ok(args->rp, gstr);
+	g_strfreev(volumes);
+	g_clear_error(&err);
+	return res;
 }
 
 
