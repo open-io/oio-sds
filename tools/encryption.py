@@ -224,6 +224,19 @@ class Crypto(object):
             conf.get("ssec_mode", "false") if conf else False
         )
 
+    def create_encryption_ctxt(self, key, iv):
+        """
+        Creates a crypto context for encrypting
+
+        :param key: 256-bit key
+        :param iv: 128-bit iv or nonce used for encryption
+        :raises ValueError: on invalid key or iv
+        :returns: an instance of an encryptor
+        """
+        self.check_key(key)
+        engine = Cipher(algorithms.AES(key), modes.CTR(iv), backend=self.backend)
+        return engine.encryptor()
+
     def create_decryption_ctxt(self, key, iv, offset):
         """
         Creates a crypto context for decrypting
@@ -253,6 +266,13 @@ class Crypto(object):
         dec.update(b"*" * offset_in_block)
         return dec
 
+    def create_iv(self):
+        return os.urandom(self.iv_length)
+
+    def create_crypto_meta(self):
+        # create a set of parameters
+        return {"iv": self.create_iv(), "cipher": self.cipher}
+
     def check_crypto_meta(self, meta):
         """
         Check that crypto meta dict has valid items.
@@ -269,6 +289,10 @@ class Crypto(object):
                 )
         except KeyError as err:
             raise Exception("Bad crypto meta: Missing %s" % err)
+
+    def create_random_key(self):
+        # helper method to create random key of correct length
+        return os.urandom(self.key_length)
 
     def unwrap_key(self, wrapping_key, context):
         # unwrap a key from dict of form returned by wrap_key
@@ -497,3 +521,36 @@ class Decrypter:
                 )
                 result.append((new_prefix + short_name, decrypted_value))
         return result
+
+
+class Encrypter:
+    """
+    Encrypt data with a random body_key and a random iv.
+    """
+
+    def __init__(self):
+        crypto = Crypto()
+
+        # Create a dict with iv and cipher keys
+        body_crypto_meta = crypto.create_crypto_meta()
+        body_key = crypto.create_random_key()
+        self.body_crypto_ctxt = crypto.create_encryption_ctxt(
+            body_key, body_crypto_meta.get("iv")
+        )
+
+    def encrypt(self, chunk):
+        """
+        Encrypt chunk.
+
+        The body crypto context was created with a randomly chosen body key and
+        a randomly chosen IV.
+        Encryption of the object body is performed using this body crypto
+        context:
+            body_ciphertext = E(body_plaintext, body_key, body_iv)
+
+        :param chunk: object body_plaintext
+        :returns: body ciphertext
+        """
+
+        ciphertext = self.body_crypto_ctxt.update(chunk)
+        return ciphertext
