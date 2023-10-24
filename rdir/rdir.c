@@ -1894,8 +1894,8 @@ struct rdir_meta2_record_s
  */
 struct rdir_meta2_record_subset_s
 {
-	GString *prefix;
-	GString *marker;
+	const char *prefix;
+	const char *marker;
 	gint64 limit;
 };
 
@@ -1979,7 +1979,8 @@ _meta2_record_free(struct rdir_meta2_record_s *rec)
 
 /*
  * Extracts a description of the desired record subset from the JSON
- * body.
+ * body. The "prefix" and "marker" fields have the same validity as
+ * the JSON object.
  */
 static GError *
 _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
@@ -1995,16 +1996,12 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 	GError *err = oio_ext_extract_json(jrecord, map);
 	if (!err) {
 		if (jprefix) {
-			// TODO(ABO): Sanity checks on the prefix.
-			const char *prefix = json_object_get_string(jprefix);
-			subset->prefix = g_string_new(prefix);
+			subset->prefix = json_object_get_string(jprefix);
 		} else {
 			subset->prefix = NULL;
 		}
 		if (jmarker) {
-			// TODO(ABO): Sanity checks on the prefix.
-			const char *marker = json_object_get_string(jmarker);
-			subset->marker = g_string_new(marker);
+			subset->marker = json_object_get_string(jmarker);
 		} else {
 			subset->marker = NULL;
 		}
@@ -2063,6 +2060,69 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
 
 /*
  * Given an rdir_meta2_record_subset_s, this functions iterates through
+ * the LevelDB database to count records.
+ *
+ * If prefix is NULL, then no particular seeking is done before the iteration,
+ * and we will return the count of all records.
+ *
+ * If prefix is non-NULL, what will be returned is the count of records
+ * starting with the prefix.
+ */
+static GError *
+_meta2_db_count(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
+				gint64 *count)
+{
+	GError *err = NULL;
+	gchar *prefix = NULL;
+	size_t prefix_len = 0;
+	struct rdir_base_s *base = NULL;
+
+	if ((err = _meta2_db_get(meta2_address, FALSE, &base)))
+		return err;
+
+	if (subset->prefix) {
+		prefix = g_strconcat(CONTAINER_PREFIX, subset->prefix, NULL);
+		prefix_len = strlen(prefix);
+	}
+
+	leveldb_readoptions_t *options = leveldb_readoptions_create();
+	leveldb_readoptions_set_fill_cache(options, 0);
+	leveldb_readoptions_set_verify_checksums(options, 0);
+	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
+	leveldb_readoptions_destroy(options);
+
+	if (prefix) {
+		leveldb_iter_seek(it, prefix, prefix_len);
+	} else {
+		// LevelDB quirk apparently, you have to seek somewhere no matter what
+		// before iterating.
+		leveldb_iter_seek_to_first(it);
+	}
+
+	// Now we're at the first record that has the prefix provided.
+	// We start iterating.
+	guint nb = 0;
+	for (; leveldb_iter_valid(it); leveldb_iter_next(it), nb++) {
+		size_t klen = 0;
+
+		const char *key = leveldb_iter_key(it, &klen);
+		if (prefix) {
+			// LevelDB's keys are ordered lexicographically, so on the first
+			// key that does not have the prefix, we can stop iterating.
+			size_t maxlen = MIN(klen, prefix_len);
+			if (strncmp(prefix, key, maxlen))
+				break;
+		}
+	}
+
+	leveldb_iter_destroy(it);
+	g_free(prefix);
+	*count = nb;
+	return err;
+}
+
+/*
+ * Given an rdir_meta2_record_subset_s, this functions iterates through
  * the LevelDB database to return the wanted subset.
  *
  * If prefix is NULL, then no particular seeking is done before the iteration,
@@ -2079,16 +2139,21 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 				GString *json_response, gboolean *truncated)
 {
 	GError *err = NULL;
+	gchar *marker = NULL, *prefix = NULL;
+	size_t marker_len = 0, prefix_len = 0;
 	struct rdir_base_s *base = NULL;
 
 	if ((err = _meta2_db_get(meta2_address, FALSE, &base)))
 		return err;
 
-	// The prefix/marker is only used here so we can edit it in-place.
-	if (subset->prefix)
-		subset->prefix = g_string_prepend(subset->prefix, CONTAINER_PREFIX);
-	if (subset->marker)
-		subset->marker = g_string_prepend(subset->marker, CONTAINER_PREFIX);
+	if (subset->prefix) {
+		prefix = g_strconcat(CONTAINER_PREFIX, subset->prefix, NULL);
+		prefix_len = strlen(prefix);
+	}
+	if (subset->marker) {
+		marker = g_strconcat(CONTAINER_PREFIX, subset->marker, NULL);
+		marker_len = strlen(marker);
+	}
 
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
 	leveldb_readoptions_set_fill_cache(options, 0);
@@ -2096,14 +2161,14 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
 	leveldb_readoptions_destroy(options);
 
-	if (subset->marker) {
+	if (marker) {
 		// We have a marker.
-		leveldb_iter_seek(it, subset->marker->str, subset->marker->len);
+		leveldb_iter_seek(it, marker, marker_len);
 		// We shouldn't include the marker in the returned results.
 		leveldb_iter_next(it);
-	} else if (subset->prefix) {
+	} else if (prefix) {
 		// No marker but we still have a prefix
-		leveldb_iter_seek(it, subset->prefix->str, subset->prefix->len);
+		leveldb_iter_seek(it, prefix, prefix_len);
 	} else {
 		// LevelDB quirk apparently, you have to seek somewhere no matter what
 		// before iterating.
@@ -2117,11 +2182,11 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 		size_t klen = 0, vallen = 0;
 
 		const char *key = leveldb_iter_key(it, &klen);
-		if (subset->prefix) {
+		if (prefix) {
 			// LevelDB's keys are ordered lexicographically, so on the first
 			// key that does not have the prefix, we can stop iterating.
-			size_t maxlen = MIN(klen, subset->prefix->len);
-			if (strncmp(subset->prefix->str, key, maxlen))
+			size_t maxlen = MIN(klen, prefix_len);
+			if (strncmp(prefix, key, maxlen))
 				break;
 		}
 
@@ -2146,6 +2211,8 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	}
 
 	leveldb_iter_destroy(it);
+	g_free(marker);
+	g_free(prefix);
 	return err;
 }
 
@@ -2275,6 +2342,88 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 	}
 
 	return _reply_ok(args->rp, response_list);
+}
+
+// RDIR{{
+// POST /v1/rdir/meta2/count?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Count the number of records for a specific meta2.
+//
+// If a prefix is provided, only records whose keys contain this prefix
+// will be counted.
+//
+// We can also seek a specific marker and start iterating from the record
+// following the marker.
+//
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/meta2/count?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: json
+//
+//    {
+//      "prefix":"<container url prefix>",
+//    }
+//
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Length: 42
+//
+// .. code-block:: json
+//
+//    {
+//      "count": 100,
+//      "prefix": "NS\/myaccount\/CT10"
+//    }
+//
+//
+// }}RDIR
+static enum http_rc_e
+_route_meta2_count(struct req_args_s *args, struct json_object *jbody,
+		const char *meta2_address)
+{
+	if (!meta2_address)
+		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
+	if (jbody && !json_object_is_type(jbody, json_type_object))
+		return _reply_format_error(args->rp, BADREQ("null body"));
+
+	GError *err = NULL;
+
+	struct rdir_meta2_record_subset_s subset = {
+		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT
+	};
+	if (jbody) {
+		err = _meta2_record_subset_extract(&subset, jbody);
+		if (err)
+			return _reply_format_error(args->rp, err);
+	}
+
+	gint64 count = 0;
+	err = _meta2_db_count(meta2_address, &subset, &count);
+
+	if (err) {
+		return _reply_common_error(args->rp, err);
+	} else {
+		GString *response = g_string_sized_new(1024);
+		g_string_append_c(response, '{');
+		oio_str_gstring_append_json_pair_int(response, "count", count);
+		if (subset.prefix != NULL) {
+			g_string_append_c(response, ',');
+			oio_str_gstring_append_json_pair(response, "prefix", subset.prefix);
+		}
+		g_string_append_c(response, '}');
+		return _reply_ok(args->rp, response);
+	}
 }
 
 // RDIR{{
@@ -2704,6 +2853,10 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			if (!strcmp(args->rq->cmd, "GET") || !strcmp(args->rq->cmd, "POST"))
 				return _route_vol_status(args, OPT("vol"));
 			return _reply_method_error(args->rp);
+
+		case OIO_RDIR_META2_COUNT:
+			CHECK_METHOD("GET");
+			return _route_meta2_count(args, jbody, OPT("vol"));
 
 		case OIO_RDIR_META2_CREATE:
 			CHECK_METHOD("POST");

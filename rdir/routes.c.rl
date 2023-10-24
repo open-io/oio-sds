@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2018 OpenIO SAS, original work as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -53,13 +53,14 @@ vol_delete = "/v1/rdir/delete" %{ rc.result = OIO_RDIR_VOL_DELETE; };
 vol_fetch = "/v1/rdir/fetch" %{ rc.result = OIO_RDIR_VOL_FETCH; };
 vol_status = "/v1/rdir/status" %{ rc.result = OIO_RDIR_VOL_STATUS; };
 meta2_fetch = "/v1/rdir/meta2/fetch" %{ rc.result = OIO_RDIR_META2_FETCH; };
+meta2_count = "/v1/rdir/meta2/count" %{ rc.result = OIO_RDIR_META2_COUNT; };
 meta2_create = "/v1/rdir/meta2/create" %{ rc.result = OIO_RDIR_META2_CREATE; };
 meta2_push = "/v1/rdir/meta2/push" %{ rc.result = OIO_RDIR_META2_PUSH; };
 meta2_delete = "/v1/rdir/meta2/delete" %{ rc.result = OIO_RDIR_META2_DELETE; };
 srv_route = srv_info | srv_status | srv_config;
 adm_route = adm_status | adm_show | adm_lock | adm_unlock | adm_incident | adm_clear;
 vol_route = vol_status | vol_fetch | vol_delete | vol_push | vol_create;
-meta2_route = meta2_push | meta2_delete | meta2_create | meta2_fetch;
+meta2_route = meta2_push | meta2_delete | meta2_count | meta2_create | meta2_fetch;
 any_route = vol_route | meta2_route | adm_route | srv_route;
 route_rdir_request := |*
 	any_route % Final;

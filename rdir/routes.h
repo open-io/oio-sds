@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2018 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -40,6 +40,7 @@ enum rdir_route_e {
     OIO_RDIR_VOL_DELETE,
     OIO_RDIR_VOL_FETCH,
     OIO_RDIR_VOL_STATUS,
+    OIO_RDIR_META2_COUNT,
     OIO_RDIR_META2_CREATE,
     OIO_RDIR_META2_PUSH,
     OIO_RDIR_META2_FETCH,
