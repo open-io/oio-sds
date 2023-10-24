@@ -86,7 +86,7 @@ class RdirTestCase(CommonTestCase):
                 pass
 
     def _volume(self):
-        return random_id(8)
+        return "fake-" + random_id(6)
 
     def _record(self, new_format=False):
         rec = {
@@ -139,8 +139,30 @@ class TestRdirServer(RdirTestCase):
     def test_status(self):
         resp = self._get("/status")
         self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.headers["Content-Type"], "application/json")
+        decoded = json.loads(resp.data)
+        self.assertIn("meta2_volumes", decoded)
+        self.assertIn("rawx_volumes", decoded)
+
         resp = self._get("/config")
         self.assertEqual(resp.status, 200)
+
+    def test_status_prometheus(self):
+        resp = self._get("/status", params={"format": "prometheus"})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.headers["Content-Type"], "text/plain")
+        decoded = resp.data.decode("utf-8")
+        self.assertIn("rdir_db_count", decoded)
+        # Only if details are asked
+        self.assertNotIn("meta2_db_count", decoded)
+
+    def test_status_prometheus_details(self):
+        resp = self._get("/status", params={"format": "prometheus", "details": "true"})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.headers["Content-Type"], "text/plain")
+        decoded = resp.data.decode("utf-8")
+        self.assertIn("rdir_db_count", decoded)
+        self.assertIn("meta2_db_count", decoded)
 
     def test_explicit_create(self):
         rec = self._record()
@@ -868,6 +890,47 @@ class TestRdirServerMeta2Ops(RdirTestCase):
                 self.json_loads(resp.data), {"records": [], "truncated": False}
             )
             rec[k] = save
+
+    def test_meta2_count(self):
+        resp = self._post("/v1/rdir/meta2/create", params={"vol": self.vol})
+        self.assertEqual(resp.status, 201)
+
+        # Meta2 is empty, count should be zero
+        resp = self._get("/v1/rdir/meta2/count", params={"vol": self.vol}, json={})
+        self.assertEqual(resp.status, 200)
+        decoded = json.loads(resp.data)
+        self.assertIn("count", decoded)
+        self.assertEqual(decoded["count"], 0)
+
+        # Simulate the creation of a meta2 database, count should be one
+        rec = self._meta2_record()
+        resp = self._post(
+            "/v1/rdir/meta2/push", params={"vol": self.vol}, data=json.dumps(rec)
+        )
+        self.assertEqual(resp.status, 204)
+        resp = self._get("/v1/rdir/meta2/count", params={"vol": self.vol}, json={})
+        self.assertEqual(resp.status, 200)
+        decoded = json.loads(resp.data)
+        self.assertIn("count", decoded)
+        self.assertEqual(decoded["count"], 1)
+
+        # Simulate the deletion of a meta2 database, count should be zero again
+        resp = self._post(
+            "/v1/rdir/meta2/delete", params={"vol": self.vol}, data=json.dumps(rec)
+        )
+        self.assertEqual(resp.status, 204)
+        resp = self._get("/v1/rdir/meta2/count", params={"vol": self.vol}, json={})
+        self.assertEqual(resp.status, 200)
+        decoded = json.loads(resp.data)
+        self.assertIn("count", decoded)
+        self.assertEqual(decoded["count"], 0)
+
+    def test_meta2_count_not_found(self):
+        resp = self._get("/v1/rdir/meta2/count", params={"vol": self.vol}, json={})
+        self.assertEqual(resp.status, 404)
+        decoded = json.loads(resp.data)
+        self.assertIn("message", decoded)
+        self.assertIn("not found", decoded["message"])
 
     def test_meta2_create(self):
         # create volume

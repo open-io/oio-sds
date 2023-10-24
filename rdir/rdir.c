@@ -412,25 +412,31 @@ _strptrcmp(const gchar **a, const gchar **b)
 }
 
 static GError *
-_db_list_volumes(gchar ***volumes)
+_db_list_volumes(gchar ***m2_volumes, gchar ***rawx_volumes)
 {
 	GError *err = NULL;
 	GDir *gdir = g_dir_open(basedir, 0, &err);
 	if (!err) {
-		GPtrArray *vols = g_ptr_array_sized_new(16);
+		GPtrArray *m2_vols = g_ptr_array_sized_new(16);
+		GPtrArray *rawx_vols = g_ptr_array_sized_new(16);
 		const gchar *fname = NULL;
 		while ((fname = g_dir_read_name(gdir)) != NULL) {
 			if (fname[0] == '.') {
 				continue;
 			} else if (g_str_has_prefix(fname, "meta2-")) {
-				g_ptr_array_add(vols, g_strdup(fname + 6));
+				g_ptr_array_add(m2_vols, g_strdup(fname + 6));
 			} else {
-				g_ptr_array_add(vols, g_strdup(fname));
+				/* Rawx databases don't have prefixes. We are not sure that
+				 * what we are listing are actually rawx volumes. */
+				g_ptr_array_add(rawx_vols, g_strdup(fname));
 			}
 		}
-		g_ptr_array_sort(vols, (GCompareFunc)_strptrcmp);
-		g_ptr_array_add(vols, NULL);
-		*volumes = (gchar**)g_ptr_array_free(vols, FALSE);
+		g_ptr_array_sort(m2_vols, (GCompareFunc)_strptrcmp);
+		g_ptr_array_sort(rawx_vols, (GCompareFunc)_strptrcmp);
+		g_ptr_array_add(m2_vols, NULL);
+		g_ptr_array_add(rawx_vols, NULL);
+		*m2_volumes = (gchar**)g_ptr_array_free(m2_vols, FALSE);
+		*rawx_volumes = (gchar**)g_ptr_array_free(rawx_vols, FALSE);
 		g_dir_close(gdir);
 	}
 	return err;
@@ -2737,9 +2743,21 @@ _route_srv_info(struct req_args_s *args)
 //    HTTP/1.1 200 OK
 //    Connection: Close
 //    Content-Type: application/json
-//    Content-Length: 21
+//    Content-Length: 144
 //
-//    {"opened_db_count":6}
+//    {
+//      "opened_db_count": 3,
+//      "service_id": "NS-rdir-2",
+//      "meta2_volumes": [
+//        "NS-meta2-1",
+//        "NS-meta2-3",
+//        "NS-meta2-4"
+//      ],
+//      "rawx_volumes": [
+//        "NS-rawx-1",
+//        "NS-rawx-3"
+//      ]
+//    }
 //
 // }}RDIR
 static enum http_rc_e
@@ -2754,9 +2772,10 @@ _route_srv_status(struct req_args_s *args)
 	count += g_tree_nnodes(meta2_db_tree);
 	g_mutex_unlock(&meta2_db_lock);
 
-	gchar **volumes = NULL;
-	GError *err = _db_list_volumes(&volumes);
+	gchar **m2_volumes = NULL, **rawx_volumes = NULL;
+	GError *err = _db_list_volumes(&m2_volumes, &rawx_volumes);
 
+	gboolean details = oio_str_parse_bool(OPT("details"), FALSE);
 	const gchar *format = OPT("format");
 	GString *gstr = g_string_sized_new(128);
 	if (!format || !*format || !g_strcmp0(format, "json")) {
@@ -2766,10 +2785,18 @@ _route_srv_status(struct req_args_s *args)
 			g_string_append_c(gstr, ',');
 			oio_str_gstring_append_json_pair(gstr, "service_id", service_id);
 		}
-		if (volumes) {
-			g_string_append_static(gstr, ",\"volumes\":[");
-			for (gchar **cur = volumes; cur && *cur; cur++) {
-				if (cur != volumes) {
+		if (!err) {
+			g_string_append_static(gstr, ",\"meta2_volumes\":[");
+			for (gchar **cur = m2_volumes; cur && *cur; cur++) {
+				if (cur != m2_volumes) {
+					g_string_append_c(gstr, ',');
+				}
+				oio_str_gstring_append_json_quote(gstr, *cur);
+			}
+			g_string_append_c(gstr, ']');
+			g_string_append_static(gstr, ",\"rawx_volumes\":[");
+			for (gchar **cur = rawx_volumes; cur && *cur; cur++) {
+				if (cur != rawx_volumes) {
 					g_string_append_c(gstr, ',');
 				}
 				oio_str_gstring_append_json_quote(gstr, *cur);
@@ -2782,11 +2809,47 @@ _route_srv_status(struct req_args_s *args)
 		g_string_append_c(gstr, '}');
 		res = _reply_ok(args->rp, gstr);
 	} else if (!g_strcmp0(format, "prometheus")) {
-		// FIXME(FVE): find something more appropriate than syslog_id
 		g_string_append_printf(gstr,
-				"rdir_opened_db{namespace=\"%s\", service=\"%s\"} "
-				"%u",
-				ns_name, syslog_id, count);
+				"rdir_opened_db{namespace=\"%s\", service_id=\"%s\"} "
+				"%u\n",
+				ns_name, service_id, count);
+		if (!err) {
+			gint64 vol_count = g_strv_length(m2_volumes);
+			g_string_append_printf(gstr,
+					"rdir_db_count{namespace=\"%s\", "
+					"service_id=\"%s\", "
+					"type=\"meta2\"} "
+					"%"G_GINT64_FORMAT"\n",
+					ns_name, service_id, vol_count);
+
+			vol_count = g_strv_length(rawx_volumes);
+			g_string_append_printf(gstr,
+					"rdir_db_count{namespace=\"%s\", "
+					"service_id=\"%s\", "
+					"type=\"rawx\"} "
+					"%"G_GINT64_FORMAT"\n",
+					ns_name, service_id, vol_count);
+
+			/* Compute the number of databases per meta2 service. This is
+			 * costly, therefore we do it only if "details" is true. */
+			struct rdir_meta2_record_subset_s subset = {0};
+			for (gchar **cur = m2_volumes; details && cur && *cur; cur++) {
+				gint64 db_count = 0;  // Number of meta2 databases
+				err = _meta2_db_count(*cur, &subset, &db_count);
+				if (err) {
+					GRID_WARN("Failed to count records in %s: %s (reqid=%s)",
+							*cur, err->message, oio_ext_get_reqid());
+					g_clear_error(&err);
+					continue;
+				}
+				g_string_append_printf(gstr,
+					"meta2_db_count{namespace=\"%s\", "
+					"rdir_service_id=\"%s\", "
+					"service_id=\"%s\"} "
+					"%"G_GINT64_FORMAT"\n",
+					ns_name, service_id, *cur, db_count);
+			}
+		}
 		res = _reply_bytes(args->rp, HTTP_CODE_OK, "OK", HTTP_CONTENT_TYPE_TEXT,
 				g_string_free_to_bytes(gstr));
 	} else {
@@ -2795,7 +2858,8 @@ _route_srv_status(struct req_args_s *args)
 				args->rp, BADREQ("Unknown format: %s", format));
 	}
 
-	g_strfreev(volumes);
+	g_strfreev(m2_volumes);
+	g_strfreev(rawx_volumes);
 	g_clear_error(&err);
 	return res;
 }
