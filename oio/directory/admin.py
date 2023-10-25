@@ -46,7 +46,12 @@ def loc_params(func):
         suffix=None,
         **kwargs
     ):
-        params = kwargs.pop("params", {})
+        params = kwargs.pop("params", None)
+        if params is None:
+            params = {}
+        else:
+            # Do not modify the dict passed as a parameter
+            params = params.copy()
         if service_type:
             params["type"] = service_type
         elif "type" not in params:

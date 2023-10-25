@@ -17,9 +17,8 @@
 
 import random
 import time
-from unittest.mock import patch
+from unittest.mock import ANY, call, patch
 from datetime import datetime, timedelta, timezone
-from oio.common.client import ProxyClient
 
 from oio.common.constants import (
     M2_PROP_BUCKET_NAME,
@@ -34,7 +33,13 @@ from oio.common.constants import (
     OIO_DB_ENABLED,
     OIO_DB_FROZEN,
 )
-from oio.common.exceptions import Forbidden, NotFound
+from oio.common.exceptions import (
+    DeadlineReached,
+    Forbidden,
+    NotFound,
+    OioTimeout,
+    ServiceBusy,
+)
 from oio.common.green import eventlet
 from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
@@ -277,7 +282,7 @@ class TestSharding(BaseTestCase):
             sorted_objects = sorted(list_objects)
             self.assertListEqual(sorted_objects, list_objects)
 
-    def _shard_container(self):
+    def _shard_container(self, vacuum_during_precleaning=True):
         self._create(self.cname)
         self._add_objects(self.cname, 4)
 
@@ -286,10 +291,40 @@ class TestSharding(BaseTestCase):
             {"index": 1, "lower": "content_0.", "upper": ""},
         ]
         new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
-        modified = self.container_sharding.replace_shard(
-            self.account, self.cname, new_shards, enable=True
-        )
-        self.assertTrue(modified)
+        _vacuum = self.container_sharding.admin.vacuum_base
+        with patch(
+            "oio.directory.admin.AdminClient.vacuum_base", wraps=_vacuum
+        ) as mock_vacuum:
+            modified = self.container_sharding.replace_shard(
+                self.account, self.cname, new_shards, enable=True
+            )
+            self.assertTrue(modified)
+        parent_cid = cid_from_name(self.account, self.cname)
+        expected_calls = [
+            call(
+                "meta2",
+                cid=parent_cid,
+                suffix=None,
+                service_id=None,
+                params={},
+                headers=ANY,
+                reqid=ANY,
+            )
+        ]
+        if vacuum_during_precleaning:
+            for _ in range(2):
+                expected_calls.append(
+                    call(
+                        "meta2",
+                        cid=parent_cid,
+                        suffix=ANY,
+                        service_id=ANY,
+                        params={"local": 1},
+                        headers=ANY,
+                        reqid=ANY,
+                    )
+                )
+        mock_vacuum.assert_has_calls(expected_calls, any_order=True)
 
         # check objects
         self._check_objects(self.cname)
@@ -309,6 +344,36 @@ class TestSharding(BaseTestCase):
 
     def test_shard_container(self):
         self._shard_container()
+
+    def test_shard_container_with_no_cleaning_during_precleaning(self):
+        self.container_sharding.preclean_timeout = 0.000001
+        self._shard_container(vacuum_during_precleaning=False)
+
+    def test_shard_container_with_incomplete_precleaning(self):
+        self.container_sharding.preclean_timeout = 2
+        _request = self.container_sharding._request
+        precleaned_indexes = set()
+
+        def _wrap_request(*args, **kwargs):
+            resp, body = _request(*args, **kwargs)
+            if (
+                args == ("POST", "/clean")
+                and kwargs.get("params", {}).get("local") == 1
+            ):
+                # Make it appear that the pr-cleaning
+                # has not been completely carried out
+                precleaned_index = kwargs.get("json", {}).get("index")
+                self.assertIsNotNone(precleaned_index)
+                precleaned_indexes.add(precleaned_index)
+                resp.headers["x-oio-truncated"] = "true"
+            return resp, body
+
+        with patch(
+            "oio.container.sharding.ContainerSharding._request", wraps=_wrap_request
+        ) as mock_request:
+            self._shard_container()
+        mock_request.assert_called()
+        self.assertEqual(2, len(precleaned_indexes))
 
     def test_shard_container_with_versioning(self):
         self._create(self.cname, versioning=True)
@@ -1744,7 +1809,7 @@ class TestSharding(BaseTestCase):
                 self.account, self.cname, system={"sys.status": str(OIO_DB_ENABLED)}
             )
 
-    def test_clean_with_timeout(self):
+    def _test_clean_container_with_timeout(self, vacuum=False):
         """
         1st request: clean with urgent mode to be sure to start cleaning
             -> success (truncated)
@@ -1765,42 +1830,143 @@ class TestSharding(BaseTestCase):
         """
         shards = self._shard_container()
 
-        nb_requests = {"count": 0}
-        proxy_client = ProxyClient(
-            {"namespace": self.ns}, request_prefix="/container/sharding"
-        )
+        requests = {"count": 0, "unexpected_errors": []}
+        _request = self.container_sharding._request
 
-        def _request(*args, **kwargs):
-            nb_requests["count"] = nb_requests["count"] + 1
-            # Check number of requests and method parameters
-            if nb_requests["count"] > 8:
-                raise Exception("Too many requests")
-            self.assertEqual(("POST", "/clean"), args)
-            expected_params = {"cid": shard_cid}
-            if nb_requests["count"] in (1, 3, 5, 6):
-                expected_params["urgent"] = 1
-            self.assertDictEqual(expected_params, kwargs.get("params"))
-            # Change the request and the response
-            if nb_requests["count"] in (2, 5):
-                kwargs["timeout"] = 0.001
-            elif nb_requests["count"] in (4,):
-                return FakeResponse(503), b""
-            elif nb_requests["count"] in (7,):
-                return FakeResponse(500), b""
-            resp, body = proxy_client._request(*args, **kwargs)
-            if nb_requests["count"] < 8:
-                resp.headers["x-oio-truncated"] = "true"
-            return resp, body
+        def _wrap_request(*args, **kwargs):
+            requests["count"] = requests["count"] + 1
+            try:
+                # Check number of requests and method parameters
+                if requests["count"] > 8:
+                    raise Exception("Too many requests")
+                self.assertEqual(("POST", "/clean"), args)
+                expected_params = {"cid": shard_cid}
+                if requests["count"] in (1, 3, 5, 6):
+                    expected_params["urgent"] = 1
+                self.assertDictEqual(expected_params, kwargs.get("params"))
+                # Change the request and the response
+                if requests["count"] in (2, 5):
+                    kwargs["timeout"] = 0.00001
+                elif requests["count"] in (4,):
+                    return FakeResponse(503), b""
+                elif requests["count"] in (7,):
+                    return FakeResponse(500), b""
+                resp, body = _request(*args, **kwargs)
+                self.assertNotIn(requests["count"], (2, 4, 5, 7))
+                if requests["count"] < 8:
+                    resp.headers["x-oio-truncated"] = "true"
+                return resp, body
+            except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+                if requests["count"] not in (2, 5, 8):
+                    requests["unexpected_errors"].append(exc)
+                raise
+            except Exception as exc:
+                requests["unexpected_errors"].append(exc)
+                raise
 
         # Clean (again) the first shard
         shard_cid = shards[0]["cid"]
         with patch(
-            "oio.container.sharding.ContainerSharding._request", wraps=_request
+            "oio.container.sharding.ContainerSharding._request", wraps=_wrap_request
         ) as mock_request:
-            self.container_sharding.clean_container(
-                None, None, cid=shards[0]["cid"], attempts=3
-            )
+            _vacuum = self.container_sharding.admin.vacuum_base
+            with patch(
+                "oio.directory.admin.AdminClient.vacuum_base", wraps=_vacuum
+            ) as mock_vacuum:
+                self.container_sharding.clean_container(
+                    None,
+                    None,
+                    cid=shards[0]["cid"],
+                    attempts=3,
+                    vacuum=vacuum,
+                )
+                self.assertListEqual([], requests["unexpected_errors"])
+            if vacuum:
+                mock_vacuum.assert_called_once()
+            else:
+                mock_vacuum.assert_not_called()
         self.assertEqual(8, mock_request.call_count)
+
+    def test_clean_container_with_timeout(self):
+        self._test_clean_container_with_timeout()
+
+    def test_clean_container_with_timeout_and_vacuum(self):
+        self._test_clean_container_with_timeout(vacuum=True)
+
+    def test_clean_container_with_too_many_errors(self):
+        """
+        1st request: clean with urgent mode to be sure to start cleaning
+            -> success (truncated)
+        2nd request: clean without urgent mode to have less impact
+            -> timeout
+        3rd request: clean with urgent mode because the previous request has timeout
+            -> success (truncated)
+        4th request: clean without urgent mode to have less impact
+            -> 503
+        5th request: clean with urgent mode because the previous request returned 503
+            -> timeout
+        6th request: clean with urgent mode because the previous request has timeout
+            -> success (truncated)
+        7th request: clean without urgent mode to have less impact
+            -> 503
+        8th request: clean with urgent mode because the previous request returned 503
+            -> timeout
+        9th request: clean with urgent mode because the previous request returned 503
+            -> 503
+        """
+        shards = self._shard_container()
+
+        requests = {"count": 0, "unexpected_errors": []}
+        _request = self.container_sharding._request
+
+        def _wrap_request(*args, **kwargs):
+            requests["count"] = requests["count"] + 1
+            try:
+                # Check number of requests and method parameters
+                if requests["count"] > 9:
+                    raise Exception("Too many requests")
+                self.assertEqual(("POST", "/clean"), args)
+                expected_params = {"cid": shard_cid}
+                if requests["count"] in (1, 3, 5, 6, 8, 9):
+                    expected_params["urgent"] = 1
+                self.assertDictEqual(expected_params, kwargs.get("params"))
+                # Change the request and the response
+                if requests["count"] in (2, 5, 8):
+                    kwargs["timeout"] = 0.00001
+                elif requests["count"] in (4, 7, 9):
+                    return FakeResponse(503), b""
+                resp, body = _request(*args, **kwargs)
+                self.assertNotIn(requests["count"], (2, 4, 5, 7, 8, 9))
+                resp.headers["x-oio-truncated"] = "true"
+                return resp, body
+            except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+                if requests["count"] not in (2, 5, 8):
+                    requests["unexpected_errors"].append(exc)
+                raise
+            except Exception as exc:
+                requests["unexpected_errors"].append(exc)
+                raise
+
+        # Clean (again) the first shard
+        shard_cid = shards[0]["cid"]
+        with patch(
+            "oio.container.sharding.ContainerSharding._request", wraps=_wrap_request
+        ) as mock_request:
+            _vacuum = self.container_sharding.admin.vacuum_base
+            with patch(
+                "oio.directory.admin.AdminClient.vacuum_base", wraps=_vacuum
+            ) as mock_vacuum:
+                self.assertRaises(
+                    ServiceBusy,
+                    self.container_sharding.clean_container,
+                    None,
+                    None,
+                    cid=shards[0]["cid"],
+                    attempts=3,
+                )
+                self.assertListEqual([], requests["unexpected_errors"])
+            mock_vacuum.assert_not_called()
+        self.assertEqual(9, mock_request.call_count)
 
 
 class TestShardingObjectLockRetention(TestSharding):
