@@ -326,7 +326,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger draining auto_vacuum auto_sharding
+pipeline = logger check_integrity draining auto_vacuum auto_sharding
 
 [filter:auto_sharding]
 use = egg:oio#auto_sharding
@@ -347,6 +347,9 @@ use = egg:oio#auto_vacuum
 min_waiting_time_after_last_modification = 30
 soft_max_unused_pages_ratio = 0.1
 hard_max_unused_pages_ratio = 0.2
+
+[filter:check_integrity]
+use = egg:oio#check_integrity
 
 [filter:draining]
 use = egg:oio#draining
