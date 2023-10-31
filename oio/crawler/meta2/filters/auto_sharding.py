@@ -124,21 +124,21 @@ class AutomaticSharding(Filter):
             modified = False
             meta2db_size = meta2db.file_status["st_size"]
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
-                modified = self._sharding(meta2db)
+                modified = self._shard(meta2db)
             elif self.shrinking_db_size > 0:
                 root_cid, shard = self.container_sharding.meta_to_shard(
                     {"system": meta2db.system}
                 )
                 if root_cid:
                     if meta2db_size < self.shrinking_db_size:
-                        modified = self._shrinking(meta2db)
+                        modified = self._shrink(meta2db)
                     elif (
                         not shard["lower"]
                         and not shard["upper"]
                         and meta2db_size < self.sharding_db_size
                     ):
                         # Merge the one and last shard in root ASAP
-                        modified = self._shrinking(meta2db)
+                        modified = self._shrink(meta2db)
                     else:
                         self.skipped += 1
                 else:  # Not a shard
@@ -223,7 +223,7 @@ class AutomaticSharding(Filter):
             self.cleaning_errors += 1
         return True
 
-    def _sharding(self, meta2db):
+    def _shard(self, meta2db):
         self.logger.info(
             "Sharding container %s (db size: %d bytes)",
             meta2db.cid,
@@ -258,7 +258,7 @@ class AutomaticSharding(Filter):
             self.sharding_errors += 1
             raise
 
-    def _shrinking(self, meta2db):
+    def _shrink(self, meta2db):
         self.logger.info(
             "Shrinking container %s (db size: %d bytes)",
             meta2db.cid,
@@ -274,7 +274,7 @@ class AutomaticSharding(Filter):
             ) = self.container_sharding.find_smaller_neighboring_shard(
                 shard, root_cid=root_cid
             )
-            shards = list()
+            shards = []
             shards.append(shard)
             if neighboring_shard is not None:
                 shards.append(neighboring_shard)
