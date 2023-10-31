@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 # License along with this library.
 
 import string
-from six import binary_type, string_types
 
 
 def int_value(value, default):
@@ -43,9 +42,7 @@ FALSE_VALUES = set(("false", "0", "no", "off", "f", "n"))
 
 
 def true_value(value):
-    return value is True or (
-        isinstance(value, string_types) and value.lower() in TRUE_VALUES
-    )
+    return value is True or (isinstance(value, str) and value.lower() in TRUE_VALUES)
 
 
 def boolean_value(value, default=False):
@@ -77,7 +74,7 @@ def convert_size(size, unit=""):
 
 
 def is_hexa(hexa, size=None):
-    if not isinstance(hexa, string_types):
+    if not isinstance(hexa, str):
         return False
     if size and len(hexa) != size:
         return False
@@ -95,7 +92,7 @@ def debinarize(something):
 
     :type something: bytes, list, dict, or anything else.
     """
-    if isinstance(something, binary_type):
+    if isinstance(something, bytes):
         return something.decode("utf-8")
     elif isinstance(something, list):
         return [debinarize(o) for o in something]
