@@ -46,6 +46,10 @@ class CorruptedChunk(ChunkException):
     pass
 
 
+class CorruptDb(OioException):
+    """Exception raised when a corrupt database is detected"""
+
+
 class FaultyChunk(ChunkException):
     """
     Raised when a chunk misses some extended attributes,

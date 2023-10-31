@@ -85,7 +85,7 @@ class TestAutoSharding(BaseTestCase):
         else:
             self.fail("Unable to find the volume path")
         meta2db = Meta2DB(self.app_env, dict())
-        meta2db.path = "/".join((volume_path, cid[:3], cid + ".1.meta2"))
+        meta2db.real_path = "/".join((volume_path, cid[:3], cid + ".1.meta2"))
         meta2db.volume_id = volume_id
         meta2db.cid = cid
         meta2db.seq = 1

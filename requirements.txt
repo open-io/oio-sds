@@ -12,6 +12,7 @@ PyECLib>=1.2.0
 pyparsing>=2.4.2
 PyYAML>=5.0.0
 redis>=3.0.0
+reflink>=0.2.1
 requests>=2.14.2
 simplejson>=3.0.0
 six>=1.11.0
