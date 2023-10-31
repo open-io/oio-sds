@@ -131,6 +131,36 @@ def config_true_value(value):
 
 
 # Functions copied from swift/common/middleware/crypto/crypto_utils.py
+
+
+def dump_crypto_meta(crypto_meta):
+    """
+    Serialize crypto meta to a form suitable for including in a header value.
+
+    The crypto-meta is serialized as a json object. The iv and key values are
+    random bytes and as a result need to be base64 encoded before sending over
+    the wire. Base64 encoding returns a bytes object in py3, to future proof
+    the code, decode this data to produce a string, which is what the
+    json.dumps function expects.
+
+    :param crypto_meta: a dict containing crypto meta items
+    :returns: a string serialization of a crypto meta dict
+    """
+
+    def b64_encode_meta(crypto_meta):
+        return {
+            name: (
+                base64.b64encode(value).decode()
+                if name in ("iv", "key")
+                else b64_encode_meta(value) if isinstance(value, dict) else value
+            )
+            for name, value in crypto_meta.items()
+        }
+
+    # use sort_keys=True to make serialized form predictable for testing
+    return urlparse.quote_plus(json.dumps(b64_encode_meta(crypto_meta), sort_keys=True))
+
+
 # EncryptionException is replaced with Exception
 
 
@@ -294,6 +324,16 @@ class Crypto(object):
         # helper method to create random key of correct length
         return os.urandom(self.key_length)
 
+    def wrap_key(self, wrapping_key, key_to_wrap):
+        # we don't use an RFC 3394 key wrap algorithm such as cryptography's
+        # aes_wrap_key because it's slower and we have iv material readily
+        # available so don't need a deterministic algorithm
+        iv = self.create_iv()
+        encryptor = Cipher(
+            algorithms.AES(wrapping_key), modes.CTR(iv), backend=self.backend
+        ).encryptor()
+        return {"key": encryptor.update(key_to_wrap), "iv": iv}
+
     def unwrap_key(self, wrapping_key, context):
         # unwrap a key from dict of form returned by wrap_key
         # check the key length early - unwrapping won't change the length
@@ -322,6 +362,24 @@ def create_key(path, key):
     """
     path = path.encode("utf-8")
     return hmac.new(key, path, digestmod=hashlib.sha256).digest()
+
+
+# Functions copied and modified from the class KmsWrapper in
+# swift/common/middleware/crypto/ssec_keymaster.py
+# self.cache has been removed
+
+
+def create_bucket_secret(
+    kms, bucket, account=None, secret_id=None, secret_bytes=32, reqid=None
+):
+    secret_meta = kms.create_secret(
+        account,
+        bucket,
+        secret_id=secret_id,
+        secret_bytes=secret_bytes,
+        reqid=reqid,
+    )
+    return secret_meta["secret"]
 
 
 # Functions copied and modified from the class SsecKeyMasterContext in
@@ -528,14 +586,37 @@ class Encrypter:
     Encrypt data with a random body_key and a random iv.
     """
 
-    def __init__(self):
+    def __init__(self, account=None, container=None, obj=None):
+        sds_namespace = os.environ.get("OIO_NS", "OPENIO")
+        api = ObjectStorageApi(sds_namespace)
         crypto = Crypto()
 
+        # Create bucket secret in kms
+        secret_id = 0
+        secret = create_bucket_secret(
+            api.kms,
+            container,
+            account=account,
+            secret_id=secret_id,
+        )
+
+        # bucket secret is used as the key_object
+        key_object = decode_secret(secret)
+
+        # key_id contains the path used to derive keys
+        account_path = os.path.join(os.sep, account)
+        path = os.path.join(account_path, container)
+        key_id = {"v": "1", "path": path, "sses3": True}
+
         # Create a dict with iv and cipher keys
-        body_crypto_meta = crypto.create_crypto_meta()
+        self.body_crypto_meta = crypto.create_crypto_meta()
         body_key = crypto.create_random_key()
+
+        # wrap the body key with object key
+        self.body_crypto_meta["body_key"] = crypto.wrap_key(key_object, body_key)
+        self.body_crypto_meta["key_id"] = key_id
         self.body_crypto_ctxt = crypto.create_encryption_ctxt(
-            body_key, body_crypto_meta.get("iv")
+            body_key, self.body_crypto_meta.get("iv")
         )
 
     def encrypt(self, chunk):
@@ -554,3 +635,16 @@ class Encrypter:
 
         ciphertext = self.body_crypto_ctxt.update(chunk)
         return ciphertext
+
+    def encrypt_metadata(self, metadata):
+        """
+        Add system metadata header to store crypto-metadata.
+
+        :param metadata: object metadata
+        :return metadata with crypto-body-metadata header
+        """
+
+        metadata["properties"]["x-object-sysmeta-crypto-body-meta"] = dump_crypto_meta(
+            self.body_crypto_meta
+        )
+        return metadata
