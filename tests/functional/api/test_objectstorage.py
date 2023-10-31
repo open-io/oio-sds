@@ -1043,6 +1043,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.assertIsNotNone(
                 self.api.blob_client.chunk_head(chunk.get("real_url", chunk["url"]))
             )
+        # Clean the orphan chunks (no object has been registered)
+        for chunk in chunks:
+            try:
+                self.api.blob_client.chunk_delete(chunk.get("real_url", chunk["url"]))
+            except Exception as err:
+                self.logger.info("Failed to clean %s: %s", chunk, err)
 
     def test_object_create_commit_deadline_keep_chunks(self):
         # pylint: disable=no-member

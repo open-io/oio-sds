@@ -29,6 +29,8 @@ class ServiceDecommissionTest(CliTestCase):
         super(ServiceDecommissionTest, cls).setUpClass()
         # Prevent the chunks' indexation by crawlers
         cls._service("oio-crawler.target", "stop", wait=3)
+        cls._cls_reload_proxy()
+        time.sleep(1)
 
     @classmethod
     def tearDownClass(cls):
@@ -214,7 +216,13 @@ class ServiceDecommissionTest(CliTestCase):
             elif exclude == "auto":
                 # Nothing should have moved because all rawx are excluded
                 self.assertEqual(job_result["tasks.total"], total_chunks)
-                self.assertEqual(job_result["errors.total"], total_chunks)
+                self.assertEqual(
+                    job_result["errors.total"]
+                    + job_result.get("results.orphan_chunks", 0)
+                    + job_result.get("results.skipped_chunks_no_longer_exist", 0),
+                    total_chunks,
+                    f"Some chunks have moved: {job_result}",
+                )
                 self.assertEqual(total_chunks_after, total_chunks)
         elif usage_target == 100:
             # Nothing should have moved

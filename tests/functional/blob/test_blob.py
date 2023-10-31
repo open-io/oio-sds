@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 import re
 import string
 from os.path import isfile
@@ -914,7 +915,8 @@ class RawxTestSuite(CommonTestCase):
 
         # Corrupt the chunk
         corrupted_data = b"chunk is dead"
-        with open(self._chunk_path(chunkid), "wb") as fp:
+        local_path = self._chunk_path(chunkid)
+        with open(local_path, "wb") as fp:
             fp.write(corrupted_data)
 
         # Check the hash with corrupted chunk
@@ -949,11 +951,13 @@ class RawxTestSuite(CommonTestCase):
             {"x-oio-check-hash": True, "x-oio-chunk-meta-chunk-hash": "A" * 32},
         )
         self.assertEqual(412, resp.status)
+        os.remove(local_path)
 
         # Check without xattr
         chunkid_woattr = chunkid[:3] + random_chunk_id()[3:]
         chunkurl_woattr = self._rawx_url(chunkid_woattr)
-        with open(self._chunk_path(chunkid_woattr), "wb") as fp:
+        local_path = self._chunk_path(chunkid_woattr)
+        with open(local_path, "wb") as fp:
             fp.write(b"without xattrs")
         resp, body = self._http_request(
             chunkurl_woattr,
@@ -963,6 +967,7 @@ class RawxTestSuite(CommonTestCase):
         )
         # If the size xattr is missing, we cannot read the chunk
         self.assertEqual(500, resp.status)
+        os.remove(local_path)
 
     def _test_get_rawx_stats(self, stat_line_regex, output_format=""):
         rawx_svc = self.conscience.next_instance("rawx")
