@@ -1315,7 +1315,7 @@ WantedBy=${PARENT}
 """
 
 template_systemd_rawx_command_options = (
-    "-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND "
+    "-s OIO,${NS},${SRVTYPE},${SRVNUM} "
     "-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf"
 )
 
