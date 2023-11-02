@@ -111,7 +111,11 @@ class SetAccount(Command):
             action="append",
             metavar="<beta-feature>",
             type=str,
-            help="Add beta-feature to enabled beta-features for this account",
+            help=(
+                "Enable a beta feature for this account. "
+                "The list of features can be obtained by grepping "
+                "'bypass_feature_disabled' in swift code."
+            ),
         )
         parser.add_argument(
             "-p",
@@ -175,7 +179,7 @@ class UnsetAccount(Command):
             metavar="<beta-feature>",
             action="append",
             type=str,
-            help="Remove beta-feature to enabled beta-features for this account",
+            help="Disable a beta feature for this account.",
         )
         parser.add_argument(
             "--max-buckets",
