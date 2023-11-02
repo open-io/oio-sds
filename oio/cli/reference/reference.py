@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +15,6 @@
 # License along with this library.
 
 from logging import getLogger
-from six import iteritems
 
 from oio.cli import Command, Lister, ShowOne
 
@@ -29,14 +29,23 @@ class ListReference(Lister):
         parser.add_argument(
             "reference", metavar="<reference>", help="Reference to list"
         )
+        parser.add_argument(
+            "--cid",
+            dest="is_cid",
+            help="Interpret <reference> as a CID",
+            action="store_true",
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        data = self.app.client_manager.reference.list(
-            self.app.client_manager.account, reference=parsed_args.reference
-        )
+        if parsed_args.is_cid:
+            data = self.app.client_manager.reference.list(cid=parsed_args.reference)
+        else:
+            data = self.app.client_manager.reference.list(
+                self.app.client_manager.account, reference=parsed_args.reference
+            )
         columns = ("Type", "Host", "Args", "Seq")
         results = ((d["type"], d["host"], d["args"], d["seq"]) for d in data["srv"])
         return columns, results
@@ -52,19 +61,28 @@ class ShowReference(ShowOne):
         parser.add_argument(
             "reference", metavar="<reference>", help="Reference to show"
         )
+        parser.add_argument(
+            "--cid",
+            dest="is_cid",
+            help="Interpret <reference> as a CID",
+            action="store_true",
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        account = self.app.client_manager.account
-        reference = parsed_args.reference
+        if parsed_args.is_cid:
+            data = self.app.client_manager.reference.list(cid=parsed_args.reference)
+            account = data.get("account")
+            reference = data.get("name")
+        else:
+            account = self.app.client_manager.account
+            reference = parsed_args.reference
 
-        data = self.app.client_manager.reference.get_properties(
-            account, parsed_args.reference
-        )
+        data = self.app.client_manager.reference.get_properties(account, reference)
         info = {"account": account, "name": reference, "cid": data.get("cid", None)}
-        for k, v in iteritems(data["properties"]):
+        for k, v in data["properties"].items():
             info["meta." + k] = v
         return list(zip(*sorted(info.items())))
 
