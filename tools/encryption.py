@@ -43,6 +43,12 @@ CRYPTO_ETAG_MAC_KEY = "x-object-sysmeta-crypto-etag-mac"
 # Functions copied from swift/common/swob.py
 
 
+def wsgi_to_bytes(wsgi_str):
+    if wsgi_str is None:
+        return None
+    return wsgi_str.encode("latin1")
+
+
 def bytes_to_wsgi(byte_str):
     return byte_str.decode("latin1")
 
@@ -51,6 +57,34 @@ def bytes_to_wsgi(byte_str):
 
 
 OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
+
+
+def is_user_meta(server_type, key):
+    """
+    Tests if a header key starts with and is longer than the user
+    metadata prefix for given server type.
+
+    :param server_type: type of backend server i.e. [account|container|object]
+    :param key: header key
+    :returns: True if the key satisfies the test, False otherwise
+    """
+    if len(key) <= 8 + len(server_type):
+        return False
+    return key.lower().startswith(get_user_meta_prefix(server_type))
+
+
+def strip_user_meta_prefix(server_type, key):
+    """
+    Removes the user metadata prefix for a given server type from the start
+    of a header key.
+
+    :param server_type: type of backend server i.e. [account|container|object]
+    :param key: header key
+    :returns: stripped header key
+    """
+    if not is_user_meta(server_type, key):
+        raise ValueError("Key is not user meta")
+    return key[len(get_user_meta_prefix(server_type)) :]
 
 
 def get_user_meta_prefix(server_type):
@@ -208,6 +242,19 @@ def load_crypto_meta(value, b64decode=True):
         raise Exception(msg)
 
 
+def append_crypto_meta(value, crypto_meta):
+    """
+    Serialize and append crypto metadata to an encrypted value.
+
+    :param value: value to which serialized crypto meta will be appended.
+    :param crypto_meta: a dict of crypto meta
+    :return: a string of the form <value>; swift_meta=<serialized crypto meta>
+    """
+    if not isinstance(value, str):
+        raise ValueError
+    return "%s; swift_meta=%s" % (value, dump_crypto_meta(crypto_meta))
+
+
 def extract_crypto_meta(value):
     """
     Extract and deserialize any crypto meta from the end of a value.
@@ -346,6 +393,30 @@ class Crypto(object):
     def check_key(self, key):
         if len(key) != self.key_length:
             raise ValueError("Key must be length %s bytes" % self.key_length)
+
+
+# Function copied from swift/common/middleware/crypto/encrypter.py
+
+
+def encrypt_header_val(crypto, value, key):
+    """
+    Encrypt a header value using the supplied key.
+
+    :param crypto: a Crypto instance
+    :param value: value to encrypt
+    :param key: crypto key to use
+    :returns: a tuple of (encrypted value, crypto_meta) where crypto_meta is a
+        dict of form returned by
+        :py:func:`~swift.common.middleware.crypto.Crypto.get_crypto_meta`
+    :raises ValueError: if value is empty
+    """
+    if not value:
+        raise ValueError("empty value is not acceptable")
+
+    crypto_meta = crypto.create_crypto_meta()
+    crypto_ctxt = crypto.create_encryption_ctxt(key, crypto_meta["iv"])
+    enc_val = bytes_to_wsgi(base64.b64encode(crypto_ctxt.update(wsgi_to_bytes(value))))
+    return enc_val, crypto_meta
 
 
 # Function copied and modified from the class BaseKeyMaster in
@@ -589,7 +660,7 @@ class Encrypter:
     def __init__(self, account=None, container=None, obj=None):
         sds_namespace = os.environ.get("OIO_NS", "OPENIO")
         api = ObjectStorageApi(sds_namespace)
-        crypto = Crypto()
+        self.crypto = Crypto()
 
         # Create bucket secret in kms
         secret_id = 0
@@ -600,22 +671,25 @@ class Encrypter:
             secret_id=secret_id,
         )
 
+        self.keys = {}
         # bucket secret is used as the key_object
-        key_object = decode_secret(secret)
+        self.keys["object"] = decode_secret(secret)
 
         # key_id contains the path used to derive keys
         account_path = os.path.join(os.sep, account)
         path = os.path.join(account_path, container)
-        key_id = {"v": "1", "path": path, "sses3": True}
+        self.keys["id"] = {"v": "1", "path": path, "sses3": True}
 
         # Create a dict with iv and cipher keys
-        self.body_crypto_meta = crypto.create_crypto_meta()
-        body_key = crypto.create_random_key()
+        self.body_crypto_meta = self.crypto.create_crypto_meta()
+        body_key = self.crypto.create_random_key()
 
         # wrap the body key with object key
-        self.body_crypto_meta["body_key"] = crypto.wrap_key(key_object, body_key)
-        self.body_crypto_meta["key_id"] = key_id
-        self.body_crypto_ctxt = crypto.create_encryption_ctxt(
+        self.body_crypto_meta["body_key"] = self.crypto.wrap_key(
+            self.keys["object"], body_key
+        )
+        self.body_crypto_meta["key_id"] = self.keys["id"]
+        self.body_crypto_ctxt = self.crypto.create_encryption_ctxt(
             body_key, self.body_crypto_meta.get("iv")
         )
 
@@ -647,4 +721,46 @@ class Encrypter:
         metadata["properties"]["x-object-sysmeta-crypto-body-meta"] = dump_crypto_meta(
             self.body_crypto_meta
         )
+        metadata["properties"] = self._encrypt_user_metadata(metadata["properties"])
+        return metadata
+
+    # Functions copied and modified from the class EncrypterObjContext in
+    # swift/common/middleware/crypto/encrypter.py
+
+    # self.server_type has been replaced with 'object'
+    # req.headers has been replaced with metadata['property']
+
+    def _encrypt_user_metadata(self, metadata):
+        """
+        Encrypt user-metadata header values. Replace each x-object-meta-<key>
+        user metadata header with a corresponding
+        x-object-transient-sysmeta-crypto-meta-<key> header which has the
+        crypto metadata required to decrypt appended to the encrypted value.
+
+        :param metadata: a dict of metadata properties
+        :returns: metadata dict with encrypted user metadata
+        """
+        prefix = get_object_transient_sysmeta("crypto-meta-")
+        user_meta_headers = [
+            h for h in metadata.items() if is_user_meta("object", h[0]) and h[1]
+        ]
+        crypto_meta = None
+        for name, val in user_meta_headers:
+            short_name = strip_user_meta_prefix("object", name)
+            new_name = prefix + short_name
+            enc_val, crypto_meta = encrypt_header_val(
+                self.crypto, val, self.keys["object"]
+            )
+            metadata[new_name] = append_crypto_meta(enc_val, crypto_meta)
+            metadata.pop(name)
+        # store a single copy of the crypto meta items that are common to all
+        # encrypted user metadata independently of any such meta that is stored
+        # with the object body because it might change on a POST. This is done
+        # for future-proofing - the meta stored here is not currently used
+        # during decryption.
+        if crypto_meta:
+            meta = dump_crypto_meta(
+                {"cipher": crypto_meta["cipher"], "key_id": self.keys["id"]}
+            )
+            metadata[get_object_transient_sysmeta("crypto-meta")] = meta
         return metadata
