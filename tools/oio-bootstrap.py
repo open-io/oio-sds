@@ -94,7 +94,7 @@ template_systemd_service_redis = """
 [Unit]
 Description=[OpenIO] Service redis ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -113,7 +113,7 @@ template_systemd_service_beanstalkd = """
 [Unit]
 Description=[OpenIO] Service beanstalkd ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -169,7 +169,7 @@ template_systemd_service_foundationdb = """
 [Unit]
 Description=[OpenIO] Service FoundationDB
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -192,7 +192,7 @@ template_systemd_service_account = """
 [Unit]
 Description=[OpenIO] Service account
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -212,7 +212,7 @@ template_systemd_service_xcute = """
 [Unit]
 Description=[OpenIO] Service xcute ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -232,7 +232,7 @@ template_systemd_service_billing_agent = """
 [Unit]
 Description=[OpenIO] Service billing agent
 PartOf=${PARENT}
-OioGroup=localhost,${GROUPTYPE},${SRVTYPE}
+OioGroup=${GROUPTYPE},${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -251,7 +251,7 @@ template_systemd_service_rdir = """
 [Unit]
 Description=[OpenIO] Service rdir ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -271,7 +271,7 @@ template_systemd_service_proxy = """
 [Unit]
 Description=[OpenIO] Service proxy ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1094,7 +1094,7 @@ template_systemd_service_ns = """
 [Unit]
 Description=[OpenIO] Service namespace
 PartOf=${PARENT}
-OioGroup=${NS},localhost,conscience,conscience-agent
+OioGroup=${NS},conscience,conscience-agent
 
 [Service]
 ${SERVICEUSER}
@@ -1115,7 +1115,7 @@ template_systemd_service_conscience = """
 Description=[OpenIO] Service conscience ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1146,7 +1146,7 @@ template_systemd_service_meta = """
 [Unit]
 Description=[OpenIO] Service ${SRVTYPE} ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1167,7 +1167,7 @@ template_systemd_service_meta2_indexer = """
 Description=[OpenIO] Service meta2 indexer
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1187,7 +1187,7 @@ template_systemd_service_meta2_crawler = """
 Description=[OpenIO] Service meta2 crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1206,7 +1206,7 @@ template_systemd_service_placement_checker_crawler = """
 [Unit]
 Description=[OpenIO] Service meta2 crawler to check chunks placement
 After=network.target
-OioGroup=${NS},localhost,meta2-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1222,7 +1222,7 @@ template_systemd_service_placement_improver_crawler = """
 Description=[OpenIO] Service placement improver crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1241,7 +1241,7 @@ template_systemd_service_rdir_crawler = """
 [Unit]
 Description=[OpenIO] Service rdir crawler
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1260,7 +1260,7 @@ template_systemd_service_rawx_crawler = """
 [Unit]
 Description=[OpenIO] Service rawx crawler
 PartOf=${PARENT}
-OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1279,7 +1279,7 @@ template_systemd_service_checksum_checker_crawler = """
 [Unit]
 Description=[OpenIO] Service checksum checker crawler
 PartOf=${PARENT}
-OioGroup=${NS},localhost,rawx-crawler,${SRVTYPE}
+OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1299,7 +1299,7 @@ template_systemd_service_cleanup_orphaned_crawler = """
 Description=[OpenIO] Service cleanup orphaned crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1324,7 +1324,7 @@ template_systemd_service_rawx = """
 Description=[OpenIO] Service rawx ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1345,7 +1345,7 @@ template_systemd_service_httpd = """
 Description=[OpenIO] Service ${SRVTYPE} ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1367,7 +1367,7 @@ template_systemd_service_blob_rebuilder = """
 [Unit]
 Description=[OpenIO] Service blob rebuilder ${SRVNUM}
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE}
+OioGroup=${NS},${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -1417,7 +1417,7 @@ template_systemd_service_event_agent = """
 Description=[OpenIO] Service event agent ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,event
+OioGroup=${NS},event
 
 [Service]
 ${SERVICEUSER}
@@ -1627,7 +1627,7 @@ template_systemd_service_xcute_event_agent = """
 Description=[OpenIO] Service xcute event agent ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,event
+OioGroup=${NS},event
 
 [Service]
 ${SERVICEUSER}
@@ -1793,7 +1793,7 @@ template_systemd_service_webhook_server = """
 Description=[OpenIO] Service webhook server ${SRVNUM}
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
 [Service]
 ${SERVICEUSER}
@@ -1815,7 +1815,7 @@ template_systemd_rabbitmq_to_beanstalkd = """
 Description=[OpenIO] Forward messages from RabbitMQ to Beanstalkd
 After=oio-meta2-1.service
 PartOf=${PARENT}
-OioGroup=${NS},localhost,event
+OioGroup=${NS},event
 
 [Service]
 ${SERVICEUSER}

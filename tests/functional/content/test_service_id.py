@@ -198,8 +198,8 @@ class TestRawxServiceId(BaseServiceIdTest):
         unit = conf["Unit"]
         if "OioGroup" in unit:
             val = unit["OioGroup"][0].split(",")
-            old_addr, old_port = val[3].split(":")
-            val[3] = old_addr + ":" + str(port)
+            old_addr, old_port = val[2].split(":")
+            val[2] = old_addr + ":" + str(port)
             unit["OioGroup"][0] = ",".join(val)
 
             section = conf["Service"]
@@ -258,8 +258,8 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         unit = conf["Unit"]
         if "OioGroup" in unit:
             val = unit["OioGroup"][0].split(",")
-            old_addr, old_port = val[3].split(":")
-            val[3] = old_addr + ":" + str(port)
+            old_addr, old_port = val[2].split(":")
+            val[2] = old_addr + ":" + str(port)
             unit["OioGroup"][0] = ",".join(val)
 
             section = conf["Service"]
