@@ -21,6 +21,7 @@ Build-Depends:
   libglib2.0-dev,
   libjson-c-dev,
   librabbitmq-dev,
+  librdkafka-dev,
   libzmq3-dev,
   asn1c,
   libattr1-dev,

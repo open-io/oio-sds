@@ -1,5 +1,6 @@
 blake3
 cliff>=3.0.0
+confluent_kafka>=2.3.0
 eventlet>=0.25.0
 foundationdb>=6.3.15,<6.4.0
 gevent>=1.4
