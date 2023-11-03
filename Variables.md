@@ -1730,6 +1730,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_QUANTUM*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### sqliterepo.journal_mode
+
+> Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY.
+
+ * default: **3**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_JOURNAL_MODE*
+ * range: 0 -> 3
+
 ### sqliterepo.outgoing.timeout.cnx.getvers
 
 > Sets the connection timeout when exchanging versions between databases replicas.

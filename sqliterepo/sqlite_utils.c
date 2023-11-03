@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,19 @@ License along with this library.
 
 #include "sqliterepo.h"
 #include "version.h"
+
+/** Prepared SQL statements to change sqlite's journal_mode.
+ * The variable oio_sqliterepo_journal_mode selects one of them.
+ * Keep them in this order! */
+static const gchar *sqlx_journal_mode_sql[] = {
+	"PRAGMA journal_mode = DELETE",
+	"PRAGMA journal_mode = TRUNCATE",
+	"PRAGMA journal_mode = PERSIST",
+	"PRAGMA journal_mode = MEMORY",
+//	"PRAGMA journal_mode = WAL",  // Not tested
+//	"PRAGMA journal_mode = OFF",  // Dangerous
+	NULL,
+};
 
 /** @private */
 struct _cache_entry_s {
@@ -81,6 +94,13 @@ sqlx_exec(sqlite3 *handle, const gchar *sql)
 	}
 
 	return grc;
+}
+
+int
+sqlx_set_journal_mode(sqlite3 *handle, guint journal_mode)
+{
+	return sqlx_exec(
+			handle, sqlx_journal_mode_sql[journal_mode]);
 }
 
 int

@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -130,10 +130,14 @@ sqlx_code_good(const int rc)
 				sqlite_strerror(R), R); \
 } while (0)
 
-/** Return a string describing the error that occured on the SQLite base */
+/** Return a string describing the error that occurred on the SQLite base */
 const char * sqlite_strerror(const int rc);
 
 int sqlx_exec(sqlite3 *handle, const gchar *sql);
+
+/** Set sqlite's journal mode. Call this right after opening the database.
+ * 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY */
+int sqlx_set_journal_mode(sqlite3 *handle, guint journal_mode);
 
 struct sqlx_sqlite3_s;
 

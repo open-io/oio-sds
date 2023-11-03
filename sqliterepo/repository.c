@@ -120,13 +120,27 @@ __delete_base(struct sqlx_sqlite3_s *sq3)
 		return;
 	}
 
-	if (!unlink(sq3->path_inline))
+	if (!unlink(sq3->path_inline)) {
 		GRID_DEBUG("DELETE done [%s][%s] (%s)", sq3->name.base,
 			sq3->name.type, sq3->path_inline);
-	else
+		/* Try to delete the journal file, if there is one. */
+		if (oio_sqliterepo_journal_mode == 1
+				|| oio_sqliterepo_journal_mode == 2) {
+			gchar *journal_file = g_strconcat(sq3->path_inline, "-journal", NULL);
+			if (unlink(journal_file) != 0) {
+				GRID_INFO(
+						"Journal for [%s][%s] (%s) was not deleted: (%d) %s",
+						sq3->name.base, sq3->name.type, journal_file,
+						errno, strerror(errno)
+				);
+			}
+			g_free(journal_file);
+		}
+	} else {
 		GRID_WARN("DELETE failed [%s][%s] (%s): (%d) %s",
 				sq3->name.base, sq3->name.type, sq3->path_inline,
 				errno, strerror(errno));
+	}
 	sq3->deleted = 0;
 }
 
@@ -830,7 +844,7 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 
 	/* We chose to check this call especially because it is able to detect
 	 * a wrong/corrupted database file. */
-	int rc = sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
+	int rc = sqlx_set_journal_mode(handle, oio_sqliterepo_journal_mode);
 	if (rc != SQLITE_OK) {
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
 			error = NEWERROR(CODE_CORRUPT_DATABASE,

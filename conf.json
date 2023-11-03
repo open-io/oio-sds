@@ -620,6 +620,11 @@
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a failed election leaves its FAILED status and returns to the NONE status.",
 				"def": "250ms", "min": "1ms", "max": "7d" },
 
+			{ "type": "uint", "name": "oio_sqliterepo_journal_mode",
+				"key": "sqliterepo.journal_mode",
+				"descr": "Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY.",
+				"def": 3, "min": 0, "max": "3" },
+
 			{ "type": "uint", "name": "_page_size",
 				"key": "sqliterepo.page_size",
 				"descr": "In the current sqliterepo repository, sets the page size of all the databases used. This value only has effects on databases created with that value.",
