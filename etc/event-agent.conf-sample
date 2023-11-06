@@ -72,3 +72,6 @@ syslog_prefix = OIO,OPENIO,event-agent,1
 
 # How often to refresh the rdir services addresses (in seconds)
 #rdir_refresh_interval = 3600.0
+
+# kafka specific options
+#kafka_client_id = event-agent
