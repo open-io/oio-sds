@@ -59,20 +59,13 @@ class KafkaClient:
         )
         return ",".join(endpoints)
 
-    def _connect(self, options=None):
+    def _connect(self, options={}):
         if self._client is not None:
             return
 
-        if options is None:
-            options = {}
-
-        conf = {
+        self._client = self.__client_class({**options,
             "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
-        }
-
-        conf.update(options)
-
-        self._client = self.__client_class(conf)
+        }, logger=self._logger)
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
@@ -97,17 +90,15 @@ class KafkaSender(KafkaClient):
         self._delayed_topic = conf.get("delayed_topic", DEFAULT_DELAYED_TOPIC)
         self._delay_granularity = get_delay_granularity(conf)
 
-        conf = {
-            "debug": "all",
+        self._connect({**conf,
             "acks": "all",
-        }
-        self._connect(conf)
+        })
 
     @property
     def producer(self):
         return self._client
 
-    def _connect(self, options=None):
+    def _connect(self, options={}):
         super()._connect(options)
         self.ensure_topics_exist([self._delayed_topic])
 
@@ -164,9 +155,7 @@ class KafkaConsumer(KafkaClient):
     def __init__(self, endpoint, topics, logger, conf={}):
         super(KafkaConsumer, self).__init__(endpoint, Consumer, logger)
 
-        configuration = {}
-        configuration.update(conf)
-        self._connect(configuration)
+        self._connect(conf)
 
         self.ensure_topics_exist(topics)
         self._client.subscribe(
