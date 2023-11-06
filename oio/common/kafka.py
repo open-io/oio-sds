@@ -59,26 +59,24 @@ class KafkaClient:
         )
         return ",".join(endpoints)
 
-    def _connect(self, options=None):
+    def _connect(self, options={}):
         if self._client is not None:
             return
 
-        if options is None:
-            options = {}
-
-        conf = {
-            "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
-        }
-
-        conf.update(options)
-
-        self._client = self.__client_class(conf)
+        self._client = self.__client_class(
+            {
+                **options,
+                "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
+            },
+            logger=self._logger,
+        )
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
             try:
                 self._client.list_topics(topic=topic, timeout=1)
             except KafkaException as exc:
+                self._logger.error("Topic '%s' not found", topic)
                 raise KafkaTopicNotFoundException() from exc
 
     def close(self):
@@ -97,17 +95,18 @@ class KafkaSender(KafkaClient):
         self._delayed_topic = conf.get("delayed_topic", DEFAULT_DELAYED_TOPIC)
         self._delay_granularity = get_delay_granularity(conf)
 
-        conf = {
-            "debug": "all",
-            "acks": "all",
-        }
-        self._connect(conf)
+        self._connect(
+            {
+                **conf,
+                "acks": "all",
+            }
+        )
 
     @property
     def producer(self):
         return self._client
 
-    def _connect(self, options=None):
+    def _connect(self, options={}):
         super()._connect(options)
         self.ensure_topics_exist([self._delayed_topic])
 
@@ -164,14 +163,10 @@ class KafkaConsumer(KafkaClient):
     def __init__(self, endpoint, topics, logger, conf={}):
         super(KafkaConsumer, self).__init__(endpoint, Consumer, logger)
 
-        configuration = {}
-        configuration.update(conf)
-        self._connect(configuration)
+        self._connect(conf)
 
         self.ensure_topics_exist(topics)
-        self._client.subscribe(
-            topics,
-        )
+        self._client.subscribe(topics)
 
     @property
     def consumer(self):
