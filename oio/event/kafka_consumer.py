@@ -46,6 +46,8 @@ class KafkaConsumerWorker(Process):
         topic,
         logger,
         group_id,
+        worker_id,
+        kafka_conf,
         *args,
         **kwargs,
     ):
@@ -55,10 +57,15 @@ class KafkaConsumerWorker(Process):
         self.topic_name = topic
         self._stop_requested = Event()
         self.group_id = group_id
+        self.worker_id = worker_id
+        self._kafka_conf = kafka_conf
 
         self._consumer = None
         self._producer = None
         self._last_use = None
+
+        if "client.id" in self._kafka_conf:
+            self._kafka_conf["client.id"] = self._kafka_conf["client.id"].format(pid=os.getpid(), worker=self.worker_id)
 
     def _consume(self):
         """
@@ -90,16 +97,16 @@ class KafkaConsumerWorker(Process):
 
     def _connect(self):
         if self._consumer is None:
-            configuration = {
-                "group.id": self.group_id,
-                "enable.auto.commit": False,
-            }
-
             self._consumer = KafkaConsumer(
-                self.endpoint, [self.topic_name], logger=self.logger, conf=configuration
+                self.endpoint, [self.topic_name], logger=self.logger, conf={
+                    **self._kafka_conf,
+                    "group.id": self.group_id,
+                    "enable.auto.commit": False,
+                }
             )
+
         if self._producer is None:
-            self._producer = KafkaSender(self.endpoint, self.logger)
+            self._producer = KafkaSender(self.endpoint, self.logger, conf=self._kafka_conf)
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
@@ -216,6 +223,7 @@ class KafkaConsumerPool:
             self.endpoint,
             self.queue_name,
             logger=self.logger,
+            worker_id=worker_id,
             *self.worker_args,
             **self.worker_kwargs,
         )
