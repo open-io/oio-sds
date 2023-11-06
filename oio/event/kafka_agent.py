@@ -21,10 +21,18 @@ from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 
+KAFKA_CONF_PREFIX = "kafka_"
 
 class KafkaEventWorker(KafkaConsumerWorker):
     def __init__(self, *args, app_conf=None, **kwargs):
-        super().__init__(*args, **kwargs)
+
+        kafka_conf = {}
+        if app_conf is not None:
+            for k, v in app_conf.items():
+                if k.startswith(KAFKA_CONF_PREFIX):
+                    kafka_conf[k[len(KAFKA_CONF_PREFIX):]] = v
+
+        super().__init__(*args, **kwargs, kafka_conf=kafka_conf)
 
         self.conf = app_conf
         acct_refresh_interval = float_value(
