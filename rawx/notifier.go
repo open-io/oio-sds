@@ -75,10 +75,11 @@ type amqpBackend struct {
 }
 
 type kafkaBackend struct {
-	endpoint string
-	topic    string
-	producer *kafka.Producer
-	conf     map[string]string
+	endpoint    string
+	topic       string
+	producer    *kafka.Producer
+	conf        map[string]string
+	logsChannel chan kafka.LogEvent
 }
 
 var (
@@ -249,6 +250,8 @@ func (backend *kafkaBackend) connect() error {
 	}
 	conf["bootstrap.servers"] = strings.ReplaceAll(backend.endpoint, "kafka://", "")
 	conf["acks"] = "all"
+	conf["go.logs.channel.enable"] = true
+	conf["go.logs.channel"] = backend.logsChannel
 
 	producer, err := kafka.NewProducer(&conf)
 
@@ -259,6 +262,28 @@ func (backend *kafkaBackend) connect() error {
 	LogDebug("Connected to event broker #%s", backend.endpoint)
 
 	backend.producer = producer
+
+	go func() {
+		var logFunction func(string, ...interface{}) = nil
+		for {
+			log := <-backend.logsChannel
+			logFunction = LogError
+			logFunction(log.Message)
+
+			switch {
+			case log.Level <= 3:
+				logFunction = LogError
+			case log.Level <= 4:
+				logFunction = LogWarning
+			case log.Level <= 6:
+				logFunction = LogInfo
+			case log.Level <= 7:
+				logFunction = LogDebug
+			}
+
+			logFunction("name:%s\ttag:%s\tmessage:%s", log.Name, log.Tag, log.Message)
+		}
+	}()
 
 	go func() {
 		for e := range producer.Events() {
@@ -353,7 +378,7 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 				out.conf[strings.TrimPrefix(k, kafka_conf_prefix)] = v
 			}
 		}
-		LogDebug("kafka configuration: %v", out.conf)
+		out.logsChannel = make(chan kafka.LogEvent)
 		return out, nil
 	}
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://" +
