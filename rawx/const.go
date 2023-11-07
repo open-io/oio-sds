@@ -251,3 +251,7 @@ const (
 	// sending the whole request body
 	httpStatusClientClosedRequest = 499
 )
+
+const (
+	kafka_conf_prefix = "kafka_"
+)

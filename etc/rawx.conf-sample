@@ -94,3 +94,8 @@ timeout_conn_event     0.5
 
 # Timeout (in seconds) for sending an event (this includes connection time)
 timeout_send_event     5
+
+# kafka configuration
+# all librdkafka configuration options can be set using the "kafka_" prefix
+# https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
+# kafka_client.id the-greatest-client.id-ever
