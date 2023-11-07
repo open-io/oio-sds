@@ -1113,15 +1113,28 @@ test_content_put_get_delete(void)
 		}
 		_bean_cleanv2(tmp);
 
-		/* Check we can force the delete by deleting deleted version */
+		/* Check by deleting whithout specific version we
+           insert another delete marker */
 		if (VERSIONS_ENABLED(maxver)) {
 			tmp = g_ptr_array_new();
 			err = meta2_backend_delete_alias(m2, u, FALSE, FALSE, FALSE, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanv2(tmp);
 
-			CHECK_ALIAS_VERSION(m2,u,CLOCK_START);
-			check_list_count(m2,u,1);
+		    /* check there are 3 versions */
+            tmp = g_ptr_array_new();
+            err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION,
+                    _bean_buffer_cb, tmp);
+
+			g_assert_no_error(err);
+			// 1 alias + 1 content header + chunks_count * (1 chunk)
+			// + 2 deleted alias
+			expected = (1 + 1 + chunks_count) + (2);
+			GRID_INFO("TEST Got %u beans for all versions, expected %u"
+					" (chunks count: %"G_GINT64_FORMAT")",
+					tmp->len, expected, chunks_count);
+            g_assert_cmpuint(tmp->len, ==, expected);
+            _bean_cleanv2(tmp);
 		}
 	}
 

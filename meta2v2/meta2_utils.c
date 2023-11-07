@@ -1692,7 +1692,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 				oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
 
 		if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
-				oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
+				oio_url_has(url, OIOURL_VERSION)) {
 			// Actually delete the object
 			if (bypass_governance && !ALIASES_get_deleted(alias)) {
 				// Allow to delete object (with data) despite retention
