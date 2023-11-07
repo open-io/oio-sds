@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -76,9 +75,11 @@ type amqpBackend struct {
 }
 
 type kafkaBackend struct {
-	endpoint string
-	topic    string
-	producer *kafka.Producer
+	endpoint    string
+	topic       string
+	producer    *kafka.Producer
+	conf        map[string]string
+	logsChannel chan kafka.LogEvent
 }
 
 var (
@@ -241,28 +242,57 @@ func (backend *kafkaBackend) connect() error {
 		return nil
 	}
 
-	LogDebug("Connecting to event broker #%s", backend.endpoint)
-	producer, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": strings.ReplaceAll(backend.endpoint, "kafka://", ""),
-		"acks":              "all",
-	})
+	LogDebug("Connecting to event broker #%s (%v)", backend.endpoint, backend.conf)
+
+	conf := kafka.ConfigMap{}
+	for k, v := range backend.conf {
+		conf[k] = v
+	}
+	conf["bootstrap.servers"] = strings.ReplaceAll(backend.endpoint, "kafka://", "")
+	conf["acks"] = "all"
+	conf["go.logs.channel.enable"] = true
+	conf["go.logs.channel"] = backend.logsChannel
+
+	producer, err := kafka.NewProducer(&conf)
 
 	if err != nil {
 		LogDebug("Failed to connect %v", err)
 		return err
 	}
+	LogDebug("Connected to event broker #%s", backend.endpoint)
 
 	backend.producer = producer
+
+	go func() {
+		var logFunction func(string, ...interface{}) = nil
+		for {
+			log := <-backend.logsChannel
+
+			switch {
+			case log.Level <= 3:
+				logFunction = LogError
+			case log.Level <= 4:
+				logFunction = LogWarning
+			case log.Level <= 6:
+				logFunction = LogInfo
+			case log.Level <= 7:
+				logFunction = LogDebug
+			default:
+				logFunction = LogDebug
+			}
+
+			logFunction("librdkafka(name=%s tag=%s) %s", log.Name, log.Tag, log.Message)
+		}
+	}()
 
 	go func() {
 		for e := range producer.Events() {
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
-					fmt.Printf("Failed to deliver message: %v\n", ev.TopicPartition)
+					LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
 				} else {
-					fmt.Printf("Produced event to topic %s: key = %-10s value = %s\n",
-						*ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
+					LogDebug("Event has been pushed to topic %s sucessfully (%s)", *ev.TopicPartition.Topic, string(ev.Value))
 				}
 			}
 		}
@@ -277,6 +307,7 @@ func (backend *kafkaBackend) push(event []byte, routingKey string) {
 
 	if err == nil {
 
+		LogDebug("Trying to push an event (%s)", string(event))
 		err = backend.producer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     &backend.topic,
@@ -286,7 +317,7 @@ func (backend *kafkaBackend) push(event []byte, routingKey string) {
 		}, nil)
 
 		if err != nil {
-			LogDebug("Failed to push event: %v", err)
+			LogError("Failed to push an event to the topic %s (%s): %v", backend.topic, string(event), err)
 		}
 	}
 }
@@ -336,6 +367,14 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 		if out.topic == "" {
 			out.topic = "oio"
 		}
+		// TODO conf
+		out.conf = map[string]string{}
+		for k, v := range *options {
+			if strings.HasPrefix(k, kafka_conf_prefix) {
+				out.conf[strings.TrimPrefix(k, kafka_conf_prefix)] = v
+			}
+		}
+		out.logsChannel = make(chan kafka.LogEvent)
 		return out, nil
 	}
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://" +
