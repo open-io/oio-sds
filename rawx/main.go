@@ -353,6 +353,9 @@ func main() {
 		log.Fatalf("Exiting with error: %v", err.Error())
 	}
 
+	if opts["log_level"] != "" {
+		initVerbosity(LogLevelToSeverity(opts["log_level"]))
+	}
 	if opts["log_format"] != "" {
 		logFormat = opts["log_format"]
 	}
