@@ -83,6 +83,7 @@ var loadedOpts = map[string]string{
 	"log_access_format":  "log_access_format",
 	"log_request_format": "log_request_format",
 	"log_format":         "log_format",
+	"log_level":          "log_level",
 	// TODO(jfs): also implement a cachedir
 
 	"graceful_stop_timeout": "graceful_stop_timeout",
@@ -109,7 +110,7 @@ var deprecatedOpts = map[string]string{
 	"grid_fadvise_download": "fadvise_download",
 }
 
-var prefixOpts = map[string]string {
+var prefixOpts = map[string]string{
 	kafka_conf_prefix: kafka_conf_prefix,
 }
 

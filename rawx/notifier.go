@@ -267,8 +267,6 @@ func (backend *kafkaBackend) connect() error {
 		var logFunction func(string, ...interface{}) = nil
 		for {
 			log := <-backend.logsChannel
-			logFunction = LogError
-			logFunction(log.Message)
 
 			switch {
 			case log.Level <= 3:
@@ -279,22 +277,22 @@ func (backend *kafkaBackend) connect() error {
 				logFunction = LogInfo
 			case log.Level <= 7:
 				logFunction = LogDebug
+			default:
+				logFunction = LogDebug
 			}
 
-			logFunction("name:%s\ttag:%s\tmessage:%s", log.Name, log.Tag, log.Message)
+			logFunction("librdkafka(name=%s tag=%s) %s", log.Name, log.Tag, log.Message)
 		}
 	}()
 
 	go func() {
 		for e := range producer.Events() {
-			LogDebug("Received kafka event: %v", e)
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
-					LogDebug("Failed to deliver message: %v", ev.TopicPartition)
+					LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
 				} else {
-					LogDebug("Produced event to topic %s: key=%s value=%s",
-						*ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
+					LogDebug("Event has been pushed to topic %s sucessfully (%s)", *ev.TopicPartition.Topic, string(ev.Value))
 				}
 			}
 		}
@@ -319,9 +317,7 @@ func (backend *kafkaBackend) push(event []byte, routingKey string) {
 		}, nil)
 
 		if err != nil {
-			LogDebug("Failed to push event: %v", err)
-		} else {
-			LogDebug("event pushed")
+			LogError("Failed to push an event to the topic %s (%s): %v", backend.topic, string(event), err)
 		}
 	}
 }
