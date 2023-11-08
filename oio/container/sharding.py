@@ -998,13 +998,14 @@ class ContainerSharding(ProxyClient):
                     raise
                 except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
                     if i >= attempts - 1:
-                        if (
-                            successes
-                            and global_deadline
-                            and monotonic_time() >= global_deadline
-                        ):
-                            # Do not raise an exception if the last cleaning request
-                            # has timeout
+                        if global_deadline and monotonic_time() >= global_deadline:
+                            # A local cleanup has a deadline to delete
+                            # as many entries as possible.
+                            # It is possible that this deadline is very slightly
+                            # exceeded (the meta2 service detects the end of
+                            # the deadline with a slight delay).
+                            # Do not raise an exception because the deadline is
+                            # slightly exceeded.
                             break
                         else:
                             exc.successes = successes

@@ -282,7 +282,7 @@ class TestSharding(BaseTestCase):
             sorted_objects = sorted(list_objects)
             self.assertListEqual(sorted_objects, list_objects)
 
-    def _shard_container(self, vacuum_during_precleaning=True):
+    def _shard_container(self):
         self._create(self.cname)
         self._add_objects(self.cname, 4)
 
@@ -311,20 +311,20 @@ class TestSharding(BaseTestCase):
                 reqid=ANY,
             )
         ]
-        if vacuum_during_precleaning:
-            for _ in range(2):
-                expected_calls.append(
-                    call(
-                        "meta2",
-                        cid=parent_cid,
-                        suffix=ANY,
-                        service_id=ANY,
-                        params={"local": 1},
-                        headers=ANY,
-                        reqid=ANY,
-                    )
+        for _ in range(2):
+            expected_calls.append(
+                call(
+                    "meta2",
+                    cid=parent_cid,
+                    suffix=ANY,
+                    service_id=ANY,
+                    params={"local": 1},
+                    headers=ANY,
+                    reqid=ANY,
                 )
+            )
         mock_vacuum.assert_has_calls(expected_calls, any_order=True)
+        self.assertEqual(len(expected_calls), mock_vacuum.call_count)
 
         # check objects
         self._check_objects(self.cname)
@@ -347,7 +347,7 @@ class TestSharding(BaseTestCase):
 
     def test_shard_container_with_no_cleaning_during_precleaning(self):
         self.container_sharding.preclean_timeout = 0.000001
-        self._shard_container(vacuum_during_precleaning=False)
+        self._shard_container()
 
     def test_shard_container_with_incomplete_precleaning(self):
         self.container_sharding.preclean_timeout = 2
