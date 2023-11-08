@@ -1,6 +1,7 @@
 storage_policy: "THREECOPIES"
 config:
   ns.chunk_size: 1048576
+  sqliterepo.journal_mode: 1
 zookeeper: true
 redis: true
 fdb: true

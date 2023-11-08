@@ -38,6 +38,10 @@ class Meta2Worker(CrawlerWorker):
             )
 
     def process_path(self, path):
+        if path.endswith("-journal") or path.endswith("-wal"):
+            self.logger.debug("Ignoring sqlite journal file: %s", path)
+            self.ignored_paths += 1
+            return False
         db_id = path.rsplit("/")[-1].rsplit(".")
         if len(db_id) != 3:
             self.logger.warning("Malformed db file name: %s", path)

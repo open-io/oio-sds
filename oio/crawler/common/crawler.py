@@ -102,6 +102,7 @@ class CrawlerWorker(object):
         self.passes = 0
         self.successes = 0
         self.errors = 0
+        self.ignored_paths = 0
         self.invalid_paths = 0
         self.start_time = time.time()
         self.last_report_time = 0
@@ -206,6 +207,7 @@ class CrawlerWorker(object):
             "volume_id=%(volume_id)s "
             "elapsed=%(elapsed).02f "
             "pass=%(pass)d "
+            "ignored_paths=%(ignored_paths)d "
             "invalid_paths=%(invalid_paths)d "
             "errors=%(errors)d "
             "total_scanned=%(total_scanned)d "
@@ -215,6 +217,7 @@ class CrawlerWorker(object):
                 "volume_id": self.volume_id,
                 "elapsed": elapsed,
                 "pass": self.passes,
+                "ignored_paths": self.ignored_paths,
                 "invalid_paths": self.invalid_paths,
                 "errors": self.errors,
                 "total_scanned": total,
@@ -294,6 +297,7 @@ class CrawlerWorker(object):
         # reset crawler stats
         self.errors = 0
         self.successes = 0
+        self.ignored_paths = 0
         self.invalid_paths = 0
         if self.use_marker:
             # reset marker

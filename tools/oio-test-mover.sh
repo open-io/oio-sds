@@ -139,7 +139,7 @@ oio_meta2_mover()
   fi
 
   echo "Copy the volume ${META2_IP_TO_MOVE} (${META2_ID})"
-  if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f 2> /dev/null \
+  if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f -name '*.1.meta2' 2> /dev/null \
       | /usr/bin/wc -l)" -eq 0 ]; then
     echo "No base found in the volume of meta2 ${META2_IP_TO_MOVE} (${META2_ID})"
     printf "${RED}\noio-meta2-mover: FAILED\n${NO_COLOR}"
@@ -147,6 +147,7 @@ oio_meta2_mover()
   fi
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${META2_LOC_TO_MOVE}" "${TMP_VOLUME}"
+  /usr/bin/find "${TMP_VOLUME}" -type f -name "*-journal" -delete
 
   set +e
 
@@ -412,7 +413,7 @@ oio_meta2_mover()
     fi
   done
 
-  if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f 2> /dev/null \
+  if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f -name '*.1.meta2' 2> /dev/null \
       | tee "${TMPDIR:-/tmp}/unwanted_files.txt" | /usr/bin/wc -l)" -ne 0 ]; then
     echo "Extra files found for meta2 ${META2_IP_TO_MOVE} (${META2_ID}):"
     cat "${TMPDIR:-/tmp}/unwanted_files.txt"

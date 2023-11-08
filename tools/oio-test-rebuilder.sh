@@ -127,6 +127,7 @@ check_and_remove_meta()
   echo >&2 "Remove the ${TYPE} ${META_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${META_LOC_TO_REBUILD}" "${TMP_VOLUME}"
+  /usr/bin/find "${TMP_VOLUME}" -type f -name "*-journal" -delete
   /bin/rm -rf "${META_LOC_TO_REBUILD}"
   /bin/mkdir "${META_LOC_TO_REBUILD}"
 
