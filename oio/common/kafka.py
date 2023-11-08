@@ -63,15 +63,20 @@ class KafkaClient:
         if self._client is not None:
             return
 
-        self._client = self.__client_class({**options,
-            "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
-        }, logger=self._logger)
+        self._client = self.__client_class(
+            {
+                **options,
+                "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
+            },
+            logger=self._logger,
+        )
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
             try:
                 self._client.list_topics(topic=topic, timeout=1)
             except KafkaException as exc:
+                self._logger.error("Topic '%s' not found", topic)
                 raise KafkaTopicNotFoundException() from exc
 
     def close(self):
@@ -90,9 +95,12 @@ class KafkaSender(KafkaClient):
         self._delayed_topic = conf.get("delayed_topic", DEFAULT_DELAYED_TOPIC)
         self._delay_granularity = get_delay_granularity(conf)
 
-        self._connect({**conf,
-            "acks": "all",
-        })
+        self._connect(
+            {
+                **conf,
+                "acks": "all",
+            }
+        )
 
     @property
     def producer(self):
@@ -160,9 +168,7 @@ class KafkaConsumer(KafkaClient):
         self._connect(conf)
 
         self.ensure_topics_exist(topics)
-        self._client.subscribe(
-            topics,
-        )
+        self._client.subscribe(topics)
 
     @property
     def consumer(self):

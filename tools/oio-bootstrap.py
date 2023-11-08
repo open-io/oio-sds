@@ -1413,6 +1413,12 @@ meta2.sharding.max_entries_cleaned=10
 admin=${IP}:${PORT_ADMIN}
 """
 
+
+template_meta_config = """
+[${NS}]
+events.kafka.options=client.id=${SERVICE_ID}
+"""
+
 template_systemd_service_event_agent = """
 [Unit]
 Description=[OpenIO] Service event agent ${SRVNUM}
@@ -2382,6 +2388,7 @@ def generate(options):
                 "PORT": next(ports),
                 "EXE": "oio-" + t + "-server",
                 "EXTRA": ext_opt,
+                "OPTARGS": "",
             }
         )
         if service_id:
@@ -2390,7 +2397,6 @@ def generate(options):
             env["OPTARGS"] = "-O ServiceId=%s" % env["SERVICE_ID"]
         else:
             env["WANT_SERVICE_ID"] = "#"
-            env["OPTARGS"] = ""
         register_service(env, tpl, parent_target)
         # watcher
         tpl = Template(template_meta_watch)
@@ -2399,6 +2405,13 @@ def generate(options):
 
         if t == "meta2":
             meta2_volumes.append("{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(**env))
+
+        if t in ("meta1", "meta2"):
+            if env.get("SERVICE_ID"):
+                tpl = Template(template_meta_config)
+                with open(config(env), "w+") as f:
+                    f.write(tpl.safe_substitute(env))
+                env["OPTARGS"] += " -O Config=%s" % config(env)
 
     # meta0
     nb_meta0 = max(
