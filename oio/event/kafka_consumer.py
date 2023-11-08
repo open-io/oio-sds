@@ -98,7 +98,7 @@ class KafkaConsumerWorker(Process):
     def _connect(self):
         if self._consumer is None:
             self._consumer = KafkaConsumer(
-                self.endpoint, [self.topic_name], logger=self.logger, conf={
+                self.endpoint, [self.topic_name], logger=self.logger, stop=self._stop_requested, conf={
                     **self._kafka_conf,
                     "group.id": self.group_id,
                     "enable.auto.commit": False,
