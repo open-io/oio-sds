@@ -18,19 +18,28 @@ License along with this library.
 
 #include "kafka.h"
 
+
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/internals.h>
 #include <events/events_variables.h>
 
+GLogLevelFlags log_level_mapping[] = {
+	GRID_LOGLVL_ERROR, // 0
+	GRID_LOGLVL_ERROR, // 1
+	GRID_LOGLVL_ERROR, // 2
+	GRID_LOGLVL_ERROR, // 3
+	GRID_LOGLVL_WARN,  // 4
+	GRID_LOGLVL_INFO,  // 5
+	GRID_LOGLVL_INFO,  // 6
+	GRID_LOGLVL_DEBUG, // 7
+};
 
+static void kafka_log_forward(const rd_kafka_t* rk, int level, const char* fac, const char* buf) {
+	// Log level conversion
+	GLogLevelFlags log_level = log_level_mapping[level];
 
-static void dr_msg_cb (rd_kafka_t *kafka_handle UNUSED,
-                       const rd_kafka_message_t *rkmessage,
-                       void *opaque UNUSED) {
-    if (rkmessage->err) {
-        g_warning("Message delivery failed: %s", rd_kafka_err2str(rkmessage->err));
-    }
+	g_log(G_LOG_DOMAIN, log_level, "%s - %s: %s", fac, rd_kafka_name(rk), buf);
 }
 
 GError*
@@ -47,19 +56,63 @@ kafka_create(const gchar *endpoint, const gchar *topic,
 
 	rd_kafka_conf_t* kafka_conf = rd_kafka_conf_new();
 	char errstr[512];
+	rd_kafka_resp_err_t kafka_err;
+	gchar** options = NULL;
 
-	rd_kafka_conf_set(kafka_conf, "bootstrap.servers", endpoint, errstr, sizeof(errstr));
 
-	rd_kafka_conf_set_dr_msg_cb(kafka_conf, dr_msg_cb);
+	// Endpoints
+	kafka_err = rd_kafka_conf_set(kafka_conf, "bootstrap.servers", endpoint, errstr, sizeof(errstr));
+	if (kafka_err) {
+		err = BADREQ("Invalid endpoint: %s", errstr);
+	}
 
-	out1.producer = rd_kafka_new(RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr));
-	if (!out1.producer) {
-		err = BADREQ("Unable to instantiate Kafka producer: %s", errstr);
+	if (!err) {
+		// Acks
+		kafka_err = rd_kafka_conf_set(kafka_conf, "acks", oio_events_kafka_acks, errstr, sizeof(errstr));
+		if (kafka_err) {
+			err = BADREQ("Invalid acknowledgement: %s", errstr);
+		}
+	}
+
+	if (!err) {
+		// Extra options
+		options = g_strsplit(oio_events_kafka_options, ";", -1);
+		for (gchar** option = options; options && *option; option++) {
+			gchar** key_value = g_strsplit(*option, "=", 2);
+			if (key_value[0] == NULL) {
+				err = BADREQ("Missing key in kafka options");
+				break;
+			}
+			if (key_value[1] == NULL) {
+				err = BADREQ("Missing value in kafka options for key '%s'", key_value[0]);
+				break;
+			}
+			kafka_err = rd_kafka_conf_set(kafka_conf, key_value[0], key_value[1], errstr, sizeof(errstr));
+			g_strfreev(key_value);
+			if (kafka_err) {
+				err = BADREQ("Invalid option: %s", errstr);
+				break;
+			}
+		}
+	}
+
+	// Configure logger redirection
+	if (!err) {
+		rd_kafka_conf_set_log_cb(kafka_conf, kafka_log_forward);
+	}
+
+	if (!err) {
+		out1.producer = rd_kafka_new(RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr));
+		if (!out1.producer) {
+			err = BADREQ("Unable to instantiate Kafka producer: %s", errstr);
+		}
 	}
 
 	if (!err) {
 		*out = g_memdup(&out1, sizeof(struct kafka_s));
 	}
+
+	g_strfreev(options);
 
 	return err;
 }
