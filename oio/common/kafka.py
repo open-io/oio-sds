@@ -152,8 +152,10 @@ class KafkaSender(KafkaClient):
 
 
 class KafkaConsumer(KafkaClient):
-    def __init__(self, endpoint, topics, logger, conf={}):
+    def __init__(self, endpoint, topics, logger, stop, conf={}):
         super(KafkaConsumer, self).__init__(endpoint, Consumer, logger)
+
+        self._stop = stop
 
         self._connect(conf)
 
@@ -167,7 +169,7 @@ class KafkaConsumer(KafkaClient):
         return self._client
 
     def fetch_events(self):
-        while True:
+        while not self._stop.is_set():
             msg = self._client.poll(1.0)
             if msg is None:
                 continue
