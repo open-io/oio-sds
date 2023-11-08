@@ -4403,7 +4403,7 @@ _compute_reasonable_limit(gint64 allowed_changes)
 static GError*
 _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 		const struct bean_descriptor_s *descr, const gchar *select_clause,
-		gint64 *allowed_changes, gint64 deadline)
+		gint64 *allowed_changes, gint64 deadline, gboolean *finished)
 {
 	/* A previous call may force this function to return early. */
 	if (*allowed_changes <= 0) {
@@ -4433,6 +4433,8 @@ _clean_shard_beans(struct sqlx_sqlite3_s *sq3,
 		/* By changing the sign, this allows the value to be retained
 		 * to calculate the number of cleaned entries. */
 		*allowed_changes *= -1;
+	} else if (!err && changes <= 0) {
+		*finished = TRUE;
 	}
 
 	g_free(clause_str);
@@ -4443,7 +4445,7 @@ static GError*
 _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 		const struct bean_descriptor_s *descr,
 		const gchar *lower, const gchar *upper,
-		gint64 *allowed_changes, gint64 deadline)
+		gint64 *allowed_changes, gint64 deadline, gboolean *finished)
 {
 	/* A previous call may force this function to return early. */
 	if (*allowed_changes <= 0) {
@@ -4472,6 +4474,8 @@ _clean_shard_aliases(struct sqlx_sqlite3_s *sq3,
 		/* By changing the sign, this allows the value to be retained
 		 * to calculate the number of cleaned entries. */
 		*allowed_changes *= -1;
+	} else if (!err && changes <= 0) {
+		*finished = TRUE;
 	}
 
 	metautils_gvariant_unrefv(params);
@@ -4505,6 +4509,16 @@ _compute_reasonable_deadline(gint64 now, gboolean local)
 	return now + MAX(available, 0);
 }
 
+#define _update_cleaned_tables(table) do { \
+	new_cleaned_tables = g_strconcat(current_cleaned_tables, "#"table";", NULL); \
+	g_free(current_cleaned_tables); \
+	current_cleaned_tables = new_cleaned_tables; \
+	new_cleaned_tables = NULL; \
+} while (0)
+
+#define _not_in_cleaned_tables(table) \
+	(!g_strstr_len(current_cleaned_tables, -1, "#"table";"))
+
 GError*
 m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 		gint64 max_entries_cleaned, gchar *lower, gchar *upper,
@@ -4513,9 +4527,12 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 	GError *err = NULL;
 	gchar *current_lower = NULL;
 	gchar *current_upper = NULL;
+	gchar *current_cleaned_tables = NULL;
+	gchar *new_cleaned_tables = NULL;
 	gint64 now = 0;
 	gint64 entries_cleaned = 0;
 	gint64 duration = 0;
+	gboolean finished = FALSE;
 
 	if (!lower) {
 		err = m2db_get_sharding_lower(sq3, &current_lower);
@@ -4531,6 +4548,11 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 		}
 		upper = current_upper;
 	}
+	current_cleaned_tables = sqlx_admin_get_str(sq3,
+			M2V2_ADMIN_SHARDING_CLEANED_TABLES);
+	if (!current_cleaned_tables) {
+		current_cleaned_tables = g_strdup("");
+	}
 	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
 	}
@@ -4540,33 +4562,78 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 	gint64 dl = _compute_reasonable_deadline(now, local);
 
 	// Remove orphan properties
-	if ((err = _clean_shard_aliases(
-			sq3, &descr_struct_PROPERTIES, lower, upper, &max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("properties")) {
+		if ((err = _clean_shard_aliases(
+				sq3, &descr_struct_PROPERTIES, lower, upper, &max_entries_cleaned,
+				dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("properties");
+		}
+	} else {
+		GRID_DEBUG("Ignore the properties table, it is already cleaned "
+				"(shard=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove aliases out of range
-	if ((err = _clean_shard_aliases(
-			sq3, &descr_struct_ALIASES, lower, upper, &max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("aliases")) {
+		if ((err = _clean_shard_aliases(
+				sq3, &descr_struct_ALIASES, lower, upper, &max_entries_cleaned,
+				dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("aliases");
+		}
+	} else {
+		GRID_DEBUG("Ignore the aliases table, it is already cleaned "
+				"(shard=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove orphan contents
-	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_CONTENTS_HEADERS,
-			"id NOT IN (SELECT content FROM aliases)",
-			&max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("contents")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_CONTENTS_HEADERS,
+				"id NOT IN (SELECT content FROM aliases)",
+				&max_entries_cleaned, dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("contents");
+		}
+	} else {
+		GRID_DEBUG("Ignore the contents table, it is already cleaned "
+				"(shard=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove orphan chunks
-	err = _clean_shard_beans(
-			sq3, &descr_struct_CHUNKS,
-			"content NOT IN (SELECT content FROM aliases)",
-			&max_entries_cleaned, dl);
+	finished = FALSE;
+	if (_not_in_cleaned_tables("chunks")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_CHUNKS,
+				"content NOT IN (SELECT content FROM aliases)",
+				&max_entries_cleaned, dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("chunks");
+		}
+	} else {
+		GRID_DEBUG("Ignore the chunks table, it is already cleaned "
+				"(shard=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
+	}
 
 end:
 	if (now) {
 		duration = oio_ext_monotonic_time() - now;
 	}
 	if (!err) {
+		/* Save tables that have already been processed so as not
+		 * to clean them again during the next request. */
+		sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_CLEANED_TABLES,
+				current_cleaned_tables);
+
 		// max_entries_cleaned will be negative if the deadline is reached
 		entries_cleaned = _max_entries_cleaned - labs(max_entries_cleaned);
 
@@ -4598,6 +4665,8 @@ end:
 			*truncated, sq3->name.base, oio_ext_get_reqid());
 	g_free(current_lower);
 	g_free(current_upper);
+	g_free(current_cleaned_tables);
+	g_free(new_cleaned_tables);
 	return err;
 }
 
@@ -4606,10 +4675,18 @@ m2db_clean_root_container(struct sqlx_sqlite3_s *sq3, gboolean local,
 		gint64 max_entries_cleaned, gboolean *truncated)
 {
 	GError *err = NULL;
+	gchar *current_cleaned_tables = NULL;
+	gchar *new_cleaned_tables = NULL;
 	gint64 now = 0;
 	gint64 entries_cleaned = 0;
 	gint64 duration = 0;
+	gboolean finished = FALSE;
 
+	current_cleaned_tables = sqlx_admin_get_str(sq3,
+			M2V2_ADMIN_SHARDING_CLEANED_TABLES);
+	if (!current_cleaned_tables) {
+		current_cleaned_tables = g_strdup("");
+	}
 	if (max_entries_cleaned <= 0) {
 		max_entries_cleaned = G_MAXINT64;
 	}
@@ -4619,29 +4696,75 @@ m2db_clean_root_container(struct sqlx_sqlite3_s *sq3, gboolean local,
 	gint64 dl = _compute_reasonable_deadline(now, local);
 
 	// Remove all chunks
-	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_CHUNKS, "1", &max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("chunks")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_CHUNKS, "1", &max_entries_cleaned,
+				dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("chunks");
+		}
+	} else {
+		GRID_DEBUG("Ignore the chunks table, it is already cleaned "
+				"(root=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove all contents
-	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_CONTENTS_HEADERS, "1", &max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("contents")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_CONTENTS_HEADERS, "1", &max_entries_cleaned,
+				dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("contents");
+		}
+	} else {
+		GRID_DEBUG("Ignore the contents table, it is already cleaned "
+				"(root=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove all properties
-	if ((err = _clean_shard_beans(
-			sq3, &descr_struct_PROPERTIES, "1", &max_entries_cleaned, dl))) {
-		goto end;
+	finished = FALSE;
+	if (_not_in_cleaned_tables("properties")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_PROPERTIES, "1", &max_entries_cleaned,
+				dl, &finished))) {
+			goto end;
+		} else if (finished) {
+			_update_cleaned_tables("properties");
+		}
+	} else {
+		GRID_DEBUG("Ignore the properties table, it is already cleaned "
+				"(root=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
 	}
 	// Remove all aliases
-	err = _clean_shard_beans(
-			sq3, &descr_struct_ALIASES, "1", &max_entries_cleaned, dl);
+	finished = FALSE;
+	if (_not_in_cleaned_tables("aliases")) {
+		if ((err = _clean_shard_beans(
+				sq3, &descr_struct_ALIASES, "1", &max_entries_cleaned,
+				dl, &finished))) {
+		} else if (finished) {
+			_update_cleaned_tables("aliases");
+		}
+	} else {
+		GRID_DEBUG("Ignore the aliases table, it is already cleaned "
+				"(root=%s) (local=%d) (reqid=%s)",
+				sq3->name.base, local, oio_ext_get_reqid());
+	}
 
 end:
 	if (now) {
 		duration = oio_ext_monotonic_time() - now;
 	}
 	if (!err) {
+		/* Save tables that have already been processed so as not
+		 * to clean them again during the next request. */
+		sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_CLEANED_TABLES,
+				current_cleaned_tables);
+
 		// max_entries_cleaned will be negative if the deadline is reached
 		entries_cleaned = _max_entries_cleaned - labs(max_entries_cleaned);
 
@@ -4655,6 +4778,8 @@ end:
 			"(truncated=%d) [%s] reqid=%s",
 			entries_cleaned, duration / G_TIME_SPAN_MILLISECOND,
 			*truncated, sq3->name.base, oio_ext_get_reqid());
+	g_free(current_cleaned_tables);
+	g_free(new_cleaned_tables);
 	return err;
 }
 

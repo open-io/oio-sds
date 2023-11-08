@@ -220,6 +220,8 @@ M2_PROP_SHARDING_PREVIOUS_UPPER = "sys.m2.sharding.upper.previous"
 M2_PROP_SHARDING_MASTER = "sys.m2.sharding.master"
 # Queue used to save all writes during sharding.
 M2_PROP_SHARDING_QUEUE = "sys.m2.sharding.queue"
+# Tables already cleaned
+M2_PROP_SHARDING_TABLES_CLEANED = "sys.m2.sharding.tables.cleaned"
 # Name of the default storage policy for the container.
 M2_PROP_STORAGE_POLICY = "sys.m2.policy.storage"
 # Total number of bytes of objects held by the container.

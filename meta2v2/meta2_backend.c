@@ -3641,6 +3641,12 @@ meta2_backend_clean_locally_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
+			if (!suffix) {
+				/* It's not a local shard copy.
+				 * Keep property so that replicated cleaning
+				 * does not clean tables again. */
+				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_CLEANED_TABLES);
+			}
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANED_UP);
 		}
@@ -3719,6 +3725,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
 			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_COPIES);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_CLEANED_TABLES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANED_UP);
 		}

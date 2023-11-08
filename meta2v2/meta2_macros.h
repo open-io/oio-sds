@@ -101,6 +101,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARDING_COPIES M2V2_ADMIN_PREFIX_SHARDING "copies"
 # endif
 
+# ifndef M2V2_ADMIN_SHARDING_CLEANED_TABLES
+# define M2V2_ADMIN_SHARDING_CLEANED_TABLES M2V2_ADMIN_PREFIX_SHARDING "tables.cleaned"
+# endif
+
 # ifndef M2V2_ADMIN_PREFIX_DRAINING
 # define M2V2_ADMIN_PREFIX_DRAINING M2V2_ADMIN_PREFIX_SYS "draining."
 # endif

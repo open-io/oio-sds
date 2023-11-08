@@ -16,6 +16,7 @@
 # License along with this library.
 
 import random
+import sqlite3
 import time
 from unittest.mock import ANY, call, patch
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,7 @@ from oio.common.constants import (
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_ROOT,
     M2_PROP_SHARDING_STATE,
+    M2_PROP_SHARDING_TABLES_CLEANED,
     M2_PROP_SHARDING_UPPER,
     NEW_SHARD_STATE_CLEANED_UP,
     M2_PROP_VERSIONING_POLICY,
@@ -254,10 +256,42 @@ class TestSharding(BaseTestCase):
     def _check_shards_objectlock_properties(self, resp):
         pass
 
+    def _check_cleaning(self, cid, objects_count):
+        meta2db_path = self._get_meta2db_path(cid)
+        with sqlite3.connect(meta2db_path) as connection:
+            cursor = connection.cursor()
+            try:
+                aliases_count = cursor.execute(
+                    "SELECT COUNT(*) FROM aliases WHERE deleted == 0"
+                ).fetchall()[0][0]
+                self.assertEqual(objects_count, aliases_count)
+                contents_count = cursor.execute(
+                    "SELECT COUNT(*) FROM contents"
+                ).fetchall()[0][0]
+                self.assertEqual(objects_count, contents_count)
+                chunks_count = cursor.execute("SELECT COUNT(*) FROM chunks").fetchall()[
+                    0
+                ][0]
+                self.assertEqual(
+                    0, chunks_count % objects_count if objects_count else 0
+                )
+                properties_count = cursor.execute(
+                    "SELECT COUNT(*) FROM properties"
+                ).fetchall()[0][0]
+                self.assertEqual(
+                    0, properties_count % objects_count if objects_count else 0
+                )
+            finally:
+                cursor.close()
+
     def _check_shards(self, new_shards, test_shards, shards_content):
         # check shards
         for index, shard in enumerate(new_shards):
             resp = self.storage.container.container_get_properties(cid=shard["cid"])
+            self.assertEqual(
+                NEW_SHARD_STATE_CLEANED_UP, int(resp["system"][M2_PROP_SHARDING_STATE])
+            )
+            self.assertNotIn(M2_PROP_SHARDING_TABLES_CLEANED, resp["system"])
             found_object_in_shard = int(resp["system"][M2_PROP_OBJECTS])
             self.assertEqual(found_object_in_shard, len(shards_content[index]))
 
@@ -282,9 +316,12 @@ class TestSharding(BaseTestCase):
             sorted_objects = sorted(list_objects)
             self.assertListEqual(sorted_objects, list_objects)
 
+            # check cleaning
+            self._check_cleaning(shard["cid"], len(shards_content[index]))
+
     def _shard_container(self):
         self._create(self.cname)
-        self._add_objects(self.cname, 4)
+        self._add_objects(self.cname, 16)
 
         test_shards = [
             {"index": 0, "lower": "", "upper": "content_0."},
@@ -332,22 +369,81 @@ class TestSharding(BaseTestCase):
         # check shards
         show_shards = self.container_sharding.show_shards(self.account, self.cname)
         show_shards = list(show_shards)
-        shards_content = [{"content_0"}, {"content_1", "content_2", "content_3"}]
+        shards_content = [{"content_0"}, {f"content_{i}" for i in range(1, 16)}]
         self._check_shards(show_shards, test_shards, shards_content)
 
         # check root container properties
         resp = self.storage.container.container_get_properties(self.account, self.cname)
         self.assertEqual(int(resp["system"][M2_PROP_OBJECTS]), 0)
         self.assertEqual(int(resp["system"]["sys.m2.shards"]), len(test_shards))
+        self.assertEqual(
+            NEW_SHARD_STATE_CLEANED_UP, int(resp["system"][M2_PROP_SHARDING_STATE])
+        )
+        self.assertNotIn(M2_PROP_SHARDING_TABLES_CLEANED, resp["system"])
+        self._check_cleaning(cid_from_name(self.account, self.cname), 0)
 
         return show_shards
 
+    def _get_meta2db_path(self, cid):
+        dir_data = self.storage.directory.list(cid=cid, service_type="meta2")
+        volume_id = dir_data["srv"][0]["host"]
+        volume_path = None
+        for srv in self.conscience.all_services("meta2"):
+            if volume_id in (srv["addr"], srv["tags"].get("tag.service_id")):
+                volume_path = srv["tags"]["tag.vol"]
+                break
+        else:
+            self.fail("Unable to find the volume path")
+        return "/".join((volume_path, cid[:3], cid + ".1.meta2"))
+
     def test_shard_container(self):
-        self._shard_container()
+        root_cid = cid_from_name(self.account, self.cname)
+        cleaning = {"local": 0, "replicated_root": 0, "replicated_shard": 0}
+        _request = self.container_sharding._request
+
+        def _wrap_request(*args, **kwargs):
+            if args == ("POST", "/clean"):
+                if kwargs.get("params", {}).get("local") == 1:
+                    cleaning["local"] = cleaning["local"] + 1
+                elif root_cid == kwargs.get("params", {}).get("cid"):
+                    cleaning["replicated_root"] = cleaning["replicated_root"] + 1
+                else:
+                    cleaning["replicated_shard"] = cleaning["replicated_shard"] + 1
+            return _request(*args, **kwargs)
+
+        with patch(
+            "oio.container.sharding.ContainerSharding._request", wraps=_wrap_request
+        ) as mock_request:
+            self._shard_container()
+        mock_request.assert_called()
+        self.assertEqual(2, cleaning["local"])
+        self.assertGreaterEqual(cleaning["replicated_root"], 5)
+        self.assertEqual(2, cleaning["replicated_shard"])
 
     def test_shard_container_with_no_cleaning_during_precleaning(self):
         self.container_sharding.preclean_timeout = 0.000001
-        self._shard_container()
+        root_cid = cid_from_name(self.account, self.cname)
+        cleaning = {"local": 0, "replicated_root": 0, "replicated_shard": 0}
+        _request = self.container_sharding._request
+
+        def _wrap_request(*args, **kwargs):
+            if args == ("POST", "/clean"):
+                if kwargs.get("params", {}).get("local") == 1:
+                    cleaning["local"] = cleaning["local"] + 1
+                elif root_cid == kwargs.get("params", {}).get("cid"):
+                    cleaning["replicated_root"] = cleaning["replicated_root"] + 1
+                else:
+                    cleaning["replicated_shard"] = cleaning["replicated_shard"] + 1
+            return _request(*args, **kwargs)
+
+        with patch(
+            "oio.container.sharding.ContainerSharding._request", wraps=_wrap_request
+        ) as mock_request:
+            self._shard_container()
+        mock_request.assert_called()
+        self.assertLessEqual(cleaning["local"], 2)
+        self.assertGreaterEqual(cleaning["replicated_root"], 5)
+        self.assertGreater(cleaning["replicated_shard"], 5)
 
     def test_shard_container_with_incomplete_precleaning(self):
         self.container_sharding.preclean_timeout = 2

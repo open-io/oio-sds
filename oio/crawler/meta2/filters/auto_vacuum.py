@@ -86,13 +86,16 @@ class AutomaticVacuum(Filter):
             raise
         try:
             meta2db_cursor = meta2db_conn.cursor()
-            unused_pages = meta2db_cursor.execute(
-                "PRAGMA main.freelist_count"
-            ).fetchall()[0][0]
-            page_count = meta2db_cursor.execute("PRAGMA main.page_count").fetchall()[0][
-                0
-            ]
-            return page_count, unused_pages
+            try:
+                unused_pages = meta2db_cursor.execute(
+                    "PRAGMA main.freelist_count"
+                ).fetchall()[0][0]
+                page_count = meta2db_cursor.execute(
+                    "PRAGMA main.page_count"
+                ).fetchall()[0][0]
+                return page_count, unused_pages
+            finally:
+                meta2db_cursor.close()
         finally:
             meta2db_conn.close()
 
