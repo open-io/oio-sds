@@ -7,7 +7,10 @@ import json
 import sys
 from encryption import Encrypter
 
+ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"
+
 parser = argparse.ArgumentParser(description="encryption tool")
+parser.add_argument("--rootkey", type=str, default=ROOT_KEY, help="root key")
 parser.add_argument(
     "--metadata",
     type=str,
@@ -37,7 +40,9 @@ with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
 
 # Encrypter object
-encrypter = Encrypter(account=args.account, container=args.container, obj=args.obj)
+encrypter = Encrypter(
+    root_key=args.rootkey, account=args.account, container=args.container, obj=args.obj
+)
 
 while 1:
     chunk = sys.stdin.buffer.read()
