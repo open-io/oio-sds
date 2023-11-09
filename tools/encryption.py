@@ -117,6 +117,9 @@ def get_object_transient_sysmeta(key):
 # Functions copied from swift/common/utils.py
 
 
+MD5_OF_EMPTY_STRING = "d41d8cd98f00b204e9800998ecf8427e"
+
+
 def strict_b64decode(value, allow_line_breaks=False):
     """
     Validate and decode Base64-encoded data.
@@ -657,10 +660,11 @@ class Encrypter:
     Encrypt data with a random body_key and a random iv.
     """
 
-    def __init__(self, account=None, container=None, obj=None):
+    def __init__(self, root_key, account=None, container=None, obj=None):
         sds_namespace = os.environ.get("OIO_NS", "OPENIO")
         api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
+        self.root_key = root_key
 
         # Create bucket secret in kms
         secret_id = 0
@@ -680,6 +684,8 @@ class Encrypter:
         path = os.path.join(account_path, container)
         self.keys["id"] = {"v": "1", "path": path, "sses3": True}
 
+        self.keys["container"] = create_key(path, self.root_key)
+
         # Create a dict with iv and cipher keys
         self.body_crypto_meta = self.crypto.create_crypto_meta()
         body_key = self.crypto.create_random_key()
@@ -692,6 +698,8 @@ class Encrypter:
         self.body_crypto_ctxt = self.crypto.create_encryption_ctxt(
             body_key, self.body_crypto_meta.get("iv")
         )
+
+        self.plaintext_md5 = hashlib.md5(b"")
 
     def encrypt(self, chunk):
         """
@@ -706,6 +714,7 @@ class Encrypter:
         :param chunk: object body_plaintext
         :returns: body ciphertext
         """
+        self.plaintext_md5.update(chunk)
 
         ciphertext = self.body_crypto_ctxt.update(chunk)
         return ciphertext
@@ -722,6 +731,7 @@ class Encrypter:
             self.body_crypto_meta
         )
         metadata["properties"] = self._encrypt_user_metadata(metadata["properties"])
+        metadata["properties"] = self._encrypt_etag(metadata["properties"])
         return metadata
 
     # Functions copied and modified from the class EncrypterObjContext in
@@ -763,4 +773,35 @@ class Encrypter:
                 {"cipher": crypto_meta["cipher"], "key_id": self.keys["id"]}
             )
             metadata[get_object_transient_sysmeta("crypto-meta")] = meta
+        return metadata
+
+    def _encrypt_etag(self, metadata):
+        """
+        Encrypt the ETag (md5 digest) of the plaintext body using the object
+        key provided by the kms and save it as X-Object-Sysmeta-Crypto-Etag.
+        Encrypt the ETag (md5 digest) of the plaintext body using the container
+        key and save it as X-Object-Sysmeta-Container-Update-Override-Etag.
+
+        :param metadata: a dict of metadata properties
+        :returns: metadata dict with encrypted ETags
+        """
+        plaintext_etag = self.plaintext_md5.hexdigest()
+        if plaintext_etag and plaintext_etag != MD5_OF_EMPTY_STRING:
+            # Encrypt ETag with the object key
+            encrypted_etag, etag_crypto_meta = encrypt_header_val(
+                self.crypto, plaintext_etag, self.keys["object"]
+            )
+            metadata[CRYPTO_ETAG_KEY] = append_crypto_meta(
+                encrypted_etag, etag_crypto_meta
+            )
+
+            # Encrypt ETag with the container key
+            val, crypto_meta = encrypt_header_val(
+                self.crypto, plaintext_etag, self.keys["container"]
+            )
+            crypto_meta["key_id"] = self.keys["id"]
+            metadata[CONTAINER_UPDATE_OVERRIDE_ETAG_KEY] = append_crypto_meta(
+                val, crypto_meta
+            )
+
         return metadata
