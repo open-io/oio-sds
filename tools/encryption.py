@@ -675,17 +675,20 @@ class Encrypter:
     """
 
     def __init__(self, root_key, account=None, container=None, obj=None):
+        self.account = account
+        self.container = container
+        self.obj = obj
         sds_namespace = os.environ.get("OIO_NS", "OPENIO")
-        api = ObjectStorageApi(sds_namespace)
+        self.api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
         self.root_key = root_key
 
         # Create bucket secret in kms
         secret_id = 0
         secret = create_bucket_secret(
-            api.kms,
-            container,
-            account=account,
+            self.api.kms,
+            self.container,
+            account=self.account,
             secret_id=secret_id,
         )
 
@@ -694,8 +697,8 @@ class Encrypter:
         self.keys["object"] = decode_secret(secret)
 
         # key_id contains the path used to derive keys
-        account_path = os.path.join(os.sep, account)
-        path = os.path.join(account_path, container)
+        account_path = os.path.join(os.sep, self.account)
+        path = os.path.join(account_path, self.container)
         self.keys["id"] = {"v": "1", "path": path, "sses3": True}
 
         self.keys["container"] = create_key(path, self.root_key)
@@ -827,3 +830,9 @@ class Encrypter:
             )
 
         return metadata
+
+    def update_metadata(self, metadata):
+        properties = metadata.get("properties")
+        self.api.object_set_properties(
+            self.account, self.container, self.obj, properties
+        )
