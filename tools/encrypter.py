@@ -52,5 +52,6 @@ while 1:
     sys.stdout.buffer.write(ciphertext)
 
 new_metadata = encrypter.encrypt_metadata(metadata)
+encrypter.update_metadata(new_metadata)
 with open("metadata.json", "w") as outfile:
     json.dump(new_metadata, outfile)
