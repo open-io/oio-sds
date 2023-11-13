@@ -2336,7 +2336,8 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
 	/* version explicitly specified */
 	if (version == latest_version) {
-		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
+		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved version=%"G_GINT64_FORMAT",\
+                latest_version=%"G_GINT64_FORMAT, version, latest_version);
 	} else if (version < latest_version) {
 		if (VERSIONS_ENABLED(max_versions)) {
 			/* Check if alias already exists */
@@ -2352,7 +2353,8 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			oio_url_clean(url2);
 		} else {
 			err = NEWERROR(CODE_CONTENT_PRECONDITION,
-					"New object version is older than latest version");
+					"New object version=%"G_GINT64_FORMAT" is older than latest version=%"G_GINT64_FORMAT,\
+                    version, latest_version);
 		}
 	}
 
