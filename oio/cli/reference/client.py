@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,16 +14,4 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from logging import getLogger
-from oio.directory.client import DirectoryClient
-
-LOG = getLogger(__name__)
-
-API_NAME = "reference"
-
-
-def make_client(instance):
-    client = DirectoryClient(
-        {"namespace": instance.namespace}, endpoint=instance.get_endpoint()
-    )
-    return client
+API_NAME = "FIXME"

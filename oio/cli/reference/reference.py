@@ -41,9 +41,9 @@ class ListReference(Lister):
         self.log.debug("take_action(%s)", parsed_args)
 
         if parsed_args.is_cid:
-            data = self.app.client_manager.reference.list(cid=parsed_args.reference)
+            data = self.app.client_manager.directory.list(cid=parsed_args.reference)
         else:
-            data = self.app.client_manager.reference.list(
+            data = self.app.client_manager.directory.list(
                 self.app.client_manager.account, reference=parsed_args.reference
             )
         columns = ("Type", "Host", "Args", "Seq")
@@ -73,14 +73,14 @@ class ShowReference(ShowOne):
         self.log.debug("take_action(%s)", parsed_args)
 
         if parsed_args.is_cid:
-            data = self.app.client_manager.reference.list(cid=parsed_args.reference)
+            data = self.app.client_manager.directory.list(cid=parsed_args.reference)
             account = data.get("account")
             reference = data.get("name")
         else:
             account = self.app.client_manager.account
             reference = parsed_args.reference
 
-        data = self.app.client_manager.reference.get_properties(account, reference)
+        data = self.app.client_manager.directory.get_properties(account, reference)
         info = {"account": account, "name": reference, "cid": data.get("cid", None)}
         for k, v in data["properties"].items():
             info["meta." + k] = v
@@ -110,7 +110,7 @@ class CreateReference(Lister):
         results = []
         account = self.app.client_manager.account
         for reference in parsed_args.references:
-            created = self.app.client_manager.reference.create(
+            created = self.app.client_manager.directory.create(
                 account, reference=reference
             )
             results.append((reference, created))
@@ -141,7 +141,7 @@ class DeleteReference(Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         for reference in parsed_args.references:
-            self.app.client_manager.reference.delete(
+            self.app.client_manager.directory.delete(
                 self.app.client_manager.account, reference=reference
             )
 
@@ -169,7 +169,7 @@ class LinkReference(Command):
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
 
-        self.app.client_manager.reference.link(
+        self.app.client_manager.directory.link(
             self.app.client_manager.account, reference, srv_type
         )
 
@@ -197,7 +197,7 @@ class UnlinkReference(Command):
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
 
-        self.app.client_manager.reference.unlink(
+        self.app.client_manager.directory.unlink(
             self.app.client_manager.account, reference, srv_type
         )
 
@@ -226,7 +226,7 @@ class PollReference(Command):
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
 
-        self.app.client_manager.reference.renew(
+        self.app.client_manager.directory.renew(
             self.app.client_manager.account, reference, srv_type
         )
 
@@ -282,7 +282,7 @@ class ForceReference(Command):
             seq=parsed_args.seq,
         )
 
-        self.app.client_manager.reference.force(
+        self.app.client_manager.directory.force(
             self.app.client_manager.account,
             reference,
             parsed_args.type,
@@ -321,7 +321,7 @@ class SetReference(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        self.app.client_manager.reference.set_properties(
+        self.app.client_manager.directory.set_properties(
             self.app.client_manager.account,
             parsed_args.reference,
             parsed_args.property,
@@ -352,7 +352,7 @@ class UnsetReference(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        self.app.client_manager.reference.del_properties(
+        self.app.client_manager.directory.del_properties(
             self.app.client_manager.account, parsed_args.reference, parsed_args.property
         )
 
@@ -375,7 +375,7 @@ class LocateReference(ShowOne):
         account = self.app.client_manager.account
         reference = parsed_args.reference
 
-        data = self.app.client_manager.reference.list(account, reference)
+        data = self.app.client_manager.directory.list(account, reference)
 
         info = {
             "account": account,

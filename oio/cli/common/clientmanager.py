@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@ class ClientManager(object):
         self._xcute_client = None
         self._admin_client = None
         self._conscience_client = None
+        self._directory_client = None
         self._rdir_client = None
         self._rdir_dispatcher = None
         self._storage = None
@@ -133,6 +134,16 @@ class ClientManager(object):
                 self.client_conf, pool_manager=self.pool_manager, logger=self.logger
             )
         return self._conscience_client
+
+    @property
+    def directory(self):
+        if self._directory_client is None:
+            from oio.directory.client import DirectoryClient
+
+            self._directory_client = DirectoryClient(
+                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+            )
+        return self._directory_client
 
     @property
     def logger(self):
