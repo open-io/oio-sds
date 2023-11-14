@@ -23,6 +23,7 @@ from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 from oio.common.statsd import get_statsd
+from oio.common.logger import get_logger
 
 KAFKA_CONF_PREFIX = "kafka_"
 
@@ -62,6 +63,13 @@ class KafkaEventWorker(KafkaConsumerWorker):
 
         self.statsd = get_statsd(conf=app_conf)
 
+        template = self.conf.get("log_request_format",
+            "request_id=%(request_id)s "
+            "topic=%(topic)s event=%(event)s "
+            "status=%(status)s duration=%(duration)f"
+        )
+        self.logger_request = get_logger(app_conf, name="request", fmt=template)
+
         if "handlers_conf" not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(
@@ -73,17 +81,29 @@ class KafkaEventWorker(KafkaConsumerWorker):
         decoded = json.loads(message)
         reqid = decoded.get("request_id")
         handler = self.handlers.get(decoded.get("event"), None)
+
+        replacements = {
+            "request_id": reqid,
+            "topic": self.topic_name,
+        }
+
         if not handler:
-            self.statsd.timing(f"event.{self.topic_name}.rejected", int((time.monotonic() - start) * 1000))
+            replacements["status"] = "rejected"
+            replacements["duration"] = 0.0
+            self.logger_request.info("", extra=replacements)
+            self.statsd.timing(f"event.{self.topic_name}.{replacements['status']}",  0)
             raise RejectMessage
 
         event = decoded.get("event").replace('.', '-')
+        replacements["event"] = event
 
         def cb(status, msg):
+            replacements["duration"] = time.monotonic() - start
+            status_txt = None
+            statsd_metric = None
+            exc = None
             if is_success(status):
-                self.statsd.timing(f"event.{self.topic_name}.{event}.ok", int((time.monotonic() - start) * 1000))
-                # Nothing special to do
-                pass
+                status_txt = "ok"
             elif is_retryable(status):
                 self.logger.warn(
                     "event handling failure (release with delay): (%s) %s reqid=%s",
@@ -91,13 +111,19 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     msg,
                     reqid,
                 )
-                self.statsd.timing(f"event.{self.topic_name}.{event}.retry", int((time.monotonic() - start) * 1000))
-                raise RetryLater
+                status_txt = "retry"
+                exc = RetryLater
             else:
                 self.logger.error(
                     "event handling failure (rejecting): %s reqid=%s", msg, reqid
                 )
-                self.statsd.timing(f"event.{self.topic_name}.{event}.rejected", int((time.monotonic() - start) * 1000))
-                raise RejectMessage
+                status_txt = "rejected"
+                exc = RejectMessage
+
+            replacements["status"] = status_txt
+            self.logger_request.info("", extra=replacements)
+            self.statsd.timing(f"event.{self.topic_name}.{event}.{status}", int(replacements["duration"]) * 1000)
+            if exc is not None:
+                raise exc
 
         handler(decoded, cb)
