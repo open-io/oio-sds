@@ -23,6 +23,7 @@ from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 from oio.common.statsd import get_statsd
+from oio.common.logger import get_logger
 
 KAFKA_CONF_PREFIX = "kafka_"
 
@@ -62,6 +63,13 @@ class KafkaEventWorker(KafkaConsumerWorker):
 
         self.statsd = get_statsd(conf=app_conf)
 
+        template = self.conf.get("log_request_format",
+            "request_id=%(request_id)s "
+            "topic=%(topic)s event=%(event)s "
+            "status=%(status)s duration=%(duration)f"
+        )
+        self.logger_request = get_logger(app_conf, name="request", fmt=template)
+
         if "handlers_conf" not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(
@@ -71,33 +79,45 @@ class KafkaEventWorker(KafkaConsumerWorker):
     def process_message(self, message: bytes, properties):
         start = time.monotonic()
         decoded = json.loads(message)
-        reqid = decoded.get("request_id")
+        reqid = decoded.get("request_id", "-")
+
+        replacements = {
+            "request_id": reqid,
+            "topic": self.topic_name,
+            "event": decoded.get("event", "-")
+        }
+        event = replacements["event"].replace(".", "-")
+
         handler = self.handlers.get(decoded.get("event"), None)
+
         if not handler:
-            self.statsd.timing(f"event.{self.topic_name}.rejected", int((time.monotonic() - start) * 1000))
+            replacements["status"] = 404
+            replacements["duration"] = 0.0
+            self.logger_request.info("", extra=replacements)
+            self.statsd.timing(f"event.{self.topic_name}.{event}.{replacements['status']}",  0)
             raise RejectMessage
 
-        event = decoded.get("event").replace('.', '-')
-
         def cb(status, msg):
-            if is_success(status):
-                self.statsd.timing(f"event.{self.topic_name}.{event}.ok", int((time.monotonic() - start) * 1000))
-                # Nothing special to do
-                pass
-            elif is_retryable(status):
+            replacements["duration"] = time.monotonic() - start
+            replacements["status"] = status
+            exc = None
+            if is_retryable(status):
                 self.logger.warn(
                     "event handling failure (release with delay): (%s) %s reqid=%s",
                     status,
                     msg,
                     reqid,
                 )
-                self.statsd.timing(f"event.{self.topic_name}.{event}.retry", int((time.monotonic() - start) * 1000))
-                raise RetryLater
-            else:
+                exc = RetryLater
+            elif not is_success(status):
                 self.logger.error(
                     "event handling failure (rejecting): %s reqid=%s", msg, reqid
                 )
-                self.statsd.timing(f"event.{self.topic_name}.{event}.rejected", int((time.monotonic() - start) * 1000))
-                raise RejectMessage
+                exc = RejectMessage
+
+            self.logger_request.info("", extra=replacements)
+            self.statsd.timing(f"event.{self.topic_name}.{event}.{status}", int(replacements["duration"]) * 1000)
+            if exc is not None:
+                raise exc
 
         handler(decoded, cb)
