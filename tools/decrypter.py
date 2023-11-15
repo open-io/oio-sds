@@ -56,3 +56,7 @@ while 1:
         break
     data = decrypter.decrypt(chunk)
     sys.stdout.buffer.write(data)
+
+ivs = decrypter.get_ivs()
+with open("iv.json", "w") as outfile:
+    json.dump(ivs, outfile)
