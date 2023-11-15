@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -106,6 +106,45 @@ class TestContainerReplication(BaseTestCase):
             self.account, cname, params={"service_id": stopped}
         )
         self.assertEqual(ref_props["system"], copy_props["system"])
+
+    def test_failed_quorum(self):
+        cname = "test_failed_quorum_" + random_str(8)
+        objname = "obj_1"
+        # Create a container
+        self.api.container_create(self.account, cname)
+
+        status = self.admin.election_status(
+            "meta2", account=self.account, reference=cname
+        )
+        # Stop 2 peers
+        slaves = status.get("slaves", [])
+        master = status.get("master", [])
+        self.api.logger.info("Stopping meta2 %s", slaves)
+
+        try:
+            for el in slaves:
+                self._service(self.service_to_systemd_key(el, "meta2"), "stop")
+
+            # Create an object
+            self.assertRaises(
+                exceptions.ServiceBusy,
+                self.api.object_create_ext,
+                self.account,
+                cname,
+                obj_name=objname,
+                data=cname,
+            )
+        finally:
+            # Start the stopped peer
+            self.api.logger.info("Starting meta2 %s", slaves)
+            for el in slaves:
+                self._service(self.service_to_systemd_key(el, "meta2"), "start")
+            self.wait_for_score(("meta2",))
+
+        # Check the database has been restored (after a little while)
+        self.api.container_get_properties(
+            self.account, cname, params={"service_id": master}
+        )
 
     @flaky(rerun_filter=is_election_error)
     def test_disabled_synchronous_restore(self):
