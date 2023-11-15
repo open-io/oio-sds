@@ -628,9 +628,10 @@ _sqlx_transaction_rollback(struct sqlx_repctx_s *ctx, GError *err)
 }
 
 static GError*
-_sqlx_transaction_validate(struct sqlx_repctx_s *ctx, GError *err)
+_sqlx_transaction_validate(struct sqlx_repctx_s *ctx)
 {
 	int rc;
+	GError *err = NULL;
 
 	/* Ensure that newly created tables have versions now referenced
 	 * in the admin table. */
@@ -717,7 +718,7 @@ _sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err, gboolean force_rol
 	if (err || force_rollback) {
 		_sqlx_transaction_rollback(ctx, err);
 	} else {
-		_sqlx_transaction_validate(ctx, err);
+		err = _sqlx_transaction_validate(ctx);
 	}
 
 	if (ctx->sq3->admin_dirty)
