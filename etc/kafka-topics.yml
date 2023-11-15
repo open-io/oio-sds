@@ -1,0 +1,10 @@
+brokers: 127.0.0.1:19092
+topics:
+  oio:
+  oio-preserved:
+  oio-delayed:
+  oio-rebuild:
+  oio-delete:
+  oio-drained:
+  oio-replication:
+  oio-deadletter:
