@@ -32,6 +32,12 @@ parser.add_argument(
 parser.add_argument(
     "--obj", type=str, required=True, help="name of the object to fetch"
 )
+parser.add_argument(
+    "--iv",
+    type=str,
+    default="iv.json",
+    help="path of json file that contains IVs to reuse",
+)
 args = parser.parse_args()
 
 
@@ -39,9 +45,17 @@ args = parser.parse_args()
 with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
 
+# Read IVs
+with open(args.iv, "r") as infile:
+    iv = json.load(infile)
+
 # Encrypter object
 encrypter = Encrypter(
-    root_key=args.rootkey, account=args.account, container=args.container, obj=args.obj
+    root_key=args.rootkey,
+    account=args.account,
+    container=args.container,
+    obj=args.obj,
+    iv=iv,
 )
 
 while 1:
