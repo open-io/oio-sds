@@ -137,6 +137,10 @@ if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
     openio --oio-ns "$NS" zk bootstrap ${opts}
 fi
+if grep -q kafka $HOME/.oio/sds.conf ; then
+    echo -e "\n### creating kafka topics"
+    oio-declare-kafka-topics.sh
+fi
 
 $SYSTEMCTL daemon-reload
 $SYSTEMCTL start oio-cluster.target

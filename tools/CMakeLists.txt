@@ -57,6 +57,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-bootstrap.py
 	${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py @ONLY)
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-declare-kafka-topics.sh
+	${CMAKE_CURRENT_BINARY_DIR}/oio-declare-kafka-topics.sh @ONLY)
+
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
 		DESTINATION ${PKGCONFIG_DIRECTORY}
@@ -79,6 +82,7 @@ install(PROGRAMS
 			${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py
 			oio-test-config.py
 			oio-reset.sh
+			${CMAKE_CURRENT_BINARY_DIR}/oio-declare-kafka-topics.sh
 			oio-dump-buried-events.py
 			oio-webhook-test.py
 			openioctl.sh
