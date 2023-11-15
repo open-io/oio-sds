@@ -50,6 +50,14 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,event-agent,1
 
+log_request_format = %(request_id) %(tube)s %(event)s %(status)d %(duration)f
+
+#statsd_host =
+#statsd_port = 8125
+#statsd_prefix =
+#statsd_maxudpsize = 512
+#statsd_ipv6 = false
+
 # Timeouts for the internal RdirClient (used mostly by volume_index filter)
 #rdir_connection_timeout = 2.0
 #rdir_read_timeout = 30.0

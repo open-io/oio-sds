@@ -16,10 +16,11 @@
 
 from oio.common.green import eventlet, Timeout, greenthread, get_watchdog
 
-import signal
-import os
-import sys
 import greenlet
+import os
+import signal
+import sys
+import time
 
 from oio.account.client import AccountClient
 from oio.rdir.client import RdirClient
@@ -30,6 +31,8 @@ from oio.common.json import json
 from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.common.exceptions import ExplicitBury, OioNetworkException, ClientException
+from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 
 
 SLEEP_TIME = 1
@@ -124,6 +127,16 @@ class EventWorker(Worker):
         self.concurrency = 1
         self.graceful_timeout = 1
         self.tube = None
+
+        template = self.conf.get(
+            "log_request_format",
+            "request_id=%(request_id)s "
+            "topic=%(topic)s event=%(event)s "
+            "status=%(status)s duration=%(duration)f",
+        )
+        self.logger_request = get_logger(self.conf, name="request", fmt=template)
+
+        self.statsd = get_statsd(conf=self.conf)
 
     def init(self):
         self.concurrency = int_value(self.conf.get("concurrency"), 10)
@@ -258,10 +271,38 @@ class EventWorker(Worker):
         except StopServe:
             pass
 
+    def log_and_statsd(self, start, status, _extra):
+        default_extra = {
+            "request_id": "-",
+            "tube": "-",
+            "topic": "-",
+            "event": "-",
+        }
+
+        extra = {**default_extra, **_extra}
+
+        extra["duration"] = time.monotonic() - start
+        extra["status"] = status
+        self.logger_request.info("", extra=extra)
+        self.statsd.timing(
+            f"openio.event.{extra['tube']}.{extra['event']}.{extra['status']}.duration",
+            extra["duration"] * 1000,
+        )
+
     def process_event(self, job_id, event, beanstalk):
+        start = time.monotonic()
+
+        replacements = {
+            "request_id": event.get("request_id"),
+            "tube": self.tube,
+            "topic": self.tube,
+            "event": event.get("event").replace(".", "-"),
+        }
+
         handler = self.get_handler(event)
         if not handler:
             self.logger.warn("no handler found for %r" % event)
+            self.log_and_statsd(start, 404, replacements)
             beanstalk.delete(job_id)
             return
 
@@ -293,6 +334,8 @@ class EventWorker(Worker):
                     self.logger.error(
                         "Job %s failed and could not be buried: %s", job_id, err
                     )
+
+            self.log_and_statsd(start, status, replacements)
 
         handler(event, cb)
 
