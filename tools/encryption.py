@@ -35,6 +35,12 @@ CRYPTO_ETAG_KEY = "x-object-sysmeta-crypto-etag"
 CONTAINER_UPDATE_OVERRIDE_ETAG_KEY = "x-object-sysmeta-container-update-override-etag"
 CRYPTO_ETAG_MAC_KEY = "x-object-sysmeta-crypto-etag-mac"
 
+BODY_IV = "body_iv"
+BODY_KEY_IV = "body_key_iv"
+USER_METADATA_IVS = "user_metadata_ivs"
+ETAG_IV = "etag_iv"
+OVERRIDE_ETAG_IV = "override_etag_iv"
+
 # This tool is in the oio-sds repository because it needs to be able to update
 # metadata. To decrypt and re-encrypt the data, some encryption functions have
 # been copied from the swift code.
@@ -374,11 +380,12 @@ class Crypto(object):
         # helper method to create random key of correct length
         return os.urandom(self.key_length)
 
-    def wrap_key(self, wrapping_key, key_to_wrap):
+    def wrap_key(self, wrapping_key, key_to_wrap, iv=None):
         # we don't use an RFC 3394 key wrap algorithm such as cryptography's
         # aes_wrap_key because it's slower and we have iv material readily
         # available so don't need a deterministic algorithm
-        iv = self.create_iv()
+        if iv is None:
+            iv = self.create_iv()
         encryptor = Cipher(
             algorithms.AES(wrapping_key), modes.CTR(iv), backend=self.backend
         ).encryptor()
@@ -396,44 +403,6 @@ class Crypto(object):
     def check_key(self, key):
         if len(key) != self.key_length:
             raise ValueError("Key must be length %s bytes" % self.key_length)
-
-
-# Function copied from swift/common/middleware/crypto/encrypter.py
-
-
-def encrypt_header_val(crypto, value, key):
-    """
-    Encrypt a header value using the supplied key.
-
-    :param crypto: a Crypto instance
-    :param value: value to encrypt
-    :param key: crypto key to use
-    :returns: a tuple of (encrypted value, crypto_meta) where crypto_meta is a
-        dict of form returned by
-        :py:func:`~swift.common.middleware.crypto.Crypto.get_crypto_meta`
-    :raises ValueError: if value is empty
-    """
-    if not value:
-        raise ValueError("empty value is not acceptable")
-
-    crypto_meta = crypto.create_crypto_meta()
-    crypto_ctxt = crypto.create_encryption_ctxt(key, crypto_meta["iv"])
-    enc_val = bytes_to_wsgi(base64.b64encode(crypto_ctxt.update(wsgi_to_bytes(value))))
-    return enc_val, crypto_meta
-
-
-def _hmac_etag(key, etag):
-    """
-    Compute an HMAC-SHA256 using given key and etag.
-
-    :param key: The starting key for the hash.
-    :param etag: The etag to hash.
-    :returns: a Base64-encoded representation of the HMAC
-    """
-    if not isinstance(etag, bytes):
-        etag = wsgi_to_bytes(etag)
-    result = hmac.new(key, etag, digestmod=hashlib.sha256).digest()
-    return base64.b64encode(result).decode()
 
 
 # Function copied and modified from the class BaseKeyMaster in
@@ -510,7 +479,8 @@ class Decrypter:
         self.crypto = Crypto()
         self.root_key = root_key
         self.body_key = None
-        self.iv = None
+        self.iv = {}
+        self.iv[USER_METADATA_IVS] = {}
 
     def decrypt_metadata(self, metadata=None):
         """
@@ -539,17 +509,60 @@ class Decrypter:
         :param chunk: data to decrypt
         :param metadata: object metadata
         """
-        if self.body_key is None or self.iv is None:
+        if self.body_key is None or self.iv.get(BODY_IV) is None:
             if metadata is None:
                 metadata = self.metadata
             crypto_meta = metadata.get("properties").get(CRYPTO_BODY_META_KEY)
-            self.body_key, self.iv, _ = self.get_cipher_keys(crypto_meta)
+            self.body_key, iv, _ = self.get_cipher_keys(crypto_meta)
+            self.iv[BODY_IV] = iv
 
         offset = 0
         decrypt_ctxt = self.crypto.create_decryption_ctxt(
-            self.body_key, self.iv, offset
+            self.body_key, self.iv.get(BODY_IV), offset
         )
         return decrypt_ctxt.update(chunk)
+
+    def get_ivs(self):
+        """
+        Returns dict with IVs in order to re-use them for re-encryption
+
+        IVs are encoded to a text format so the dictionary can be saved as json
+        file. User metadata IVs are contained by a dictionary nested into the
+        output dictionary.
+        :return iv dictionary
+        """
+
+        def get_iv(key):
+            iv = None
+            for name, val in self.metadata["properties"].items():
+                if name.lower() == key:
+                    _, meta = parse_header(val)
+                    if "swift_meta" in meta:
+                        swift_meta = load_crypto_meta(meta["swift_meta"])
+                        iv = swift_meta.get("iv")
+            return iv
+
+        def encode_binary_dict(data):
+            return {
+                str(name): (
+                    encode_binary_dict(val)
+                    if isinstance(val, dict)
+                    else base64.b64encode(val).decode("utf-8")
+                )
+                for name, val in data.items()
+            }
+
+        # Save IV from ETag
+        etag_iv = get_iv(CRYPTO_ETAG_KEY)
+        if etag_iv is not None:
+            self.iv[ETAG_IV] = etag_iv
+
+        # Save IV from container update override ETag
+        override_etag_iv = get_iv(CONTAINER_UPDATE_OVERRIDE_ETAG_KEY)
+        if override_etag_iv is not None:
+            self.iv[OVERRIDE_ETAG_IV] = override_etag_iv
+
+        return encode_binary_dict(self.iv)
 
     def get_cipher_keys(self, crypto_meta):
         """
@@ -592,6 +605,7 @@ class Decrypter:
         body_key = None
         wrapped_body_key = crypto_meta.get("body_key")
         if wrapped_body_key:
+            self.iv[BODY_KEY_IV] = wrapped_body_key.get("iv")
             body_key = self.crypto.unwrap_key(object_key, wrapped_body_key)
         return body_key, iv, put_keys
 
@@ -626,10 +640,11 @@ class Decrypter:
         if crypto_meta:
             self.crypto.check_crypto_meta(crypto_meta)
             value = self._decrypt_value(extracted_value, key, crypto_meta, decoder)
+            iv = crypto_meta.get("iv")
         elif required:
             raise Exception("Missing crypto meta in value %s" % value)
 
-        return value
+        return value, iv
 
     def _decrypt_value(self, value, key, crypto_meta, decoder):
         """
@@ -662,9 +677,10 @@ class Decrypter:
         for name, val in self.metadata["properties"].items():
             if name.lower().startswith(prefix) and val:
                 short_name = name[prefix_len:]
-                decrypted_value = self._decrypt_value_with_meta(
+                decrypted_value, iv = self._decrypt_value_with_meta(
                     val, keys["object"], True, bytes_to_wsgi
                 )
+                self.iv[USER_METADATA_IVS][short_name] = iv
                 result.append((new_prefix + short_name, decrypted_value))
         return result
 
@@ -674,10 +690,23 @@ class Encrypter:
     Encrypt data with a random body_key and a random iv.
     """
 
-    def __init__(self, root_key, account=None, container=None, obj=None):
+    def __init__(self, root_key, account=None, container=None, obj=None, iv=None):
         self.account = account
         self.container = container
         self.obj = obj
+
+        def decode_binary_dict(data):
+            return {
+                str(name): (
+                    decode_binary_dict(val)
+                    if isinstance(val, dict)
+                    else base64.b64decode(val)
+                )
+                for name, val in data.items()
+            }
+
+        self.iv = decode_binary_dict(iv)
+
         sds_namespace = os.environ.get("OIO_NS", "OPENIO")
         self.api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
@@ -705,11 +734,15 @@ class Encrypter:
 
         # Create a dict with iv and cipher keys
         self.body_crypto_meta = self.crypto.create_crypto_meta()
+        # Overwrite iv with provided body_iv
+        body_iv = self.iv.get(BODY_IV)
+        if body_iv is not None:
+            self.body_crypto_meta["iv"] = body_iv
         body_key = self.crypto.create_random_key()
 
         # wrap the body key with object key
         self.body_crypto_meta["body_key"] = self.crypto.wrap_key(
-            self.keys["object"], body_key
+            self.keys["object"], body_key, self.iv.get(BODY_KEY_IV)
         )
         self.body_crypto_meta["key_id"] = self.keys["id"]
         self.body_crypto_ctxt = self.crypto.create_encryption_ctxt(
@@ -775,8 +808,9 @@ class Encrypter:
         for name, val in user_meta_headers:
             short_name = strip_user_meta_prefix("object", name)
             new_name = prefix + short_name
-            enc_val, crypto_meta = encrypt_header_val(
-                self.crypto, val, self.keys["object"]
+            iv = self.iv[USER_METADATA_IVS][short_name]
+            enc_val, crypto_meta = self._encrypt_header_val(
+                self.crypto, val, self.keys["object"], iv=iv
             )
             metadata[new_name] = append_crypto_meta(enc_val, crypto_meta)
             metadata.pop(name)
@@ -807,16 +841,18 @@ class Encrypter:
         plaintext_etag = self.plaintext_md5.hexdigest()
         if plaintext_etag and plaintext_etag != MD5_OF_EMPTY_STRING:
             # Encrypt ETag with the object key
-            encrypted_etag, etag_crypto_meta = encrypt_header_val(
-                self.crypto, plaintext_etag, self.keys["object"]
+            iv = self.iv[ETAG_IV]
+            encrypted_etag, etag_crypto_meta = self._encrypt_header_val(
+                self.crypto, plaintext_etag, self.keys["object"], iv=iv
             )
             metadata[CRYPTO_ETAG_KEY] = append_crypto_meta(
                 encrypted_etag, etag_crypto_meta
             )
 
             # Encrypt ETag with the container key
-            val, crypto_meta = encrypt_header_val(
-                self.crypto, plaintext_etag, self.keys["container"]
+            iv = self.iv[OVERRIDE_ETAG_IV]
+            val, crypto_meta = self._encrypt_header_val(
+                self.crypto, plaintext_etag, self.keys["container"], iv=iv
             )
             crypto_meta["key_id"] = self.keys["id"]
             metadata[CONTAINER_UPDATE_OVERRIDE_ETAG_KEY] = append_crypto_meta(
@@ -825,7 +861,7 @@ class Encrypter:
 
             # Also add an HMAC of the etag for use when evaluating
             # conditional requests
-            metadata[CRYPTO_ETAG_MAC_KEY] = _hmac_etag(
+            metadata[CRYPTO_ETAG_MAC_KEY] = self._hmac_etag(
                 self.keys["object"], plaintext_etag
             )
 
@@ -836,3 +872,44 @@ class Encrypter:
         self.api.object_set_properties(
             self.account, self.container, self.obj, properties
         )
+
+    # Functions copied from swift/common/middleware/crypto/encrypter.py
+
+    def _encrypt_header_val(self, crypto, value, key, iv=None):
+        """
+        Encrypt a header value using the supplied key.
+
+        :param crypto: a Crypto instance
+        :param value: value to encrypt
+        :param key: crypto key to use
+        :param iv: optional iv value, if None, a randomly chosen will be use
+        :returns: a tuple of (encrypted value, crypto_meta) where crypto_meta is a
+            dict of form returned by
+            :py:func:`~swift.common.middleware.crypto.Crypto.get_crypto_meta`
+        :raises ValueError: if value is empty
+        """
+        if not value:
+            raise ValueError("empty value is not acceptable")
+
+        crypto_meta = crypto.create_crypto_meta()
+        # Overwrite with provided iv
+        if iv is not None:
+            crypto_meta["iv"] = iv
+        crypto_ctxt = crypto.create_encryption_ctxt(key, crypto_meta["iv"])
+        enc_val = bytes_to_wsgi(
+            base64.b64encode(crypto_ctxt.update(wsgi_to_bytes(value)))
+        )
+        return enc_val, crypto_meta
+
+    def _hmac_etag(self, key, etag):
+        """
+        Compute an HMAC-SHA256 using given key and etag.
+
+        :param key: The starting key for the hash.
+        :param etag: The etag to hash.
+        :returns: a Base64-encoded representation of the HMAC
+        """
+        if not isinstance(etag, bytes):
+            etag = wsgi_to_bytes(etag)
+        result = hmac.new(key, etag, digestmod=hashlib.sha256).digest()
+        return base64.b64encode(result).decode()
