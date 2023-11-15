@@ -29,6 +29,9 @@ log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ 
 #log_access_put true
 #log_access_delete true
 
+#statsd_addr
+#statsd_prefix
+
 # Number of connection attempts to the event broker
 event_conn_attempts 3
 

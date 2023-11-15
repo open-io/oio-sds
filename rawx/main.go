@@ -156,7 +156,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 
 				ongoing_stop = true
 
-				for i:=0; i<len(servers); i++ {
+				for i := 0; i < len(servers); i++ {
 					server := servers[i]
 
 					// run in a go routine as the Shutdown function is blocking the current goroutine
@@ -249,7 +249,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				cmd.ExtraFiles = files
-				cmd.Env = append(os.Environ(),  env[:]...)
+				cmd.Env = append(os.Environ(), env[:]...)
 				if err := cmd.Start(); err != nil {
 					LogWarning("Fork did not succeed: %s", err)
 					continue
@@ -376,6 +376,8 @@ func main() {
 		InitNoopLogger()
 	}
 
+	InitStatsd(opts["statsd_addr"], opts["statsd_prefix"])
+
 	var graceful_stop_timeout time.Duration = -1
 	if v, ok := opts["graceful_stop_timeout"]; ok {
 		graceful_stop_timeout, err = time.ParseDuration(v)
@@ -491,7 +493,7 @@ func main() {
 
 	/* need to be duplicated for HTTP and HTTPS */
 	srv := httpServer{
-		server: http.Server {
+		server: http.Server{
 			Addr:              rawx.url,
 			Handler:           &rawx,
 			TLSConfig:         nil,
@@ -500,12 +502,12 @@ func main() {
 			WriteTimeout:      time.Duration(toWrite) * time.Second,
 			IdleTimeout:       time.Duration(toIdle) * time.Second,
 			// The default is at 1MiB but the RAWX never needs that
-			MaxHeaderBytes:    opts.getInt("headers_buffer_size", 65536),
+			MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 		},
 	}
 
 	tlsSrv := httpServer{
-		server : http.Server {
+		server: http.Server{
 			Addr:              rawx.tlsUrl,
 			Handler:           &rawx,
 			TLSConfig:         nil,
@@ -514,7 +516,7 @@ func main() {
 			WriteTimeout:      time.Duration(toWrite) * time.Second,
 			IdleTimeout:       time.Duration(toIdle) * time.Second,
 			// The default is at 1MiB but the RAWX never needs that
-			MaxHeaderBytes:    opts.getInt("headers_buffer_size", 65536),
+			MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 		},
 	}
 

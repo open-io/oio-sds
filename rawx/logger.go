@@ -26,6 +26,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/cactus/go-statsd-client/v5/statsd"
 )
 
 type oioLogger interface {
@@ -63,6 +65,9 @@ var pid = os.Getpid()
 
 // The singleton logger that will be used by all the coroutine
 var logger oioLogger
+
+// The statsd client
+var statsdClient statsd.Statter
 
 type AccessLogEvent struct {
 	Pid       int
@@ -312,7 +317,35 @@ func (evt AccessLogEvent) String() string {
 }
 
 func LogHttp(evt AccessLogEvent) {
+
+	if statsdClient != nil {
+		prefix := fmt.Sprintf("openio.rawx.request.%s.%d", evt.Method, evt.Status)
+		// .TimeSpent and .TTFB are already in ms
+		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent), 1.0)
+		statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB), 1.0)
+		statsdClient.Inc(fmt.Sprintf("%s.in.xfer", prefix), int64(evt.BytesIn), 1.0)
+		statsdClient.Inc(fmt.Sprintf("%s.out.xfer", prefix), int64(evt.BytesOut), 1.0)
+	}
+
 	logger.writeAccess(evt.String())
+}
+
+func InitStatsd(addr string, prefix string) {
+	var err error
+
+	if addr == "" {
+		return
+	}
+
+	config := &statsd.ClientConfig{
+		Address: addr,
+		Prefix:  prefix,
+	}
+
+	statsdClient, err = statsd.NewClientWithConfig(config)
+	if err != nil {
+		LogError("Unable to init statsd: %v", err)
+	}
 }
 
 func InitNoopLogger() {

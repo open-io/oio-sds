@@ -34,9 +34,9 @@ func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file
 	var listener net.Listener
 
 	if tls_cert_file != "" && tls_key_file != "" {
-			protocol = "HTTPS"
+		protocol = "HTTPS"
 	} else {
-			protocol = "HTTP"
+		protocol = "HTTP"
 	}
 
 	fdEnvVar := os.Getenv(fmt.Sprintf("__OIO_RAWX_FORK_%s_FD", protocol))

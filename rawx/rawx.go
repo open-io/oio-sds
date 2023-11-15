@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2020-2022 OVH SAS
+// Copyright (C) 2020-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -103,7 +103,7 @@ func (rr *rawxRequest) replyError(action string, err error) {
 		// Prepare the most adapted reply status.
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
-		} else if (err == io.ErrUnexpectedEOF && rr.req.Method == "PUT") {
+		} else if err == io.ErrUnexpectedEOF && rr.req.Method == "PUT" {
 			rr.replyCode(httpStatusClientClosedRequest)
 		} else {
 			switch err {

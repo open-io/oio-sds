@@ -85,6 +85,9 @@ var loadedOpts = map[string]string{
 	"log_format":         "log_format",
 	// TODO(jfs): also implement a cachedir
 
+	"statsd_addr":   "statsd_addr",
+	"statsd_prefix": "statsd_prefix",
+
 	"graceful_stop_timeout": "graceful_stop_timeout",
 }
 
