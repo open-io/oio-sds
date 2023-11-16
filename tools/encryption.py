@@ -777,11 +777,10 @@ class Encrypter:
         :return metadata with crypto-body-metadata header
         """
 
-        metadata["properties"]["x-object-sysmeta-crypto-body-meta"] = dump_crypto_meta(
-            self.body_crypto_meta
-        )
         metadata["properties"] = self._encrypt_user_metadata(metadata["properties"])
-        metadata["properties"] = self._encrypt_etag(metadata["properties"])
+        metadata["properties"] = self._encrypt_crypto_body_etag_metadata(
+            metadata["properties"]
+        )
         return metadata
 
     # Functions copied and modified from the class EncrypterObjContext in
@@ -826,8 +825,12 @@ class Encrypter:
             metadata[get_object_transient_sysmeta("crypto-meta")] = meta
         return metadata
 
-    def _encrypt_etag(self, metadata):
+    def _encrypt_crypto_body_etag_metadata(self, metadata):
         """
+        Add crypto body, Etag, override Etag and Etag mac to the metadata dict.
+
+        Encrypt crypto body metadata and save it as
+        X-Object-Sysmeta-Crypto-Body-Meta.
         Encrypt the ETag (md5 digest) of the plaintext body using the object
         key provided by the kms and save it as X-Object-Sysmeta-Crypto-Etag.
         Encrypt the ETag (md5 digest) of the plaintext body using the container
@@ -836,10 +839,13 @@ class Encrypter:
         under the metadata key X-Object-Sysmeta-Crypto-Etag-Mac.
 
         :param metadata: a dict of metadata properties
-        :returns: metadata dict with encrypted ETags
+        :returns: metadata dict with encrypted crypto body and ETags
         """
         plaintext_etag = self.plaintext_md5.hexdigest()
         if plaintext_etag and plaintext_etag != MD5_OF_EMPTY_STRING:
+            # Encrypt crypto body metadata
+            metadata[CRYPTO_BODY_META_KEY] = dump_crypto_meta(self.body_crypto_meta)
+
             # Encrypt ETag with the object key
             iv = self.iv[ETAG_IV]
             encrypted_etag, etag_crypto_meta = self._encrypt_header_val(
