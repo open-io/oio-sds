@@ -37,12 +37,14 @@ jobs:
           echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
           # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
           echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
+          echo "export PIP_EXTRA_INDEX_URL=https://pypi.org/simple" >> $HOME/oio-env.sh
           source $HOME/oio-env.sh
           mkdir /tmp/oio
           /opt/${PYTHON_PACKAGE}/bin/python3 -m venv $HOME/oiovenv
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          extra_index_url = https://pypi.org/simple
           [install]
           progress-bar = off
           EOF
