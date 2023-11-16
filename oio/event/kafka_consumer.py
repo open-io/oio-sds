@@ -64,8 +64,11 @@ class KafkaConsumerWorker(Process):
         self._producer = None
         self._last_use = None
 
-        if "client.id" in self._kafka_conf:
-            self._kafka_conf["client.id"] = self._kafka_conf["client.id"].format(pid=os.getpid(), worker=self.worker_id)
+        for key in ["client.id", "group.instance.id"]:
+            if key in self._kafka_conf:
+                self._kafka_conf[key] = self._kafka_conf[key].format(
+                    pid=os.getpid(), worker=self.worker_id
+                )
 
     def _consume(self):
         """
@@ -98,15 +101,21 @@ class KafkaConsumerWorker(Process):
     def _connect(self):
         if self._consumer is None:
             self._consumer = KafkaConsumer(
-                self.endpoint, [self.topic_name], logger=self.logger, stop=self._stop_requested, conf={
+                self.endpoint,
+                [self.topic_name],
+                logger=self.logger,
+                stop=self._stop_requested,
+                conf={
                     **self._kafka_conf,
                     "group.id": self.group_id,
                     "enable.auto.commit": False,
-                }
+                },
             )
 
         if self._producer is None:
-            self._producer = KafkaSender(self.endpoint, self.logger, conf=self._kafka_conf)
+            self._producer = KafkaSender(
+                self.endpoint, self.logger, conf=self._kafka_conf
+            )
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
