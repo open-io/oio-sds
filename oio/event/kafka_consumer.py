@@ -64,8 +64,9 @@ class KafkaConsumerWorker(Process):
         self._producer = None
         self._last_use = None
 
-        if "client.id" in self._kafka_conf:
-            self._kafka_conf["client.id"] = self._kafka_conf["client.id"].format(pid=os.getpid(), worker=self.worker_id)
+        for key in ["client.id", "group.instance.id"]:
+            if key in self._kafka_conf:
+                self._kafka_conf[key] = self._kafka_conf[key].format(pid=os.getpid(), worker=self.worker_id)
 
     def _consume(self):
         """
