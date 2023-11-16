@@ -214,6 +214,7 @@ extern "C" {
 # define OIO_CFG_ZOOKEEPER    "zookeeper"
 # define OIO_CFG_CONSCIENCE   "conscience"
 # define OIO_CFG_ACCOUNTAGENT "event-agent"
+# define OIO_CFG_BEANSTALK    "beanstalk"
 # define OIO_CFG_SWIFT        "swift"
 # define OIO_CFG_ECD          "ecd"
 
@@ -223,6 +224,7 @@ extern "C" {
 # define EVENT_FIELD_ORIGIN     "origin"
 
 # define oio_cfg_get_eventagent(ns)     oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+# define oio_cfg_get_beanstalk(ns)      oio_cfg_get_value((ns), OIO_CFG_BEANSTALK)
 
 /** Get the URL of the queue where the services of the specified type
  * must send their events. */

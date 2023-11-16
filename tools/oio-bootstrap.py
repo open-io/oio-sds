@@ -1402,6 +1402,7 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
 ${NOBS}event-agent=${EVENT_CNXSTRING}
+${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
 
@@ -2355,9 +2356,21 @@ def generate(options):
         beanstalkd_cnxstring = ";".join(
             "beanstalk://" + str(h) + ":" + str(p) for _, h, p in all_beanstalkd
         )
-        ENV.update({"EVENT_CNXSTRING": beanstalkd_cnxstring, "NOBS": ""})
+        ENV.update(
+            {
+                "BEANSTALK_CNXSTRING": beanstalkd_cnxstring,
+                "EVENT_CNXSTRING": beanstalkd_cnxstring,
+                "NOBS": "",
+            }
+        )
     else:
-        ENV.update({"EVENT_CNXSTRING": "***disabled***", "NOBS": "#"})
+        ENV.update(
+            {
+                "EVENT_CNXSTRING": "***disabled***",
+                "BEANSTALK_CNXSTRING": "***disabled***",
+                "NOBS": "#",
+            }
+        )
 
     # Kafka
     use_kafka = False
