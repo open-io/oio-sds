@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -485,8 +485,8 @@ label_simple_connect:
 			*len = 0;
 			if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
 				if (errno != EINPROGRESS && errno != 0) {
-					g_error_transmit(err,
-							SYSERR("connect error: (%d) %s", errno, strerror(errno)));
+					g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
+							"connect error: (%d) %s", errno, strerror(errno)));
 					metautils_pclose (&fd);
 					return -1;
 				}
@@ -502,7 +502,8 @@ label_simple_connect:
 			return fd;
 		} else {
 			g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
-						"connect error: (%d) %s", errno, strerror(errno)));
+					"connect error (TCP fast open): (%d) %s",
+					errno, strerror(errno)));
 			metautils_pclose (&fd);
 			return -1;
 		}
