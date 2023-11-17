@@ -486,7 +486,8 @@ label_simple_connect:
 			if (0 != metautils_syscall_connect (fd, (struct sockaddr*)&sas, sas_len)) {
 				if (errno != EINPROGRESS && errno != 0) {
 					g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
-							"connect error: (%d) %s", errno, strerror(errno)));
+							"connect error %s: (%d) %s",
+							url, errno, strerror(errno)));
 					metautils_pclose (&fd);
 					return -1;
 				}
@@ -502,8 +503,8 @@ label_simple_connect:
 			return fd;
 		} else {
 			g_error_transmit(err, NEWERROR(CODE_NETWORK_ERROR,
-					"connect error (TCP fast open): (%d) %s",
-					errno, strerror(errno)));
+					"connect error %s (TCP fast open): (%d) %s",
+					url, errno, strerror(errno)));
 			metautils_pclose (&fd);
 			return -1;
 		}
