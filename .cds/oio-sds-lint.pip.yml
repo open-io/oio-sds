@@ -5,17 +5,28 @@ jobs:
   steps:
 
       - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+        checkout: "{{ .cds.workspace }}"
         
       - name: Install dependencies
-        script:
-          - eval $(worker key install --env-git proj-ssh-openio)
-          - export DEBIAN_FRONTEND=noninteractive
-          - apt update
-          - apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
-          - virtualenv -p /usr/bin/python3 $HOME/venv
-          - . $HOME/venv/bin/activate
-          - pip install --progress-bar off -r requirements.txt -r test-requirements.txt
+        script: |+
+          #!/bin/bash
+          set -x
+          export DEBIAN_FRONTEND=noninteractive
+          # Docker repo for docker compose plugin should be removed after https://jira.ovhcloud.tools/browse/CORDEV-2545 completion
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          sudo chmod a+r /etc/apt/keyrings/docker.gpg
+          echo \
+            "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+            "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/nul
+          eval $(worker key install --env-git proj-ssh-openio)
+          export DEBIAN_FRONTEND=noninteractive
+          apt update
+          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
+          virtualenv -p /usr/bin/python3 $HOME/venv
+          . $HOME/venv/bin/activate
+          pip install --progress-bar off -r requirements.txt -r test-requirements.txt
 
       - name: Run coding style tests
         script:
@@ -26,4 +37,4 @@ jobs:
           - flake8 --config .flake8 --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
 
   requirements:
-      - model: ubuntu-focal
+      - model: Ubuntu-20.04-VM-b2-07

@@ -444,6 +444,39 @@ Used by `gcc`
  * cmake directive: *OIO_EVENTS_COMMON_PENDING_MAX*
  * range: 1 -> 1048576
 
+### events.kafka.acks
+
+> Set the acknowledgement policy
+
+ * default: **all**
+ * type: string
+ * cmake directive: *OIO_EVENTS_KAFKA_ACKS*
+
+### events.kafka.flush
+
+> Flush message after produce
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_EVENTS_KAFKA_FLUSH*
+
+### events.kafka.options
+
+> Set the Kafka client options
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_EVENTS_KAFKA_OPTIONS*
+
+### events.kafka.timeouts.flush
+
+> Set the Kafka client flush timeout
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_KAFKA_TIMEOUTS_FLUSH*
+ * range: 0 -> 86400
+
 ### events.zmq.max_recv
 
 > Sets the maximum number of ACK managed by the ZMQ notification client
@@ -952,7 +985,7 @@ Used by `gcc`
 
 ### proxy.prefer.master_for_write
 
-> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB
+> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB 
 
  * default: **TRUE**
  * type: gboolean
@@ -1644,7 +1677,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_none
 
-> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten
+> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten 
 
  * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -2093,7 +2126,7 @@ the cmake command line.
 
 ### enbug.sqliterepo.synchro.failure
 
-> Fake Error rate on synchronism RPC (a.k.a. ZK)
+> Fake Error rate on synchronism RPC (a.k.a. ZK) 
 
  * default: **0**
  * type: gint32
