@@ -128,13 +128,11 @@ class EventWorker(Worker):
         self.graceful_timeout = 1
         self.tube = None
 
-        template = self.conf.get(
-            "log_request_format",
-            "request_id=%(request_id)s "
-            "topic=%(topic)s event=%(event)s "
-            "status=%(status)s duration=%(duration)f",
-        )
-        self.logger_request = get_logger(self.conf, name="request", fmt=template)
+        template = self.conf.get("log_request_format")
+        if template is not None:
+            self.logger_request = get_logger(self.conf, name="request", fmt=template)
+        else:
+            self.logger_request = None
 
         self.statsd = get_statsd(conf=self.conf)
 
@@ -283,7 +281,8 @@ class EventWorker(Worker):
 
         extra["duration"] = time.monotonic() - start
         extra["status"] = status
-        self.logger_request.info("", extra=extra)
+        if self.logger_request is not None:
+            self.logger_request.info("", extra=extra)
         self.statsd.timing(
             f"openio.event.{extra['tube']}.{extra['event']}.{extra['status']}.duration",
             extra["duration"] * 1000,

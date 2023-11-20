@@ -50,7 +50,15 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,event-agent,1
 
-log_request_format = %(request_id) %(tube)s %(event)s %(status)d %(duration)f
+#log all events that are handled (access logs)
+# avaiable values:
+# the request_id: %(request_id) 
+# the tube (beanstalkd): %(tube)s
+# the topic (kafka): %(topic)s
+# the name of th event: %(event)s
+# the returned status code: %(status)d
+# the time it took the handle the event: %(duration)f
+#log_request_format = 
 
 #statsd_host =
 #statsd_port = 8125
