@@ -2336,8 +2336,10 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
 	/* version explicitly specified */
 	if (version == latest_version) {
-		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved version=%"G_GINT64_FORMAT",\
-                latest_version=%"G_GINT64_FORMAT, version, latest_version);
+		err = NEWERROR(CODE_CONTENT_EXISTS,
+				"Alias already saved version=%"G_GINT64_FORMAT", "
+				"latest_version=%"G_GINT64_FORMAT,
+				version, latest_version);
 	} else if (version < latest_version) {
 		if (VERSIONS_ENABLED(max_versions)) {
 			/* Check if alias already exists */
@@ -2353,8 +2355,9 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			oio_url_clean(url2);
 		} else {
 			err = NEWERROR(CODE_CONTENT_PRECONDITION,
-					"New object version=%"G_GINT64_FORMAT" is older than latest version=%"G_GINT64_FORMAT,\
-                    version, latest_version);
+					"New object version=%"G_GINT64_FORMAT
+					" is older than latest version=%"G_GINT64_FORMAT,
+					version, latest_version);
 		}
 	}
 
@@ -3833,7 +3836,7 @@ _m2db_get_shard_ranges(struct sqlx_sqlite3_s *sq3, const gchar *lower,
 }
 
 static GVariant **
-_sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
+_sharding_find_upper__sql(const gchar *lower, gint64 shard_size,
 		const gchar *max_upper, GString *clause)
 {
 	void lazy_and () {
@@ -3867,7 +3870,7 @@ _sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
 }
 
 static GVariant **
-_sharding_compute_size_to_sql_clause(const gchar *lower, const gchar *upper,
+_sharding_compute_size__sql(const gchar *lower, const gchar *upper,
 		GString *clause)
 {
 	void lazy_and () {
@@ -4009,7 +4012,7 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 
 		// Find alias at the specific position
 		GString *clause = g_string_sized_new(128);
-		GVariant **params = _sharding_find_upper_to_sql_clause(
+		GVariant **params = _sharding_find_upper__sql(
 				lower, shard_size, max_upper, clause);
 		err = ALIASES_load(sq3, clause->str, params, _bean_buffer_cb, aliases);
 		metautils_gvariant_unrefv(params);
@@ -4030,7 +4033,7 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 
 			// Compute the actual count for this shards
 			clause = g_string_sized_new(128);
-			params = _sharding_compute_size_to_sql_clause(lower, upper, clause);
+			params = _sharding_compute_size__sql(lower, upper, clause);
 			err = _db_count_bean(&descr_struct_ALIASES, sq3,
 					clause->str, params, &shard_size);
 			metautils_gvariant_unrefv(params);

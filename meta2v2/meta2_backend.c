@@ -2717,14 +2717,17 @@ meta2_backend_find_shards_with_partition(struct meta2_backend_s *m2b,
 	if (jthreshold) {
 		threshold = json_object_get_int64(jthreshold);
 		if (threshold < 0) {
-			err = BADREQ("Invalid threshold: expected positive integer");
+			err = BADREQ("Invalid threshold '%s': expected positive integer",
+					json_object_get_string(jthreshold));
 			goto end;
 		}
 	}
 
 	GError* get_shard_size(gint64 obj_count, guint index, gint64 *pshard_size) {
 		if (index >= partition_len) {
-			return SYSERR("Partition is too small");
+			return SYSERR("Partition is too small (looking for index %u in %s, "
+					"obj_count=%"G_GINT64_FORMAT")",
+					index, json_object_get_string(jpartition), obj_count);
 		}
 		gint64 shard_size = ceil(partition[index] / 100 * obj_count);
 		if (shard_size <= 0)

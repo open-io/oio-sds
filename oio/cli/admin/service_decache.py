@@ -81,7 +81,7 @@ class ProxyDecache(DecacheCommand):
             dest="high",
             help=(
                 'Flush the "low" cache only, i.e. the reference/service '
-                "association (content of meta1 DB)."
+                "association (content of meta1 DB), and the shard resolver."
             ),
         )
         return parser
