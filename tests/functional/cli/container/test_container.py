@@ -20,7 +20,7 @@ import re
 import tempfile
 
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
@@ -257,9 +257,13 @@ class ContainerTest(CliTestCase):
     def test_unicode_container_list(self):
         opts = self.get_format_opts(fields=("Name",)) + " -a " + self.account
         cname = "Intérêts-" + uuid.uuid4().hex
-        self.storage.container_create(self.account, cname)
+        reqid = request_id()
+        self.storage.container_create(self.account, cname, reqid=reqid)
         self.wait_for_kafka_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_NEW,)
+            "oio-preserved",
+            reqid=reqid,
+            fields={"user": cname},
+            types=(EventTypes.CONTAINER_NEW,),
         )
         output = self.openio("container list " + opts)
         self.assertIn(cname, output)
