@@ -325,18 +325,6 @@ test_cli () {
 	test_oio_logger
 }
 
-test_rabbitmq_resiliency () {
-	randomize_env
-	$OIO_RESET ${args} -N $OIO_NS $@ -f "${SRCDIR}/etc/bootstrap-option-rabbitmq.yml"
-
-	cd $SRCDIR
-	${PYTHON} $(command -v nosetests) --verbose tests.functional.rabbitmq.test_rabbitmq_cluster.py -s
-
-	$SYSTEMCTL stop oio-cluster.target
-	$OPENIOCTL stop
-	sleep 0.5
-}
-
 #-------------------------------------------------------------------------------
 
 set -e
