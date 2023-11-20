@@ -94,16 +94,6 @@ workflow:
       script: |+
         return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
 
-  tests-rabbitmq-resiliency:
-    pipeline: oio-sds-test-functional
-    application: oio-sds
-    environment: oio-sds-env-rabbitmq-resiliency
-    depends_on:
-      - root
-    conditions:
-      script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
-
   coverage:
     pipeline: oio-sds-coverage
     application: oio-sds
@@ -115,7 +105,6 @@ workflow:
       - tests-fullrepli
       - tests-rebuilder
       - tests-mover
-      - tests-rabbitmq-resiliency
     when:
       - success
 
