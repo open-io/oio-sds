@@ -47,7 +47,6 @@ class ContainerTest(CliTestCase):
 
     def setUp(self):
         super(ContainerTest, self).setUp()
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def _test_container_show(self, with_cid=False):
         opts = self.get_format_opts(fields=("container",))

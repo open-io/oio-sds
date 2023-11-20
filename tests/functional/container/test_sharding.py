@@ -67,7 +67,7 @@ class TestSharding(BaseTestCase):
         self.cname = f"test_sharding_{time.time()}"
         self.created = {}
         self.container_sharding = ContainerSharding(self.conf)
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         self.versioning_enabled = False
         self.system = {}
         self.objects_properties = {}

@@ -40,7 +40,6 @@ class ServiceDecommissionTest(CliTestCase):
     def setUp(self):
         super().setUp()
         self._containers = []
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def tearDown(self):
         for ct in self._containers:
