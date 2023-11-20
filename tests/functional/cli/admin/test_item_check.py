@@ -1706,7 +1706,11 @@ class ItemCheckTest(CliTestCase):
 
         # Remove container in account service
         self.api.account_flush(self.account)
-
+        self.wait_for_kafka_event(
+            "oio-preserved",
+            fields={"account": self.account, "user": self.container},
+            types=(EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED),
+        )
         # Check with missing container
         output = self.openio_admin(
             "chunk check %s %s" % (chunk["url"], self.check_opts), expected_returncode=1

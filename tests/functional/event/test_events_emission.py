@@ -43,13 +43,14 @@ class TestMeta2EventsEmission(BaseTestCase):
         pulled_events = {}
         for event_type in types:
             pulled_events[event_type] = []
-
+        offset = None
         while True:
-            event, _ = self.wait_for_kafka_event(
+            event, offset = self.wait_for_kafka_event(
                 "oio-preserved",
                 types=types,
                 reqid=reqid,
                 timeout=REASONABLE_EVENT_DELAY,
+                offset=offset,
             )
             if event is None:
                 break
