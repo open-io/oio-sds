@@ -17,11 +17,9 @@
 # License along with this library.
 
 import time
-from random import choice
 from urllib.parse import quote
 
 from oio.blob.rebuilder import BlobRebuilder
-from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import KafkaNotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 from testtools.testcase import ExpectedException
@@ -60,14 +58,11 @@ class TestContentRebuildFilter(BaseTestCase):
             self.account, self.container
         )["system"]
         self.container_id = syst["sys.name"].split(".", 1)[0]
-        queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
-        self.queue_url = queue_addr
-        self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
-        self.notify_filter = KafkaNotifyFilter(app=_App, conf=self.conf)
-        bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE, timeout=0.5)
-        bt.close()
+        self.conf["queue_url"] = self.ns_conf["event-agent"]
+        self.conf["topic"] = BlobRebuilder.DEFAULT_KAKFA_WORKER_TUBE
+        self.notify_filter = KafkaNotifyFilter(
+            app=_App, conf=self.conf, endpoints=self.ns_conf["event-agent"]
+        )
         self.wait_for_score(("rawx", "meta2"), score_threshold=10, timeout=5.0)
         self.objects_created = list()
 
@@ -129,10 +124,8 @@ class TestContentRebuildFilter(BaseTestCase):
                 return False
         return True
 
-    def _rebuild(self, event, job_id=0):
-        bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.wait_until_empty(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE, timeout=0.5)
-        bt.close()
+    def _rebuild(self):
+        self.wait_until_empty("oio-rebuild", "event-agent-rebuild")
         time.sleep(2)
 
     def _remove_chunks(self, obj_meta, chunks):
@@ -161,7 +154,7 @@ class TestContentRebuildFilter(BaseTestCase):
         missing_pos = [chunk["pos"] for chunk in chunks_to_remove]
         event = self._create_event(obj_meta, chunks, missing_pos)
         self.notify_filter.process(event, None)
-        self._rebuild(event)
+        self._rebuild()
         _, after = self.storage.object_locate(
             account=self.account,
             container=self.container,
@@ -397,10 +390,9 @@ class TestContentRebuildFilter(BaseTestCase):
 class TestNotifyFilterBase(BaseTestCase):
     def setUp(self):
         super(TestNotifyFilterBase, self).setUp()
-        queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
-        self.queue_url = queue_addr
-        self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = "oio-repli"
+        self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        self.conf["queue_url"] = self.ns_conf["event-agent"]
+        self.conf["topic"] = BlobRebuilder.DEFAULT_KAKFA_WORKER_TUBE
         self.conf["exclude"] = []
         self.notify_filter = self.filter_class(app=_App, conf=self.conf)
 
@@ -408,8 +400,8 @@ class TestNotifyFilterBase(BaseTestCase):
         super(TestNotifyFilterBase, self).tearDown()
 
 
-class TestBeanstalkdNotifyFilter(TestNotifyFilterBase):
-    filter_class = BeanstalkdNotifyFilter
+class TestKafkaNotifyFilter(TestNotifyFilterBase):
+    filter_class = KafkaNotifyFilter
 
     def test_parsing(self):
         expected = {

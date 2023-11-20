@@ -984,11 +984,13 @@ class TestSharding(BaseTestCase):
         self.assertTrue(modified)
 
         # Wait for the update of the root and the 2 new shards
+        offset = None
         for _ in range(3):
-            self.wait_for_kafka_event(
+            _, offset = self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid="testingisdoubting",
                 types=(EventTypes.CONTAINER_STATE,),
+                offset=offset,
             )
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
@@ -1010,12 +1012,14 @@ class TestSharding(BaseTestCase):
         self.assertTrue(modified)
 
         # Wait for the deletion of the parent and update of the 2 new shards
+        offset = None
         for _ in range(3):
-            self.wait_for_kafka_event(
+            _, offset = self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid="fixingisfailing",
                 fields={"account": shards_account},
                 types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
+                offset=offset,
             )
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
@@ -1349,11 +1353,13 @@ class TestSharding(BaseTestCase):
             if bigger_is_root:  # The one and last shard
                 # Wait for the deletion of the smaller and update of the root
                 nb_events = 2
+            offset = None
             for _ in range(nb_events):
-                self.wait_for_kafka_event(
+                _, offset = self.wait_for_kafka_event(
                     "oio-preserved",
                     reqid=reqid,
                     types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
+                    offset=offset,
                 )
             stats = self.storage.bucket.bucket_show(bucket, account=self.account)
             self.assertEqual(len(self.created[cname]), stats["objects"])
