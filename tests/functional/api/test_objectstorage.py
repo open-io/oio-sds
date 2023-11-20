@@ -58,7 +58,6 @@ class ObjectStorageApiTestBase(BaseTestCase):
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = []
         self.created_containers = set()
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()

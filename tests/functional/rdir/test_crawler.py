@@ -62,7 +62,6 @@ class TestRdirCrawler(BaseTestCase):
                 )
                 pass
 
-        self.beanstalkd0.drain_tube("oio-preserved")
         self.wait_until_empty(topic="oio", group_id="event-agent")
 
     def tearDown(self):

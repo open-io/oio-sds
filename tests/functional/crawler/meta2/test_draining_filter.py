@@ -69,7 +69,7 @@ class TestDrainingFilter(BaseTestCase):
         self.cname = "ct-%d" % int(now())
         self.created = []
         self.containers = []
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         self.container_sharding = ContainerSharding(self.conf)
         self.app_env = dict()
         self.app_env["api"] = self.storage
@@ -176,8 +176,6 @@ class TestDrainingFilter(BaseTestCase):
 
         # pylint: disable=protected-access
         if self.expected_successes >= 1:
-            self.beanstalkd0.drain_tube("oio-preserved")
-
             # Get all chunk urls of the container
             resp = self.storage.object_list(None, None, cid=cid)
             self.assertEqual(

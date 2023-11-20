@@ -75,8 +75,6 @@ class ItemCheckTest(CliTestCase):
         self.account = "item_check_account_" + random_str(4)
         self.container = "item_check_container" + random_str(4)
         self.obj_name = "item_check_obj_" + random_str(4)
-
-        self.beanstalkd0.drain_tube("oio-preserved")
         self.api.account_create(self.account)
 
     def _wait_for_kafka_events(self, chunks, reqid):

@@ -51,7 +51,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend = AccountBackendFdb(self.account_conf, self.logger)
         self.backend.init_db()
         self.backend.db.clear_range(b"\x00", b"\xfe")
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         self.maxDiff = None
 
     @classmethod

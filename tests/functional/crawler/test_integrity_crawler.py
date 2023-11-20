@@ -31,7 +31,7 @@ class TestIntegrityCrawler(BaseTestCase):
         self.container = "ct-" + random_str(8)
         self.obj = "obj-" + random_str(8)
         self.account = "test-integrity-" + random_str(8)
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         reqid = request_id()
         self.storage.object_create(
             self.account, self.container, obj_name=self.obj, data="chunk", reqid=reqid
