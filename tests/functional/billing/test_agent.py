@@ -76,7 +76,6 @@ class TestBillingAgent(BaseTestCase):
         conf = self.CONF.copy()
         conf["fdb_file"] = conf["fdb_file"] % self.ns
         self.agent = BillingAgent(conf, logger=self.logger)
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     @classmethod
     def _monkey_patch(cls):

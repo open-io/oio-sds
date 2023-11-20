@@ -50,8 +50,6 @@ class ItemRebuildTest(CliTestCase):
         self.obj_name = "item_rebuild_obj_" + random_str(4)
         self._containers_to_clean = {(self.account, self.container)}
 
-        self.beanstalkd0.drain_tube("oio-preserved")
-
     def tearDown(self):
         for acct, ct in self._containers_to_clean:
             try:

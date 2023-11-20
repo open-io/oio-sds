@@ -72,7 +72,6 @@ class TestBlobIndexer(BaseTestCase):
         for chunk_file in chunk_files:
             os.remove(chunk_file)
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def _put_chunk(self):
         account = "blob-indexer-" + random_str(6)
