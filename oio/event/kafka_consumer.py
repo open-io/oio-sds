@@ -75,28 +75,28 @@ class KafkaConsumerWorker(Process):
         Repeatedly read messages from the topic and call process_message().
         """
 
-        for message in self._consumer.fetch_events():
+        for event in self._consumer.fetch_events():
             if self._stop_requested.is_set():
                 break
-            if message is None:
+            if event is None:
                 continue
 
             # If we are here, we just communicated with RabbitMQ, we know it's alive
             self._last_use = time.monotonic()
 
             try:
-                body = message.value()
+                body = event.value()
                 properties = {}
                 self.process_message(body, properties)
-                self.acknowledge_message(message)
+                self.acknowledge_message(event)
 
             except RejectMessage as err:
-                self.reject_message(message, retry_later=isinstance(err, RetryLater))
+                self.reject_message(event, retry_later=isinstance(err, RetryLater))
             except Exception:
-                self.logger.exception("Failed to process message %s", message)
+                self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
-                self.reject_message(message, retry_later=False)
+                self.reject_message(event, retry_later=False)
 
     def _connect(self):
         if self._consumer is None:
@@ -104,7 +104,6 @@ class KafkaConsumerWorker(Process):
                 self.endpoint,
                 [self.topic_name],
                 logger=self.logger,
-                stop=self._stop_requested,
                 conf={
                     **self._kafka_conf,
                     "group.id": self.group_id,

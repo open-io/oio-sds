@@ -27,7 +27,10 @@ DEFAULT_REPLICATION_TOPIC = "oio-replication"
 DEFAULT_DELAYED_TOPIC = "oio-delayed"
 DEFAULT_REBUILD_TOPIC = "oio-rebuild"
 DEFAULT_DEADLETTER_TOPIC = "oio-deadletter"
+DEFAULT_XCUTE_JOB_TOPIC = "oio-xcute-job"
+DEFAULT_XCUTE_JOB_REPLY_TOPIC = DEFAULT_XCUTE_JOB_TOPIC + "-reply"
 DEFAULT_DELAY_GRANULARITY = 60
+KAFKA_CONF_PREFIX = "kafka_"
 POLL_TIMEOUT = 10 * 1000
 
 
@@ -41,6 +44,16 @@ class KafkaSendException(OioException):
 
 class KafkaTopicNotFoundException(OioException):
     ...
+
+
+def kafka_options_from_conf(conf):
+    if conf is None:
+        conf = {}
+    return {
+        k[len(KAFKA_CONF_PREFIX) :]: v
+        for k, v in conf.items()
+        if k.startswith(KAFKA_CONF_PREFIX)
+    }
 
 
 class KafkaClient:
@@ -77,7 +90,7 @@ class KafkaClient:
                 self._client.list_topics(topic=topic, timeout=1)
             except KafkaException as exc:
                 self._logger.error("Topic '%s' not found", topic)
-                raise KafkaTopicNotFoundException() from exc
+                raise KafkaTopicNotFoundException(f"Topic {topic} not found") from exc
 
     def close(self):
         if self._client is None:
@@ -160,10 +173,8 @@ class KafkaSender(KafkaClient):
 
 
 class KafkaConsumer(KafkaClient):
-    def __init__(self, endpoint, topics, logger, stop, conf={}):
+    def __init__(self, endpoint, topics, logger, conf={}):
         super(KafkaConsumer, self).__init__(endpoint, Consumer, logger)
-
-        self._stop = stop
 
         self._connect(conf)
 
@@ -175,11 +186,9 @@ class KafkaConsumer(KafkaClient):
         return self._client
 
     def fetch_events(self):
-        while not self._stop.is_set():
+        while True:
             msg = self._client.poll(1.0)
-            if msg is None:
-                continue
-            elif msg.error():
+            if msg and msg.error():
                 self._logger.error("Failed to fetch message, reason: %s", msg.error())
                 continue
             yield msg

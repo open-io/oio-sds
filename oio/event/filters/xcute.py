@@ -14,11 +14,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.event.evob import Event, EventTypes
-from oio.event.beanstalk import BeanstalkError
-from oio.event.filters.base import Filter
 from oio.common.easy_value import int_value
-from oio.common.json import json
+from oio.event.evob import Event
+from oio.event.filters.base import Filter
 from oio.xcute.common.worker import XcuteWorker
 
 
@@ -42,43 +40,15 @@ class XcuteFilter(Filter):
             task_ids = event.data["task_ids"]
             task_results = event.data["task_results"]
             task_errors = event.data["task_errors"]
-            beanstalkd_reply_info = event.data["beanstalkd_reply"]
         else:
             (
                 job_id,
                 task_ids,
                 task_results,
                 task_errors,
-                beanstalkd_reply_info,
             ) = self.worker.process(event.data)
 
-        try:
-            self.worker.reply(
-                job_id, task_ids, task_results, task_errors, beanstalkd_reply_info
-            )
-        except BeanstalkError as exc:
-            self.logger.warn(
-                "[job_id=%s] Fail to reply, retry later (%d): %s",
-                job_id,
-                self.retry_delay_to_reply,
-                exc,
-            )
-            tasks_processed_event = json.dumps(
-                {
-                    "event": EventTypes.XCUTE_TASKS,
-                    "data": {
-                        "job_id": job_id,
-                        "task_ids": task_ids,
-                        "task_results": task_results,
-                        "task_errors": task_errors,
-                        "beanstalkd_reply": beanstalkd_reply_info,
-                        "processed": True,
-                    },
-                }
-            )
-            # TODO(FVE): make it compatible with another queue system
-            beanstalkd = env["queue_connector"]
-            beanstalkd.put(tasks_processed_event, delay=self.retry_delay_to_reply)
+        self.worker.reply(job_id, task_ids, task_results, task_errors)
 
         return self.app(env, cb)
 

@@ -1653,7 +1653,7 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-tube = oio-xcute
+tube = oio-xcute-jobs
 namespace = ${NS}
 user = ${USER}
 workers = 2
@@ -1664,6 +1664,7 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 queue_url=${QUEUE_URL}
+group_id = ${GROUP_ID}
 """
 
 template_xcute_event_agent_handlers = """
@@ -1763,9 +1764,8 @@ workers = 2
 
 [xcute-orchestrator]
 orchestrator_id = orchestrator-${SRVNUM}
-beanstalkd_workers_tube = oio-xcute
-beanstalkd_reply_tube = oio-xcute.reply
-beanstalkd_reply_addr = ${QUEUE_URL}
+endpoints=${QUEUE_URL}
+jobs_topic = oio-xcute-jobs
 """
 
 template_rdir = """
@@ -2955,14 +2955,14 @@ def generate(options):
 
     # Xcute event-agent
     # -------------------------------------------------------------------------
-    # TODO(TPE): Adapt when we will add kafka support to xcute
-    for num, url, event_agent_bin in get_instance():
+    for num, url, event_agent_bin in get_instance(use_kafka):
         env = subenv(
             {
                 "SRVTYPE": "xcute-event-agent",
                 "SRVNUM": num,
                 "QUEUE_URL": url,
                 "EXE": event_agent_bin,
+                "GROUP_ID": "event-agent-xcute",
             }
         )
         register_service(
@@ -2986,14 +2986,13 @@ def generate(options):
 
     # -------------------------------------------------------------------------
 
-    # xcute
     env = subenv(
         {
             "SRVTYPE": "xcute",
             "SRVNUM": 1,
             "PORT": next(ports),
             "REDIS_PORT": 6379,
-            "QUEUE_URL": ENV["MAIN_QUEUE_URL"],
+            "QUEUE_URL": ENV["KAFKA_QUEUE_URL"],
             "EXE": "oio-xcute",
         }
     )

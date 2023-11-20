@@ -24,7 +24,7 @@ from oio.event.filters.base import Filter
 
 class DelayedFilter(Filter):
     """
-    Forward events to another tube when due date is reached.
+    Forward events to another topic when due date is reached.
     """
 
     def __init__(self, *args, endpoints=None, **kwargs):
@@ -34,14 +34,11 @@ class DelayedFilter(Filter):
         super().__init__(*args, **kwargs)
 
     def init(self):
-        self.queue_url = self.conf.get("queue_url")
-        if not self.queue_url:
-            raise ValueError("Missing 'queue_url' in the configuration")
-        self.topic = self.conf.get("tube", DEFAULT_DELAYED_TOPIC)
+        self.topic = self.conf.get("topic_name", DEFAULT_DELAYED_TOPIC)
 
     def process(self, env, cb):
         if not self._producer:
-            self._producer = KafkaSender(self.queue_url, self.logger)
+            self._producer = KafkaSender(self.endpoints, self.logger)
 
         data = env.get("data", {})
         due_time = data.get("due_time", 0)
@@ -76,11 +73,14 @@ class DelayedFilter(Filter):
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
-    queue_url = conf.get("queue_url")
+    endpoint = conf.get("broker_endpoint")
+
+    if not endpoint:
+        raise ValueError("Broker endpoint is missing")
 
     def make_filter(app):
-        if queue_url.startswith("kafka://"):
-            return DelayedFilter(app, conf, endpoints=queue_url)
+        if endpoint.startswith("kafka://"):
+            return DelayedFilter(app, conf, endpoints=endpoint)
         raise NotImplementedError()
 
     return make_filter
