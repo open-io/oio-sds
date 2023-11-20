@@ -1915,8 +1915,10 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event, _ = self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.new",)
+        event, offset = self.wait_for_kafka_event(
+            "oio-preserved",
+            reqid=reqid,
+            types=("storage.content.new",),
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1931,8 +1933,11 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event, _ = self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+        event, offset = self.wait_for_kafka_event(
+            "oio-preserved",
+            reqid=reqid,
+            types=("storage.content.update",),
+            offset=offset,
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1947,8 +1952,12 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event, _ = self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+
+        event, offset = self.wait_for_kafka_event(
+            "oio-preserved",
+            reqid=reqid,
+            types=("storage.content.update",),
+            offset=offset,
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1964,7 +1973,7 @@ class TestMeta2Contents(BaseTestCase):
             create_delete_marker=True,
         )
         event, _ = self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.new",)
+            "oio-preserved", reqid=reqid, types=("storage.content.new",), offset=offset
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)

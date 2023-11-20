@@ -64,12 +64,14 @@ class ServiceDecommissionTest(CliTestCase):
             )
 
     def wait_for_chunk_events(self, n_obj, reqid=None, event=EventTypes.CHUNK_NEW):
+        offset = None
         for _ in range(n_obj * 3):
-            self.wait_for_kafka_event(
+            _, offset = self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 types=(event,),
-                timeout=1.0,
+                timeout=5.0,
+                offset=offset,
             )
 
     def _test_meta2_decommission(self, decommission_percentage=None):
@@ -81,14 +83,19 @@ class ServiceDecommissionTest(CliTestCase):
             self.skip("This test requires at least 4 meta2 services")
 
         create_reqid = request_id("xcute-decom-")
+        offset = None
         for i in range(100):
             cname = f"xcute-decommission-{i:0>3}"
             self.storage.container_create(self.account, cname, reqid=create_reqid)
             self._containers.append(cname)
-        for _ in range(100):
-            self.wait_for_kafka_event(
-                "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW)
+            _, offset = self.wait_for_kafka_event(
+                "oio-preserved",
+                reqid=create_reqid,
+                types=(EventTypes.CONTAINER_NEW,),
+                fields={"user": cname},
+                offset=offset,
             )
+
         list_reqid = request_id("xcute-decom-")
         candidate = self.storage.conscience.next_instance("meta2")["addr"]
         total_bases = len(
