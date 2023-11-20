@@ -47,15 +47,11 @@ def main():
     workers = int_value(conf.get("workers"), 1)
 
     # Configuration either from dedicated file or central file (in that order)
-    endpoint = conf.get("queue_url", ns_conf.get("event-agent", DEFAULT_ENDPOINT))
+    endpoint = conf.get("broker_endpoint", ns_conf.get("event-agent", DEFAULT_ENDPOINT))
     topic = conf.get(
-        "topic_name",
-        conf.get("tube", ns_conf.get("events.kafka.topic_name", DEFAULT_TOPIC)),
+        "topic_name", ns_conf.get("events.kafka.topic_name", DEFAULT_TOPIC)
     )
-
-    group_id = conf.get("group_id")
-    if not group_id:
-        group_id = ns_conf.get("events.kafka.group_id", "event-agent")
+    group_id = conf.get("group_id", ns_conf.get("events.kafka.group_id", "event-agent"))
 
     pool = KafkaConsumerPool(
         endpoint,

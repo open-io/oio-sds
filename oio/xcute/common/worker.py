@@ -20,9 +20,13 @@ from six import iteritems
 from oio.common.constants import STRLEN_REQID
 from oio.common.green import ratelimit
 from oio.common.json import json
+from oio.common.kafka import (
+    KafkaSender,
+    kafka_options_from_conf,
+    DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+)
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
-from oio.event.beanstalk import Beanstalk
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -33,16 +37,37 @@ class XcuteWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.watchdog = watchdog
-        self.beanstalkd_replies = {}
         self.tasks = CacheDict(
             size=self.conf.get("cache_size", self.DEFAULT_CACHE_SIZE)
         )
 
-    def process(self, beanstalkd_job):
-        job_id = beanstalkd_job["job_id"]
-        job_config = beanstalkd_job["job_config"]
+        self.kafka_reply_topic = self.conf.get(
+            "xcute_job_reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
+        )
+
+        self.kafka_producer = None
+
+    def _connect(self):
+        if not self.kafka_producer:
+            kafka_conf = {
+                "acks": "all",
+            }
+            kafka_conf.update(kafka_options_from_conf(self.conf))
+
+            self.kafka_producer = KafkaSender(
+                self.conf["queue_url"],
+                self.logger,
+                kafka_conf,
+            )
+
+    def process(self, job):
+        # Connect to kafka cluster
+        self._connect()
+
+        job_id = job["job_id"]
+        job_config = job["job_config"]
         job_params = job_config["params"]
-        job_type = beanstalkd_job["job_type"]
+        job_type = job["job_type"]
 
         init_error = None
         task = self.tasks.get(job_id)
@@ -59,7 +84,7 @@ class XcuteWorker(object):
                 init_error = exc
 
         tasks_per_second = job_config["tasks_per_second"]
-        tasks = beanstalkd_job["tasks"]
+        tasks = job["tasks"]
 
         task_errors = Counter()
         task_results = Counter()
@@ -87,22 +112,9 @@ class XcuteWorker(object):
             list(tasks.keys()),
             task_results,
             task_errors,
-            beanstalkd_job["beanstalkd_reply"],
         )
 
-    def reply(self, job_id, task_ids, task_results, task_errors, beanstalkd_reply_info):
-        beanstalkd_reply_addr = beanstalkd_reply_info["addr"]
-        beanstalkd_reply_tube = beanstalkd_reply_info["tube"]
-
-        beanstalkd_reply_info = (beanstalkd_reply_addr, beanstalkd_reply_tube)
-        beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
-        if not beanstalkd_reply:
-            beanstalkd_reply = Beanstalk.from_url(beanstalkd_reply_addr)
-            beanstalkd_reply.use(beanstalkd_reply_tube)
-            beanstalkd_reply.watch(beanstalkd_reply_tube)
-
-            self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
-
+    def reply(self, job_id, task_ids, task_results, task_errors):
         reply_payload = json.dumps(
             {
                 "job_id": job_id,
@@ -111,4 +123,4 @@ class XcuteWorker(object):
                 "task_errors": task_errors,
             }
         )
-        beanstalkd_reply.put(reply_payload)
+        self.kafka_producer.send(self.kafka_reply_topic, reply_payload, flush=True)
