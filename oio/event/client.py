@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@ from oio.event.beanstalk import Beanstalk
 class EventClient(object):
     def __init__(self, conf, **kwargs):
         self.ns_conf = load_namespace_conf(conf["namespace"])
-        self.queue_url = self.ns_conf["event-agent"].split(";")
+        self.queue_url = self.ns_conf["beanstalk"].split(";")
         self._beanstalk = None
 
     @property
