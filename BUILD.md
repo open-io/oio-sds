@@ -26,7 +26,7 @@ Building the entire project will require the SDK dependencies, but also:
 * beanstalkd: you need it to have the event-agent working
 * libapache2-mod-wsgi-py3 (as named on Ubuntu), the WSGI module for apache2
 
-In addition, there some dependencies at runtime (the up-to-date list is in [requirements.txt](./requirements.txt)). You don't need to install them on the system, they will be installed by pip in your virtualenv (see [Building](#Building)).
+In addition, there some dependencies at runtime (the up-to-date list is in [pyproject.toml](./pyproject.toml)). You don't need to install them on the system, they will be installed by pip in your virtualenv (see [Building](#Building)).
 * python-eventlet
 * python-werkzeug
 * python-gunicorn
@@ -89,6 +89,8 @@ We suggest to install Python dependencies in a virtualenv instead of directly on
 python3 -m venv oiovenv
 # or "virtualenv -p /usr/bin/python3 oiovenv"
 source oiovenv/bin/activate
+pip install --upgrade pip
+pip install --upgrade setuptools virtualenv
 ```
 
 Then install the python module inside your virtualenv:

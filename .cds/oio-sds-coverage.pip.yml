@@ -17,9 +17,11 @@ jobs:
           - apt install -y ${GO_PACKAGE} jq lcov python3-virtualenv virtualenv
           - echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
           - . $HOME/oio-env.sh
-          - virtualenv -p /usr/bin/python3 $HOME/oiovenv
-          - . $HOME/oiovenv/bin/activate
-          - pip install --progress-bar off --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
+          - virtualenv -p /usr/bin/python3 $HOME/venv
+          - . $HOME/venv/bin/activate
+          - pip install --upgrade pip
+          - pip install --upgrade setuptools virtualenv
+          - pip install --progress-bar off --upgrade awscli awscli-plugin-endpoint coverage git+https://github.com/boyska/xq.git
           - go install github.com/axw/gocov/gocov@latest
 
       - name: Download test result artifacts
@@ -32,7 +34,7 @@ jobs:
         optional: true
         script: |+
           #!/bin/bash
-          . $HOME/oiovenv/bin/activate
+          . $HOME/venv/bin/activate
           export TEST_COUNT=0
           export TEST_FUNC=0
           export TEST_UNIT=0
@@ -59,7 +61,7 @@ jobs:
 
       - name: Aggregate Python coverage statistics
         script:
-          - . $HOME/oiovenv/bin/activate
+          - . $HOME/venv/bin/activate
           - cd {{.cds.workspace}}
           - coverage combine .coverage.*
           - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
@@ -73,7 +75,7 @@ jobs:
           - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
           - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
           - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
-          - . $HOME/oiovenv/bin/activate
+          - . $HOME/venv/bin/activate
           - python tools/oio-lcov-to-json.py cmake_coverage.all coverage-report-c.json
 
       - name: Download code coverage artifacts (Golang)
@@ -107,7 +109,7 @@ jobs:
       - name: Publish code coverage reports on S3 public cloud
         script: |+
           #!/bin/bash
-          . $HOME/oiovenv/bin/activate
+          . $HOME/venv/bin/activate
           cd {{.cds.workspace}}
           mkdir -p "$HOME/.aws"
           cat <<EOF >>"$HOME/.aws/credentials"

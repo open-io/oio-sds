@@ -1,6 +1,357 @@
 [project]
 name = "oio"
+authors = [
+    { name="OpenIO", email="support@openio.io" }
+]
+description = "OpenIO Software Defined Storage"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.6"
+classifiers = [
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.6"
+]
 dynamic = ["version"]
+dependencies = [
+    "blake3",
+    "cliff>=3.0.0",
+    "eventlet>=0.25.0",
+    "foundationdb<6.4.0,>=6.3.15",
+    "gevent>=1.4",
+    "gunicorn>=20.0.0",
+    "jsonschema>=4.17.3",
+    "kazoo>=2.7.0",
+    "lxml>=4.0.0",
+    "pika>=1.2.0",
+    "PyECLib>=1.2.0",
+    "pyparsing>=2.4.2",
+    "PyYAML>=5.0.0",
+    "redis>=3.0.0",
+    "reflink>=0.2.1",
+    "requests>=2.14.2",
+    "simplejson>=3.0.0",
+    "six>=1.11.0",
+    "statsd",
+    "urllib3>=1.26.0",
+    "werkzeug>=2.0.0",
+]
+
+[project.optional-dependencies]
+lint = [
+    "black",
+    "flake8",
+    "pylint",
+]
+test = [
+    "coverage",
+    "fixtures>=1.4.0",
+    "flaky",
+    "gcovr",
+    "mock>=1.0",
+    "nose",
+    "nose-timer",
+    "testtools",
+]
+
+[project.scripts]
+openio = "oio.cli.common.shell:main"
+openio-admin = "oio.cli.admin:main"
+
+[project.entry-points."openio.account"]
+account_show = "oio.cli.account.account:ShowAccount"
+account_create = "oio.cli.account.account:CreateAccount"
+account_delete = "oio.cli.account.account:DeleteAccount"
+account_list = "oio.cli.account.account:ListAccounts"
+account_set = "oio.cli.account.account:SetAccount"
+account_unset = "oio.cli.account.account:UnsetAccount"
+account_refresh = "oio.cli.account.account:RefreshAccount"
+account_flush = "oio.cli.account.account:FlushAccount"
+account_recompute = "oio.cli.account.account:RecomputeAccount"
+
+[project.entry-points."openio.container"]
+bucket_create = "oio.cli.container.container:CreateBucket"
+bucket_delete = "oio.cli.container.container:DeleteBucket"
+bucket_list = "oio.cli.container.container:ListBuckets"
+bucket_refresh = "oio.cli.container.container:RefreshBucket"
+bucket_set = "oio.cli.container.container:SetBucket"
+bucket_show = "oio.cli.container.container:ShowBucket"
+bucket_unset = "oio.cli.container.container:UnsetBucket"
+container_create = "oio.cli.container.container:CreateContainer"
+container_delete = "oio.cli.container.container:DeleteContainer"
+container_drain = "oio.cli.container.container:DrainContainer"
+container_flush = "oio.cli.container.container:FlushContainer"
+container_list = "oio.cli.container.container:ListContainer"
+container_locate = "oio.cli.container.container:LocateContainer"
+container_purge = "oio.cli.container.container:PurgeContainer"
+container_refresh = "oio.cli.container.container:RefreshContainer"
+container_save = "oio.cli.container.container:SaveContainer"
+container_set = "oio.cli.container.container:SetContainer"
+container_show = "oio.cli.container.container:ShowContainer"
+container_snapshot = "oio.cli.container.container:SnapshotContainer"
+container_touch = "oio.cli.container.container:TouchContainer"
+container_unset = "oio.cli.container.container:UnsetContainer"
+
+[project.entry-points."openio.containersharding"]
+container-sharding_abort = "oio.cli.containersharding.sharding:AbortSharding"
+container-sharding_clean = "oio.cli.containersharding.sharding:CleanContainerSharding"
+container-sharding_find = "oio.cli.containersharding.sharding:FindContainerSharding"
+container-sharding_find-and-replace = "oio.cli.containersharding.sharding:FindAndReplaceContainerSharding"
+container-sharding_find-and-shrink = "oio.cli.containersharding.sharding:FindAndShrinkContainerSharding"
+container-sharding_is-orphan = "oio.cli.containersharding.sharding:IsOrphanShard"
+container-sharding_replace = "oio.cli.containersharding.sharding:ReplaceContainerSharding"
+container-sharding_show = "oio.cli.containersharding.sharding:ShowContainerSharding"
+container-sharding_shrink = "oio.cli.containersharding.sharding:ShrinkContainerSharding"
+
+[project.entry-points."openio.lifecycle"]
+lifecycle_apply = "oio.cli.lifecycle.lifecycle:LifecycleApply"
+lifecycle_get = "oio.cli.lifecycle.lifecycle:LifecycleGet"
+lifecycle_set = "oio.cli.lifecycle.lifecycle:LifecycleSet"
+
+[project.entry-points."openio.object"]
+object_locate = "oio.cli.object.object:LocateObject"
+object_show = "oio.cli.object.object:ShowObject"
+object_create = "oio.cli.object.object:CreateObject"
+object_save = "oio.cli.object.object:SaveObject"
+object_drain = "oio.cli.object.object:DrainObject"
+object_delete = "oio.cli.object.object:DeleteObject"
+object_touch = "oio.cli.object.object:TouchObject"
+object_list = "oio.cli.object.object:ListObject"
+object_purge = "oio.cli.object.object:PurgeObject"
+object_set = "oio.cli.object.object:SetObject"
+object_unset = "oio.cli.object.object:UnsetObject"
+object_link = "oio.cli.object.object:LinkObject"
+
+[project.entry-points."openio.reference"]
+reference_locate = "oio.cli.reference.reference:LocateReference"
+reference_show = "oio.cli.reference.reference:ShowReference"
+reference_list = "oio.cli.reference.reference:ListReference"
+reference_create = "oio.cli.reference.reference:CreateReference"
+reference_delete = "oio.cli.reference.reference:DeleteReference"
+reference_set = "oio.cli.reference.reference:SetReference"
+reference_unset = "oio.cli.reference.reference:UnsetReference"
+reference_link = "oio.cli.reference.reference:LinkReference"
+reference_poll = "oio.cli.reference.reference:PollReference"
+reference_unlink = "oio.cli.reference.reference:UnlinkReference"
+reference_force = "oio.cli.reference.reference:ForceReference"
+
+[project.entry-points."openio.volume"]
+volume_show = "oio.cli.volume.volume:ShowVolume"
+volume_assignation = "oio.cli.volume.volume:DisplayVolumeAssignation"
+volume_admin_incident = "oio.cli.volume.volume:IncidentAdminVolume"
+volume_admin_lock = "oio.cli.volume.volume:LockAdminVolume"
+volume_admin_unlock = "oio.cli.volume.volume:UnlockAdminVolume"
+volume_admin_show = "oio.cli.volume.volume:ShowAdminVolume"
+volume_admin_clear = "oio.cli.volume.volume:ClearAdminVolume"
+volume_admin_bootstrap = "oio.cli.volume.volume:BootstrapVolume"
+
+[project.entry-points."openio.rdir"]
+rdir_bootstrap = "oio.cli.rdir.rdir:RdirBootstrap"
+rdir_assignments = "oio.cli.rdir.rdir:RdirAssignments"
+
+[project.entry-points."openio.directory"]
+directory_bootstrap = "oio.cli.directory.directory:DirectoryInit"
+directory_check = "oio.cli.directory.directory:DirectoryCheck"
+directory_decommission = "oio.cli.directory.directory:DirectoryDecommission"
+directory_dump = "oio.cli.directory.directory:DirectoryList"
+directory_rebalance = "oio.cli.directory.directory:DirectoryRebalance"
+directory_restore = "oio.cli.directory.directory:DirectoryRestore"
+directory_warmup = "oio.cli.directory.directory:DirectoryWarmup"
+
+[project.entry-points."openio.events"]
+events_drain = "oio.cli.events.events:DrainTube"
+events_exhume = "oio.cli.events.events:EventsExhume"
+events_tubes = "oio.cli.events.events:ListTubes"
+events_stats = "oio.cli.events.events:StatsEvents"
+
+[project.entry-points."openio.cluster"]
+cluster_show = "oio.cli.cluster.cluster:ClusterShow"
+cluster_list = "oio.cli.cluster.cluster:ClusterList"
+cluster_local_list = "oio.cli.cluster.cluster:ClusterLocalList"
+cluster_unlockall = "oio.cli.cluster.cluster:ClusterUnlockAll"
+cluster_unlock = "oio.cli.cluster.cluster:ClusterUnlock"
+cluster_lock = "oio.cli.cluster.cluster:ClusterLock"
+cluster_flush = "oio.cli.cluster.cluster:ClusterFlush"
+cluster_deregister = "oio.cli.cluster.cluster:ClusterDeregister"
+cluster_resolve = "oio.cli.cluster.cluster:ClusterResolve"
+cluster_wait = "oio.cli.cluster.cluster:ClusterWait"
+cluster_local_conf = "oio.cli.cluster.cluster:LocalNSConf"
+
+[project.entry-points."openio.election"]
+election_check = "oio.cli.election.election:ElectionCheckPeers"
+election_debug = "oio.cli.election.election:ElectionDebug"
+election_leave = "oio.cli.election.election:ElectionLeave"
+election_ping = "oio.cli.election.election:ElectionPing"
+election_status = "oio.cli.election.election:ElectionStatus"
+election_sync = "oio.cli.election.election:ElectionSync"
+
+[project.entry-points."openio.zk"]
+zk_reset = "oio.cli.zk.set:ElectionReset"
+zk_stat = "oio.cli.zk.set:ElectionStat"
+zk_smudge = "oio.cli.zk.set:ElectionSmudge"
+zk_armageddon = "oio.cli.zk.set:HierarchyArmageddon"
+zk_bootstrap = "oio.cli.zk.set:HierarchyBootstrap"
+
+[project.entry-points."openio.admin"]
+account-service_clean = "oio.cli.admin.account_service:AccountServiceClean"
+account-service_rebuild = "oio.cli.admin.service_rebuild:AccountServiceRebuild"
+account_check = "oio.cli.admin.item_check:AccountCheck"
+account_locate = "oio.cli.admin.item_locate:AccountLocate"
+account_repair = "oio.cli.admin.item_repair:AccountRepair"
+chunk_check = "oio.cli.admin.item_check:ChunkCheck"
+chunk_distributed-rebuild = "oio.cli.admin.item_rebuild:ChunkDistributedRebuild"
+chunk_locate = "oio.cli.admin.item_locate:ChunkLocate"
+chunk_rebuild = "oio.cli.admin.item_rebuild:ChunkRebuild"
+conscience_get-config = "oio.cli.admin.service_config:ServiceGetConfig"
+conscience_release-memory = "oio.cli.admin.service_decache:ConscienceReleaseMemory"
+container_check = "oio.cli.admin.item_check:ContainerCheck"
+container_locate = "oio.cli.admin.item_locate:ContainerLocate"
+container_move = "oio.cli.admin.item_move:ContainerMove"
+container_repair = "oio.cli.admin.item_repair:ContainerRepair"
+container_vacuum = "oio.cli.admin.item_vacuum:ContainerVacuum"
+directory_check = "oio.cli.admin.service_check:DirectoryCheck"
+election_debug = "oio.cli.election.election:ElectionDebug"
+election_leave = "oio.cli.election.election:ElectionLeave"
+election_ping = "oio.cli.election.election:ElectionPing"
+election_status = "oio.cli.election.election:ElectionStatus"
+election_sync = "oio.cli.election.election:ElectionSync"
+election_balance = "oio.cli.election.election:ElectionBalance"
+iam_delete-user-policy = "oio.cli.admin.iam:IamDeleteUserPolicy"
+iam_list-users = "oio.cli.admin.iam:IamListUsers"
+iam_list-user-policies = "oio.cli.admin.iam:IamListUserPolicies"
+iam_get-user-policy = "oio.cli.admin.iam:IamGetUserPolicy"
+iam_put-user-policy = "oio.cli.admin.iam:IamPutUserPolicy"
+meta0_check = "oio.cli.admin.service_check:Meta0Check"
+meta0_get-config = "oio.cli.admin.service_config:ServiceGetConfig"
+meta0_info = "oio.cli.admin.service_info:ServiceInfo"
+meta0_release-memory = "oio.cli.admin.service_decache:Meta0ReleaseMemory"
+meta0_set-config = "oio.cli.admin.service_config:ServiceSetConfig"
+meta1_check = "oio.cli.admin.service_check:Meta1Check"
+meta1_decache = "oio.cli.admin.service_decache:Meta1Decache"
+meta1_get-config = "oio.cli.admin.service_config:ServiceGetConfig"
+meta1_info = "oio.cli.admin.service_info:ServiceInfo"
+meta1_rebuild = "oio.cli.admin.service_rebuild:Meta1Rebuild"
+meta1_release-memory = "oio.cli.admin.service_decache:Meta1ReleaseMemory"
+meta1_set-config = "oio.cli.admin.service_config:ServiceSetConfig"
+meta2_decache = "oio.cli.admin.service_decache:Meta2Decache"
+meta2_get-config = "oio.cli.admin.service_config:ServiceGetConfig"
+meta2_info = "oio.cli.admin.service_info:ServiceInfo"
+meta2_list_containers = "oio.cli.admin.service_list:Meta2ListContainers"
+meta2_rebuild = "oio.cli.admin.service_rebuild:Meta2Rebuild"
+meta2_release-memory = "oio.cli.admin.service_decache:Meta2ReleaseMemory"
+meta2_set-config = "oio.cli.admin.service_config:ServiceSetConfig"
+object_check = "oio.cli.admin.item_check:ObjectCheck"
+object_locate = "oio.cli.admin.item_locate:ObjectLocate"
+object_repair = "oio.cli.admin.item_repair:ObjectRepair"
+oioproxy_decache = "oio.cli.admin.service_decache:ProxyDecache"
+oioproxy_get-config = "oio.cli.admin.service_config:ProxyGetConfig"
+oioproxy_set-config = "oio.cli.admin.service_config:ProxySetConfig"
+rawx_check = "oio.cli.admin.service_check:RawxCheck"
+rawx_distributed-rebuild = "oio.cli.admin.service_rebuild:RawxDistributedRebuild"
+rawx_list_containers = "oio.cli.admin.service_list:RawxListContainers"
+rawx_list_objects = "oio.cli.admin.service_list:RawxListObjects"
+rawx_rebuild = "oio.cli.admin.service_rebuild:RawxRebuild"
+rdir_check = "oio.cli.admin.service_check:RdirCheck"
+rdir_copy = "oio.cli.rdir.rdir:RdirCopyBase"
+rdir_reassign = "oio.cli.rdir.rdir:RdirReassign"
+sqlx_get-config = "oio.cli.admin.service_config:ServiceGetConfig"
+sqlx_info = "oio.cli.admin.service_info:ServiceInfo"
+sqlx_set-config = "oio.cli.admin.service_config:ServiceSetConfig"
+xcute_job_delete = "oio.cli.admin.xcute.job:JobDelete"
+xcute_job_list = "oio.cli.admin.xcute.job:JobList"
+xcute_job_pause = "oio.cli.admin.xcute.job:JobPause"
+xcute_job_resume = "oio.cli.admin.xcute.job:JobResume"
+xcute_job_show = "oio.cli.admin.xcute.job:JobShow"
+xcute_job_update = "oio.cli.admin.xcute.job:JobUpdate"
+xcute_lock_list = "oio.cli.admin.xcute.lock:LockList"
+xcute_lock_show = "oio.cli.admin.xcute.lock:LockShow"
+xcute_meta2_decommission = "oio.cli.admin.xcute.meta2:Meta2Decommission"
+xcute_meta2_rebuild = "oio.cli.admin.xcute.meta2:Meta2Rebuild"
+xcute_rawx_decommission = "oio.cli.admin.xcute.rawx:RawxDecommission"
+xcute_rawx_rebuild = "oio.cli.admin.xcute.rawx:RawxRebuild"
+xcute_rdir_decommission = "oio.cli.admin.xcute.rdir:RdirDecommission"
+
+[project.entry-points."oio.conscience.checker"]
+asn1 = "oio.conscience.checker.asn1:Asn1PingChecker"
+http = "oio.conscience.checker.http:HttpChecker"
+tcp = "oio.conscience.checker.tcp:TcpChecker"
+
+[project.entry-points."oio.conscience.stats"]
+beanstalkd = "oio.conscience.stats.beanstalkd:BeanstalkdStat"
+http = "oio.conscience.stats.http:HttpStat"
+meta = "oio.conscience.stats.meta:MetaStat"
+oioproxy = "oio.conscience.stats.proxy:ProxyStat"
+rawx = "oio.conscience.stats.rawx:RawxStat"
+rdir = "oio.conscience.stats.rdir:RdirStat"
+system = "oio.conscience.stats.system:SystemStat"
+volume = "oio.conscience.stats.volume:VolumeStat"
+
+[project.entry-points."oio.event.handler_factory"]
+default = "oio.event.handlers.base:handler_factory"
+
+[project.entry-points."oio.event.filter_factory"]
+account_update = "oio.event.filters.account_update:filter_factory"
+bury = "oio.event.filters.bury:filter_factory"
+dump = "oio.event.filters.dump:filter_factory"
+content_cleaner = "oio.event.filters.content_cleaner:filter_factory"
+logger = "oio.event.filters.logger:filter_factory"
+meta2_index = "oio.event.filters.meta2_index:filter_factory"
+noop = "oio.event.filters.noop:filter_factory"
+notify = "oio.event.filters.notify:filter_factory"
+replicate = "oio.event.filters.replicate:filter_factory"
+volume_index = "oio.event.filters.volume_index:filter_factory"
+webhook = "oio.event.filters.webhook:filter_factory"
+xcute = "oio.event.filters.xcute:filter_factory"
+
+[project.entry-points."oio.crawler.meta2.handler_factory"]
+default = "oio.crawler.meta2.handlers.base:handler_factory"
+
+[project.entry-points."oio.crawler.meta2.filter_factory"]
+auto_sharding = "oio.crawler.meta2.filters.auto_sharding:filter_factory"
+auto_vacuum = "oio.crawler.meta2.filters.auto_vacuum:filter_factory"
+check_integrity = "oio.crawler.meta2.filters.integrity_check:filter_factory"
+draining = "oio.crawler.meta2.filters.draining:filter_factory"
+logger = "oio.crawler.meta2.filters.logger:filter_factory"
+verify_chunk_placement = "oio.crawler.meta2.filters.verify_chunk_placement:filter_factory"
+
+[project.entry-points."oio.crawler.rawx.handler_factory"]
+default = "oio.crawler.rawx.handlers.base:handler_factory"
+
+[project.entry-points."oio.crawler.rawx.filter_factory"]
+changelocation = "oio.crawler.rawx.filters.changelocation:filter_factory"
+checksum = "oio.crawler.rawx.filters.checksum:filter_factory"
+cleanup_orphaned = "oio.crawler.rawx.filters.cleanup_orphaned:filter_factory"
+indexer = "oio.crawler.rawx.filters.indexer:filter_factory"
+logger = "oio.crawler.rawx.filters.logger:filter_factory"
+
+[tool.setuptools]
+packages = ["oio"]
+script-files = [
+    "bin/oio-account-server",
+    "bin/oio-beanstalkd-to-rabbitmq",
+    "bin/oio-billing-agent",
+    "bin/oio-blake3sum",
+    "bin/oio-blob-registrator",
+    "bin/oio-blob-auditor",
+    "bin/oio-blob-mover",
+    "bin/oio-blob-rebuilder",
+    "bin/oio-check-master",
+    "bin/oio-check-services",
+    "bin/oio-conscience-agent",
+    "bin/oio-crawler-storage-tierer",
+    "bin/oio-crawler-integrity",
+    "bin/oio-event-agent",
+    "bin/oio-event-agent-rabbitmq",
+    "bin/oio-meta1-rebuilder",
+    "bin/oio-meta2-crawler",
+    "bin/oio-meta2-indexer",
+    "bin/oio-meta2-mover",
+    "bin/oio-meta2-rebuilder",
+    "bin/oio-rabbitmq-to-beanstalkd",
+    "bin/oio-rawx-crawler",
+    "bin/oio-rdir-crawler",
+    "bin/oio-xcute",
+]
 
 [build-system]
 requires = ["black", "setuptools >= 47.1.0", "wheel"]

@@ -45,8 +45,10 @@ jobs:
           progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
+          pip install --upgrade pip
+          pip install --upgrade setuptools virtualenv
           # FIXME(adu): Fix tox configuration file to support the new versions
-          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          pip install --upgrade "tox<4.0.0"
 
           fdbtag="fdb-${FDB_VERSION}"
           worker cache pull $fdbtag
