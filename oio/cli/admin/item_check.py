@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -192,10 +192,25 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
     def get_parser(self, prog_name):
         parser = super(ObjectCheck, self).get_parser(prog_name)
         ObjectCommandMixin.patch_parser(self, parser)
+        parser.add_argument(
+            "--limit-listings",
+            type=int,
+            default=2,
+            help=(
+                "Avoid listing the whole container (resp. account) to check if an "
+                "object (resp. container) exists:\n"
+                "0 means no limit (build an exhaustive list "
+                "useful when checking many objects from many containers).\n"
+                "1 means limit only container listings.\n"
+                "2 means limit both container and object listings."
+            ),
+        )
+
         return parser
 
     def _take_action(self, parsed_args):
         account, _, objects = self.resolve_objects(self.app, parsed_args)
+        self.checker.limit_listings = parsed_args.limit_listings
         for container, obj_name, version in objects:
             target = Target(account, container, obj_name, version=version)
             self.checker.check(target, parsed_args.depth)

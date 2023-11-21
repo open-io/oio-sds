@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -747,8 +747,10 @@ class Checker(object):
             return cached
 
         self.logger.info('Checking object "%s"', target)
-        container_listing, _ = self.check_container(target.copy_container())
+        new_target = target if self.limit_listings > 1 else target.copy_container()
+        container_listing, _ = self.check_container(new_target)
         errors = list()
+
         if obj not in container_listing:
             errors.append("Missing from container listing")
             # checksum = None
@@ -801,7 +803,6 @@ class Checker(object):
     def check_container(self, target, recurse=0):
         account = target.account
         container = target.container
-
         cached = self._get_cached_or_lock((account, container))
         if cached is not None:
             return cached
@@ -822,7 +823,7 @@ class Checker(object):
             # where this object is supposed to be. Do not use a limit,
             # but an end marker, in order to fetch all versions of the object.
             extra_args["prefix"] = target.obj
-            extra_args["end_marker"] = target.obj + "\x00"  # HACK
+            extra_args["end_marker"] = target.obj + "\x01"  # HACK
         while True:
             try:
                 resp = self.api.object_list(
@@ -868,7 +869,6 @@ class Checker(object):
 
         if self.limit_listings <= 1:
             # We just listed the whole container, keep the result in a cache
-            self.containers_checked += 1
             self.list_cache[(account, container)] = container_listing, ct_meta
         self._unlock((account, container))
 
@@ -880,7 +880,15 @@ class Checker(object):
                     tcopy.content_id = obj["id"]
                     tcopy.version = str(obj["version"])
                     self._spawn_n(self.check_obj, tcopy, recurse - 1)
-        self.send_result(target, errors)
+        new_target = target.copy_container() if self.limit_listings > 1 else target
+        if self.limit_listings > 1:
+            if self.containers_checked == 0:
+                self.send_result(new_target, errors)
+        else:
+            self.send_result(new_target, errors)
+
+        self.containers_checked += 1
+
         return container_listing, ct_meta
 
     def check_account(self, target, recurse=0):
@@ -920,10 +928,8 @@ class Checker(object):
         for container in results:
             # Name, number of objects, number of bytes
             containers[container[0]] = (container[1], container[2])
-
         if self.limit_listings <= 0:
             # We just listed the whole account, keep the result in a cache
-            self.accounts_checked += 1
             self.list_cache[account] = containers
         self._unlock(account)
 
@@ -933,7 +939,14 @@ class Checker(object):
                 tcopy.container = container
                 self._spawn_n(self.check_container, tcopy, recurse - 1)
 
-        self.send_result(target, errors)
+        if self.limit_listings > 1:
+            if self.accounts_checked == 0:
+                self.send_result(target, errors)
+        else:
+            self.send_result(target, errors)
+
+        self.accounts_checked += 1
+
         return containers
 
     def check(self, target, recurse=0):

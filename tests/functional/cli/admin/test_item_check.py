@@ -79,6 +79,8 @@ class ItemCheckTest(CliTestCase):
         self.beanstalkd0.drain_tube("oio-preserved")
         self.api.account_create(self.account)
 
+        self.limit_listings = 0
+
     def _wait_for_events(self, chunks, reqid):
         for _ in range(2 + len(chunks)):
             self.wait_for_event(
@@ -922,8 +924,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check all items
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s %s "
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -956,7 +964,8 @@ class ItemCheckTest(CliTestCase):
 
         # Check all items
         output = self.openio_admin(
-            "object check --cid %s %s %s" % (cid, self.obj_name, self.check_opts)
+            "object check --limit-listings %d --cid %s %s %s"
+            % (self.limit_listings, cid, self.obj_name, self.check_opts)
         )
         self.assert_list_output(expected_items, output)
 
@@ -989,9 +998,11 @@ class ItemCheckTest(CliTestCase):
 
         # Check all items
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --object-version %s %s"
+            "--oio-account %s object check --limit-listings %d %s %s "
+            "--object-version %s %s"
             % (
                 self.account,
+                self.limit_listings,
                 self.container,
                 self.obj_name,
                 obj_meta["version"],
@@ -1012,9 +1023,11 @@ class ItemCheckTest(CliTestCase):
 
         # Check first version
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --object-version %s %s"
+            "--oio-account %s object check --limit-listings %d %s %s "
+            "--object-version %s %s"
             % (
                 self.account,
+                self.limit_listings,
                 self.container,
                 self.obj_name,
                 obj_meta["version"],
@@ -1046,9 +1059,11 @@ class ItemCheckTest(CliTestCase):
 
         # Check second version
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --object-version %s %s"
+            "--oio-account %s object check --limit-listings %d %s %s "
+            "--object-version %s %s"
             % (
                 self.account,
+                self.limit_listings,
                 self.container,
                 self.obj_name,
                 second_version_meta["version"],
@@ -1074,9 +1089,16 @@ class ItemCheckTest(CliTestCase):
 
         # Check all versions
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
+
         self.assert_list_output(expected_items, output)
 
     def test_object_check_with_auto(self):
@@ -1108,8 +1130,15 @@ class ItemCheckTest(CliTestCase):
 
         # Check all items
         output = self.openio_admin(
-            "--oio-account %s object check %s --auto --flat-bits %d %s"
-            % (self.account, self.obj_name, self.FLAT_BITS, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s"
+            " --auto --flat-bits %d %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.obj_name,
+                self.FLAT_BITS,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1140,34 +1169,64 @@ class ItemCheckTest(CliTestCase):
             )
         )
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --depth 0 %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --depth 0 %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
         for chunk in obj_chunks:
             expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --depth 1 %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --depth 1 %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --depth 2 %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --depth 2 %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --depth 3 %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --depth 3 %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --depth 4 %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --depth 4 %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1200,8 +1259,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with checksum
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --checksum %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s --checksum %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1211,8 +1276,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check without checksum
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1245,8 +1316,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with checksum
         output = self.openio_admin(
-            "--oio-account %s object check %s %s --checksum %s"
-            % (self.account, self.container, self.obj_name, self.check_opts),
+            "--oio-account %s object check --limit-listings %d %s %s --checksum %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            ),
             expected_returncode=1,
         )
         self.assert_list_output(expected_items, output)
@@ -1289,8 +1366,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with missing chunk
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts),
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            ),
             expected_returncode=1,
         )
         self.assert_list_output(expected_items, output)
@@ -1316,8 +1399,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with missing object
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, missing_obj, self.check_opts),
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                missing_obj,
+                self.check_opts,
+            ),
             expected_returncode=1,
         )
         self.assert_list_output(expected_items, output)
@@ -1338,9 +1427,10 @@ class ItemCheckTest(CliTestCase):
             expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
 
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s %s"
+            "--oio-account %s object check --limit-listings %d %s %s %s %s"
             % (
                 self.account,
+                self.limit_listings,
                 self.container,
                 self.obj_name,
                 missing_obj,
@@ -1382,8 +1472,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with missing container
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts),
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            ),
             expected_returncode=1,
         )
         self.assert_list_output(expected_items, output)
@@ -1421,8 +1517,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check with missing account
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts),
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            ),
             expected_returncode=1,
         )
         self.assert_list_output(expected_items, output)
@@ -1463,8 +1565,14 @@ class ItemCheckTest(CliTestCase):
 
         # Check only the first object
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s"
-            % (self.account, self.container, self.obj_name, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1485,8 +1593,15 @@ class ItemCheckTest(CliTestCase):
 
         # Check two objects
         output = self.openio_admin(
-            "--oio-account %s object check %s %s %s %s"
-            % (self.account, self.container, self.obj_name, second_obj, self.check_opts)
+            "--oio-account %s object check --limit-listings %d %s %s %s %s"
+            % (
+                self.account,
+                self.limit_listings,
+                self.container,
+                self.obj_name,
+                second_obj,
+                self.check_opts,
+            )
         )
         self.assert_list_output(expected_items, output)
 
@@ -1816,3 +1931,9 @@ class ItemCheckTest(CliTestCase):
             % (chunk["url"], second_chunk["url"], self.check_opts)
         )
         self.assert_list_output(expected_items, output)
+
+
+class ItemCheckTestLimitListing(ItemCheckTest):
+    def setUp(self):
+        super(ItemCheckTestLimitListing, self).setUp()
+        self.limit_listings = 2
