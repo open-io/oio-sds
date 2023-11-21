@@ -14,6 +14,7 @@
 # License along with this library.
 
 
+import re
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.crawler.common.crawler import Crawler, CrawlerWorker
 from oio.crawler.meta2.meta2db import Meta2DB
@@ -30,6 +31,7 @@ class Meta2Worker(CrawlerWorker):
         super(Meta2Worker, self).__init__(
             conf, volume_path, logger=logger, api=api, **kwargs
         )
+        self.sharding_suffix_regex = re.compile(r"sharding-([\d]+)-([\d])")
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
@@ -44,6 +46,9 @@ class Meta2Worker(CrawlerWorker):
             return False
         db_id = path.rsplit("/")[-1].rsplit(".")
         if len(db_id) != 3:
+            if (len(db_id)) == 4 and self.sharding_suffix_regex.match(db_id[3]):
+                self.ignored_paths += 1
+                return False
             self.logger.warning("Malformed db file name: %s", path)
             self.invalid_paths += 1
             return False
