@@ -1,6 +1,6 @@
 [project]
 name = "oio"
-dynamic = ["version"]
+dynamic = ["authors", "classifiers", "dependencies", "entry-points", "readme", "scripts", "version"]
 
 [build-system]
 requires = ["black", "setuptools >= 47.1.0", "wheel"]

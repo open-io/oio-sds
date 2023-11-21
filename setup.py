@@ -2,7 +2,6 @@ import setuptools
 
 
 setuptools.setup(
-    python_requires=">=3.6.0",
     setup_requires=["pbr"],
     install_requires=[
         "six>=1.11.0",
