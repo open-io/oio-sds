@@ -162,7 +162,7 @@ class RdirDispatcher(object):
         min_dist=None,
         service_id=None,
         reassign=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Assign an rdir service to all `service_type` servers that aren't
@@ -254,7 +254,7 @@ class RdirDispatcher(object):
                         min_dist=min_dist,
                         reassign=reassign,
                         known_hosts=rdir_hosts,
-                        **kwargs
+                        **kwargs,
                     )
                 except (OioException, ValueError) as exc:
                     self.logger.warning(
@@ -330,7 +330,7 @@ class RdirDispatcher(object):
                     assignments,
                     autocreate=True,
                     replace=is_reassign,
-                    **kwargs
+                    **kwargs,
                 )
                 break
             except ClientException as ex:
@@ -372,7 +372,7 @@ class RdirDispatcher(object):
         dry_run=False,
         known_hosts=None,
         replicas=DEFAULT_RDIR_REPLICAS,
-        **kwargs
+        **kwargs,
     ):
         """
         Force the load balancer to avoid services that already host more
@@ -422,7 +422,7 @@ class RdirDispatcher(object):
                 known=known_ids,
                 min_dist=min_dist,
                 replicas=replicas,
-                **kwargs
+                **kwargs,
             )
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
@@ -435,7 +435,7 @@ class RdirDispatcher(object):
                 known=known_ids,
                 min_dist=min_dist,
                 replicas=replicas,
-                **kwargs
+                **kwargs,
             )
 
         # Prepare the output list of IDs
@@ -466,7 +466,7 @@ class RdirDispatcher(object):
             assignments,
             is_reassign=bool(reassign),
             max_attempts=max_attempts,
-            **kwargs
+            **kwargs,
         )
 
         # Do the creation in the rdir itself
@@ -485,7 +485,7 @@ class RdirDispatcher(object):
         force=False,
         replicas=DEFAULT_RDIR_REPLICAS,
         allow_down_known_services: int = 0,
-        **kwargs
+        **kwargs,
     ):
         """
         Create the special pool for rdir services.
@@ -511,7 +511,7 @@ class RdirDispatcher(object):
             ((jokers, JOKER_SVC_TARGET), (rdirs, "rdir")),
             options=options,
             force=force,
-            **kwargs
+            **kwargs,
         )
 
     def _poll_rdir(
@@ -521,7 +521,7 @@ class RdirDispatcher(object):
         min_dist=None,
         replicas=DEFAULT_RDIR_REPLICAS,
         allow_down_known_services: int = 0,
-        **kwargs
+        **kwargs,
     ):
         """
         Call the special rdir service pool (created if missing).
@@ -556,7 +556,7 @@ class RdirDispatcher(object):
                 force=True,
                 replicas=replicas,
                 allow_down_known_services=allow_down_known_services,
-                **kwargs
+                **kwargs,
             )
 
         try:
@@ -691,7 +691,7 @@ class RdirClient(HttpApi):
         params=None,
         service_type="rawx",
         rdir_hosts=None,
-        **kwargs
+        **kwargs,
     ):
         if params is None:
             params = dict()
@@ -802,7 +802,7 @@ class RdirClient(HttpApi):
         content_path,
         content_version,
         headers=None,
-        **data
+        **data,
     ):
         """Reference a chunk in the reverse directory"""
         body = {
@@ -844,7 +844,7 @@ class RdirClient(HttpApi):
         shuffle=False,
         full_urls=False,
         old_format=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Fetch the list of chunks belonging to the specified volume.
@@ -940,7 +940,7 @@ class RdirClient(HttpApi):
         batch_size=1000,
         create=True,
         reqid=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Copy all chunks records from volume_id from one rdir to another.
@@ -987,7 +987,7 @@ class RdirClient(HttpApi):
                     json=batch,
                     rdir_hosts=dests_rdir_hosts,
                     reqid=reqid,
-                    **kwargs
+                    **kwargs,
                 )
                 batch = []
         if batch:
@@ -999,7 +999,7 @@ class RdirClient(HttpApi):
                 json=batch,
                 rdir_hosts=dests_rdir_hosts,
                 reqid=reqid,
-                **kwargs
+                **kwargs,
             )
 
     def admin_incident_set(self, volume, date, **kwargs):
@@ -1125,7 +1125,7 @@ class RdirClient(HttpApi):
             create=False,
             json=body,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
         return res, body
 
@@ -1172,7 +1172,7 @@ class RdirClient(HttpApi):
             create=False,
             json=body,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
 
     def meta2_index_fetch(
@@ -1205,7 +1205,7 @@ class RdirClient(HttpApi):
             action="fetch",
             json=params,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
         return body
 
@@ -1224,7 +1224,7 @@ class RdirClient(HttpApi):
             # The following is only called when the list is truncated
             # So we can assume there are records in the list
             marker_key=lambda x: x["records"][-1]["container_url"],
-            **kwargs
+            **kwargs,
         )
 
     @ensure_request_id
@@ -1236,7 +1236,7 @@ class RdirClient(HttpApi):
         batch_size=1000,
         create=True,
         reqid=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Copy all meta2 records from volume_id from one rdir to another.
@@ -1282,7 +1282,7 @@ class RdirClient(HttpApi):
                     service_type="meta2",
                     rdir_hosts=dests_rdir_hosts,
                     reqid=reqid,
-                    **kwargs
+                    **kwargs,
                 )
                 batch = []
         if batch:
@@ -1295,5 +1295,5 @@ class RdirClient(HttpApi):
                 service_type="meta2",
                 rdir_hosts=dests_rdir_hosts,
                 reqid=reqid,
-                **kwargs
+                **kwargs,
             )

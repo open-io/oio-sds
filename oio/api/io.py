@@ -154,7 +154,7 @@ class LinkHandler(_WriteHandler):
         blob_client,
         policy,
         headers=None,
-        **kwargs
+        **kwargs,
     ):
         super(LinkHandler, self).__init__(
             chunk_preparer, storage_method, headers=headers, **kwargs
@@ -178,7 +178,7 @@ class LinkHandler(_WriteHandler):
                     reqid=self.headers.get(REQID_HEADER),
                     connection_timeout=self.connection_timeout,
                     write_timeout=self.write_timeout,
-                    **kwargs
+                    **kwargs,
                 )
                 chunks = handler.link()
             except Exception as ex:
@@ -204,7 +204,7 @@ class WriteHandler(_WriteHandler):
         storage_method,
         headers=None,
         object_checksum_algo="md5",
-        **kwargs
+        **kwargs,
     ):
         """
         :param connection_timeout: timeout to establish the connection
@@ -314,7 +314,7 @@ class ChunkReader(object):
         resp_by_chunk=None,
         watchdog=None,
         verify_checksum=False,
-        **_kwargs
+        **_kwargs,
     ):
         """
         :param chunk_iter:
@@ -767,7 +767,7 @@ class _MetachunkWriter(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         self.storage_method = storage_method
         self._quorum = quorum
@@ -843,14 +843,14 @@ class MetachunkLinker(_MetachunkWriter):
         perfdata=None,
         connection_timeout=None,
         write_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         super(MetachunkLinker, self).__init__(
             storage_method=storage_method,
             quorum=quorum,
             reqid=reqid,
             perfdata=perfdata,
-            **kwargs
+            **kwargs,
         )
         self.meta_chunk_target = meta_chunk_target
         self.fullpath = fullpath
@@ -918,14 +918,14 @@ class MetachunkWriter(_MetachunkWriter):
         chunk_buffer_min=32768,
         chunk_buffer_max=262144,
         perfdata=None,
-        **_kwargs
+        **_kwargs,
     ):
         super(MetachunkWriter, self).__init__(
             storage_method=storage_method,
             quorum=quorum,
             reqid=reqid,
             perfdata=perfdata,
-            **_kwargs
+            **_kwargs,
         )
         self.sysmeta = sysmeta
         if self.storage_method and "cca" in self.storage_method.params:
@@ -1027,7 +1027,7 @@ class MetachunkPreparer(object):
                 position=mc_pos,
                 size=1,
                 stgpol=self.policy,
-                **self.extra_kwargs
+                **self.extra_kwargs,
             )
             self.obj_meta["properties"].update(meta.get("properties", {}))
             self._fix_mc_pos(next_body, mc_pos)

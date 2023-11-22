@@ -81,7 +81,7 @@ def get_pool_manager(
     pool_maxsize=DEFAULT_POOLSIZE,
     max_retries=DEFAULT_RETRIES,
     backoff_factor=DEFAULT_BACKOFF,
-    **kwargs
+    **kwargs,
 ):
     """
     Get `urllib3.PoolManager` to manage pools of connections
@@ -111,7 +111,7 @@ def get_pool_manager(
         maxsize=pool_maxsize,
         retries=max_retries,
         block=False,
-        **kw
+        **kw,
     )
 
 

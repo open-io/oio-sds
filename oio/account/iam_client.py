@@ -25,7 +25,7 @@ class IamClient(ServiceClient):
             conf,
             service_name="iam-service",
             request_prefix="v1.0/iam",
-            **kwargs
+            **kwargs,
         )
 
     def iam_request(self, account, *args, **kwargs):

@@ -44,7 +44,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         write_timeout=None,
         read_timeout=None,
         headers=None,
-        **kwargs
+        **kwargs,
     ):
         super(ReplicatedMetachunkWriter, self).__init__(
             sysmeta, storage_method=storage_method, quorum=quorum, **kwargs
@@ -370,7 +370,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
-                **kwargs
+                **kwargs,
             )
             bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks

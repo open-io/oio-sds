@@ -106,7 +106,7 @@ class BlobClient(object):
         logger=None,
         connection_pool=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         self.conf = conf
         self.perfdata = perfdata
@@ -146,7 +146,7 @@ class BlobClient(object):
             logger=self.logger,
             watchdog=self.watchdog,
             headers=headers,
-            **kwargs
+            **kwargs,
         )
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
@@ -221,7 +221,7 @@ class BlobClient(object):
             None,
             verify_checksum=verify_checksum,
             watchdog=self.watchdog,
-            **kwargs
+            **kwargs,
         )
         # This must be done now if we want to access headers
         stream = reader.stream()
@@ -276,7 +276,7 @@ class BlobClient(object):
         version=None,
         content_id=None,
         headers=None,
-        **kwargs
+        **kwargs,
     ):
         stream = None
         # Check source headers only when new fullpath is not provided

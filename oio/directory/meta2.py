@@ -248,7 +248,7 @@ class Meta2Database(object):
                         cid=cid,
                         svc_from=true_src,
                         svc_to=dst,
-                        **kwargs
+                        **kwargs,
                     )
                 except ClientException as cliexc:
                     if cliexc.status != 473:
@@ -261,7 +261,7 @@ class Meta2Database(object):
                         cid=cid,
                         svc_from=true_src,
                         svc_to=dst,
-                        **kwargs
+                        **kwargs,
                     )
                 break
             except Exception as exc:  # pylint: disable=broad-except
@@ -287,7 +287,7 @@ class Meta2Database(object):
             services=dict(
                 type=self.service_type, host=",".join(peers), args=args, seq=seq
             ),
-            **kwargs
+            **kwargs,
         )
         # FIXME(ABO): This part can be removed when, either:
         # - meta1 sends the removed services bundled with the

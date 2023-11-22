@@ -44,7 +44,7 @@ def loc_params(func):
         cid=None,
         service_id=None,
         suffix=None,
-        **kwargs
+        **kwargs,
     ):
         params = kwargs.pop("params", None)
         if params is None:
@@ -95,7 +95,7 @@ class AdminClient(ProxyClient):
                 request_prefix="/cache",
                 pool_manager=self.pool_manager,
                 no_ns_in_url=True,
-                **self._kwargs
+                **self._kwargs,
             )
         return self._cache_client
 
@@ -110,7 +110,7 @@ class AdminClient(ProxyClient):
                 request_prefix="/forward",
                 pool_manager=self.pool_manager,
                 no_ns_in_url=True,
-                **self._kwargs
+                **self._kwargs,
             )
         return self._forwarder
 

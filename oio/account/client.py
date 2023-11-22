@@ -27,7 +27,7 @@ class AccountClient(ServiceClient):
             conf,
             service_name="account-service",
             request_prefix="v1.0/account",
-            **kwargs
+            **kwargs,
         )
         # Some requests don't need the region,
         # let the requests fail if the region is needed
@@ -78,7 +78,7 @@ class AccountClient(ServiceClient):
         prefix=None,
         stats=None,
         sharding_accounts=None,
-        **kwargs
+        **kwargs,
     ):
         """
         List known accounts (except if requested, the sharding accounts
@@ -138,7 +138,7 @@ class AccountClient(ServiceClient):
             "PUT",
             "update",
             json={"metadata": metadata, "to_delete": to_delete},
-            **kwargs
+            **kwargs,
         )
 
     def bucket_list(
@@ -149,7 +149,7 @@ class AccountClient(ServiceClient):
         end_marker=None,
         prefix=None,
         region=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Get the list of buckets of an account.
@@ -195,7 +195,7 @@ class AccountClient(ServiceClient):
         prefix=None,
         region=None,
         bucket=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Get the list of containers of an account.
@@ -254,7 +254,7 @@ class AccountClient(ServiceClient):
         objects_details=None,
         bytes_details=None,
         bucket=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Update account with container-related metadata.

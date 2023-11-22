@@ -135,7 +135,7 @@ class ECChunkDownloadHandler(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **_kwargs
+        **_kwargs,
     ):
         """
         :param connection_timeout: timeout to establish the connections
@@ -665,7 +665,7 @@ class EcChunkWriter(object):
         chunk_checksum_algo="blake3",
         perfdata=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         self._chunk = chunk
         self._conn = conn
@@ -702,7 +702,7 @@ class EcChunkWriter(object):
         connection_timeout=None,
         write_timeout=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -746,7 +746,7 @@ class EcChunkWriter(object):
             write_timeout=write_timeout,
             reqid=reqid,
             watchdog=watchdog,
-            **kwargs
+            **kwargs,
         )
 
     def start(self, pool):
@@ -885,7 +885,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         kwargs.setdefault("chunk_buffer_min", storage_method.ec_segment_size)
         kwargs.setdefault("chunk_buffer_max", storage_method.ec_segment_size)
@@ -1237,7 +1237,7 @@ class ECWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                **kwargs
+                **kwargs,
             )
             bytes_transferred, checksum, chunks = handler.stream(self.source, max_size)
 
@@ -1273,7 +1273,7 @@ class ECRebuildHandler(object):
         read_timeout=None,
         watchdog=None,
         reqid=None,
-        **_kwargs
+        **_kwargs,
     ):
         self.meta_chunk = meta_chunk
         self.missing = missing

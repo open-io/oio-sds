@@ -274,7 +274,7 @@ class ListAccounts(Lister):
                 listing_key=lambda x: x["listing"],
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
-                **kwargs
+                **kwargs,
             )
         else:
             meta = acct_client.account_list(**kwargs)

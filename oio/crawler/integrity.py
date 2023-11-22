@@ -229,7 +229,7 @@ class Checker(object):
         beanstalkd_addr=None,
         beanstalkd_tube=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
         cache_size=2**24,
-        **_kwargs
+        **_kwargs,
     ):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
@@ -831,7 +831,7 @@ class Checker(object):
                     marker=marker,
                     version_marker=version_marker,
                     versions=True,
-                    **extra_args
+                    **extra_args,
                 )
             except exc.NoSuchContainer as err:
                 self.container_not_found += 1

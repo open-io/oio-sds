@@ -107,7 +107,7 @@ def extract_reference_params(func):
             path=path,
             cid=cid,
             params=params,
-            **kwargs
+            **kwargs,
         )
 
     return _reference_params
@@ -155,7 +155,7 @@ class ContainerClient(ProxyClient):
         version=None,
         bypass_governance=None,
         dryrun=None,
-        **kwargs
+        **kwargs,
     ):
         if cid:
             params = {"cid": cid}
@@ -295,7 +295,7 @@ class ContainerClient(ProxyClient):
                 params=params,
                 data=data,
                 region=region,
-                **kwargs
+                **kwargs,
             )
             if resp.status not in (204, 200):
                 raise exceptions.from_response(resp, body)
@@ -411,7 +411,7 @@ class ContainerClient(ProxyClient):
         dst_account=None,
         dst_reference=None,
         cid=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Create a snapshot of a the container.
@@ -488,7 +488,7 @@ class ContainerClient(ProxyClient):
         properties=None,
         cid=None,
         params=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Get information about a container (user and system properties).
@@ -534,7 +534,7 @@ class ContainerClient(ProxyClient):
         cid=None,
         system=None,
         propagate_to_shards=False,
-        **kwargs
+        **kwargs,
     ):
         params = self._make_params(account, reference, cid=cid)
         if clear:
@@ -643,7 +643,7 @@ class ContainerClient(ProxyClient):
         params=None,
         chunks=False,
         mpu_marker_only=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Get the list of contents of a container.
@@ -694,7 +694,7 @@ class ContainerClient(ProxyClient):
         append=False,
         change_policy=False,
         force=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Create a new object. This method does not upload any data, it just
@@ -771,7 +771,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, body = self._direct_request(
@@ -791,7 +791,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
@@ -807,7 +807,7 @@ class ContainerClient(ProxyClient):
         bypass_governance=None,
         create_delete_marker=False,
         dryrun=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Delete one object.
@@ -835,7 +835,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         data = self._add_replication_destinations({}, **kwargs)
@@ -906,7 +906,7 @@ class ContainerClient(ProxyClient):
         version=None,
         properties=True,
         params=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Get a description of the content along with the list of its chunks.
@@ -929,7 +929,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=properties,
-            **kwargs
+            **kwargs,
         )
         if content_meta is not None and chunks is not None:
             self._maybe_refresh_rawx_scores(**kwargs)
@@ -958,7 +958,7 @@ class ContainerClient(ProxyClient):
                     cid=cid,
                     content=content,
                     version=version,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 raise
@@ -972,7 +972,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=properties,
-            **kwargs
+            **kwargs,
         )
 
         return content_meta, chunks
@@ -990,7 +990,7 @@ class ContainerClient(ProxyClient):
         content_id=None,
         version=None,
         params=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Prepare an upload: get URLs of chunks on available rawx.
@@ -1033,7 +1033,7 @@ class ContainerClient(ProxyClient):
         content=None,
         version=None,
         params=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Get a description of the content along with its user properties.
@@ -1045,7 +1045,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=True,
-            **kwargs
+            **kwargs,
         )
         if obj_meta is not None:
             return obj_meta
@@ -1067,7 +1067,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=True,
-            **kwargs
+            **kwargs,
         )
 
         return obj_meta
@@ -1081,7 +1081,7 @@ class ContainerClient(ProxyClient):
         cid=None,
         version=None,
         clear=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Set properties on an object.
@@ -1102,7 +1102,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         _resp, _body = self._direct_request(
@@ -1117,7 +1117,7 @@ class ContainerClient(ProxyClient):
         properties=[],
         cid=None,
         version=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Delete some properties from an object.
@@ -1145,7 +1145,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, _body = self._direct_request(
@@ -1172,7 +1172,7 @@ class ContainerClient(ProxyClient):
         stgpol=None,
         position=None,
         params=None,
-        **kwargs
+        **kwargs,
     ):
         uri = self._make_uri("content/spare")
         if None in (stgpol, position):
@@ -1193,7 +1193,7 @@ class ContainerClient(ProxyClient):
         cid=None,
         version=None,
         size=0,
-        **kwargs
+        **kwargs,
     ):
         uri = self._make_uri("content/truncate")
         params = self._make_params(account, reference, path, cid=cid, version=version)
@@ -1205,7 +1205,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         _resp, body = self._direct_request("POST", uri, params=params, **kwargs)

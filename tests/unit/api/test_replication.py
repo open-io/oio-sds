@@ -335,7 +335,7 @@ class TestReplication(unittest.TestCase):
                 global_checksum,
                 self.storage_method,
                 watchdog=self.__class__.watchdog,
-                **kwargs
+                **kwargs,
             )
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(meta_chunk), len(chunks))

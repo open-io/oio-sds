@@ -219,7 +219,7 @@ class ContainerLifecycle(object):
             container=container,
             properties=True,
             versions=True,
-            **kwargs
+            **kwargs,
         ):
             try:
                 obj_meta["container"] = container
@@ -378,7 +378,7 @@ class LifecycleRule(object):
         try:
             expiration = NoncurrentVersionExpiration.from_element(
                 rule_elt.findall(tag("NoncurrentVersionExpiration"), nsmap)[-1],
-                **kwargs
+                **kwargs,
             )
             action_filter_type = type(expiration.filter)
             actions.append(expiration)

@@ -54,7 +54,7 @@ class HttpApi(object):
         connection="keep-alive",
         service_type="unknown",
         service_name=None,
-        **kwargs
+        **kwargs,
     ):
         """
         :param pool_manager: an optional pool manager that will be reused
@@ -101,7 +101,7 @@ class HttpApi(object):
         admin_mode=False,
         pool_manager=None,
         force_master=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Make an HTTP request.

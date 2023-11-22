@@ -64,7 +64,7 @@ class Indexer(Filter):
             chunk.meta["content_path"],
             chunk.meta["content_version"],
             headers=headers,
-            **data
+            **data,
         )
 
     def process(self, env, cb):

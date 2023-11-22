@@ -117,7 +117,7 @@ class RedisConnection(object):
         self._sentinel = self.__redis_sentinel_mod.Sentinel(
             self._sentinel_hosts,
             sentinel_kwargs=self._sentinel_conn_kwargs,
-            **self._conn_kwargs
+            **self._conn_kwargs,
         )
 
     def _filter_conn_kwargs(self, conn_kwargs):

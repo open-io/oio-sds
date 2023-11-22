@@ -662,7 +662,7 @@ class ListObject(ContainerCommandMixin, Lister):
                 account=account,
                 container=container_marker,
                 marker=marker,
-                **kwargs
+                **kwargs,
             ):
                 count += 1
                 yield element
@@ -701,7 +701,7 @@ class ListObject(ContainerCommandMixin, Lister):
                 truncated_key=lambda x: x["truncated"],
                 account=account,
                 container=container,
-                **kwargs
+                **kwargs,
             ):
                 object_list.append(i)
         except exceptions.OioException as err:
@@ -753,7 +753,7 @@ class ListObject(ContainerCommandMixin, Lister):
                     account=account,
                     container=container,
                     cid=cid,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 resp = self.app.client_manager.storage.object_list(
@@ -1115,5 +1115,5 @@ class LinkObject(ObjectCommandMixin, Command):
             link_content_id=parsed_args.dest_content_id,
             properties_directive=directive,
             cid=cid,
-            **kwargs
+            **kwargs,
         )

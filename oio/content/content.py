@@ -111,7 +111,7 @@ class Content(object):
         fake_excluded_chunks=None,
         force_fair_constraints=False,
         adjacent_mode=False,
-        **kwargs
+        **kwargs,
     ):
         notin = ChunksHelper(chunks_notin, False).raw()
         broken = ChunksHelper(chunks_broken, False).raw()
@@ -139,7 +139,7 @@ class Content(object):
                     data=spare_data,
                     stgpol=self.policy,
                     position=position,
-                    **kwargs
+                    **kwargs,
                 )
                 # Transform list of properties into a dict
                 properties = {
@@ -215,7 +215,7 @@ class Content(object):
             cid=self.container_id,
             path=self.path,
             version=self.version,
-            **kwargs
+            **kwargs,
         )
 
     def _generate_sysmeta(self):
@@ -244,7 +244,7 @@ class Content(object):
             chunk_method=self.chunk_method,
             mime_type=self.mime_type,
             data=data,
-            **kwargs
+            **kwargs,
         )
 
     def rebuild_chunk(
@@ -280,7 +280,7 @@ class Content(object):
         force_fair_constraints=True,
         adjacent_mode=False,
         headers={},
-        **kwargs
+        **kwargs,
     ):
         """
         Move a chunk to another place. Optionally ensure that the
@@ -325,7 +325,7 @@ class Content(object):
             max_attempts=max_attempts,
             force_fair_constraints=force_fair_constraints,
             adjacent_mode=adjacent_mode,
-            **kwargs
+            **kwargs,
         )
 
         # Sort chunks by score to try to copy with higher score.
@@ -363,7 +363,7 @@ class Content(object):
                         version=self.version,
                         content_id=self.content_id,
                         headers=headers,
-                        **kwargs
+                        **kwargs,
                     )
                     break
                 except Exception as err:
