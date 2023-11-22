@@ -1,50 +1,19 @@
 #!/usr/bin/make -f
-# See debhelper(7) (uncomment to enable)
-# output every command that modifies files on the build system.
-#DH_VERBOSE = 1
-#export DH_OPTIONS=-v
-export DEB_BUILD_OPTIONS += nocheck
 
 DESTDIR=$(CURDIR)/debian/${PACKAGE}
 PREFIX=/opt/${PACKAGE}
-# Only one Python path is expected
+
+export DH_VIRTUALENV_INSTALL_ROOT=/opt/
 PYTHON_PATH=$(shell readlink -f /opt/python-*)
-# Only one Zookeeper path is expected
-ZOOKEEPER_PATH=$(shell readlink -f /opt/obsto-zookeeper-*)
-# Only one Golang path is expected
-GO_PATH=$(shell readlink -f /opt/go-*)
-GO_HOME=${GO_PATH}
-GOPATH=${GO_PATH}
 
-export PATH := $(PYTHON_PATH)/bin:$(GO_PATH)/bin:$(PATH)
-export PKG_CONFIG_PATH := $(PYTHON_PATH)/lib/pkgconfig
-export LIBRARY_PATH := $(PYTHON_PATH)/lib
-export C_INCLUDE_PATH := $(PYTHON_PATH)/include
-
-export DH_VIRTUALENV_INSTALL_ROOT=/opt
-
-DPKG_EXPORT_BUILDFLAGS = 1
-include /usr/share/dpkg/default.mk
+export CFLAGS=-I${PYTHON_PATH}/include/
+export LIBRARY_PATH=${PYTHON_PATH}/lib
+export LD_LIBRARY_PATH=${LIBRARY_PATH}
 
 %:
-	dh $@ --buildsystem cmake
+	dh $@ --buildsystem=dh_virtualenv --with python-virtualenv
 
-override_dh_auto_configure:
-	dh_auto_configure --buildsystem cmake -- \
-	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_INSTALL_PREFIX=${PREFIX} \
-	-DCMAKE_INSTALL_RPATH=${PREFIX}/lib:${PYTHON_PATH}/lib \
-	-DLD_LIBDIR=lib \
-	-DEXE_PREFIX=oio \
-	-DZK_LIBDIR=${ZOOKEEPER_PATH}/lib \
-	-DZK_INCDIR=${ZOOKEEPER_PATH}/include/zookeeper \
-	-DSOCKET_OPTIMIZED=1
-
-override_dh_auto_build:
-	dh_auto_build
-	python3 -m build
-
-override_dh_install:
+override_dh_virtualenv:
 	echo "Name: oio" > PKG-INFO
 	dh_virtualenv \
 	  --python ${PYTHON_PATH}/bin/python \
@@ -52,36 +21,16 @@ override_dh_install:
 	  --use-system-packages \
 	  --builtin-venv \
 	  --upgrade-pip \
-	  --preinstall build \
 	  --preinstall "setuptools>=48.0.0" \
 	  --preinstall wheel \
 	  --index-url https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
-	# do dh_install after dh_virtualenv as it cleans everything
-	# make install, to install oio except the python part
-	dh_install
-	# copy zookeeper libraries not to depend on zookeeper package
-	cp -a ${ZOOKEEPER_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
-	# create env file for library directory
-	echo "LD_LIBRARY_PATH=${PREFIX}/lib:${PYTHON_PATH}/lib" > $(DESTDIR)/${PREFIX}/ld_library_path.env
-	# create ld.so.conf file
-	echo ${PREFIX}/lib > $(DESTDIR)${PREFIX}/ld.so.conf
-	echo ${PYTHON_PATH}/lib >> $(DESTDIR)${PREFIX}/ld.so.conf
-	# Install OpenIO SDS directories
-	mkdir -pv $(DESTDIR)/var/log/oio/sds \
-		$(DESTDIR)/var/lib/oio/sds \
-		$(DESTDIR)/etc/oio/sds \
-		$(DESTDIR)/run/oio/sds
 	# fix shebangs
-	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
+	find $(DESTDIR)$(PREFIX)/bin/ -type f -exec sed -i "s@${DESTDIR}@@" {} \;
 	./tools/patch-python-modules.sh "${DESTDIR}${PREFIX}"
+
+.PHONY: override_dh_strip override_dh_shlibdeps
 
 # remove postinst from dh-virtualenv as it's buggy and useless
 override_dh_installdeb:
-	dh_installdeb -O--buildsystem=cmake
+	dh_installdeb
 	rm -f $(DESTDIR)/DEBIAN/postinst
-
-override_dh_auto_install:
-	dh_auto_install --destdir=${DESTDIR}
-
-override_dh_shlibdeps:
-	# skip
