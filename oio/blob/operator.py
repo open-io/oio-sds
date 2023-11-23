@@ -111,7 +111,12 @@ class ChunkOperator(object):
             )
             for data in rawx_srv_data:
                 # Fetch location of each rawx service
-                loc = tuple(data["tags"]["tag.loc"].split("."))
+                tags = data.get("tags", {})
+                loc = tags.get("tag.loc")
+                if not loc:
+                    self.logger.warn("Location is missing for rawx %s", data["id"])
+                    continue
+                loc = tuple(loc.split("."))
                 # Here data["id"] represents the rawx service id
                 self.rawx_srv_locations[data["id"]] = loc
         # Calculate the current items on the same host with the chunk to rebuild
