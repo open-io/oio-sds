@@ -1057,8 +1057,11 @@ class EcMetachunkWriter(io.MetachunkWriter):
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to) from to
-        except Exception:
-            self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
+        except Exception as exc:
+            # Do not log the stack trace here (we reraise the exception).
+            self.logger.error(
+                "Exception reading or writing data (reqid=%s): %s", self.reqid, exc
+            )
             raise
 
     def _get_writers(self):

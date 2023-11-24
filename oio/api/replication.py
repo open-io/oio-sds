@@ -143,8 +143,11 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         except Timeout as to:
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             raise OioTimeout(to) from to
-        except Exception:
-            self.logger.exception("Exception writing data (reqid=%s)", self.reqid)
+        except Exception as exc:
+            # Do not log the stack trace here (we reraise the exception).
+            self.logger.error(
+                "Exception reading or writing data (reqid=%s): %s", self.reqid, exc
+            )
             raise
 
         success_chunks = []
