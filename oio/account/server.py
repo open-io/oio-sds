@@ -49,10 +49,11 @@ def force_master(func):
 class Account(WerkzeugApp):
     # pylint: disable=no-member
 
-    def __init__(self, conf, backend, iam_db, logger=None):
+    def __init__(self, conf, backend, iam_db, kms_api, logger=None):
         self.conf = conf
         self.backend = backend
         self.iam = iam_db
+        self.kms_api = kms_api
         self.logger = logger or get_logger(conf)
 
         self.url_map = Map(
@@ -1580,6 +1581,49 @@ class Account(WerkzeugApp):
 
     # --- KMS -----------------------------------------------------------------
 
+    def _encrypt_plaintext_secret(self, resp):
+        """Try to encrypt and store the resp["secret"]"""
+        account_id = resp["account"]
+        bname = resp["bucket"]
+        context = f"{account_id}_{bname}"
+        try:
+            data = self.kms_api.encrypt(resp["secret"], context)
+            ciphertext = data["ciphertext"]
+            key_id = data["context"]["key_id"]
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to encrypt bucket {account_id}/{bname} secret: {exc}"
+            )
+        else:
+            try:
+                self.backend.save_bucket_encrypted_secret(
+                    account_id, bname, ciphertext, key_id, secret_id=resp["secret_id"]
+                )
+            except Exception as exc:
+                self.logger.error(
+                    f"Failed to save bucket {account_id}/{bname} secret: {exc}"
+                )
+
+    def _decrypt_ciphered_secret(self, resp, key_id, ciphertext):
+        """Try to decrypt the ciphertext"""
+        account_id = resp["account"]
+        bname = resp["bucket"]
+        context = f"{account_id}_{bname}"
+        try:
+            data = self.kms_api.decrypt(key_id, ciphertext, context)
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to decrypt bucket {account_id}/{bname} secret: {exc}"
+            )
+        else:
+            if data and data["plaintext"]:
+                resp["secret"] = data["plaintext"]
+            else:
+                self.logger.error(
+                    f"Failed to read plaintext from decrypted data: {data}"
+                )
+        return resp
+
     @force_master
     def on_kms_create_secret(self, req, **kwargs):
         """Create (and return) a secret for the specified bucket."""
@@ -1596,22 +1640,35 @@ class Account(WerkzeugApp):
         except ValueError as err:
             return BadRequest(str(err))
         secret = secrets.token_bytes(secret_bytes)
+        ciphertext = None
+
         try:
             self.backend.save_bucket_secret(
-                account_id, bname, secret, secret_id=secret_id
+                account_id,
+                bname,
+                secret,
+                secret_id=secret_id,
             )
             status = 201
         except Conflict:
-            secret = self.backend.get_bucket_secret(
+            secret, ciphertext, key_id = self.backend.get_bucket_secret(
                 account_id, bname, secret_id=secret_id
             )
             status = 200
+
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
             "secret": base64.b64encode(secret),
         }
+
+        if self.kms_api.enabled:
+            if ciphertext:
+                resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
+            else:
+                self._encrypt_plaintext_secret(resp)
+
         return Response(
             json.dumps(resp, separators=(",", ":")),
             mimetype=HTTP_CONTENT_TYPE_JSON,
@@ -1633,13 +1690,21 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
-        secret = self.backend.get_bucket_secret(account_id, bname, secret_id=secret_id)
+        secret, ciphertext, key_id = self.backend.get_bucket_secret(
+            account_id, bname, secret_id=secret_id
+        )
+        secret_b64 = base64.b64encode(secret)
+
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
-            "secret": base64.b64encode(secret),
+            "secret": secret_b64,
         }
+
+        if self.kms_api.enabled and ciphertext:
+            resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
+
         return Response(
             json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
         )
@@ -1665,12 +1730,14 @@ def create_app(conf, **kwargs):
 
     from oio.account.backend_fdb import AccountBackendFdb
     from oio.account.iam_fdb import FdbIamDb
+    from oio.account.kmsapi_client import KmsApiClient
 
     backend = AccountBackendFdb(conf, logger)
     iam_db = FdbIamDb(conf, logger=logger)
+    kms_api = KmsApiClient(conf, logger=logger)
 
-    logger.info("Account using FBD backend")
-    app = Account(conf, backend, iam_db, logger=logger)
+    logger.info("Account using FBD backend and KMS API")
+    app = Account(conf, backend, iam_db, kms_api, logger=logger)
     return app
 
 

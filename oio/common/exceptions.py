@@ -293,6 +293,15 @@ class BadRequest(ClientException):
         super(BadRequest, self).__init__(http_status, status, message)
 
 
+class Unauthorized(ClientException):
+    """
+    Unauthorized access.
+    """
+
+    def __init__(self, http_status=401, status=None, message=None):
+        super(Unauthorized, self).__init__(http_status, status, message)
+
+
 class Forbidden(ClientException):
     """
     Operation is forbidden.
@@ -355,6 +364,7 @@ class ServiceBusy(ClientException):
 
 _http_status_map = {
     400: BadRequest,
+    401: Unauthorized,
     403: Forbidden,
     404: NotFound,
     405: MethodNotAllowed,
