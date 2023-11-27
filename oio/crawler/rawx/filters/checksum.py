@@ -164,10 +164,13 @@ class Checksum(Filter):
                     error_msg = "%(err)s, action required!" % {"err": str(err)}
                     self.error(chunk, container_id, error_msg)
             else:
-                error_msg = "%(err)s, not possible to get list of rawx" % {
-                    "err": str(err)
-                }
-                self.logger.error(chunk, container_id, error_msg)
+                error_msg = (
+                    f"Not possible to get list of rawx "
+                    f"err={str(err)} chunk={chunk.chunk_id}, "
+                    f"container_id ={container_id}"
+                )
+
+                self.logger.error(error_msg)
 
     def process(self, env, cb):
         chunk = ChunkWrapper(env)
