@@ -385,7 +385,7 @@ class KafkaCreateTopics(KafkaCommandMixinBase, Lister):
         with open(schema, "r", encoding="utf8") as file:
             schema = yaml.safe_load(file)
             default_options = schema.get("options", {})
-            default_replication = schema.get("replication", 1)
+            default_replicas = schema.get("replicas", 1)
             default_partitions = schema.get("partitions", 1)
 
             topics = schema.get("topics", [])
@@ -399,9 +399,7 @@ class KafkaCreateTopics(KafkaCommandMixinBase, Lister):
                     "name": topic_name,
                     "options": options,
                     "partitions": topic_details.get("partitions", default_partitions),
-                    "replication": topic_details.get(
-                        "replication", default_replication
-                    ),
+                    "replicas": topic_details.get("replicas", default_replicas),
                 }
         return topics_to_process
 
