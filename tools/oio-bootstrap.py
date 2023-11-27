@@ -1395,7 +1395,6 @@ meta2.sharding.max_entries_cleaned=10
 admin=${IP}:${PORT_ADMIN}
 """
 
-
 template_meta_config = """
 [${NS}]
 events.kafka.options=client.id=${SERVICE_ID}
@@ -1436,8 +1435,8 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
-queue_url=${QUEUE_URL}
-tube = ${QUEUE_NAME}
+broker_endpoint = ${QUEUE_URL}
+topic_name = ${QUEUE_NAME}
 group_id = ${GROUP_ID}
 
 rdir_connection_timeout = 0.5
@@ -1513,8 +1512,8 @@ timeout = 4.5
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = oio-rebuild
-queue_url = ${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+topic_name = oio-rebuild
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -1530,10 +1529,9 @@ endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:async_replication]
 use = egg:oio#notify
-tube = oio-replication
-queue_url = ${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+topic_name = oio-replication
 required_fields = destinations
-exchange_name = oio-replication
 
 [filter:bury]
 use = egg:oio#bury
@@ -1548,23 +1546,20 @@ use = egg:oio#noop
 # Forward storage.content.deleted events to another queue. Another
 # oio-event-agent will read this queue and delete chunks at a limited rate.
 use = egg:oio#notify
-tube = oio-delete
-queue_url = ${QUEUE_URL}
-#queue_args = ${QUEUE_ARGS}
+broker_endpoint = ${QUEUE_URL}
+topic_name = oio-delete
+
 # In exchange "oio", all messages are routed to the queue "oio". To prevent
 # loops, we need another exchange.
-exchange_name = oio-delete
 strip_fields = aliases,contents_headers
 
 # This filter is only to demonstrate policy regexes
 [filter:notify_drained]
 use = egg:oio#notify
-queue_url = ${QUEUE_URL}
-queue_args = x-queue-type=classic
-tube = oio-drained
+broker_endpoint = ${QUEUE_URL}
+topic_name = oio-drained
 policy_regex_EC = ^EC.*
-tube_EC = oio-drained-ec
-exchange_name = oio-drained
+topic_name_EC = oio-drained-ec
 
 [filter:logger]
 use = egg:oio#logger
@@ -1663,7 +1658,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
-queue_url=${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
 group_id = ${GROUP_ID}
 """
 
@@ -1764,7 +1759,7 @@ workers = 2
 
 [xcute-orchestrator]
 orchestrator_id = orchestrator-${SRVNUM}
-endpoints=${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
 jobs_topic = oio-xcute-jobs
 """
 
