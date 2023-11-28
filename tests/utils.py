@@ -28,12 +28,14 @@ from urllib.parse import urlencode
 
 import yaml
 import testtools
+from confluent_kafka import TopicPartition
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time, get_watchdog, eventlet
+from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_PRESERVED_TOPIC, KafkaConsumer
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -44,6 +46,8 @@ CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
 CODE_POLICY_NOT_SATISFIABLE = 481
 CODE_POLICY_NOT_SUPPORTED = 480
+
+DEFAULT_GROUP_ID_TEST = "event-agent-test"
 
 
 def ec(fnc):
@@ -120,6 +124,9 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
     TEST_HEADERS = {REQID_HEADER: "7E571D0000000000"}
+    # Here we initialize the consumer as a class attribute
+    # to be able to close the consumer in teardownclass
+    KAKFA_CONSUMER = None
 
     def _compression(self):
         rx = self.conf.get("rawx", {})
@@ -253,6 +260,8 @@ class CommonTestCase(testtools.TestCase):
         self._storage_api = None
         self._watchdog = None
         self._bucket = None
+        self._preserved_offset = None
+
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
         # Namespace configuration as it was when the test started
@@ -275,6 +284,9 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         super(CommonTestCase, cls).tearDownClass()
+        if cls.KAKFA_CONSUMER is not None:
+            # Close consumer
+            cls.KAKFA_CONSUMER.close()
 
     @property
     def conscience(self):
@@ -306,6 +318,46 @@ class CommonTestCase(testtools.TestCase):
         if not self._beanstalkd0:
             self._beanstalkd0 = Beanstalk.from_url(self.conf["main_queue_url"])
         return self._beanstalkd0
+
+    @property
+    def kafka_consumer(self):
+        if not self.KAKFA_CONSUMER:
+            self._init_kafka_consumer()
+            self._define_oio_preserved_offset()
+        return self.KAKFA_CONSUMER
+
+    def _init_kafka_consumer(self):
+        """Initialize a consumer at the beginning of each test"""
+        if self.KAKFA_CONSUMER:
+            # Close the consumer previously created
+            self.KAKFA_CONSUMER.consumer.close()
+            self.KAKFA_CONSUMER = None
+        # Create a new consumer
+        group_id = DEFAULT_GROUP_ID_TEST + "-" + random_str(8)
+        self.KAKFA_CONSUMER = self.get_kafka_consumer(group_id=group_id)
+
+    def _define_oio_preserved_offset(self):
+        """Define the latest offset of oio-preserved topic"""
+        partition = TopicPartition("oio-preserved", 0)
+        (
+            _,
+            self._preserved_offset,
+        ) = self.KAKFA_CONSUMER.consumer.get_watermark_offsets(partition)
+
+    def get_kafka_consumer(self, topics=None, group_id=DEFAULT_GROUP_ID_TEST):
+        endpoint = DEFAULT_ENDPOINT
+        kafka_consumer = KafkaConsumer(
+            endpoint,
+            topics=topics,
+            logger=self.logger,
+            conf={
+                **{},
+                "group.id": group_id,
+                "enable.auto.commit": False,
+                "auto.offset.reset": "latest",
+            },
+        )
+        return kafka_consumer
 
     @property
     def bucket_client(self):
@@ -693,3 +745,68 @@ class BaseTestCase(CommonTestCase):
         except ResponseError as err:
             logging.warn("%s", err)
         return None
+
+    def wait_for_kafka_event(
+        self,
+        topic=DEFAULT_PRESERVED_TOPIC,
+        reqid=None,
+        types=None,
+        fields=None,
+        timeout=30.0,
+        partition_id=0,
+        nb_prior_events=10,
+        offset=None,
+    ):
+        """
+        Wait for an event in the specified tube.
+        If reqid, types and/or fields are specified, drain events until the
+        specified event is found.
+
+        :param fields: dict of fields to look for in the event's URL
+        :param types: list of types of events the method should look for
+        """
+        if not offset:
+            offset = self._preserved_offset
+        now = time.time()
+        deadline = now + timeout
+        try:
+            while now < deadline:
+                # To avoid to poll from lowest offset each time
+                # here we want to poll n-th events from the highest offset
+                events = self.kafka_consumer.fetch_n_events(
+                    nb_prior_events, partition_id, topic, offset=offset
+                )
+                now = time.time()
+                for event in events:
+                    if now > deadline:
+                        # Stop fetching events
+                        break
+                    if event:
+                        data = event.value()
+                        offset = event.offset()
+                        event = Event(jsonlib.loads(data))
+                        if types and event.event_type not in types:
+                            logging.debug("ignore event %s (event mismatch)", data)
+                            continue
+                        if reqid and event.reqid != reqid:
+                            logging.info("ignore event %s (request_id mismatch)", data)
+                            continue
+                        if fields and any(
+                            fields[k] != event.url.get(k) for k in fields
+                        ):
+                            logging.info("ignore event %s (filter mismatch)", data)
+                            continue
+                        logging.info("event %s", data)
+                        return event, offset + 1
+
+            logging.warn(
+                "wait_for_kafka_event(reqid=%s, types=%s, fields=%s, timeout=%s) "
+                "reached its timeout",
+                reqid,
+                types,
+                fields,
+                timeout,
+            )
+        except ResponseError as err:
+            logging.warn("%s", err)
+        return None, None

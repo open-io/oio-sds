@@ -105,7 +105,7 @@ class KafkaConsumerWorker(Process):
         if self._consumer is None:
             self._consumer = KafkaConsumer(
                 self.endpoint,
-                [self.topic],
+                topics=[self.topic],
                 logger=self.logger,
                 conf={
                     **self._kafka_conf,
