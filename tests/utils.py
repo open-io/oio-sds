@@ -810,3 +810,26 @@ class BaseTestCase(CommonTestCase):
         except ResponseError as err:
             logging.warn("%s", err)
         return None, None
+
+    def wait_until_empty(
+        self,
+        topic,
+        group_id,
+        timeout=float("inf"),
+        poll_interval=2.0,
+        initial_delay=0.0,
+    ):
+        """
+        Wait until all events in the specified topic are consumed or the timeout
+        expires.
+        """
+        deadline = time.time() + timeout
+        if initial_delay > 0.0:
+            time.sleep(initial_delay)
+        sum_lag = 1000000
+        while sum_lag > 0 and time.time() < deadline:
+            time.sleep(poll_interval)
+            kafka_consumer = self.get_kafka_consumer(topics=[topic], group_id=group_id)
+            lags = kafka_consumer.get_topic_lag(topic)
+            sum_lag = sum(lags.values())
+            kafka_consumer.consumer.close()
