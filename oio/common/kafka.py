@@ -272,6 +272,47 @@ class KafkaConsumer(KafkaClient):
                 continue
             yield msg
 
+    def get_partition_lag(self, partition):
+        """Get the number for specified partition
+        in the specified topic
+
+        :param partition: TopicPartition instance
+        :type partition: TopicPartition
+        """
+        # Get the total number of events
+        low_offset, high_offset = self.consumer.get_watermark_offsets(partition)
+        if high_offset < 0:
+            lag = 0
+        elif partition.offset < 0:
+            # No committed offset defined for the given partition.
+            lag = high_offset - low_offset
+        else:
+            # The committed offset is known,
+            # the lag is total number of events - events already consumed
+            lag = high_offset - partition.offset
+        return lag
+
+    def get_topic_lag(self, topic):
+        """Get lag of all partitions of the specified topic
+
+        :param topic: topic name
+        :type topic: str
+        :return: dict of partition_id and corresponding lag
+        :rtype: dict
+        """
+        lags = {}
+        # List of partitions defined in the topic
+        partitions = [
+            TopicPartition(topic, p)
+            for p in self.consumer.list_topics(topic).topics[topic].partitions
+        ]
+        # Partitions with the right offset committed
+        committed = self.consumer.committed(partitions)
+        for topic_partition in committed:
+            lag = self.get_partition_lag(topic_partition)
+            lags[topic_partition.partition] = lag
+        return lags
+
     def _close(self):
         self._client.poll(POLL_TIMEOUT)
         self._client.close()
