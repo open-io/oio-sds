@@ -111,7 +111,7 @@ class KafkaConsumerWorker(Process):
 
             self._consumer = KafkaConsumer(
                 self.endpoint,
-                [self.topic],
+                topics=[self.topic],
                 logger=self.logger,
                 conf={
                     "group.id": self.group_id,
