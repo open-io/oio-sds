@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -44,7 +44,7 @@ class TestIntegrityCrawler(BaseTestCase):
         self.chunk = chunks[0]
         self.irreparable = len(chunks) == 1
         self.storage.blob_client.chunk_delete(self.chunk["real_url"])
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             reqid=reqid,
             fields={"account": self.account, "user": self.container},
@@ -56,7 +56,7 @@ class TestIntegrityCrawler(BaseTestCase):
         os.remove(self.rebuild_file)
         self.storage.container_flush(self.account, self.container)
         self.storage.container_delete(self.account, self.container)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             types=[EventTypes.CONTAINER_DELETED],
             fields={"user": self.container},

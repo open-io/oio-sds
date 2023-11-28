@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ class TestAccountServiceCleaner(BaseTestCase):
     def test_container_still_exists(self):
         reqid = request_id()
         self.storage.container_create(self.account, self.container, reqid=reqid)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_NEW,)
         )
         self.cleaner.run()
@@ -51,7 +51,7 @@ class TestAccountServiceCleaner(BaseTestCase):
             self.account, self.container, system=system, reqid=reqid
         )
         self.storage.bucket.bucket_create(self.container, self.account)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_NEW,)
         )
         self.cleaner.run()

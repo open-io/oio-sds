@@ -46,7 +46,7 @@ class TestMeta2EventsEmission(BaseTestCase):
             pulled_events[event_type] = []
 
         while True:
-            event = self.wait_for_event(
+            event, _ = self.wait_for_kafka_event(
                 "oio-preserved",
                 types=types,
                 reqid=reqid,
