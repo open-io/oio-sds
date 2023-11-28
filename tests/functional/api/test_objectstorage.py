@@ -1374,7 +1374,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_account_refresh_all(self):
         self.wait_for_score(("account", "meta2"))
-        self.beanstalkd0.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         # clear accounts
         accounts = depaginate(
             self.api.account.account_list,
@@ -1422,7 +1422,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name1)
         name2 = random_str(32)
         self.api.container_create(account, name2)
-        self.beanstalkd.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         time.sleep(0.1)
         self.api.account_flush(account)
         containers = self.api.container_list(account)
@@ -1434,7 +1434,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_delete(account, name1)
         self.api.container_delete(account, name2)
-        self.beanstalkd.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         time.sleep(0.1)
         self.api.account_delete(account)
 

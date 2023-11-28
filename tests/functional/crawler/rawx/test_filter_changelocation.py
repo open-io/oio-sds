@@ -49,7 +49,7 @@ class TestFilterChangelocation(BaseTestCase):
     def setUp(self):
         super(TestFilterChangelocation, self).setUp()
         self.api = self.storage
-        self.beanstalkd0.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         self.rawx_srv_list = self.conscience.all_services(
             service_type="rawx",
         )
