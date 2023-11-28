@@ -14,9 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
 from oio.common.logger import get_logger
+from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
 from oio.content.plain import PlainContent
@@ -54,6 +56,15 @@ class ContentFactory(object):
                 account = container_info["sys.account"]
             if not container_name:
                 container_name = container_info["sys.user.name"]
+        # If we are dealing with a shard, resolve real account and bucket name,
+        # or the chunk IDs we compute will be wrong.
+        if account.startswith(SHARDING_ACCOUNT_PREFIX):
+            account = account[len(SHARDING_ACCOUNT_PREFIX) :]
+            container_name = container_name.rsplit("-", 3)[0]
+            self.logger.debug(
+                "%s is a shard of %s/%s", container_id, account, container_name
+            )
+            container_id = cid_from_name(account, container_name)
         cls = ECContent if storage_method.ec else PlainContent
         return cls(
             self.conf,
