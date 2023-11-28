@@ -43,6 +43,8 @@ class CustomHTTPResponse(HTTPResponse):
             # This message will help us track the error further.
             if "no attribute 'recv'" in str(err) or "Read on closed" in str(err):
                 raise IOError("reading socket after close") from err
+            if "no attribute 'close'" in str(err):
+                return b""
             raise
 
     def close(self):
