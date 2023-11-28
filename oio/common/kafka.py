@@ -15,14 +15,23 @@
 # pylint: disable-next=unused-import
 from datetime import datetime
 import json
+import time
 from math import ceil
 
-from confluent_kafka import Consumer, Producer, KafkaException
+from confluent_kafka import (
+    Consumer,
+    Producer,
+    KafkaException,
+    TopicPartition,
+    OFFSET_BEGINNING,
+    OFFSET_INVALID,
+)
 from oio.common.exceptions import OioException
 from oio.event.evob import EventTypes
 
 DEFAULT_ENDPOINT = "kafka://127.0.0.1:19092"
 DEFAULT_TOPIC = "oio"
+DEFAULT_PRESERVED_TOPIC = "oio-preserved"
 DEFAULT_REPLICATION_TOPIC = "oio-replication"
 DEFAULT_DELAYED_TOPIC = "oio-delayed"
 DEFAULT_DELETE_TOPIC_PREFIX = "oio-delete-"
@@ -44,6 +53,10 @@ class KafkaSendException(OioException):
 
 
 class KafkaTopicNotFoundException(OioException):
+    ...
+
+
+class KafkaPartitionNotAssignedException(OioException):
     ...
 
 
@@ -189,8 +202,9 @@ class KafkaConsumer(KafkaClient):
 
         self._connect(client_conf)
 
-        self.ensure_topics_exist(topics)
-        self._client.subscribe(topics)
+        if topics:
+            self.ensure_topics_exist(topics)
+            self._client.subscribe(topics)
 
     @property
     def consumer(self):
@@ -199,6 +213,64 @@ class KafkaConsumer(KafkaClient):
     def fetch_events(self):
         while True:
             yield self._client.poll(1.0)
+
+    def _is_valid_offset(self):
+        return self.consumer.assignment()[0].offset != OFFSET_INVALID
+
+    def fetch_n_events(self, nb_events, partition_id, topic, offset=None):
+        """Fetch event starting from the n-th event (nb_events).
+        If offset is defined, returned events will be starting from the
+        given offset position.
+
+        :param nb_msg: number of expected events
+        :type nb_events: int
+        :param partition_id: partition assigned
+        :type partition_id: TopicPartition
+        :param topic: the name of the topic from which to poll
+        :type topic: str
+        :param offset: the starting position when polling
+        :type offset: int
+        :return: events
+        :rtype: generator of events
+        """
+        partition = TopicPartition(topic, partition_id)
+        desired_offset = offset if offset else OFFSET_BEGINNING
+        low_offset, high_offset = self.consumer.get_watermark_offsets(partition)
+        if nb_events and not offset:
+            # Set the offset just on the n-th event
+            desired_offset = (
+                high_offset - nb_events if high_offset >= nb_events else low_offset
+            )
+            if desired_offset <= low_offset:
+                desired_offset = OFFSET_BEGINNING
+
+        partition.offset = desired_offset
+        self.consumer.assign([partition])
+        is_assigned = False
+        while not all([is_assigned, self._is_valid_offset()]):
+            try:
+                # wait a little bit the time the partition is assigned
+                time.sleep(1.0)
+                self.consumer.seek(partition)
+                is_assigned = True
+            except KafkaException:
+                continue
+            except Exception as exc:
+                raise KafkaPartitionNotAssignedException from exc
+        nb_poll = (
+            high_offset - desired_offset
+            if desired_offset != OFFSET_BEGINNING
+            else high_offset
+        )
+        for _ in range(nb_poll):
+            msg = self.consumer.poll(1.0)
+            if msg is None:
+                # we probably already polled the latest event
+                break
+            elif msg.error():
+                self._logger.error("Failed to fetch message, reason: %s", msg.error())
+                continue
+            yield msg
 
     def _close(self):
         self._client.poll(POLL_TIMEOUT)
