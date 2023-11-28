@@ -63,7 +63,7 @@ class ServiceListTest(CliTestCase):
 
         reqid = request_id("rlc")
         self.storage.object_delete(self.account, container, obj, reqid=reqid)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             reqid=reqid,
             timeout=5.0,

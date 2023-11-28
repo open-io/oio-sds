@@ -92,7 +92,7 @@ class TestObjectLock(BaseTestCase):
                 properties=properties,
             )
         if bucket:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
             )
 
@@ -104,7 +104,7 @@ class TestObjectLock(BaseTestCase):
         b"".join(data)  # drain the data stream
 
         # Check not events has been created
-        events = self.wait_for_event(
+        events, _ = self.wait_for_kafka_event(
             "oio-preserved",
             reqid=reqid,
             types=(EventTypes.CONTENT_DELETED, EventTypes.CHUNK_DELETED),

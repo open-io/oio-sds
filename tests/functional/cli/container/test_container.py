@@ -152,7 +152,7 @@ class ContainerTest(CliTestCase):
                 "--oio-account %s object create %s %s --name test"
                 % (account, cname, file_.name)
             )
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
@@ -165,7 +165,7 @@ class ContainerTest(CliTestCase):
         self.assertEqual(account + "\n4\n1\n1\n", output)
         # Refresh account
         output = self.openio("account refresh " + account)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # show bucket
@@ -187,7 +187,7 @@ class ContainerTest(CliTestCase):
             output = self.openio(
                 "object create %s %s --name test" % (cname, file_.name)
             )
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
@@ -258,7 +258,7 @@ class ContainerTest(CliTestCase):
         opts = self.get_format_opts(fields=("Name",)) + " -a " + self.account
         cname = "Intérêts-" + uuid.uuid4().hex
         self.storage.container_create(self.account, cname)
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_NEW,)
         )
         output = self.openio("container list " + opts)

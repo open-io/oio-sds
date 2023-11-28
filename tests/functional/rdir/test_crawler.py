@@ -91,7 +91,7 @@ class TestRdirCrawler(BaseTestCase):
             reqid=reqid,
         )
         for _ in chunks:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved", reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
             )
         self._containers_to_clean.add(container)

@@ -182,7 +182,7 @@ class TestSharding(BaseTestCase):
             else:
                 self.created[cname_root].add(obj_name)
         if bucket:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
             )
             self._check_bucket_stats(cname_root, bucket, account=account)
@@ -211,7 +211,7 @@ class TestSharding(BaseTestCase):
                 else:
                     self.created[cname].remove(obj_name)
         if bucket:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 fields={"account": self.account, "user": cname},
@@ -565,7 +565,7 @@ class TestSharding(BaseTestCase):
 
         if self.wait_event:
             # check that all chunk urls are matching expected ones
-            event = self.wait_for_event(
+            event, _ = self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid="delete-from-shards",
                 types=(EventTypes.CONTENT_DELETED,),
@@ -985,7 +985,7 @@ class TestSharding(BaseTestCase):
 
         # Wait for the update of the root and the 2 new shards
         for _ in range(3):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid="testingisdoubting",
                 types=(EventTypes.CONTAINER_STATE,),
@@ -1011,7 +1011,7 @@ class TestSharding(BaseTestCase):
 
         # Wait for the deletion of the parent and update of the 2 new shards
         for _ in range(3):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid="fixingisfailing",
                 fields={"account": shards_account},
@@ -1350,7 +1350,7 @@ class TestSharding(BaseTestCase):
                 # Wait for the deletion of the smaller and update of the root
                 nb_events = 2
             for _ in range(nb_events):
-                self.wait_for_event(
+                self.wait_for_kafka_event(
                     "oio-preserved",
                     reqid=reqid,
                     types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
