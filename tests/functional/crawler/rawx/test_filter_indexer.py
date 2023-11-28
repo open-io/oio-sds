@@ -107,7 +107,9 @@ class TestBlobIndexer(BaseTestCase):
             "http://" + self.rawx_id + "/" + chunk_id, meta, data, reqid=reqid
         )
         # ensure chunk event have been processed
-        self.wait_for_event("oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,))
+        self.wait_for_kafka_event(
+            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,)
+        )
         return (
             account,
             container,
@@ -124,7 +126,7 @@ class TestBlobIndexer(BaseTestCase):
             "http://" + self.rawx_id + "/" + chunk_id, reqid=reqid
         )
         # ensure chunk event have been processed
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_DELETED,)
         )
 
@@ -147,7 +149,9 @@ class TestBlobIndexer(BaseTestCase):
         )
         chunk_id = link.split("/")[-1]
         # ensure chunk event have been processed
-        self.wait_for_event("oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,))
+        self.wait_for_kafka_event(
+            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,)
+        )
         return (
             account,
             container,

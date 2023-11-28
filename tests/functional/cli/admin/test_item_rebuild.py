@@ -62,12 +62,12 @@ class ItemRebuildTest(CliTestCase):
         super().tearDown()
 
     def _wait_events(self, account, container, obj_name):
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
         )
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),

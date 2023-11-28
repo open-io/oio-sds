@@ -475,7 +475,7 @@ class TestBillingAgent(BaseTestCase):
                     data=data,
                     reqid=reqid,
                 )
-                self.wait_for_event(
+                self.wait_for_kafka_event(
                     "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
                 )
             top_objects.append((bucket_name, nb_objects))

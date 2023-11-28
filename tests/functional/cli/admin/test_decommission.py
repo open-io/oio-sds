@@ -66,7 +66,7 @@ class ServiceDecommissionTest(CliTestCase):
 
     def wait_for_chunk_events(self, n_obj, reqid=None, event=EventTypes.CHUNK_NEW):
         for _ in range(n_obj * 3):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 types=(event,),
@@ -87,7 +87,7 @@ class ServiceDecommissionTest(CliTestCase):
             self.storage.container_create(self.account, cname, reqid=create_reqid)
             self._containers.append(cname)
         for _ in range(100):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW)
             )
         list_reqid = request_id("xcute-decom-")
@@ -134,7 +134,7 @@ class ServiceDecommissionTest(CliTestCase):
     def test_meta2_decommission_percentage(self):
         return self._test_meta2_decommission(decommission_percentage=50)
 
-    def _run_rawx_decommission(self, service, usage_target=0, exclude=None):
+    def _run_rawx_decommission(self, service, usage_target=0, exclude=None, reqid=None):
         """
         Run a decommission task, then wait for it to be finished.
 
@@ -191,9 +191,12 @@ class ServiceDecommissionTest(CliTestCase):
         total_chunks = len(
             list(self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid))
         )
-
+        rawx_reqid = request_id("xcute-decom-")
         job_result = self._run_rawx_decommission(
-            service=candidate, usage_target=usage_target, exclude=exclude
+            service=candidate,
+            usage_target=usage_target,
+            exclude=exclude,
+            reqid=rawx_reqid,
         )
 
         all_chunks_after = list(

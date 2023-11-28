@@ -46,7 +46,7 @@ class ServiceCheckTest(CliTestCase):
         )
         output = self.storage.object_locate(self.account, container, obj)
         for _ in range(1 + len(output[1])):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_NEW),
@@ -67,7 +67,7 @@ class ServiceCheckTest(CliTestCase):
         reqid = request_id()
         self.storage.object_delete(self.account, container, obj, reqid=reqid)
         for _ in range(1 + len(output[1])):
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_DELETED),

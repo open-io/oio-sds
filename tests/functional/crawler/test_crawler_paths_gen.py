@@ -73,7 +73,7 @@ class TestCrawlerPathGen(BaseTestCase):
             policy=policy,
             reqid=reqid,
         )
-        self.wait_for_event(
+        self.wait_for_kafka_event(
             "oio-preserved",
             reqid=reqid,
             timeout=5.0,

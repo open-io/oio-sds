@@ -79,9 +79,10 @@ class ItemCheckTest(CliTestCase):
         self.beanstalkd0.drain_tube("oio-preserved")
         self.api.account_create(self.account)
 
-    def _wait_for_events(self, chunks, reqid):
+    def _wait_for_kafka_events(self, chunks, reqid):
+        offset = None
         for _ in range(2 + len(chunks)):
-            self.wait_for_event(
+            _, offset = self.wait_for_kafka_event(
                 "oio-preserved",
                 reqid=reqid,
                 types=(
@@ -89,6 +90,7 @@ class ItemCheckTest(CliTestCase):
                     EventTypes.CONTENT_NEW,
                     EventTypes.CONTAINER_STATE,
                 ),
+                offset=offset,
             )
 
     def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
@@ -106,7 +108,7 @@ class ItemCheckTest(CliTestCase):
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
         )
-        self._wait_for_events(obj_chunks, reqid)
+        self._wait_for_kafka_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta["version"])
         )
@@ -118,7 +120,7 @@ class ItemCheckTest(CliTestCase):
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
         )
-        self._wait_for_events(obj_chunks, reqid)
+        self._wait_for_kafka_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta["version"])
         )

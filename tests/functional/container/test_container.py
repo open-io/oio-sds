@@ -1915,7 +1915,7 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
+        event, _ = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=("storage.content.new",)
         )
         self.assertIsNotNone(event)
@@ -1931,7 +1931,7 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
+        event, _ = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=("storage.content.update",)
         )
         self.assertIsNotNone(event)
@@ -1947,7 +1947,7 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
+        event, _ = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=("storage.content.update",)
         )
         self.assertIsNotNone(event)
@@ -1963,7 +1963,7 @@ class TestMeta2Contents(BaseTestCase):
             replication_destinations="dst1;dst2",
             create_delete_marker=True,
         )
-        event = self.wait_for_event(
+        event, _ = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=("storage.content.new",)
         )
         self.assertIsNotNone(event)

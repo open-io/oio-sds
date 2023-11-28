@@ -65,7 +65,7 @@ class TestRabbitmqCluster(BaseTestCase):
         reqid = request_id()
         print(f"create object with reqid={reqid}")
         self._create_object(reqid)
-        event = self.wait_for_event(
+        event = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTENT_NEW)
         )
         self.assertEquals(reqid, event.reqid)
@@ -74,7 +74,7 @@ class TestRabbitmqCluster(BaseTestCase):
         reqid = request_id()
         print(f"create object with reqid={reqid}")
         self._create_object(reqid)
-        event = self.wait_for_event(
+        event = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTENT_NEW)
         )
         self.assertEquals(reqid, event.reqid)
@@ -84,7 +84,7 @@ class TestRabbitmqCluster(BaseTestCase):
         reqid = request_id()
         print(f"create object with reqid={reqid}")
         self._create_object(reqid)
-        event = self.wait_for_event(
+        event = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTENT_NEW)
         )
         self.assertEquals(reqid, event.reqid)
@@ -94,13 +94,13 @@ class TestRabbitmqCluster(BaseTestCase):
         reqid = request_id()
         print(f"create object with reqid={reqid}")
         self._create_object(reqid)
-        event = self.wait_for_event(
+        event = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTENT_NEW)
         )
         self.assertIsNone(event)
         print("start rabbit-1")
         os.system("docker exec rabbit-1 rabbitmqctl start_app")
-        event = self.wait_for_event(
+        event = self.wait_for_kafka_event(
             "oio-preserved", reqid=reqid, types=(EventTypes.CONTENT_NEW)
         )
         self.assertEquals(reqid, event.reqid)
