@@ -20,7 +20,6 @@ import uuid
 from oio.common.easy_value import true_value
 from oio.common.utils import get_hasher
 from tests.functional.cli import CliTestCase, CommandFailed
-from testtools.matchers import Equals
 from tests.utils import random_str
 
 
@@ -235,11 +234,12 @@ class ObjectTest(CliTestCase):
         # Wait for meta2 service to be available again
         # After the set timeout the test must fail
         self.wait_for_score(("meta2",), timeout=5.0)
+        self.clean_later(cname, self.account_from_env())
         output = self.openio("container create " + cname + opts)
         data = self.json_loads(output)
-        self.assertThat(len(data), Equals(1))
+        self.assertEqual(len(data), 1)
         self.assert_list_fields(data, HEADERS)
-        self.assertThat(data[0]["Name"], Equals(cname))
+        self.assertEqual(data[0]["Name"], cname)
         cname_or_cid = cname
         if with_cid:
             cname_or_cid = self._get_cid_from_name(cname)
@@ -247,7 +247,7 @@ class ObjectTest(CliTestCase):
         # TODO ensure a clean environment before the test, and proper cleanup
         # after, so that we can check the container is properly created
         if not auto:
-            self.assertThat(data[0]["Created"], Equals(True))
+            self.assertTrue(data[0]["Created"])
 
         opts = self.get_format_opts("json")
         output = self.openio("container list" + opts)
@@ -284,27 +284,27 @@ class ObjectTest(CliTestCase):
 
         data = self.json_loads(output)
         self.assert_list_fields(data, OBJ_HEADERS)
-        self.assertThat(len(data), Equals(expected_created_objects))
+        self.assertEqual(len(data), expected_created_objects)
         item = data[0]
-        self.assertThat(item["Name"], Equals(obj_name))
-        self.assertThat(item["Size"], Equals(len(test_content)))
-        self.assertThat(item["Hash"], Equals(checksum))
+        self.assertEqual(item["Name"], obj_name)
+        self.assertEqual(item["Size"], len(test_content))
+        self.assertEqual(item["Hash"], checksum)
 
         opts = self.get_format_opts("json")
         output = self.openio("object list " + cid_opt + cname_or_cid + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
-        self.assertThat(len(listing), Equals(1))  # 1 object stored
+        self.assertEqual(len(listing), 1)  # 1 object stored
         item = data[0]
-        self.assertThat(item["Name"], Equals(obj_name))
-        self.assertThat(item["Size"], Equals(len(test_content)))
-        self.assertThat(item["Hash"], Equals(checksum))
+        self.assertEqual(item["Name"], obj_name)
+        self.assertEqual(item["Size"], len(test_content))
+        self.assertEqual(item["Hash"], checksum)
 
         output = self.openio("object save " + cid_opt + cname_or_cid + " " + obj_name)
         self.addCleanup(os.remove, obj_name)
         self.assertOutput("", output)
 
-        tmp_file = "tmp_obj"
+        tmp_file = f"tmp_obj_{random_str(3)}"
         opts = " --tls" if with_tls else ""
         output = self.openio(
             "object save "
@@ -325,9 +325,9 @@ class ObjectTest(CliTestCase):
         )
         data = self.json_loads(output)
         self.assert_show_fields(data, OBJ_FIELDS)
-        self.assertThat(data["object"], Equals(obj_name))
-        self.assertThat(data["size"], Equals(str(len(test_content))))
-        self.assertThat(data["hash"], Equals(checksum))
+        self.assertEqual(data["object"], obj_name)
+        self.assertEqual(data["size"], str(len(test_content)))
+        self.assertEqual(data["hash"], checksum)
 
         output = self.openio(
             "object delete " + cid_opt + cname_or_cid + " " + obj_name + opts
@@ -336,9 +336,10 @@ class ObjectTest(CliTestCase):
 
     def _test_drain(self, with_cid=False):
         cname = "test-drain-" + random_str(6)
+        self.clean_later(cname, self.account_from_env())
         cid_opt = ""
         if with_cid:
-            self.openio(" ".join(["container create", cname]))
+            self.openio(" ".join(("container create", cname)))
             cname = self._get_cid_from_name(cname)
             cid_opt = "--cid"
 
@@ -367,27 +368,23 @@ class ObjectTest(CliTestCase):
     def _test_autocontainer_object_listing(self, args="", env=None):
         obj_count = 7
         prefix = random_str(8)
-        expected = list()
-        with tempfile.NamedTemporaryFile() as myfile:
-            myfile.write(b"something")
-            myfile.flush()
-            # TODO(FVE): find a quicker way to upload several objects
-            commands = list()
-            for i in range(obj_count):
-                obj_name = "%s_%d" % (prefix, i)
-                commands.append(
-                    " ".join(
-                        [
-                            "object create --auto ",
-                            myfile.name,
-                            "--name ",
-                            obj_name,
-                            args,
-                        ]
-                    )
+        expected = []
+        # TODO(FVE): find a quicker way to upload several objects
+        commands = []
+        for i in range(obj_count):
+            obj_name = f"{prefix}_{i}"
+            commands.append(
+                " ".join(
+                    [
+                        "object create --auto /etc/fstab",
+                        "--name ",
+                        obj_name,
+                        args,
+                    ]
                 )
-                expected.append(obj_name)
-            self.openio_batch(commands, env=env)
+            )
+            expected.append(obj_name)
+        self.openio_batch(commands, env=env)
 
         # Default listing
         opts = self.get_format_opts("json") + " --attempts 3"
@@ -433,12 +430,24 @@ class ObjectTest(CliTestCase):
             # 4 columns
             self.assertEqual(4, len(obj))
 
+        # Cleanup
+        opts = self.get_format_opts("json")
+        output = self.openio(
+            "container list " + opts,
+            env=env,
+        )
+        listing = self.json_loads(output)
+        to_clean = {(env.get("OIO_ACCOUNT"), x["Name"]) for x in listing}
+        self._containers_to_clean.update(to_clean)
+
     def test_autocontainer_object_listing(self):
-        env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
+        env = dict(os.environ)
+        env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
         self._test_autocontainer_object_listing(env=env)
 
     def test_autocontainer_object_listing_other_flatns(self):
-        env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
+        env = dict(os.environ)
+        env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
         self._test_autocontainer_object_listing("--flat-bits 8", env=env)
         opts = self.get_format_opts("json")
         output = self.openio("container list " + opts, env=env)
@@ -455,6 +464,7 @@ class ObjectTest(CliTestCase):
         cid_opt = ""
 
         output = self.openio("container create " + cont_name)
+        self.clean_later(cont_name, self.account_from_env())
         if with_cid:
             cont_name = self._get_cid_from_name(cont_name)
             cid_opt = "--cid "
@@ -500,6 +510,7 @@ class ObjectTest(CliTestCase):
         cid_opt = ""
 
         output = self.openio("container create " + cont_name)
+        self.clean_later(cont_name, self.account_from_env())
         if with_cid:
             cont_name = self._get_cid_from_name(cont_name)
             cid_opt = "--cid "
