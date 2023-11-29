@@ -1436,7 +1436,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 broker_endpoint = ${QUEUE_URL}
-topic_name = ${QUEUE_NAME}
+topic = ${QUEUE_NAME}
 group_id = ${GROUP_ID}
 
 rdir_connection_timeout = 0.5
@@ -1513,7 +1513,7 @@ timeout = 4.5
 [filter:content_rebuild]
 use = egg:oio#notify
 broker_endpoint = ${QUEUE_URL}
-topic_name = oio-rebuild
+topic = oio-rebuild
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -1530,7 +1530,7 @@ endpoint = ${WEBHOOK_ENDPOINT}
 [filter:async_replication]
 use = egg:oio#notify
 broker_endpoint = ${QUEUE_URL}
-topic_name = oio-replication
+topic = oio-replication
 required_fields = destinations
 
 [filter:bury]
@@ -1547,7 +1547,7 @@ use = egg:oio#noop
 # oio-event-agent will read this queue and delete chunks at a limited rate.
 use = egg:oio#notify
 broker_endpoint = ${QUEUE_URL}
-topic_name = oio-delete
+topic = oio-delete
 
 # In exchange "oio", all messages are routed to the queue "oio". To prevent
 # loops, we need another exchange.
@@ -1557,20 +1557,20 @@ strip_fields = aliases,contents_headers
 [filter:notify_drained]
 use = egg:oio#notify
 broker_endpoint = ${QUEUE_URL}
-topic_name = oio-drained
+topic = oio-drained
 policy_regex_EC = ^EC.*
-topic_name_EC = oio-drained-ec
+topic_EC = oio-drained-ec
 
 [filter:logger]
 use = egg:oio#logger
 
 [filter:preserve]
-# Preserve all events in the oio-preserved tube. This filter is intended
+# Preserve all events in the oio-preserved topic. This filter is intended
 # to be placed at the end of each pipeline, to allow tests to check an
 # event has been handled properly.
 use = egg:oio#notify
-tube = oio-preserved
-queue_url = ${MAIN_QUEUE_URL}
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_event_agent_delete_handlers = """
@@ -1594,12 +1594,12 @@ timeout = 4.5
 use = egg:oio#logger
 
 [filter:preserve]
-# Preserve all events in the oio-preserved tube. This filter is intended
+# Preserve all events in the oio-preserved topic. This filter is intended
 # to be placed at the end of each pipeline, to allow tests to check an
 # event has been handled properly.
 use = egg:oio#notify
-tube = oio-preserved
-queue_url = ${MAIN_QUEUE_URL}
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_event_agent_delayed_handlers = """
@@ -1608,7 +1608,7 @@ pipeline = delay
 
 [filter:delay]
 use = egg:oio#delayed
-topic_name = oio-delay
+topic = oio-delay
 
 [filter:logger]
 use = egg:oio#logger
@@ -1620,7 +1620,7 @@ pipeline = rebuild
 
 [filter:rebuild]
 use = egg:oio#blob_rebuilder
-topic_name = oio-rebuild
+topic = oio-rebuild
 
 [filter:logger]
 use = egg:oio#logger

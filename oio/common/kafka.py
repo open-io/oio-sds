@@ -191,11 +191,7 @@ class KafkaConsumer(KafkaClient):
 
     def fetch_events(self):
         while True:
-            msg = self._client.poll(1.0)
-            if msg and msg.error():
-                self._logger.error("Failed to fetch message, reason: %s", msg.error())
-                continue
-            yield msg
+            yield self._client.poll(1.0)
 
     def _close(self):
         self._client.poll(POLL_TIMEOUT)

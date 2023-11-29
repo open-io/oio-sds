@@ -54,7 +54,7 @@ class KafkaConsumerWorker(Process):
         super().__init__()
         self.endpoint = endpoint
         self.logger = logger
-        self.topic_name = topic
+        self.topic = topic
         self._stop_requested = Event()
         self.group_id = group_id
         self.worker_id = worker_id
@@ -80,6 +80,9 @@ class KafkaConsumerWorker(Process):
                 break
             if event is None:
                 continue
+            if event.error():
+                self.logger.error("Failed to fetch event, reason: %s", event.error())
+                continue
 
             # If we are here, we just communicated with RabbitMQ, we know it's alive
             self._last_use = time.monotonic()
@@ -102,7 +105,7 @@ class KafkaConsumerWorker(Process):
         if self._consumer is None:
             self._consumer = KafkaConsumer(
                 self.endpoint,
-                [self.topic_name],
+                [self.topic],
                 logger=self.logger,
                 conf={
                     **self._kafka_conf,
