@@ -76,13 +76,15 @@ class KafkaClient:
         if self._client is not None:
             return
 
-        self._client = self.__client_class(
-            {
-                **options,
-                "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
-            },
-            logger=self._logger,
-        )
+        conf = {
+            "bootstrap.servers": self._cleanup_endpoint(self._endpoint),
+            **options,
+        }
+
+        for key, value in conf.items():
+            self._logger.info("Setting option %s=%s", key, value)
+
+        self._client = self.__client_class(conf, logger=self._logger)
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
@@ -110,8 +112,8 @@ class KafkaSender(KafkaClient):
 
         self._connect(
             {
-                **conf,
                 "acks": "all",
+                **conf,
             }
         )
 
@@ -187,11 +189,7 @@ class KafkaConsumer(KafkaClient):
 
     def fetch_events(self):
         while True:
-            msg = self._client.poll(1.0)
-            if msg and msg.error():
-                self._logger.error("Failed to fetch message, reason: %s", msg.error())
-                continue
-            yield msg
+            yield self._client.poll(1.0)
 
     def _close(self):
         self._client.poll(POLL_TIMEOUT)
