@@ -110,13 +110,6 @@ tube_EC = oio-delete-ec
 # Ensure fields are present in events (values are not checked)
 required_fields = destinations
 
-# -----------------------------------------------------------------
-# Redirect event to the replication queue (deprecated).
-[filter:replication]
-use = egg:oio#replicate
-tube = oio-repli
-queue_url = ${QUEUE_URL}
-
 # For each bucket, check if replication is enabled before forwarding
 # replication events. This is disabled by default, meaning that all
 # replication event will be forwarded (same behavior as before).
