@@ -34,7 +34,7 @@ class DelayedFilter(Filter):
         super().__init__(*args, **kwargs)
 
     def init(self):
-        self.topic = self.conf.get("topic_name", DEFAULT_DELAYED_TOPIC)
+        self.topic = self.conf.get("topic", DEFAULT_DELAYED_TOPIC)
 
     def process(self, env, cb):
         if not self._producer:

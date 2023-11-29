@@ -42,7 +42,7 @@ class NotifyFilter(Filter):
     def init(self):
         self.exclude = self._parse_exclude(self.conf.get("exclude", []))
         self.strip_fields = tuple(self.conf.get("strip_fields", "").split(","))
-        self.topic = self.conf.get("topic_name")
+        self.topic = self.conf.get("topic")
         self.required_fields = [
             f for f in self.conf.get("required_fields", "").split(",") if f
         ]

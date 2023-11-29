@@ -69,7 +69,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
         handler = self.handlers.get(decoded.get("event"), None)
         if not handler:
             self.statsd.timing(
-                f"event.{self.topic_name}.rejected",
+                f"event.{self.topic}.rejected",
                 int((time.monotonic() - start) * 1000),
             )
             raise RejectMessage
@@ -79,7 +79,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
         def cb(status, msg):
             if is_success(status):
                 self.statsd.timing(
-                    f"event.{self.topic_name}.{event}.ok",
+                    f"event.{self.topic}.{event}.ok",
                     int((time.monotonic() - start) * 1000),
                 )
             elif is_retryable(status):
@@ -90,7 +90,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     reqid,
                 )
                 self.statsd.timing(
-                    f"event.{self.topic_name}.{event}.retry",
+                    f"event.{self.topic}.{event}.retry",
                     int((time.monotonic() - start) * 1000),
                 )
                 raise RetryLater
@@ -99,7 +99,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     "event handling failure (rejecting): %s reqid=%s", msg, reqid
                 )
                 self.statsd.timing(
-                    f"event.{self.topic_name}.{event}.rejected",
+                    f"event.{self.topic}.{event}.rejected",
                     int((time.monotonic() - start) * 1000),
                 )
                 raise RejectMessage

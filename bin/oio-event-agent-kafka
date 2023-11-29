@@ -48,9 +48,7 @@ def main():
 
     # Configuration either from dedicated file or central file (in that order)
     endpoint = conf.get("broker_endpoint", ns_conf.get("event-agent", DEFAULT_ENDPOINT))
-    topic = conf.get(
-        "topic_name", ns_conf.get("events.kafka.topic_name", DEFAULT_TOPIC)
-    )
+    topic = conf.get("topic", ns_conf.get("events.kafka.topic", DEFAULT_TOPIC))
     group_id = conf.get("group_id", ns_conf.get("events.kafka.group_id", "event-agent"))
 
     pool = KafkaConsumerPool(
