@@ -1590,26 +1590,27 @@ class ItemCheckTest(CliTestCase):
         missing_chunk = random.choice(obj_chunks)
 
         expected_items = []
-        expected_items.append("account account=%s OK" % self.account)
+        expected_items.append(f"account account={self.account} OK None")
         expected_items.append(
-            "container account=%s, container=%s, cid=%s OK"
-            % (self.account, self.container, cid)
+            f"container account={self.account}, container={self.container}, cid={cid}"
+            " OK None"
         )
         expected_items.append(
-            "object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, "
-            "version=%s OK"
-            % (
-                self.account,
-                self.container,
-                cid,
-                self.obj_name,
-                obj_meta["id"],
-                obj_meta["version"],
-            )
+            f"object account={self.account}, container={self.container}, cid={cid}, "
+            f"obj={self.obj_name}, content_id={obj_meta['id']}, "
+            f"version={obj_meta['version']} OK None"
         )
-        expected_items.append("chunk chunk=%s error" % missing_chunk["url"])
 
         self._wait_for_chunk_indexation(missing_chunk["url"])
+
+        # Do a check before removing the chunk
+        check_opts = self.get_format_opts()
+        expected_items.append(f"chunk chunk={missing_chunk['url']} OK None")
+        output = self.openio_admin(
+            f"chunk check {missing_chunk['url']} {check_opts}",
+            expected_returncode=0,
+        )
+        self.assert_list_output(expected_items, output)
 
         # Stop treating the events
         self._service("oio-event.target", "stop", wait=8)
@@ -1624,13 +1625,17 @@ class ItemCheckTest(CliTestCase):
 
             # Verify we know about the chunk, even if we just deleted it:
             # it is still registered in rdir (we blocked the deletion event).
+            expected_items[-1] = (
+                f"chunk chunk={missing_chunk['url']} error "
+                "Not found: n/a (HTTP 404) (STATUS Not Found)"
+            )
             output = self.openio_admin(
-                "chunk check %s %s" % (missing_chunk["url"], self.check_opts),
+                f"chunk check {missing_chunk['url']} {check_opts}",
                 expected_returncode=1,
             )
             self.assert_list_output(expected_items, output)
         finally:
-            self._service("oio-event.target", "start", wait=2)
+            self._service("oio-event.target", "start", wait=3)
 
     def test_chunk_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1704,7 +1709,7 @@ class ItemCheckTest(CliTestCase):
         )
         expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
 
-        # Remove container in account service
+        # Remove container from account service
         self.api.account_flush(self.account)
 
         # Check with missing container
