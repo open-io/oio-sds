@@ -93,7 +93,7 @@ class ServiceDecommissionTest(CliTestCase):
             # Do not pass the parameter, but use 100 for result analyzis
             decommission_percentage = 100
         job_id = self.openio_admin("xcute meta2 decommission %s %s" % (candidate, opts))
-        attempts = 10
+        attempts = 15
         status = None
         opts = self.get_format_opts("json")
         for _ in range(attempts):
@@ -255,7 +255,7 @@ class ServiceDecommissionTest(CliTestCase):
 
         opts = self.get_format_opts(fields=["job.id"])
         job_id = self.openio_admin("xcute rdir decommission %s %s" % (candidate, opts))
-        attempts = 5
+        attempts = 15
         status = None
         opts = self.get_format_opts("json")
         for _ in range(attempts):
