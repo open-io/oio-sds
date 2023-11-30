@@ -51,10 +51,10 @@ _tree_compare_int(gconstpointer a, gconstpointer b)
 #define STRTOLL_ERROR(v,s,e) (FORMAT_ERROR(v,s,e) || RANGE_ERROR(v))
 
 const struct bean_descriptor_s *TABLE_TO_MERGE[5] = {
-	&descr_struct_ALIASES,
+	&descr_struct_PROPERTIES,
 	&descr_struct_CONTENTS_HEADERS,
 	&descr_struct_CHUNKS,
-	&descr_struct_PROPERTIES,
+	&descr_struct_ALIASES,
 	NULL
 };
 
