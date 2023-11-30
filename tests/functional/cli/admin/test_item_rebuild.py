@@ -48,18 +48,9 @@ class ItemRebuildTest(CliTestCase):
 
         self.container = "item_rebuild_container" + random_str(4)
         self.obj_name = "item_rebuild_obj_" + random_str(4)
-        self._containers_to_clean = {(self.account, self.container)}
+        self.clean_later(self.container, self.account)
 
         self.beanstalkd0.drain_tube("oio-preserved")
-
-    def tearDown(self):
-        for acct, ct in self._containers_to_clean:
-            try:
-                self.storage.container_flush(acct, ct)
-                self.storage.container_delete(acct, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean container %s", exc)
-        super().tearDown()
 
     def _wait_events(self, account, container, obj_name):
         self.wait_for_event(
@@ -79,7 +70,7 @@ class ItemRebuildTest(CliTestCase):
         )
         obj_meta, obj_chunks = self.api.object_locate(account, container, obj_name)
         self._wait_events(account, container, obj_name)
-        self._containers_to_clean.add((account, container))
+        self.clean_later(container, account)
         return obj_meta, obj_chunks
 
     def test_chunk_rebuild(self):

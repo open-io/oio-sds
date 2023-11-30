@@ -39,20 +39,10 @@ class ServiceDecommissionTest(CliTestCase):
 
     def setUp(self):
         super().setUp()
-        self._containers = []
         self.beanstalkd0.drain_tube("oio-preserved")
 
-    def tearDown(self):
-        for ct in self._containers:
-            try:
-                self.storage.container_flush(self.account, ct)
-                self.storage.container_delete(self.account, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean %s/%s: %s", self.account, ct, exc)
-        super().tearDown()
-
     def create_objects(self, cname, n_obj=10, reqid=None):
-        self._containers.append(cname)
+        self.clean_later(cname)
         for i in range(n_obj):
             name = f"xcute-decom-{i:0>5}"
             self.storage.object_create(
@@ -85,7 +75,7 @@ class ServiceDecommissionTest(CliTestCase):
         for i in range(100):
             cname = f"xcute-decommission-{i:0>3}"
             self.storage.container_create(self.account, cname, reqid=create_reqid)
-            self._containers.append(cname)
+            self.clean_later(cname)
         for _ in range(100):
             self.wait_for_event(
                 "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW)

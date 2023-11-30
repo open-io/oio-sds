@@ -258,10 +258,18 @@ class CommonTestCase(testtools.TestCase):
         # Namespace configuration as it was when the test started
         self._ns_conf_backup = None
 
+        # Set of containers to flush and remove at teardown
+        self._containers_to_clean = set()
         self._deregister_at_teardown = []
 
     def tearDown(self):
-        super(CommonTestCase, self).tearDown()
+        for acct, ct in self._containers_to_clean:
+            try:
+                self.storage.container_flush(acct, ct)
+                self.storage.container_delete(acct, ct)
+            except Exception as exc:
+                self.logger.info("Failed to clean container %s", exc)
+
         # Reset namespace configuration as it was before we mess with it
         if self._ns_conf != self._ns_conf_backup:
             remove = {x for x in self._ns_conf if x not in self._ns_conf_backup}
@@ -271,6 +279,8 @@ class CommonTestCase(testtools.TestCase):
                 self._deregister_srv(srv)
             except Exception:
                 pass
+
+        super().tearDown()
 
     @classmethod
     def tearDownClass(cls):
@@ -356,6 +366,10 @@ class CommonTestCase(testtools.TestCase):
             self._ns_conf = load_namespace_conf(self.ns)
             self._ns_conf_backup = dict(self._ns_conf)
         return self._ns_conf
+
+    def clean_later(self, container, account=None):
+        """Register a container to be cleaned at tearDown."""
+        self._containers_to_clean.add((account or self.account, container))
 
     def set_ns_opts(self, opts, remove=None):
         """

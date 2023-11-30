@@ -27,16 +27,6 @@ class ItemRepairTest(CliTestCase):
         super(ItemRepairTest, self).setUp()
         if int(self.conf.get("container_replicas", 1)) < 3:
             self.skipTest("Container replication must be enabled")
-        self._containers_to_clean = set()
-
-    def tearDown(self):
-        for acct, ct in self._containers_to_clean:
-            try:
-                self.storage.container_flush(acct, ct)
-                self.storage.container_delete(acct, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean container %s", exc)
-        super().tearDown()
 
     def get_peers(self, container):
         output = self.storage.directory.list(self.account, container)
@@ -62,7 +52,7 @@ class ItemRepairTest(CliTestCase):
         container = "test_container_repair_" + random_str(4)
         opts = self.get_opts([])
         self.storage.container_create(self.account, container)
-        self._containers_to_clean.add((self.account, container))
+        self.clean_later(container)
         peers = self.get_peers(container)
         removed_peer = random.choice(peers)
         path = self.get_path(removed_peer, container)

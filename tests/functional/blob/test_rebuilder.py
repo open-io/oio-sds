@@ -27,7 +27,6 @@ from tests.utils import BaseTestCase, random_str
 class TestBlobRebuilder(BaseTestCase):
     def setUp(self):
         super(TestBlobRebuilder, self).setUp()
-        self._containers_to_clean = set()
         self.container = "blob-rebuilder-" + random_str(6)
         self.cid = cid_from_name(self.account, self.container)
         self.path = "blob-" + random_str(8)
@@ -35,7 +34,7 @@ class TestBlobRebuilder(BaseTestCase):
         self.blob_client = self.api.blob_client
 
         self.api.container_create(self.account, self.container)
-        self._containers_to_clean.add(self.container)
+        self.clean_later(self.container)
         _, chunks = self.api.container.content_prepare(
             self.account, self.container, self.path, size=1
         )
@@ -65,12 +64,6 @@ class TestBlobRebuilder(BaseTestCase):
         self._service("oio-crawler.target", "stop", wait=3)
 
     def tearDown(self):
-        for ct in self._containers_to_clean:
-            try:
-                self.storage.container_flush(self.account, ct)
-                self.storage.container_delete(self.account, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean container %s", exc)
         self._service("oio-crawler.target", "start", wait=1)
         super(TestBlobRebuilder, self).tearDown()
 

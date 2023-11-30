@@ -39,7 +39,6 @@ class TestRdirCrawler(BaseTestCase):
     def setUp(self):
         super(TestRdirCrawler, self).setUp()
         self.api = self.storage
-        self._containers_to_clean = set()
 
         self.conf.update({"hash_width": 3, "hash_depth": 1})
 
@@ -65,15 +64,6 @@ class TestRdirCrawler(BaseTestCase):
         self.beanstalkd0.wait_until_empty("oio")
         self.beanstalkd0.drain_tube("oio-preserved")
 
-    def tearDown(self):
-        for ct in self._containers_to_clean:
-            try:
-                self.storage.container_flush(self.account, ct)
-                self.storage.container_delete(self.account, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean container %s", exc)
-        super(TestRdirCrawler, self).tearDown()
-
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
             self.account, container, path, size=1
@@ -94,7 +84,7 @@ class TestRdirCrawler(BaseTestCase):
             self.wait_for_event(
                 "oio-preserved", reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
             )
-        self._containers_to_clean.add(container)
+        self.clean_later(container)
         return chunks
 
     def _chunk_info(self, chunk):
