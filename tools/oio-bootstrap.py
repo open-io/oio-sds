@@ -1648,7 +1648,7 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-tube = oio-xcute-jobs
+topic = oio-xcute-jobs
 namespace = ${NS}
 user = ${USER}
 workers = 2
