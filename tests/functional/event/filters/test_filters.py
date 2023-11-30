@@ -17,7 +17,6 @@
 # License along with this library.
 
 import time
-from random import choice
 from urllib.parse import quote
 
 from oio.blob.rebuilder import BlobRebuilder
@@ -60,7 +59,7 @@ class TestContentRebuildFilter(BaseTestCase):
         )["system"]
         self.container_id = syst["sys.name"].split(".", 1)[0]
         self.conf["queue_url"] = self.ns_conf["event-agent"]
-        self.conf["tube"] = BlobRebuilder.DEFAULT_KAKFA_WORKER_TUBE
+        self.conf["topic"] = BlobRebuilder.DEFAULT_KAKFA_WORKER_TUBE
         self.notify_filter = KafkaNotifyFilter(
             app=_App, conf=self.conf, endpoints=self.ns_conf["event-agent"]
         )
@@ -391,10 +390,9 @@ class TestContentRebuildFilter(BaseTestCase):
 class TestNotifyFilterBase(BaseTestCase):
     def setUp(self):
         super(TestNotifyFilterBase, self).setUp()
-        queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
-        self.queue_url = queue_addr
-        self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = "oio-repli"
+        self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        self.conf["queue_url"] = self.ns_conf["event-agent"]
+        self.conf["topic"] = BlobRebuilder.DEFAULT_KAKFA_WORKER_TUBE
         self.conf["exclude"] = []
         self.notify_filter = self.filter_class(app=_App, conf=self.conf)
 

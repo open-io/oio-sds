@@ -626,7 +626,10 @@ class XcuteOrchestrator(object):
         conf.update(kafka_options_from_conf(self.conf))
 
         kafka_consumer = KafkaConsumer(
-            self.kafka_endpoints, [self.kafka_reply_topic], self.logger, conf
+            self.kafka_endpoints,
+            self.logger,
+            topics=[self.kafka_reply_topic],
+            conf=conf,
         )
 
         # keep the job results in memory
