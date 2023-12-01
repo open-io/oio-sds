@@ -23,6 +23,7 @@ from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLa
 from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
+from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 
 
@@ -54,6 +55,12 @@ class KafkaEventWorker(KafkaConsumerWorker):
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 
+        template = self.conf.get("log_request_format")
+        if template is not None:
+            self.logger_request = get_logger(self.conf, name="request", fmt=template)
+        else:
+            self.logger_request = None
+
         self.statsd = get_statsd(conf=app_conf)
 
         if "handlers_conf" not in self.conf:
@@ -62,27 +69,50 @@ class KafkaEventWorker(KafkaConsumerWorker):
             self.conf.get("handlers_conf"), global_conf=self.conf, app=self
         )
 
+    def log_and_statsd(self, start, status, _extra):
+        default_extra = {
+            "request_id": "-",
+            "tube": "-",
+            "topic": "-",
+            "event": "-",
+        }
+
+        extra = {**default_extra, **_extra}
+
+        extra["duration"] = time.monotonic() - start
+        extra["status"] = status
+        if self.logger_request is not None:
+            self.logger_request.info("", extra=extra)
+        self.statsd.timing(
+            f"openio.event.{extra['topic']}.{extra['event']}.{extra['status']}.duration",
+            extra["duration"] * 1000,
+        )
+
     def process_message(self, message: bytes, _properties):
         start = time.monotonic()
         decoded = json.loads(message)
         reqid = decoded.get("request_id")
+
+        replacements = {
+            "request_id": reqid,
+            "tube": self.topic,
+            "topic": self.topic,
+            "event": decoded.get("event").replace(".", "-"),
+        }
+
         handler = self.handlers.get(decoded.get("event"), None)
         if not handler:
-            self.statsd.timing(
-                f"event.{self.topic}.rejected",
-                int((time.monotonic() - start) * 1000),
-            )
+            self.log_and_statsd(start, 404, replacements)
             raise RejectMessage
 
         event = decoded.get("event").replace(".", "-")
 
         def cb(status, msg):
+            self.log_and_statsd(start, status, replacements)
             if is_success(status):
-                self.statsd.timing(
-                    f"event.{self.topic}.{event}.ok",
-                    int((time.monotonic() - start) * 1000),
-                )
-            elif is_retryable(status):
+                return
+
+            if is_retryable(status):
                 self.logger.warn(
                     "event handling failure (release with delay): (%s) %s reqid=%s",
                     status,
@@ -97,10 +127,6 @@ class KafkaEventWorker(KafkaConsumerWorker):
             else:
                 self.logger.error(
                     "event handling failure (rejecting): %s reqid=%s", msg, reqid
-                )
-                self.statsd.timing(
-                    f"event.{self.topic}.{event}.rejected",
-                    int((time.monotonic() - start) * 1000),
                 )
                 raise RejectMessage
 
