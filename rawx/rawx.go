@@ -72,6 +72,12 @@ func (rr *rawxRequest) drain() error {
 	}
 }
 
+func (rr *rawxRequest) replyIoError(rawx *rawxService) {
+	rr.status = http.StatusServiceUnavailable
+	rr.rep.WriteHeader(rr.status)
+	rr.rep.Write([]byte(rawx.lastIOMsg))
+}
+
 func (rr *rawxRequest) replyCode(code int) {
 	rr.status = code
 	rr.rep.WriteHeader(rr.status)
@@ -180,7 +186,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url && req.Host != rawx.tlsUrl) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else if !rawx.isIOok() {
-		rawxreq.replyCode(http.StatusServiceUnavailable)
+		rawxreq.replyIoError(rawx)
 	} else {
 		for _dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]

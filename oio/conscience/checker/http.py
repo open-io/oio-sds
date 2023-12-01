@@ -49,7 +49,10 @@ class HttpChecker(BaseChecker):
             if resp.status == 200:
                 self.last_check_success = True
             else:
-                raise Exception(f"({resp.status}) {resp.data.decode('utf-8')}")
+                msg = f"({resp.status}) {resp.reason}"
+                if resp.data:
+                    msg += f"\n{resp.data.decode('utf-8')}"
+                raise Exception(msg)
         except Exception as err:
             # Avoid spamming the logs
             if self.last_check_success:
