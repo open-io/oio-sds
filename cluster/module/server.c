@@ -540,7 +540,7 @@ conscience_srvtype_zero_expired(struct conscience_srvtype_s * srvtype,
 	g_hash_table_iter_init(&iter, srvtype->services_ht);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		struct conscience_srv_s *p_srv = value;
-		if ((!p_srv->put_locked || !p_srv->get_locked) && p_srv->put_score.timestamp < oldest) {
+		if (p_srv->put_score.timestamp < oldest || p_srv->get_score.timestamp < oldest) {
 			if (p_srv->put_score.value > 0 && !p_srv->put_locked) {
 				p_srv->put_score.value = 0;
 				p_srv->put_score.timestamp = now;

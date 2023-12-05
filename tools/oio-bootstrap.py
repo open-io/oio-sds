@@ -1073,7 +1073,7 @@ score_timeout=120
 
 [type:echo]
 score_expr=(num stat.cpu)
-score_timeout=30
+score_timeout=10
 
 [type:oioproxy]
 score_expr=(1 + (num stat.cpu))

@@ -574,3 +574,34 @@ class TestConscienceFunctional(BaseTestCase):
             except Exception:
                 exc_count += 1
         self.assertLess(exc_count, 5)
+
+    def test_up_status(self):
+        def check(isUp):
+            echo_services = self.conscience.all_services("echo")
+            echo = echo_services[0]
+            self.assertEqual(isUp, echo["tags"]["tag.up"])
+
+        srv0 = self._srv("echo", ip="127.0.0.3")
+        self._register_srv(srv0)
+        self._reload_proxy()
+        check(True)
+        # Wait for timeout
+        time.sleep(12)
+        check(False)
+
+    def test_up_status_locked_service(self):
+        def check(isUp):
+            echo_services = self.conscience.all_services("echo")
+            echo = echo_services[0]
+            self.assertEqual(isUp, echo["tags"]["tag.up"])
+
+        srv0 = self._srv("echo", ip="127.0.0.3")
+        self._register_srv(srv0)
+        self._reload_proxy()
+        check(True)
+        # Lock service echo
+        self.conscience.lock_score(srv0)
+        check(True)
+        # Wait for timeout
+        time.sleep(12)
+        check(False)
