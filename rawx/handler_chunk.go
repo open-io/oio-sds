@@ -291,6 +291,10 @@ func (rr *rawxRequest) updateChunk() {
 		}
 	}
 
+	// TODO(FVE): find a way to update extended attributes
+	// Currently there is no API to open an existingchunk file for writing,
+	// and the setAttr method requires an open file (not a path).
+
 	// Everything is OK, return success
 	rr.replyCode(http.StatusOK)
 }
