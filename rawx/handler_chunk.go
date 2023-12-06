@@ -269,6 +269,7 @@ func (rr *rawxRequest) uploadChunk() {
 
 func (rr *rawxRequest) updateChunk() {
 	var err error
+	var out fileUpdater
 
 	// Check if chunk exists before continuing
 	if !rr.rawx.repo.check(rr.chunkID) {
@@ -289,6 +290,11 @@ func (rr *rawxRequest) updateChunk() {
 			rr.replyError("updateChunk() link", err)
 			return
 		}
+	}
+
+	out = rr.rawx.repo.post(rr.chunkID)
+	if err = rr.chunk.saveExtMetaAttr(out); err != nil {
+		rr.replyError("updateChunk()", err)
 	}
 
 	// Everything is OK, return success
