@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -194,6 +194,10 @@ func (fr *fileRepository) put(name string) (fileWriter, error) {
 	return fr.putRelPath(fr.nameToRelPath(name))
 }
 
+func (fr *fileRepository) post(name string) fileUpdater {
+	return &realFileUpdater{repo: fr, path: fr.nameToRelPath(name)}
+}
+
 func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
 	LogInfo("chunk %s doesn't have an optimal placement", name)
 
@@ -345,6 +349,16 @@ func (lo *realLinkOp) rollback() error {
 	return err
 }
 
+type realFileUpdater struct {
+	repo *fileRepository
+	path string
+}
+
+func (fu *realFileUpdater) setAttr(key string, value []byte) error {
+	path := joinPath2(fu.repo.root, fu.path)
+	return syscall.Setxattr(path, key, value, 0)
+}
+
 type realFileWriter struct {
 	f         *os.File
 	repo      *fileRepository
@@ -360,6 +374,10 @@ func (fw *realFileWriter) fd() int {
 
 func (fw *realFileWriter) setAttr(key string, value []byte) error {
 	return syscall.Fsetxattr(fw.fd(), key, value, 0)
+}
+
+func (fw *realFileWriter) updateAttr(key string, value []byte) error {
+	return syscall.Setxattr(fw.pathFinal, key, value, 0)
 }
 
 func (fw *realFileWriter) Write(buffer []byte) (int, error) {
