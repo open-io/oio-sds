@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -32,20 +32,21 @@ import (
 )
 
 type chunkInfo struct {
-	ContentFullpath    string `json:"full_path,omitempty"`
-	ContainerID        string `json:"container_id,omitempty"`
-	ContentPath        string `json:"content_path,omitempty"`
-	ContentVersion     string `json:"content_version,omitempty"`
-	ContentID          string `json:"content_id,omitempty"`
-	ContentChunkMethod string `json:"content_chunk_method,omitempty"`
-	ContentStgPol      string `json:"content_storage_policy,omitempty"`
-	MetachunkHash      string `json:"metachunk_hash,omitempty"`
-	MetachunkSize      string `json:"metachunk_size,omitempty"`
-	ChunkID            string `json:"chunk_id,omitempty"`
-	ChunkPosition      string `json:"chunk_position,omitempty"`
-	ChunkHash          string `json:"chunk_hash,omitempty"`
-	ChunkHashAlgo      string `json:"chunk_hash_algo,omitempty"`
-	ChunkSize          string `json:"chunk_size,omitempty"`
+	ContentFullpath    string            `json:"full_path,omitempty"`
+	ContainerID        string            `json:"container_id,omitempty"`
+	ContentPath        string            `json:"content_path,omitempty"`
+	ContentVersion     string            `json:"content_version,omitempty"`
+	ContentID          string            `json:"content_id,omitempty"`
+	ContentChunkMethod string            `json:"content_chunk_method,omitempty"`
+	ContentStgPol      string            `json:"content_storage_policy,omitempty"`
+	MetachunkHash      string            `json:"metachunk_hash,omitempty"`
+	MetachunkSize      string            `json:"metachunk_size,omitempty"`
+	ChunkID            string            `json:"chunk_id,omitempty"`
+	ChunkPosition      string            `json:"chunk_position,omitempty"`
+	ChunkHash          string            `json:"chunk_hash,omitempty"`
+	ChunkHashAlgo      string            `json:"chunk_hash_algo,omitempty"`
+	ChunkSize          string            `json:"chunk_size,omitempty"`
+	ExtMeta            map[string]string `json:"ext_meta,omitempty"`
 
 	compression         string
 	mtime               time.Time
@@ -112,6 +113,16 @@ func (chunk chunkInfo) saveContentFullpathAttr(out decorable) error {
 	return out.setAttr(xattrKey(chunk.ChunkID), []byte(chunk.ContentFullpath))
 }
 
+func (chunk chunkInfo) saveExtMetaAttr(out decorable) error {
+	for k, v := range chunk.ExtMeta {
+		attrKey := "user.oio.ext." + k
+		if err := out.setAttr(attrKey, []byte(v)); err != nil {
+			return err
+		}
+	}
+    return nil
+}
+
 func (chunk chunkInfo) saveAttr(out decorable) error {
 	setAttr := func(k, v string) error {
 		if v == "" {
@@ -138,6 +149,10 @@ func (chunk chunkInfo) saveAttr(out decorable) error {
 		if err := setAttr(hs.key, *(hs.ptr)); err != nil {
 			return err
 		}
+	}
+
+	if err := chunk.saveExtMetaAttr(out); err != nil {
+		return err
 	}
 
 	return nil
@@ -415,7 +430,19 @@ func retrievePostHeaders(headers *http.Header, chunkID string) (chunkInfo, error
 	if GetBool(headers.Get(HeaderNameNonOptimalPlacement), false) {
 		chunk.nonOptimalPlacement = true
 	}
+	chunk.loadExtHeaders(headers)
 	return chunk, nil
+}
+
+func (chunk *chunkInfo) loadExtHeaders(headers *http.Header) {
+	if chunk.ExtMeta == nil {
+		chunk.ExtMeta = make(map[string]string)
+	}
+	for key, value := range *headers {
+		if strippedKey, found := hasPrefix(key, "X-Oio-Ext-"); found {
+			chunk.ExtMeta[strippedKey] = value[0]
+		}
+	}
 }
 
 // Check and load the info of the chunk.
@@ -481,8 +508,13 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		chunk.nonOptimalPlacement = true
 	}
 
-	err := chunk.retrieveContentFullpathHeader(headers)
-	return chunk, err
+	if err := chunk.retrieveContentFullpathHeader(headers); err != nil {
+		return chunk, err
+	}
+
+	chunk.loadExtHeaders(headers)
+
+	return chunk, nil
 }
 
 // Check and load the checksum and the size of the chunk and the metachunk
@@ -538,6 +570,8 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 	} else {
 		chunk.ChunkSize = strconv.FormatInt(ul.length, 10)
 	}
+
+	chunk.loadExtHeaders(trailers)
 
 	return nil
 }
