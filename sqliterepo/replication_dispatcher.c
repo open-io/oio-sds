@@ -831,7 +831,6 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	reply->no_access();
 
 	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -881,7 +880,6 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	NAME2CONST(n0, name);
 	GError *err = NULL;
 
-	reply->no_access();
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -974,7 +972,6 @@ _handler_STATUS(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	reply->no_access();
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -997,7 +994,6 @@ _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	reply->no_access();
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -1027,7 +1023,6 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	reply->no_access();
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -1052,7 +1047,6 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	reply->no_access();
 
 	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
@@ -2032,7 +2026,6 @@ static gboolean
 _handler_INFO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
-	reply->no_access();
 
 	gchar format[64] = {0};
 	metautils_message_extract_string_noerror(

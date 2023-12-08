@@ -79,7 +79,6 @@ GBytes **wanted_prepared = NULL;
 static enum http_rc_e
 action_status(struct req_args_s *args)
 {
-	args->rp->no_access();
 
 	if (0 == strcasecmp("HEAD", args->rq->cmd))
 		return _reply_success_json(args, NULL);

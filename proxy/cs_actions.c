@@ -529,7 +529,6 @@ _deregistration(struct req_args_s *args, struct json_object *jsrv)
 enum http_rc_e
 action_conscience_info (struct req_args_s *args)
 {
-	args->rp->no_access();
 	GError *err;
 	const char *v = OPT("what");
 
@@ -581,7 +580,6 @@ action_conscience_info (struct req_args_s *args)
 enum http_rc_e
 action_local_list (struct req_args_s *args)
 {
-	args->rp->no_access();
 
 	const char *type = TYPE();
 
@@ -636,7 +634,6 @@ action_local_list (struct req_args_s *args)
 enum http_rc_e
 action_conscience_list (struct req_args_s *args)
 {
-	args->rp->no_access();
 
 	const char *type = TYPE();
 	if (!type)
@@ -732,7 +729,6 @@ action_conscience_list (struct req_args_s *args)
 enum http_rc_e
 action_conscience_resolve_service_id (struct req_args_s *args)
 {
-	args->rp->no_access();
 
 	const char *type = TYPE();
 	if (!type)
@@ -925,7 +921,6 @@ _rest_conscience_register(struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_conscience_register(struct req_args_s *args)
 {
-	args->rp->no_access();
 	return rest_action(args, _rest_conscience_register);
 }
 

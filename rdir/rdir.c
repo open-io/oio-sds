@@ -2905,24 +2905,20 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 {
 	switch (route) {
 		case OIO_ROUTE_INFO:
-			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_srv_info(args);
 
 		case OIO_ROUTE_STATUS:
-			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_srv_status(args);
 
 		case OIO_ROUTE_CONFIG:
-			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_srv_config(args);
 
 		case OIO_RDIR_STATUS:
 			// FALLTHROUGH
 		case OIO_RDIR_ADMIN_SHOW:
-			args->rp->no_access();
 			CHECK_METHOD("GET");
 			return _route_admin_show(args, OPT("vol"));
 
@@ -2951,12 +2947,10 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_vol_create(args, OPT("vol"));
 
 		case OIO_RDIR_VOL_PUSH:
-			args->rp->no_access();
 			CHECK_METHOD("POST");
 			return _route_vol_push(args, jbody, OPT("vol"), OPT("create"));
 
 		case OIO_RDIR_VOL_DELETE:
-			args->rp->no_access();
 			CHECK_METHOD("DELETE");
 			return _route_vol_delete(args, jbody, OPT("vol"));
 
@@ -2979,7 +2973,6 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_meta2_create(args, OPT("vol"));
 
 		case OIO_RDIR_META2_PUSH:
-			args->rp->no_access();
 			CHECK_METHOD("POST");
 			return _route_meta2_push(args, jbody, OPT("vol"), OPT("create"));
 
@@ -2989,7 +2982,6 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _reply_method_error(args->rp);
 
 		case OIO_RDIR_META2_DELETE:
-			args->rp->no_access();
 			CHECK_METHOD("POST");
 			return _route_meta2_delete(args, jbody, OPT("vol"));
 

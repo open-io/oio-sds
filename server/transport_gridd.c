@@ -803,7 +803,6 @@ dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 	g_tree_foreach(reply->client->transport.client_context->dispatcher->tree_requests,
 			_stats_runner, body);
 	reply->add_body(body);
-	reply->no_access();
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -829,7 +828,6 @@ static gboolean
 dispatch_PING(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	reply->no_access();
 	reply->add_body(metautils_gba_from_string("OK\r\n"));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -1054,7 +1052,6 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 	g_array_free(stats, TRUE);
 	g_free(format);
 
-	reply->no_access();
 	reply->add_body(body);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -1064,7 +1061,6 @@ static gboolean
 dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	reply->no_access();
 	reply->add_body(metautils_gba_from_string(OIOSDS_PROJECT_VERSION));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
