@@ -25,6 +25,7 @@ DEFAULT_ENDPOINT = "kafka://127.0.0.1:19092"
 DEFAULT_TOPIC = "oio"
 DEFAULT_REPLICATION_TOPIC = "oio-replication"
 DEFAULT_DELAYED_TOPIC = "oio-delayed"
+DEFAULT_DELETE_TOPIC_PREFIX = "oio-delete-"
 DEFAULT_REBUILD_TOPIC = "oio-rebuild"
 DEFAULT_DEADLETTER_TOPIC = "oio-deadletter"
 DEFAULT_DELAY_GRANULARITY = 60
@@ -153,6 +154,9 @@ class KafkaSender(KafkaClient):
             topic = self._delayed_topic
 
         self._send(topic, data, flush=flush, callback=callback)
+
+    def flush(self, timeout=None):
+        return self._client.flush(timeout)
 
     def _close(self):
         self._client.poll(POLL_TIMEOUT)
