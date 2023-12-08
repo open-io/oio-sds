@@ -16,6 +16,7 @@
 import time
 from random import choice
 
+from oio.common import exceptions
 from oio.common.json import json
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
@@ -68,23 +69,32 @@ class ServiceDecommissionTest(CliTestCase):
         Test the 'openio-admin xcute meta2 decommission' command actually
         decommissions a meta2 service.
         """
+        container_count = 100
         if len(self.conf["services"]["meta2"]) < 4:
             self.skip("This test requires at least 4 meta2 services")
 
         create_reqid = request_id("xcute-decom-")
-        for i in range(100):
+        for i in range(container_count):
             cname = f"xcute-decommission-{i:0>3}"
-            self.storage.container_create(self.account, cname, reqid=create_reqid)
-            self.clean_later(cname)
-        for _ in range(100):
+            try:
+                self.storage.container_create(self.account, cname, reqid=create_reqid)
+                self.clean_later(cname)
+            except exceptions.ServiceBusy:
+                # Creating so many containers in a row puts high pressure on the
+                # system. We can still run the test with a few containers missing.
+                container_count -= 1
+        for _ in range(container_count):
             self.wait_for_event(
-                "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW)
+                "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW,)
             )
         list_reqid = request_id("xcute-decom-")
         candidate = self.storage.conscience.next_instance("meta2")["addr"]
         total_bases = len(
             list(self.rdir.meta2_index_fetch_all(candidate, reqid=list_reqid))
         )
+        # We chose to continue running the test while some databases failed to
+        # be created: ensure "some databases" is at least 2.
+        self.assertGreater(total_bases, 1)
 
         opts = self.get_format_opts(fields=["job.id"])
         if decommission_percentage is not None:

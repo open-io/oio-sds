@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,13 +65,6 @@ def unparse_chunk_method(chunk_method, params):
     )
 
 
-def guess_storage_method(url):
-    """
-    Guess the storage method from a chunk URL.
-    """
-    return "plain"
-
-
 class StorageMethods(object):
     def __init__(self, methods):
         self.index = methods
@@ -94,7 +87,7 @@ class StorageMethods(object):
 
 class StorageMethod(object):
     """
-    Hold parameters telling how an object is chunked, replicated, checksumed...
+    Hold parameters telling how an object is chunked, replicated, checksummed...
     """
 
     def __init__(self, name, ec=False, **kwargs):
