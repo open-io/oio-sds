@@ -362,8 +362,7 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 	} else if _, ok := hasPrefix(url, "kafka://"); ok {
 		out := new(kafkaBackend)
 		out.endpoint = url
-		out.topic = oioGetConfigValue(
-			options.getString("ns", "OIO"), oioConfigEventTopic)
+		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), oioConfigEventTopic))
 		if out.topic == "" {
 			out.topic = "oio"
 		}
