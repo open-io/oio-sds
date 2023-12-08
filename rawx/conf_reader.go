@@ -72,6 +72,7 @@ var loadedOpts = map[string]string{
 	"sock_tcp_nodelay": "nodelay",
 
 	"events": "events",
+	"topic":  "topic",
 
 	"tls_cert_file": "tls_cert_file",
 	"tls_key_file":  "tls_key_file",
