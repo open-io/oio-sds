@@ -19,6 +19,7 @@ from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.common.json import json
 from oio.common.kafka import kafka_options_from_conf
+from oio.conscience.client import ConscienceClient
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
 from oio.event.evob import is_success, is_retryable
 from oio.event.loader import loadhandlers
@@ -52,6 +53,10 @@ class KafkaEventWorker(KafkaConsumerWorker):
             logger=self.logger,
             cache_duration=rdir_refresh_interval,
             **rdir_kwargs,
+        )
+        self.app_env["conscience_client"] = ConscienceClient(
+            self.conf,
+            logger=self.logger,
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 

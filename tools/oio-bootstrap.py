@@ -1648,7 +1648,7 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-tube = oio-xcute-jobs
+topic = oio-xcute
 namespace = ${NS}
 user = ${USER}
 workers = 2
@@ -2526,8 +2526,10 @@ def generate(options):
         rawx_volumes = []
         rawx_target = register_target("rawx", root_target)
         for i in range(nb_rawx):
+            host = hosts[i % len(hosts)]
             env = subenv(
                 {
+                    "IP": host,
                     "SRVTYPE": srvtype,
                     "SRVNUM": i + 1,
                     "EXE": "oio-rawx",
@@ -3075,9 +3077,33 @@ def generate(options):
     for _, v in targets.items():
         generate_target(v)
 
+    # Generate topics declaration file
+    if use_kafka:
+        topics_to_declare = [
+            "oio",
+            "oio-preserved",
+            "oio-rebuild",
+            "oio-drained",
+            "oio-replication",
+            "oio-deadletter",
+        ]
+        # Add delete topics per host
+        rawx_hosts = hosts[:nb_rawx]
+        topics_to_declare.extend([f"oio-delete-{h}" for h in rawx_hosts])
+
+        with open(f"{CFGDIR}/topics.yml", "w+") as f:
+            f.write(
+                yaml.dump(
+                    {
+                        "brokers": options["kafka"]["endpoint"],
+                        "topics": {k: None for k in topics_to_declare},
+                    }
+                )
+            )
+
     # ensure volumes for srvtype in final_services:
-    for srvtype in final_services:
-        for rec in final_services[srvtype]:
+    for srvtype, services in final_services.items():
+        for rec in services:
             if "path" in rec:
                 mkdir_noerror(rec["path"])
             if "path" in rec and "addr" in rec:
