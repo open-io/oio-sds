@@ -28,6 +28,7 @@ from urllib import parse as urlparse
 
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound
+from oio.common.easy_value import true_value as config_true_value
 
 CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"
 TRANSIENT_CRYPTO_META_KEY = "x-object-transient-sysmeta-crypto-meta"
@@ -103,7 +104,7 @@ def get_user_meta_prefix(server_type):
     :param server_type: type of backend server i.e. [account|container|object]
     :returns: prefix string for server type's user metadata headers
     """
-    return "x-%s-%s-" % (server_type.lower(), "meta")
+    return f"x-{server_type.lower()}-meta-"
 
 
 def get_object_transient_sysmeta(key):
@@ -159,18 +160,6 @@ def strict_b64decode(value, allow_line_breaks=False):
         return base64.b64decode(value)
     except (TypeError, binascii.Error):  # (py2 error, py3 error)
         raise ValueError
-
-
-# Used when reading config values
-TRUE_VALUES = set(("true", "1", "yes", "on", "t", "y"))
-
-
-def config_true_value(value):
-    """
-    Returns True if the value is either True or a string in TRUE_VALUES.
-    Returns False otherwise.
-    """
-    return value is True or (isinstance(value, str) and value.lower() in TRUE_VALUES)
 
 
 # Functions copied from swift/common/middleware/crypto/crypto_utils.py
