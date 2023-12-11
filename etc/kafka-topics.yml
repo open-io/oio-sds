@@ -6,5 +6,8 @@ topics:
   oio-rebuild:
   oio-delete:
   oio-drained:
+  oio-drained-ec:
   oio-replication:
   oio-deadletter:
+  oio-xcute:
+  oio-xcute-reply:
