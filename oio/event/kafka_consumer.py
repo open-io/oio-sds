@@ -20,6 +20,7 @@ from multiprocessing import Event, Process
 
 from oio.common.kafka import DEFAULT_DEADLETTER_TOPIC, KafkaConsumer, KafkaSender
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 
 
 class RejectMessage(Exception):
@@ -48,6 +49,7 @@ class KafkaConsumerWorker(Process):
         group_id,
         worker_id,
         kafka_conf,
+        app_conf,
         *args,
         **kwargs,
     ):
@@ -63,6 +65,8 @@ class KafkaConsumerWorker(Process):
         self._consumer = None
         self._producer = None
         self._last_use = None
+
+        self.statsd = get_statsd(conf=app_conf)
 
         for key in ["client.id", "group.instance.id"]:
             if key in self._kafka_conf:
@@ -91,7 +95,13 @@ class KafkaConsumerWorker(Process):
                 body = event.value()
                 properties = {}
                 self.process_message(body, properties)
+                start = time.monotonic()
                 self.acknowledge_message(event)
+                duration = time.monotonic() - start
+                self.statsd.timing(
+                    f"openio.event.{self.topic}.ack.duration",
+                    duration * 1000,
+                )
 
             except RejectMessage as err:
                 self.reject_message(event, retry_later=isinstance(err, RetryLater))
