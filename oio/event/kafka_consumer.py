@@ -61,12 +61,16 @@ class KafkaConsumerWorker(Process):
         self.group_id = group_id
         self.worker_id = worker_id
         self._kafka_conf = kafka_conf
+        self.app_conf = app_conf or {}
 
         self._consumer = None
         self._producer = None
         self._last_use = None
 
         self.statsd = get_statsd(conf=app_conf)
+
+        self.ack_every = app_conf.get('ack_every', 1)
+        self._ack_counter = 0
 
         for key in ["client.id", "group.instance.id"]:
             if key in self._kafka_conf:
@@ -95,13 +99,15 @@ class KafkaConsumerWorker(Process):
                 body = event.value()
                 properties = {}
                 self.process_message(body, properties)
-                start = time.monotonic()
-                self.acknowledge_message(event)
-                duration = time.monotonic() - start
-                self.statsd.timing(
-                    f"openio.event.{self.topic}.ack.duration",
-                    duration * 1000,
-                )
+                if self._ack_counter % self.ack_every == 0:
+                    start = time.monotonic()
+                    self.acknowledge_message(event)
+                    duration = time.monotonic() - start
+                    self.statsd.timing(
+                        f"openio.event.{self.topic}.ack.duration",
+                        duration * 1000,
+                    )
+                self._ack_counter += 1
 
             except RejectMessage as err:
                 self.reject_message(event, retry_later=isinstance(err, RetryLater))
