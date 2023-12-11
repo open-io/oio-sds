@@ -8,3 +8,5 @@ topics:
   oio-drained:
   oio-replication:
   oio-deadletter:
+  oio-xcute-jobs:
+  oio-xcute-job-reply:
