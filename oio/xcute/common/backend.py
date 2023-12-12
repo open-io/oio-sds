@@ -703,7 +703,7 @@ class XcuteBackend(RedisConnection):
 
             if len(job_ids) < limit_:
                 break
-            marker = job_id
+            marker = debinarize(job_id)
         return jobs
 
     def _get_timestamp(self):
