@@ -30,7 +30,7 @@ from oio.common.statsd import get_statsd
 class KafkaEventWorker(KafkaConsumerWorker):
     def __init__(self, *args, app_conf=None, **kwargs):
         kafka_conf = kafka_options_from_conf(app_conf)
-        super().__init__(*args, **kwargs, kafka_conf=kafka_conf)
+        super().__init__(*args, **kwargs, kafka_conf=kafka_conf, app_conf=app_conf)
 
         self.conf = app_conf
         acct_refresh_interval = float_value(

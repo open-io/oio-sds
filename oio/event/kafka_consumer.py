@@ -17,7 +17,7 @@ import signal
 import time
 
 from multiprocessing import Event, Process
-
+from oio.common.easy_value import int_value
 from oio.common.kafka import DEFAULT_DEADLETTER_TOPIC, KafkaConsumer, KafkaSender
 from oio.common.logger import get_logger
 
@@ -48,6 +48,7 @@ class KafkaConsumerWorker(Process):
         group_id,
         worker_id,
         kafka_conf,
+        app_conf,
         *args,
         **kwargs,
     ):
@@ -59,6 +60,9 @@ class KafkaConsumerWorker(Process):
         self.group_id = group_id
         self.worker_id = worker_id
         self._kafka_conf = kafka_conf
+        self.autocommit_ms = int_value(app_conf.get("autocommit_ms"), 0)
+        if self.autocommit_ms < 0:
+            self.autocommit_ms = 0
 
         self._consumer = None
         self._producer = None
@@ -103,13 +107,16 @@ class KafkaConsumerWorker(Process):
 
     def _connect(self):
         if self._consumer is None:
+            use_autocommit = self.autocommit_ms > 0
+
             self._consumer = KafkaConsumer(
                 self.endpoint,
                 [self.topic],
                 logger=self.logger,
                 conf={
                     "group.id": self.group_id,
-                    "enable.auto.commit": False,
+                    "enable.auto.commit": use_autocommit,
+                    "auto.commit.interval.ms": self.autocommit_ms,
                     **self._kafka_conf,
                 },
             )
@@ -146,6 +153,8 @@ class KafkaConsumerWorker(Process):
     # --- Helper methods --------------
 
     def acknowledge_message(self, message):
+        if self.autocommit_ms > 0:
+            return True
         try:
             self._consumer.commit(message)
             return True
@@ -155,8 +164,7 @@ class KafkaConsumerWorker(Process):
 
     def reject_message(self, message, retry_later=False):
         try:
-            self._consumer.commit(message)
-
+            self.acknowledge_message(message)
             if not self._producer:
                 self._connect()
             if not self._producer:
