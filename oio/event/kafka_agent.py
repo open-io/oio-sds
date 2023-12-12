@@ -83,8 +83,11 @@ class KafkaEventWorker(KafkaConsumerWorker):
         extra["status"] = status
         if self.logger_request is not None:
             self.logger_request.info("", extra=extra)
+        topic = extra["topic"]
+        event = extra["event"]
+        status = extra["status"]
         self.statsd.timing(
-            f"openio.event.{extra['topic']}.{extra['event']}.{extra['status']}.duration",
+            f"openio.event.{topic}.{event}.{status}.duration",
             extra["duration"] * 1000,
         )
 
