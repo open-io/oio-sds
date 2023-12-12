@@ -1760,7 +1760,7 @@ workers = 2
 [xcute-orchestrator]
 orchestrator_id = orchestrator-${SRVNUM}
 broker_endpoint = ${QUEUE_URL}
-jobs_topic = oio-xcute-jobs
+jobs_topic = oio-xcute
 """
 
 template_rdir = """
