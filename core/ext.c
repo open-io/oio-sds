@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -189,6 +189,7 @@ struct oio_ext_local_s {
 	gchar *region;
 	gchar *root_hexid;
 	gchar **shared_properties;
+	gint64 db_wait;
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
 	guint8 allow_long_timeout;
@@ -250,6 +251,21 @@ GRand *oio_ext_local_prng (void) {
 		l->prng = g_rand_new_with_seed_array (seeds, 3);
 	}
 	return l->prng;
+}
+
+gint64 oio_ext_get_db_wait(void) {
+	struct oio_ext_local_s *l = _local_ensure();
+	return l->db_wait;
+}
+
+void oio_ext_incr_db_wait(gint64 delta) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->db_wait += delta;
+}
+
+void oio_ext_reset_db_wait(void) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->db_wait = 0;
 }
 
 const char *oio_ext_get_reqid (void) {

@@ -685,15 +685,10 @@
 				"descr": "Triggers an alert when a thread tries to wait for an overloaded database.",
 				"def": true },
 
-			{ "type": "uint32", "name": "_cache_max_waiting",
-				"key": "sqliterepo.cache.waiting.max",
-				"descr": "Sets how many threads can wait on a single database. All the additional waiters will be denied with any wait attempt.",
-				"def": 16, "min": 0, "max": "1<<32 - 1" },
-
 			{ "type": "monotonic", "name": "_cache_timeout_open",
 				"key": "sqliterepo.cache.timeout.open",
 				"descr": "Sets how long a worker thread accepts for a DB to become available.",
-				"def": "20s", "min": "1ms", "max": "1d" },
+				"def": "20s", "min": "1ms", "max": "1m" },
 
 			{ "type": "monotonic", "name": "_cache_period_cond_wait",
 				"key": "sqliterepo.cache.timeout.lock",

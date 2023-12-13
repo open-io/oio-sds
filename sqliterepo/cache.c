@@ -37,11 +37,11 @@ License along with this library.
 
 #define GET(R,I) ((R)->bases + (I))
 
-#define LOAD_TOO_HIGH "Load too high on [%s] " \
-		"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT", " \
-		"avg_wait=%"G_GINT64_FORMAT"us, " \
-		"sqliterepo.cache.timeout.open=%"G_GINT64_FORMAT"us, " \
-		"reqid=%s)"
+#define EXCESSIVE_LOAD(AVG_WAITING_TIME, DEADLINE_REACHED) NEWERROR( \
+		CODE_EXCESSIVE_LOAD, \
+		"Load too high (waiting_requests=%"G_GUINT32_FORMAT", " \
+		"avg_waiting_time=%.6lf, deadline_reached=%s)", \
+		base->count_waiting, AVG_WAITING_TIME, DEADLINE_REACHED)
 
 #define BEACON_RESET(B) do { (B)->first = (B)->last = -1; } while (0)
 
@@ -625,6 +625,43 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 	g_free(cache);
 }
 
+/**
+ * Check if the database was accessed during the period.
+ */
+static gboolean
+_base_is_accessible(sqlx_base_t *base, gint64 now, gint64 period)
+{
+	return grid_single_rrd_get_delta(base->open_attempts,
+			now / G_TIME_SPAN_SECOND,
+			MIN(60, MAX(1, period / G_TIME_SPAN_SECOND))) > 0;
+}
+
+/**
+ * From the average waiting time of the last 10 seconds, check if the request
+ * can still wait (return 0) or if it doesn't have much time left
+ * (return the average wait time in second).
+ */
+static double
+_load_too_high(sqlx_base_t *base, gint64 now, gint64 remaining_time)
+{
+	gint64 dx = grid_single_rrd_get_delta(base->open_attempts,
+			now / G_TIME_SPAN_SECOND, 10);
+	gint64 dt = grid_single_rrd_get_delta(base->open_wait_time,
+			now / G_TIME_SPAN_SECOND, 10);
+	if (dx > 0) {
+		/* Check if the average waiting time does not exceed the remaining time
+		 * for the request */
+		gint64 avg_waiting_time = dt / dx;
+		if (avg_waiting_time > remaining_time) {
+			return (double)avg_waiting_time / (double)G_TIME_SPAN_SECOND;
+		}
+		return 0;
+	}
+	/* No requests have successfully opened the database recently,
+	 * retry until the deadline is reached */
+	return 0;
+}
+
 GError *
 sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 		gboolean urgent, gint *result, gint64 deadline)
@@ -632,6 +669,7 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	gint bd;
 	GError *err = NULL;
 	sqlx_base_t *base = NULL;
+	gint attempts = 0;
 
 	EXTRA_ASSERT(cache != NULL);
 	EXTRA_ASSERT(hname != NULL);
@@ -645,8 +683,10 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 			(void*)cache, hname ? hashstr_str(hname) : "NULL",
 			(void*)result, (deadline - start) / G_TIME_SPAN_MILLISECOND);
 
+	gboolean base_has_been_opened = FALSE;
 	g_mutex_lock(&cache->lock);
 retry:
+	attempts++;
 
 	bd = sqlx_lookup_id(cache, hname);
 	if (bd < 0) {
@@ -670,10 +710,30 @@ retry:
 
 		const gint64 now = oio_ext_monotonic_time ();
 
-		if (now > deadline) {
-			err = NEWERROR (CODE_UNAVAILABLE,
-					"DB busy (deadline reached after %"G_GINT64_FORMAT" us)",
-					now - start);
+		gint64 remaining_time = deadline - now;
+		if (remaining_time <= 0) {
+			gint64 wait_time = now - start;
+			if (base->status == SQLX_BASE_USED
+					&& base->owner == g_thread_self()) {
+				/* The database is already open but the deadline has passed */
+				err = TIMEOUT("Deadline reached");
+			} else if (attempts < 2) {
+				/* The deadline was reached without having had time
+				 * to make the slightest attempt */
+				err = BUSY(
+						"DB busy (deadline reached after %"G_GINT64_FORMAT \
+						" us): no attempt to open", wait_time);
+			} else if (_cache_fail_on_heavy_load
+					&& _base_is_accessible(base, now, wait_time)) {
+				/* Several attempts were made to fail to open the database,
+				 * but other requests succeeded in opening it
+				 * within the same amount of time */
+				err = EXCESSIVE_LOAD(_load_too_high(base, now, 0), "true");
+			} else {
+				err = BUSY(
+						"DB busy (deadline reached after %"G_GINT64_FORMAT \
+						" us)", wait_time);
+			}
 		} else switch (base->status) {
 
 			case SQLX_BASE_FREE:
@@ -693,6 +753,7 @@ retry:
 				base->count_open ++;
 				base->owner = g_thread_self();
 				*result = base->index;
+				base_has_been_opened = TRUE;
 				break;
 
 			case SQLX_BASE_USED:
@@ -702,25 +763,31 @@ retry:
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), oio_log_thread_id(base->owner));
 
-					if (!urgent && _cache_max_waiting > 0 &&
-							base->count_waiting >= _cache_max_waiting) {
-						if (_cache_fail_on_heavy_load) {
-							err = NEWERROR(CODE_EXCESSIVE_LOAD, "Load too high "
-									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")",
-									base->count_waiting, _cache_max_waiting);
-							break;
-						} else if (_cache_alert_on_heavy_load) {
-							gint64 dx = grid_single_rrd_get_delta(base->open_attempts,
-									now / G_TIME_SPAN_SECOND, 30);
-							gint64 dt = grid_single_rrd_get_delta(base->open_wait_time,
-									now / G_TIME_SPAN_SECOND, 30);
-							gint64 avg_wait = dt / (dx?: 1);
-							gint64 max_wait = deadline - now;
-							if (avg_wait > max_wait * 3 / 4) {
-								GRID_WARN(LOAD_TOO_HIGH, hashstr_str(hname),
-									base->count_waiting, _cache_max_waiting,
-									avg_wait, _cache_timeout_open,
-									oio_ext_get_reqid());
+					if (!urgent) {
+						gint64 margin = 0;
+						if (!_cache_fail_on_heavy_load
+								&& _cache_alert_on_heavy_load) {
+							/* Only 2 more attempts before definitively
+							 * failing */
+							margin = 2 * G_TIME_SPAN_SECOND;
+						}
+						double avg_waiting_time = _load_too_high(
+								base, now, remaining_time - margin);
+						if (avg_waiting_time > 0) {
+							if (_cache_fail_on_heavy_load) {
+								err = EXCESSIVE_LOAD(avg_waiting_time, "false");
+								break;
+							}
+							if (_cache_alert_on_heavy_load) {
+								GRID_WARN(
+										"Load too high on [%s] (waiting_" \
+										"requests=%"G_GUINT32_FORMAT", " \
+										"avg_waiting_time=%.6lf, " \
+										"reqid=%s)",
+										hashstr_str(hname),
+										base->count_waiting,
+										avg_waiting_time,
+										oio_ext_get_reqid());
 							}
 						}
 					}
@@ -735,6 +802,7 @@ retry:
 					base->count_waiting --;
 					goto retry;
 				}
+				/* Already opened by this thread */
 				base->owner = g_thread_self();
 				base->count_open ++;
 				*result = base->index;
@@ -760,9 +828,12 @@ retry:
 		gint64 now = oio_ext_monotonic_time();
 		time_t now_secs = now / G_TIME_SPAN_SECOND;
 		gint64 wait_time = now - start;
-		grid_single_rrd_add(base->open_attempts, now_secs, 1);
-		grid_single_rrd_add(base->open_wait_time, now_secs, wait_time);
-		oio_ext_add_perfdata("db_wait", wait_time);
+		if (base_has_been_opened) {
+			grid_single_rrd_add(base->open_attempts, now_secs, 1);
+			grid_single_rrd_add(base->open_wait_time, now_secs, wait_time);
+		}
+		oio_ext_incr_db_wait(wait_time);
+		oio_ext_add_perfdata("db_wait", wait_time / G_TIME_SPAN_SECOND);
 
 		if (!err) {
 			sqlx_base_debug(__FUNCTION__, base);

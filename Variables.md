@@ -1550,7 +1550,7 @@ Used by `gcc`
  * default: **20 * G_TIME_SPAN_SECOND**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_CACHE_TIMEOUT_OPEN*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_MINUTE
 
 ### sqliterepo.cache.ttl.cool
 
@@ -1569,15 +1569,6 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_CACHE_TTL_HOT*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
-
-### sqliterepo.cache.waiting.max
-
-> Sets how many threads can wait on a single database. All the additional waiters will be denied with any wait attempt.
-
- * default: **16**
- * type: guint32
- * cmake directive: *OIO_SQLITEREPO_CACHE_WAITING_MAX*
- * range: 0 -> 2147483648
 
 ### sqliterepo.client.timeout.alert_if_longer
 

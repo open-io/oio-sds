@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2023 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -94,6 +94,12 @@ gdouble oio_ext_rand_double (void);
 guint32 oio_ext_rand_int (void);
 
 gint32 oio_ext_rand_int_range (gint32 low, gint32 up);
+
+gint64 oio_ext_get_db_wait(void);
+
+void oio_ext_incr_db_wait(gint64 delta);
+
+void oio_ext_reset_db_wait(void);
 
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);

@@ -216,6 +216,7 @@ network_client_log_access(struct log_item_s *item)
 			/ (double)G_TIME_SPAN_SECOND;
 
 	GString *gstr = g_string_sized_new(256);
+	double db_wait = (double)oio_ext_get_db_wait() / (double)G_TIME_SPAN_SECOND;
 
 	/* mandatory */
 	g_string_append_static(gstr, "local:");
@@ -234,6 +235,8 @@ network_client_log_access(struct log_item_s *item)
 
 	/* arbitrary */
 	g_string_append_printf(gstr, "\ttime_spent_handler_float:%.6lf", diff_handler);
+	g_string_append_printf(gstr, "\tdb_wait_float:%.6lf", db_wait);
+	g_string_append_printf(gstr, "\tprocess_time_float:%.6lf", diff_handler - db_wait);
 	GHashTable *perfdata = oio_ext_get_perfdata();
 	if (perfdata) {
 		void __log_perfdata(gpointer key, gpointer val, gpointer udata UNUSED)
@@ -745,6 +748,7 @@ _client_manage_l4v(struct network_client_s *client,
 	req_ctx.request = request;
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.reqid = _req_get_ID(request, reqid, sizeof(reqid));
+	oio_ext_reset_db_wait();
 	oio_ext_set_reqid(req_ctx.reqid);
 	req_ctx.reqsize = ctx->gba_l4v->len;
 	rc = TRUE;
@@ -779,7 +783,8 @@ label_exit:
 		g_free(req_ctx.reqname);
 	oio_str_clean(&req_ctx.subject);
 	memset(&req_ctx, 0, sizeof(req_ctx));
-	oio_ext_set_reqid (NULL);
+	oio_ext_reset_db_wait();
+	oio_ext_set_reqid(NULL);
 	return rc;
 }
 
