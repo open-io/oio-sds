@@ -407,6 +407,11 @@
 				"def": false,
 				"descr": "" },
 
+			{ "type": "bool", "name": "oio_disable_noisy_access_logs",
+				"key": "server.disable_noisy_access_logs",
+				"def": true,
+				"descr": "Enable by default, unnecessary access logs are ignored. Set to false to log every access" },
+
 			{ "type": "bool", "name": "server_perfdata_enabled",
 				"key": "server.perfdata.enabled",
 				"def": false,

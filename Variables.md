@@ -1237,6 +1237,14 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_CNX_TIMEOUT_PERSIST*
  * range: 0 -> 1 * G_TIME_SPAN_DAY
 
+### server.disable_noisy_access_logs
+
+> Enable by default, unnecessary access logs are ignored. Set to false to log every access
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_SERVER_DISABLE_NOISY_ACCESS_LOGS*
+
 ### server.fd_max_passive
 
 > Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (50% of available file descriptors).
