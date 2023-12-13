@@ -1,7 +1,11 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tools.benchmark")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . .. ../..)
+include_directories(BEFORE
+	.
+	..
+	../..
+	${CMAKE_BINARY_DIR})
 
 add_executable(
 	event_benchmark

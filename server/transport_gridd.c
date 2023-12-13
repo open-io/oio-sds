@@ -204,7 +204,7 @@ network_client_log_access(struct log_item_s *item)
 {
 	struct req_ctx_s *r = item->req_ctx;
 
-	if (r->access_disabled && CODE_IS_OK(item->code) && !GRID_DEBUG_ENABLED())
+	if (oio_disable_noisy_access_logs && r->access_disabled && CODE_IS_OK(item->code) && !GRID_DEBUG_ENABLED())
 		return;
 
 	if (!r->tv_end)
