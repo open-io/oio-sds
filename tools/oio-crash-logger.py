@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2023 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,6 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+Create a logger with bad configuration and ensure there is no infinite recursion.
+"""
 
 import sys
 from tempfile import NamedTemporaryFile
@@ -20,6 +24,6 @@ from oio.common.logger import get_logger, redirect_stdio
 with NamedTemporaryFile(mode="rb", prefix="nolog-") as tmp:
     LOGGER = get_logger({"log_address": tmp.name})
     redirect_stdio(LOGGER)
-    LOGGER.warn("Trying to log something boring.")
+    LOGGER.warning("Trying to log something boring.")
 
 sys.exit(0)

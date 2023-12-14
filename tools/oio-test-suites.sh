@@ -113,13 +113,13 @@ test_oio_lb_benchmark() {
 }
 
 test_oio_logger() {
-	# Expect the thing to exit with error 1. If it crashes in an uncontrolled
-	# way, it will return 128+.
+	# Expect the thing to exit with code 0 or 1.
+	# If it crashes in an uncontrolled way, it will return 128+.
 	set +e
 	python ${WRKDIR}/tools/oio-crash-logger.py
 	CODE=$?
 	set -e
-	if [ $CODE -ne 1 ]; then exit 1; fi
+	if [ $CODE -ne 1 -a $CODE -ne 0 ]; then exit 1; fi
 }
 
 test_proxy_forward () {

@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2021 OVH SAS
+# Copyright (C) 2020-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -55,6 +55,22 @@ class StreamToLogger(object):
         pass
 
 
+def switch_to_real_stderr(wrapped):
+    """
+    Decorate a method so it uses the real stderr, not a wrapped one.
+    """
+
+    def _wrapper(*args, **kwargs):
+        orig_stderr = sys.stderr
+        sys.stderr = sys.__stderr__
+        try:
+            return wrapped(*args, **kwargs)
+        finally:
+            sys.stderr = orig_stderr
+
+    return _wrapper
+
+
 def redirect_stdio(logger):
     """
     Close stdio, redirect stdout and stderr.
@@ -84,6 +100,9 @@ def redirect_stdio(logger):
                 os.dup2(nullfile.fileno(), fd.fileno())
             except OSError:
                 pass
+
+    handler = get_logger.handler4logger[logger]
+    handler.handleError = switch_to_real_stderr(handler.handleError)
 
     sys.stdout = StreamToLogger(logger)
     sys.stderr = StreamToLogger(logger, "STDERR")
