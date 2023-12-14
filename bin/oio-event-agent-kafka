@@ -52,13 +52,13 @@ def main():
     group_id = conf.get("group_id", ns_conf.get("events.kafka.group_id", "event-agent"))
 
     pool = KafkaConsumerPool(
+        conf,
         endpoint,
         topic,
-        KafkaEventWorker,
+        worker_class=KafkaEventWorker,
         group_id=group_id,
         logger=logger,
         processes=workers,
-        app_conf=conf,
     )
     pool.run()
 

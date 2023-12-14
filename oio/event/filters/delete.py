@@ -20,7 +20,6 @@ from lru import LRU
 
 from oio.common.kafka import DEFAULT_DELETE_TOPIC_PREFIX, KafkaSender
 from oio.common.exceptions import OioException
-from oio.conscience.client import ConscienceClient
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 from oio.event.kafka_consumer import RetryLater
@@ -68,11 +67,11 @@ class DeleteFilter(Filter):
 
         if event.event_type in (EventTypes.CONTENT_DELETED, EventTypes.CONTENT_DRAINED):
             # Create a base event without "chunks"
-            dedicated_event = deepcopy(env)
-            dedicated_event["data"] = [
-                d for d in dedicated_event["data"] if d.get("type") != "chunks"
+            base_event = deepcopy(env)
+            base_event["data"] = [
+                d for d in base_event["data"] if d.get("type") != "chunks"
             ]
-            per_dst_events = {}
+            child_events = []
 
             # Split event per servers
             for data in event.data:
@@ -92,11 +91,13 @@ class DeleteFilter(Filter):
                     self._cache[service_name] = rawx_addr
 
                 # Add the chunk to the event mean to be sent to a rawx server
-                _event = per_dst_events.setdefault(rawx_addr, deepcopy(dedicated_event))
+                _event = deepcopy(base_event)
                 _event["data"].append(data)
+                _event["service_id"] = service_name
+                child_events.append((rawx_addr, _event))
 
-            # Produce events to each
-            for dst, evt in per_dst_events.items():
+            # Produce events to each topic
+            for dst, evt in child_events:
                 dst_topic = f"{self._topic_prefix}{dst}"
                 self._send_event(dst_topic, evt)
 

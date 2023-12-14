@@ -12,14 +12,134 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import bisect
+import json
 import os
 import signal
 import time
 
-from multiprocessing import Event, Process
-from oio.common.easy_value import int_value
-from oio.common.kafka import DEFAULT_DEADLETTER_TOPIC, KafkaConsumer, KafkaSender
+from collections import deque
+from multiprocessing import Event, Process, Queue
+from multiprocessing.queues import Empty
+
+from confluent_kafka import TopicPartition
+from oio.common.easy_value import float_value, int_value
+from oio.common.kafka import (
+    DEFAULT_DEADLETTER_TOPIC,
+    KafkaConsumer,
+    KafkaSender,
+    kafka_options_from_conf,
+)
 from oio.common.logger import get_logger
+from oio.common.utils import monotonic_time
+
+
+DEFAULT_BATCH_SIZE = 100
+DEFAULT_BATCH_INTERVAL = 1.0
+
+
+class Throttle:
+    def __init__(self, rate):
+        self.enabled = rate > 0
+        if self.enabled:
+            self.rate = rate
+            self._timeframe = 1
+            self._max_requests = int(self.rate)
+            if self.rate < 1:
+                self._timeframe = 1 / self.rate
+                self._max_requests = 1
+            self._requests = deque(maxlen=self._max_requests)
+
+    def request_slot(self):
+        if not self.enabled:
+            return
+
+        # check if full
+        if len(self._requests) == self._requests.maxlen:
+            next_slot = self._requests[0]
+            now = monotonic_time() + self._timeframe
+            if now < next_slot:
+                time.sleep(next_slot - now)
+            self._requests.popleft()
+        self._requests.append(monotonic_time())
+        return
+
+
+class EventQueue:
+    DEFAULT_QUEUE = "__default"
+
+    def __init__(self, logger, conf, size, workers):
+        self.logger = logger
+        self.size = size
+        self.queues = {}
+        self.queue_ids = []
+
+        # Instantiate default queue
+        self.register_queue(self.DEFAULT_QUEUE)
+
+        self.init(conf, workers)
+
+    def init(self, _conf, _workers):
+        ...
+
+    def register_queue(self, queue_id):
+        self.queues[queue_id] = Queue(self.size)
+        self.queue_ids.append(queue_id)
+
+    def put(self, queue_id, data, **kwargs):
+        queue = self.queues.get(queue_id)
+        if not queue:
+            # Fallback to default queue
+            queue = self.queues[self.DEFAULT_QUEUE]
+            if len(self.queue_ids) > 1:
+                # We should not use default queue if we specified queue ids
+                self.logger.warning(
+                    "Queue id '%s' is not defined, fallback to default", queue_id
+                )
+        queue.put(data, **kwargs)
+
+    def get(self, queue_id, **kwargs):
+        queue = self.queues.get(queue_id)
+        if not queue:
+            # Fallback to default queue
+            queue = self.queues[self.DEFAULT_QUEUE]
+        return queue.get(**kwargs)
+
+    def id_from_event(self, _event):
+        return self.DEFAULT_QUEUE
+
+    def get_queue_id(self, worker_id):
+        return self.queue_ids[worker_id % len(self.queue_ids)]
+
+
+class PerServiceEventQueue(EventQueue):
+    def init(self, conf, workers):
+        self.ids = conf.get("event_queue_ids", "").strip(";").split(";")
+
+        if workers < len(self.ids):
+            raise ValueError(
+                f"Not enough workers to handle queues ({workers} < {len(self.ids)})"
+            )
+
+        for queue_id in self.ids:
+            self.register_queue(queue_id)
+
+    def id_from_event(self, event):
+        return event.get("service_id")
+
+
+def event_queue_factory(logger, conf, *args, **kwargs):
+    event_queue_type = conf.get("event_queue_type")
+    _class = None
+    if event_queue_type in (None, "default"):
+        logger.info("Instantiate default event queue")
+        _class = EventQueue
+    elif event_queue_type == "per_service":
+        logger.info("Instantiate per_service event queue")
+        _class = PerServiceEventQueue
+    else:
+        raise NotImplementedError(f"Event queue '{event_queue_type}' not supported")
+    return _class(logger, conf, *args, **kwargs)
 
 
 class RejectMessage(Exception):
@@ -45,54 +165,56 @@ class KafkaConsumerWorker(Process):
         endpoint,
         topic,
         logger,
-        group_id,
+        events_queue,
+        offsets_queue,
         worker_id,
-        kafka_conf,
-        app_conf,
         *args,
+        app_conf=None,
+        kafka_conf=None,
         **kwargs,
     ):
         super().__init__()
         self.endpoint = endpoint
+        self.app_conf = app_conf or {}
         self.logger = logger
         self.topic = topic
         self._stop_requested = Event()
-        self.group_id = group_id
-        self.worker_id = worker_id
-        self._kafka_conf = kafka_conf
-        self.autocommit_ms = int_value(app_conf.get("autocommit_ms"), 0)
-        if self.autocommit_ms < 0:
-            self.autocommit_ms = 0
+        self._kafka_conf = kafka_conf or {}
 
-        self._consumer = None
+        self._events_queue = events_queue
+        self._offsets_queue = offsets_queue
+        self._events_queue_id = self._events_queue.get_queue_id(worker_id)
+
         self._producer = None
         self._last_use = None
 
-        for key in ["client.id", "group.instance.id"]:
-            if key in self._kafka_conf:
-                self._kafka_conf[key] = self._kafka_conf[key].format(
-                    pid=os.getpid(), worker=self.worker_id
-                )
+        rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
+
+        self._throttler = Throttle(rate_limit)
 
     def _consume(self):
         """
         Repeatedly read messages from the topic and call process_message().
         """
 
-        for event in self._consumer.fetch_events():
+        while True:
             if self._stop_requested.is_set():
                 break
-            if event is None:
-                continue
-            if event.error():
-                self.logger.error("Failed to fetch event, reason: %s", event.error())
+            try:
+                event = self._events_queue.get(
+                    self._events_queue_id, block=True, timeout=1.0
+                )
+            except Empty:
+                # No events available
                 continue
 
-            # If we are here, we just communicated with RabbitMQ, we know it's alive
+            # Respect rate limit
+            self._throttler.request_slot()
+
             self._last_use = time.monotonic()
 
             try:
-                body = event.value()
+                body = event["data"]
                 properties = {}
                 self.process_message(body, properties)
                 self.acknowledge_message(event)
@@ -106,21 +228,6 @@ class KafkaConsumerWorker(Process):
                 self.reject_message(event, retry_later=False)
 
     def _connect(self):
-        if self._consumer is None:
-            use_autocommit = self.autocommit_ms > 0
-
-            self._consumer = KafkaConsumer(
-                self.endpoint,
-                [self.topic],
-                logger=self.logger,
-                conf={
-                    "group.id": self.group_id,
-                    "enable.auto.commit": use_autocommit,
-                    "auto.commit.interval.ms": self.autocommit_ms,
-                    **self._kafka_conf,
-                },
-            )
-
         if self._producer is None:
             self._producer = KafkaSender(
                 self.endpoint, self.logger, conf=self._kafka_conf
@@ -153,13 +260,17 @@ class KafkaConsumerWorker(Process):
     # --- Helper methods --------------
 
     def acknowledge_message(self, message):
-        if self.autocommit_ms > 0:
-            return True
         try:
-            self._consumer.commit(message)
-            return True
+            self._offsets_queue.put(
+                {"partition": message["partition"], "offset": message["offset"]}
+            )
         except Exception:
-            self.logger.exception("Failed to ack message %s", message)
+            self.logger.exception(
+                "Failed to ack message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
             return False
 
     def reject_message(self, message, retry_later=False):
@@ -171,14 +282,19 @@ class KafkaConsumerWorker(Process):
                 raise SystemError("No producer available")
 
             if retry_later:
-                self._producer.send(message.topic(), message.value(), 60)
+                self._producer.send(message["topic"], message["data"], 60)
             else:
                 self._producer.send(
-                    DEFAULT_DEADLETTER_TOPIC, message.value(), flush=True
+                    DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
                 )
             return True
         except Exception:
-            self.logger.exception("Failed to reject message %s", message)
+            self.logger.exception(
+                "Failed to reject message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
             return False
 
     # --- Abstract methods ------------
@@ -211,6 +327,175 @@ class KafkaConsumerWorker(Process):
         raise NotImplementedError
 
 
+class KafkaBatchFeeder(Process):
+    def __init__(
+        self,
+        endpoint,
+        topic,
+        logger,
+        group_id,
+        worker_id,
+        app_conf,
+        workers,
+        **kwargs,
+    ):
+        super().__init__()
+        self.endpoint = endpoint
+        self.topic = topic
+        self.logger = logger
+        self._group_id = group_id
+        self._worker_id = worker_id
+        self._app_conf = app_conf
+        self._kafka_conf = kafka_options_from_conf(self._app_conf)
+        self._batch_size = int_value(
+            self._app_conf.get("batch_size"), DEFAULT_BATCH_SIZE
+        )
+        self._commit_interval = float_value(
+            self._app_conf.get("batch_commit_interval_"), DEFAULT_BATCH_INTERVAL
+        )
+
+        self._fetched_events = 0
+
+        self._consumer = None
+        self._stop_requested = Event()
+        self._offsets_queue = Queue(maxsize=self._batch_size)
+        self._events_queue = event_queue_factory(
+            logger, self._app_conf, self._batch_size, workers
+        )
+        self._offsets_to_commit = {}
+
+    @property
+    def events_queue(self):
+        return self._events_queue
+
+    @property
+    def offsets_queue(self):
+        return self._offsets_queue
+
+    def run(self):
+        try:
+            while True:
+                self._connect()
+                # Retrieve events
+                self._fetched_events = 0
+                self._offsets_to_commit = {}
+                deadline = monotonic_time() + self._commit_interval
+                for event in self._consumer.fetch_events():
+                    if self._stop_requested.is_set():
+                        raise StopIteration()
+                    if event:
+                        if event.error():
+                            self.logger.error(
+                                "Failed to fetch event, reason: %s", event.error()
+                            )
+                            continue
+                        # Enqueue event
+                        topic = event.topic()
+                        partition = event.partition()
+                        offset = event.offset()
+                        value = event.value()
+                        self.logger.debug(
+                            "Got event topic=%s, partition=%s, offset=%s",
+                            topic,
+                            partition,
+                            offset,
+                        )
+                        event_data = json.loads(value)
+                        queue_id = self._events_queue.id_from_event(event_data)
+                        self._events_queue.put(
+                            queue_id,
+                            {
+                                "topic": topic,
+                                "partition": partition,
+                                "offset": offset,
+                                "data": event_data,
+                            },
+                        )
+                        self._fetched_events += 1
+
+                    if self._fetched_events == self._batch_size:
+                        # Batch complete
+                        break
+                    if monotonic_time() > deadline:
+                        # Deadline reached
+                        break
+
+                # Wait all events are processed
+                ready_events = 0
+                while self._fetched_events > 0:
+                    if self._stop_requested.is_set():
+                        raise StopIteration()
+                    try:
+                        offset = self._offsets_queue.get(True, timeout=1.0)
+                    except Empty:
+                        continue
+                    offsets = self._offsets_to_commit.setdefault(
+                        offset["partition"], []
+                    )
+                    bisect.insort(offsets, offset["offset"])
+                    ready_events += 1
+                    if ready_events == self._fetched_events:
+                        # All events had been processed and are ready to be commited
+                        self.logger.debug("Commit %d events", ready_events)
+                        self._commit_batch()
+                        break
+        except StopIteration:
+            ...
+        # Try to commit even a partial batch
+        self._commit_batch()
+
+    def _connect(self):
+        if not self._consumer:
+            for key in ["client.id", "group.instance.id"]:
+                if key in self._kafka_conf:
+                    self._kafka_conf[key] = self._kafka_conf[key].format(
+                        pid=os.getpid(), worker=self._worker_id
+                    )
+            # Force auto commit to False and retrieve events from last commited offset
+            conf = {
+                **self._kafka_conf,
+                "enable.auto.commit": False,
+                "auto.offset.reset": "earliest",
+            }
+
+            self._consumer = KafkaConsumer(
+                self.endpoint,
+                [self.topic],
+                self._group_id,
+                self.logger,
+                conf,
+            )
+
+    def _commit_batch(self):
+        top_offsets = {}
+        offsets = []
+        for partition, partition_offsets in self._offsets_to_commit.items():
+            top_partition_offsets = top_offsets.setdefault(partition, -1)
+            for offset in partition_offsets:
+                # Ensure we do not skip offset
+                if top_partition_offsets != -1 and top_partition_offsets + 1 != offset:
+                    break
+                top_partition_offsets = offset
+            top_offsets[partition] = top_partition_offsets
+
+        for partition, offset in top_offsets.items():
+            if offset == -1:
+                continue
+
+            offsets.append(TopicPartition(self.topic, partition, offset + 1))
+
+        if offsets:
+            self.logger.info("Commit offsets: %s", offsets)
+            self._consumer.commit(offsets=offsets)
+
+    def stop(self):
+        """
+        Ask the process to stop processing messages.
+        Notice that the process will try to finish what's in progress.
+        """
+        self._stop_requested.set()
+
+
 class KafkaConsumerPool:
     """
     Pool of worker processes, listening to the specified topic and handling messages.
@@ -218,32 +503,37 @@ class KafkaConsumerPool:
 
     def __init__(
         self,
+        conf,
         endpoint,
-        queue,
+        topic,
         worker_class: KafkaConsumerWorker,
         logger=None,
         processes=None,
         *args,
         **kwargs,
     ):
+        self.conf = conf
         self.endpoint = endpoint
         self.logger = logger or get_logger(None)
         self.processes = processes or os.cpu_count()
-        self.queue_name = queue
+        self.topic = topic
         self.running = False
         self.worker_args = args
         self.worker_class = worker_class
         self.worker_kwargs = kwargs
-
         self._workers = {}
 
     def _start_worker(self, worker_id):
+        feeder = self._workers["feeder"]
         self._workers[worker_id] = self.worker_class(
             self.endpoint,
-            self.queue_name,
-            logger=self.logger,
-            worker_id=worker_id,
+            self.topic,
+            self.logger,
+            feeder.events_queue,
+            feeder.offsets_queue,
+            worker_id,
             *self.worker_args,
+            app_conf=self.conf,
             **self.worker_kwargs,
         )
         self.logger.info(
@@ -261,8 +551,23 @@ class KafkaConsumerPool:
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
+            # Create feeder
+            self._workers["feeder"] = KafkaBatchFeeder(
+                self.endpoint,
+                self.topic,
+                self.logger,
+                worker_id=-1,
+                app_conf=self.conf,
+                workers=self.processes,
+                **self.worker_kwargs,
+            )
+            self._workers["feeder"].start()
+
+            # We must have an extra process for default queue
+            nb_processes = self.processes + 1
+
             while self.running:
-                for worker_id in range(self.processes):
+                for worker_id in range(nb_processes):
                     if (
                         worker_id not in self._workers
                         or not self._workers[worker_id].is_alive()
@@ -276,7 +581,7 @@ class KafkaConsumerPool:
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
             self.running = False
         for worker_id, worker in self._workers.items():
-            self.logger.info("Stopping worker %d", worker_id)
+            self.logger.info("Stopping worker %s", worker_id)
             worker.stop()
         for worker in self._workers.values():
             # TODO(FVE): set a timeout (some processes may take a long time to stop)

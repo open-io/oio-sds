@@ -17,7 +17,6 @@ import time
 from oio.account.client import AccountClient
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
-from oio.common.json import json
 from oio.common.kafka import kafka_options_from_conf
 from oio.conscience.client import ConscienceClient
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
@@ -29,9 +28,31 @@ from oio.common.statsd import get_statsd
 
 
 class KafkaEventWorker(KafkaConsumerWorker):
-    def __init__(self, *args, app_conf=None, **kwargs):
+    def __init__(
+        self,
+        endpoint,
+        topic,
+        logger,
+        events_queue,
+        offsets_queue,
+        worker_id,
+        *args,
+        app_conf=None,
+        **kwargs,
+    ):
         kafka_conf = kafka_options_from_conf(app_conf)
-        super().__init__(*args, **kwargs, kafka_conf=kafka_conf, app_conf=app_conf)
+        super().__init__(
+            endpoint,
+            topic,
+            logger,
+            events_queue,
+            offsets_queue,
+            worker_id,
+            *args,
+            kafka_conf=kafka_conf,
+            app_conf=app_conf,
+            **kwargs,
+        )
 
         self.conf = app_conf
         acct_refresh_interval = float_value(
@@ -89,28 +110,28 @@ class KafkaEventWorker(KafkaConsumerWorker):
         if self.logger_request is not None:
             self.logger_request.info("", extra=extra)
         self.statsd.timing(
-            f"openio.event.{extra['topic']}.{extra['event']}.{extra['status']}.duration",
+            f"openio.event.{extra['topic']}.{extra['event']}.{extra['status']}"
+            ".duration",
             extra["duration"] * 1000,
         )
 
-    def process_message(self, message: bytes, _properties):
+    def process_message(self, message, _properties):
         start = time.monotonic()
-        decoded = json.loads(message)
-        reqid = decoded.get("request_id")
+        reqid = message.get("request_id")
 
         replacements = {
             "request_id": reqid,
             "tube": self.topic,
             "topic": self.topic,
-            "event": decoded.get("event").replace(".", "-"),
+            "event": message.get("event").replace(".", "-"),
         }
 
-        handler = self.handlers.get(decoded.get("event"), None)
+        handler = self.handlers.get(message.get("event"), None)
         if not handler:
             self.log_and_statsd(start, 404, replacements)
             raise RejectMessage
 
-        event = decoded.get("event").replace(".", "-")
+        event = message.get("event").replace(".", "-")
 
         def cb(status, msg):
             self.log_and_statsd(start, status, replacements)
@@ -135,4 +156,4 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 )
                 raise RejectMessage
 
-        handler(decoded, cb)
+        handler(message, cb)

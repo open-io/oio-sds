@@ -179,10 +179,15 @@ class KafkaSender(KafkaClient):
 
 
 class KafkaConsumer(KafkaClient):
-    def __init__(self, endpoint, topics, logger, conf={}):
+    def __init__(self, endpoint, topics, group_id, logger, conf={}):
         super(KafkaConsumer, self).__init__(endpoint, Consumer, logger)
 
-        self._connect(conf)
+        client_conf = {
+            **conf,
+            "group.id": group_id,
+        }
+
+        self._connect(client_conf)
 
         self.ensure_topics_exist(topics)
         self._client.subscribe(topics)
@@ -199,5 +204,10 @@ class KafkaConsumer(KafkaClient):
         self._client.poll(POLL_TIMEOUT)
         self._client.close()
 
-    def commit(self, message):
-        self._client.commit(message, asynchronous=False)
+    def commit(self, message=None, offsets=None):
+        kwargs = {"asynchronous": False}
+        if offsets:
+            kwargs["offsets"] = offsets
+        else:
+            kwargs["message"] = message
+        self._client.commit(**kwargs)

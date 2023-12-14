@@ -1438,6 +1438,8 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 broker_endpoint = ${QUEUE_URL}
 topic = ${QUEUE_NAME}
 group_id = ${GROUP_ID}
+event_queue_type = ${QUEUE_TYPE}
+event_queue_ids = ${QUEUE_IDS}
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
@@ -1460,8 +1462,6 @@ pipeline = ${WEBHOOK} ${PRESERVE}
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
-# pipeline = content_cleaner
-
 # New pipeline with a separate oio-event-agent doing deletions
 pipeline = ${WEBHOOK} notify_deleted
 
@@ -1469,9 +1469,7 @@ pipeline = ${WEBHOOK} notify_deleted
 # pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
-# pipeline = content_cleaner
 pipeline = notify_deleted notify_drained
-# pipeline = content_cleaner notify_drained ${PRESERVE}
 
 [handler:storage.container.new]
 # pipeline = account_update
@@ -1545,13 +1543,10 @@ use = egg:oio#noop
 [filter:notify_deleted]
 # Forward storage.content.deleted events to another queue. Another
 # oio-event-agent will read this queue and delete chunks at a limited rate.
-use = egg:oio#notify
+use = egg:oio#delete
 broker_endpoint = ${QUEUE_URL}
-topic = oio-delete
+topic_prefix = oio-delete-
 
-# In exchange "oio", all messages are routed to the queue "oio". To prevent
-# loops, we need another exchange.
-strip_fields = aliases,contents_headers
 
 # This filter is only to demonstrate policy regexes
 [filter:notify_drained]
@@ -2522,6 +2517,7 @@ def generate(options):
     # RAWX
     srvtype = "rawx"
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults["NB_RAWX"])
+    rawx_per_host = {}
     if nb_rawx:
         rawx_volumes = []
         rawx_target = register_target("rawx", root_target)
@@ -2546,6 +2542,8 @@ def generate(options):
             )
             rawx_volumes.append(env["VOLUME"])
             env["SERVICE_ID"] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
+            host_rawxs = rawx_per_host.setdefault(host, [])
+            host_rawxs.append(env["SERVICE_ID"])
             if options.get("use_tls", False):
                 env["TLS_CERT_FILE"] = ENV["TLS_CERT_FILE"]
                 env["TLS_KEY_FILE"] = ENV["TLS_KEY_FILE"]
@@ -2832,6 +2830,8 @@ def generate(options):
                 "EXE": event_agent_bin,
                 "EVENT_WORKERS": "2",
                 "GROUP_ID": "event-agent",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(
@@ -2848,38 +2848,40 @@ def generate(options):
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
-    # Configure a special oio-event-agent dedicated to chunk deletions
+    # Configure a special oio-event-agent dedicated to chunk deletions per host
     # -------------------------------------------------------------------------
-    num += 1
     for _, url, event_agent_bin in get_instance(use_kafka):
-        env = subenv(
-            {
-                "SRVTYPE": "event-agent",
-                "SRVNUM": num,
-                "QUEUE_NAME": "oio-delete",
-                "QUEUE_URL": url,
-                "EXE": event_agent_bin,
-                "EVENT_WORKERS": "1",
-                "GROUP_ID": "event-agent-delete",
-            }
-        )
-        register_service(
-            env,
-            template_systemd_service_event_agent,
-            event_agents_target,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+", encoding="utf8") as outf:
-            tpl = Template(template_event_agent)
-            outf.write(tpl.safe_substitute(env))
-        with open(
-            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-        ) as outf:
-            tpl = Template(template_event_agent_delete_handlers)
-            outf.write(tpl.safe_substitute(env))
+        for host in hosts:
+            num += 1
+            env = subenv(
+                {
+                    "SRVTYPE": "event-agent",
+                    "SRVNUM": num,
+                    "QUEUE_NAME": f"oio-delete-{host}",
+                    "QUEUE_URL": url,
+                    "EXE": event_agent_bin,
+                    "EVENT_WORKERS": len(rawx_per_host[host]),
+                    "GROUP_ID": "event-agent-delete",
+                    "QUEUE_TYPE": "per_service",
+                    "QUEUE_IDS": ";".join(rawx_per_host[host]).lower(),
+                }
+            )
+            register_service(
+                env,
+                template_systemd_service_event_agent,
+                event_agents_target,
+                coverage_wrapper=shutil.which("coverage")
+                + " run --context event-agent --concurrency=eventlet -p ",
+            )
+            with open(config(env), "w+", encoding="utf8") as outf:
+                tpl = Template(template_event_agent)
+                outf.write(tpl.safe_substitute(env))
+            with open(
+                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+            ) as outf:
+                tpl = Template(template_event_agent_delete_handlers)
+                outf.write(tpl.safe_substitute(env))
 
-        # We need only one service
         break
 
     # Configure a special oio-event-agent dedicated to delayed events
@@ -2895,6 +2897,8 @@ def generate(options):
                 "EXE": event_agent_bin,
                 "EVENT_WORKERS": "1",
                 "GROUP_ID": "event-agent-delay",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(
@@ -2929,6 +2933,8 @@ def generate(options):
                 "EXE": event_agent_bin,
                 "EVENT_WORKERS": "1",
                 "GROUP_ID": "event-agent-rebuild",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(
@@ -2960,6 +2966,8 @@ def generate(options):
                 "QUEUE_URL": url,
                 "EXE": event_agent_bin,
                 "GROUP_ID": "event-agent-xcute",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(

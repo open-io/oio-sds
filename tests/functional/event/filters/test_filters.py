@@ -20,9 +20,7 @@ import time
 from random import choice
 from urllib.parse import quote
 
-from oio.account.client import AccountClient
 from oio.blob.rebuilder import BlobRebuilder
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import KafkaNotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
