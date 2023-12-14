@@ -12,14 +12,27 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import bisect
 import os
 import signal
 import time
 
-from multiprocessing import Event, Process
-from oio.common.easy_value import int_value
-from oio.common.kafka import DEFAULT_DEADLETTER_TOPIC, KafkaConsumer, KafkaSender
+from multiprocessing import Event, Process, Queue
+from multiprocessing.queues import Empty
+
+from confluent_kafka import TopicPartition
+from oio.common.kafka import (
+    DEFAULT_DEADLETTER_TOPIC,
+    KafkaConsumer,
+    KafkaSender,
+    kafka_options_from_conf,
+)
 from oio.common.logger import get_logger
+from oio.common.utils import monotonic_time
+
+
+DEFAULT_BATCH_SIZE = 100
+DEFAULT_BATCH_INTERVAL = 1000
 
 
 class RejectMessage(Exception):
@@ -45,10 +58,9 @@ class KafkaConsumerWorker(Process):
         endpoint,
         topic,
         logger,
-        group_id,
-        worker_id,
         kafka_conf,
-        app_conf,
+        events_queue,
+        offsets_queue,
         *args,
         **kwargs,
     ):
@@ -57,42 +69,32 @@ class KafkaConsumerWorker(Process):
         self.logger = logger
         self.topic = topic
         self._stop_requested = Event()
-        self.group_id = group_id
-        self.worker_id = worker_id
         self._kafka_conf = kafka_conf
-        self.autocommit_ms = int_value(app_conf.get("autocommit_ms"), 0)
-        if self.autocommit_ms < 0:
-            self.autocommit_ms = 0
+        self._events_queue = events_queue
+        self._offsets_queue = offsets_queue
 
-        self._consumer = None
         self._producer = None
         self._last_use = None
-
-        for key in ["client.id", "group.instance.id"]:
-            if key in self._kafka_conf:
-                self._kafka_conf[key] = self._kafka_conf[key].format(
-                    pid=os.getpid(), worker=self.worker_id
-                )
 
     def _consume(self):
         """
         Repeatedly read messages from the topic and call process_message().
         """
 
-        for event in self._consumer.fetch_events():
+        while True:
             if self._stop_requested.is_set():
                 break
-            if event is None:
-                continue
-            if event.error():
-                self.logger.error("Failed to fetch event, reason: %s", event.error())
+            try:
+                event = self._events_queue.get(True, timeout=1.0)
+            except Empty:
+                # No events available
                 continue
 
             # If we are here, we just communicated with RabbitMQ, we know it's alive
             self._last_use = time.monotonic()
 
             try:
-                body = event.value()
+                body = event["data"]
                 properties = {}
                 self.process_message(body, properties)
                 self.acknowledge_message(event)
@@ -106,21 +108,6 @@ class KafkaConsumerWorker(Process):
                 self.reject_message(event, retry_later=False)
 
     def _connect(self):
-        if self._consumer is None:
-            use_autocommit = self.autocommit_ms > 0
-
-            self._consumer = KafkaConsumer(
-                self.endpoint,
-                [self.topic],
-                logger=self.logger,
-                conf={
-                    "group.id": self.group_id,
-                    "enable.auto.commit": use_autocommit,
-                    "auto.commit.interval.ms": self.autocommit_ms,
-                    **self._kafka_conf,
-                },
-            )
-
         if self._producer is None:
             self._producer = KafkaSender(
                 self.endpoint, self.logger, conf=self._kafka_conf
@@ -153,13 +140,17 @@ class KafkaConsumerWorker(Process):
     # --- Helper methods --------------
 
     def acknowledge_message(self, message):
-        if self.autocommit_ms > 0:
-            return True
         try:
-            self._consumer.commit(message)
-            return True
+            self._offsets_queue.put(
+                {"partition": message["partition"], "offset": message["offset"]}
+            )
         except Exception:
-            self.logger.exception("Failed to ack message %s", message)
+            self.logger.exception(
+                "Failed to ack message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
             return False
 
     def reject_message(self, message, retry_later=False):
@@ -171,14 +162,19 @@ class KafkaConsumerWorker(Process):
                 raise SystemError("No producer available")
 
             if retry_later:
-                self._producer.send(message.topic(), message.value(), 60)
+                self._producer.send(message["topic"], message["data"], 60)
             else:
                 self._producer.send(
-                    DEFAULT_DEADLETTER_TOPIC, message.value(), flush=True
+                    DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
                 )
             return True
         except Exception:
-            self.logger.exception("Failed to reject message %s", message)
+            self.logger.exception(
+                "Failed to reject message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
             return False
 
     # --- Abstract methods ------------
@@ -211,6 +207,166 @@ class KafkaConsumerWorker(Process):
         raise NotImplementedError
 
 
+class KafkaBatchFeeder(Process):
+    def __init__(
+        self,
+        endpoint,
+        topic,
+        logger,
+        group_id,
+        worker_id,
+        app_conf,
+        **kwargs,
+    ):
+        super().__init__()
+        self.endpoint = endpoint
+        self.topic = topic
+        self.logger = logger
+        self._group_id = group_id
+        self._worker_id = worker_id
+        self._app_conf = app_conf
+        self._kafka_conf = kafka_options_from_conf(self._app_conf)
+        self._batch_size = self._app_conf.get("batch_size", DEFAULT_BATCH_INTERVAL)
+        self._commit_interval = (
+            self._app_conf.get("batch_commit_interval_ms", DEFAULT_BATCH_INTERVAL)
+            / 1000
+        )
+        self._fetched_events = 0
+
+        self._consumer = None
+        self._stop_requested = Event()
+        self._events_queue = Queue(maxsize=self._batch_size)
+        self._offsets_queue = Queue(maxsize=self._batch_size)
+        self._offsets_to_commit = {}
+
+    @property
+    def events_queue(self):
+        return self._events_queue
+
+    @property
+    def offsets_queue(self):
+        return self._offsets_queue
+
+    def run(self):
+        try:
+            while True:
+                self._connect()
+                # Retrieve events
+                self._fetched_events = 0
+                self._offsets_to_commit = {}
+                deadline = monotonic_time() + self._commit_interval
+                for event in self._consumer.fetch_events():
+                    if self._stop_requested.is_set():
+                        raise StopIteration()
+                    if event:
+                        if event.error():
+                            self.logger.error(
+                                "Failed to fetch event, reason: %s", event.error()
+                            )
+                            continue
+                        # Enqueue event
+                        topic = event.topic()
+                        partition = event.partition()
+                        offset = event.offset()
+                        self.logger.debug(
+                            "Got event topic=%s, partition=%s, offset=%s",
+                            topic,
+                            partition,
+                            offset,
+                        )
+                        self._events_queue.put(
+                            {
+                                "topic": topic,
+                                "partition": partition,
+                                "offset": offset,
+                                "data": event.value(),
+                            }
+                        )
+                        self._fetched_events += 1
+
+                    if self._fetched_events == self._batch_size:
+                        # Batch complete
+                        break
+                    if monotonic_time() > deadline:
+                        # Deadline reached
+                        break
+
+                # Wait all events are processed
+                ready_events = 0
+                while self._fetched_events > 0:
+                    if self._stop_requested.is_set():
+                        raise StopIteration()
+                    try:
+                        offset = self._offsets_queue.get(True, timeout=1.0)
+                    except Empty:
+                        continue
+                    offsets = self._offsets_to_commit.setdefault(
+                        offset["partition"], []
+                    )
+                    bisect.insort(offsets, offset["offset"])
+                    ready_events += 1
+                    if ready_events == self._fetched_events:
+                        # All events had been processed and are ready to be commited
+                        self.logger.debug("Commit %d events", ready_events)
+                        self._commit_batch()
+                        break
+        except StopIteration:
+            ...
+        # Try to commit even a partial batch
+        self._commit_batch()
+
+    def _connect(self):
+        if not self._consumer:
+            for key in ["client.id", "group.instance.id"]:
+                if key in self._kafka_conf:
+                    self._kafka_conf[key] = self._kafka_conf[key].format(
+                        pid=os.getpid(), worker=self._worker_id
+                    )
+            # Force auto commit to False and retrieve events from last commited offset
+            conf = {
+                **self._kafka_conf,
+                "enable.auto.commit": False,
+                "auto.offset.reset": "earliest",
+            }
+
+            self._consumer = KafkaConsumer(
+                self.endpoint,
+                [self.topic],
+                self._group_id,
+                self.logger,
+                conf,
+            )
+
+    def _commit_batch(self):
+        top_offsets = {}
+        offsets = []
+        for partition, partition_offsets in self._offsets_to_commit.items():
+            top_partition_offsets = top_offsets.setdefault(partition, -1)
+            for offset in partition_offsets:
+                # Ensure we do not skip offset
+                if top_partition_offsets != -1 and top_partition_offsets + 1 != offset:
+                    break
+                top_partition_offsets = offset
+            top_offsets[partition] = top_partition_offsets
+
+        for partition, offset in top_offsets.items():
+            if offset == -1:
+                continue
+
+            offsets.append(TopicPartition(self.topic, partition, offset + 1))
+
+        if offsets:
+            self.logger.info("Commit offsets: %s", offsets)
+            self._consumer.commit(offsets=offsets)
+
+    def stop(self):
+        """
+        Ask the process to stop processing messages.
+        Notice that the process will try to finish what's in progress.
+        """
+        self._stop_requested.set()
+
+
 class KafkaConsumerPool:
     """
     Pool of worker processes, listening to the specified topic and handling messages.
@@ -219,7 +375,7 @@ class KafkaConsumerPool:
     def __init__(
         self,
         endpoint,
-        queue,
+        topic,
         worker_class: KafkaConsumerWorker,
         logger=None,
         processes=None,
@@ -229,7 +385,7 @@ class KafkaConsumerPool:
         self.endpoint = endpoint
         self.logger = logger or get_logger(None)
         self.processes = processes or os.cpu_count()
-        self.queue_name = queue
+        self.topic = topic
         self.running = False
         self.worker_args = args
         self.worker_class = worker_class
@@ -238,10 +394,13 @@ class KafkaConsumerPool:
         self._workers = {}
 
     def _start_worker(self, worker_id):
+        feeder = self._workers["feeder"]
         self._workers[worker_id] = self.worker_class(
             self.endpoint,
-            self.queue_name,
-            logger=self.logger,
+            self.topic,
+            self.logger,
+            events_queue=feeder.events_queue,
+            offsets_queue=feeder.offsets_queue,
             worker_id=worker_id,
             *self.worker_args,
             **self.worker_kwargs,
@@ -261,6 +420,16 @@ class KafkaConsumerPool:
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
+            # Create feeder
+            self._workers["feeder"] = KafkaBatchFeeder(
+                self.endpoint,
+                self.topic,
+                self.logger,
+                worker_id=1,
+                **self.worker_kwargs,
+            )
+            self._workers["feeder"].start()
+
             while self.running:
                 for worker_id in range(self.processes):
                     if (
