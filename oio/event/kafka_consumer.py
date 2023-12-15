@@ -29,10 +29,11 @@ from oio.common.kafka import (
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time
+from oio.common.easy_value import int_value, float_value
 
 
 DEFAULT_BATCH_SIZE = 100
-DEFAULT_BATCH_INTERVAL = 1000
+DEFAULT_BATCH_INTERVAL = 1.0
 
 
 class RejectMessage(Exception):
@@ -226,11 +227,8 @@ class KafkaBatchFeeder(Process):
         self._worker_id = worker_id
         self._app_conf = app_conf
         self._kafka_conf = kafka_options_from_conf(self._app_conf)
-        self._batch_size = self._app_conf.get("batch_size", DEFAULT_BATCH_INTERVAL)
-        self._commit_interval = (
-            self._app_conf.get("batch_commit_interval_ms", DEFAULT_BATCH_INTERVAL)
-            / 1000
-        )
+        self._batch_size = int_value(self._app_conf.get("batch_size"), DEFAULT_BATCH_SIZE)
+        self._commit_interval = float_value(self._app_conf.get("batch_commit_interval"), DEFAULT_BATCH_INTERVAL)
         self._fetched_events = 0
 
         self._consumer = None
