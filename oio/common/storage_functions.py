@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,6 @@
 
 
 import random
-from six import iteritems
 
 from oio.api.io import ChunkReader
 from oio.api.ec import ECChunkDownloadHandler
@@ -54,7 +53,7 @@ def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
         obj_start = total_size - min(total_size, obj_end)
         obj_end = total_size - 1
 
-    meta_chunk_ranges = dict()
+    meta_chunk_ranges = {}
     for pos, meta_size in enumerate(meta_sizes):
         if meta_size <= 0:
             continue
@@ -130,8 +129,8 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
     :returns: a `dict` with metachunk positions as keys,
         and `list` of chunk objects as values.
     """
-    nums_by_position = dict()
-    chunks = dict()
+    nums_by_position = {}
+    chunks = {}
     for chunk in raw_chunks:
         raw_position = chunk["pos"].split(".")
         position = int(raw_position[0])
@@ -148,23 +147,23 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
                     )
                 continue
             nums.add(num)
-        chunks_at_position = chunks.setdefault(position, list())
+        chunks_at_position = chunks.setdefault(position, [])
         chunks_at_position.append(chunk)
 
     # for each position, remove incoherent chunks
-    for pos, local_chunks in iteritems(chunks):
+    for pos, local_chunks in chunks.items():
         if len(local_chunks) < 2:
             continue
-        byhash = dict()
+        byhash = {}
         for chunk in local_chunks:
             h = chunk.get("hash")
             if h not in byhash:
-                byhash[h] = list()
+                byhash[h] = []
             byhash[h].append(chunk)
         if len(byhash) < 2:
             continue
         # sort by length
-        bylength = byhash.values()
+        bylength = list(byhash.values())
         bylength.sort(key=len, reverse=True)
         chunks[pos] = bylength[0]
 
@@ -216,12 +215,10 @@ def fetch_stream(chunks, ranges, storage_method, headers=None, **kwargs):
             try:
                 it = reader.get_iter()
             except exc.NotFound as err:
-                raise exc.UnrecoverableContent(
-                    "Cannot download position %d: %s" % (pos, err)
-                )
+                raise exc.UnrecoverableContent(f"Cannot download position {pos}: {err}")
             except Exception as err:
                 raise exc.ServiceUnavailable(
-                    "Error while downloading position %d: %s" % (pos, err)
+                    f"Error while downloading position {pos}: {err}"
                 )
             for part in it:
                 for dat in part["iter"]:
@@ -241,12 +238,10 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
             try:
                 stream = handler.get_stream()
             except exc.NotFound as err:
-                raise exc.UnrecoverableContent(
-                    "Cannot download position %d: %s" % (pos, err)
-                )
+                raise exc.UnrecoverableContent(f"Cannot download position {pos}: {err}")
             except Exception as err:
                 raise exc.ServiceUnavailable(
-                    "Error while downloading position %d: %s" % (pos, err)
+                    f"Error while downloading position {pos}: {err}"
                 )
             try:
                 for part_info in stream:
