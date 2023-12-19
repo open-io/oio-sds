@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2023 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -94,7 +94,7 @@ class XcuteServer(WerkzeugApp):
         job_type = req.args.get("type")
         job_lock = req.args.get("lock")
 
-        job_infos = self.backend.list_jobs(
+        job_infos, next_marker = self.backend.list_jobs(
             limit=limit,
             prefix=prefix,
             marker=marker,
@@ -102,7 +102,14 @@ class XcuteServer(WerkzeugApp):
             job_type=job_type,
             job_lock=job_lock,
         )
-        return Response(json.dumps(job_infos), mimetype="application/json")
+        jobs = {}
+        jobs["jobs"] = job_infos
+        if next_marker is not None:
+            jobs["next_marker"] = next_marker
+            jobs["truncated"] = True
+        else:
+            jobs["truncated"] = False
+        return Response(json.dumps(jobs), mimetype="application/json")
 
     @handle_exceptions
     def on_job_create(self, req):

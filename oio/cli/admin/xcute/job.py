@@ -21,6 +21,7 @@ from oio.cli.admin.xcute import XcuteCommand
 from oio.cli.common.utils import KeyValueAction
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
+from oio.common.utils import depaginate
 
 
 class JobList(XcuteCommand, Lister):
@@ -31,6 +32,8 @@ class JobList(XcuteCommand, Lister):
     columns = ("ID", "Status", "Type", "Lock", "Progress")
 
     def get_parser(self, prog_name):
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
+
         parser = super(JobList, self).get_parser(prog_name)
         parser.add_argument(
             "--date",
@@ -48,6 +51,22 @@ class JobList(XcuteCommand, Lister):
         )
         parser.add_argument(
             "--lock", help="Filter jobs with the specified job lock (wildcards allowed)"
+        )
+        parser.add_argument(
+            "--limit",
+            metavar="<limit>",
+            type=int,
+            default=1000,
+            help="Limit the number of results (1000 by default)",
+        )
+        parser.add_argument("--marker", metavar="<marker>", help="Marker for paging")
+
+        parser.add_argument(
+            "--no-paging",
+            dest="no_paging",
+            default=False,
+            help="List all elements without paging (and set output format to 'value')",
+            action=ValueFormatStoreTrueAction,
         )
         return parser
 
@@ -86,12 +105,30 @@ class JobList(XcuteCommand, Lister):
                 raise ValueError("Wrong date format")
             prefix = job_date.strftime(datetime_output_format)
 
-        jobs = self.xcute.job_list(
-            prefix=prefix,
-            job_status=parsed_args.status,
-            job_type=parsed_args.type,
-            job_lock=parsed_args.lock,
-        )
+        if parsed_args.no_paging:
+            jobs = depaginate(
+                self.xcute.job_list,
+                prefix=prefix,
+                limit=parsed_args.limit,
+                marker=parsed_args.marker,
+                job_status=parsed_args.status,
+                job_type=parsed_args.type,
+                job_lock=parsed_args.lock,
+                listing_key=lambda x: x["jobs"],
+                marker_key=lambda x: x.get("next_marker"),
+                truncated_key=lambda x: x.get("truncated"),
+            )
+        else:
+            jobs_list = self.xcute.job_list(
+                prefix=prefix,
+                limit=parsed_args.limit,
+                marker=parsed_args.marker,
+                job_status=parsed_args.status,
+                job_type=parsed_args.type,
+                job_lock=parsed_args.lock,
+            )
+            jobs = jobs_list["jobs"]
+
         for job_info in jobs:
             job_main_info = job_info["job"]
             job_tasks = job_info["tasks"]

@@ -20,10 +20,11 @@
 from tests.utils import (
     BaseTestCase,
 )
+from tests.functional.cli import CliTestCase
 from oio.common.json import json
 
 
-class TestXcute(BaseTestCase):
+class TestXcute(CliTestCase, BaseTestCase):
     def test_limit_marker(self):
         """
         Add test to cover pagination of job listing
@@ -43,3 +44,29 @@ class TestXcute(BaseTestCase):
 
         resp = self.request("GET", url, params=params)
         self.assertEqual(resp.status, 200)
+
+    def test_marker(self):
+        _, _, xcute_addr, _ = self.get_service_url("xcute")
+
+        types = ["tester", "rdir-decommission"]
+        for i in range(20):
+            params = {"type": types[i % 2]}
+            data = {"params": {"service_id": i}}
+            url = "/".join((xcute_addr, "v1.0", "xcute/job/create"))
+            resp = self.request("POST", url, params=params, data=json.dumps(data))
+        limit = 5
+        opts = self.get_format_opts("json")
+        resp = self.openio_admin("xcute job list --limit %d %s" % (limit, opts))
+
+        resp_json = json.loads(resp)
+        self.assertEqual(len(resp_json), limit)
+
+        marker = resp_json[-1].get("ID")
+        next_resp = self.openio_admin("xcute job list --marker %s %s" % (marker, opts))
+        next_resp_json = json.loads(next_resp)
+
+        self.assertNotEqual(len(next_resp_json), 0)
+
+        for el in resp_json:
+            for next_el in next_resp_json:
+                self.assertNotEqual(el.get("ID"), next_el.get("ID"))

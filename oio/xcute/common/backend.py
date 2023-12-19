@@ -658,6 +658,8 @@ class XcuteBackend(RedisConnection):
             job_lock = job_lock.lower().strip().encode("utf-8")
 
         jobs = []
+        next_marker = None
+        job_id = None
         while True:
             limit_ = limit - len(jobs)
             if limit_ <= 0:
@@ -671,8 +673,8 @@ class XcuteBackend(RedisConnection):
             if marker and (not prefix or marker > prefix):
                 range_min = "(" + marker
 
-            job_ids = self.conn.zrevrangebylex(
-                self.key_job_ids, range_max, range_min, 0, limit_
+            job_ids = self.conn.zrangebylex(
+                self.key_job_ids, range_min, range_max, 0, limit_
             )
 
             pipeline = self.conn.pipeline()
@@ -700,11 +702,16 @@ class XcuteBackend(RedisConnection):
                     )
 
                 jobs.append(self._unmarshal_job_info(job_info))
+            if job_id:
+                marker = debinarize(job_id)
+                next_marker = marker
+            else:
+                next_marker = None
 
             if len(job_ids) < limit_:
+                next_marker = None
                 break
-            marker = debinarize(job_id)
-        return jobs
+        return jobs, next_marker
 
     def _get_timestamp(self):
         return Timestamp().normal
