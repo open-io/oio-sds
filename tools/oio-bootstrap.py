@@ -3093,6 +3093,8 @@ def generate(options):
             "oio-rebuild",
             "oio-drained",
             "oio-replication",
+            "oio-xcute",
+            "oio-xcute-reply",
             "oio-deadletter",
         ]
         # Add delete topics per host
