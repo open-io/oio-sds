@@ -102,5 +102,10 @@ jobs:
           - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
           - '[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json'
 
+      - name: Publish test reports on CDS
+        optional: true
+        always_executed: true
+        jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
+
     requirements:
         - model: '{{ .cds.env.MODEL}}'
