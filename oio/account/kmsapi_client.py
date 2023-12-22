@@ -18,6 +18,7 @@ from oio.api.base import HttpApi
 from oio.common import exceptions
 from oio.common.easy_value import boolean_value
 from oio.common.logger import get_logger
+from oio.common.utils import get_hasher
 
 
 class KmsApiClient(HttpApi):
@@ -36,6 +37,12 @@ class KmsApiClient(HttpApi):
             key_file=conf.get("kmsapi_key_file"),
             **kwargs,
         )
+
+    def checksum(self, data=b""):
+        """Get the blake3 checksum of the provided data."""
+        hasher = get_hasher("blake3")
+        hasher.update(data)
+        return hasher.hexdigest()
 
     def encrypt(self, plaintext, context, **kwargs):
         """
@@ -57,7 +64,7 @@ class KmsApiClient(HttpApi):
         resp, body = self._request(
             "POST",
             f"v1/servicekey/{self.key_id}/encrypt",
-            json={"plaintext": plaintext, "context": context},
+            json={"plaintext": plaintext, "context": self.checksum(context)},
             **kwargs,
         )
         if resp.status != 200:
@@ -84,7 +91,7 @@ class KmsApiClient(HttpApi):
         resp, body = self._request(
             "POST",
             f"v1/servicekey/{key_id}/decrypt",
-            json={"ciphertext": ciphertext, "context": context},
+            json={"ciphertext": ciphertext, "context": self.checksum(context)},
             **kwargs,
         )
         if resp.status != 200:

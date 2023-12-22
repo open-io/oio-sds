@@ -1585,7 +1585,7 @@ class Account(WerkzeugApp):
         """Try to encrypt and store the resp["secret"]"""
         account_id = resp["account"]
         bname = resp["bucket"]
-        context = f"{account_id}_{bname}"
+        context = f"{account_id}_{bname}".encode("utf-8")
         try:
             data = self.kms_api.encrypt(resp["secret"], context)
             ciphertext = data["ciphertext"]
@@ -1608,7 +1608,7 @@ class Account(WerkzeugApp):
         """Try to decrypt the ciphertext"""
         account_id = resp["account"]
         bname = resp["bucket"]
-        context = f"{account_id}_{bname}"
+        context = f"{account_id}_{bname}".encode("utf-8")
         try:
             data = self.kms_api.decrypt(key_id, ciphertext, context)
         except Exception as exc:
