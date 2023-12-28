@@ -31,6 +31,12 @@ parser.add_argument(
     help="path of object metadata json file",
 )
 parser.add_argument(
+    "--iv",
+    type=str,
+    default="iv.json",
+    help="path of object iv json file",
+)
+parser.add_argument(
     "--account",
     type=str,
     default="AUTH_demo",
@@ -50,6 +56,7 @@ args = parser.parse_args()
 # Read metadata
 with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
+    infile.close()
 
 # Decrypt object
 decrypter = Decrypter(
@@ -60,8 +67,9 @@ decrypter = Decrypter(
     metadata=metadata,
 )
 decrypted_metadata = decrypter.decrypt_metadata()
-with open("metadata.json", "w") as outfile:
+with open(args.metadata, "w") as outfile:
     json.dump(decrypted_metadata, outfile)
+    outfile.close()
 
 while 1:
     chunk = sys.stdin.buffer.read()
@@ -71,5 +79,6 @@ while 1:
     sys.stdout.buffer.write(data)
 
 ivs = decrypter.get_ivs()
-with open("iv.json", "w") as outfile:
+with open(args.iv, "w") as outfile:
     json.dump(ivs, outfile)
+    outfile.close()
