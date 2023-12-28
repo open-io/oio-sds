@@ -42,6 +42,9 @@ var accessLogPut = configAccessLogDefaultPut
 var accessLogPost = configAccessLogDefaultPost
 var accessLogDel = configAccessLogDefaultDelete
 
+var computeAgeGet = configAccessLogDefaultGet
+var computeAgeDel = configAccessLogDefaultPut
+
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var requestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
 var accessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"

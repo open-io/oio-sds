@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2022 OVH SAS
+// Copyright (C) 2022-2023 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -24,6 +24,7 @@ alternative file names, etc.
 
 import (
 	"os"
+	"syscall"
 )
 
 type chunkRepository struct {
@@ -40,6 +41,17 @@ func (cr *chunkRepository) lock(ns, url string) error {
 
 func (cr *chunkRepository) del(name string) error {
 	err := cr.sub.del(name)
+	if err == nil {
+		return nil
+	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
+		return err
+	} else {
+		return os.ErrNotExist
+	}
+}
+
+func (cr *chunkRepository) stat(name string, stat *syscall.Stat_t) error {
+	err := cr.sub.stat(name, stat)
 	if err == nil {
 		return nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {

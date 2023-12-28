@@ -396,6 +396,9 @@ func main() {
 	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
 	accessLogDel = opts.getBool("log_access_del", configAccessLogDefaultDelete)
 
+	computeAgeGet = opts.getBool("compute_age_get", configAccessLogDefaultGet)
+	computeAgeDel = opts.getBool("compute_age_del", configAccessLogDefaultDelete)
+
 	checkNS(namespace)
 	checkURL(rawxURL)
 

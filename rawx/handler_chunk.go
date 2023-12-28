@@ -24,6 +24,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -31,6 +32,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"lukechampine.com/blake3"
@@ -674,6 +676,26 @@ func (rr *rawxRequest) serveChunk() {
 			TTFB:      ttfb,
 		})
 	}
+
+	if shouldComputeAge(rr.status, rr.req.Method) {
+		if statsdClient != nil {
+			var err error = nil
+			var ctime int64 = 0
+			if rr.chunk.ContentVersion != "" {
+				if ctime, err = strconv.ParseInt(rr.chunk.ContentVersion, 10, 64); err == nil {
+					ctime *= 1000
+				}
+			} else {
+				var stat syscall.Stat_t
+				if err = rr.rawx.repo.stat(rr.chunkID, &stat); err == nil {
+					ctime = stat.Ctim.Nano()
+				}
+			}
+			if ctime > 0 {
+				statsdClient.Timing(fmt.Sprintf("openio.rawx.request.%s.%d.age", rr.req.Method, rr.status), (ctime-time.Now().UnixNano())/1000000, 1.0)
+			}
+		}
+	}
 }
 
 func packRangeHeader(start, last, size int64) string {
@@ -720,5 +742,20 @@ func shouldAccessLog(status int, method string) bool {
 		return accessLogDel
 	default:
 		return true
+	}
+}
+
+func shouldComputeAge(status int, method string) bool {
+	if !statusOk(status) {
+		return false
+	}
+
+	switch method {
+	case "GET", "HEAD":
+		return computeAgeGet
+	case "DELETE":
+		return computeAgeDel
+	default:
+		return false
 	}
 }

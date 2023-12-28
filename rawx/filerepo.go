@@ -129,6 +129,12 @@ func (fr *fileRepository) del(name string) error {
 	return syscall.Unlinkat(fr.rootFd, relPath, 0)
 }
 
+// stat retrieves the system stats of the chunk.
+func (fr *fileRepository) stat(name string, stat *syscall.Stat_t) error {
+	relPath := fr.nameToRelPath(name)
+	return syscall.Lstat(relPath, stat)
+}
+
 func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 	fd, err := syscall.Openat(fr.rootFd, path, fr.openFlagsRO(), 0)
 	if err != nil {
