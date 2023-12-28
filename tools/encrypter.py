@@ -57,10 +57,12 @@ args = parser.parse_args()
 # Read metadata
 with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
+    infile.close()
 
 # Read IVs
 with open(args.iv, "r") as infile:
     iv = json.load(infile)
+    infile.close()
 
 # Encrypter object
 encrypter = Encrypter(
@@ -80,5 +82,6 @@ while 1:
 
 new_metadata = encrypter.encrypt_metadata(metadata)
 encrypter.update_metadata(new_metadata)
-with open("metadata.json", "w") as outfile:
+with open(args.metadata, "w") as outfile:
     json.dump(new_metadata, outfile)
+    outfile.close()
