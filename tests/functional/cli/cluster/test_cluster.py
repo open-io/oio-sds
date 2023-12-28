@@ -97,14 +97,14 @@ class ClusterTest(CliTestCase):
 
     def test_detailed_lock_unlock(self):
         opts = self.get_format_opts("json")
-        # Check lock of get score only
-        output = self.openio("cluster lock rdir 127.0.0.1:666 -S get=0" + opts)
+        # Check lock of get score only (default value)
+        output = self.openio("cluster lock rdir 127.0.0.1:666 -S get" + opts)
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "locked to get=0")
-        # Lock of put score
-        output = self.openio("cluster lock rdir 127.0.0.1:666 -S put=0" + opts)
+        # Lock of put score to 50
+        output = self.openio("cluster lock rdir 127.0.0.1:666 -S put=50" + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]["Result"], "locked to put=0")
+        self.assertEqual(data[0]["Result"], "locked to put=50")
         # Check unlock of get score only
         output = self.openio("cluster unlock rdir 127.0.0.1:666 -U get" + opts)
         data = json.loads(output)

@@ -28,12 +28,14 @@ DETAILED_SCORES = ("get", "put")
 
 def _detailed_score(value):
     parts = value.split("=")
-    if len(parts) != 2:
+    if len(parts) not in [1, 2]:
         raise ValueError("Usage: '-S put=0' or '-S get=0'")
     name = parts[0]
     if name not in DETAILED_SCORES:
         raise ValueError("Usage: '-S put=0' or '-S get=0'")
-    score = int(parts[1])
+    score = 0
+    if len(parts) == 2:
+        score = int(parts[1])
     return (name, score)
 
 
@@ -46,7 +48,7 @@ def _format_detailed_locks(srv):
     )
 
 
-def _detailed_lock(value):
+def _detailed_unlock(value):
     if value not in DETAILED_SCORES:
         raise ValueError("Usage: '-U put' or '-U get'")
     return value
@@ -283,9 +285,9 @@ class ClusterUnlock(Lister):
         )
         parser.add_argument(
             "-U",
-            "--detail-lock",
-            metavar="<detail_lock>",
-            type=_detailed_lock,
+            "--detail-unlock",
+            metavar="<detail_unlock>",
+            type=_detailed_unlock,
             action="append",
             default=[],
             help="Take put or get to unlock only one score of the service, e.g.: "
@@ -297,8 +299,8 @@ class ClusterUnlock(Lister):
     def _unlock_services(self, parsed_args):
         srv_definitions = list()
         tags = {}
-        if parsed_args.detail_lock:
-            for k in parsed_args.detail_lock:
+        if parsed_args.detail_unlock:
+            for k in parsed_args.detail_unlock:
                 tags["tag." + k + "lock"] = True
         else:
             tags = None
@@ -569,13 +571,17 @@ class ClusterWait(Lister):
         return columns, self._wait(parsed_args)
 
 
-class ClusterLock(ClusterUnlock):
+class ClusterLock(Lister):
     """Lock the score of a service."""
 
     log = getLogger(__name__ + ".ClusterLock")
 
     def get_parser(self, prog_name):
         parser = super(ClusterLock, self).get_parser(prog_name)
+        parser.add_argument("srv_type", metavar="<srv_type>", help="Service type.")
+        parser.add_argument(
+            "srv_ids", metavar="<srv_ids>", nargs="+", help="ID(s) of the services."
+        )
 
         parser.add_argument(
             "-s",
@@ -593,7 +599,8 @@ class ClusterLock(ClusterUnlock):
             type=_detailed_score,
             action="append",
             default=[],
-            help="Score to set for put or get, e.g.: '-S put=50'.",
+            help="Score to set for put or get, e.g.: '-S put=50' "
+            "or '-S put' (score=0 by default).",
         )
 
         return parser
