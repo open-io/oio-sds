@@ -3,7 +3,7 @@
 # oio-bootstrap.py
 # Copyright (C) 2015 Conrad Kleinespel
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -3097,9 +3097,12 @@ def generate(options):
             "oio-xcute-reply",
             "oio-deadletter",
         ]
-        # Add delete topics per host
+
         rawx_hosts = hosts[:nb_rawx]
+        # Add delete topics per host
         topics_to_declare.extend([f"oio-delete-{h}" for h in rawx_hosts])
+        # Add chunk topics per host
+        topics_to_declare.extend([f"oio-chunk-{h}" for h in rawx_hosts])
 
         with open(f"{CFGDIR}/topics.yml", "w+") as f:
             f.write(
