@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -565,8 +565,7 @@ class TestSharding(BaseTestCase):
 
         if self.wait_event:
             # check that all chunk urls are matching expected ones
-            event, _ = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid="delete-from-shards",
                 types=(EventTypes.CONTENT_DELETED,),
             )
@@ -984,14 +983,13 @@ class TestSharding(BaseTestCase):
         self.assertTrue(modified)
 
         # Wait for the update of the root and the 2 new shards
-        offset = None
+
         for _ in range(3):
-            _, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid="testingisdoubting",
                 types=(EventTypes.CONTAINER_STATE,),
-                offset=offset,
             )
+            self.assertIsNotNone(event)
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats["objects"], 10)
@@ -1012,15 +1010,13 @@ class TestSharding(BaseTestCase):
         self.assertTrue(modified)
 
         # Wait for the deletion of the parent and update of the 2 new shards
-        offset = None
         for _ in range(3):
-            _, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid="fixingisfailing",
                 fields={"account": shards_account},
                 types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
-                offset=offset,
             )
+            self.assertIsNotNone(event)
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats["objects"], 10)
@@ -1353,14 +1349,12 @@ class TestSharding(BaseTestCase):
             if bigger_is_root:  # The one and last shard
                 # Wait for the deletion of the smaller and update of the root
                 nb_events = 2
-            offset = None
             for _ in range(nb_events):
-                _, offset = self.wait_for_kafka_event(
-                    "oio-preserved",
+                event = self.wait_for_kafka_event(
                     reqid=reqid,
                     types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
-                    offset=offset,
                 )
+                self.assertIsNotNone(event)
             stats = self.storage.bucket.bucket_show(bucket, account=self.account)
             self.assertEqual(len(self.created[cname]), stats["objects"])
         return new_shards

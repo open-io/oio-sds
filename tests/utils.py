@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@ from urllib.parse import urlencode
 
 import yaml
 import testtools
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, OFFSET_END
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
@@ -124,9 +124,9 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
     TEST_HEADERS = {REQID_HEADER: "7E571D0000000000"}
-    # Here we initialize the consumer as a class attribute
-    # to be able to close the consumer in teardownclass
-    KAKFA_CONSUMER = None
+
+    _cls_kafka_consumer = None
+    _cls_logger = logging.getLogger("test")
 
     def _compression(self):
         rx = self.conf.get("rawx", {})
@@ -235,6 +235,19 @@ class CommonTestCase(testtools.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
+        group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
+        cls._cls_kafka_consumer = KafkaConsumer(
+            DEFAULT_ENDPOINT,
+            [DEFAULT_PRESERVED_TOPIC],
+            group_id,
+            logger=cls._cls_logger,
+            conf={
+                **{},
+                "enable.auto.commit": True,
+                "auto.offset.reset": "latest",
+            },
+        )
+
     def setUp(self):
         super(CommonTestCase, self).setUp()
         # Some test classes do not call setUpClass
@@ -269,6 +282,33 @@ class CommonTestCase(testtools.TestCase):
 
         self._deregister_at_teardown = []
 
+        self._assigned_partitions = []
+        self._cached_events = []
+
+        self._wait_kafka_partition_assignment()
+        self._set_kafka_offset()
+
+    def _wait_kafka_partition_assignment(self):
+        while not self._assigned_partitions:
+            self._cls_kafka_consumer._client.poll(1.0)
+            self._assigned_partitions = self._cls_kafka_consumer._client.assignment()
+        self.logger.warning(
+            "Assigned partitions: [%s]",
+            ",".join(
+                [
+                    f"(topic: {p.topic},part:{p.partition},offset:{p.offset})"
+                    for p in self._assigned_partitions
+                ],
+            ),
+        )
+
+    def _set_kafka_offset(self, offset=OFFSET_END):
+        self.logger.warning("Seek partition offset: %s", offset)
+        for part in self._assigned_partitions:
+            self._cls_kafka_consumer._client.seek(
+                TopicPartition(part.topic, part.partition, offset)
+            )
+
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
         # Reset namespace configuration as it was before we mess with it
@@ -284,9 +324,9 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         super(CommonTestCase, cls).tearDownClass()
-        if cls.KAKFA_CONSUMER is not None:
+        if cls._cls_kafka_consumer is not None:
             # Close consumer
-            cls.KAKFA_CONSUMER.close()
+            cls._cls_kafka_consumer.close()
 
     @property
     def conscience(self):
@@ -318,31 +358,6 @@ class CommonTestCase(testtools.TestCase):
         if not self._beanstalkd0:
             self._beanstalkd0 = Beanstalk.from_url(self.conf["main_queue_url"])
         return self._beanstalkd0
-
-    @property
-    def kafka_consumer(self):
-        if not self.KAKFA_CONSUMER:
-            self._init_kafka_consumer()
-            self._define_oio_preserved_offset()
-        return self.KAKFA_CONSUMER
-
-    def _init_kafka_consumer(self):
-        """Initialize a consumer at the beginning of each test"""
-        if self.KAKFA_CONSUMER:
-            # Close the consumer previously created
-            self.KAKFA_CONSUMER.consumer.close()
-            self.KAKFA_CONSUMER = None
-        # Create a new consumer
-        group_id = DEFAULT_GROUP_ID_TEST + "-" + random_str(8)
-        self.KAKFA_CONSUMER = self.get_kafka_consumer(group_id=group_id)
-
-    def _define_oio_preserved_offset(self):
-        """Define the latest offset of oio-preserved topic"""
-        partition = TopicPartition("oio-preserved", 0)
-        (
-            _,
-            self._preserved_offset,
-        ) = self.KAKFA_CONSUMER.consumer.get_watermark_offsets(partition)
 
     def get_kafka_consumer(self, topics=None, group_id=DEFAULT_GROUP_ID_TEST):
         endpoint = DEFAULT_ENDPOINT
@@ -389,9 +404,7 @@ class CommonTestCase(testtools.TestCase):
 
     @property
     def logger(self):
-        if not self._logger:
-            self._logger = logging.getLogger("test")
-        return self._logger
+        return self._cls_logger
 
     @property
     def watchdog(self):
@@ -691,7 +704,7 @@ class BaseTestCase(CommonTestCase):
                         if not all_svcs:
                             wait = True
                 except Exception as err:
-                    logging.warn("Could not check service score: %s", err)
+                    logging.warning("Could not check service score: %s", err)
                     wait = True
                 if wait:
                     # No need to check other types, we have to wait anyway
@@ -734,7 +747,7 @@ class BaseTestCase(CommonTestCase):
                     continue
                 logging.info("event %s", data)
                 return event
-            logging.warn(
+            logging.warning(
                 "wait_for_event(reqid=%s, types=%s, fields=%s, timeout=%s) "
                 "reached its timeout",
                 reqid,
@@ -743,19 +756,16 @@ class BaseTestCase(CommonTestCase):
                 timeout,
             )
         except ResponseError as err:
-            logging.warn("%s", err)
+            logging.warning("%s", err)
         return None
 
     def wait_for_kafka_event(
         self,
-        topic=DEFAULT_PRESERVED_TOPIC,
         reqid=None,
+        svcid=None,
         types=None,
         fields=None,
         timeout=30.0,
-        partition_id=0,
-        nb_prior_events=10,
-        offset=None,
     ):
         """
         Wait for an event in the specified tube.
@@ -765,53 +775,59 @@ class BaseTestCase(CommonTestCase):
         :param fields: dict of fields to look for in the event's URL
         :param types: list of types of events the method should look for
         """
-        if not offset:
-            offset = self._preserved_offset
+
+        def match_event(event):
+            if types and event.event_type not in types:
+                logging.debug("ignore event %s (event mismatch)", event)
+                return False
+            if reqid and event.reqid != reqid:
+                logging.info("ignore event %s (request_id mismatch)", event)
+                return False
+            if svcid and event.svcid != svcid:
+                logging.info("ignore event %s (service_id mismatch)", event)
+                return False
+            if fields and any(fields[k] != event.url.get(k) for k in fields):
+                logging.info("ignore event %s (filter mismatch)", event)
+                return False
+            logging.info("event %s", event)
+            return True
+
+        # Check if event is already present
+        for event in self._cached_events:
+            if match_event(event):
+                return event
+
         now = time.time()
         deadline = now + timeout
         try:
-            while now < deadline:
-                # To avoid to poll from lowest offset each time,
-                # we choose to poll n-th events from the highest offset.
-                # If the offset to start on is given, the method rather
-                # poll (highest offset - given offset) events.
-                events = self.kafka_consumer.fetch_n_events(
-                    nb_prior_events, partition_id, topic, offset=offset
-                )
+            for event in self._cls_kafka_consumer.fetch_events():
                 now = time.time()
-                for event in events:
-                    if now > deadline:
-                        # Stop fetching events
-                        break
-                    if event:
-                        data = event.value()
-                        offset = event.offset()
-                        event = Event(jsonlib.loads(data))
-                        if types and event.event_type not in types:
-                            logging.debug("ignore event %s (event mismatch)", data)
-                            continue
-                        if reqid and event.reqid != reqid:
-                            logging.info("ignore event %s (request_id mismatch)", data)
-                            continue
-                        if fields and any(
-                            fields[k] != event.url.get(k) for k in fields
-                        ):
-                            logging.info("ignore event %s (filter mismatch)", data)
-                            continue
-                        logging.info("event %s", data)
-                        return event, offset + 1
+                if now > deadline:
+                    # Stop fetching events
+                    break
+                if not event or event.error():
+                    continue
+                data = event.value()
+                event = Event(jsonlib.loads(data))
 
-            logging.warn(
-                "wait_for_kafka_event(reqid=%s, types=%s, fields=%s, timeout=%s) "
-                "reached its timeout",
+                # Add to cache
+                self._cached_events.append(event)
+
+                if match_event(event):
+                    return event
+
+            logging.warning(
+                "wait_for_kafka_event(reqid=%s, types=%s, svcid=%s, fields=%s,"
+                " timeout=%s) reached its timeout",
                 reqid,
                 types,
+                svcid,
                 fields,
                 timeout,
             )
         except ResponseError as err:
-            logging.warn("%s", err)
-        return None, None
+            logging.warning("%s", err)
+        return None
 
     def wait_until_empty(
         self,

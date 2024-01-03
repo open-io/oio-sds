@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -43,14 +43,12 @@ class TestMeta2EventsEmission(BaseTestCase):
         pulled_events = {}
         for event_type in types:
             pulled_events[event_type] = []
-        offset = None
+
         while True:
-            event, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 types=types,
                 reqid=reqid,
                 timeout=REASONABLE_EVENT_DELAY,
-                offset=offset,
             )
             if event is None:
                 break

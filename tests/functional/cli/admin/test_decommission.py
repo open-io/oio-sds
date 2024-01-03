@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -64,15 +64,13 @@ class ServiceDecommissionTest(CliTestCase):
             )
 
     def wait_for_chunk_events(self, n_obj, reqid=None, event=EventTypes.CHUNK_NEW):
-        offset = None
         for _ in range(n_obj * 3):
-            _, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(event,),
                 timeout=5.0,
-                offset=offset,
             )
+            self.assertIsNotNone(event)
 
     def _test_meta2_decommission(self, decommission_percentage=None):
         """
@@ -83,18 +81,16 @@ class ServiceDecommissionTest(CliTestCase):
             self.skip("This test requires at least 4 meta2 services")
 
         create_reqid = request_id("xcute-decom-")
-        offset = None
         for i in range(100):
             cname = f"xcute-decommission-{i:0>3}"
             self.storage.container_create(self.account, cname, reqid=create_reqid)
             self._containers.append(cname)
-            _, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid=create_reqid,
                 types=(EventTypes.CONTAINER_NEW,),
                 fields={"user": cname},
-                offset=offset,
             )
+            self.assertIsNotNone(event)
 
         list_reqid = request_id("xcute-decom-")
         candidate = self.storage.conscience.next_instance("meta2")["addr"]

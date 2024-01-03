@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -210,11 +210,11 @@ class TestDrainingFilter(BaseTestCase):
         if self.expected_successes >= 1:
             # All chunks should have received a draining event
             for i in range(nb_objects):
-                event, _ = self.wait_for_kafka_event(
-                    "oio-preserved",
+                event = self.wait_for_kafka_event(
                     types=(EventTypes.CONTENT_DRAINED,),
                     fields={"path": object_names[i]},
                 )
+                self.assertIsNotNone(event)
                 for event_data in event.data:
                     if event_data.get("type") == "chunks":
                         chunk_url = event_data.get("id")
