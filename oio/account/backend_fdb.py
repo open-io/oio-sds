@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -2821,5 +2821,5 @@ class AccountBackendFdb(object):
         **kwargs,
     ):
         secret_space = self.kms_space[account][bucket][secret_id]
-        tr[secret_space.pack(("ciphertext"))] = ciphertext.encode("utf-8")
-        tr[secret_space.pack(("key_id"))] = key_id.encode("utf-8")
+        tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
+        tr[secret_space.pack(("key_id",))] = key_id.encode("utf-8")
