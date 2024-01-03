@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -78,18 +78,16 @@ class ItemCheckTest(CliTestCase):
         self.api.account_create(self.account)
 
     def _wait_for_kafka_events(self, chunks, reqid):
-        offset = None
         for _ in range(2 + len(chunks)):
-            _, offset = self.wait_for_kafka_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(
                     EventTypes.CHUNK_NEW,
                     EventTypes.CONTENT_NEW,
                     EventTypes.CONTAINER_STATE,
                 ),
-                offset=offset,
             )
+            self.assertIsNotNone(event)
 
     def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
         _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@ class Event(object):
     event_type = _event_env_property("event")
     data = _event_env_property("data")
     reqid = _event_env_property("request_id")
+    svcid = _event_env_property("service_id")
     url = _event_env_property("url")
     when = _event_env_property("when")
     destinations = _event_env_property("destinations")
