@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -678,6 +678,9 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	const gint64 start = oio_ext_monotonic_time();
 	const gint64 local_deadline = start + _cache_timeout_open;
 	deadline = (deadline <= 0) ? local_deadline : MIN(deadline, local_deadline);
+	/* Half the request timeout, or 2 wait periods. */
+	const gint64 deadline_margin =
+			MIN((deadline - start) / 2, 2 * _cache_period_cond_wait);
 
 	GRID_TRACE2("%s(%p,%s,%p) delay = %" G_GINT64_FORMAT "ms", __FUNCTION__,
 			(void*)cache, hname ? hashstr_str(hname) : "NULL",
@@ -767,9 +770,9 @@ retry:
 						gint64 margin = 0;
 						if (!_cache_fail_on_heavy_load
 								&& _cache_alert_on_heavy_load) {
-							/* Only 2 more attempts before definitively
-							 * failing */
-							margin = 2 * G_TIME_SPAN_SECOND;
+							/* Set a margin so we send the warning
+							 * before actually failing. */
+							margin = deadline_margin;
 						}
 						double avg_waiting_time = _load_too_high(
 								base, now, remaining_time - margin);
@@ -783,10 +786,12 @@ retry:
 										"Load too high on [%s] (waiting_" \
 										"requests=%"G_GUINT32_FORMAT", " \
 										"avg_waiting_time=%.6lf, " \
+										"remaining_time=%.6lf, " \
 										"reqid=%s)",
 										hashstr_str(hname),
 										base->count_waiting,
 										avg_waiting_time,
+										remaining_time/(double)G_TIME_SPAN_SECOND,
 										oio_ext_get_reqid());
 							}
 						}
