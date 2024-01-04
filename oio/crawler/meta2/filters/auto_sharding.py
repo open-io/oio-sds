@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import int_value
 from oio.common.green import time
+from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
@@ -108,9 +109,10 @@ class AutomaticSharding(Filter):
         Trigger cleaning/sharding/shrinking.
         """
         meta2db = Meta2DB(self.app_env, env)
+        reqid = request_id(prefix="autoshard-")
 
         try:
-            if self._clean(meta2db):
+            if self._clean(meta2db, reqid=reqid):
                 # If there was a cleaning, do nothing else
                 # and let the "auto_vacuum" pass
                 self.skipped += 1
@@ -124,21 +126,21 @@ class AutomaticSharding(Filter):
             modified = False
             meta2db_size = meta2db.file_status["st_size"]
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
-                modified = self._shard(meta2db)
+                modified = self._shard(meta2db, reqid=reqid)
             elif self.shrinking_db_size > 0:
                 root_cid, shard = self.container_sharding.meta_to_shard(
                     {"system": meta2db.system}
                 )
                 if root_cid:
                     if meta2db_size < self.shrinking_db_size:
-                        modified = self._shrink(meta2db)
+                        modified = self._shrink(meta2db, reqid=reqid)
                     elif (
                         not shard["lower"]
                         and not shard["upper"]
                         and meta2db_size < self.sharding_db_size
                     ):
                         # Merge the one and last shard in root ASAP
-                        modified = self._shrink(meta2db)
+                        modified = self._shrink(meta2db, reqid=reqid)
                     else:
                         self.skipped += 1
                 else:  # Not a shard
@@ -174,7 +176,7 @@ class AutomaticSharding(Filter):
             )
             return resp(env, cb)
 
-    def _clean(self, meta2db):
+    def _clean(self, meta2db, reqid=None):
         """
         Check if the shard is cleaned up. If not, try to clean it.
         """
@@ -209,6 +211,7 @@ class AutomaticSharding(Filter):
                 cid=meta2db.cid,
                 attempts=3,
                 vacuum=False,
+                reqid=reqid,
             )
             self.cleaning_successes += 1
 
@@ -223,11 +226,12 @@ class AutomaticSharding(Filter):
             self.cleaning_errors += 1
         return True
 
-    def _shard(self, meta2db):
+    def _shard(self, meta2db, reqid=None):
         self.logger.info(
-            "Sharding container %s (db size: %d bytes)",
+            "Sharding container %s (db size: %d bytes, reqid=%s)",
             meta2db.cid,
             meta2db.file_status["st_size"],
+            reqid,
         )
         try:
             shards = self.container_sharding.find_shards(
@@ -235,18 +239,22 @@ class AutomaticSharding(Filter):
                 meta2db.system[M2_PROP_CONTAINER_NAME],
                 strategy=self.sharding_strategy,
                 strategy_params=self.sharding_strategy_params,
+                reqid=reqid,
             )
             modified = self.container_sharding.replace_shard(
                 meta2db.system[M2_PROP_ACCOUNT_NAME],
                 meta2db.system[M2_PROP_CONTAINER_NAME],
                 shards,
                 enable=True,
+                reqid=reqid,
             )
             if modified:
                 self.sharding_successes += 1
             else:
                 self.logger.warning(
-                    "No change after sharding container %s", meta2db.cid
+                    "No change after sharding container %s (reqid=%s)",
+                    meta2db.cid,
+                    reqid,
                 )
                 self.sharding_no_change += 1
             return modified
@@ -254,11 +262,13 @@ class AutomaticSharding(Filter):
             # The exception is handled in the "process" method
             raise
         except Exception as exc:
-            self.logger.error("Failed to shard container %s: %s", meta2db.cid, exc)
+            self.logger.error(
+                "Failed to shard container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
+            )
             self.sharding_errors += 1
             raise
 
-    def _shrink(self, meta2db):
+    def _shrink(self, meta2db, reqid=None):
         self.logger.info(
             "Shrinking container %s (db size: %d bytes)",
             meta2db.cid,
@@ -272,7 +282,7 @@ class AutomaticSharding(Filter):
                 shard,
                 neighboring_shard,
             ) = self.container_sharding.find_smaller_neighboring_shard(
-                shard, root_cid=root_cid
+                shard, root_cid=root_cid, reqid=reqid
             )
             shards = []
             shards.append(shard)
@@ -281,19 +291,25 @@ class AutomaticSharding(Filter):
             # The "AutoVacuum" filter is very likely to precede,
             # so there is no need to launch the vacuum first.
             modified = self.container_sharding.shrink_shards(
-                shards, root_cid=root_cid, pre_vacuum=False
+                shards, root_cid=root_cid, pre_vacuum=False, reqid=reqid
             )
             if modified:
                 self.shrinking_successes += 1
             else:
-                self.logger.warning("No change after merging container %s", meta2db.cid)
+                self.logger.warning(
+                    "No change after merging container %s (reqid=%s)",
+                    meta2db.cid,
+                    reqid,
+                )
                 self.shrinking_no_change += 1
             return modified
         except FileNotFoundError:
             # The exception is handled in the "process" method
             raise
         except Exception as exc:
-            self.logger.error("Failed to merge container %s: %s", meta2db.cid, exc)
+            self.logger.error(
+                "Failed to merge container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
+            )
             self.shrinking_errors += 1
             raise
 
