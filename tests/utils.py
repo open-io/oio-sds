@@ -283,12 +283,15 @@ class CommonTestCase(testtools.TestCase):
         self._deregister_at_teardown = []
 
         self._assigned_partitions = []
-        self._cached_events = []
+        self._cached_events = {}
+        self._used_events = []
 
         self._wait_kafka_partition_assignment()
         self._set_kafka_offset()
 
     def _wait_kafka_partition_assignment(self):
+        if not self._cls_kafka_consumer:
+            return
         while not self._assigned_partitions:
             self._cls_kafka_consumer._client.poll(1.0)
             self._assigned_partitions = self._cls_kafka_consumer._client.assignment()
@@ -303,10 +306,18 @@ class CommonTestCase(testtools.TestCase):
         )
 
     def _set_kafka_offset(self, offset=OFFSET_END):
+        if not self._cls_kafka_consumer:
+            return
         self.logger.warning("Seek partition offset: %s", offset)
         for part in self._assigned_partitions:
+            watermark = self._cls_kafka_consumer._client.get_watermark_offsets(
+                part, timeout=5
+            )
+            self.logger.warning("Get watermark for %s = %s", str(part), str(watermark))
+            self.assertIsNotNone(watermark)
+            _, high_offset = watermark
             self._cls_kafka_consumer._client.seek(
-                TopicPartition(part.topic, part.partition, offset)
+                TopicPartition(part.topic, part.partition, high_offset)
             )
 
     def tearDown(self):
@@ -776,7 +787,7 @@ class BaseTestCase(CommonTestCase):
         :param types: list of types of events the method should look for
         """
 
-        def match_event(event):
+        def match_event(key, event):
             if types and event.event_type not in types:
                 logging.debug("ignore event %s (event mismatch)", event)
                 return False
@@ -790,11 +801,14 @@ class BaseTestCase(CommonTestCase):
                 logging.info("ignore event %s (filter mismatch)", event)
                 return False
             logging.info("event %s", event)
+            self._used_events.append(key)
             return True
 
         # Check if event is already present
-        for event in self._cached_events:
-            if match_event(event):
+        for key, event in self._cached_events.items():
+            if key in self._used_events:
+                continue
+            if match_event(key, event):
                 return event
 
         now = time.time()
@@ -807,13 +821,15 @@ class BaseTestCase(CommonTestCase):
                     break
                 if not event or event.error():
                     continue
+                event_key = f"{event.topic()},{event.partition()},{event.offset()}"
+                logging.debug("Got event: %s", event_key)
                 data = event.value()
                 event = Event(jsonlib.loads(data))
 
                 # Add to cache
-                self._cached_events.append(event)
+                self._cached_events[event_key] = event
 
-                if match_event(event):
+                if match_event(event_key, event):
                     return event
 
             logging.warning(

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -91,7 +91,7 @@ class TestRdirCrawler(BaseTestCase):
         )
         for _ in chunks:
             self.wait_for_kafka_event(
-                "oio-preserved", reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
+                reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
             )
         self._containers_to_clean.add(container)
         return chunks

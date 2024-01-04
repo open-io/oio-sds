@@ -88,9 +88,7 @@ class TestDrainingFilter(BaseTestCase):
             self.storage.object_delete_many(self.account, self.cname, objs=self.created)
             # FIXME temporary cleaning, this should be handled by deleting
             # root container
-            self.wait_for_kafka_event(
-                "oio-preserved", types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
             if self.use_sharding:
                 resp = self.storage.account.container_list(self.shards_account)
                 for cont in resp["listing"]:
@@ -140,7 +138,6 @@ class TestDrainingFilter(BaseTestCase):
             self.created.append(file_name)
         # Wait for the event from the last object created
         self.wait_for_kafka_event(
-            "oio-preserved",
             types=(EventTypes.CONTENT_NEW,),
             fields={"path": file_name},
             reqid=reqid,
@@ -195,7 +192,7 @@ class TestDrainingFilter(BaseTestCase):
                 if object_["name"] not in out_of_range_objects:
                     for chunk in chunks:
                         chunk_urls.append(chunk["url"])
-                    object_names.append(object_["name"])
+                    object_names.append((object_["name"], len(chunks)))
 
         # Process the draining
         if not meta2db_env:
@@ -210,16 +207,18 @@ class TestDrainingFilter(BaseTestCase):
         if self.expected_successes >= 1:
             # All chunks should have received a draining event
             for i in range(nb_objects):
-                event = self.wait_for_kafka_event(
-                    types=(EventTypes.CONTENT_DRAINED,),
-                    fields={"path": object_names[i]},
-                )
-                self.assertIsNotNone(event)
-                for event_data in event.data:
-                    if event_data.get("type") == "chunks":
-                        chunk_url = event_data.get("id")
-                        self.logger.debug("Drain event for %s received", chunk_url)
-                        chunk_urls.remove(chunk_url)
+                object_name, nb_chunks = object_names[i]
+                for _ in range(nb_chunks):
+                    event = self.wait_for_kafka_event(
+                        types=(EventTypes.CONTENT_DRAINED,),
+                        fields={"path": object_name},
+                    )
+                    self.assertIsNotNone(event)
+                    for event_data in event.data:
+                        if event_data.get("type") == "chunks":
+                            chunk_url = event_data.get("id")
+                            self.logger.debug("Drain event for %s received", chunk_url)
+                            chunk_urls.remove(chunk_url)
             self.assertEqual(0, len(chunk_urls))
             # Check if the out-of-range objects are not drained
             for obj_name in out_of_range_objects:

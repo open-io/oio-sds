@@ -262,7 +262,12 @@ class KafkaConsumerWorker(Process):
     def acknowledge_message(self, message):
         try:
             self._offsets_queue.put(
-                {"partition": message["partition"], "offset": message["offset"]}
+                {
+                    "topic": message["topic"],
+                    "partition": message["partition"],
+                    "offset": message["offset"],
+                    "leader": message["leader"],
+                }
             )
         except Exception:
             self.logger.exception(
@@ -393,6 +398,7 @@ class KafkaBatchFeeder(Process):
                         topic = event.topic()
                         partition = event.partition()
                         offset = event.offset()
+                        leader_epoch = event.leader_epoch()
                         value = event.value()
                         self.logger.debug(
                             "Got event topic=%s, partition=%s, offset=%s",
@@ -408,6 +414,7 @@ class KafkaBatchFeeder(Process):
                                 "topic": topic,
                                 "partition": partition,
                                 "offset": offset,
+                                "leader": leader_epoch,
                                 "data": event_data,
                             },
                         )
@@ -429,9 +436,9 @@ class KafkaBatchFeeder(Process):
                         offset = self._offsets_queue.get(True, timeout=1.0)
                     except Empty:
                         continue
-                    offsets = self._offsets_to_commit.setdefault(
-                        offset["partition"], []
-                    )
+                    partitions = self._offsets_to_commit.setdefault(offset["topic"], {})
+                    leaders = partitions.setdefault(offset["partition"], {})
+                    offsets = leaders.setdefault(offset["leader"], [])
                     bisect.insort(offsets, offset["offset"])
                     ready_events += 1
                     if ready_events == self._fetched_events:
@@ -467,26 +474,28 @@ class KafkaBatchFeeder(Process):
             )
 
     def _commit_batch(self):
-        top_offsets = {}
-        offsets = []
-        for partition, partition_offsets in self._offsets_to_commit.items():
-            top_partition_offsets = top_offsets.setdefault(partition, -1)
-            for offset in partition_offsets:
-                # Ensure we do not skip offset
-                if top_partition_offsets != -1 and top_partition_offsets + 1 != offset:
-                    break
-                top_partition_offsets = offset
-            top_offsets[partition] = top_partition_offsets
+        _offsets = []
 
-        for partition, offset in top_offsets.items():
-            if offset == -1:
-                continue
+        for topic, partitions in self._offsets_to_commit.items():
+            for partition, leaders in partitions.items():
+                for leader, offsets in leaders.items():
+                    top_offset = -1
+                    for offset in offsets:
+                        # Ensure we do not skip offset
+                        if top_offset != -1 and top_offset + 1 != offset:
+                            break
+                        top_offset = offset
+                    if top_offset != -1:
+                        _offsets.append(
+                            TopicPartition(topic, partition, top_offset + 1, "", leader)
+                        )
 
-            offsets.append(TopicPartition(self.topic, partition, offset + 1))
+        if _offsets:
+            self.logger.info("Commit offsets: %s", _offsets)
+            self._consumer.commit(offsets=_offsets)
 
-        if offsets:
-            self.logger.info("Commit offsets: %s", offsets)
-            self._consumer.commit(offsets=offsets)
+        # Prepare for next batch
+        self._offsets_to_commit = {}
 
     def stop(self):
         """

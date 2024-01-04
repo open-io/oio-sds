@@ -507,6 +507,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
+        self.assertIsNotNone(event)
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])

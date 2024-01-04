@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -106,9 +106,7 @@ class TestBlobIndexer(BaseTestCase):
             "http://" + self.rawx_id + "/" + chunk_id, meta, data, reqid=reqid
         )
         # ensure chunk event have been processed
-        self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,)
-        )
+        self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CHUNK_NEW,))
         return (
             account,
             container,
@@ -125,9 +123,7 @@ class TestBlobIndexer(BaseTestCase):
             "http://" + self.rawx_id + "/" + chunk_id, reqid=reqid
         )
         # ensure chunk event have been processed
-        self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_DELETED,)
-        )
+        self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CHUNK_DELETED,))
 
     def _link_chunk(self, target_chunk_id):
         account = "blob-indexer-" + random_str(6)
@@ -148,9 +144,7 @@ class TestBlobIndexer(BaseTestCase):
         )
         chunk_id = link.split("/")[-1]
         # ensure chunk event have been processed
-        self.wait_for_kafka_event(
-            "oio-preserved", reqid=reqid, types=(EventTypes.CHUNK_NEW,)
-        )
+        self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CHUNK_NEW,))
         return (
             account,
             container,

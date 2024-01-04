@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import socket
 
 from copy import deepcopy
 from urllib.parse import urlparse
@@ -48,7 +49,15 @@ class DeleteFilter(Filter):
 
         self._producer.send(topic, event)
 
-    def _get_full_path(self, svc_name):
+    def _get_rawx_addr(self, svc_name):
+        # We may already have an IP address
+        try:
+            socket.inet_aton(svc_name)
+            return svc_name
+        except socket.error:
+            # Not a valid IP address
+            ...
+
         try:
             resolved_path = self._conscience_client.resolve_url("rawx", svc_name)
             url_parts = urlparse(resolved_path)
@@ -82,7 +91,7 @@ class DeleteFilter(Filter):
                 rawx_addr = self._cache.get(service_name)
                 if not rawx_addr:
                     # Service not present in cache, resolve its name
-                    rawx_addr = self._get_full_path(service_name)
+                    rawx_addr = self._get_rawx_addr(service_name)
                     if not rawx_addr:
                         self.logger.error(
                             "Failed to get rawx addr for service %s", service_name
@@ -101,7 +110,8 @@ class DeleteFilter(Filter):
                 dst_topic = f"{self._topic_prefix}{dst}"
                 self._send_event(dst_topic, evt)
 
-            self._producer.flush(1.0)
+            if self._producer:
+                self._producer.flush(1.0)
 
         return self.app(env, cb)
 

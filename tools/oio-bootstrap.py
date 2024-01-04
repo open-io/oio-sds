@@ -617,6 +617,9 @@ shallow_copy ${SHALLOW_COPY}
 ${USE_TLS}tls_cert_file ${SRCDIR}/${TLS_CERT_FILE}
 ${USE_TLS}tls_key_file ${SRCDIR}/${TLS_KEY_FILE}
 ${USE_TLS}tls_rawx_url ${IP}:${TLS_PORT}
+
+events true
+topic  ${TOPIC}
 """
 
 template_wsgi_service_host = """
@@ -1441,21 +1444,20 @@ group_id = ${GROUP_ID}
 event_queue_type = ${QUEUE_TYPE}
 event_queue_ids = ${QUEUE_IDS}
 
+kafka_group.instance.id = ${SRVTYPE}.${SRVNUM}
+
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
 """
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
-# pipeline = async_replication
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.update]
-# pipeline = async_replication webhook
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.append]
-# pipeline = webhook
 pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.broken]
@@ -1465,22 +1467,16 @@ pipeline = content_rebuild ${PRESERVE}
 # New pipeline with a separate oio-event-agent doing deletions
 pipeline = ${WEBHOOK} notify_deleted
 
-# Old pipeline with deletion done by the main oio-event-agent
-# pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
-
 [handler:storage.content.drained]
-pipeline = notify_deleted notify_drained
+pipeline = notify_deleted
 
 [handler:storage.container.new]
-# pipeline = account_update
 pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.update]
-# pipeline =
 pipeline = ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = account_update
 pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.state]
@@ -1547,15 +1543,6 @@ use = egg:oio#delete
 broker_endpoint = ${QUEUE_URL}
 topic_prefix = oio-delete-
 
-
-# This filter is only to demonstrate policy regexes
-[filter:notify_drained]
-use = egg:oio#notify
-broker_endpoint = ${QUEUE_URL}
-topic = oio-drained
-policy_regex_EC = ^EC.*
-topic_EC = oio-drained-ec
-
 [filter:logger]
 use = egg:oio#logger
 
@@ -1587,6 +1574,27 @@ timeout = 4.5
 
 [filter:logger]
 use = egg:oio#logger
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_chunks_handlers = """
+### handlers
+[handler:storage.chunk.new]
+pipeline = volume_index ${PRESERVE}
+
+[handler:storage.chunk.deleted]
+pipeline = volume_index ${PRESERVE}
+
+### filters
+[filter:volume_index]
+use = egg:oio#volume_index
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -2538,6 +2546,7 @@ def generate(options):
                     "SHALLOW_COPY": (
                         "enabled" if options[SHALLOW_COPY] else "disabled"
                     ),
+                    "TOPIC": f"oio-chunks-{host}",
                 }
             )
             rawx_volumes.append(env["VOLUME"])
@@ -2884,6 +2893,42 @@ def generate(options):
 
         break
 
+    # Configure a special oio-event-agent dedicated to chunk events per host
+    # -------------------------------------------------------------------------
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        for host in hosts:
+            num += 1
+            env = subenv(
+                {
+                    "SRVTYPE": "event-agent",
+                    "SRVNUM": num,
+                    "QUEUE_NAME": f"oio-chunks-{host}",
+                    "QUEUE_URL": url,
+                    "EXE": event_agent_bin,
+                    "EVENT_WORKERS": len(rawx_per_host[host]),
+                    "GROUP_ID": "event-agent-chunks",
+                    "QUEUE_TYPE": "default",
+                    "QUEUE_IDS": "",
+                }
+            )
+            register_service(
+                env,
+                template_systemd_service_event_agent,
+                event_agents_target,
+                coverage_wrapper=shutil.which("coverage")
+                + " run --context event-agent --concurrency=eventlet -p ",
+            )
+            with open(config(env), "w+", encoding="utf8") as outf:
+                tpl = Template(template_event_agent)
+                outf.write(tpl.safe_substitute(env))
+            with open(
+                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+            ) as outf:
+                tpl = Template(template_event_agent_chunks_handlers)
+                outf.write(tpl.safe_substitute(env))
+
+        break
+
     # Configure a special oio-event-agent dedicated to delayed events
     # -------------------------------------------------------------------------
     num += 1
@@ -3101,8 +3146,8 @@ def generate(options):
         rawx_hosts = hosts[:nb_rawx]
         # Add delete topics per host
         topics_to_declare.extend([f"oio-delete-{h}" for h in rawx_hosts])
-        # Add chunk topics per host
-        topics_to_declare.extend([f"oio-chunk-{h}" for h in rawx_hosts])
+        # Add chunks topics per host
+        topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
 
         with open(f"{CFGDIR}/topics.yml", "w+") as f:
             f.write(
