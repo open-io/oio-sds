@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -455,7 +455,7 @@ class RdirDispatcher(object):
             all_hosts = known_hosts + all_hosts
 
         assignments = {
-            "host": ",".join(all_hosts),
+            "host": ",".join(sorted(all_hosts)),
             "type": "rdir",
             "seq": 1,
             "args": "",

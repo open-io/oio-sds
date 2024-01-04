@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -233,10 +233,12 @@ class PollReference(Command):
 
 class ForceReference(Command):
     """
-    Force link a service to reference.
+    Assign a list of services to a reference (aka "container").
 
     In order to keep the same sequence number,
     you must first unlink the service.
+
+    The list of services set by this command is NOT sorted.
     """
 
     log = getLogger(__name__ + ".ForceReference")
