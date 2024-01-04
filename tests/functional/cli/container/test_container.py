@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -152,7 +152,7 @@ class ContainerTest(CliTestCase):
                 % (account, cname, file_.name)
             )
         self.wait_for_kafka_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
         opts = self.get_format_opts(
@@ -165,7 +165,7 @@ class ContainerTest(CliTestCase):
         # Refresh account
         output = self.openio("account refresh " + account)
         self.wait_for_kafka_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # show bucket
         output = self.openio(
@@ -187,7 +187,7 @@ class ContainerTest(CliTestCase):
                 "object create %s %s --name test" % (cname, file_.name)
             )
         self.wait_for_kafka_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
         opts = self.get_format_opts(
@@ -259,7 +259,6 @@ class ContainerTest(CliTestCase):
         reqid = request_id()
         self.storage.container_create(self.account, cname, reqid=reqid)
         self.wait_for_kafka_event(
-            "oio-preserved",
             reqid=reqid,
             fields={"user": cname},
             types=(EventTypes.CONTAINER_NEW,),

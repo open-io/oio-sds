@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -61,12 +61,10 @@ class ItemRebuildTest(CliTestCase):
 
     def _wait_events(self, account, container, obj_name):
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
         )
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
         )

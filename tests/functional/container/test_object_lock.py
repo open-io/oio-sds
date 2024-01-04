@@ -92,9 +92,7 @@ class TestObjectLock(BaseTestCase):
                 properties=properties,
             )
         if bucket:
-            self.wait_for_kafka_event(
-                "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTAINER_STATE,))
 
     def _check_no_deletion(self, object_name, version, reqid):
         # Check the object still exists

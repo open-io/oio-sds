@@ -1705,7 +1705,6 @@ class ItemCheckTest(CliTestCase):
         # Remove container in account service
         self.api.account_flush(self.account)
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": self.account, "user": self.container},
             types=(EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED),
         )

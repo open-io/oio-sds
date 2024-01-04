@@ -88,9 +88,7 @@ class TestDrainingFilter(BaseTestCase):
             self.storage.object_delete_many(self.account, self.cname, objs=self.created)
             # FIXME temporary cleaning, this should be handled by deleting
             # root container
-            self.wait_for_kafka_event(
-                "oio-preserved", types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
             if self.use_sharding:
                 resp = self.storage.account.container_list(self.shards_account)
                 for cont in resp["listing"]:
@@ -140,7 +138,6 @@ class TestDrainingFilter(BaseTestCase):
             self.created.append(file_name)
         # Wait for the event from the last object created
         self.wait_for_kafka_event(
-            "oio-preserved",
             types=(EventTypes.CONTENT_NEW,),
             fields={"path": file_name},
             reqid=reqid,

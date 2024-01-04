@@ -289,6 +289,8 @@ class CommonTestCase(testtools.TestCase):
         self._set_kafka_offset()
 
     def _wait_kafka_partition_assignment(self):
+        if not self._cls_kafka_consumer:
+            return
         while not self._assigned_partitions:
             self._cls_kafka_consumer._client.poll(1.0)
             self._assigned_partitions = self._cls_kafka_consumer._client.assignment()
@@ -303,6 +305,8 @@ class CommonTestCase(testtools.TestCase):
         )
 
     def _set_kafka_offset(self, offset=OFFSET_END):
+        if not self._cls_kafka_consumer:
+            return
         self.logger.warning("Seek partition offset: %s", offset)
         for part in self._assigned_partitions:
             self._cls_kafka_consumer._client.seek(

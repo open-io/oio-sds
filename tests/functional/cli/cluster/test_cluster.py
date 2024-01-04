@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -115,6 +115,7 @@ class ClusterTest(CliTestCase):
         self._reload_proxy()
         output = self.openio("cluster list --locked" + opts)
         data = json.loads(output)
+        self.assertNotEqual(0, len(data))
         self.assertEqual(data[0]["Locks"], "put=True get=False")
 
     def test_cluster_wait(self):

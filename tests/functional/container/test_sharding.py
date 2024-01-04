@@ -182,9 +182,7 @@ class TestSharding(BaseTestCase):
             else:
                 self.created[cname_root].add(obj_name)
         if bucket:
-            self.wait_for_kafka_event(
-                "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTAINER_STATE,))
             self._check_bucket_stats(cname_root, bucket, account=account)
 
     def _delete_objects(
@@ -212,7 +210,6 @@ class TestSharding(BaseTestCase):
                     self.created[cname].remove(obj_name)
         if bucket:
             self.wait_for_kafka_event(
-                "oio-preserved",
                 reqid=reqid,
                 fields={"account": self.account, "user": cname},
                 types=(EventTypes.CONTAINER_STATE,),

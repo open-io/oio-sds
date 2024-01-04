@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,13 +32,11 @@ class ServiceRebuildTest(CliTestCase):
 
     def _wait_events(self, account, container, obj_name, reqid):
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
             reqid=reqid,
         )
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,
@@ -85,7 +83,6 @@ class ServiceRebuildTest(CliTestCase):
         self.assertIn("%s|%s|%s OK" % (self.ns, account, container), entries)
 
         self.wait_for_kafka_event(
-            "oio-preserved",
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,

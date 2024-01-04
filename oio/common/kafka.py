@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -41,7 +41,7 @@ DEFAULT_XCUTE_JOB_TOPIC = "oio-xcute"
 DEFAULT_XCUTE_JOB_REPLY_TOPIC = DEFAULT_XCUTE_JOB_TOPIC + "-reply"
 DEFAULT_DELAY_GRANULARITY = 60
 KAFKA_CONF_PREFIX = "kafka_"
-POLL_TIMEOUT = 10 * 1000
+POLL_TIMEOUT = 10
 
 
 def get_delay_granularity(conf):
@@ -314,7 +314,6 @@ class KafkaConsumer(KafkaClient):
         return lags
 
     def _close(self):
-        self._client.poll(POLL_TIMEOUT)
         self._client.close()
 
     def commit(self, message=None, offsets=None):
