@@ -898,6 +898,15 @@
 				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
 				"def": "40s", "min": "10ms", "max": "1h" },
 
+			{ "type": "monotonic", "name": "cs_enbug_list_delay",
+				"key": "enbug.cs.list.delay",
+				"descr": "In testing situations, sets a delay to add to any service listing request.",
+				"def": 0, "min": 0, "max": "60m" },
+			{ "type": "monotonic", "name": "cs_enbug_serialize_delay",
+				"key": "enbug.cs.serialize.delay",
+				"descr": "In testing situations, sets a delay to add to service pre-serialize operations.",
+				"def": 0, "min": 0, "max": "60m" },
+
 			{ "type": "int32", "name": "oio_server_request_failure_threshold",
 				"key": "enbug.server.request.failure.threshold",
 				"descr": "In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.",

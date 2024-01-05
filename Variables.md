@@ -2010,6 +2010,24 @@ the cmake command line.
  * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
  * range: 0 -> 100
 
+### enbug.cs.list.delay
+
+> In testing situations, sets a delay to add to any service listing request.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_ENBUG_CS_LIST_DELAY*
+ * range: 0 -> 60 * G_TIME_SPAN_MINUTE
+
+### enbug.cs.serialize.delay
+
+> In testing situations, sets a delay to add to service pre-serialize operations.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_ENBUG_CS_SERIALIZE_DELAY*
+ * range: 0 -> 60 * G_TIME_SPAN_MINUTE
+
 ### enbug.election.double_master.db
 
 > CID of the base to force a double master condition on.

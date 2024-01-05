@@ -2,7 +2,7 @@
 OpenIO SDS conscience central server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -66,6 +66,7 @@ static GByteArray *nsinfo_cache = NULL;
 static gchar *service_url = NULL;
 static gchar *hub_me = NULL;
 static gchar *hub_group = NULL;
+static gint hub_threads = 0;
 static gint hub_group_size = 0;
 static gchar *path_stgpol = NULL;
 static gchar *path_srvcfg = NULL;
@@ -335,6 +336,9 @@ _conscience_srv_prepare_cache(struct conscience_srv_s *srv)
 {
 	conscience_srv_clean_udata(srv);
 	srv->cache = _conscience_srv_serialize(srv);
+#ifdef HAVE_ENBUG
+	g_usleep(cs_enbug_serialize_delay);
+#endif
 }
 
 static guint
@@ -572,6 +576,9 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 		if (!callback(srv, udata))
 			return FALSE;
 	}
+#ifdef HAVE_ENBUG
+	g_usleep(cs_enbug_list_delay);
+#endif
 	return TRUE;
 }
 
@@ -783,6 +790,7 @@ static void *hub_zsub = NULL;
 static GAsyncQueue *hub_queue = NULL;
 static GThread *hub_thread_pub = NULL;
 static GThread *hub_thread_sub = NULL;
+static GThreadPool *pool_update_srv = NULL;
 
 static void
 _et_bim_cest_dans_le_hub (gchar *m)
@@ -976,6 +984,7 @@ push_service_dated(struct service_info_dated_s *sid)
 	if (!srvtype) {
 		GRID_ERROR("Service type [%s/%s] not found", nsname, sid->si->type);
 	} else {
+		/* TODO(FVE): measure time to obtain the lock, send alert. */
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
 		struct conscience_srv_s *srv = \
 				conscience_srvtype_refresh_dated(srvtype, sid);
@@ -990,6 +999,7 @@ push_service_dated(struct service_info_dated_s *sid)
 					srv->put_score.value = 0;
 				if (!srv->get_locked)
 					srv->get_score.value = 0;
+				/* TODO(FVE): send alert outside of the lock. */
 				if (!srv->put_locked || !srv->get_locked)
 					_alert_service_with_zeroed_score(srv);
 			}
@@ -1065,8 +1075,10 @@ rm_service(struct service_info_s *si)
 	struct service_info_dated_s *sid = NULL;
 
 	gchar str_desc[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO];
-	int str_desc_len = g_snprintf(str_desc, sizeof(str_desc), "%s/%s/", nsname, si->type);
-	grid_addrinfo_to_string(&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
+	int str_desc_len = g_snprintf(
+			str_desc, sizeof(str_desc), "%s/%s/", nsname, si->type);
+	grid_addrinfo_to_string(
+			&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
 
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(si->type, FALSE);
 	if (!srvtype) {
@@ -1084,19 +1096,32 @@ rm_service(struct service_info_s *si)
 }
 
 static void
-_on_push (const guint8 *b, gsize l)
+_load_and_update_service(gpointer srv_data, gpointer udata UNUSED)
 {
+	gchar *json_data = srv_data;
 	struct service_info_dated_s *sid = NULL;
-	gchar *tmp = g_strndup ((gchar*)b, l);
-	GError *err = service_info_dated_load_json (tmp, &sid, FALSE);
+	GError *err = service_info_dated_load_json(json_data, &sid, FALSE);
 	EXTRA_ASSERT((err != NULL) ^ (sid != NULL));
-	g_free (tmp);
 	if (err) {
 		GRID_WARN("HUB: decoder error: (%d) %s", err->code, err->message);
 		g_clear_error (&err);
 	} else {
 		push_service_dated(sid);
 		service_info_dated_free(sid);
+	}
+	g_free(json_data);
+}
+
+static void
+_on_push (const guint8 *b, gsize l)
+{
+	/* Copy the buffer received from the HUB, send it to a thread pool
+	 * for decoding (we don't want to block the HUB). */
+	gchar *json_data = g_strndup((gchar*)b, l);
+	if (pool_update_srv) {
+		metautils_gthreadpool_push("SRVUPD", pool_update_srv, json_data);
+	} else {
+		_load_and_update_service(json_data, NULL);
 	}
 }
 
@@ -1177,7 +1202,7 @@ hub_worker_sub (gpointer p)
 		GRID_TRACE2("HUB activity!");
 
 		/* manage them */
-		for (guint i=0; i<1024 ;++i) {
+		for (guint i=0; i<1024; ++i) {
 			zmq_msg_t msg;
 			zmq_msg_init (&msg);
 			rc = zmq_msg_recv (&msg, hub_zsub, ZMQ_DONTWAIT);
@@ -1551,6 +1576,13 @@ _init_hub (void)
 	hub_thread_sub = g_thread_new ("hub-sub", hub_worker_sub, NULL);
 	g_assert (hub_thread_sub != NULL);
 
+	if (hub_threads > 0) {
+		pool_update_srv = g_thread_pool_new(
+				(GFunc)_load_and_update_service,
+				NULL, hub_threads, FALSE, NULL);
+		g_assert(pool_update_srv != NULL);
+	}
+
 	if (split_me)
 		g_strfreev (split_me);
 	return NULL;
@@ -1594,6 +1626,21 @@ _task_expire (gpointer p UNUSED)
 	g_free(typev);
 }
 
+static void
+_task_check_hub(gpointer p UNUSED)
+{
+	if (pool_update_srv) {
+		guint unprocessed = g_thread_pool_unprocessed(pool_update_srv);
+		if (unprocessed > 10000) {
+			GRID_WARN("HUB: %u service updates waiting to be processed",
+					unprocessed);
+		} else {
+			GRID_DEBUG("HUB: %u service updates waiting to be processed",
+					unprocessed);
+		}
+	}
+	// TODO(FVE): check other hub-related metrics
+}
 
 /* Persistence of services status -------------------------------------------*/
 
@@ -1805,6 +1852,8 @@ _cs_configure_with_file(const char *path UNUSED)
 			"Plugin.conscience", "param_hub.me", NULL);
 	hub_group = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_hub.group", NULL);
+	hub_threads = g_key_file_get_integer(gkf,
+			"Plugin.conscience", "param_hub.threads", NULL);
 	path_stgpol = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_storage_conf", NULL);
 	path_srvcfg = g_key_file_get_value(gkf,
@@ -2209,6 +2258,10 @@ _cs_configure(int argc, char **argv)
 				(GDestroyNotify)write_status,
 				NULL, persistence_path->str);
 	}
+
+	if (hub_running)
+		grid_task_queue_register(gtq_admin, 5, _task_check_hub, NULL, NULL);
+
 	return TRUE;
 }
 
@@ -2251,6 +2304,10 @@ _cs_specific_fini(void)
 	if (hub_zpub) zmq_close(hub_zpub);
 	if (hub_zsub) zmq_close(hub_zsub);
 	if (hub_zctx) zmq_term(hub_zctx);
+	if (pool_update_srv) {
+		g_thread_pool_free(pool_update_srv, FALSE, TRUE);
+		pool_update_srv = NULL;
+	}
 	if (hub_queue) {
 		for (gchar *m = g_async_queue_try_pop(hub_queue); m ;
 				m = g_async_queue_try_pop(hub_queue))

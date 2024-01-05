@@ -9,6 +9,7 @@ directory_replicas: 3
 container_replicas: 3
 conscience:
   count: 3
+  hub_threads: 1
 rawx:
   count: 3
 rdir:

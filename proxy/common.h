@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -105,6 +105,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MASTER_READ(Action)  GUARDED_READ(master_rwlock,Action)
 #define MASTER_WRITE(Action) GUARDED_WRITE(master_rwlock,Action)
 
+/** Allocate on the stack a shuffled array of Conscience addresses. */
 #define CSURL(C) gchar **C = NULL; do { \
 	C = proxy_get_cs_urlv(); \
 	STRINGV_STACKIFY(C); \

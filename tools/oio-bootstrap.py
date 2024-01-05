@@ -3,7 +3,7 @@
 # oio-bootstrap.py
 # Copyright (C) 2015 Conrad Kleinespel
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -858,6 +858,7 @@ param_namespace=${NS}
 # Multi-conscience
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
+param_hub.threads=${CS_HUB_THREADS}
 
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
@@ -2255,6 +2256,7 @@ def generate(options):
     # conscience
     nb_conscience = getint(options["conscience"].get(SVC_NB), defaults["NB_CS"])
     if nb_conscience:
+        hub_threads = getint(options["conscience"].get("hub_threads"), 0)
         cs = list()
         # This is to trigger "content.perfectible" events during tests
         ENV["WARN_DIST"] = 1 if len(hosts) > 1 else 0
@@ -2279,6 +2281,7 @@ def generate(options):
                 "CS_ALL_HUB": ",".join(
                     ["tcp://" + str(host) + ":" + str(hub) for _, host, _, hub in cs]
                 ),
+                "CS_HUB_THREADS": str(hub_threads),
             }
         )
         # generate the conscience files
