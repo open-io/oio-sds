@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 # -*- coding: utf-8 -*-
 import time
+from oio.common.easy_value import true_value
 from oio.conscience.stats.http import HttpStat
 
 
@@ -34,6 +35,7 @@ class RawxStat(HttpStat):
         self._cur_time = time.time()
         self._prev_http_stats = dict()
         self._prev_time = time.time()
+        self.extra_metrics = true_value(self.stat_conf.get("extra_metrics", "false"))
 
     def _compute_ratepersec(self, stat_key, delta_t):
         hkey = " ".join(stat_key[:2])
@@ -64,7 +66,7 @@ class RawxStat(HttpStat):
             if http_key in self._cur_http_stats:
                 if stat_key[0] == "config":
                     output[stat_key[2]] = self._cur_http_stats[http_key]
-                elif stat_key[0] == "counter":
+                elif self.extra_metrics and stat_key[0] == "counter":
                     if stat_key[1].startswith("req.hits"):
                         output[stat_key[2]] = self._compute_ratepersec(stat_key, delta)
                     if stat_key[1].startswith("req.time"):
