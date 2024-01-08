@@ -1,0 +1,151 @@
+#!/usr/bin/env python
+# Copyright (C) 2024 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import os
+
+from functools import partial
+
+from oio.common.json import json as jsonlib
+from oio.common.kafka import KafkaSendException, KafkaSender as Sender
+from oio.common.logger import get_logger
+
+from oio.event.beanstalk import BeanstalkdListener
+from oio.event.evob import Event, EventTypes
+
+
+class KafkaSender(Sender):
+    def publish(self, jobid, data, topic_dst, attempts=3, file=None):
+        last_err = None
+
+        def get_dest_topic(data):
+            """Get the right topic destination to send message to"""
+            event = Event(jsonlib.loads(data))
+            topic = topic_dst
+            if event.event_type in [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]:
+                topic = "oio-chunks-" + event.data.get("volume_id").split(":")[0]
+            return topic
+
+        for _ in range(attempts):
+            try:
+                topic = get_dest_topic(data)
+                self.send(topic, data)
+                break
+            except KafkaSendException as err:
+                last_err = err
+                if file:
+                    self._logger.warning(
+                        "Failed to publish message from file=%s: %s",
+                        file,
+                        err
+                    )
+                else:
+                    self._logger.warning("Failed to publish (jobid=%s): %s", jobid, err)
+        else:
+            raise last_err
+        # Please do not ask
+        return [1]
+
+
+def make_arg_parser():
+    descr = """
+    Read messages from Beanstalkd, forward them to the right topic in Kafka.
+    """
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument(
+        "--src-tube",
+        default="oio",
+        help="Name of the Beanstalkd tube to read messages from (default is 'oio')",
+    )
+    parser.add_argument(
+        "--src-endpoint",
+        default="beanstalk://127.0.0.1:6005",
+        help="Endpoint of the Beanstalkd server",
+    )
+    parser.add_argument(
+        "--src-folder",
+        default=None,
+        help="Folder path where is stored files listing beanstald messages"
+    )
+    parser.add_argument(
+        "--dst-endpoint",
+        default="kafka://127.0.0.1:19092",
+        help=("Endpoint of the Kafka server"),
+    )
+    parser.add_argument(
+        "--dst-topic",
+        default="oio",
+        help="Name of the kafka topic to send messages to (default is 'oio')",
+    )
+    parser.add_argument(
+        "--namespace",
+        "--ns",
+        default=os.environ.get("OIO_NS", "OPENIO"),
+        help="Namespace name",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
+    return parser
+
+
+def send_msg_from_bsl(logger, kaf, args):
+    """Fetch messages from beanstalkd queue and send them to kafka server"""
+
+    bsl = BeanstalkdListener(args.src_endpoint, args.src_tube, logger=logger)
+    send = partial(kaf.publish, topic_dst=args.dst_topic)
+    logger.info(
+        f"Starting to copy messages from {args.src_endpoint} tube={args.src_tube} "
+        f"to topic {args.dst_topic} at {args.dst_endpoint}"
+    )
+    jobs = 0
+    try:
+        for _job in bsl.fetch_jobs(send):
+            jobs += 1
+    except KeyboardInterrupt:
+        logger.info("%d messages copied", jobs)
+
+
+def send_msg_from_files(args, logger, kaf):
+    """Read beanstalkd messages stored in files and send them to kafka server"""
+    logger.info(
+        f"Starting to copy messages from files stored in folder {args.src_folder}"
+        f"to topic {args.dst_topic} at {args.dst_endpoint}"
+    )
+    for file in os.listdir(args.src_folder):
+        with open(file, "r") as f:
+            datas = f.readlines()
+            for data in datas:
+                kaf.publish(
+                    jobid=None, topic_dst=args.dst_topic, data=data, file=file)
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    logger = get_logger(None, verbose=args.verbose)
+    conf = {}
+    conf["namespace"] = args.namespace
+    kaf = KafkaSender(endpoint=args.dst_endpoint, logger=logger, app_conf=conf)
+    if args.src_folder:
+        if not os.path.isdir(args.src_folder):
+            logger.warning(f"Specified folder {args.src_folder} does not exist")
+            return
+        send_msg_from_files(args, logger, kaf)
+        return
+    send_msg_from_bsl(logger, kaf, args)
+
+
+if __name__ == "__main__":
+    main()
