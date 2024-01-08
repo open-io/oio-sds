@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -104,7 +104,15 @@ class ConscienceClient(ProxyClient):
         self._lb_kwargs.pop("pool_manager", None)
         self._lb = None
         self._service_id_max_age = service_id_max_age
-        self._service_ids = dict()
+        self._service_ids = {}
+
+    def _request(self, method, url, **kwargs):
+        params = kwargs.setdefault("params", {})
+        # Forward the request to this particular Conscience, do not use cache
+        cs_addr = kwargs.get("cs")
+        if cs_addr:
+            params["cs"] = cs_addr
+        return super()._request(method, url, **kwargs)
 
     @property
     def lb(self):
@@ -255,7 +263,7 @@ class ConscienceClient(ProxyClient):
             return body
         else:
             raise OioException(
-                "failed to resolve servie id %s: %s" % (service_id, resp.text)
+                "failed to resolve service id %s: %s" % (service_id, resp.text)
             )
 
     def resolve_service_id(self, service_type, service_id, check_format=True, **kwargs):
