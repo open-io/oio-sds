@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -390,6 +390,24 @@ class AdminClient(ProxyClient):
         :rtype: `dict`
         """
         return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
+
+    def service_get_stats(self, svc_id, **kwargs):
+        """
+        Get request statistics from the specified service.
+        Works on all services using ASN.1 protocol.
+
+        :returns: a dictionary with all information keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        res = self._forward_service_action(svc_id, "/stats", method="GET", **kwargs)
+        return {
+            counter[1]: int(counter[2])
+            for counter in (
+                line.split(" ") for line in res.decode("utf-8").splitlines()
+            )
+            if counter[0] == "counter"
+        }
 
     def service_balance_elections(
         self, svc_id, max_ops=0, inactivity=0, rejoin=True, **kwargs

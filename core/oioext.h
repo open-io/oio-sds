@@ -171,7 +171,8 @@ gboolean oio_ext_is_allowed_to_do_long_timeout(void);
 
 void oio_ext_allow_long_timeout(const gboolean allow_long_timeout);
 
-gint64 oio_ext_real_time (void);
+/** Get the wall-clock time in microseconds. */
+gint64 oio_ext_real_time(void);
 
 gint64 oio_ext_monotonic_time (void);
 

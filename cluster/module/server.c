@@ -86,6 +86,15 @@ static time_t persistence_period = 30;
 static const guint8 header[] = { 0x30, 0x80 };
 static const guint8 footer[] = { 0x00, 0x00 };
 
+static GQuark gq_count_hub_flush = 0;
+static GQuark gq_time_hub_flush = 0;
+static GQuark gq_count_hub_remove = 0;
+static GQuark gq_lag_hub_remove = 0;
+static GQuark gq_time_hub_remove = 0;
+static GQuark gq_count_hub_update = 0;
+static GQuark gq_lag_hub_update = 0;
+static GQuark gq_time_hub_update = 0;
+
 /* ------------------------------------------------------------------------- */
 
 # ifndef LIMIT_LENGTH_SRVDESCR
@@ -983,31 +992,44 @@ push_service_dated(struct service_info_dated_s *sid)
 	if (!srvtype) {
 		GRID_ERROR("Service type [%s/%s] not found",
 				oio_server_namespace, sid->si->type);
-	} else {
-		/* TODO(FVE): measure time to obtain the lock, send alert. */
-		g_rw_lock_writer_lock(&srvtype->rw_lock);
-		struct conscience_srv_s *srv = \
-				conscience_srvtype_refresh_dated(srvtype, sid);
-		if (srv) {
-			/* shortcut for services tagged DOWN */
-			gboolean bval = FALSE;
-			struct service_tag_s *tag = service_info_get_tag(
-					sid->si->tags, NAME_TAGNAME_UP);
-			if (tag && service_tag_get_value_boolean(tag, &bval, NULL) \
-					&& !bval) {
-				if (!srv->put_locked)
-					srv->put_score.value = 0;
-				if (!srv->get_locked)
-					srv->get_score.value = 0;
-				/* TODO(FVE): send alert outside of the lock. */
-				if (!srv->put_locked || !srv->get_locked)
-					_alert_service_with_zeroed_score(srv);
-			}
-			/* Prepare the serialized form of the service */
-			_conscience_srv_prepare_cache (srv);
-		}
-		g_rw_lock_writer_unlock(&srvtype->rw_lock);
+		return;
 	}
+
+	time_t now = oio_ext_real_time();
+	gint64 repli_lag = now - sid->tags_mtime;
+
+	/* TODO(FVE): measure time to obtain the lock, send alert. */
+	gint64 start = oio_ext_monotonic_time();
+	g_rw_lock_writer_lock(&srvtype->rw_lock);
+	struct conscience_srv_s *srv = \
+			conscience_srvtype_refresh_dated(srvtype, sid);
+	if (srv) {
+		/* shortcut for services tagged DOWN */
+		gboolean bval = FALSE;
+		struct service_tag_s *tag = service_info_get_tag(
+				sid->si->tags, NAME_TAGNAME_UP);
+		if (tag && service_tag_get_value_boolean(tag, &bval, NULL) \
+				&& !bval) {
+			if (!srv->put_locked)
+				srv->put_score.value = 0;
+			if (!srv->get_locked)
+				srv->get_score.value = 0;
+			/* TODO(FVE): send alert outside of the lock. */
+			if (!srv->put_locked || !srv->get_locked)
+				_alert_service_with_zeroed_score(srv);
+		}
+		/* Prepare the serialized form of the service */
+		_conscience_srv_prepare_cache (srv);
+	}
+	g_rw_lock_writer_unlock(&srvtype->rw_lock);
+	gint64 duration = oio_ext_monotonic_time() - start;
+
+	oio_stats_add(
+		gq_count_hub_update, 1,
+		gq_lag_hub_update, repli_lag,
+		gq_time_hub_update, duration,
+		0, 0
+	);
 }
 
 static void
@@ -1024,13 +1046,26 @@ rm_service_dated(struct service_info_dated_s *sid)
 			sid->si->type, FALSE);
 	if (!srvtype) {
 		GRID_ERROR("Service type not found [%s]", str_desc);
-	} else {
-		g_rw_lock_writer_lock(&srvtype->rw_lock);
-		conscience_srvtype_remove_srv(srvtype, &sid->si->addr,
-				sid->lock_mtime);
-		g_rw_lock_writer_unlock(&srvtype->rw_lock);
-		GRID_INFO("Service removed [%s]", str_desc);
+		return;
 	}
+
+	time_t now = oio_ext_real_time();
+	gint64 repli_lag = now - sid->tags_mtime;
+
+	gint64 start = oio_ext_monotonic_time();
+	g_rw_lock_writer_lock(&srvtype->rw_lock);
+	conscience_srvtype_remove_srv(srvtype, &sid->si->addr,
+			sid->lock_mtime);
+	g_rw_lock_writer_unlock(&srvtype->rw_lock);
+	gint64 duration = oio_ext_monotonic_time() - start;
+
+	oio_stats_add(
+		gq_count_hub_remove, 1,
+		gq_lag_hub_remove, repli_lag,
+		gq_time_hub_remove, duration,
+		0, 0
+	);
+	GRID_INFO("Service removed [%s]", str_desc);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1153,13 +1188,21 @@ _on_flush (const guint8 *b, gsize l)
 	if (!srvtype) {
 		GRID_ERROR("[NS=%s][SRVTYPE=%s] not found", oio_server_namespace, tmp);
 	} else {
+		gint64 start = oio_ext_monotonic_time();
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
 		conscience_srvtype_flush(srvtype);
 		g_rw_lock_writer_unlock(&srvtype->rw_lock);
-	}
+		gint64 duration = oio_ext_monotonic_time() - start;
 
-	GRID_NOTICE("[NS=%s][SRVTYPE=%s] flush done!",
-			oio_server_namespace, srvtype->type_name);
+		oio_stats_add(
+			gq_count_hub_flush, 1,
+			gq_time_hub_flush, duration,
+			0, 0,
+			0, 0
+		);
+		GRID_NOTICE("[NS=%s][SRVTYPE=%s] flush done!",
+				oio_server_namespace, srvtype->type_name);
+	}
 	g_free (tmp);
 }
 
@@ -2232,6 +2275,15 @@ _cs_configure(int argc, char **argv)
 		GRID_ERROR("Missing mandatory parameter");
 		return FALSE;
 	}
+
+	gq_count_hub_flush = g_quark_from_static_string("counter req.hits.hub_flush");
+	gq_time_hub_flush = g_quark_from_static_string("counter req.time.hub_flush");
+	gq_count_hub_remove = g_quark_from_static_string("counter req.hits.hub_remove");
+	gq_lag_hub_remove = g_quark_from_static_string("counter req.lag.hub_remove");
+	gq_time_hub_remove = g_quark_from_static_string("counter req.time.hub_remove");
+	gq_count_hub_update = g_quark_from_static_string("counter req.hits.hub_update");
+	gq_lag_hub_update = g_quark_from_static_string("counter req.lag.hub_update");
+	gq_time_hub_update = g_quark_from_static_string("counter req.time.hub_update");
 
 	GError *err;
 	if ((err = _cs_configure_with_file(argv[0])))

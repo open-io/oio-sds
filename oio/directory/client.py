@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-import warnings
 
 from oio.common import exceptions
 from oio.common.client import ProxyClient
@@ -79,18 +77,6 @@ class DirectoryClient(ProxyClient):
         )
         _resp, body = self._request("GET", "/show", params=params, **kwargs)
         return body
-
-    def show(self, *args, **kwargs):
-        """
-        :deprecated: use `list`
-        """
-        warnings.simplefilter("once")
-        warnings.warn(
-            "DirectoryClient.show() is deprecated, use .list()",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.list(*args, **kwargs)
 
     def delete(self, account=None, reference=None, cid=None, **kwargs):
         """

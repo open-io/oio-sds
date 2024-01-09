@@ -955,6 +955,9 @@ network_server_stats_to_prometheus(GArray *stats, GByteArray *body)
 				} else if (strcmp(tags[1], "time") == 0) {
 					g_string_append_static(key_suffix,
 							"requests_duration_second_");
+				} else if (strcmp(tags[1], "lag") == 0) {
+					g_string_append_static(key_suffix,
+							"requests_lag_second_");
 				} else {
 					goto error;
 				}
