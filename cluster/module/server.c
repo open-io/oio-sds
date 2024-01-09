@@ -70,7 +70,6 @@ static gint hub_threads = 0;
 static gint hub_group_size = 0;
 static gchar *path_stgpol = NULL;
 static gchar *path_srvcfg = NULL;
-static gchar *nsname = NULL;
 
 static GRWLock rwlock_srv = {};
 static GTree *srvtypes = NULL;
@@ -275,7 +274,7 @@ conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 	memcpy(&dst->put_score, &src->put_score, sizeof(score_t));
 	memcpy(&dst->get_score, &src->get_score, sizeof(score_t));
 	g_strlcpy(dst->type, src->srvtype->type_name, sizeof(dst->type));
-	g_strlcpy(dst->ns_name, nsname, sizeof(dst->ns_name));
+	g_strlcpy(dst->ns_name, oio_server_namespace, sizeof(dst->ns_name));
 }
 
 static void
@@ -849,7 +848,7 @@ _alert_service_with_zeroed_score(struct conscience_srv_s *srv)
 	time_t now = oio_ext_monotonic_seconds ();
 	if (srv->time_last_alert < now - srv->srvtype->alert_frequency_limit) {
 		GRID_WARN("[NS=%s][%s][SCORE=0] service=%.*s",
-				nsname, srv->srvtype->type_name,
+				oio_server_namespace, srv->srvtype->type_name,
 				(int)sizeof(srv->description), srv->description);
 		srv->time_last_alert = now;
 	}
@@ -982,7 +981,8 @@ push_service_dated(struct service_info_dated_s *sid)
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(
 			sid->si->type, FALSE);
 	if (!srvtype) {
-		GRID_ERROR("Service type [%s/%s] not found", nsname, sid->si->type);
+		GRID_ERROR("Service type [%s/%s] not found",
+				oio_server_namespace, sid->si->type);
 	} else {
 		/* TODO(FVE): measure time to obtain the lock, send alert. */
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
@@ -1016,7 +1016,7 @@ rm_service_dated(struct service_info_dated_s *sid)
 	gchar str_desc[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE \
 			+ STRLEN_ADDRINFO];
 	int str_desc_len = g_snprintf(str_desc, sizeof(str_desc),
-			"%s/%s/", nsname, sid->si->type);
+			"%s/%s/", oio_server_namespace, sid->si->type);
 	grid_addrinfo_to_string(&(sid->si->addr), str_desc + str_desc_len,
 			sizeof(str_desc) - str_desc_len);
 
@@ -1042,7 +1042,8 @@ push_service(struct service_info_s *si)
 
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(si->type, FALSE);
 	if (!srvtype) {
-		GRID_ERROR("Service type [%s/%s] not found", nsname, si->type);
+		GRID_ERROR("Service type [%s/%s] not found",
+				oio_server_namespace, si->type);
 	} else {
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
 		struct conscience_srv_s *srv = conscience_srvtype_refresh(srvtype, si);
@@ -1076,7 +1077,8 @@ rm_service(struct service_info_s *si)
 
 	gchar str_desc[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO];
 	int str_desc_len = g_snprintf(
-			str_desc, sizeof(str_desc), "%s/%s/", nsname, si->type);
+			str_desc, sizeof(str_desc), "%s/%s/",
+			oio_server_namespace, si->type);
 	grid_addrinfo_to_string(
 			&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
 
@@ -1149,14 +1151,15 @@ _on_flush (const guint8 *b, gsize l)
 	gchar *tmp = g_strndup ((gchar*)b, l);
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(tmp, FALSE);
 	if (!srvtype) {
-		GRID_ERROR("[NS=%s][SRVTYPE=%s] not found", nsname, tmp);
+		GRID_ERROR("[NS=%s][SRVTYPE=%s] not found", oio_server_namespace, tmp);
 	} else {
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
 		conscience_srvtype_flush(srvtype);
 		g_rw_lock_writer_unlock(&srvtype->rw_lock);
 	}
 
-	GRID_NOTICE("[NS=%s][SRVTYPE=%s] flush done!", nsname, srvtype->type_name);
+	GRID_NOTICE("[NS=%s][SRVTYPE=%s] flush done!",
+			oio_server_namespace, srvtype->type_name);
 	g_free (tmp);
 }
 
@@ -1427,7 +1430,7 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 			grid_addrinfo_to_string(&si->addr, srvaddr, sizeof(srvaddr));
 			GRID_DEBUG("Got a service without ns_name: %s %s",
 					si->type, srvaddr);
-		} else if (g_strcmp0(nsname, si->ns_name) != 0) {
+		} else if (g_strcmp0(oio_server_namespace, si->ns_name) != 0) {
 			gchar srvaddr[STRLEN_ADDRINFO];
 			grid_addrinfo_to_string(&si->addr, srvaddr, sizeof(srvaddr));
 			GRID_WARN("Got a service from namespace %s: %s %s, refusing it!",
@@ -1480,7 +1483,7 @@ _cs_dispatch_RM(struct gridd_reply_ctx_s *reply,
 	}
 
 	GRID_NOTICE("[NS=%s] [%d] services to be removed",
-			nsname, g_slist_length(list_srvinfo));
+			oio_server_namespace, g_slist_length(list_srvinfo));
 
 	for (GSList *l = list_srvinfo; l; l = l->next) {
 		struct service_info_dated_s *sid = rm_service(l->data);
@@ -1726,7 +1729,7 @@ restart_srv_from_file(gchar *path)
 				si_data->type, FALSE);
 		if (!srvtype) {
 			GRID_ERROR("Service type [%s/%s] not found",
-					nsname, si_data->type);
+					oio_server_namespace, si_data->type);
 		} else {
 			/* service is not registered if score.value != 0 */
 			si_data->put_score.value = 0;
@@ -1804,7 +1807,7 @@ _reconfigure_on_SIGHUP(void)
 {
 	GRID_NOTICE("SIGHUP! Reconfiguring...");
 	oio_var_reset_all();
-	oio_var_value_with_files(nsname, config_system, config_paths);
+	oio_var_value_with_files(oio_server_namespace, config_system, config_paths);
 	_patch_and_apply_configuration();
 }
 
@@ -1858,7 +1861,7 @@ _cs_configure_with_file(const char *path UNUSED)
 			"Plugin.conscience", "param_storage_conf", NULL);
 	path_srvcfg = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_service_conf", NULL);
-	nsname = g_key_file_get_value(gkf,
+	oio_server_namespace = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_namespace", NULL);
 
 	g_key_file_free(gkf);
@@ -1866,7 +1869,7 @@ _cs_configure_with_file(const char *path UNUSED)
 
 	if (!service_url)
 		return BADREQ("Missing value [%s]", "listen");
-	if (!nsname)
+	if (!oio_server_namespace)
 		return BADREQ("Missing value [%s]", "param_namespace");
 	if (!path_stgpol)
 		return BADREQ("Missing value [%s]", "param_storage_conf");
@@ -2233,8 +2236,10 @@ _cs_configure(int argc, char **argv)
 
 	/* Load the central configuration facility, it will tell us our
 	 * NS is locally known. */
-	if (!oio_var_value_with_files(nsname, config_system, config_paths)) {
-		DUAL_ERROR("NS [%s] unknown in the configuration", nsname);
+	if (!oio_var_value_with_files(oio_server_namespace,
+			config_system, config_paths)) {
+		DUAL_ERROR("NS [%s] unknown in the configuration",
+				oio_server_namespace);
 		return FALSE;
 	}
 	_patch_and_apply_configuration();
@@ -2246,7 +2251,7 @@ _cs_configure(int argc, char **argv)
 	if ((err = _init_services(path_srvcfg)))
 		return _config_error("Services", err);
 
-	g_strlcpy(nsinfo->name, nsname, sizeof(nsinfo->name));
+	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
 	nsinfo_cache = namespace_info_marshall (nsinfo, NULL);
 	transport_gridd_dispatcher_add_requests (dispatcher, descr, NULL);
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
@@ -2327,7 +2332,7 @@ _cs_specific_fini(void)
 	oio_str_clean(&hub_group);
 	oio_str_clean(&path_srvcfg);
 	oio_str_clean(&path_stgpol);
-	oio_str_clean(&nsname);
+	oio_str_clean((gchar **)&oio_server_namespace);
 }
 
 static struct grid_main_option_s *
