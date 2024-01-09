@@ -685,6 +685,11 @@
 				"descr": "Triggers an alert when a thread tries to wait for an overloaded database.",
 				"def": true },
 
+			{ "type": "uint32", "name": "_cache_min_load_on_heavy_load",
+				"key": "sqliterepo.cache.heavyload.min_load",
+				"descr": "Minimum number of requests per second opening the database to consider the database overloaded.",
+				"def": 64, "min": 1, "max": 10000 },
+
 			{ "type": "monotonic", "name": "_cache_timeout_open",
 				"key": "sqliterepo.cache.timeout.open",
 				"descr": "Sets how long a worker thread accepts for a DB to become available.",

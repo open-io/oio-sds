@@ -626,14 +626,16 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 }
 
 /**
- * Check if the database was accessed during the period.
+ * Check if the database was accessed during the period
+ * and it is under minimal load.
  */
 static gboolean
-_base_is_accessible(sqlx_base_t *base, gint64 now, gint64 period)
+_base_is_accessible(sqlx_base_t *base, gint64 now, guint64 period)
 {
+	period = CLAMP(period / G_TIME_SPAN_SECOND, 1, 60);
 	return grid_single_rrd_get_delta(base->open_attempts,
 			now / G_TIME_SPAN_SECOND,
-			MIN(60, MAX(1, period / G_TIME_SPAN_SECOND))) > 0;
+			period) >= (period * _cache_min_load_on_heavy_load);
 }
 
 /**
@@ -644,11 +646,12 @@ _base_is_accessible(sqlx_base_t *base, gint64 now, gint64 period)
 static double
 _load_too_high(sqlx_base_t *base, gint64 now, gint64 remaining_time)
 {
-	gint64 dx = grid_single_rrd_get_delta(base->open_attempts,
+	guint64 dx = grid_single_rrd_get_delta(base->open_attempts,
 			now / G_TIME_SPAN_SECOND, 10);
-	gint64 dt = grid_single_rrd_get_delta(base->open_wait_time,
+	guint64 dt = grid_single_rrd_get_delta(base->open_wait_time,
 			now / G_TIME_SPAN_SECOND, 10);
-	if (dx > 0) {
+	/* Check if the database is under minimal load on the last 10 seconds */
+	if (dx >= (10 * _cache_min_load_on_heavy_load)) {
 		/* Check if the average waiting time does not exceed the remaining time
 		 * for the request */
 		gint64 avg_waiting_time = dt / dx;

@@ -1525,6 +1525,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_CACHE_HEAVYLOAD_FAIL*
 
+### sqliterepo.cache.heavyload.min_load
+
+> Minimum number of requests per second opening the database to consider the database overloaded.
+
+ * default: **64**
+ * type: guint32
+ * cmake directive: *OIO_SQLITEREPO_CACHE_HEAVYLOAD_MIN_LOAD*
+ * range: 1 -> 10000
+
 ### sqliterepo.cache.kbytes_per_db
 
 > Number of kibibytes (kiB) of cache per open DB.
