@@ -1,6 +1,6 @@
 # OpenIO SDS configuration
 
-`oio-sds` allows you to alter a lot of configuration at compile-time as well at runtime. We use a minimal generation tool for a set of variables that can be modified at runtime, and whose default value can be changed at the compile-time. Those variabes are described [here](./Variables.md)
+`oio-sds` allows you to alter a lot of configuration at compile-time as well at runtime. We use a minimal generation tool for a set of variables that can be modified at runtime, and whose default value can be changed at the compile-time. Those variables are described [here](./Variables.md)
 
 Some variables, though, are not configurable yet, and still require a value to be fixed once for all when compiling the code. Please find below the list of the `cmake` directives to control such variables.
 
@@ -34,7 +34,7 @@ Used by `gcc`
 | ----- | ------- | ----------- |
 | PROXYD_PREFIX | "v3.0" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_HEADER_PREFIX | "X-oio-" | Prefix for all the headers sent to the proxy |
-| PROXYD_HEADER_REQID | PROXYD_HEADER_PREFIX "req-id" | Header whose value is printed in access log, destined to agregate several requests belonging to the same session. |
+| PROXYD_HEADER_REQID | PROXYD_HEADER_PREFIX "req-id" | Header whose value is printed in access log, destined to aggregate several requests belonging to the same session. |
 | PROXYD_HEADER_NOEMPTY | PROXYD_HEADER_PREFIX "no-empty-list" | Flag sent to the proxy to turn empty list (results) into 404 not found. |
 
 | Macro | Default | Description |
@@ -88,5 +88,5 @@ Used by `gcc`
 | fsync | boolean | disabled | At the end of an upload, perform a fsync() on the chunk file itself |
 | fsync_dir | boolean | enabled | At the end of an upload, perform a fsync() on the directory holding the chunk |
 | fallocate | boolean | enabled | Preallocate space for the chunk file |
-| checksum | string (enabled,disabled,smart) | enabled | Enable checksuming the body of PUT |
+| checksum | string (enabled,disabled,smart) | enabled | Enable checksumming the body of PUT |
 

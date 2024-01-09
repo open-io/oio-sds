@@ -288,37 +288,37 @@
 
 			{ "type": "monotonic", "name": "oio_resolver_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
+				"descr": "In any service resolver instantiated, sets the default TTL on the entries related meta0 (meta1 addresses) and conscience (meta0 address)",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "oio_resolver_m0cs_default_max",
 				"key": "resolver.cache.csm0.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
+				"descr": "In any service resolver instantiated, sets the maximum number of entries related to meta0 (meta1 addresses) and conscience (meta0 address)",
 				"def": "4Mi", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "oio_resolver_srv_default_ttl",
 				"key": "resolver.cache.srv.ttl.default",
-				"descr": "In any service resolver instanciated, sets the default TTL on the meta1 entries (data-bound services)",
+				"descr": "In any service resolver instantiated, sets the default TTL on the meta1 entries (data-bound services)",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "oio_resolver_srv_default_max",
 				"key": "resolver.cache.srv.max.default",
-				"descr": "In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)",
+				"descr": "In any service resolver instantiated, sets the maximum number of meta1 entries (data-bound services)",
 				"def": "4Mi", "min": 0, "max": "max" },
 
 			{ "type": "monotonic", "name": "oio_shard_resolver_root_default_ttl",
 				"key": "resolver.cache.root.ttl.default",
-				"descr": "In any shard resolver instanciated, sets the default TTL on the root entries",
+				"descr": "In any shard resolver instantiated, sets the default TTL on the root entries",
 				"def": 0, "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "oio_shard_resolver_root_default_max",
 				"key": "resolver.cache.root.max.default",
-				"descr": "In any shard resolver instanciated, sets the maximum number of root entries",
+				"descr": "In any shard resolver instantiated, sets the maximum number of root entries",
 				"def": "4ki", "min": 0, "max": "max" },
 
 			{ "type": "uint", "name": "oio_shard_resolver_shards_default_max",
 				"key": "resolver.cache.shards.max.default",
-				"descr": "In any shard resolver instanciated, sets the maximum number of shards entries per root",
+				"descr": "In any shard resolver instantiated, sets the maximum number of shards entries per root",
 				"def": 16, "min": 1, "max": 128 }
 		]
 	},
@@ -345,7 +345,7 @@
 
 			{ "type": "uint", "name": "oio_ns_meta1_digits",
 				"key": "ns.meta1_digits",
-				"descr": "Default number of digits to agregate meta1 databases.",
+				"descr": "Default number of digits to aggregate meta1 databases.",
 				"def": 4, "min": 0, "max": 4,
 				"aliases": ["meta1_digits"]},
 
@@ -890,7 +890,7 @@
 
 			{ "type": "monotonic", "name": "server_queue_max_delay",
 				"key": "server.queue.max_delay",
-				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
+				"descr": "Anti-DDoS counter-measure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, the connection is immediately closed. Keep this value rather high because the connection closing doesn't involve a reply that will help the client to retry with an exponential back-off.",
 				"def": "60s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "server_queue_warn_delay",
@@ -900,7 +900,7 @@
 
 			{ "type": "monotonic", "name": "meta_queue_max_delay",
 				"key": "meta.queue.max_delay",
-				"descr": "Anti-DDoS counter-mesure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailabe' error is replied.",
+				"descr": "Anti-DDoS counter-measure. In the current server, sets the maximum amount of time a queued TCP event may remain in the queue. If an event is polled and the thread sees the event stayed longer than that delay, A '503 Unavailable' error is replied.",
 				"def": "40s", "min": "10ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "cs_enbug_list_delay",
@@ -970,7 +970,7 @@
 		"variables": [
 			{ "type": "int", "name": "oio_proxy_local_prepare",
 				"key": "proxy.srv_local.prepare",
-				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maximum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.",
+				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maximum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional condition wherein you accept the risk.",
 				"def": 0, "min": 0, "max": 2},
 
 			{ "type": "string", "name": "oio_proxy_location",
