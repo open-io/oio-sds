@@ -599,7 +599,7 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('job_running');
         end;
 
-        if status == 'PAUSED' or status == 'FAILED' then
+        if status == 'WAITING' or status == 'PAUSED' or status == 'FAILED' then
     """
         + _lua_release_lock
         + """
