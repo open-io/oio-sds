@@ -66,6 +66,8 @@ static GByteArray *nsinfo_cache = NULL;
 static gchar *service_url = NULL;
 static gchar *hub_me = NULL;
 static gchar *hub_group = NULL;
+static gint hub_publish_stale_delay = 0;
+static gint hub_startup_delay = 0;
 static gint hub_threads = 0;
 static gint hub_group_size = 0;
 static gchar *path_stgpol = NULL;
@@ -580,7 +582,9 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 		service_callback_f *callback, gpointer udata)
 {
 	const struct conscience_srv_s *beacon = &(srvtype->services_ring);
-	for (struct conscience_srv_s *srv = beacon->next; srv && srv != beacon; srv = srv->next) {
+	for (struct conscience_srv_s *srv = beacon->next;
+			srv && srv != beacon;
+			srv = srv->next) {
 		if (!callback(srv, udata))
 			return FALSE;
 	}
@@ -1005,11 +1009,11 @@ push_service_dated(struct service_info_dated_s *sid)
 			conscience_srvtype_refresh_dated(srvtype, sid);
 	if (srv) {
 		/* shortcut for services tagged DOWN */
-		gboolean bval = FALSE;
-		struct service_tag_s *tag = service_info_get_tag(
+		gboolean is_up = FALSE;
+		struct service_tag_s *tag_up = service_info_get_tag(
 				sid->si->tags, NAME_TAGNAME_UP);
-		if (tag && service_tag_get_value_boolean(tag, &bval, NULL) \
-				&& !bval) {
+		if (tag_up && service_tag_get_value_boolean(tag_up, &is_up, NULL) \
+				&& !is_up) {
 			if (!srv->put_locked)
 				srv->put_score.value = 0;
 			if (!srv->get_locked)
@@ -1688,6 +1692,52 @@ _task_check_hub(gpointer p UNUSED)
 	// TODO(FVE): check other hub-related metrics
 }
 
+static gboolean
+_publish_if_locked(struct conscience_srv_s *srv, gpointer u UNUSED)
+{
+	EXTRA_ASSERT(srv != NULL);
+
+	if (!(srv->get_locked || srv->put_locked)) {
+		/* Service is not locked */
+		return TRUE;
+	}
+
+	time_t now = oio_ext_real_time();
+	gint64 delay = MAX(5, hub_publish_stale_delay) * G_TIME_SPAN_SECOND;
+	if (srv->tags_mtime > (now - delay)) {
+		/* Service has been updated recently */
+		return TRUE;
+	}
+
+	/* Service is locked, but has not been updated recently. Maybe the
+	 * conscience-agent is down. Publish the service on the hub, so new
+	 * conscience instances see it exists and is locked. */
+	struct service_info_dated_s *sid = service_info_dated_new2(srv);
+	hub_publish_service(sid);
+	GRID_DEBUG("Published locked service %s, last updated at %"G_GINT64_FORMAT,
+			srv->service_id, srv->tags_mtime / G_TIME_SPAN_SECOND);
+	service_info_dated_free(sid);
+
+	return TRUE;
+}
+
+static void
+_task_publish_stale_services(gpointer p UNUSED)
+{
+	GError *err = NULL;
+	gchar **services_names = conscience_get_srvtype_names();
+	for (gchar **name = services_names; !err && *name; name++){
+		err = conscience_run_srvtypes(*name, _publish_if_locked, NULL);
+		if (err) {
+			GRID_ERROR("Failed to synchronize %s service locks: (%d) %s",
+				*name, err->code, err->message);
+			g_clear_error(&err);
+		}
+	}
+	g_free(services_names);
+}
+
+
 /* Persistence of services status -------------------------------------------*/
 
 static gboolean
@@ -1901,6 +1951,10 @@ _cs_configure_with_file(const char *path UNUSED)
 			"Plugin.conscience", "param_hub.me", NULL);
 	hub_group = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_hub.group", NULL);
+	hub_publish_stale_delay = g_key_file_get_integer(gkf,
+			"Plugin.conscience", "param_hub.publish_stale_delay", NULL);
+	hub_startup_delay = g_key_file_get_integer(gkf,
+			"Plugin.conscience", "param_hub.startup_delay", NULL);
 	hub_threads = g_key_file_get_integer(gkf,
 			"Plugin.conscience", "param_hub.threads", NULL);
 	path_stgpol = g_key_file_get_value(gkf,
@@ -2020,7 +2074,8 @@ module_init_known_service_types(void)
 	for (struct srvtype_init_s *type=types_to_init; type->name ; type++) {
 		struct conscience_srvtype_s *config = conscience_get_srvtype(type->name, TRUE);
 		config->alert_frequency_limit = TIME_DEFAULT_ALERT_LIMIT;
-		gboolean rc = conscience_srvtype_set_type_expression(config, NULL, type->expr, PUT | GET);
+		gboolean rc = conscience_srvtype_set_type_expression(
+				config, NULL, type->expr, PUT | GET);
 		g_assert_true(rc);
 	}
 }
@@ -2299,17 +2354,27 @@ _cs_configure(int argc, char **argv)
 	}
 	_patch_and_apply_configuration();
 
+	/* Start inter-conscience communication */
 	if ((err = _init_hub ()))
 		return _config_error("HUB", err);
+
+	/* Load storage policy information (part of nsinfo) */
 	if ((err = _init_storage_policies(path_stgpol)))
 		return _config_error("Policies", err);
+
+	/* Load service type information (score expressions, timeouts, etc.) */
 	if ((err = _init_services(path_srvcfg)))
 		return _config_error("Services", err);
 
+	/* Prepare nsinfo cache */
 	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
 	nsinfo_cache = namespace_info_marshall (nsinfo, NULL);
+
+	/* Prepare the ASN.1 request server */
 	transport_gridd_dispatcher_add_requests (dispatcher, descr, NULL);
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
+
+	/* Start internal tasks */
 	grid_task_queue_register (gtq_admin, 1, _task_expire, NULL, NULL);
 
 	if (persistence_path) {
@@ -2319,8 +2384,13 @@ _cs_configure(int argc, char **argv)
 				NULL, persistence_path->str);
 	}
 
-	if (hub_running)
+	if (hub_running) {
 		grid_task_queue_register(gtq_admin, 5, _task_check_hub, NULL, NULL);
+		if (hub_publish_stale_delay > 0) {
+			grid_task_queue_register(
+					gtq_admin, 5, _task_publish_stale_services, NULL, NULL);
+		}
+	}
 
 	return TRUE;
 }

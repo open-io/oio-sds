@@ -858,6 +858,14 @@ param_namespace=${NS}
 # Multi-conscience
 param_hub.me=tcp://${IP}:${PORT_HUB}
 param_hub.group=${CS_ALL_HUB}
+# When a service is locked, but has not been updated for a while,
+# publish it on the inter-conscience hub.
+# Minimum 5 seconds, set to 0 to disable the feature.
+param_hub.publish_stale_delay=15
+# Number of seconds to wait before starting serving requests
+param_hub.startup_delay=1
+# Number of threads dealing with inter-conscience messages
+# (set to 0 to disable the thread pool)
 param_hub.threads=${CS_HUB_THREADS}
 
 # Storage policies definitions

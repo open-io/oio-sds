@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -604,8 +604,8 @@ service_info_encode_prometheus(GString *gstr, const struct service_info_s *si)
 			continue;
 		}
 		if (tag->type != STVT_I64 &&
-		    tag->type != STVT_REAL &&
-		    tag->type != STVT_BOOL) {
+				tag->type != STVT_REAL &&
+				tag->type != STVT_BOOL) {
 			continue;
 		}
 		g_string_append_printf(gstr, "conscience_stat{%s,type=\"%s\"} ",
