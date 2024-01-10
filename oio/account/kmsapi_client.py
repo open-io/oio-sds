@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,10 +14,13 @@
 # License along with this library.
 
 import json
+import time
+
 from oio.api.base import HttpApi
 from oio.common import exceptions
 from oio.common.easy_value import boolean_value
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 from oio.common.utils import get_hasher
 
 
@@ -36,6 +39,14 @@ class KmsApiClient(HttpApi):
             cert_file=conf.get("kmsapi_cert_file"),
             key_file=conf.get("kmsapi_key_file"),
             **kwargs,
+        )
+        self.statsd = get_statsd(conf=conf)
+
+    def send_to_statsd(self, label, status, start_time):
+        duration = time.monotonic() - start_time
+        self.statsd.timing(
+            f"openio.account.kmsapi.{label}.{status}.timing",
+            duration * 1000,  # in milliseconds
         )
 
     def checksum(self, data=b""):
@@ -61,12 +72,14 @@ class KmsApiClient(HttpApi):
                 }
             }
         """
+        start_time = time.monotonic()
         resp, body = self._request(
             "POST",
             f"v1/servicekey/{self.key_id}/encrypt",
             json={"plaintext": plaintext, "context": self.checksum(context)},
             **kwargs,
         )
+        self.send_to_statsd("encrypt", resp.status, start_time)
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
         return json.loads(body)
@@ -88,12 +101,14 @@ class KmsApiClient(HttpApi):
             }
         }
         """
+        start_time = time.monotonic()
         resp, body = self._request(
             "POST",
             f"v1/servicekey/{key_id}/decrypt",
             json={"ciphertext": ciphertext, "context": self.checksum(context)},
             **kwargs,
         )
+        self.send_to_statsd("decrypt", resp.status, start_time)
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
         return json.loads(body)
