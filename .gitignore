@@ -40,6 +40,7 @@ build
 *.egg-info
 .tox/
 .eggs/
+.venv/
 
 # Python tools
 .noseids
@@ -47,6 +48,7 @@ build
 # IDE
 .idea
 .vscode/
+.envrc
 tags
 
 # cmake
