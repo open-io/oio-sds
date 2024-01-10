@@ -15,63 +15,91 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
-
 import time
 from eventlet import sleep
 from eventlet.greenpool import GreenPool
-from eventlet.queue import LightQueue
 from oio import ObjectStorageApi
 from oio.common.configuration import load_namespace_conf
 from oio.common.utils import request_id
+from oio.directory.admin import AdminClient
 
 
 API = None
 CS_ADDR = None
 POOL = None
-RESULTS = None
+RESULTS = 0
 
 
 def list_loop(prefix):
+    global RESULTS
     iteration = 0
     reqid = request_id("csbench-" + prefix)
     while True:
-        name = prefix + str(iteration)
         iteration += 1
         try:
             API.conscience.all_services("all", cs=CS_ADDR, reqid=reqid)
-            RESULTS.put(name)
+            RESULTS += 1
             sleep(0)
         except Exception as err:
             print(err)
 
 
-def main(threads, delay=2.0, duration=60.0):
+def main_loop(threads, delay=2.0, duration=60.0):
     counter = 0
-    created = []
     now = start = checkpoint = time.monotonic()
     POOL.starmap(list_loop, [("%d-" % n,) for n in range(threads)])
     while now - start < duration:
-        res = RESULTS.get()
-        counter += 1
-        if now - checkpoint > delay:
+        new_counter = RESULTS
+        elapsed = now - checkpoint
+        if elapsed > delay:
+            diff = new_counter - counter
             print(
-                f"{counter} requests in {now - checkpoint:.3f}s, "
-                f"{counter / (now - checkpoint):.3f} req/s."
+                f"{diff} requests in {now - checkpoint:.3f}s, "
+                f"{diff / (now - checkpoint):.3f} req/s."
             )
-            counter = 0
+            counter = new_counter
             checkpoint = now
-        created.append(res)
+        else:
+            sleep(delay - elapsed)
         now = time.monotonic()
     for coro in POOL.coroutines_running:
         coro.kill()
-    while not RESULTS.empty():
-        created.append(RESULTS.get(block=False))
-    end = time.monotonic()
-    rate = len(created) / (end - start)
-    print(f"End. {len(created)} requests in {end - start:.3f}s, " f"{rate:.3f} req/s.")
     POOL.waitall()
+    end = time.monotonic()
+    rate = RESULTS / (end - start)
+    print(f"End. {RESULTS} requests in {end - start:.3f}s, " f"{rate:.3f} req/s.")
     return rate
+
+
+def main(threads, delay=2.0, duration=60.0):
+    global API, CS_ADDR
+    admin = AdminClient(
+        {"namespace": API.namespace}, pôol_manager=API.container.pool_manager
+    )
+    stats_before = admin.service_get_stats(CS_ADDR)
+    update_duration_before = stats_before.get(
+        "req.time.hub_update", 0
+    ) / stats_before.get("req.hits.hub_update", 1)
+
+    main_loop(threads, delay=delay, duration=duration)
+
+    stats_after = admin.service_get_stats(CS_ADDR)
+    if "req.time.hub_update" in stats_after:
+        update_duration_after = (
+            stats_after.get("req.time.hub_update", 0)
+            - stats_before.get("req.time.hub_update", 0)
+        ) / (
+            stats_after.get("req.hits.hub_update", 1)
+            - stats_before.get("req.hits.hub_update", 0)
+        )
+        print(
+            "Inter-conscience update before: "
+            f"{update_duration_before:.3f}µs per service"
+        )
+        print(
+            "Inter-conscience update during benchmark: "
+            f"{update_duration_after:.3f}µs per service"
+        )
 
 
 if __name__ == "__main__":
@@ -83,6 +111,5 @@ if __name__ == "__main__":
     NS_CONF = load_namespace_conf(NS)
     CS_ADDR = NS_CONF["conscience"].split(",")[0]
     API = ObjectStorageApi(NS)
-    RESULTS = LightQueue(THREADS * 10)
     POOL = GreenPool(THREADS)
     main(THREADS)
