@@ -13,8 +13,7 @@
 "num"    { return UN_STRNUM_TK; }
 "root"	 { return BIN_ROOT_TK; }
 
-[-]?[1-9][0-9]* { yylval.n=atof(yytext) ; return VAL_NUM_TK; }
-[0]             { yylval.n=0 ; return VAL_NUM_TK; }
+[-]?[0-9]*\.?[0-9]+ { yylval.n=atof(yytext) ; return VAL_NUM_TK; }
 
 [<][Nn][>] { return BIN_NUMCMP_TK; }
 [!][=]     { return BIN_NUMEQ_TK; }
