@@ -17,56 +17,113 @@
 
 # pylint: disable=no-member
 
-from tests.utils import (
-    BaseTestCase,
-)
+import time
+
+from oio.xcute.client import XcuteClient
+
+from tests.utils import BaseTestCase
 from tests.functional.cli import CliTestCase
-from oio.common.json import json
 
 
 class TestXcute(CliTestCase, BaseTestCase):
-    def test_limit_marker(self):
-        """
-        Add test to cover pagination of job listing
-        bug occurs when marker job_id is stored in marker
-        """
-        _, _, xcute_addr, _ = self.get_service_url("xcute")
+    def setUp(self):
+        res = super().setUp()
+        self.xcute_client = XcuteClient({"namespace": self.ns})
 
-        types = ["tester", "rawx-decommission", "rdir-decommission"]
-        for i in range(3):
-            params = {"type": types[i]}
-            data = {"params": {"service_id": i}}
-            url = "/".join((xcute_addr, "v1.0", "xcute/job/create"))
-            resp = self.request("POST", url, params=params, data=json.dumps(data))
+        # Clean old jobs
+        try:
+            data = self.xcute_client.job_list()
+            for job in data["jobs"]:
+                for i in range(2):
+                    if i != 0:
+                        # Wait for the job to complete.
+                        time.sleep(5)
+                    try:
+                        self.xcute_client.job_delete(job["job"]["id"])
+                        break
+                    except Exception as exc2:
+                        self.logger.info(
+                            "Failed to delete job %s: %s", job["job"]["id"], exc2
+                        )
+        except Exception as exc:
+            self.logger.info("Failed to delete jobs: %s", exc)
 
-        params = {"type": "tester", "limit": 2}
-        url = "/".join((xcute_addr, "v1.0", "xcute/job/list"))
+        return res
 
-        resp = self.request("GET", url, params=params)
-        self.assertEqual(resp.status, 200)
+    def _create_jobs(self, nb):
+        jobs = []
+        job_types = ["tester", "rawx-decommission", "rdir-decommission"]
+        for i in range(nb):
+            job_type = job_types[i % len(job_types)]
+            job = self.xcute_client.job_create(
+                job_type,
+                job_config={
+                    "params": {
+                        "service_id": str(i),
+                        "end": 0,
+                    }
+                },
+                put_on_hold_if_locked=True,
+            )
+            jobs.append(job)
+        jobs.reverse()  # The most recent jobs are listed first
+        return jobs
 
-    def test_marker(self):
-        _, _, xcute_addr, _ = self.get_service_url("xcute")
+    def test_list_jobs_with_limit(self):
+        jobs = self._create_jobs(6)
 
-        types = ["tester", "rdir-decommission"]
-        for i in range(20):
-            params = {"type": types[i % 2]}
-            data = {"params": {"service_id": i}}
-            url = "/".join((xcute_addr, "v1.0", "xcute/job/create"))
-            resp = self.request("POST", url, params=params, data=json.dumps(data))
-        limit = 5
-        opts = self.get_format_opts("json")
-        resp = self.openio_admin("xcute job list --limit %d %s" % (limit, opts))
+        # The last N jobs
+        for limit in range(1, len(jobs) + 1):
+            data = self.xcute_client.job_list(limit=limit)
+            self.assertListEqual(
+                [job["job"]["id"] for job in jobs[:limit]],
+                [job["job"]["id"] for job in data["jobs"]],
+            )
+            self.assertTrue(data["truncated"])
+            self.assertEqual(jobs[limit - 1]["job"]["id"], data["next_marker"])
 
-        resp_json = json.loads(resp)
-        self.assertEqual(len(resp_json), limit)
+        # All jobs
+        data = self.xcute_client.job_list(limit=len(jobs) + 1)
+        self.assertListEqual(
+            [job["job"]["id"] for job in jobs],
+            [job["job"]["id"] for job in data["jobs"]],
+        )
+        self.assertFalse(data["truncated"])
+        self.assertNotIn("next_marker", data)
 
-        marker = resp_json[-1].get("ID")
-        next_resp = self.openio_admin("xcute job list --marker %s %s" % (marker, opts))
-        next_resp_json = json.loads(next_resp)
+    def test_list_jobs_with_limit_and_type(self):
+        jobs = self._create_jobs(6)
+        tester_jobs = [job for job in jobs if job["job"]["type"] == "tester"]
+        self.assertGreater(len(tester_jobs), 0)
 
-        self.assertNotEqual(len(next_resp_json), 0)
+        # The last N tester jobs
+        for limit in range(1, len(tester_jobs) + 1):
+            data = self.xcute_client.job_list(limit=limit, job_type="tester")
+            self.assertListEqual(
+                [job["job"]["id"] for job in tester_jobs[:limit]],
+                [job["job"]["id"] for job in data["jobs"]],
+            )
+            self.assertTrue(data["truncated"])
+            self.assertEqual(tester_jobs[limit - 1]["job"]["id"], data["next_marker"])
 
-        for el in resp_json:
-            for next_el in next_resp_json:
-                self.assertNotEqual(el.get("ID"), next_el.get("ID"))
+        # All tester jobs
+        data = self.xcute_client.job_list(limit=len(tester_jobs) + 1, job_type="tester")
+        self.assertListEqual(
+            [job["job"]["id"] for job in tester_jobs],
+            [job["job"]["id"] for job in data["jobs"]],
+        )
+        self.assertFalse(data["truncated"])
+        self.assertNotIn("next_marker", data)
+
+    def test_list_jobs_with_marker(self):
+        jobs = self._create_jobs(20)
+
+        for i in range(len(jobs)):
+            marker = jobs[i]["job"]["id"]
+            data = self.xcute_client.job_list(marker=marker)
+            self.assertListEqual(
+                [job["job"]["id"] for job in jobs[i + 1 :]],
+                [job["job"]["id"] for job in data["jobs"]],
+            )
+            self.assertFalse(data["truncated"])
+            self.assertNotIn("next_marker", data)

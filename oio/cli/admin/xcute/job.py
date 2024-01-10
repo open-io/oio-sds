@@ -26,7 +26,7 @@ from oio.common.utils import depaginate
 
 class JobList(XcuteCommand, Lister):
     """
-    List all jobs.
+    List jobs sorted by descending creation date.
     """
 
     columns = ("ID", "Status", "Type", "Lock", "Progress")
@@ -60,7 +60,6 @@ class JobList(XcuteCommand, Lister):
             help="Limit the number of results (1000 by default)",
         )
         parser.add_argument("--marker", metavar="<marker>", help="Marker for paging")
-
         parser.add_argument(
             "--no-paging",
             dest="no_paging",

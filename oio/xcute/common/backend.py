@@ -671,10 +671,10 @@ class XcuteBackend(RedisConnection):
                 range_min = "[" + prefix
                 range_max = "[" + prefix + END_MARKER
             if marker and (not prefix or marker > prefix):
-                range_min = "(" + marker
+                range_max = "(" + marker
 
-            job_ids = self.conn.zrangebylex(
-                self.key_job_ids, range_min, range_max, 0, limit_
+            job_ids = self.conn.zrevrangebylex(
+                self.key_job_ids, range_max, range_min, 0, limit_
             )
 
             pipeline = self.conn.pipeline()
