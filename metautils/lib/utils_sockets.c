@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -287,8 +287,10 @@ sock_set_cloexec(int fd, gboolean enabled)
 {
 	int res = fcntl(fd, F_SETFD, enabled? FD_CLOEXEC : 0);
 
-	GRID_DEBUG("fd=%i set(FD_CLOEXEC,%d): (%d) %s",
-			fd, enabled, errno, strerror(errno));
+	if (res != 0) {
+		GRID_DEBUG("fd=%i set(FD_CLOEXEC,%d): (%d) %s",
+				fd, enabled, errno, strerror(errno));
+	}
 	return res == 0;
 }
 
