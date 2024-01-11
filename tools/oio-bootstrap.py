@@ -829,10 +829,6 @@ flag.KEEPALIVE=false
 flag.QUICKACK=false
 
 [Server.conscience]
-min_workers=2
-min_spare_workers=2
-max_spare_workers=10
-max_workers=10
 listen=${IP}:${PORT}
 plugins=conscience,stats,ping,fallback
 
@@ -841,15 +837,6 @@ namespace=${NS}
 type=conscience
 register=false
 load_ns_info=false
-
-[Plugin.ping]
-path=${LIBDIR}/grid/msg_ping.so
-
-[Plugin.stats]
-path=${LIBDIR}/grid/msg_stats.so
-
-[Plugin.fallback]
-path=${LIBDIR}/grid/msg_fallback.so
 
 [Plugin.conscience]
 path=${LIBDIR}/grid/msg_conscience.so
@@ -1086,12 +1073,6 @@ score_timeout=10
 
 [type:oioproxy]
 score_expr=(1 + (num stat.cpu))
-score_timeout=120
-lock_at_first_register=false
-
-[type:oioswift]
-#score_expr=((num stat.cpu)>5) * (num stat.cpu)
-score_expr=1 + (num stat.cpu)
 score_timeout=120
 lock_at_first_register=false
 
