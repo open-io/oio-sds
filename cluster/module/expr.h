@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -51,6 +52,7 @@ enum expr_type_e
 	BIN_NUMAND_ET, BIN_NUMXOR_ET,
 	BIN_NUMOR_ET,
 	BIN_ROOT_ET,
+	TER_NUMCLAMP_ET,
 	ACC_ET,
 	/*last beacon */
 	NB_ET
@@ -71,6 +73,12 @@ union internal_expr_u
 		struct expr_s *p1;
 		struct expr_s *p2;
 	} bin;
+	struct
+	{
+		struct expr_s *p1;
+		struct expr_s *p2;
+		struct expr_s *p3;
+	} ter;
 };
 
 struct expr_s

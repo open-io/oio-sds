@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -64,6 +65,14 @@ expr_clean(struct expr_s *pE)
 			expr_clean(pE->expr.bin.p1);
 		if (pE->expr.bin.p2)
 			expr_clean(pE->expr.bin.p2);
+		break;
+	case TER_NUMCLAMP_ET:
+		if (pE->expr.ter.p1)
+			expr_clean(pE->expr.ter.p1);
+		if (pE->expr.ter.p2)
+			expr_clean(pE->expr.ter.p2);
+		if (pE->expr.ter.p3)
+			expr_clean(pE->expr.ter.p3);
 		break;
 	case ACC_ET:
 		if (pE->expr.acc.base)

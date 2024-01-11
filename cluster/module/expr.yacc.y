@@ -8,6 +8,8 @@ static struct expr_s* makeStr (char *s);
 static struct expr_s* makeUnary (enum expr_type_e e, struct expr_s *pE);
 static struct expr_s* makeAccessor (char *pBase, char *pF);
 static struct expr_s* makeBinary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2);
+static struct expr_s* makeTernary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2,
+		struct expr_s *p3);
 
 static int yyerror(char *m);
 extern void* yy_scan_string(const char *yy_str );
@@ -24,12 +26,13 @@ static struct expr_s *pParsed = NULL;
 	char* s;
 	struct expr_s* e;
 }
+%token TER_NUMCLAMP_TK
 %token BIN_STRCMP_TK BIN_NUMCMP_TK BIN_NUMEQ_TK BIN_NUMNEQ_TK
 %token BIN_NUMLT_TK BIN_NUMLE_TK BIN_NUMGT_TK BIN_NUMGE_TK
 %token BIN_NUMADD_TK BIN_NUMSUB_TK BIN_NUMMUL_TK BIN_NUMDIV_TK BIN_NUMMOD_TK
 %token BIN_NUMAND_TK BIN_NUMXOR_TK BIN_NUMOR_TK BIN_ROOT_TK
 %token UN_NUMSUP_TK UN_NUMINF_TK UN_NUMNOT_TK
-%token UN_STRNUM_TK UN_STRLEN_TK 
+%token UN_STRNUM_TK UN_STRLEN_TK
 %token PAROP_TK PARCL_TK DOT_TK COMA_TK
 %token <s> ID_TK
 %token <s> VAL_STR_TK
@@ -75,6 +78,8 @@ expr:
 	| expr BIN_NUMDIV_TK expr { $$ = makeBinary (BIN_NUMDIV_ET,$1,$3); }
 	| expr BIN_NUMMOD_TK expr { $$ = makeBinary (BIN_NUMMOD_ET,$1,$3); }
 
+	| TER_NUMCLAMP_TK PAROP_TK expr COMA_TK expr COMA_TK expr PARCL_TK { $$ = makeTernary (TER_NUMCLAMP_ET,$3,$5,$7); }
+
 	;
 %%
 
@@ -117,6 +122,18 @@ static struct expr_s* makeBinary (enum expr_type_e e, struct expr_s *p1, struct 
 	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.bin.p1 = p1;
 	pRet->expr.bin.p2 = p2;
+	pRet->type = e;
+	return pRet;
+}
+
+static struct expr_s* makeTernary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2,
+		struct expr_s *p3) {
+	if (!p1 || !p2 || !p3)
+		return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
+	pRet->expr.ter.p1 = p1;
+	pRet->expr.ter.p2 = p2;
+	pRet->expr.ter.p3 = p3;
 	pRet->type = e;
 	return pRet;
 }

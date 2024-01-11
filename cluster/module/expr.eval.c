@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,12 @@ License along with this library.
 #define EVAL_BINNUM(d1,d2,pE) do {\
 	ret = __main_eval(pE->expr.bin.p1, &d1); if (ret!=EXPR_EVAL_DEF) return ret;\
 	ret = __main_eval(pE->expr.bin.p2, &d2); if (ret!=EXPR_EVAL_DEF) return ret;\
+} while (0)
+
+#define EVAL_TERNUM(d1,d2,d3,pE) do {\
+	ret = __main_eval(pE->expr.ter.p1, &d1); if (ret!=EXPR_EVAL_DEF) return ret;\
+	ret = __main_eval(pE->expr.ter.p2, &d2); if (ret!=EXPR_EVAL_DEF) return ret;\
+	ret = __main_eval(pE->expr.ter.p3, &d3); if (ret!=EXPR_EVAL_DEF) return ret;\
 } while (0)
 
 #define FPBOOL(D) ((D>0.0)||(D<0.0))
@@ -80,6 +86,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 		case BIN_NUMXOR_ET:
 		case BIN_NUMOR_ET:
 		case BIN_ROOT_ET:
+		case TER_NUMCLAMP_ET:
 		case NB_ET:
 			return EXPR_EVAL_UNDEF;
 		case ACC_ET:{
@@ -394,6 +401,18 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				GRID_TRACE("root with args [%f]/[%f] return result [%f]", d1, d2, *pD);
 				return EXPR_EVAL_DEF;
 			}
+
+		case TER_NUMCLAMP_ET:{
+				double d1 = 0, d2 = 0, d3 = 0;
+
+				EVAL_TERNUM(d1, d2, d3, pE);
+				GRID_TRACE("clamp with args [%f]/[%f]/[%f]", d1, d2, d3);
+				*pD = CLAMP(d1, d2, d3);
+				GRID_TRACE("clamp with args [%f]/[%f]/[%f] return result [%f]",
+						d1, d2, d3, *pD);
+				return EXPR_EVAL_DEF;
+			}
+
 		case NB_ET:
 			break;
 		}
