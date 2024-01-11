@@ -8,6 +8,7 @@ fdb: true
 directory_replicas: 3
 container_replicas: 3
 conscience:
+  cache_service_lists: true
   count: 3
   hub_threads: 1
 rawx:

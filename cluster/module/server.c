@@ -97,6 +97,11 @@ static GQuark gq_count_hub_update = 0;
 static GQuark gq_lag_hub_update = 0;
 static GQuark gq_time_hub_update = 0;
 
+/** Hold a serialized version of the list of services of each type
+ * (with tags, without statistics) */
+static gboolean cache_service_lists = FALSE;
+static GHashTable *srv_cache = NULL;
+
 /* ------------------------------------------------------------------------- */
 
 # ifndef LIMIT_LENGTH_SRVDESCR
@@ -1382,7 +1387,9 @@ _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	 gpointer g UNUSED, gpointer h UNUSED)
 {
 	GError *err = NULL;
-	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {};
+	gboolean cache_hit = TRUE;
+	GByteArray *serialized = NULL;
+	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {0};
 
 	if (!metautils_message_extract_string_noerror(
 				reply->request, NAME_MSGKEY_TYPENAME, strtype, sizeof(strtype))) {
@@ -1395,25 +1402,48 @@ _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	const gboolean full = metautils_message_extract_flag(
 			reply->request, NAME_MSGKEY_FULL, FALSE);
 
+	/* Take a reference to the cache, so it's not freed while we use it */
+	GHashTable *srv_cache_ref = g_hash_table_ref(srv_cache);
 	GByteArray *gba = g_byte_array_sized_new(8192);
 	g_byte_array_append(gba, header, 2);
 
 	if (strcmp(strtype, "all") == 0) {
 		gchar **services_names = conscience_get_srvtype_names();
-		for (gchar **name = services_names; !err && *name; name++){
-			err = conscience_run_srvtypes(*name,
-					full ? _prepare_full : _prepare_cached, gba);
+		for (gchar **name = services_names; !err && *name; name++) {
+			if (!full &&
+					(serialized = g_hash_table_lookup(srv_cache_ref, *name))) {
+				g_byte_array_append(gba, serialized->data, serialized->len);
+			} else {
+				err = conscience_run_srvtypes(*name,
+						full ? _prepare_full : _prepare_cached, gba);
+				cache_hit = FALSE;
+			}
 		}
 		g_free(services_names);
 	} else {
-		err = conscience_run_srvtypes(strtype,
-				full ? _prepare_full : _prepare_cached, gba);
+		if (!full &&
+				(serialized = g_hash_table_lookup(srv_cache_ref, strtype))) {
+			g_byte_array_append(gba, serialized->data, serialized->len);
+		} else {
+			err = conscience_run_srvtypes(strtype,
+					full ? _prepare_full : _prepare_cached, gba);
+			cache_hit = FALSE;
+		}
 	}
+
+	/* Release the reference to the cache.
+	 * It may be freed here, if it has been regenerated in the meantime. */
+	g_hash_table_unref(srv_cache_ref);
 
 	if (err) {
 		g_byte_array_free(gba, TRUE);
 		reply->send_error(0, err);
 	} else {
+		reply->subject("cache:%s\tsrv_type:%s%s",
+				cache_hit? "HIT" : "MISS",
+				strtype,
+				full? "\top_type:full" : ""
+		);
 		g_byte_array_append(gba, footer, 2);
 		reply->add_body(gba);
 		reply->send_reply(200, "OK");
@@ -1737,6 +1767,41 @@ _task_publish_stale_services(gpointer p UNUSED)
 	g_free(services_names);
 }
 
+static void
+_task_prepare_serialized_cache(gpointer p UNUSED)
+{
+	gint64 start = oio_ext_monotonic_time();
+	GError *err = NULL;
+	GHashTable *new_srv_cache = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+
+	gchar **services_names = conscience_get_srvtype_names();
+	for (gchar **name = services_names; !err && *name; name++) {
+		GByteArray *serialized = g_byte_array_sized_new(8192);
+		err = conscience_run_srvtypes(*name, _prepare_cached, serialized);
+		g_hash_table_insert(new_srv_cache, g_strdup(*name), serialized);
+		if (err)
+			break;
+	}
+	g_free(services_names);
+	if (err) {
+		GRID_WARN("Failed to prepare serialized service cache: %s",
+				err->message);
+		g_clear_error(&err);
+		g_hash_table_unref(new_srv_cache);
+	} else {
+		/* Keep a pointer to the old cache. */
+		GHashTable *old_srv_cache = srv_cache;
+		/* Atomically replace the pointer to the new cache. */
+		srv_cache = new_srv_cache;
+		/* Then decrease the reference count of the old cache.
+		 * The last thread using it will free it. */
+		g_hash_table_unref(old_srv_cache);
+		gint64 duration = oio_ext_monotonic_time() - start;
+		GRID_DEBUG("Prepared serialized service cache in %"G_GINT64_FORMAT"µs",
+				duration);
+	}
+}
 
 /* Persistence of services status -------------------------------------------*/
 
@@ -1947,6 +2012,12 @@ _cs_configure_with_file(const char *path UNUSED)
 
 	service_url = g_key_file_get_value(gkf,
 			"Server.conscience", "listen", NULL);
+	/* g_key_file_get_boolean() is case-sensitive */
+	cache_service_lists = oio_str_parse_bool(
+			g_key_file_get_value(gkf,
+				"Plugin.conscience", "cache_service_lists", NULL),
+			FALSE
+	);
 	hub_me = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_hub.me", NULL);
 	hub_group = g_key_file_get_value(gkf,
@@ -2370,12 +2441,20 @@ _cs_configure(int argc, char **argv)
 	/* Prepare nsinfo cache */
 	nsinfo_cache = namespace_info_marshall (nsinfo, NULL);
 
+	/* Prepare serialized service lists cache */
+	srv_cache = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+
 	/* Prepare the ASN.1 request server */
 	transport_gridd_dispatcher_add_requests (dispatcher, descr, NULL);
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
 
 	/* Start internal tasks */
-	grid_task_queue_register (gtq_admin, 1, _task_expire, NULL, NULL);
+	grid_task_queue_register(gtq_admin, 1, _task_expire, NULL, NULL);
+	if (cache_service_lists) {
+		grid_task_queue_register(
+				gtq_admin, 1, _task_prepare_serialized_cache, NULL, NULL);
+	}
 
 	if (persistence_path) {
 		restart_srv_from_file(persistence_path->str);
@@ -2451,6 +2530,7 @@ _cs_specific_fini(void)
 	}
 
 	metautils_gba_unref (nsinfo_cache);
+	g_hash_table_unref(srv_cache);
 	namespace_info_free (nsinfo);
 
 	g_rw_lock_clear(&rwlock_srv);

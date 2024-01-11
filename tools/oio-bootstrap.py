@@ -855,6 +855,8 @@ param_hub.startup_delay=1
 # (set to 0 to disable the thread pool)
 param_hub.threads=${CS_HUB_THREADS}
 
+cache_service_lists=${CS_CACHE_SERVICES}
+
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
@@ -2245,6 +2247,7 @@ def generate(options):
     # conscience
     nb_conscience = getint(options["conscience"].get(SVC_NB), defaults["NB_CS"])
     if nb_conscience:
+        cache_service_lists = bool(options["conscience"].get("cache_service_lists"))
         hub_threads = getint(options["conscience"].get("hub_threads"), 0)
         cs = list()
         # This is to trigger "content.perfectible" events during tests
@@ -2271,6 +2274,7 @@ def generate(options):
                     ["tcp://" + str(host) + ":" + str(hub) for _, host, _, hub in cs]
                 ),
                 "CS_HUB_THREADS": str(hub_threads),
+                "CS_CACHE_SERVICES": str(cache_service_lists),
             }
         )
         # generate the conscience files
