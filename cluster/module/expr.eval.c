@@ -85,6 +85,7 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 		case BIN_NUMAND_ET:
 		case BIN_NUMXOR_ET:
 		case BIN_NUMOR_ET:
+		case BIN_POW_ET:
 		case BIN_ROOT_ET:
 		case TER_NUMCLAMP_ET:
 		case NB_ET:
@@ -381,6 +382,24 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 
 				EVAL_BINNUM(d1, d2, pE);
 				*pD = d1 + d2;
+				return EXPR_EVAL_DEF;
+			}
+
+		case BIN_POW_ET:{
+				double d1 = 0, d2 = 0;
+
+				EVAL_BINNUM(d1, d2, pE);
+				GRID_TRACE("pow with args [%f]/[%f]", d1, d2);
+				FPcmp(ret, d1, 0);
+				if (ret == 0)
+					return EXPR_EVAL_UNDEF;
+				FPcmp(ret, d2, 0);
+				if (ret == 0) {
+					*pD = 0.0;
+					return EXPR_EVAL_DEF;
+				}
+				*pD = pow(d2, d1);
+				GRID_TRACE("pow with args [%f]/[%f] return result [%f]", d1, d2, *pD);
 				return EXPR_EVAL_DEF;
 			}
 

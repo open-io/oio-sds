@@ -12,6 +12,7 @@
 
 "clamp" { return TER_NUMCLAMP_TK; }
 "num"   { return UN_STRNUM_TK; }
+"pow"   { return BIN_POW_TK; }
 "root"  { return BIN_ROOT_TK; }
 
 [-]?[0-9]*\.?[0-9]+ { yylval.n=atof(yytext) ; return VAL_NUM_TK; }

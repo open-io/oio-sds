@@ -58,6 +58,7 @@ expr_clean(struct expr_s *pE)
 	case BIN_NUMDIV_ET:
 	case BIN_NUMMOD_ET:
 	case BIN_NUMAND_ET:
+	case BIN_POW_ET:
 	case BIN_ROOT_ET:
 	case BIN_NUMXOR_ET:
 	case BIN_NUMOR_ET:

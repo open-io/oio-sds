@@ -51,7 +51,7 @@ enum expr_type_e
 	BIN_NUMMOD_ET,
 	BIN_NUMAND_ET, BIN_NUMXOR_ET,
 	BIN_NUMOR_ET,
-	BIN_ROOT_ET,
+	BIN_POW_ET, BIN_ROOT_ET,
 	TER_NUMCLAMP_ET,
 	ACC_ET,
 	/*last beacon */
