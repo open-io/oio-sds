@@ -923,6 +923,7 @@ network_server_stats_to_prometheus(GArray *stats, GByteArray *body)
 	GString *key_suffix = NULL;
 	GString *labels_suffix = NULL;
 	for (guint i = 0; i < stats->len; ++i) {
+		gboolean needs_seconds = FALSE;
 		stat = NULL;
 		tags = NULL;
 		key_suffix = g_string_sized_new(16);
@@ -955,9 +956,11 @@ network_server_stats_to_prometheus(GArray *stats, GByteArray *body)
 				} else if (strcmp(tags[1], "time") == 0) {
 					g_string_append_static(key_suffix,
 							"requests_duration_second_");
+					needs_seconds = TRUE;
 				} else if (strcmp(tags[1], "lag") == 0) {
 					g_string_append_static(key_suffix,
 							"requests_lag_second_");
+					needs_seconds = TRUE;
 				} else {
 					goto error;
 				}
@@ -1003,10 +1006,19 @@ next:
 				g_byte_array_append(body, (guint8*)tmp, len);
 			}
 			len = g_snprintf(tmp, sizeof(tmp),
-					"volume=\"%s\",namespace=\"%s\"%s} %"G_GUINT64_FORMAT"\n",
+					"volume=\"%s\",namespace=\"%s\"%s} ",
 					oio_server_volume, oio_server_namespace,
-					labels_suffix->str, st->value);
+					labels_suffix->str);
 			g_byte_array_append(body, (guint8*)tmp, len);
+			if (needs_seconds) {
+				len = g_snprintf(tmp, sizeof(tmp),
+						"%.6lf\n", st->value/(double)G_TIME_SPAN_SECOND);
+				g_byte_array_append(body, (guint8*)tmp, len);
+			} else {
+				len = g_snprintf(tmp, sizeof(tmp),
+						"%"G_GUINT64_FORMAT"\n", st->value);
+				g_byte_array_append(body, (guint8*)tmp, len);
+			}
 		}
 		g_string_free(labels_suffix, TRUE);
 		g_string_free(key_suffix, TRUE);

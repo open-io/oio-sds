@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -48,7 +48,7 @@ class TestMetaX(BaseTestCase):
         self._test_get_stats(service_type, stat_re)
 
     def _test_get_stats_prometheus(self, service_type):
-        stat_re = re.compile(r"^(\w+){(.+)} (\w+)$")
+        stat_re = re.compile(r"^(\w+){(.+)} (\w+|[0-9.]+)$")
         self._test_get_stats(service_type, stat_re, output_format="prometheus")
 
     def test_get_meta0_stats(self):
