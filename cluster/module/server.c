@@ -1491,7 +1491,7 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 		}
 		++ count;
 	}
-	GRID_DEBUG("Pushed %u items", count);
+	GRID_DEBUG("Pushed %u items (reqid=%s)", count, oio_ext_get_reqid());
 	g_slist_free_full (list_srvinfo, (GDestroyNotify) service_info_clean);
 
 	reply->send_reply(200, "OK");
@@ -1963,6 +1963,7 @@ _cs_configure_with_file(const char *path UNUSED)
 			"Plugin.conscience", "param_service_conf", NULL);
 	oio_server_namespace = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_namespace", NULL);
+	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
 
 	g_key_file_free(gkf);
 	gkf = NULL;
@@ -2367,7 +2368,6 @@ _cs_configure(int argc, char **argv)
 		return _config_error("Services", err);
 
 	/* Prepare nsinfo cache */
-	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
 	nsinfo_cache = namespace_info_marshall (nsinfo, NULL);
 
 	/* Prepare the ASN.1 request server */
@@ -2385,6 +2385,11 @@ _cs_configure(int argc, char **argv)
 	}
 
 	if (hub_running) {
+		if (hub_startup_delay > 0) {
+			GRID_INFO("HUB: waiting %ds before serving requests",
+					hub_startup_delay);
+			g_usleep(hub_startup_delay * G_TIME_SPAN_SECOND);
+		}
 		grid_task_queue_register(gtq_admin, 5, _task_check_hub, NULL, NULL);
 		if (hub_publish_stale_delay > 0) {
 			grid_task_queue_register(
