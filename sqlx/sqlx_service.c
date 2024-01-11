@@ -2,7 +2,7 @@
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1130,6 +1130,8 @@ _task_reload_nsinfo(gpointer p)
 	if (!grid_main_is_running ())
 		return;
 
+	oio_ext_set_prefixed_random_reqid("task-reload-info-");
+
 	struct namespace_info_s *ni = NULL, *old = NULL;
 	GError *err = conscience_get_namespace(PSRV(p)->ns_name, &ni);
 	EXTRA_ASSERT ((err != NULL) ^ (ni != NULL));
@@ -1150,6 +1152,8 @@ _task_reload_peers(gpointer p)
 {
 	if (!grid_main_is_running ())
 		return;
+
+	oio_ext_set_prefixed_random_reqid("task-reload-peers-");
 
 	const char * nsname = PSRV(p)->ns_name;
 	const char * srvtype = PSRV(p)->service_config->srvtype;
@@ -1304,6 +1308,8 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 		return;  /* not ready */
 	if (ADAPTIVE_PERIOD_SKIP())
 		return;
+
+	oio_ext_set_prefixed_random_reqid("task-reload-lb-");
 
 	GError *err = _reload_lb_world(ss->lb_world, ss->lb);
 	if (err) {

@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -589,6 +589,8 @@ lb_cache_reload (void)
 		goto out;
 	}
 
+	oio_ext_set_prefixed_random_reqid("task-reload-srv-");
+
 	/* preload all the services */
 	tabsrv = g_ptr_array_new_full(8, _free_list_of_services);
 	taberr = g_ptr_array_new_full(8, _free_error);
@@ -690,6 +692,7 @@ _task_reload_nsinfo (gpointer p UNUSED)
 		return;
 
 	struct namespace_info_s *ni = NULL;
+	oio_ext_set_prefixed_random_reqid("task-reload-inf-");
 	GError *err = conscience_remote_get_namespace(NULL, cs, &ni,
 			oio_ext_get_deadline());
 	if (err) {
@@ -718,6 +721,7 @@ _task_reload_srvtypes (gpointer p UNUSED)
 		return;
 
 	gchar **types = NULL;
+	oio_ext_set_prefixed_random_reqid("task-reload-typ-");
 	GError *err = conscience_remote_get_types(NULL, cs, &types,
 			oio_ext_get_deadline());
 	EXTRA_ASSERT((err != NULL) ^ (types != NULL));
@@ -762,6 +766,7 @@ _task_push (gpointer p UNUSED)
 		if (!cs) {
 			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 		} else {
+			oio_ext_set_prefixed_random_reqid("task-push-srv-");
 			GError *err = conscience_remote_push_services(NULL, cs, tmp,
 					oio_ext_get_deadline());
 			if (err != NULL) {
