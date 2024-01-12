@@ -1051,8 +1051,8 @@ score_expr=((num stat.space)>1) * root(3,((1 + (num stat.cpu))*(num stat.space)*
 score_timeout=120
 
 [type:rawx]
-put_score_expr=((num stat.space)>1) * root(3,((1 + (num stat.cpu))*(num stat.space)*(1 + (num stat.io))))
-get_score_expr=root(2,((1 + (num stat.cpu))*(1 + (num stat.io))))
+put_score_expr=root(4, (pow(2, (clamp((((num stat.space) - 1) * 1.010101), 0, 100))) * clamp((((num stat.cpu) - 5) * 6.666667), 1, 100) * clamp((((num stat.io) - 5) * 1.333333), 1, 100)))
+get_score_expr=root(2, (clamp((((num stat.cpu) - 5) * 6.666667), 0, 100) * clamp((((num stat.io) - 5) * 1.333333), 0, 100)))
 score_timeout=120
 
 [type:rdir]
@@ -1076,8 +1076,10 @@ score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
 [type:echo]
-score_expr=(num stat.cpu)
+put_score_expr=root(4, (pow(2, (clamp((((num stat.space) - 20) * 1.25), 0, 100))) * clamp((((num stat.cpu) - 5) * 6.666667), 1, 100) * clamp((((num stat.io) - 5) * 1.333333), 1, 100)))
+get_score_expr=root(2, (clamp((((num stat.cpu) - 5) * 6.666667), 0, 100) * clamp((((num stat.io) - 5) * 1.333333), 0, 100)))
 score_timeout=10
+score_variation_bound=50
 
 [type:oioproxy]
 score_expr=(1 + (num stat.cpu))

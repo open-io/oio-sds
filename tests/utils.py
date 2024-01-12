@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -399,12 +399,16 @@ class CommonTestCase(testtools.TestCase):
         )
         self.assertIn(resp.status, (200, 204))
 
-    def _register_srv(self, srv, deregister=True):
+    def _register_srv(self, srv, cs=None, deregister=True):
+        params = None
+        if cs:
+            params = {"cs": cs}
         resp = self.request(
             "POST",
             self._url_cs("register"),
             jsonlib.dumps(srv),
             headers=self.TEST_HEADERS,
+            params=params,
         )
         self.assertIn(resp.status, (200, 204))
         if deregister:
@@ -416,12 +420,16 @@ class CommonTestCase(testtools.TestCase):
         )
         self.assertIn(resp.status, (200, 204))
 
-    def _unlock_srv(self, srv):
+    def _unlock_srv(self, srv, cs=None):
+        params = None
+        if cs:
+            params = {"cs": cs}
         resp = self.request(
             "POST",
             self._url_cs("unlock"),
             jsonlib.dumps(srv),
             headers=self.TEST_HEADERS,
+            params=params,
         )
         self.assertIn(resp.status, (200, 204))
 

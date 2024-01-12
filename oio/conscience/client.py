@@ -149,13 +149,14 @@ class ConscienceClient(ProxyClient):
         """
         return self.lb.poll(pool, **kwargs)
 
-    def all_services(self, service_type, full=False, **kwargs):
+    def all_services(self, service_type, full=False, cs=None, **kwargs):
         """
         Get the list of all services of a specific type.
 
         :param service_type: the type of services to get (ex: 'rawx')
         :type service_type: `str`
         :param full: whether to get all metrics for each service
+        :param cs: conscience address to request
         :returns: the list of all services of the specified type.
         :rtype: `list` of `dict` objects, each containing at least
             - 'addr' (`str`),
@@ -166,6 +167,8 @@ class ConscienceClient(ProxyClient):
         params = {"type": service_type}
         if full:
             params["full"] = "1"
+        if cs:
+            params["cs"] = cs
         resp, body = self._request("GET", "/list", params=params, **kwargs)
         if resp.status == 200:
             # TODO(FVE): do that in the proxy

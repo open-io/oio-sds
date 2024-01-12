@@ -605,3 +605,69 @@ class TestConscienceFunctional(BaseTestCase):
         # Wait for timeout
         time.sleep(12)
         check(False)
+
+    def test_scores_calculation(self):
+        # Always use the same conscience to avoid synchronization issues
+        cs = self.conf["services"]["conscience"][0]["addr"]
+        srv = self._srv("echo")
+        self._register_srv(srv, cs=cs)
+        self._unlock_srv(srv, cs=cs)
+
+        def clamp(n, low, high):
+            return max(low, min(high, n))
+
+        def update_and_check(space, cpu, io):
+            # Update the stats
+            stats = {"stat.space": space, "stat.cpu": cpu, "stat.io": io}
+            srv["tags"].update(stats)
+            self._register_srv(srv, cs=cs, deregister=False)
+
+            # Compute scores
+            put_score = int(
+                (
+                    (clamp((space - 20) * 1.25, 0, 100) ** 2)
+                    * clamp((cpu - 5) * 6.666667, 1, 100)
+                    * clamp((io - 5) * 1.333333, 1, 100)
+                )
+                ** (1 / 4)
+            )
+            get_score = int(
+                (
+                    clamp((cpu - 5) * 6.666667, 0, 100)
+                    * clamp((io - 5) * 1.333333, 0, 100)
+                )
+                ** (1 / 2)
+            )
+
+            # Wait for the service update
+            for _ in range(4):
+                self._register_srv(srv, cs=cs, deregister=False)
+                echo_services = self.conscience.all_services("echo", full=True, cs=cs)
+                for echo_srv in echo_services:
+                    if echo_srv["addr"] == srv["addr"]:
+                        echo = echo_srv
+                        break
+                else:
+                    # The service is not yet known to the requested conscience
+                    continue
+                if not all((echo["tags"].get(k) == v for k, v in stats.items())):
+                    # The requested conscience is not yet up to date
+                    continue
+                if (
+                    echo["scores"]["score.put"] != put_score
+                    or echo["scores"]["score.get"] != get_score
+                ):
+                    # The scores is not yet stabilized (or there is a bug)
+                    continue
+                break
+            else:
+                self.fail(
+                    f"No echo service with address '{srv['addr']}', stats '{stats}' "
+                    f"and scores 'get={get_score} put={put_score}': "
+                    f"{echo_services}",
+                )
+
+        for space in (0, 20, 25, 62.5, 100):
+            for cpu in (0, 5, 10, 54.3, 100):
+                for io in (0, 5, 10, 56.7, 100):
+                    update_and_check(space, cpu, io)
