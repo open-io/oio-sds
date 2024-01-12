@@ -855,7 +855,9 @@ param_hub.startup_delay=1
 # (set to 0 to disable the thread pool)
 param_hub.threads=${CS_HUB_THREADS}
 
-cache_service_lists=${CS_CACHE_SERVICES}
+service_cache.enable=${CS_CACHE_SERVICES}
+service_cache.enable_full=${CS_CACHE_SERVICES}
+service_cache.interval=0.5
 
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
