@@ -596,8 +596,7 @@ lb_cache_reload (void)
 	taberr = g_ptr_array_new_full(8, _free_error);
 	for (char **pt=tabtypes; *pt ;++pt) {
 		GSList *srv = NULL;
-		/* TODO(mbo): only retrieve static tags to still use cache on conscience side */
-		GError *e = conscience_remote_get_services(NULL, cs, *pt, TRUE, &srv,
+		GError *e = conscience_remote_get_services(NULL, cs, *pt, FALSE, &srv,
 				oio_ext_get_deadline());
 		if (e) {
 			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
