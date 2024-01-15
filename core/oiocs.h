@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2016 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@ extern "C" {
 struct oio_cs_registration_s {
 	const char *id;
 	const char *url;
+	const char *type;
 	const char * const * kv_tags;
 };
 

@@ -25,6 +25,7 @@ License along with this library.
 #include <zmq.h>
 
 #include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 #include <server/server_variables.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
@@ -84,6 +85,7 @@ static GSList *config_paths = NULL;
 
 static GString *persistence_path = NULL;
 static time_t persistence_period = 30;
+static gboolean synchronize_at_startup = FALSE;
 
 static const guint8 header[] = { 0x30, 0x80 };
 static const guint8 footer[] = { 0x00, 0x00 };
@@ -1970,6 +1972,54 @@ restart_end:
 	return ret;
 }
 
+static gboolean
+restart_srv_from_other_consciences(void)
+{
+	gboolean res = TRUE;
+	GError *err = NULL;
+	GSList *all_services = NULL;
+
+	err = conscience_get_services(
+			oio_server_namespace, "all", TRUE, &all_services, 0);
+
+	if (!err) {
+		guint count = 0;
+		for (GSList *l = all_services; l; l = g_slist_next(l)) {
+			struct service_info_s *si = l->data;
+			if (!metautils_addr_valid_for_connect(&si->addr)
+					|| !oio_str_is_set(si->type)) {
+				continue;
+			}
+			/* If there is no lock, we must declare the score as "unset", and
+			 * let the conscience compute it. Any other value will lock it. */
+			const gchar *is_locked_str = service_info_get_tag_value(
+					si, NAME_TAGNAME_GET_LOCK, "false");
+			if (!oio_str_parse_bool(is_locked_str, FALSE)) {
+				si->get_score.value = SCORE_UNSET;
+			}
+			is_locked_str = service_info_get_tag_value(
+					si, NAME_TAGNAME_PUT_LOCK, "false");
+			if (!oio_str_parse_bool(is_locked_str, FALSE)) {
+				si->put_score.value = SCORE_UNSET;
+			}
+			struct service_info_dated_s *sid = push_service(si);
+			if (sid) {
+				service_info_dated_free(sid);
+			}
+			++count;
+		}
+		GRID_NOTICE("Loaded %u services from other consciences (reqid=%s)",
+				count, oio_ext_get_reqid());
+	} else {
+		res = FALSE;
+		GRID_WARN("Failed to load services from other consciences: (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
+	}
+	g_slist_free_full(all_services, (GDestroyNotify) service_info_clean);
+	return res;
+}
+
 /* Main -------------------------------------------------------------------- */
 
 static void
@@ -2050,6 +2100,10 @@ _cs_configure_with_file(const char *path UNUSED)
 				* G_TIME_SPAN_SECOND
 		));
 	}
+	tmp = g_key_file_get_value(gkf,
+			"Plugin.conscience", "synchronize_at_startup", NULL);
+	synchronize_at_startup = oio_str_parse_bool(tmp, FALSE);
+	g_free(tmp);
 	hub_me = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_hub.me", NULL);
 	hub_group = g_key_file_get_value(gkf,
@@ -2499,6 +2553,9 @@ _cs_configure(int argc, char **argv)
 	}
 
 	if (hub_running) {
+		if (synchronize_at_startup) {
+			restart_srv_from_other_consciences();
+		}
 		if (hub_startup_delay > 0) {
 			GRID_INFO("HUB: waiting %ds before serving requests",
 					hub_startup_delay);

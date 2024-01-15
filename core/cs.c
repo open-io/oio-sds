@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -127,13 +127,15 @@ _unpack_registration (json_object *item,
 	EXTRA_ASSERT (preg != NULL);
 	EXTRA_ASSERT (p_put_score != NULL);
 	EXTRA_ASSERT (p_get_score != NULL);
-	struct json_object *id = NULL, *url = NULL, *score = NULL, *scores, *tags = NULL;
+	struct json_object *id = NULL, *url = NULL, *score = NULL, *scores,
+			*tags = NULL, *type = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"id",     &id,     json_type_string, 0},
 		{"addr",   &url,    json_type_string, 1},
 		{"score",  &score,  json_type_int,    0},
 		{"scores", &scores, json_type_object, 0},
 		{"tags",   &tags,   json_type_object, 0},
+		{"type",   &type,   json_type_string, 0},  // only if requested "all"
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (item, mapping);
@@ -150,6 +152,9 @@ _unpack_registration (json_object *item,
 		}
 		g_ptr_array_add(tag_arr, NULL);
 		preg->kv_tags = (const char * const *)g_ptr_array_free(tag_arr, FALSE);
+	}
+	if (type) {
+		preg->type = json_object_get_string(type);
 	}
 	if (score) {
 		*p_put_score = json_object_get_int64 (score);

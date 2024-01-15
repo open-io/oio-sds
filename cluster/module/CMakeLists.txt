@@ -35,6 +35,7 @@ add_executable(conscience
 	expr.yacc.c)
 
 target_link_libraries(conscience
+	gridcluster
 	server
 	${GLIB2_LIBRARIES} ${ZMQ_LIBRARIES})
 

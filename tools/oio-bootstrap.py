@@ -859,6 +859,10 @@ service_cache.enable=${CS_CACHE_SERVICES}
 service_cache.enable_full=${CS_CACHE_SERVICES}
 service_cache.interval=0.5
 
+# When starting, if an inter-conscience hub is configured,
+# try to load a full list of services from another conscience.
+synchronize_at_startup=true
+
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
