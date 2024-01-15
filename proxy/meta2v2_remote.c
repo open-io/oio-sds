@@ -314,7 +314,8 @@ GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, gboolean dryrun,
 		const char *destinations, const char *replicator_id,
-		const char *role_project_id, gint64 dl)
+		const char *role_project_id, const char *etag, gint64 nb_mpu_parts,
+		gint64 lower_id,  gint64 upper_id, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
 	if (bypass_governance) {
@@ -326,6 +327,18 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 	}
 	if (dryrun) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_DRYRUN, "1");
+	}
+	if (nb_mpu_parts) {
+		metautils_message_add_field_strint64(msg, NAME_MSGKEY_NB_MPU_PARTS, nb_mpu_parts);
+	}
+	if (etag) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_ETAG, etag);
+	}
+	if (lower_id) {
+		metautils_message_add_field_strint64(msg, NAME_MSGKEY_LOWER_ID, lower_id);
+	}
+	if (upper_id) {
+		metautils_message_add_field_strint64(msg, NAME_MSGKEY_UPPER_ID, upper_id);
 	}
 	const gchar *force_versioning = oio_ext_get_force_versioning();
 	if (force_versioning != NULL) {

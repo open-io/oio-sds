@@ -60,7 +60,8 @@ void _m2b_notify_beans2(
 		struct oio_events_queue_s *notifier,
 		struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks,
-		struct async_repli_s *repli);
+		struct async_repli_s *repli, const char* etag, gint64 lower_id,
+		gint64 upper_id);
 
 // Replication functions
 struct async_repli_s *_async_repli_init(struct gridd_filter_ctx_s *ctx);
@@ -97,6 +98,11 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_delete_marker);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_bypass_governance);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_dryrun);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_nb_mpu_parts);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_etag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_lower_id);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_upper_id);
+
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_maxvers);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_async_replication);

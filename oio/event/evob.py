@@ -48,6 +48,9 @@ class Event(object):
     url = _event_env_property("url")
     when = _event_env_property("when")
     repli = _event_env_property("repli")
+    etag = _event_env_property("etag")
+    lower_id = _event_env_property("lower_id")
+    upper_id = _event_env_property("upper_id")
 
     def __init__(self, env):
         self.env = env

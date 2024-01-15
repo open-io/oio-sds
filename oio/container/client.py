@@ -240,6 +240,38 @@ class ContainerClient(ProxyClient):
             data["replication_role_project_id"] = replication_role_project_id
         return data
 
+    def _add_nb_parts(self, data, **kwargs):
+        if data is None:
+            data = {}
+        nb_mpu_parts = kwargs.get("nb_mpu_parts")
+        if nb_mpu_parts:
+            data["nb_mpu_parts"] = nb_mpu_parts
+        return data
+
+    def _add_etag(self, data, **kwargs):
+        if data is None:
+            data = {}
+        etag = kwargs.get("etag")
+        if etag:
+            data["etag"] = etag
+        return data
+
+    def _add_lower_id(self, data, **kwargs):
+        if data is None:
+            data = {}
+        lower_id = kwargs.get("lower_id")
+        if lower_id:
+            data["lower_id"] = lower_id
+        return data
+
+    def _add_upper_id(self, data, **kwargs):
+        if data is None:
+            data = {}
+        upper_id = kwargs.get("upper_id")
+        if upper_id:
+            data["upper_id"] = upper_id
+        return data
+
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
     ):
@@ -857,6 +889,9 @@ class ContainerClient(ProxyClient):
         )
 
         data = self._add_replication_info({}, **kwargs)
+        data = self._add_etag(data, **kwargs)
+        data = self._add_lower_id(data, **kwargs)
+        data = self._add_upper_id(data, **kwargs)
         data = json.dumps(data)
         resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
         delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
@@ -882,7 +917,10 @@ class ContainerClient(ProxyClient):
                 unformatted_data.append({"name": obj[0], "version": obj[1]})
             else:
                 unformatted_data.append({"name": obj})
-        data = json.dumps({"contents": unformatted_data})
+        data = {"contents": unformatted_data}
+        data = self._add_nb_parts(data, **kwargs)
+        data = json.dumps(data)
+
         results = []
 
         for path in paths:

@@ -146,6 +146,10 @@ GByteArray* m2v2_remote_pack_DEL(
 		const char *destinations,
 		const char *replicator_id,
 		const char *role_project_id,
+		const char *etag,
+        gint64 nb_mpu_parts,
+        gint64 lower_id,
+        gint64 upper_id,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(
