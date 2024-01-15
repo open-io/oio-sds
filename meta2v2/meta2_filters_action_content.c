@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -434,54 +434,83 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	GError *e = NULL;
+	GError *err = NULL;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	gboolean dryrun = BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DRYRUN));
 
+	const gchar* nb_mpu_parts_str  = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_NB_MPU_PARTS);
+	gint64 nb_mpu_parts = 0;
+	oio_str_is_number(nb_mpu_parts_str, &nb_mpu_parts);
+
+	GSList *deleted = NULL;
+	gboolean truncated = FALSE;
+
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url,
+	err = meta2_backend_delete_alias(m2b, url,
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
 		dryrun,
-		_bean_list_cb, &obc->l);
-	if (NULL != e) {
+		&truncated,
+		nb_mpu_parts,
+		_bean_list_cb, &deleted);
+	if (err != NULL) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, e);
+		meta2_filter_ctx_set_error(ctx, err);
 		_on_bean_ctx_clean(obc);
 		return FILTER_KO;
 	}
 
 	gboolean delete_marker_created = FALSE;
-	for (GSList *l = obc->l; l; l = l->next) {
-		gpointer bean = l->data;
-		if (DESCR(bean) != &descr_struct_ALIASES) {
-			continue;
+	if (nb_mpu_parts == 0) {
+		for (GSList *l = deleted; l; l = l->next) {
+			gpointer bean = l->data;
+			if (DESCR(bean) != &descr_struct_ALIASES) {
+				continue;
+			}
+			if (!ALIASES_get_deleted(bean)) {
+				continue;
+			}
+			GByteArray *content_id = ALIASES_get_content(bean);
+			if (!content_id) {
+				continue;
+			}
+			if (strncmp((gchar*)content_id->data, "NEW", content_id->len) != 0) {
+				continue;
+			}
+			delete_marker_created = TRUE;
+			break;
 		}
-		if (!ALIASES_get_deleted(bean)) {
-			continue;
-		}
-		GByteArray *content_id = ALIASES_get_content(bean);
-		if (!content_id) {
-			continue;
-		}
-		if (strncmp((gchar*)content_id->data, "NEW", content_id->len) != 0) {
-			continue;
-		}
-		delete_marker_created = TRUE;
-		break;
 	}
 	// do not notify if dryrun is activated
 	if (!dryrun) {
 		if (delete_marker_created) {
 			const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
-			_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l, "content.new", FALSE, dests);
+			_m2b_notify_beans2(m2b->notifier_content_created, url, deleted, "content.new", FALSE, dests);
 		} else {
-			_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
+			if (nb_mpu_parts == 0) {
+				_m2b_notify_beans(m2b->notifier_content_deleted, url, deleted, "content.deleted", TRUE);
+			} else {
+				for (GSList *el = deleted; el; el = el->next) {
+					_m2b_notify_beans(m2b->notifier_content_deleted, url, el->data, "content.deleted", TRUE);
+					//_bean_cleanl2(l->data);
+				}
+			}
 		}
 	}
-	_on_bean_ctx_send_list(obc);
+
+	if (!err && nb_mpu_parts > 0) {
+		reply->add_header(NAME_MSGKEY_TRUNCATED,
+				metautils_gba_from_string(truncated? "true": "false"));
+	}
+	if (nb_mpu_parts == 0){
+		obc->l = deleted;
+		_on_bean_ctx_send_list(obc);
+	} else {
+		_on_bean_ctx_send_list(obc);
+		g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
+	}
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }

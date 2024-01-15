@@ -1572,8 +1572,8 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, gboolean dryrun,
-		m2_onbean_cb cb, gpointer u0)
+		gboolean create_delete_marker, gboolean dryrun, gboolean *truncated,
+		gint64 nb_delete, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1595,7 +1595,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 			}
 
 			if (!(err = m2db_delete_alias(sq3, max_versions, bypass_governance,
-					create_delete_marker, url, cb, u0))) {
+					create_delete_marker, truncated, nb_delete, url, cb, u0))) {
 				m2db_increment_version(sq3);
 			}
 			if (dryrun) {

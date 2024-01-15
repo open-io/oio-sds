@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -67,6 +67,10 @@ _is_empty_prop(gpointer bean)
 	GByteArray *val = PROPERTIES_get_value((struct bean_PROPERTIES_s *)bean);
 	return !val || !val->len || !val->data;
 }
+
+static GError*
+_delete_range(struct sqlx_sqlite3_s *sq3, const gchar *base_name, m2_onbean_cb cb, gpointer u0,
+		gboolean *truncated, gint64 nb_delete);
 
 void
 m2v2_position_encode (GString *out, struct m2v2_position_s *p)
@@ -1631,7 +1635,7 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		gboolean bypass_governance, gboolean create_delete_marker,
-	 struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+		gboolean *truncated, gint64 nb_delete, struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	gint64 version = 0;
@@ -1661,7 +1665,11 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		GRID_TRACE("DELETE_MARKER %s maxvers=%"G_GINT64_FORMAT" ver=%s",
 				oio_url_get(delete_marker_url, OIOURL_WHOLE), max_versions,
 				oio_url_get(delete_marker_url, OIOURL_VERSION));
-	} else {
+	} else if (nb_delete > 0) {
+		GRID_TRACE("mpu delete parts");
+		err = _delete_range(sq3, oio_url_get(url, OIOURL_PATH) , cb, u0,
+			truncated, nb_delete);
+    } else {
 		struct bean_ALIASES_s *alias = NULL;
 		struct bean_CONTENTS_HEADERS_s *header = NULL;
 		GSList *beans = NULL;
@@ -3556,6 +3564,49 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
 	}
+	return err;
+}
+
+static GError*
+_delete_range(struct sqlx_sqlite3_s *sq3, const gchar *name, m2_onbean_cb cb, gpointer u0,
+		gboolean *truncated, gint64 nb_delete)
+{
+	GError *err = NULL;
+	GPtrArray *aliases = g_ptr_array_new();
+	GVariant *params[3] = {NULL, NULL, NULL};
+	gchar *joined = NULL;
+
+	gchar * pos = strrchr(name, '/');
+	if(pos == NULL) {
+		err = NEWERROR(CODE_CONTENT_NOTFOUND, "object name didn't match mpu part pattern %s", name);
+		return err;
+	}
+	joined = g_strndup(name, pos - name);
+
+	/**
+	name = object_name/{etag}/{id}
+	Select all aliases that ends with at most 5 digits (up to 10000 parts) after object_name/{etag}/
+	 This avoids collisions where objects where name contains ual object_name/{etag}
+	 First match deletes uncomplete MPU parts
+	*/
+	gchar *sql = g_strconcat(" (alias LIKE  '", joined, "'", " OR alias LIKE '",joined, "/_'", 
+				" OR alias LIKE '",joined, "/__'", " OR alias LIKE '", joined, "/___'",
+				" OR alias LIKE '",joined, "/____'"," OR alias LIKE '", joined, "/_____' )", NULL);
+
+	err = ALIASES_load(sq3, sql, params, _bean_buffer_cb, aliases);
+	metautils_gvariant_unrefv(params);
+
+	gint64 nb_aliases = aliases->len;
+	if (nb_aliases != nb_delete) {
+		*truncated = TRUE;
+	}
+
+	if (!err)
+		err = _real_delete_aliases(sq3, aliases, cb, u0);
+	_bean_cleanv2(aliases);
+
+	g_free(joined);
+	g_free(sql);
 
 	return err;
 }

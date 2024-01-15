@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -254,8 +254,8 @@ GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gboolean bypass_governance, gboolean create_delete_marker,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+		gboolean bypass_governance, gboolean create_delete_marker, gboolean *truncated,
+		gint64 nb_delete, struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 void checked_content_free(struct checked_content_s *checked_content);
 

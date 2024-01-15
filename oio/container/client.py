@@ -234,6 +234,14 @@ class ContainerClient(ProxyClient):
             data["replication_destinations"] = dests
         return data
 
+    def _add_nb_parts(self, data, **kwargs):
+        if data is None:
+            data = {}
+        nb_mpu_parts = kwargs.get("nb_mpu_parts")
+        if nb_mpu_parts:
+            data["nb_mpu_parts"] = nb_mpu_parts
+        return data
+
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
     ):
@@ -872,7 +880,10 @@ class ContainerClient(ProxyClient):
                 unformatted_data.append({"name": obj[0], "version": obj[1]})
             else:
                 unformatted_data.append({"name": obj})
-        data = json.dumps({"contents": unformatted_data})
+        data = {"contents": unformatted_data}
+        data = self._add_nb_parts(data, **kwargs)
+        data = json.dumps(data)
+
         results = []
 
         for path in paths:

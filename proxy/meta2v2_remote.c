@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -305,7 +305,7 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, gboolean dryrun,
-		const char* destinations, gint64 dl)
+		const char* destinations, gint64 nb_mpu_parts, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
 	if (bypass_governance) {
@@ -317,6 +317,9 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 	}
 	if (dryrun) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_DRYRUN, "1");
+	}
+	if (nb_mpu_parts) {
+		metautils_message_add_field_strint64(msg, NAME_MSGKEY_NB_MPU_PARTS, nb_mpu_parts);
 	}
 	const gchar *force_versioning = oio_ext_get_force_versioning();
 	if (force_versioning != NULL) {

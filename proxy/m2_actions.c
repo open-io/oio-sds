@@ -4427,7 +4427,7 @@ static GError *_m2_json_delete (struct req_args_s *args,
 	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, destinations, DL()); }
+			bypass_governance, create_delete_marker, dryrun, destinations, 0, DL()); }
 	gboolean delete_marker = FALSE;
 	gint64 version = -1;
 	struct list_result_s del_result = {0};
@@ -4529,6 +4529,12 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	const gboolean bypass_governance =
 			_request_get_flag(args, "bypass_governance");
 	const gboolean dryrun = _request_get_flag(args, "dryrun");
+
+	struct json_object *jnb_mpu_parts= NULL;
+
+	json_object_object_get_ex(jbody, "nb_mpu_parts", &jnb_mpu_parts);
+    const gint64 nb_mpu_parts = !jnb_mpu_parts ? 0 : json_object_get_int(jnb_mpu_parts);
+
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
@@ -4536,7 +4542,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, NULL, DL()); }
+			bypass_governance, create_delete_marker, dryrun, NULL, nb_mpu_parts, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,
@@ -4571,7 +4577,8 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	g_string_append(gresponse, "{\"contents\":[");
 	for (guint i = 0; i < jarray_len; i++) {
 		struct json_object * jcontent = json_object_array_get_idx(jarray, i);
-
+		struct list_result_s del_result = {0};
+		GError *err = NULL;
 		struct json_object *jname = NULL, *jversion = NULL;
 		json_object_object_get_ex(jcontent, "name", &jname);
 		json_object_object_get_ex(jcontent, "version", &jversion);
@@ -4579,9 +4586,27 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 		oio_url_set(args->url, OIOURL_PATH, name);
 		const gchar *version = jversion? json_object_get_string(jversion) : "";
 		oio_url_set(args->url, OIOURL_VERSION, version);
-		GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+		if (nb_mpu_parts > 0) {
+			m2v2_list_result_init(&del_result);
+			err = _resolve_meta2(args, _prefer_master(), _pack,
+				&del_result, m2v2_list_result_extract);
+		} else {
+			err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+		}
 		_bulk_item_result(gresponse, i, name, version, err, HTTP_CODE_NO_CONTENT);
 		if (err) g_clear_error(&err);
+
+		if (nb_mpu_parts > 0) {
+			//TODO (LAA) add condition to break if i> 2 as we know that at most
+			// we clean up to 2 shards
+			if(!del_result.truncated){
+				m2v2_list_result_clean(&del_result);
+				// TMP to beak if truncated
+				//break;
+			} else {
+				m2v2_list_result_clean(&del_result);
+			}
+		}
 	}
 
 	g_string_append(gresponse, "]}");

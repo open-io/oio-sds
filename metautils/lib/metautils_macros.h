@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -81,6 +81,7 @@ License along with this library.
 #define NAME_MSGKEY_MAX_KEYS           "MAX_KEYS"
 #define NAME_MSGKEY_MAXVERS            "MAXVERS"
 #define NAME_MSGKEY_MESSAGE            "MSG"
+#define NAME_MSGKEY_NB_MPU_PARTS       "NB_MPU_PARTS"
 #define NAME_MSGKEY_NAMESPACE          "NS"
 #define NAME_MSGKEY_NEW                "NEW"
 #define NAME_MSGKEY_NOCHECK            "NOCHECK"
