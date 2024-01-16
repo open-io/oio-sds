@@ -41,6 +41,8 @@ class KmsApiClient(HttpApi):
             **kwargs,
         )
         self.statsd = get_statsd(conf=conf)
+        regions = conf.get("kmsapi_regions", "")
+        self.regions = [v.strip() for v in regions.split(",") if v.strip()]
 
     def send_to_statsd(self, label, status, start_time):
         duration = time.monotonic() - start_time

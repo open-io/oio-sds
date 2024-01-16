@@ -31,7 +31,7 @@ class KmsClient(ServiceClient):
         params["bucket"] = bucket
         return self.service_request(*args, **kwargs)
 
-    def create_secret(self, account, bucket, secret_id="1", secret_bytes=32, **kwargs):
+    def create_secret(self, account, bucket, region, secret_id="1", secret_bytes=32, **kwargs):
         """
         Create and return a secret for the bucket.
 
@@ -43,6 +43,7 @@ class KmsClient(ServiceClient):
         resp_, body = self.kms_request(
             account,
             bucket,
+            region,
             "PUT",
             "create-secret",
             params={"secret_id": secret_id, "secret_bytes": secret_bytes},
@@ -61,7 +62,7 @@ class KmsClient(ServiceClient):
             **kwargs
         )
 
-    def get_secret(self, account, bucket, secret_id="1", **kwargs):
+    def get_secret(self, account, bucket, region, secret_id="1", **kwargs):
         """
         Get a secret associated to the bucket.
 
@@ -71,6 +72,7 @@ class KmsClient(ServiceClient):
         resp_, body = self.kms_request(
             account,
             bucket,
+            region,
             "GET",
             "get-secret",
             params={"secret_id": secret_id},

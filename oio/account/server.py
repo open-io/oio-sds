@@ -1630,6 +1630,7 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
+        region = req.args.get("region", None)
         try:
             secret_bytes = int(req.args.get("secret_bytes", KMS_SECRET_BYTES_DEFAULT))
             if not KMS_SECRET_BYTES_MIN <= secret_bytes <= KMS_SECRET_BYTES_MAX:
@@ -1663,7 +1664,7 @@ class Account(WerkzeugApp):
             "secret": base64.b64encode(secret),
         }
 
-        if self.kms_api.enabled:
+        if self.kms_api.enabled and region in self.kms_api.regions:
             if ciphertext:
                 resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
             else:
@@ -1690,6 +1691,7 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
+        region = req.args.get("region", None)
         secret, ciphertext, key_id = self.backend.get_bucket_secret(
             account_id, bname, secret_id=secret_id
         )
@@ -1702,7 +1704,7 @@ class Account(WerkzeugApp):
             "secret": secret_b64,
         }
 
-        if self.kms_api.enabled and ciphertext:
+        if self.kms_api.enabled and region in self.kms_api.regions and ciphertext:
             resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
 
         return Response(
