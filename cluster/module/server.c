@@ -1745,27 +1745,30 @@ restart_srv_from_file(gchar *path)
 			struct service_tag_s *tag_lock = service_info_get_tag(
 					si_data->tags, NAME_TAGNAME_LOCK);
 			if (tag_lock && tag_lock->type == STVT_BOOL && tag_lock->value.b) {
+				p_srv->put_locked = tag_lock->value.b;
 				p_srv->get_locked = tag_lock->value.b;
-				p_srv->get_locked = tag_lock->value.b;
-			}
-			/* If the put score was locked, lock it again. */
-			struct service_tag_s *tag_put_lock = service_info_get_tag(
-					si_data->tags, NAME_TAGNAME_PUT_LOCK);
-			if (tag_put_lock) {
-				service_tag_get_value_boolean(tag_put_lock, &(p_srv->put_locked), &err);
-				if (err) {
-					GRID_WARN("Failed to read put lock tag: %s", err->message);
-					g_clear_error(&err);
+
+			/* Otherwise, restore PUT/GET lock independently */
+			} else {
+				/* If the put score was locked, lock it again. */
+				struct service_tag_s *tag_put_lock = service_info_get_tag(
+						si_data->tags, NAME_TAGNAME_PUT_LOCK);
+				if (tag_put_lock) {
+					service_tag_get_value_boolean(tag_put_lock, &(p_srv->put_locked), &err);
+					if (err) {
+						GRID_WARN("Failed to read put lock tag: %s", err->message);
+						g_clear_error(&err);
+					}
 				}
-			}
-			/* If the get score was locked, lock it again. */
-			struct service_tag_s *tag_get_lock = service_info_get_tag(
-					si_data->tags, NAME_TAGNAME_GET_LOCK);
-			if (tag_get_lock) {
-				service_tag_get_value_boolean(tag_get_lock, &(p_srv->get_locked), &err);
-				if (err) {
-					GRID_WARN("Failed to read get lock tag: %s", err->message);
-					g_clear_error(&err);
+				/* If the get score was locked, lock it again. */
+				struct service_tag_s *tag_get_lock = service_info_get_tag(
+						si_data->tags, NAME_TAGNAME_GET_LOCK);
+				if (tag_get_lock) {
+					service_tag_get_value_boolean(tag_get_lock, &(p_srv->get_locked), &err);
+					if (err) {
+						GRID_WARN("Failed to read get lock tag: %s", err->message);
+						g_clear_error(&err);
+					}
 				}
 			}
 
