@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -112,5 +112,8 @@ void gridd_client_update_global_down_hosts(GSList *srv);
 
 /* Clear the down hosts */
 void gridd_client_clear_down_hosts(down_hosts_t *pdown);
+
+/* Indicate whether the service is said to be down. */
+gboolean gridd_client_is_down_host(const char *url);
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

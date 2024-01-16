@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -114,7 +114,11 @@ def _get_weighted_random_score(chunk):
     score = chunk.get("score", 0)
     if not score:
         return 0
-    return score + random.randrange(10)
+    if score > 0:
+        score += random.randrange(10)
+    # else:
+    #   Score may be negative if the service is down
+    return score
 
 
 def _sort_chunks(raw_chunks, ec_security, logger=None):

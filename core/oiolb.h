@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ License along with this library.
 # include <core/oioloc.h>
 
 typedef guint8 oio_weight_t;
+typedef gint8 oio_sweight_t;
 
 /* the sum of all the weights in a slot shall not overflow the capacity of
  * an oio_weight_acc_t. We internally need this to enweight pools */

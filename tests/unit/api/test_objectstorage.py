@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,12 +34,13 @@ from tests.utils import random_str
 from tests.unit.api import FakeStorageApi, FakeApiResponse
 
 
-def chunk(suffix, position):
+def chunk(suffix, position, score=100):
     return {
         "url": "http://1.2.3.4:6000/{0}".format(suffix),
         "pos": str(position),
         "size": 32,
         "hash": "0" * 32,
+        "score": score,
     }
 
 
@@ -542,48 +543,48 @@ class ObjectStorageTest(unittest.TestCase):
     def test_sort_chunks(self):
         raw_chunks = [
             chunk("AAAA", "0"),
-            chunk("BBBB", "0"),
-            chunk("CCCC", "1"),
+            chunk("BBBB", "0", score=12),
+            chunk("CCCC", "1", score=42),
             chunk("DDDD", "1"),
-            chunk("EEEE", "2"),
-            chunk("FFFF", "2"),
+            chunk("EEEE", "2", score=20),
+            chunk("FFFF", "2", score=50),
         ]
         chunks = _sort_chunks(raw_chunks, False)
         sorted_chunks = {
             0: [
                 extend(chunk("AAAA", "0"), {"offset": 0}),
-                extend(chunk("BBBB", "0"), {"offset": 0}),
+                extend(chunk("BBBB", "0", score=12), {"offset": 0}),
             ],
             1: [
-                extend(chunk("CCCC", "1"), {"offset": 32}),
                 extend(chunk("DDDD", "1"), {"offset": 32}),
+                extend(chunk("CCCC", "1", score=42), {"offset": 32}),
             ],
             2: [
-                extend(chunk("EEEE", "2"), {"offset": 64}),
-                extend(chunk("FFFF", "2"), {"offset": 64}),
+                extend(chunk("FFFF", "2", score=50), {"offset": 64}),
+                extend(chunk("EEEE", "2", score=20), {"offset": 64}),
             ],
         }
         self.assertDictEqual(sorted_chunks, chunks)
 
         raw_chunks = [
-            chunk("AAAA", "0.0"),
-            chunk("BBBB", "0.1"),
-            chunk("CCCC", "0.2"),
-            chunk("DDDD", "1.0"),
-            chunk("EEEE", "1.1"),
-            chunk("FFFF", "1.2"),
+            chunk("AAAA", "0.0", score=0),
+            chunk("BBBB", "0.1", score=-1),
+            chunk("CCCC", "0.2", score=0),
+            chunk("DDDD", "1.0", score=-1),
+            chunk("EEEE", "1.1", score=0),
+            chunk("FFFF", "1.2", score=-1),
         ]
         chunks = _sort_chunks(raw_chunks, True)
         sorted_chunks = {
             0: [
-                extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
-                extend(chunk("BBBB", "0.1"), {"num": 1, "offset": 0}),
-                extend(chunk("CCCC", "0.2"), {"num": 2, "offset": 0}),
+                extend(chunk("AAAA", "0.0", score=0), {"num": 0, "offset": 0}),
+                extend(chunk("CCCC", "0.2", score=0), {"num": 2, "offset": 0}),
+                extend(chunk("BBBB", "0.1", score=-1), {"num": 1, "offset": 0}),
             ],
             1: [
-                extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
-                extend(chunk("EEEE", "1.1"), {"num": 1, "offset": 32}),
-                extend(chunk("FFFF", "1.2"), {"num": 2, "offset": 32}),
+                extend(chunk("EEEE", "1.1", score=0), {"num": 1, "offset": 32}),
+                extend(chunk("DDDD", "1.0", score=-1), {"num": 0, "offset": 32}),
+                extend(chunk("FFFF", "1.2", score=-1), {"num": 2, "offset": 32}),
             ],
         }
         self.assertDictEqual(sorted_chunks, chunks)

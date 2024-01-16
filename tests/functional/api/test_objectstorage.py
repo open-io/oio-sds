@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -2363,6 +2363,61 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             expected_size_by_policy=expected_size_by_policy,
             reqid=reqid,
         )
+
+    def test_object_locate(self):
+        # Create an object
+        container = "test-object-locate-" + random_str(4)
+        path = "content"
+        self._create(container)
+        reqid = request_id()
+        self.api.object_create(
+            self.account,
+            container,
+            obj_name=path,
+            data=random_data(12),
+            policy="SINGLE",
+            reqid=reqid,
+        )
+
+        # With all UP services
+        expected_obj_meta, expected_chunks = self.api.object_locate(
+            self.account, container, path, properties=False
+        )
+        self.assertIsNotNone(expected_obj_meta)
+        self.assertIsNotNone(expected_chunks)
+        expected_obj_meta = expected_obj_meta.copy()
+        expected_chunks = copy.deepcopy(expected_chunks)
+        for expected_chunk in expected_chunks:
+            self.assertGreaterEqual(expected_chunk["score"], 0)
+            del expected_chunk["score"]
+
+        # With a DOWN service
+        down_chunk = random.choice(expected_chunks)
+        service_id = down_chunk["url"].split("/")[2]
+        systemd_key = self.service_to_systemd_key(service_id, "rawx")
+        try:
+            self._service(systemd_key, "stop")
+
+            for _ in range(8):
+                time.sleep(1)
+                obj_meta, chunks = self.api.object_locate(
+                    self.account, container, path, properties=False
+                )
+                down_chunk_score = None
+                for chunk in chunks:
+                    if chunk["url"] == down_chunk["url"]:
+                        down_chunk_score = chunk["score"]
+                    else:
+                        self.assertGreaterEqual(chunk["score"], 0)
+                    del chunk["score"]
+                self.assertDictEqual(expected_obj_meta, obj_meta)
+                self.assertListEqual(expected_chunks, chunks)
+                if down_chunk_score == -1:
+                    break
+                self.assertGreaterEqual(down_chunk_score, 0)
+            self.assertEqual(-1, down_chunk_score)
+        finally:
+            self._service(systemd_key, "start", wait=4)
 
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):

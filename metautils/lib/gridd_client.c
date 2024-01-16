@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2022 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -110,8 +110,8 @@ _oio_cache_of_errors_constructor (void)
 	}
 }
 
-static gboolean
-_is_peer_down (const char *url)
+gboolean
+gridd_client_is_down_host(const char *url)
 {
 	g_rw_lock_reader_lock(&lock_down);
 	gpointer p = g_tree_lookup(tree_down, url);
@@ -806,7 +806,7 @@ gridd_client_start(struct gridd_client_s *client)
 		}
 
 		if (oio_client_down_avoid || oio_client_down_shorten) {
-			const gboolean down = _is_peer_down(client->url);
+			const gboolean down = gridd_client_is_down_host(client->url);
 			if (down) {
 				if (oio_client_down_avoid) {
 					_client_replace_error(client, NEWERROR(CODE_AVOIDED,
