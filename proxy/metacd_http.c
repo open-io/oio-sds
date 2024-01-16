@@ -18,6 +18,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <malloc.h>
+
 #include "common.h"
 #include "actions.h"
 
@@ -365,26 +367,46 @@ _lru_tree_expire (GRWLock *rw, struct lru_tree_s *lru, const gint64 delay)
 static void
 _task_expire_services_master (gpointer p UNUSED)
 {
+	gint64 start = oio_ext_monotonic_time();
 	guint count = _lru_tree_expire (&master_rwlock, srv_master,
 			ttl_expire_master_services);
-	if (count)
+	gint64 duration = oio_ext_monotonic_time() - start;
+	if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("Expired %u masters in %.6fs",
+				count, duration/(double)G_TIME_SPAN_SECOND);
+	} else if (count) {
 		GRID_DEBUG("Expired %u masters", count);
+	}
 }
 
 static void
 _task_expire_services_known (gpointer p UNUSED)
 {
+	gint64 start = oio_ext_monotonic_time();
 	guint count = _lru_tree_expire (&srv_rwlock, srv_known, ttl_known_services);
-	if (count)
-		GRID_INFO("Forgot %u services", count);
+	gint64 duration = oio_ext_monotonic_time() - start;
+	if (count) {
+		GRID_INFO("Forgot %u services, in %.6fs",
+				count, duration/(double)G_TIME_SPAN_SECOND);
+	} else if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("No known service expired, but analyzis took %.6fs",
+				duration/(double)G_TIME_SPAN_SECOND);
+	}
 }
 
 static void
 _task_expire_services_down (gpointer p UNUSED)
 {
+	gint64 start = oio_ext_monotonic_time();
 	guint count = _lru_tree_expire (&srv_rwlock, srv_down, ttl_down_services);
-	if (count)
-		GRID_INFO("Re-enabled %u services", count);
+	gint64 duration = oio_ext_monotonic_time() - start;
+	if (count) {
+		GRID_INFO("Re-enabled %u services in %.6fs",
+				count, duration/(double)G_TIME_SPAN_SECOND);
+	} else if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("No service re-enabled, but analyzis took %.6fs",
+				duration/(double)G_TIME_SPAN_SECOND);
+	}
 }
 
 static void
@@ -399,18 +421,39 @@ _task_expire_local (gpointer p UNUSED)
 static void
 _task_expire_resolver (gpointer p UNUSED)
 {
+	gint64 start = oio_ext_monotonic_time();
 	guint count_expire = hc_resolver_expire (resolver);
 	guint count_purge = hc_resolver_purge (resolver);
-	if (count_expire || count_purge) {
-		GRID_DEBUG ("Resolver: expired %u, purged %u",
-				count_expire, count_purge);
+	gint64 duration = oio_ext_monotonic_time() - start;
+	if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("Resolver: expired %u, purged %u in %.6fs",
+				count_expire, count_purge, duration/(double)G_TIME_SPAN_SECOND);
+	} else if (count_expire || count_purge) {
+		GRID_DEBUG("Resolver: expired %u, purged %u in %.6fs",
+				count_expire, count_purge, duration/(double)G_TIME_SPAN_SECOND);
 	}
+
+	start = oio_ext_monotonic_time();
 	count_expire = shard_resolver_expire(shard_resolver);
 	count_purge = shard_resolver_purge(shard_resolver);
-	if (count_expire || count_purge) {
-		GRID_DEBUG("Sharding resolver: expired %u, purged %u",
-				count_expire, count_purge);
+	duration = oio_ext_monotonic_time() - start;
+	if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("Sharding resolver: expired %u, purged %u in %.6fs",
+				count_expire, count_purge, duration/(double)G_TIME_SPAN_SECOND);
+	} else if (count_expire || count_purge) {
+		GRID_DEBUG("Sharding resolver: expired %u, purged %u in %.6fs",
+				count_expire, count_purge, duration/(double)G_TIME_SPAN_SECOND);
 	}
+}
+
+static void
+_task_malloc_trim(gpointer p UNUSED)
+{
+	VARIABLE_PERIOD_DECLARE();
+	if (VARIABLE_PERIOD_SKIP(sqlx_periodic_malloctrim_period))
+		return;
+
+	malloc_trim(sqlx_periodic_malloctrim_size);
 }
 
 static void
@@ -647,8 +690,17 @@ _task_reload_lb(gpointer p UNUSED)
 		return;
 
 	CSURL(cs);
+	gint64 start = oio_ext_monotonic_time();
 	if (cs && lb_cache_reload()) {
 		ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
+	}
+	gint64 duration = oio_ext_monotonic_time() - start;
+	if (duration > G_TIME_SPAN_SECOND) {
+		GRID_WARN("Reloading service cache took %.6fs (reqid=%s)",
+				duration/(double)G_TIME_SPAN_SECOND, oio_ext_get_reqid());
+	} else {
+		GRID_DEBUG("Reloading service cache took %.6fs (reqid=%s)",
+				duration/(double)G_TIME_SPAN_SECOND, oio_ext_get_reqid());
 	}
 }
 
@@ -1340,6 +1392,9 @@ grid_main_configure (int argc, char **argv)
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_reload_nsinfo, NULL, NULL);
+
+	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_malloc_trim, NULL, NULL);
 
 	network_server_bind_host (server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);
