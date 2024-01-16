@@ -2741,8 +2741,8 @@ class AccountBackendFdb(object):
             raise NotFound(
                 f"No secret for {account}/{bucket} with secret_id={secret_id}"
             )
-        ciphertext = tr[bucket_space.pack(("ciphertext", secret_id))]
-        key_id = tr[bucket_space.pack(("key_id", secret_id))]
+        ciphertext = tr[bucket_space.pack((secret_id, "ciphertext"))]
+        key_id = tr[bucket_space.pack((secret_id, "key_id"))]
         if ciphertext.present() and key_id.present():
             return (
                 secret.value,
