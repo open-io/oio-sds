@@ -695,7 +695,7 @@ _task_reload_lb(gpointer p UNUSED)
 		ADAPTIVE_PERIOD_ONSUCCESS(lb_downstream_delay);
 	}
 	gint64 duration = oio_ext_monotonic_time() - start;
-	if (duration > G_TIME_SPAN_SECOND) {
+	if (duration > (lb_downstream_delay * G_TIME_SPAN_SECOND)) {
 		GRID_WARN("Reloading service cache took %.6fs (reqid=%s)",
 				duration/(double)G_TIME_SPAN_SECOND, oio_ext_get_reqid());
 	} else {
