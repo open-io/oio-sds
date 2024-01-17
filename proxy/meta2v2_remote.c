@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -236,8 +236,8 @@ m2v2_remote_pack_DEDUP(struct oio_url_s *url, gint64 dl)
 
 
 GByteArray*
-m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, const char* destinations,
-	gint64 dl)
+m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, const char *destinations,
+	const char *replicator_id, const char *role_project_id, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PUT, url, body, dl);
@@ -247,8 +247,16 @@ m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, const char* destinati
 				force_versioning);
 	}
 	if (destinations) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_DESTS,
 				destinations);
+	}
+	if (replicator_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_ID,
+				replicator_id);
+	}
+	if (role_project_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_PROJECT_ID,
+				role_project_id);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
@@ -305,7 +313,8 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, gboolean dryrun,
-		const char* destinations, gint64 dl)
+		const char *destinations, const char *replicator_id,
+		const char *role_project_id, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
 	if (bypass_governance) {
@@ -324,8 +333,16 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 				force_versioning);
 	}
 	if (destinations) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_DESTS,
 				destinations);
+	}
+	if (replicator_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_ID,
+				replicator_id);
+	}
+	if (role_project_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_PROJECT_ID,
+				role_project_id);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
@@ -446,23 +463,32 @@ m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url,
 
 GByteArray*
 m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, gchar **names,
-		const char* destinations, gint64 dl)
+		const char *destinations, const char *replicator_id,
+		const char *role_project_id, gint64 dl)
 {
 	GByteArray *body = g_bytes_unref_to_array(
 			g_string_free_to_bytes(STRV_encode_gstr(names)));
 
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PROP_DEL, url, body, dl);
 	if (destinations) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_DESTS,
 				destinations);
 	}
-
+	if (replicator_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_ID,
+				replicator_id);
+	}
+	if (role_project_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_PROJECT_ID,
+				role_project_id);
+	}
 	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
 m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags,
-		GSList *beans, const char *destinations, gint64 dl)
+		GSList *beans, const char *destinations, const char *replicator_id,
+		const char *role_project_id, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PROP_SET, url, body, dl);
@@ -470,8 +496,16 @@ m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags,
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 
 	if (destinations) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLICATION_DESTS,
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_DESTS,
 				destinations);
+	}
+	if (replicator_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_ID,
+				replicator_id);
+	}
+	if (role_project_id) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_REPLI_PROJECT_ID,
+				role_project_id);
 	}
 	return message_marshall_gba_and_clean(msg);
 }

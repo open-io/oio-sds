@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -70,8 +70,51 @@ _m2b_notify_beans(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 }
 
 void
+meta2_json_encode_async_repli(GString *gstr, struct async_repli_s *repli)
+{
+	if (!repli->dests) {
+		GRID_DEBUG("no async repli in event (dests are missing)");
+		return;
+	}
+	g_string_append_static(gstr, ",\"repli\":{\"destinations\":");
+	oio_str_gstring_append_json_quote(gstr, repli->dests);
+
+	if (repli->replicator_id) {
+		g_string_append_static(gstr, ",\"replicator_id\":");
+		oio_str_gstring_append_json_quote(gstr, repli->replicator_id);
+	}
+	if (repli->role_project_id) {
+		// Here, the project_id coming from the role is converted
+		// to the project_id of the source (it makes more sense for the
+		// event reader).
+		g_string_append_static(gstr, ",\"src_project_id\":");
+		oio_str_gstring_append_json_quote(gstr, repli->role_project_id);
+	}
+	for (GSList *l0=repli->props; l0; l0=l0->next) {
+		if (!l0->data) {
+			continue;
+		}
+		if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
+			struct bean_PROPERTIES_s *prop = l0->data;
+			GByteArray *val = PROPERTIES_get_value(prop);
+			// Need both key and value to exist
+			if (!PROPERTIES_get_key(prop)->str || !(gchar*)val->data) {
+				continue;
+			}
+			g_string_append_static(gstr, ",");
+			oio_str_gstring_append_json_quote(gstr, PROPERTIES_get_key(prop)->str);
+			g_string_append_static(gstr, ":\"");
+			oio_str_gstring_append_json_blob(gstr, (gchar*)val->data, val->len);
+			g_string_append_static(gstr, "\"");
+		}
+	}
+	g_string_append_static(gstr, "}");
+}
+
+void
 _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
-		GSList *beans, const char *name, gboolean send_chunks, const char* dests)
+		GSList *beans, const char *name, gboolean send_chunks,
+		struct async_repli_s *repli)
 {
 	if (!notifier)
 		return;
@@ -83,7 +126,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 	// Need the alias to build a complete object URL
 	struct bean_ALIASES_s *alias = NULL;
 
-	void forward(GSList *list_of_beans, gboolean send_dst) {
+	void forward(GSList *list_of_beans, gboolean send_repli) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
@@ -96,9 +139,9 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append_static (gs, "]");
-		if (dests && send_dst) {
-			g_string_append_static(gs, ",\"destinations\":");
-			oio_str_gstring_append_json_quote(gs, dests);
+
+		if (repli && send_repli) {
+			meta2_json_encode_async_repli(gs, repli);
 		}
 		g_string_append_static (gs, "}");
 		oio_events_queue__send (notifier, g_string_free (gs, FALSE));
@@ -139,13 +182,13 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 	if (alias)
 		non_chunks = g_slist_prepend(non_chunks, alias);
 	non_chunks = g_slist_concat(non_chunks, g_slist_copy(sorted->properties));
-	gboolean send_dst = TRUE;
+	gboolean send_repli = TRUE;
 	if (!send_chunks) {
-		forward(non_chunks, send_dst);
-		send_dst = FALSE;
+		forward(non_chunks, send_repli);
+		send_repli = FALSE;
 	} else if (beans_len <= _MAX_BEANS_BY_EVENT) {
-		forward(beans, send_dst);
-		send_dst = FALSE;
+		forward(beans, send_repli);
+		send_repli = FALSE;
 	} else {
 		/* first, notify everything but the chunks */
 
@@ -153,8 +196,8 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		n_events += (beans_len - g_slist_length(non_chunks)
 				+ _MAX_BEANS_BY_EVENT - 1) / _MAX_BEANS_BY_EVENT;
 		if (non_chunks) {
-			forward (non_chunks, send_dst);
-			send_dst = FALSE;
+			forward (non_chunks, send_repli);
+			send_repli = FALSE;
 		}
 
 		if (!sorted->header)
@@ -174,8 +217,8 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 					batch = g_slist_prepend(batch, sorted->header);
 				if (alias)
 					batch = g_slist_prepend(batch, alias);
-				forward (batch, send_dst);
-				send_dst = FALSE;
+				forward (batch, send_repli);
+				send_repli = FALSE;
 				g_slist_free (batch);
 				batch = NULL;
 				count = 0;
@@ -186,7 +229,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 				batch = g_slist_prepend(batch, sorted->header);
 			if (alias)
 				batch = g_slist_prepend(batch, alias);
-			forward (batch, send_dst);
+			forward (batch, send_repli);
 			g_slist_free (batch);
 			batch = NULL;
 		}
@@ -195,6 +238,67 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 	m2v2_sorted_content_free(sorted);
 	g_slist_free(non_chunks);
 	oio_url_clean(url2);
+}
+
+struct async_repli_s *
+_async_repli_init(struct gridd_filter_ctx_s *ctx)
+{
+	struct async_repli_s *repli = g_slice_new0(struct async_repli_s);
+
+	repli->dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLI_DESTS);
+	repli->replicator_id = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLI_ID);
+	repli->role_project_id = meta2_filter_ctx_get_param(
+			ctx, NAME_MSGKEY_REPLI_PROJECT_ID);
+	repli->props = NULL;
+
+	return repli;
+}
+
+void
+_async_repli_clean(struct async_repli_s *repli)
+{
+	if (!repli)
+		return;
+
+	if (repli->props) {
+		_bean_cleanl2(repli->props);
+		repli->props = NULL;
+	}
+	g_slice_free(struct async_repli_s, repli);
+}
+
+GError*
+_m2b_extract_repli_properties(struct gridd_filter_ctx_s *ctx, GSList **out)
+{
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+
+	guint32 flags = 0;
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
+	if (fstr) {
+		flags = atoi(fstr);
+	}
+
+	void
+	_bean_repli_cb(gpointer plist, gpointer bean)
+	{
+		EXTRA_ASSERT(plist != NULL);
+		EXTRA_ASSERT(bean != NULL);
+		
+		if (&descr_struct_PROPERTIES == DESCR(bean)) {
+			struct bean_PROPERTIES_s *prop = bean;
+			gchar *expected_prop = "x-object-sysmeta-s3api-acl";
+			if (strcmp(expected_prop, PROPERTIES_get_key(prop)->str) != 0) {
+				_bean_clean(bean);
+				return;
+			}
+			*((GSList**)plist) = g_slist_prepend (*((GSList**)plist), bean);
+		} else {
+			_bean_clean(bean);
+		}
+	}
+
+	return meta2_backend_get_properties(m2b, url, flags, _bean_repli_cb, out);
 }
 
 int
@@ -298,10 +402,13 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		rc = FILTER_KO;
 	} else {
 		for (GSList *l=deleted; l; l=l->next) {
-			_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
+			_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data,
+					"content.deleted", TRUE);
 		}
-		const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
-		_m2b_notify_beans2(m2b->notifier_content_created, url, added, "content.new", FALSE, dests);
+		struct async_repli_s *repli = _async_repli_init(ctx);
+		_m2b_notify_beans2(m2b->notifier_content_created, url, added, "content.new",
+				FALSE, repli);
+		_async_repli_clean(repli);
 		meta2_filter_send_deferred_events(ctx, m2b->notifier_content_created);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
@@ -475,10 +582,13 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	// do not notify if dryrun is activated
 	if (!dryrun) {
 		if (delete_marker_created) {
-			const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
-			_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l, "content.new", FALSE, dests);
+			struct async_repli_s *repli = _async_repli_init(ctx);
+			_m2b_notify_beans2(m2b->notifier_content_created, url, obc->l,
+					"content.new", FALSE, repli);
+			_async_repli_clean(repli);
 		} else {
-			_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
+			_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l,
+					"content.deleted", TRUE);
 		}
 	}
 	_on_bean_ctx_send_list(obc);
@@ -527,29 +637,42 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct async_repli_s *repli = _async_repli_init(ctx);
 
 	guint32 flags = 0;
 	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (fstr != NULL)
 		flags = atoi(fstr);
 
-	if (!oio_url_has(url, OIOURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH)) {
 		e = BADREQ("Missing content path");
-	else
+	} else {
 		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
 				beans, &modified);
+	}
 
-	if (e != NULL) {
+	if (e) {
 		GRID_DEBUG("Failed to set properties on [%s]: (%d) %s",
 				oio_url_get(url, OIOURL_WHOLE), e->code, e->message);
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
 
-	const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
+	// Only extract properties if dests are found
+	if (repli->dests) {
+		e = _m2b_extract_repli_properties(ctx, &repli->props);
+		if (e) {
+			_bean_cleanl2(modified);
+			_async_repli_clean(repli);
+			meta2_filter_ctx_set_error(ctx, e);
+			return FILTER_KO;
+		}
+	}
+
 	_m2b_notify_beans2(m2b->notifier_content_updated, url, modified,
-			"content.update", FALSE, dests);
+			"content.update", FALSE, repli);
 	_bean_cleanl2(modified);
+	_async_repli_clean(repli);
 	return FILTER_OK;
 }
 
@@ -589,6 +712,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	GSList *deleted = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct async_repli_s *repli = _async_repli_init(ctx);
 
 	TRACE_FILTER();
 
@@ -600,25 +724,33 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	if (!e) {
 		e = meta2_backend_del_properties(m2b, url, namev, &deleted);
 	}
-
-	if (!e) {
-		/* Notify only if we changed something. */
-		gint prop_count = g_slist_length(deleted) - 1;  // Do not count alias
-		if (prop_count > 0) {
-			const char* dests = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_REPLICATION_DESTS);
-			_m2b_notify_beans2(m2b->notifier_content_updated, url, deleted,
-					"content.update", FALSE, dests);
-		}
-		g_slist_free_full(deleted, _bean_clean);
-	}
-
 	g_strfreev(namev);
+
 	if (e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
-	} else {
-		return FILTER_OK;
 	}
+
+	/* Notify only if we changed something. */
+	gint prop_count = g_slist_length(deleted) - 1;  // Do not count alias
+	if (prop_count > 0) {
+		// Only extract properties if dests are found
+		if (repli->dests) {
+			e = _m2b_extract_repli_properties(ctx, &repli->props);
+			if (e) {
+				_async_repli_clean(repli);
+				meta2_filter_ctx_set_error(ctx, e);
+				g_slist_free_full(deleted, _bean_clean);
+				return FILTER_KO;
+			}
+		}
+
+		_m2b_notify_beans2(m2b->notifier_content_updated, url, deleted,
+				"content.update", FALSE, repli);
+	}
+	g_slist_free_full(deleted, _bean_clean);
+
+	return FILTER_OK;
 }
 
 int

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -104,7 +104,9 @@ GByteArray* m2v2_remote_pack_DEDUP(
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
 		GSList *beans,
-		const char* destinations,
+		const char *destinations,
+		const char *replicator_id,
+		const char *role_project_id,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_OVERWRITE(
@@ -142,6 +144,8 @@ GByteArray* m2v2_remote_pack_DEL(
 		gboolean create_delete_marker,
 		gboolean dryrun,
 		const char *destinations,
+		const char *replicator_id,
+		const char *role_project_id,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(
@@ -199,14 +203,18 @@ GByteArray* m2v2_remote_pack_RAW_SUBST(
 GByteArray* m2v2_remote_pack_PROP_DEL(
 		struct oio_url_s *url,
 		gchar **names,
-		const char* destinations,
+		const char *destinations,
+		const char *replicator_id,
+		const char *role_project_id,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PROP_SET(
 		struct oio_url_s *url,
 		guint32 flags,
 		GSList *beans,
-		const char* destinations,
+		const char *destinations,
+		const char *replicator_id,
+		const char *role_project_id,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PROP_GET(

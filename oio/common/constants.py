@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,6 @@ SIMULATEVERSIONING_HEADER = HEADER_PREFIX + "simulate-versioning"
 PERFDATA_HEADER = HEADER_PREFIX + "perfdata"
 PERFDATA_HEADER_PREFIX = PERFDATA_HEADER + "-"
 REGION_HEADER = HEADER_PREFIX + "region"
-REPLICATION_DESTINATIONS = HEADER_PREFIX + "replication-destinations"
 REQID_HEADER = HEADER_PREFIX + "req-id"
 VERSIONID_HEADER = HEADER_PREFIX + "version-id"
 

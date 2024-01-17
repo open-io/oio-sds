@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -36,6 +36,14 @@ struct on_bean_ctx_s
 	struct gridd_filter_ctx_s *ctx;
 };
 
+struct async_repli_s
+{
+	const char *dests;
+	const char *replicator_id;
+	const char *role_project_id;
+	GSList *props;
+};
+
 struct on_bean_ctx_s *_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
@@ -52,7 +60,13 @@ void _m2b_notify_beans2(
 		struct oio_events_queue_s *notifier,
 		struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks,
-		const char* dests);
+		struct async_repli_s *repli);
+
+// Replication functions
+struct async_repli_s *_async_repli_init(struct gridd_filter_ctx_s *ctx);
+void _async_repli_clean(struct async_repli_s *repli);
+GError* _m2b_extract_repli_properties(struct gridd_filter_ctx_s *ctx, GSList **out);
+void meta2_json_encode_async_repli(GString *g, struct async_repli_s *repli);
 
 /* -------------------------------------------------------------------------- */
 
@@ -85,7 +99,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_bypass_governance);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_dryrun);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_maxvers);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_repli_destinations);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_async_replication);
 M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_limit);
 M2V2_DECLARE_FILTER(meta2_filter_extract_admin);

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -299,7 +299,7 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_optional_overwrite,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_header_optional_repli_destinations,
+	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
 	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
@@ -377,7 +377,7 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_optional_dryrun,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_flags32,
-	meta2_filter_extract_header_optional_repli_destinations,
+	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
 	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
@@ -424,7 +424,7 @@ static gridd_filter M2V2_PROPSET_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_extract_header_flags32,
-	meta2_filter_extract_header_optional_repli_destinations,
+	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_body_beans,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_events_not_stalled,
@@ -459,7 +459,7 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_events_not_stalled,
-	meta2_filter_extract_header_optional_repli_destinations,
+	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_action_del_content_properties,
 	meta2_filter_reply_success,
 	NULL

@@ -3892,6 +3892,8 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 
 	GSList *beans = NULL;
 	const gchar *destinations = NULL;
+	const gchar *replicator_id = NULL;
+	const gchar *role_project_id = NULL;
 
 	if (jargs) {
 		gchar **kv = NULL;
@@ -3913,6 +3915,17 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		if (jdests) {
 			destinations = json_object_get_string(jdests);
 		}
+		struct json_object *jreplicator_id = NULL;
+		json_object_object_get_ex(jargs, "replication_replicator_id", &jreplicator_id);
+		if (jreplicator_id) {
+			replicator_id =json_object_get_string(jreplicator_id);
+		}
+		struct json_object *jrole_project_id = NULL;
+		json_object_object_get_ex(jargs, "replication_role_project_id",
+								  &jrole_project_id);
+		if (jrole_project_id) {
+			role_project_id = json_object_get_string(jrole_project_id);
+		}
 	}
 
 	guint32 flags = 0;
@@ -3920,7 +3933,8 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		flags |= M2V2_FLAG_FLUSH;
 	}
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, destinations, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans,
+			destinations, replicator_id, role_project_id, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2 (beans);
 	return _reply_m2_error (args, err);
@@ -3930,6 +3944,8 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 		struct json_object *jargs) {
 	struct json_object * jprops = jargs;
 	const gchar *destinations = NULL;
+	const gchar *replicator_id = NULL;
+	const gchar *role_project_id = NULL;
 
 	// Payload with replication destinations
 	if (json_object_is_type(jargs, json_type_object)) {
@@ -3938,6 +3954,17 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 		json_object_object_get_ex(jargs, "replication_destinations", &jdests);
 		if (jdests) {
 			destinations =json_object_get_string(jdests);
+		}
+		struct json_object *jreplicator_id = NULL;
+		json_object_object_get_ex(jargs, "replication_replicator_id", &jreplicator_id);
+		if (jreplicator_id) {
+			replicator_id =json_object_get_string(jreplicator_id);
+		}
+		struct json_object *jrole_project_id = NULL;
+		json_object_object_get_ex(jargs, "replication_role_project_id",
+								  &jrole_project_id);
+		if (jrole_project_id) {
+			role_project_id = json_object_get_string(jrole_project_id);
 		}
 	} else if (!json_object_is_type(jargs, json_type_array)) {
 		return _reply_format_error (args, BADREQ("Array or object argument expected"));
@@ -3950,7 +3977,8 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 		return _reply_format_error(args, err);
 	}
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev, destinations, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev,
+			destinations, replicator_id, role_project_id, DL()); }
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	g_strfreev(namev);
 	return _reply_m2_error (args, err);
@@ -3999,13 +4027,22 @@ static GError *_m2_json_put (struct req_args_s *args,
 	struct json_object *jdests = NULL;
 	json_object_object_get_ex(jbody, "replication_destinations", &jdests);
 	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
+	struct json_object *jreplicator_id = NULL;
+	json_object_object_get_ex(jbody, "replication_replicator_id", &jreplicator_id);
+	const gchar *replicator_id = !jreplicator_id ? NULL : json_object_get_string(
+			jreplicator_id);
+	struct json_object *jrole_project_id = NULL;
+	json_object_object_get_ex(jbody, "replication_role_project_id", &jrole_project_id);
+	const gchar *role_project_id = !jrole_project_id ? NULL : json_object_get_string(
+			jrole_project_id);
 
 	PACKER_VOID(_pack) {
 		if (force) return m2v2_remote_pack_OVERWRITE(args->url, ibeans, DL());
 		if (append) return m2v2_remote_pack_APPEND(args->url, ibeans, DL());
 		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY(args->url, ibeans, DL());
 		if (restore_drained) return m2v2_remote_pack_RESTORE_DRAINED(args->url, ibeans, DL());
-		return m2v2_remote_pack_PUT (args->url, ibeans, destinations, DL());
+		return m2v2_remote_pack_PUT (args->url, ibeans, destinations, replicator_id,
+				role_project_id, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (obeans);
@@ -4425,9 +4462,17 @@ static GError *_m2_json_delete (struct req_args_s *args,
 	struct json_object *jdests = NULL;
 	json_object_object_get_ex(jbody, "replication_destinations", &jdests);
 	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
-
+	struct json_object *jreplicator_id = NULL;
+	json_object_object_get_ex(jbody, "replication_replicator_id", &jreplicator_id);
+	const gchar *replicator_id = !jreplicator_id ? NULL : json_object_get_string(
+			jreplicator_id);
+	struct json_object *jrole_project_id = NULL;
+	json_object_object_get_ex(jbody, "replication_role_project_id", &jrole_project_id);
+	const gchar *role_project_id = !jrole_project_id ? NULL : json_object_get_string(
+			jrole_project_id);
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, destinations, DL()); }
+			bypass_governance, create_delete_marker, dryrun, destinations,
+			replicator_id, role_project_id, DL()); }
 	gboolean delete_marker = FALSE;
 	gint64 version = -1;
 	struct list_result_s del_result = {0};
@@ -4536,7 +4581,8 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, NULL, DL()); }
+			bypass_governance, create_delete_marker, dryrun,
+			NULL, NULL, NULL, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,

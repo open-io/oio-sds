@@ -58,7 +58,7 @@ def random_content():
 
 def random_container():
     """Generate a container name."""
-    return random_str(16)
+    return random_str(8)
 
 
 def merge(s0, s1):
@@ -96,7 +96,7 @@ def gen_names(width=8, depth=1):
 class TestMeta2Containers(BaseTestCase):
     def setUp(self):
         super(TestMeta2Containers, self).setUp()
-        self.ref = random_container()
+        self.ref = f"TestMeta2Containers-{random_container()}"
 
     def tearDown(self):
         super(TestMeta2Containers, self).tearDown()
@@ -154,7 +154,7 @@ class TestMeta2Containers(BaseTestCase):
     def test_mass_delete(self):
         containers = []
         for i in range(50):
-            container = random_container()
+            container = f"test_mass_delete-{random_container()}"
             param = self.param_ref(container)
             self._create(param, 201)
             self._delete(param)
@@ -1232,7 +1232,7 @@ class TestMeta2Containers(BaseTestCase):
 class TestMeta2Contents(BaseTestCase):
     def setUp(self):
         super(TestMeta2Contents, self).setUp()
-        self.ref = random_container()
+        self.ref = f"TestMeta2Contents-{random_container()}"
 
     @classmethod
     def setUpClass(cls):
@@ -1901,54 +1901,86 @@ class TestMeta2Contents(BaseTestCase):
         for chunk in chunks:
             self.assertTrue(chunk["real_url"].startswith("https://"))
 
-    def test_replication_destinations(self):
-        cname = "test_repli_" + random_str(8)
+    def test_replication(self):
+        self.ref = "test_replication_" + random_str(8)
         reqid = request_id()
+
         # Create a container
-        self.storage.container_create(self.account, cname, reqid=reqid)
+        self.storage.container_create(self.account, self.ref, reqid=reqid)
+
+        # Enable versioning on the container
+        params = self.param_content(self.ref, self.ref)
+        props = {"system": {"sys.m2.policy.version": "-1"}}
+        resp = self.request(
+            "POST",
+            self.url_container("set_properties"),
+            params=params,
+            data=json.dumps(props),
+        )
+        self.assertEqual(204, resp.status)
 
         # Create an object
         self.storage.object_create_ext(
             self.account,
-            cname,
-            obj_name=cname,
-            data=cname,
+            self.ref,
+            obj_name=self.ref,
+            data=self.ref,
             reqid=reqid,
             replication_destinations="dst1;dst2",
+            replication_replicator_id="obj_create_ext_1",
+            replication_role_project_id="obj_create_ext_2",
+            properties={"x-object-sysmeta-s3api-acl": "myuseracls"},
         )
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.CONTENT_NEW,),
         )
         self.assertIsNotNone(event)
-        self.assertEqual("dst1;dst2", event.destinations)
+        found = False
+        for d in event.data:
+            key = d.get("key")
+            if key and key == "x-object-sysmeta-s3api-acl":
+                self.assertEqual("myuseracls", d["value"])
+                found = True
+                break
+        self.assertTrue(found)
+        self.assertEqual("dst1;dst2", event.repli["destinations"])
+        self.assertEqual("obj_create_ext_1", event.repli["replicator_id"])
+        self.assertEqual("obj_create_ext_2", event.repli["src_project_id"])
 
         # Set properties
         reqid = request_id()
         self.storage.object_set_properties(
             self.account,
-            cname,
-            obj=cname,
+            self.ref,
+            obj=self.ref,
             properties={"foo": "bar"},
             reqid=reqid,
-            replication_destinations="dst1;dst2",
+            replication_destinations="dst3;dst4",
+            replication_replicator_id="obj_set_props_1",
+            replication_role_project_id="obj_set_props_2",
         )
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.CONTENT_UPDATE,),
         )
         self.assertIsNotNone(event)
-        self.assertEqual("dst1;dst2", event.destinations)
+        self.assertEqual("dst3;dst4", event.repli["destinations"])
+        self.assertEqual("obj_set_props_1", event.repli["replicator_id"])
+        self.assertEqual("obj_set_props_2", event.repli["src_project_id"])
+        self.assertEqual("myuseracls", event.repli["x-object-sysmeta-s3api-acl"])
 
         # Delete properties
         reqid = request_id()
         self.storage.object_del_properties(
             self.account,
-            cname,
-            obj=cname,
+            self.ref,
+            obj=self.ref,
             properties=["foo"],
             reqid=reqid,
-            replication_destinations="dst1;dst2",
+            replication_destinations="dst5;dst6",
+            replication_replicator_id="obj_del_props_1",
+            replication_role_project_id="obj_del_props_2",
         )
 
         event = self.wait_for_kafka_event(
@@ -1956,18 +1988,32 @@ class TestMeta2Contents(BaseTestCase):
             types=(EventTypes.CONTENT_UPDATE,),
         )
         self.assertIsNotNone(event)
-        self.assertEqual("dst1;dst2", event.destinations)
+        self.assertEqual("dst5;dst6", event.repli["destinations"])
+        self.assertEqual("obj_del_props_1", event.repli["replicator_id"])
+        self.assertEqual("obj_del_props_2", event.repli["src_project_id"])
+        self.assertEqual("myuseracls", event.repli["x-object-sysmeta-s3api-acl"])
 
-        # Delete object
+        # Delete object (as versioning is enabled, a delete marker will be created)
         self.storage.object_delete(
             self.account,
-            cname,
-            obj=cname,
+            self.ref,
+            obj=self.ref,
             reqid=reqid,
-            version="3",
-            replication_destinations="dst1;dst2",
-            create_delete_marker=True,
+            replication_destinations="dst7;dst8",
+            replication_replicator_id="obj_del_1",
+            replication_role_project_id="obj_del_2",
         )
         event = self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTENT_NEW,))
         self.assertIsNotNone(event)
-        self.assertEqual("dst1;dst2", event.destinations)
+        self.assertEqual("dst7;dst8", event.repli["destinations"])
+        self.assertEqual("obj_del_1", event.repli["replicator_id"])
+        self.assertEqual("obj_del_2", event.repli["src_project_id"])
+        # No acl for delete markers
+        self.assertNotIn("x-object-sysmeta-s3api-acl", event.repli)
+        found = False
+        for d in event.data:
+            key = d.get("key")
+            if key and key == "x-object-sysmeta-s3api-acl":
+                found = True
+                break
+        self.assertFalse(found)

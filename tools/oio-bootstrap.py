@@ -1499,7 +1499,7 @@ endpoint = ${WEBHOOK_ENDPOINT}
 use = egg:oio#notify
 broker_endpoint = ${QUEUE_URL}
 topic = oio-replication
-required_fields = destinations
+required_fields = repli
 
 [filter:bury]
 use = egg:oio#bury

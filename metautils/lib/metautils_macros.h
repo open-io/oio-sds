@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -58,7 +58,9 @@ License along with this library.
 #define NAME_MSGKEY_CONTENTPATH        "CP"
 #define NAME_MSGKEY_CONTENTID          "CI"
 #define NAME_MSGKEY_DELETE_MARKER      "DELETE_MARKER"
-#define NAME_MSGKEY_REPLICATION_DESTS  "REPLICATION_DESTS"
+#define NAME_MSGKEY_REPLI_DESTS        "REPLI_DESTS"
+#define NAME_MSGKEY_REPLI_ID           "REPLI_ID"
+#define NAME_MSGKEY_REPLI_PROJECT_ID   "REPLI_PROJECT_ID"
 #define NAME_MSGKEY_DELIMITER          "DELIMITER"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"

@@ -225,13 +225,19 @@ class ContainerClient(ProxyClient):
             if now - self._last_refresh_rawx_scores > self._refresh_rawx_scores_delay:
                 self._refresh_rawx_scores(now, **kwargs)
 
-    def _add_replication_destinations(self, data, **kwargs):
+    def _add_replication_info(self, data, **kwargs):
         """Add replication destinations field to data structure."""
         if data is None:
             data = {}
         dests = kwargs.get("replication_destinations")
         if dests:
             data["replication_destinations"] = dests
+        replication_replicator_id = kwargs.get("replication_replicator_id")
+        if replication_replicator_id:
+            data["replication_replicator_id"] = replication_replicator_id
+        replication_role_project_id = kwargs.get("replication_role_project_id")
+        if replication_role_project_id:
+            data["replication_role_project_id"] = replication_role_project_id
         return data
 
     def container_create(
@@ -755,7 +761,7 @@ class ContainerClient(ProxyClient):
             params["id"] = content_id
             uri = self._make_uri("content/update")
 
-        data = self._add_replication_destinations(data, **kwargs)
+        data = self._add_replication_info(data, **kwargs)
         data = json.dumps(data)
 
         hdrs = {"x-oio-content-meta-length": str(size)}
@@ -846,7 +852,7 @@ class ContainerClient(ProxyClient):
             **kwargs
         )
 
-        data = self._add_replication_destinations({}, **kwargs)
+        data = self._add_replication_info({}, **kwargs)
         data = json.dumps(data)
         resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
         delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
@@ -1102,7 +1108,7 @@ class ContainerClient(ProxyClient):
         if clear:
             params["flush"] = 1
 
-        data = self._add_replication_destinations(properties, **kwargs)
+        data = self._add_replication_info(properties, **kwargs)
         data = json.dumps(data)
 
         del_cached_object_metadata(
@@ -1139,7 +1145,7 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid, version=version)
         # Build a list in case the parameter is a view (not serializable).
 
-        data = self._add_replication_destinations({}, **kwargs)
+        data = self._add_replication_info({}, **kwargs)
         if data:
             data["properties"] = [x for x in properties]
         else:

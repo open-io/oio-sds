@@ -47,7 +47,7 @@ class Event(object):
     svcid = _event_env_property("service_id")
     url = _event_env_property("url")
     when = _event_env_property("when")
-    destinations = _event_env_property("destinations")
+    repli = _event_env_property("repli")
 
     def __init__(self, env):
         self.env = env

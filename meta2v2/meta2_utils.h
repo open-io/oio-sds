@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -34,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define VERSIONS_LIMITED(V)   ((V) > 1)
 
 #define CHUNK_METHOD_DRAINED "drained"
-#define REPLICATION_DESTS_HEADER "x-oio-replication-destinations"
 
 #define LAST_UNICODE_CHAR "\xf4\x8f\xbf\xbd"
 
