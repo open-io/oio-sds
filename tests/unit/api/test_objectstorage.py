@@ -589,25 +589,30 @@ class ObjectStorageTest(unittest.TestCase):
         }
         self.assertDictEqual(sorted_chunks, chunks)
 
+        # Some chunks have a lower score because we want them sorted AFTER.
+        # Indeed, EC chunks are not sorted by subposition, but by score.
+        # And there is some kind of randomization for close scores, hence
+        # the 20 percent gap.
         raw_chunks = [
             chunk("AAAA", "0.0"),
-            chunk("BBBB", "0.1"),
+            chunk("BBBB", "0.1", 80),
             chunk("AAAA", "0.0"),
             chunk("DDDD", "1.0"),
-            chunk("EEEE", "1.1"),
-            chunk("EEEE", "1.1"),
+            chunk("EEEE", "1.1", 80),
+            chunk("EEEE", "1.1", 80),
         ]
         chunks = _sort_chunks(raw_chunks, True)
         sorted_chunks = {
             0: [
                 extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
-                extend(chunk("BBBB", "0.1"), {"num": 1, "offset": 0}),
+                extend(chunk("BBBB", "0.1", 80), {"num": 1, "offset": 0}),
             ],
             1: [
                 extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
-                extend(chunk("EEEE", "1.1"), {"num": 1, "offset": 32}),
+                extend(chunk("EEEE", "1.1", 80), {"num": 1, "offset": 32}),
             ],
         }
+        self.maxDiff = 8000
         self.assertDictEqual(sorted_chunks, chunks)
 
     def test_container_refresh_conflict(self):
