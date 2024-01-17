@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -279,6 +279,102 @@ _cs_json_pack_and_free_srvinfo_list(GSList * svc, gboolean full)
 	}
 	g_string_append_c(gstr, ']');
 	g_slist_free_full(svc, (GDestroyNotify) service_info_clean);
+	return gstr;
+}
+
+static void
+_service_info_build_stats_keys(const struct service_info_s *si,
+		gchar *out_key_get, gchar *out_key_put, size_t key_size)
+{
+	gchar slots[128] = {0};
+	gboolean up = FALSE, get_lock = FALSE, put_lock = FALSE;
+	struct service_tag_s *tag = NULL;
+	for (guint i = 0, max = si->tags->len; i < max; i++) {
+		tag = si->tags->pdata[i];
+		if (!g_strcmp0(tag->name, NAME_TAGNAME_SLOTS)) {
+			service_tag_get_value_string(tag, slots, sizeof(slots), NULL);
+		} else if (!g_strcmp0(tag->name, NAME_TAGNAME_UP)) {
+			service_tag_get_value_boolean(tag, &up, NULL);
+		} else if (!g_strcmp0(tag->name, NAME_TAGNAME_GET_LOCK)) {
+			service_tag_get_value_boolean(tag, &get_lock, NULL);
+		} else if (!g_strcmp0(tag->name, NAME_TAGNAME_PUT_LOCK)) {
+			service_tag_get_value_boolean(tag, &put_lock, NULL);
+		}
+	}
+
+	g_snprintf(out_key_get, key_size,
+			"service_type=\"%s\",slots=\"%s\",up=\"%s\",lock=\"%s\",score_type=\"get\"",
+			si->type, slots, BOOLSTR(up), BOOLSTR(get_lock));
+	g_snprintf(out_key_put, key_size,
+			"service_type=\"%s\",slots=\"%s\",up=\"%s\",lock=\"%s\",score_type=\"put\"",
+			si->type, slots, BOOLSTR(up), BOOLSTR(put_lock));
+}
+
+static void
+_service_info_incr_stats(GHashTable *stats, const gchar *mid_key, gint32 score)
+{
+	gint32 intervals[6] = {G_MAXINT32, 80, 60, 40, 20, 0};
+	gchar *key = NULL;
+
+	key = g_strdup_printf("conscience_scores_count{%s}", mid_key);
+	gint64 count = GPOINTER_TO_INT(g_hash_table_lookup(stats, key));
+	g_hash_table_insert(stats, key, GINT_TO_POINTER(count + 1));
+
+	key = g_strdup_printf("conscience_scores_sum{%s}", mid_key);
+	gint64 sum = GPOINTER_TO_INT(g_hash_table_lookup(stats, key));
+	g_hash_table_insert(stats, key, GINT_TO_POINTER(sum + score));
+
+	for (size_t i = 0; i < sizeof(intervals)/sizeof(gint32); i++) {
+		gint32 upper = intervals[i];
+		if (i == 0) {
+			key = g_strdup_printf(
+					"conscience_scores_bucket{%s,le=\"+Inf\"}", mid_key);
+		} else {
+			key = g_strdup_printf(
+					"conscience_scores_bucket{%s,le=\"%u\"}", mid_key, upper);
+		}
+		/* If the key does not exist, count will be zero. */
+		count = GPOINTER_TO_INT(g_hash_table_lookup(stats, key));
+		if (score <= upper)
+			count += 1;
+		/* Even if the count is zero, insert it, so all "le" exist. */
+		g_hash_table_insert(stats, key, GINT_TO_POINTER(count));
+	}
+}
+
+static void
+service_info_incr_stats(GHashTable *stats, const struct service_info_s *si)
+{
+	if (!si)
+		return;
+
+	gchar mid_key_get[192] = {0}, mid_key_put[192] = {0};
+	_service_info_build_stats_keys(
+			si, mid_key_get, mid_key_put, sizeof(mid_key_get));
+	_service_info_incr_stats(stats, mid_key_get, si->get_score.value);
+	_service_info_incr_stats(stats, mid_key_put, si->put_score.value);
+}
+
+static GString*
+_cs_prometheus_aggregate_and_free_srvinfo_stats(GSList *svc)
+{
+	GHashTable *stats = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, NULL);
+	for (GSList * l = svc; l; l = l->next) {
+		service_info_incr_stats(stats, l->data);
+	}
+	g_slist_free_full(svc, (GDestroyNotify)service_info_clean);
+
+	GString *gstr = g_string_sized_new(4096);
+	GHashTableIter iter;
+	gpointer k, v;
+	g_hash_table_iter_init(&iter, stats);
+	while (g_hash_table_iter_next(&iter, &k, &v)) {
+		g_string_append_printf(
+				gstr, "%s %d\n", (gchar*)k, GPOINTER_TO_INT(v));
+	}
+
+	g_hash_table_unref(stats);
 	return gstr;
 }
 
@@ -700,6 +796,10 @@ action_conscience_list (struct req_args_s *args)
 		return _reply_success_bytes(args, HTTP_CONTENT_TYPE_TEXT,
 				g_string_free_to_bytes(
 						_cs_prometheus_pack_and_free_srvinfo_list(sl)));
+	} else if (strcmp(format, "aggregated") == 0) {
+		return _reply_success_bytes(args, HTTP_CONTENT_TYPE_TEXT,
+				g_string_free_to_bytes(
+						_cs_prometheus_aggregate_and_free_srvinfo_stats(sl)));
 	}
 	return _reply_format_error(args, BADREQ("Unknown format"));
 }

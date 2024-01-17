@@ -31,6 +31,7 @@ extern "C" {
 #define CMP(a,b) (((a) > (b)) - ((a) < (b)))
 
 #define BOOL(C) ((C)!=0)
+#define BOOLSTR(C) ((C)?"true":"false")
 
 #define MACRO_COND(C,A,B) ((B) ^ (((A)^(B)) & -BOOL(C)))
 

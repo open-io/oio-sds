@@ -48,7 +48,7 @@ class TestMetaX(BaseTestCase):
         self._test_get_stats(service_type, stat_re)
 
     def _test_get_stats_prometheus(self, service_type):
-        stat_re = re.compile(r"^(\w+){(.+)} (\w+|[0-9.]+)$")
+        stat_re = re.compile(r"^(\w+){(.+)} (\w+|[\d.]+)$")
         self._test_get_stats(service_type, stat_re, output_format="prometheus")
 
     def test_get_meta0_stats(self):
@@ -86,3 +86,18 @@ class TestMetaX(BaseTestCase):
 
     def test_get_meta2_info(self):
         self._test_get_info_prometheus("meta2")
+
+    def test_get_aggregated_score_stats(self):
+        stat_re = re.compile(r"^(conscience_scores_\w+){(.+)} (\d+)$")
+        resp, body = self.proxy_client._request(
+            "GET",
+            f"{self.ns}/conscience/list",
+            params={"type": "all", "format": "aggregated"},
+        )
+        self.assertEqual(200, resp.status)
+        stats = body.decode("utf-8")
+        for line in stats.split("\n"):
+            if not line.strip():
+                continue
+            match = stat_re.match(line)
+            self.assertTrue(match, "'%s' did not match %r" % (line, stat_re.pattern))
