@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -166,12 +166,8 @@ def get_logger(conf, name=None, verbose=False, fmt=None):
     logging_level = getattr(
         logging, conf.get("log_level", "INFO").upper(), logging.INFO
     )
-    if (
-        verbose
-        or conf.get("is_cli")
-        or hasattr(get_logger, "console_handler4logger")
-        or logging_level < logging.INFO
-    ):
+
+    if verbose or conf.get("is_cli") or hasattr(get_logger, "console_handler4logger"):
         if not hasattr(get_logger, "console_handler4logger"):
             get_logger.console_handler4logger = {}
         if logger in get_logger.console_handler4logger:
