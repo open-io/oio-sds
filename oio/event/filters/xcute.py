@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,20 +19,31 @@ from oio.event.beanstalk import BeanstalkError
 from oio.event.filters.base import Filter
 from oio.common.easy_value import int_value
 from oio.common.json import json
-from oio.xcute.common.worker import XcuteWorker
+from oio.xcute.common.worker import BeanstalkXcuteWorker, KafkaXcuteWorker
 
 
 class XcuteFilter(Filter):
     DEFAULT_RETRY_DELAY_TO_REPLY = 60
+
+    def __init__(self, app, conf, endpoint=None):
+        super().__init__(app, conf)
+        self.endpoint = endpoint
 
     def init(self):
         self.retry_delay_to_reply = int_value(
             self.conf.get("retry_delay_to_reply"), self.DEFAULT_RETRY_DELAY_TO_REPLY
         )
 
-        self.worker = XcuteWorker(
-            self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
-        )
+        self.worker = self._instanciate_worker()
+
+    def _instanciate_worker(self):
+        raise NotImplementedError("Worker instanciation not defined")
+
+    def _reply(self, job_id, task_ids, task_results, task_errors, *args):
+        self.worker.reply(job_id, task_ids, task_results, task_errors)
+
+    def _get_extra_from_event(self, _event, _env):
+        return []
 
     def process(self, env, cb):
         event = Event(env)
@@ -42,16 +53,31 @@ class XcuteFilter(Filter):
             task_ids = event.data["task_ids"]
             task_results = event.data["task_results"]
             task_errors = event.data["task_errors"]
-            beanstalkd_reply_info = event.data["beanstalkd_reply"]
         else:
             (
                 job_id,
                 task_ids,
                 task_results,
                 task_errors,
-                beanstalkd_reply_info,
             ) = self.worker.process(event.data)
+        extra = self._get_extra_from_event(event, env)
+        self._reply(job_id, task_ids, task_results, task_errors, *extra)
 
+        return self.app(env, cb)
+
+
+class BeanstalkXcuteFilter(XcuteFilter):
+    def _instanciate_worker(self):
+        return BeanstalkXcuteWorker(
+            self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
+        )
+
+    def _get_extra_from_event(self, event, env):
+        beanstalkd_reply_info = event.data["beanstalkd_reply"]
+        return (beanstalkd_reply_info, env["queue_connector"])
+
+    def _reply(self, job_id, task_ids, task_results, task_errors, *extra):
+        beanstalkd_reply_info, queue_connector, *_ = extra
         try:
             self.worker.reply(
                 job_id, task_ids, task_results, task_errors, beanstalkd_reply_info
@@ -76,18 +102,27 @@ class XcuteFilter(Filter):
                     },
                 }
             )
-            # TODO(FVE): make it compatible with another queue system
-            beanstalkd = env["queue_connector"]
-            beanstalkd.put(tasks_processed_event, delay=self.retry_delay_to_reply)
+            queue_connector.put(tasks_processed_event, delay=self.retry_delay_to_reply)
 
-        return self.app(env, cb)
+
+class KafkaXcuteFilter(XcuteFilter):
+    def _instanciate_worker(self):
+        return KafkaXcuteWorker(
+            self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
+        )
 
 
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
 
+    endpoint = conf.get("broker_endpoint", conf.get("queue_url"))
+    if not endpoint:
+        raise ValueError("Endpoint is missing")
+
     def account_filter(app):
-        return XcuteFilter(app, conf)
+        if endpoint.startswith("kafka://"):
+            return KafkaXcuteFilter(app, conf, endpoint=endpoint)
+        return BeanstalkXcuteFilter(app, conf, endpoint=endpoint)
 
     return account_filter

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,10 +66,12 @@ class TestContentRebuildFilter(BaseTestCase):
         queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
         self.queue_url = queue_addr
         self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
-        self.notify_filter = BeanstalkdNotifyFilter(app=_App, conf=self.conf)
+        self.conf["tube"] = BlobRebuilder.DEFAULT_WORKER_TUBE
+        self.notify_filter = BeanstalkdNotifyFilter(
+            app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
+        )
         bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE, timeout=0.5)
+        bt.drain_tube(BlobRebuilder.DEFAULT_WORKER_TUBE, timeout=0.5)
         bt.close()
         self.wait_for_score(("rawx", "meta2"), score_threshold=10, timeout=5.0)
         self.objects_created = list()
@@ -134,7 +136,7 @@ class TestContentRebuildFilter(BaseTestCase):
 
     def _rebuild(self, event, job_id=0):
         bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.wait_until_empty(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE, timeout=0.5)
+        bt.wait_until_empty(BlobRebuilder.DEFAULT_WORKER_TUBE, timeout=0.5)
         bt.close()
         time.sleep(2)
 
@@ -405,7 +407,9 @@ class TestNotifyFilterBase(BaseTestCase):
         self.conf["queue_url"] = "beanstalk://" + self.queue_url
         self.conf["tube"] = "oio-repli"
         self.conf["exclude"] = []
-        self.notify_filter = self.filter_class(app=_App, conf=self.conf)
+        self.notify_filter = self.filter_class(
+            app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
+        )
 
     def tearDown(self):
         super(TestNotifyFilterBase, self).tearDown()

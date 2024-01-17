@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -295,7 +295,7 @@ class ToolCommandMixin(CommandMixin):
                 """
 The beanstalkd tube to use to send the items to rebuild. (default=%s)
 """
-                % self.tool_class.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
+                % self.tool_class.DEFAULT_DISTRIBUTED_WORKER_TUBE
             )
             parser.add_argument("--distributed-tube", help=distributed_tube_help)
         else:  # local

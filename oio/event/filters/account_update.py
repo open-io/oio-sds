@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,10 +24,11 @@ from oio.common.constants import (
 from oio.common.exceptions import (
     BadRequest,
     ClientException,
-    ExplicitBury,
     OioException,
     OioTimeout,
 )
+from oio.common.kafka import get_retry_delay
+from oio.common.easy_value import float_value
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
@@ -49,12 +50,15 @@ class AccountUpdateFilter(Filter):
 
     def init(self):
         self.account = self.app_env["account_client"]
-        self.connection_timeout = float(
-            self.conf.get("connection_timeout", CONNECTION_TIMEOUT)
+        self.connection_timeout = float_value(
+            self.conf.get("connection_timeout"), CONNECTION_TIMEOUT
         )
-        self.read_timeout = float(self.conf.get("read_timeout", READ_TIMEOUT))
+
+        self.read_timeout = float_value(self.conf.get("read_timeout"), READ_TIMEOUT)
         if not self.account.region:
             raise OioException("Missing region key in namespace conf")
+
+        self.retry_delay = get_retry_delay(self.conf)
 
     def process(self, env, cb):
         event = Event(env)
@@ -135,7 +139,9 @@ class AccountUpdateFilter(Filter):
                         )
         except OioTimeout as exc:
             msg = f"account update failure: {exc}"
-            resp = RetryableEventError(event=Event(env), body=msg)
+            resp = RetryableEventError(
+                event=Event(env), body=msg, delay=self.retry_delay
+            )
             return resp(env, cb)
         except ClientException as exc:
             if exc.http_status == 409 and "No update needed" in exc.message:
@@ -166,7 +172,10 @@ class AccountUpdateFilter(Filter):
                         headers[REQID_HEADER],
                         exc,
                     )
-                    raise ExplicitBury from exc
+                    return EventError(
+                        f"Invalid request (type{event.event_type}, job_id="
+                        f"{event.job_id}, reqid={headers[REQID_HEADER]}): {exc}"
+                    )(env, cb)
             else:
                 msg = f"account update failure: {exc}"
                 resp = EventError(event=Event(env), body=msg)

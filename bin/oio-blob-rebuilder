@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.green import eventlet_monkey_patch, get_watchdog
+
 eventlet_monkey_patch()
 
 import argparse
@@ -25,6 +26,7 @@ import sys
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.cli import make_logger_args_parser, get_logger_from_args
+
 
 def make_arg_parser():
     log_parser = make_logger_args_parser()
@@ -39,97 +41,125 @@ tube for broken chunks events.
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
 
     # common
-    parser.add_argument('namespace', help="Namespace")
-    parser.add_argument("--random-wait", type=int,
-                        help="Random wait (in microseconds)")
+    parser.add_argument("namespace", help="Namespace")
+    parser.add_argument("--random-wait", type=int, help="Random wait (in microseconds)")
     parser.add_argument(
-        '--rdir-fetch-limit', type=int,
-        help='Maximum number of entries returned in each rdir response. '
-             '(default=%d)' % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+        "--rdir-fetch-limit",
+        type=int,
+        help="Maximum number of entries returned in each rdir response. "
+        "(default=%d)" % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT,
+    )
     parser.add_argument(
-        '--rdir-shuffle-chunks', action='store_true',
+        "--rdir-shuffle-chunks",
+        action="store_true",
         help="Shuffle chunks after fetching them from rdir. "
-             "Allows to avoid rebuilding all chunks "
-             "of the same container at the same time.")
+        "Allows to avoid rebuilding all chunks "
+        "of the same container at the same time.",
+    )
     parser.add_argument(
-        '--rdir-timeout', type=float,
-        help='Timeout for rdir operations, in seconds (%f)' %
-             BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+        "--rdir-timeout",
+        type=float,
+        help="Timeout for rdir operations, in seconds (%f)"
+        % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT,
+    )
     parser.add_argument(
-        '--report-interval', type=int,
-        help='Report interval in seconds. '
-             '(default=%d)' % BlobRebuilder.DEFAULT_REPORT_INTERVAL)
+        "--report-interval",
+        type=int,
+        help="Report interval in seconds. "
+        "(default=%d)" % BlobRebuilder.DEFAULT_REPORT_INTERVAL,
+    )
 
     # input
+    parser.add_argument("--volume", metavar="IP:PORT", help="ID of the rawx to rebuild")
     parser.add_argument(
-        '--volume', metavar='IP:PORT',
-        help='ID of the rawx to rebuild')
-    parser.add_argument(
-        '--input-file',
+        "--input-file",
         help="""
         Read chunks from this file instead of rdir.
         Each line should be formatted like
         "container_id|content_id|path|version|short_chunk_id_or_position".
-        """)
+        """,
+    )
     parser.add_argument(
-        '--beanstalkd', metavar='IP:PORT',
-        help='Listen to broken chunks events from a beanstalkd tube '
-             'instead of querying rdir.')
+        "--beanstalkd",
+        metavar="IP:PORT",
+        help="Listen to broken chunks events from a beanstalkd tube "
+        "instead of querying rdir.",
+    )
     parser.add_argument(
-        '--beanstalkd-tube',
-        help='The beanstalkd tube to use to listen. '
-             '(default=%s)' % BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE)
+        "--beanstalkd-tube",
+        help="The beanstalkd tube to use to listen. "
+        "(default=%s)" % BlobRebuilder.DEFAULT_WORKER_TUBE,
+    )
 
     # retry
     parser.add_argument(
-        '--retry-delay', type=int,
-        help=('Delay to wait before rescheduling a job that could not be '
-              'handled. Only works with "--beanstalkd". '
-              '(default=%s)' % BlobRebuilder.DEFAULT_RETRY_DELAY),
-        default=3600)
+        "--retry-delay",
+        type=int,
+        help=(
+            "Delay to wait before rescheduling a job that could not be "
+            'handled. Only works with "--beanstalkd". '
+            "(default=%s)" % BlobRebuilder.DEFAULT_RETRY_DELAY
+        ),
+        default=3600,
+    )
 
     # local
     parser.add_argument(
-        '--concurrency', '--workers', type=int,
-        help='Number of coroutines to spawn. '
-             '(default=%d)' % BlobRebuilder.DEFAULT_CONCURRENCY)
+        "--concurrency",
+        "--workers",
+        type=int,
+        help="Number of coroutines to spawn. "
+        "(default=%d)" % BlobRebuilder.DEFAULT_CONCURRENCY,
+    )
     parser.add_argument(
-        '--chunks-per-second', type=int,
-        help='Max chunks per second. '
-             '(default=%d)' % BlobRebuilder.DEFAULT_ITEM_PER_SECOND)
+        "--chunks-per-second",
+        type=int,
+        help="Max chunks per second. "
+        "(default=%d)" % BlobRebuilder.DEFAULT_ITEM_PER_SECOND,
+    )
     parser.add_argument(
-        '--dry-run', action='store_true',
-        help='Display actions but do nothing '
-             '(--distributed is ignored). '
-             '(default=%s)' % BlobRebuilder.DEFAULT_DRY_RUN)
+        "--dry-run",
+        action="store_true",
+        help="Display actions but do nothing "
+        "(--distributed is ignored). "
+        "(default=%s)" % BlobRebuilder.DEFAULT_DRY_RUN,
+    )
     parser.add_argument(
-        '--delete-faulty-chunks', action='store_true',
-        help='Try to delete faulty chunks after they have been rebuilt '
-             'elsewhere. This option is useful if the chunks you are '
-             'rebuilding are not actually missing but are corrupted. '
-             '(default=%s)' % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE)
+        "--delete-faulty-chunks",
+        action="store_true",
+        help="Try to delete faulty chunks after they have been rebuilt "
+        "elsewhere. This option is useful if the chunks you are "
+        "rebuilding are not actually missing but are corrupted. "
+        "(default=%s)" % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE,
+    )
     parser.add_argument(
-        '--allow-frozen-container', action='store_true',
-        help="DEPRECATED Allow rebuilding a chunk in a frozen container.")
+        "--allow-frozen-container",
+        action="store_true",
+        help="DEPRECATED Allow rebuilding a chunk in a frozen container.",
+    )
     parser.add_argument(
-        '--allow-same-rawx', action='store_true',
+        "--allow-same-rawx",
+        action="store_true",
         default=BlobRebuilder.DEFAULT_ALLOW_SAME_RAWX,
-        help='Allow rebuilding a chunk on the original rawx. '
-             'WARNING: This option is now enabled by default. '
-             '(default=%s)' % BlobRebuilder.DEFAULT_ALLOW_SAME_RAWX)
+        help="Allow rebuilding a chunk on the original rawx. "
+        "WARNING: This option is now enabled by default. "
+        "(default=%s)" % BlobRebuilder.DEFAULT_ALLOW_SAME_RAWX,
+    )
 
     # distributed
     parser.add_argument(
-        '--distributed', action='store_true',
-        help='Send broken chunks to beanstalkd tubes '
-             'instead of rebuilding them locally '
-             '(the following options are ignored: '
-             '--concurrency, --chunks-per-second, --delete-faulty-chunks).')
+        "--distributed",
+        action="store_true",
+        help="Send broken chunks to beanstalkd tubes "
+        "instead of rebuilding them locally "
+        "(the following options are ignored: "
+        "--concurrency, --chunks-per-second, --delete-faulty-chunks).",
+    )
     parser.add_argument(
-        '--distributed-tube',
-        help='The beanstalkd tube to use to send the broken chunks. '
-             '(default=%s)'
-             % BlobRebuilder.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE)
+        "--distributed-tube",
+        help="The beanstalkd tube to use to send the broken chunks. "
+        "(default=%s)" % BlobRebuilder.DEFAULT_DISTRIBUTED_WORKER_TUBE,
+    )
 
     return parser
 
@@ -138,36 +168,40 @@ def main():
     args = make_arg_parser().parse_args()
 
     if not any((args.volume, args.input_file, args.beanstalkd)):
-        raise ValueError('Missing rawx ID, input file or beanstalkd address')
+        raise ValueError("Missing rawx ID, input file or beanstalkd address")
 
     conf = {}
     # common
-    conf['allow_same_rawx'] = args.allow_same_rawx
-    conf['dry_run'] = args.dry_run
-    conf['namespace'] = args.namespace
-    conf['rdir_fetch_limit'] = args.rdir_fetch_limit
+    conf["allow_same_rawx"] = args.allow_same_rawx
+    conf["dry_run"] = args.dry_run
+    conf["namespace"] = args.namespace
+    conf["rdir_fetch_limit"] = args.rdir_fetch_limit
     if args.rdir_timeout is not None:
-        conf['rdir_timeout'] = args.rdir_timeout
-    conf['rdir_shuffle_chunks'] = args.rdir_shuffle_chunks
-    conf['report_interval'] = args.report_interval
+        conf["rdir_timeout"] = args.rdir_timeout
+    conf["rdir_shuffle_chunks"] = args.rdir_shuffle_chunks
+    conf["report_interval"] = args.report_interval
     # input
-    conf['beanstalkd_worker_tube'] = args.beanstalkd_tube
+    conf["beanstalkd_worker_tube"] = args.beanstalkd_tube
     # retry
-    conf['retry_delay'] = args.retry_delay
+    conf["retry_delay"] = args.retry_delay
     # local
-    conf['concurrency'] = args.concurrency
-    conf['items_per_second'] = args.chunks_per_second
-    conf['try_chunk_delete'] = args.delete_faulty_chunks
+    conf["concurrency"] = args.concurrency
+    conf["items_per_second"] = args.chunks_per_second
+    conf["try_chunk_delete"] = args.delete_faulty_chunks
     # distributed
-    conf['distributed_beanstalkd_worker_tube'] = args.distributed_tube
+    conf["distributed_beanstalkd_worker_tube"] = args.distributed_tube
 
     logger = get_logger_from_args(args, default_conf=conf)
 
     try:
         blob_rebuilder = BlobRebuilder(
-            conf, input_file=args.input_file, service_id=args.volume,
-            beanstalkd_addr=args.beanstalkd, logger=logger,
-            watchdog=get_watchdog(called_from_main_application=True))
+            conf,
+            input_file=args.input_file,
+            service_id=args.volume,
+            beanstalkd_addr=args.beanstalkd,
+            logger=logger,
+            watchdog=get_watchdog(called_from_main_application=True),
+        )
         if args.distributed and not args.dry_run:
             blob_rebuilder.prepare_distributed_dispatcher()
         else:
@@ -176,19 +210,23 @@ def main():
         for item, _, error in tasks_res:
             if error:
                 logger.error(
-                    'ERROR while rebuilding chunk %s: %s',
-                    blob_rebuilder.string_from_item(item), error)
+                    "ERROR while rebuilding chunk %s: %s",
+                    blob_rebuilder.string_from_item(item),
+                    error,
+                )
             else:
-                logger.info('Successful rebuilding for chunk %s',
-                            blob_rebuilder.string_from_item(item))
+                logger.info(
+                    "Successful rebuilding for chunk %s",
+                    blob_rebuilder.string_from_item(item),
+                )
     except KeyboardInterrupt:
-        logger.info('Exiting')
+        logger.info("Exiting")
     except Exception as exc:
-        logger.exception('ERROR in rebuilder: %s', exc)
+        logger.exception("ERROR in rebuilder: %s", exc)
         sys.exit(1)
     if not blob_rebuilder.is_success():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

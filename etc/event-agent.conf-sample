@@ -52,13 +52,13 @@ syslog_prefix = OIO,OPENIO,event-agent,1
 
 #log all events that are handled (access logs)
 # avaiable values:
-# the request_id: %(request_id) 
+# the request_id: %(request_id)
 # the tube (beanstalkd): %(tube)s
 # the topic (kafka): %(topic)s
 # the name of th event: %(event)s
 # the returned status code: %(status)d
 # the time it took the handle the event: %(duration)f
-#log_request_format = 
+#log_request_format =
 
 #statsd_host =
 #statsd_port = 8125
@@ -72,3 +72,17 @@ syslog_prefix = OIO,OPENIO,event-agent,1
 
 # How often to refresh the rdir services addresses (in seconds)
 #rdir_refresh_interval = 3600.0
+
+# Kafka
+# Size of event batch
+batch_size = 100
+# Event queue type for batches default or per_service
+event_queue_type = default
+# If queue is per_service specify the service id for each queue
+event_queue_ids =
+# Rate limit the events processing (0 = no limit)
+events_per_second = 0
+# Specify kafka options with prefixes
+#kafka_consumer_
+#kafka_producer_
+#kafka_common_

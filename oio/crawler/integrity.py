@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -227,7 +227,7 @@ class Checker(object):
         min_time_in_error=0.0,
         required_confirmations=0,
         beanstalkd_addr=None,
-        beanstalkd_tube=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+        beanstalkd_tube=BlobRebuilder.DEFAULT_WORKER_TUBE,
         cache_size=2**24,
         **_kwargs
     ):
@@ -1204,10 +1204,10 @@ def main():
     )
     parser.add_argument(
         "--beanstalkd-tube",
-        default=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+        default=BlobRebuilder.DEFAULT_WORKER_TUBE,
         help=(
             "The beanstalkd tube to send broken chunks events to (default=%s)."
-            % BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
+            % BlobRebuilder.DEFAULT_WORKER_TUBE
         ),
     )
 

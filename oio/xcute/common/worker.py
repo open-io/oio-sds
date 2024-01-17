@@ -19,6 +19,10 @@ from collections import Counter
 from oio.common.constants import STRLEN_REQID
 from oio.common.green import ratelimit
 from oio.common.json import json
+from oio.common.kafka import (
+    KafkaSender,
+    DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+)
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
 from oio.event.beanstalk import Beanstalk
@@ -32,16 +36,15 @@ class XcuteWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.watchdog = watchdog
-        self.beanstalkd_replies = {}
         self.tasks = CacheDict(
             size=self.conf.get("cache_size", self.DEFAULT_CACHE_SIZE)
         )
 
-    def process(self, beanstalkd_job):
-        job_id = beanstalkd_job["job_id"]
-        job_config = beanstalkd_job["job_config"]
+    def process(self, job):
+        job_id = job["job_id"]
+        job_config = job["job_config"]
         job_params = job_config["params"]
-        job_type = beanstalkd_job["job_type"]
+        job_type = job["job_type"]
 
         init_error = None
         task = self.tasks.get(job_id)
@@ -58,7 +61,7 @@ class XcuteWorker(object):
                 init_error = exc
 
         tasks_per_second = job_config["tasks_per_second"]
-        tasks = beanstalkd_job["tasks"]
+        tasks = job["tasks"]
 
         task_errors = Counter()
         task_results = Counter()
@@ -91,10 +94,19 @@ class XcuteWorker(object):
             list(tasks.keys()),
             task_results,
             task_errors,
-            beanstalkd_job["beanstalkd_reply"],
         )
 
-    def reply(self, job_id, task_ids, task_results, task_errors, beanstalkd_reply_info):
+    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
+        raise NotImplementedError()
+
+
+class BeanstalkXcuteWorker(XcuteWorker):
+    def __init__(self, conf, logger=None, watchdog=None):
+        super().__init__(conf, logger=logger, watchdog=watchdog)
+        self.beanstalkd_replies = {}
+
+    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
+        beanstalkd_reply_info = extra[0]
         beanstalkd_reply_addr = beanstalkd_reply_info["addr"]
         beanstalkd_reply_tube = beanstalkd_reply_info["tube"]
 
@@ -116,3 +128,36 @@ class XcuteWorker(object):
             }
         )
         beanstalkd_reply.put(reply_payload)
+
+
+class KafkaXcuteWorker(XcuteWorker):
+    def __init__(self, conf, logger=None, watchdog=None):
+        super().__init__(conf, logger=logger, watchdog=watchdog)
+        self.producer = None
+
+        self.kafka_reply_topic = self.conf.get(
+            "xcute_job_reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
+        )
+
+    def _connect(self):
+        if not self.producer:
+            self.producer = KafkaSender(
+                self.conf["broker_endpoint"],
+                self.logger,
+                app_conf=self.conf,
+                kafka_conf={
+                    "acks": "all",
+                },
+            )
+
+    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
+        reply_payload = json.dumps(
+            {
+                "job_id": job_id,
+                "task_ids": task_ids,
+                "task_results": task_results,
+                "task_errors": task_errors,
+            }
+        )
+        self._connect()
+        self.producer.send(self.kafka_reply_topic, reply_payload, flush=True)

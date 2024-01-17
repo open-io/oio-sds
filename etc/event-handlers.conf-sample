@@ -79,6 +79,9 @@ use = egg:oio#account_update
 # Index meta2 or rawx content into rdir services
 [filter:volume_index]
 use = egg:oio#volume_index
+# Time in seconds before an event should be reprocessed
+retry_delay = 60
+
 
 # -----------------------------------------------------------------
 # Example of the notify filter: redirect some events to another tube,
@@ -89,6 +92,26 @@ tube = oio-rebuild
 queue_url = ${QUEUE_URL}
 # Exclude events whose URL matches these accounts and containers
 exclude = AUTH_demo1,AUTH_demo2/trash
+# Kafka endpoint
+broker_endpoint = kafka://localhost:19092
+topic = oio-rebuild
+
+# -----------------------------------------------------------------
+# Spread delete events accross rawx servers
+[filter:delete]
+use = egg:oio#delete
+broker_endpoint = kafka://localhost:19092
+topic_prefix = oio-delete-
+# Time in seconds before an event should be reprocessed
+retry_delay = 60
+
+# -----------------------------------------------------------------
+# Spread delete events accross rawx servers
+[filter:blob_rebuilder]
+use = egg:oio#blob_rebuilder
+# Time in seconds before an event should be reprocessed
+retry_delay = 60
+
 
 # -----------------------------------------------------------------
 # Example of the notify filter: redirect some events to another tube,

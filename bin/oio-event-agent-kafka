@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+# Copyright (C) 2024 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+
+from oio.common.configuration import load_namespace_conf, read_conf
+from oio.common.easy_value import int_value
+from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_TOPIC
+from oio.common.logger import get_logger
+from oio.event.kafka_consumer import KafkaConsumerPool
+from oio.event.kafka_agent import KafkaEventWorker
+
+
+def make_arg_parser():
+    descr = """
+    Read object storage events from Kafka, execute actions.
+    """
+    parser = argparse.ArgumentParser(description=descr)
+
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
+    parser.add_argument("configuration", help="Path to the legacy configuration file")
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    conf = read_conf(args.configuration, "event-agent")
+    ns_conf = load_namespace_conf(conf["namespace"])
+
+    # Configuration from dedicated file
+    logger = get_logger(conf, verbose=args.verbose)
+    workers = int_value(conf.get("workers"), 1)
+
+    # Configuration either from dedicated file or central file (in that order)
+    endpoint = conf.get("broker_endpoint", ns_conf.get("event-agent", DEFAULT_ENDPOINT))
+    topic = conf.get("topic", ns_conf.get("events.kafka.topic", DEFAULT_TOPIC))
+    group_id = conf.get("group_id", ns_conf.get("events.kafka.group_id", "event-agent"))
+
+    pool = KafkaConsumerPool(
+        conf,
+        endpoint,
+        topic,
+        worker_class=KafkaEventWorker,
+        group_id=group_id,
+        logger=logger,
+        processes=workers,
+    )
+    pool.run()
+
+
+if __name__ == "__main__":
+    main()

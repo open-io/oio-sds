@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,12 +36,12 @@ class Tool(object):
     (item, info, error).
     """
 
-    DEFAULT_BEANSTALKD_WORKER_TUBE = "oio-process"
+    DEFAULT_WORKER_TUBE = "oio-process"
     DEFAULT_REPORT_INTERVAL = 3600
     DEFAULT_RETRY_DELAY = 3600
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_CONCURRENCY = 1
-    DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = "oio-process"
+    DEFAULT_DISTRIBUTED_WORKER_TUBE = "oio-process"
 
     def __init__(self, conf, beanstalkd_addr=None, logger=None, watchdog=None):
         self.conf = conf
@@ -77,8 +77,7 @@ class Tool(object):
         if beanstalkd_addr:
             self.beanstalkd = BeanstalkdListener(
                 beanstalkd_addr,
-                self.conf.get("beanstalkd_worker_tube")
-                or self.DEFAULT_BEANSTALKD_WORKER_TUBE,
+                self.conf.get("beanstalkd_worker_tube") or self.DEFAULT_WORKER_TUBE,
                 self.logger,
             )
 
@@ -509,7 +508,7 @@ class _DistributedDispatcher(_Dispatcher):
         # Beanstalkd workers
         workers_tube = (
             self.conf.get("distributed_beanstalkd_worker_tube")
-            or self.tool.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
+            or self.tool.DEFAULT_DISTRIBUTED_WORKER_TUBE
         )
         self.beanstalkd_workers = dict()
         for beanstalkd in locate_tube(all_available_beanstalkd.values(), workers_tube):

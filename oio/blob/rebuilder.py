@@ -32,8 +32,8 @@ class BlobRebuilder(Tool):
     Rebuild chunks.
     """
 
-    DEFAULT_BEANSTALKD_WORKER_TUBE = "oio-rebuild"
-    DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = "oio-rebuild"
+    DEFAULT_WORKER_TUBE = "oio-rebuild"
+    DEFAULT_DISTRIBUTED_WORKER_TUBE = "oio-rebuild"
     DEFAULT_RDIR_FETCH_LIMIT = 100
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_ALLOW_SAME_RAWX = True

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
 
 import signal
@@ -26,17 +28,18 @@ from optparse import OptionParser
 from oio.common.configuration import parse_options, read_conf
 from oio.common.logger import get_logger
 from oio.common.wsgi import Application, ServiceLogger
-from oio.xcute.orchestrator import XcuteOrchestrator
+from oio.xcute.orchestrator import XcuteOrchestrator as BeanstalkOrchestrator
+from oio.xcute.orchestrator_kafka import XcuteOrchestrator as KafkaOrchestrator
 from oio.xcute.server import create_app
 
 
-DEFAULT_SECTION = 'DEFAULT'
-SERVER_SECTION = 'xcute-server'
-ORCHESTRATOR_SECTION = 'xcute-orchestrator'
+DEFAULT_SECTION = "DEFAULT"
+SERVER_SECTION = "xcute-server"
+ORCHESTRATOR_SECTION = "xcute-orchestrator"
 
 
-if __name__ == '__main__':
-    parser = OptionParser('%prog CONFIG [options]')
+if __name__ == "__main__":
+    parser = OptionParser("%prog CONFIG [options]")
     conf_file, options = parse_options(parser)
 
     all_conf = read_conf(conf_file)
@@ -55,16 +58,19 @@ if __name__ == '__main__':
         server_conf = server_conf_
 
     if server_conf is None and orchestrator_conf is None:
-        print('Missing section %s or %s in config %s'
-              % (ORCHESTRATOR_SECTION, SERVER_SECTION, conf_file))
+        print(
+            "Missing section %s or %s in config %s"
+            % (ORCHESTRATOR_SECTION, SERVER_SECTION, conf_file)
+        )
         sys.exit(1)
 
     orchestrator = None
     if orchestrator_conf is not None:
-        orchestrator_logger = get_logger(
-            orchestrator_conf, verbose=options['verbose'])
-        orchestrator = XcuteOrchestrator(
-            orchestrator_conf, logger=orchestrator_logger)
+        orchestrator_class = BeanstalkOrchestrator
+        if orchestrator_conf.get("broker_endpoint") is not None:
+            orchestrator_class = KafkaOrchestrator
+        orchestrator_logger = get_logger(orchestrator_conf, verbose=options["verbose"])
+        orchestrator = orchestrator_class(orchestrator_conf, logger=orchestrator_logger)
 
     server = None
     if server_conf is not None:

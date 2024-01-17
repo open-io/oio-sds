@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,50 +15,37 @@
 # License along with this library.
 
 import re
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import unquote
 
-from oio.common.amqp import (
-    AMQPError,
-    ExchangeType,
-    AmqpConnector,
-    DEFAULT_EXCHANGE,
-    DEFAULT_QUEUE_ARGS,
-)
 from oio.common.json import json
-from oio.event.evob import Event, EventError, RetryableEventError
+from oio.common.kafka import KafkaSendException, KafkaSender, get_retry_delay
 from oio.event.beanstalk import Beanstalk, BeanstalkError
+from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.filters.base import Filter
 
 POLICY_REGEX_PREFIX = "policy_regex_"
-TUBE_PREFIX = "tube_"
 
 
 class NotifyFilter(Filter):
     """
-    Forward events to another tube.
+    Forward events to another topic.
 
     Object events can be matched by their storage policy.
     """
 
-    def __init__(self, *args, **kwargs):
-        self.queue_url = None
+    def __init__(self, *args, endpoint=None, **kwargs):
         self.strip_fields = ()
-        # Called "tube" for compatibility, this is the name of the main queue
-        self.tube = None
+        self.destination = None
+        self.endpoint = endpoint
+        self.rules = {}
         super().__init__(*args, **kwargs)
 
     def init(self):
-        self.queue_url = self.conf.get("queue_url")
         self.exclude = self._parse_exclude(self.conf.get("exclude", []))
-        if not self.queue_url:
-            raise ValueError("Missing 'queue_url' in the configuration")
-
         self.strip_fields = tuple(self.conf.get("strip_fields", "").split(","))
-        self.tube = self.conf.get("tube", self.conf.get("queue_name", "notif"))
         self.required_fields = [
             f for f in self.conf.get("required_fields", "").split(",") if f
         ]
-        self.tube_rules = {}
         self._load_policy_regex()
 
     @staticmethod
@@ -110,22 +97,28 @@ class NotifyFilter(Filter):
             event.url.get("account"), event.url.get("user")
         )
 
+    def _prefix(self):
+        raise NotImplementedError()
+
     def _load_policy_regex(self):
         """
-        Load storage policy patterns and their associated tube.
-        If there is no specific tube, the default will be used.
+        Load storage policy patterns and their associated destination.
+        If there is no specific destination, the default will be used.
         """
+        prefix = self._prefix()
         for key, val in self.conf.items():
-            if key.startswith(TUBE_PREFIX):
-                rule = key[len(TUBE_PREFIX) :]
-                self.tube_rules.setdefault(rule, {})["tube"] = val
+            if key.startswith(prefix):
+                rule = key[len(prefix) :]
+                self.rules.setdefault(rule, {})["destination"] = val
             elif key.startswith(POLICY_REGEX_PREFIX):
                 rule = key[len(POLICY_REGEX_PREFIX) :]
                 regex = re.compile(val)
-                self.tube_rules.setdefault(rule, {})["regex"] = regex
-        # Ensure each rule has a tube
-        for rule in self.tube_rules.values():
-            rule.setdefault("tube", self.tube)
+                self.rules.setdefault(rule, {})["regex"] = regex
+        # Ensure each rule has a topic
+        for name, rule in self.rules.items():
+            if "regex" not in rule:
+                raise ValueError(f"No regex defined for rule {name}")
+            rule.setdefault("destination", self.destination)
 
     @staticmethod
     def _lookup_policy(event):
@@ -147,9 +140,9 @@ class NotifyFilter(Filter):
         return policy
 
     def send_event(self, event, data):
-        """Send data to the configured message queue
-
-        Must be implemented by subclasses."""
+        """Send data to the configured message topic.
+        Must be implemented by subclasses.
+        """
         raise NotImplementedError
 
     def strip_event(self, data):
@@ -179,38 +172,38 @@ class NotifyFilter(Filter):
 
 
 class BeanstalkdNotifyFilter(NotifyFilter):
-    """
-    Forward events to a beanstalkd tube.
-
-    Object events can be matched by their storage policy.
-    """
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, endpoint=None, **kwargs):
         self.beanstalk = None
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, endpoint=endpoint, **kwargs)
 
     def init(self):
+        self.destination = self.conf.get("tube", self.conf.get("queue_name", "notif"))
+
         super().init()
-        for rule in self.tube_rules.values():
-            rule["beanstalkd"] = Beanstalk.from_url(self.queue_url)
-            rule["beanstalkd"].use(rule["tube"])
+
+        for rule in self.rules.values():
+            rule["beanstalkd"] = Beanstalk.from_url(self.endpoint)
+            rule["beanstalkd"].use(rule["destination"])
             self.logger.debug(
                 f"Events with policy matching {rule['regex'].pattern!r} "
-                f"will go to tube {rule['tube']}"
+                f"will go to tube {rule['destination']}"
             )
 
         # Keep an instance talking to the default tube
-        self.beanstalk = Beanstalk.from_url(self.queue_url)
-        self.beanstalk.use(self.tube)
+        self.beanstalk = Beanstalk.from_url(self.endpoint)
+        self.beanstalk.use(self.destination)
+
+    def _prefix(self):
+        return "tube_"
 
     def send_event(self, event, data):
         out_beanstalkd = self.beanstalk
-        if self.tube_rules:
+        if self.rules:
             policy = self._lookup_policy(event)
             if policy:
-                for name in sorted(self.tube_rules.keys()):
-                    if self.tube_rules[name]["regex"].match(policy):
-                        out_beanstalkd = self.tube_rules[name]["beanstalkd"]
+                for name in sorted(self.rules.keys()):
+                    if self.rules[name]["regex"].match(policy):
+                        out_beanstalkd = self.rules[name]["beanstalkd"]
                         break
         try:
             out_beanstalkd.put(data)
@@ -224,94 +217,44 @@ class BeanstalkdNotifyFilter(NotifyFilter):
         return None
 
 
-class AmqpNotifyFilter(AmqpConnector, NotifyFilter):
-    """
-    Forward events to a RabbitMQ queue.
-
-    Object events can be matched by their storage policy.
-    """
-
-    def __init__(self, *args, endpoints=None, **kwargs):
-        # Loaded in init()
-        self.bind_args = {}
-        self.exchange_name = None
-        self.queue_args = {}
-
-        super().__init__(*args, endpoints=endpoints, **kwargs)
-
-        # We do not log at "info" level in amqp_connect() anymore (it was too verbose)
-        self.logger.info(
-            "%s will connect to %r", self.__class__.__name__, self._conn_params
-        )
-
-        # Connect to the broker, then declare and bind all queues we may use.
-        for rule in self.tube_rules.values():
-            self._declare_and_bind(rule["tube"], rule["tube"])
-            self.logger.debug(
-                f"Events with policy matching {rule['regex'].pattern!r} "
-                f"will go to queue {rule['tube']}"
-            )
-        # Do not forget to declare the default queue where
-        # unmatched events will be forwarded.
-        self._declare_and_bind(self.tube, self.tube)
-
-    def _declare_and_bind(self, queue, routing_key, attempts=3):
-        for i in range(attempts):
-            try:
-                self.maybe_reconnect()
-                # XXX(FVE): maybe we need a "direct" exchange instead
-                self._channel.exchange_declare(
-                    exchange=self.exchange_name,
-                    exchange_type=ExchangeType.topic,
-                    durable=True,
-                )
-                self._channel.queue_declare(
-                    queue,
-                    durable=True,
-                    arguments=self.queue_args,
-                )
-                self._channel.queue_bind(
-                    exchange=self.exchange_name,
-                    queue=queue,
-                    routing_key=routing_key,
-                    arguments=self.bind_args,
-                )
-                break
-            except AMQPError:
-                if i >= attempts - 1:
-                    raise
+class KafkaNotifyFilter(NotifyFilter):
+    def __init__(self, *args, endpoint=None, **kwargs):
+        self.producer = None
+        self._retry_delay = None
+        super().__init__(*args, endpoint=endpoint, **kwargs)
 
     def init(self):
+        self.destination = self.conf.get("topic", "notif")
+        self._retry_delay = get_retry_delay(self.conf)
         super().init()
-        self.exchange_name = self.conf.get("exchange_name") or DEFAULT_EXCHANGE
-        self.bind_args = dict(parse_qsl(self.conf.get("bind_args", ""), separator=","))
-        self.queue_args = dict(
-            parse_qsl(self.conf.get("queue_args", DEFAULT_QUEUE_ARGS), separator=",")
-        )
+
+    def _prefix(self):
+        return "topic_"
 
     def send_event(self, event, data):
-        # In case nothing matches, send to the main queue
-        routing_key = self.tube
-        if self.tube_rules:
+        if not self.producer:
+            self.producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+            topics = [self.destination]
+            topics.extend([r["destination"] for r in self.rules.values()])
+            self.producer.ensure_topics_exist(topics)
+
+        topic = self.destination
+        if self.rules:
             policy = self._lookup_policy(event)
             if policy:
-                for name in sorted(self.tube_rules.keys()):
-                    rule = self.tube_rules[name]
+                for name in sorted(self.rules.keys()):
+                    rule = self.rules[name]
                     if rule["regex"].match(policy):
-                        routing_key = rule["tube"]
+                        topic = rule["destination"]
                         break
         try:
-            self.maybe_reconnect()
-            self._channel.basic_publish(
-                exchange=self.exchange_name,
-                routing_key=routing_key,
-                body=data,
-            )
-        except AMQPError as err:
-            # The event-agent will retry later, we do not need to loop here.
-            self._close_conn(after_error=True)
+            self.producer.send(topic, data, flush=True)
+        except KafkaSendException as err:
+            delay = None
+            if err.retriable:
+                delay = self._retry_delay
             msg = f"notify failure: {err!r}"
-            resp = RetryableEventError(event=event, body=msg)
+            resp = RetryableEventError(event=event, body=msg, delay=delay)
             return resp
         return None
 
@@ -319,11 +262,14 @@ class AmqpNotifyFilter(AmqpConnector, NotifyFilter):
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
-    queue_url = local_conf.get("queue_url")
+
+    endpoint = conf.get("broker_endpoint", conf.get("queue_url"))
+    if not endpoint:
+        raise ValueError("Endpoint is missing")
 
     def make_filter(app):
-        if queue_url.startswith("amqp"):
-            return AmqpNotifyFilter(app, conf, endpoints=queue_url)
-        return BeanstalkdNotifyFilter(app, conf)
+        if endpoint.startswith("kafka://"):
+            return KafkaNotifyFilter(app, conf, endpoint=endpoint)
+        return BeanstalkdNotifyFilter(app, conf, endpoint=endpoint)
 
     return make_filter
