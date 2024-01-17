@@ -97,8 +97,14 @@ class KafkaClient:
 
         for key, value in conf.items():
             self._logger.info("Setting option %s=%s", key, value)
-
-        self._client = self.__client_class(conf, logger=self._logger)
+        try:
+            self._client = self.__client_class(conf, logger=self._logger)
+        except KafkaException as err:
+            self._logger.error(
+                "Failed to start Kafka client (%s), reason: %s",
+                self.__client_class.__name__,
+                str(err),
+            )
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
@@ -322,4 +328,11 @@ class KafkaConsumer(KafkaClient):
             kwargs["offsets"] = offsets
         else:
             kwargs["message"] = message
-        self._client.commit(**kwargs)
+        try:
+            partitions = self._client.commit(**kwargs)
+            errors = [p.error for p in partitions if p.error]
+
+            if errors:
+                self._logger.error("Failed to commit partitions: %s", errors)
+        except KafkaException as err:
+            self._logger.error("Failed to commit: %s", str(err))

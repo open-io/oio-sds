@@ -266,7 +266,6 @@ class KafkaConsumerWorker(Process):
                     "topic": message["topic"],
                     "partition": message["partition"],
                     "offset": message["offset"],
-                    "leader": message["leader"],
                 }
             )
         except Exception:
@@ -340,8 +339,9 @@ class KafkaBatchFeeder(Process):
         logger,
         group_id,
         worker_id,
+        events_queue,
+        offsets_queue,
         app_conf,
-        workers,
         **kwargs,
     ):
         super().__init__()
@@ -363,10 +363,8 @@ class KafkaBatchFeeder(Process):
 
         self._consumer = None
         self._stop_requested = Event()
-        self._offsets_queue = Queue(maxsize=self._batch_size)
-        self._events_queue = event_queue_factory(
-            logger, self._app_conf, self._batch_size, workers
-        )
+        self._events_queue = events_queue
+        self._offsets_queue = offsets_queue
         self._offsets_to_commit = {}
 
     @property
@@ -398,7 +396,7 @@ class KafkaBatchFeeder(Process):
                         topic = event.topic()
                         partition = event.partition()
                         offset = event.offset()
-                        leader_epoch = event.leader_epoch()
+
                         value = event.value()
                         self.logger.debug(
                             "Got event topic=%s, partition=%s, offset=%s",
@@ -414,7 +412,6 @@ class KafkaBatchFeeder(Process):
                                 "topic": topic,
                                 "partition": partition,
                                 "offset": offset,
-                                "leader": leader_epoch,
                                 "data": event_data,
                             },
                         )
@@ -437,8 +434,7 @@ class KafkaBatchFeeder(Process):
                     except Empty:
                         continue
                     partitions = self._offsets_to_commit.setdefault(offset["topic"], {})
-                    leaders = partitions.setdefault(offset["partition"], {})
-                    offsets = leaders.setdefault(offset["leader"], [])
+                    offsets = partitions.setdefault(offset["partition"], [])
                     bisect.insort(offsets, offset["offset"])
                     ready_events += 1
                     if ready_events == self._fetched_events:
@@ -477,18 +473,21 @@ class KafkaBatchFeeder(Process):
         _offsets = []
 
         for topic, partitions in self._offsets_to_commit.items():
-            for partition, leaders in partitions.items():
-                for leader, offsets in leaders.items():
-                    top_offset = -1
-                    for offset in offsets:
-                        # Ensure we do not skip offset
-                        if top_offset != -1 and top_offset + 1 != offset:
-                            break
-                        top_offset = offset
-                    if top_offset != -1:
-                        _offsets.append(
-                            TopicPartition(topic, partition, top_offset + 1, "", leader)
+            for partition, offsets in partitions.items():
+                top_offset = -1
+                for offset in offsets:
+                    # Ensure we do not skip offset
+                    if top_offset != -1 and top_offset + 1 != offset:
+                        break
+                    top_offset = offset
+                if top_offset != -1:
+                    _offsets.append(
+                        TopicPartition(
+                            topic,
+                            partition,
+                            top_offset + 1,
                         )
+                    )
 
         if _offsets:
             self.logger.info("Commit offsets: %s", _offsets)
@@ -532,14 +531,35 @@ class KafkaConsumerPool:
         self.worker_kwargs = kwargs
         self._workers = {}
 
+        self._batch_size = int_value(self.conf.get("batch_size"), DEFAULT_BATCH_SIZE)
+        # Instantiate events queues
+        self._events_queue = event_queue_factory(
+            logger, self.conf, self._batch_size, self.processes
+        )
+        self._offsets_queue = Queue(maxsize=self._batch_size)
+
+    def _start_feeder(self, worker_id):
+        self._workers[worker_id] = KafkaBatchFeeder(
+            self.endpoint,
+            self.topic,
+            self.logger,
+            worker_id=-1,
+            events_queue=self._events_queue,
+            offsets_queue=self._offsets_queue,
+            app_conf=self.conf,
+            workers=self.processes,
+            **self.worker_kwargs,
+        )
+        self.logger.info("Spawning worker %s %s", KafkaBatchFeeder.__name__, worker_id)
+        self._workers[worker_id].start()
+
     def _start_worker(self, worker_id):
-        feeder = self._workers["feeder"]
         self._workers[worker_id] = self.worker_class(
             self.endpoint,
             self.topic,
             self.logger,
-            feeder.events_queue,
-            feeder.offsets_queue,
+            self._events_queue,
+            self._offsets_queue,
             worker_id,
             *self.worker_args,
             app_conf=self.conf,
@@ -560,32 +580,22 @@ class KafkaConsumerPool:
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
-            # Create feeder
-            self._workers["feeder"] = KafkaBatchFeeder(
-                self.endpoint,
-                self.topic,
-                self.logger,
-                worker_id=-1,
-                app_conf=self.conf,
-                workers=self.processes,
-                **self.worker_kwargs,
-            )
-            self._workers["feeder"].start()
-
             # We must have an extra process for default queue
             nb_processes = self.processes + 1
 
+            worker_factories = {"feeder": self._start_feeder}
+
+            self._workers = {w: None for w in range(nb_processes)}
+            self._workers["feeder"] = None
+
             while self.running:
-                for worker_id in range(nb_processes):
-                    if (
-                        worker_id not in self._workers
-                        or not self._workers[worker_id].is_alive()
-                    ):
-                        old_worker = self._workers.get(worker_id, None)
-                        if old_worker:
+                for worker_id, instance in self._workers.items():
+                    if instance is None or not instance.is_alive():
+                        if instance:
                             self.logger.info("Joining dead worker %d", worker_id)
-                            old_worker.join()
-                        self._start_worker(worker_id)
+                            instance.join()
+                        factory = worker_factories.get(worker_id, self._start_worker)
+                        factory(worker_id)
                 time.sleep(1)
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
             self.running = False
