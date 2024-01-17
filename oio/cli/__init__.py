@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -139,7 +139,7 @@ def add_common_parser_options(parser):
     )
 
 
-def flat_dict_from_dict(parsed_args, dict_):
+def flat_dict_from_dict(parsed_args, dict_, separator="\n"):
     """
     Create a dictionary without depth.
 
@@ -158,15 +158,41 @@ def flat_dict_from_dict(parsed_args, dict_):
     flat_dict = dict()
     for key, value in dict_.items():
         if not isinstance(value, dict):
-            if isinstance(value, list) and parsed_args.formatter == "table":
-                value = "\n".join(value)
+            if (
+                isinstance(value, list) or isinstance(value, tuple)
+            ) and parsed_args.formatter == "table":
+                value = separator.join(value)
             flat_dict[key] = value
             continue
 
-        _flat_dict = flat_dict_from_dict(parsed_args, value)
+        _flat_dict = flat_dict_from_dict(parsed_args, value, separator=separator)
         for _key, _value in _flat_dict.items():
             flat_dict[key + "." + _key] = _value
     return flat_dict
+
+
+def get_all_values(dict_):
+    """
+    Return all deep values contained in a dictionary.
+
+    {
+        'depth0': {
+            'depth1': {
+                'depth2': 'test1'
+            },
+            'depth1-bis': 'test2',
+        }
+    }
+    =>
+    ['test1', 'test2']
+    """
+    values = []
+    for value in dict_.values():
+        if isinstance(value, dict):
+            values.extend(get_all_values(value))
+        else:
+            values.append(value)
+    return values
 
 
 class Command(command.Command):

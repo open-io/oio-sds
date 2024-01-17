@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 # License along with this library.
 
 from cliff import lister
+from oio.cli import ShowOne, flat_dict_from_dict, get_all_values
 
 from oio.cli.admin.common import (
     AccountCommandMixin,
@@ -22,6 +23,7 @@ from oio.cli.admin.common import (
     ObjectCommandMixin,
     ChunkCommandMixin,
 )
+from oio.common.exceptions import NotFound, OioException
 from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH
 
 
@@ -243,3 +245,214 @@ class ChunkCheck(ChunkCommandMixin, ItemCheckCommand):
     def take_action(self, parsed_args):
         ChunkCommandMixin.check_and_load_parsed_args(self, self.app, parsed_args)
         return super(ChunkCheck, self).take_action(parsed_args)
+
+
+class PeersCheck(ShowOne):
+    """
+    Check the consistency of all peers of the indicated type
+    with what is known by the parent metaX.
+    """
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
+
+    @property
+    def storage(self):
+        return self.app.client_manager.storage
+
+    def get_parser(self, prog_name):
+        parser = super(PeersCheck, self).get_parser(prog_name)
+        parser.add_argument(
+            "service_type", choices=("meta0", "meta1", "meta2"), help="Service type"
+        )
+        parser.add_argument("reference", metavar="<reference>", help="Reference name")
+        parser.add_argument(
+            "--cid",
+            dest="is_cid",
+            default=False,
+            help="Interpret <reference> as a CID",
+            action="store_true",
+        )
+        return parser
+
+    def get_params(self, parsed_args):
+        service_type = parsed_args.service_type
+        if parsed_args.is_cid:
+            cid = parsed_args.reference
+            account = None
+            reference = None
+        else:
+            account = self.app.options.account
+            reference = parsed_args.reference
+            cid = None
+        return service_type, account, reference, cid
+
+    def get_meta2_links(self, account, reference, cid):
+        """
+        Retur the meta2 links known by the master meta1 database.
+        """
+        data_dir = self.storage.directory.list(
+            account, reference, cid=cid, force_master=True
+        )
+        meta1_peers = []
+        for d in data_dir["dir"]:
+            if d["type"] == "meta1":
+                meta1_peers.append(d["host"])
+        meta2_links = []
+        for d in data_dir["srv"]:
+            if d["type"] == "meta2":
+                meta2_links.append(d["host"])
+        meta2_links.sort()
+
+        # Check that all meta1 peers agree
+        for sid in meta1_peers:
+            data_dir = self.storage.directory.list(
+                account, reference, cid=cid, service_id=sid
+            )
+            _meta2_links = sorted(
+                (d["host"] for d in data_dir["srv"] if d["type"] == "meta2")
+            )
+            if _meta2_links != meta2_links:
+                raise OioException(
+                    "Unsynchronized meta1 peers: "
+                    f"{_meta2_links} ({sid}) != {meta2_links} (master)"
+                )
+
+        if not meta2_links:
+            raise OioException("No meta2 links in meta1 DB")
+        return tuple(meta2_links)
+
+    def get_meta2_peers(self, account, reference, cid, service_id):
+        """
+        Return the meta2 peers known by the meta2 database.
+        """
+        try:
+            # Don’t trigger an election
+            meta = self.storage.container_get_properties(
+                account,
+                reference,
+                cid=cid,
+                params={"service_id": service_id, "local": 1},
+            )
+            system = meta.get("system")
+            if not system:
+                # Database doesn't exist
+                return None
+            meta2_peers = system.get("sys.peers")
+            if meta2_peers is None:
+                # Maybe no metaX replication
+                return ()
+            return tuple(sorted(meta2_peers.split(",")))
+        except NotFound:
+            self.logger.info(
+                "Reference %s/%s no longer exists (meta2 service)", account, reference
+            )
+            return None
+        except Exception as exc:
+            self.success = False
+            self.logger.error(
+                "Failed to locate reference %s/%s (meta2 service): %s",
+                account,
+                reference,
+                exc,
+            )
+            return None
+
+    def get_all_metaX_peers(
+        self,
+        all_metaX_peers,
+        get_metaX_peers_func,
+        account,
+        reference,
+        cid,
+        service_id,
+    ):
+        all_metaX_peers = dict(all_metaX_peers)
+        if service_id not in all_metaX_peers:
+            metaX_peers = get_metaX_peers_func(account, reference, cid, service_id)
+            all_metaX_peers[service_id] = metaX_peers
+            if metaX_peers is not None:
+                for sid in metaX_peers:
+                    all_metaX_peers.update(
+                        self.get_all_metaX_peers(
+                            all_metaX_peers,
+                            get_metaX_peers_func,
+                            account,
+                            reference,
+                            cid,
+                            sid,
+                        )
+                    )
+        return all_metaX_peers
+
+    def take_action(self, parsed_args):
+        service_type, account, reference, cid = self.get_params(parsed_args)
+
+        if service_type == "meta2":
+            parent_peers_func = self.get_meta2_links
+            get_metaX_peers_func = self.get_meta2_peers
+        else:
+            raise NotImplementedError(f"Service type {service_type} is not implemented")
+
+        parent_peers = parent_peers_func(account, reference, cid)
+        all_metaX_peers = {}
+        for sid in parent_peers:
+            all_metaX_peers = self.get_all_metaX_peers(
+                all_metaX_peers,
+                get_metaX_peers_func,
+                account,
+                reference,
+                cid,
+                sid,
+            )
+
+        nb_repli = len(parent_peers)
+        if nb_repli == 1:
+            # No metaX replication
+            for sid, peers in all_metaX_peers.items():
+                if peers == ():
+                    # metaX databases don't need to know about their peers
+                    # (since there aren't any)
+                    all_metaX_peers[sid] = tuple(parent_peers)
+
+        # Select the majority peers
+        majority_peers = None
+        all_metaX_peers_values = [
+            peers for peers in all_metaX_peers.values() if peers is not None
+        ]
+        if all_metaX_peers_values.count(parent_peers) >= nb_repli:
+            # Favor already parent peers
+            majority_peers = parent_peers
+        else:
+            for peers in set(all_metaX_peers_values):
+                count = all_metaX_peers_values.count(peers)
+                if count < nb_repli:
+                    continue
+                if majority_peers is not None:
+                    raise OioException("Impossible to know the majority peers")
+                majority_peers = peers
+
+        # Check the consistency of the information.
+        res = {
+            "peers": {
+                "parent": parent_peers,
+                service_type: all_metaX_peers,
+                "majority": majority_peers,
+            },
+            "agree_with_majority": {
+                "parent": majority_peers is not None and parent_peers == majority_peers,
+                service_type: {
+                    sid: majority_peers is not None and metaX_peers == majority_peers
+                    for sid, metaX_peers in all_metaX_peers.items()
+                },
+                "majority": majority_peers is not None
+                and all(
+                    (all_metaX_peers[sid] == majority_peers for sid in majority_peers)
+                ),
+            },
+        }
+        self.success = all(get_all_values(res["agree_with_majority"]))
+        if parsed_args.formatter not in ("json", "yaml"):
+            res = flat_dict_from_dict(parsed_args, res, separator=",")
+        return list(zip(*sorted(res.items())))

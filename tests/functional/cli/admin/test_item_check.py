@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 # License along with this library.
 
 
+import json
 import random
 import time
 
@@ -24,7 +25,7 @@ from oio import ObjectStorageApi
 from oio.common.autocontainer import HashedContainerBuilder
 from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
 
 
@@ -1937,3 +1938,161 @@ class ItemCheckTestLimitListing(ItemCheckTest):
     def setUp(self):
         super(ItemCheckTestLimitListing, self).setUp()
         self.limit_listings = 2
+
+
+class PeersCheckTest(CliTestCase):
+    def setUp(self):
+        self.container = f"peers_check_{random_str(4)}"
+        self.openio(f"container create {self.container}")
+        return super(PeersCheckTest, self).setUp()
+
+    def tearDown(self):
+        self.openio(f"container delete {self.container}")
+        return super(PeersCheckTest, self).tearDown()
+
+    def test_meta2_peers_valid(self):
+        output = self.openio_admin(
+            f"peers check meta2 {self.container} {self.get_format_opts(format_='json')}"
+        )
+        output = json.loads(output)
+
+        parent_peers = sorted(output["peers"]["parent"])
+        expected_output = {
+            "agree_with_majority": {
+                "parent": True,
+                "meta2": {sid: True for sid in parent_peers},
+                "majority": True,
+            },
+            "peers": {
+                "parent": parent_peers,
+                "meta2": {sid: parent_peers for sid in parent_peers},
+                "majority": parent_peers,
+            },
+        }
+        self.assertDictEqual(expected_output, output)
+
+    def _recover_commandfailed(self, func, *args):
+        try:
+            func(*args)
+        except CommandFailed as cf:
+            self.stdout = cf.stdout
+            self.stderr = cf.stderr
+            self.rc = cf.returncode
+            raise
+
+    def _test_meta2_peers_with_bad_parent_peers(self, copy_base=True):
+        self.maxDiff = None
+
+        # Fetch current meta2 links in meta1 database
+        data_dir = self.storage.directory.list(self.account_from_env(), self.container)
+        old_parent_peers = []
+        for d in data_dir["srv"]:
+            if d["type"] == "meta2":
+                old_parent_peers.append(d["host"])
+        old_parent_peers.sort()
+
+        # Select a meta2 service not yet used
+        remaining_services = [
+            service.get("service_id", service["addr"])
+            for service in self.conf["services"]["meta2"]
+            if service.get("service_id", service["addr"]) not in old_parent_peers
+        ]
+        if not remaining_services:
+            self.skipTest("Not enough meta2 service")
+        bad_service_id = random.choice(remaining_services)
+        tmp_old_parent_peers = list(old_parent_peers)
+        new_parent_peers = []
+        for _ in range(len(old_parent_peers) - 1):
+            sid = random.choice(tmp_old_parent_peers)
+            tmp_old_parent_peers.remove(sid)
+            new_parent_peers.append(sid)
+        new_parent_peers.append(bad_service_id)
+        new_parent_peers.sort()
+
+        try:
+            if copy_base:
+                # Copy meta2 database
+                self.admin.copy_base_from(
+                    service_type="meta2",
+                    account=self.account_from_env(),
+                    reference=self.container,
+                    svc_from=old_parent_peers[0],
+                    svc_to=bad_service_id,
+                )
+
+            # Update meta2 links in meta1 database
+            self.storage.directory.force(
+                self.account_from_env(),
+                self.container,
+                service_type="meta2",
+                replace=True,
+                services={
+                    "host": ",".join(new_parent_peers),
+                    "type": "meta2",
+                    "args": "",
+                    "seq": 1,
+                },
+            )
+
+            self.assertRaises(
+                CommandFailed,
+                self._recover_commandfailed,
+                self.openio_admin,
+                f"peers check meta2 {self.container} "
+                f"{self.get_format_opts(format_='json')}",
+            )
+            self.assertEqual(1, self.rc)
+            output = json.loads(self.stdout)
+
+            expected_output = {
+                "agree_with_majority": {
+                    "parent": False,
+                    "meta2": {sid: True for sid in old_parent_peers},
+                    "majority": True,
+                },
+                "peers": {
+                    "parent": new_parent_peers,
+                    "meta2": {sid: old_parent_peers for sid in old_parent_peers},
+                    "majority": old_parent_peers,
+                },
+            }
+            if copy_base:
+                expected_output["agree_with_majority"]["meta2"][bad_service_id] = True
+                expected_output["peers"]["meta2"][bad_service_id] = old_parent_peers
+            else:
+                expected_output["agree_with_majority"]["meta2"][bad_service_id] = False
+                expected_output["peers"]["meta2"][bad_service_id] = None
+            self.assertDictEqual(expected_output, output)
+        finally:
+            try:
+                self.storage.directory.force(
+                    self.account_from_env(),
+                    self.container,
+                    service_type="meta2",
+                    replace=True,
+                    services={
+                        "host": ",".join(old_parent_peers),
+                        "type": "meta2",
+                        "args": "",
+                        "seq": 1,
+                    },
+                )
+            except Exception as exc:
+                self.logger.error("Failed to change meta2 links: %s", exc)
+
+            if copy_base:
+                try:
+                    self.admin.remove_base(
+                        service_type="meta2",
+                        account=self.account_from_env(),
+                        reference=self.container,
+                        service_id=bad_service_id,
+                    )
+                except Exception as exc:
+                    self.logger.error("Failed to delete meta2 database: %s", exc)
+
+    def test_meta2_peers_with_bad_parent_peers_and_copy(self):
+        self._test_meta2_peers_with_bad_parent_peers()
+
+    def test_meta2_peers_with_bad_parent_peers_and_no_copy(self):
+        self._test_meta2_peers_with_bad_parent_peers(copy_base=False)
