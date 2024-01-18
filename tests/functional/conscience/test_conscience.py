@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -577,7 +577,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_up_status(self):
         def check(isUp):
-            echo_services = self.conscience.all_services("echo")
+            echo_services = self._assert_list_echo()
             echo = echo_services[0]
             self.assertEqual(isUp, echo["tags"]["tag.up"])
 
@@ -591,7 +591,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_up_status_locked_service(self):
         def check(isUp):
-            echo_services = self.conscience.all_services("echo")
+            echo_services = self._assert_list_echo()
             echo = echo_services[0]
             self.assertEqual(isUp, echo["tags"]["tag.up"])
 
