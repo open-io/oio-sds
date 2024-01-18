@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 #include <server/network_server.h>
+#include <vendor/statsd-c-client/statsd-client.h>
 
 #ifndef OIO_SERVER_HTTP_READAHEAD
 #define OIO_SERVER_HTTP_READAHEAD 4096
@@ -61,6 +62,8 @@ struct network_server_s
 	struct endpoint_s **endpointv;
 
 	struct network_client_s *first;
+
+	statsd_link *statsd_client;
 
 	GThread *thread_udp;
 	GThread *thread_tcp;

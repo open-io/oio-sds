@@ -108,6 +108,9 @@ static GHashTable *full_srv_list_cache = NULL;
 static GThread *srv_cache_thread = NULL;
 static gint64 srv_cache_interval = 250 * G_TIME_SPAN_MILLISECOND;
 
+static gchar *statsd_host = NULL;
+static gint statsd_port = 8125;
+
 /* ------------------------------------------------------------------------- */
 
 # ifndef LIMIT_LENGTH_SRVDESCR
@@ -416,7 +419,7 @@ conscience_srvtype_init(struct conscience_srvtype_s *srvtype)
 {
 	EXTRA_ASSERT(srvtype != NULL);
 	conscience_srvtype_set_type_expression(srvtype, NULL, "100", PUT | GET);
-	srvtype->alert_frequency_limit = 30;
+	srvtype->alert_frequency_limit = TIME_DEFAULT_ALERT_LIMIT;
 	srvtype->score_expiration = 300;
 	srvtype->score_variation_bound = 5;
 	srvtype->lock_at_first_register = TRUE;
@@ -815,6 +818,42 @@ static GThread *hub_thread_pub = NULL;
 static GThread *hub_thread_sub = NULL;
 static GThreadPool *pool_update_srv = NULL;
 
+
+static const char *
+hub_action_to_str(const char action)
+{
+	switch (action) {
+		case 'P':
+			return "CS_PSH";
+		case 'R':
+			return "CS_DEL";
+		case 'F':
+			/* CS_FLUSH does not exist, "flush" is a special case of CS_DEL */
+			return "CS_FLUSH";
+		default:
+			return "undefined";
+	}
+}
+
+static void
+send_hub_stat(const gchar *way, const gchar action, const int code)
+{
+	gchar metric_name[256] = {0};
+	g_snprintf(metric_name, sizeof(metric_name),
+			"hub_%s.%s.%d.count", way, hub_action_to_str(action), code);
+	network_server_incr_stat(server, metric_name);
+}
+
+static void
+send_hub_timing(const gchar *way, const gchar action, const int code,
+		gint64 micros)
+{
+	gchar metric_name[256] = {0};
+	g_snprintf(metric_name, sizeof(metric_name),
+			"hub_%s.%s.%d.timing", way, hub_action_to_str(action), code);
+	network_server_send_timing(server, metric_name, micros);
+}
+
 static void
 _et_bim_cest_dans_le_hub (gchar *m)
 {
@@ -827,6 +866,7 @@ _et_bim_cest_dans_le_hub (gchar *m)
 			GRID_WARN("HUB: failed to publish action: "
 					"unexpected number of bytes sent: %d (expected=1)",
 					rc);
+			send_hub_stat("sent", m[0], EMSGSIZE);
 		} else {
 			GRID_TRACE2("HUB: published 1 action / %d bytes", rc);
 			int mlen = strlen(m+1);
@@ -834,12 +874,15 @@ _et_bim_cest_dans_le_hub (gchar *m)
 			if (rc < 0) {
 				GRID_WARN("HUB: failed to publish service: (%d) %s",
 						errno, strerror(errno));
+				send_hub_stat("sent", m[0], errno);
 			} else if (rc != mlen) {
 				GRID_WARN("HUB: failed to publish service: "
 						"unexpected number of bytes sent: %d (expected=%d)",
 						rc, mlen);
+				send_hub_stat("sent", m[0], EMSGSIZE);
 			} else {
 				GRID_TRACE2("HUB: published 1 service / %d bytes", rc);
+				send_hub_stat("sent", m[0], 0);
 			}
 		}
 	}
@@ -1004,14 +1047,16 @@ push_service_dated(struct service_info_dated_s *sid)
 {
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(
 			sid->si->type, FALSE);
+
+	time_t now = oio_ext_real_time();
+	gint64 repli_lag = now - MAX(sid->tags_mtime, sid->lock_mtime);
 	if (!srvtype) {
 		GRID_ERROR("Service type [%s/%s] not found",
 				oio_server_namespace, sid->si->type);
+		send_hub_timing("lag", 'P', ENOENT, repli_lag);
 		return;
 	}
-
-	time_t now = oio_ext_real_time();
-	gint64 repli_lag = now - sid->tags_mtime;
+	send_hub_timing("lag", 'P', 0, repli_lag);
 
 	/* TODO(FVE): measure time to obtain the lock, send alert. */
 	gint64 start = oio_ext_monotonic_time();
@@ -1057,15 +1102,17 @@ rm_service_dated(struct service_info_dated_s *sid)
 	grid_addrinfo_to_string(&(sid->si->addr), str_desc + str_desc_len,
 			sizeof(str_desc) - str_desc_len);
 
+	time_t now = oio_ext_real_time();
+	gint64 repli_lag = now - MAX(sid->tags_mtime, sid->lock_mtime);
+
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(
 			sid->si->type, FALSE);
 	if (!srvtype) {
 		GRID_ERROR("Service type not found [%s]", str_desc);
+		send_hub_timing("lag", 'R', ENOENT, repli_lag);
 		return;
 	}
-
-	time_t now = oio_ext_real_time();
-	gint64 repli_lag = now - sid->tags_mtime;
+	send_hub_timing("lag", 'R', 0, repli_lag);
 
 	gint64 start = oio_ext_monotonic_time();
 	g_rw_lock_writer_lock(&srvtype->rw_lock);
@@ -1274,17 +1321,20 @@ hub_worker_sub (gpointer p)
 					continue;
 				GRID_WARN("HUB: failed to receive action: (%d) %s",
 						errno, strerror(errno));
+				send_hub_stat("recv", 0, errno);
 				break;
 			} else if (rc != 1) {
 				GRID_WARN("HUB: failed to receive action: "
 						"unexpected number of bytes received: %d (expected=1)",
 						rc);
+				send_hub_stat("recv", 0, EMSGSIZE);
 				break;
 			}
 			const char *action = (const char*) zmq_msg_data(&msg);
 			const int more = zmq_msg_more(&msg);
 			GRID_TRACE2("HUB: received 1 action size=%d more=%d action=%c",
 					rc, more, *action);
+			send_hub_stat("recv", *action, 0);
 			if (more) {
 				switch (*action) {
 					case 'P':
@@ -1728,6 +1778,12 @@ _task_check_hub(gpointer p UNUSED)
 					unprocessed);
 		}
 	}
+	gint qlen = g_async_queue_length(hub_queue);
+	if (qlen > 10000) {
+		GRID_WARN("HUB: %d service updates waiting to be published", qlen);
+	} else if (qlen > 0) {
+		GRID_DEBUG("HUB: %d service updates waiting to be published", qlen);
+	}
 	// TODO(FVE): check other hub-related metrics
 }
 
@@ -2136,6 +2192,10 @@ _cs_configure_with_file(const char *path UNUSED)
 	oio_server_namespace = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_namespace", NULL);
 	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
+	statsd_host = g_key_file_get_value(gkf,
+			"Plugin.conscience", "statsd.host", NULL);
+	statsd_port = g_key_file_get_integer(gkf,
+			"Plugin.conscience", "statsd.port", NULL);
 
 	g_key_file_free(gkf);
 	gkf = NULL;
@@ -2527,6 +2587,12 @@ _cs_configure(int argc, char **argv)
 	}
 	_patch_and_apply_configuration();
 
+	/* Start statsd client */
+	if (statsd_host) {
+		network_server_configure_statsd(
+				server, "openio.conscience", statsd_host, statsd_port);
+	}
+
 	/* Start inter-conscience communication */
 	if ((err = _init_hub ()))
 		return _config_error("HUB", err);
@@ -2666,6 +2732,7 @@ _cs_specific_fini(void)
 	oio_str_clean(&path_srvcfg);
 	oio_str_clean(&path_stgpol);
 	oio_str_clean((gchar **)&oio_server_namespace);
+	oio_str_clean(&statsd_host);
 }
 
 static struct grid_main_option_s *

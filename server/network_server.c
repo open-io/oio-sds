@@ -278,6 +278,34 @@ network_server_allow_udp(struct network_server_s *srv)
 	srv->udp_allowed = TRUE;
 }
 
+void
+network_server_configure_statsd(struct network_server_s *srv,
+		const gchar *service_type, const gchar *statsd_host, gint statsd_port)
+{
+	if (srv->statsd_client != NULL)
+		statsd_finalize(srv->statsd_client);
+	srv->statsd_client = statsd_init_with_namespace(
+			statsd_host, statsd_port, service_type);
+}
+
+void
+network_server_incr_stat(struct network_server_s *srv, gchar *metric_name)
+{
+	if (!srv->statsd_client)
+		return;
+	statsd_inc(srv->statsd_client, metric_name, 1.0);
+}
+
+void
+network_server_send_timing(struct network_server_s *srv, gchar *metric_name,
+		gint64 micros)
+{
+	if (!srv->statsd_client)
+		return;
+	statsd_timing(srv->statsd_client, metric_name,
+			micros / G_TIME_SPAN_MILLISECOND);
+}
+
 static void
 _stop_pools (struct network_server_s *srv)
 {
@@ -334,6 +362,11 @@ network_server_clean(struct network_server_s *srv)
 	if (srv->queue_monitor) {
 		g_async_queue_unref(srv->queue_monitor);
 		srv->queue_monitor = NULL;
+	}
+
+	if (srv->statsd_client) {
+		statsd_finalize(srv->statsd_client);
+		srv->statsd_client = NULL;
 	}
 
 	g_cond_clear(&srv->req_mem_cond);

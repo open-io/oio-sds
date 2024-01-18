@@ -199,16 +199,40 @@ struct log_item_s
 	gsize out_len;
 };
 
+static gboolean
+statsd_log_access(struct log_item_s *item)
+{
+	struct req_ctx_s *req = item->req_ctx;
+	statsd_link *statsd_client = req->client->server->statsd_client;
+
+	if (!statsd_client)
+		return FALSE;
+
+	gchar metric_name[256] = {0};
+	g_snprintf(metric_name, sizeof(metric_name),
+			"request.%s.%d.timing",
+			hashstr_str(req->reqname), item->code);
+	size_t duration_ms = (item->req_ctx->tv_end - item->req_ctx->tv_start)
+		/ G_TIME_SPAN_MILLISECOND;
+	int error = statsd_timing(statsd_client, metric_name, duration_ms);
+	return error == 0;
+}
+
 static void
 network_client_log_access(struct log_item_s *item)
 {
 	struct req_ctx_s *r = item->req_ctx;
 
-	if (oio_disable_noisy_access_logs && r->access_disabled && CODE_IS_OK(item->code) && !GRID_DEBUG_ENABLED())
-		return;
-
 	if (!r->tv_end)
-		r->tv_end = oio_ext_monotonic_time ();
+		r->tv_end = oio_ext_monotonic_time();
+
+	statsd_log_access(item);
+
+	if (oio_disable_noisy_access_logs
+			&& r->access_disabled
+			&& CODE_IS_OK(item->code)
+			&& !GRID_DEBUG_ENABLED())
+		return;
 
 	double diff_total = (double)(r->tv_end - r->tv_start)
 			/ (double)G_TIME_SPAN_SECOND;

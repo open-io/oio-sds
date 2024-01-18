@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -147,6 +147,17 @@ void network_server_postfork_clean(struct network_server_s *srv);
 /* -------------------------------------------------------------------------- */
 
 void network_client_allow_input(struct network_client_s *clt, gboolean v);
+
+/** Configure a statds client which will log all incoming requests */
+void network_server_configure_statsd(struct network_server_s *srv,
+		const gchar *service_type, const gchar *statsd_host, gint statsd_port);
+
+/** Increment a (statsd) statistic */
+void network_server_incr_stat(struct network_server_s *srv, gchar *metric_name);
+
+/** Send a (statsd) timing statistic. Microseconds expected. */
+void network_server_send_timing(struct network_server_s *srv, gchar *metric_name,
+		gint64 micros);
 
 void network_client_close_output(struct network_client_s *clt, int now);
 

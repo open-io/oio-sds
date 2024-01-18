@@ -25,12 +25,20 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 
+add_library(statsd-client STATIC
+		${CMAKE_SOURCE_DIR}/vendor/statsd-c-client/statsd-client.c
+)
+# Disable this warning only for this lib (not maintained by us)
+target_compile_options(statsd-client PRIVATE -Wno-float-equal)
+
 add_library(server STATIC
 		slab.c
 		network_server.c
-        transport_gridd.c
+		transport_gridd.c
 		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c)
+
 target_link_libraries(server
+		statsd-client
 		metautils
 		-lm ${GLIB2_LIBRARIES})
 
