@@ -127,10 +127,10 @@ class KafkaClient:
 
 
 class KafkaSender(KafkaClient):
-    def __init__(self, endpoint, logger, conf={}):
+    def __init__(self, endpoint, logger, delay_granularity=None, conf={}):
         super(KafkaSender, self).__init__(endpoint, Producer, logger)
-        self._delayed_topic = conf.get("delayed_topic", DEFAULT_DELAYED_TOPIC)
-        self._delay_granularity = get_delay_granularity(conf)
+        self._delayed_topic = conf.get("topic", DEFAULT_DELAYED_TOPIC)
+        self._delay_granularity = delay_granularity
 
         self._connect(
             {

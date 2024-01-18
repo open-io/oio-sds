@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,11 @@ from urllib.parse import urlparse
 
 from lru import LRU
 
-from oio.common.kafka import DEFAULT_DELETE_TOPIC_PREFIX, KafkaSender
+from oio.common.kafka import (
+    DEFAULT_DELETE_TOPIC_PREFIX,
+    KafkaSender,
+    get_delay_granularity,
+)
 from oio.common.exceptions import OioException
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
@@ -45,7 +49,11 @@ class DeleteFilter(Filter):
 
     def _send_event(self, topic, event):
         if not self._producer:
-            self._producer = KafkaSender(self.conf.get("broker_endpoint"), self.logger)
+            self._producer = KafkaSender(
+                self.conf.get("broker_endpoint"),
+                self.logger,
+                delay_granularity=get_delay_granularity(self.conf["namespace"]),
+            )
 
         self._producer.send(topic, event)
 

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@ from oio.common.kafka import (
     KafkaConsumer,
     KafkaSender,
     kafka_options_from_conf,
+    get_delay_granularity,
     DEFAULT_XCUTE_JOB_TOPIC,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
 )
@@ -527,7 +528,11 @@ class XcuteOrchestrator(object):
         Try sending a task until it's ok
         """
         if self.kafka_producer is None:
-            self.kafka_producer = KafkaSender(self.kafka_endpoints, self.logger)
+            self.kafka_producer = KafkaSender(
+                self.kafka_endpoints,
+                self.logger,
+                delay_granularity=get_delay_granularity(self.conf["namespace"]),
+            )
 
         payload = self.make_payload(job_id, job_type, job_config, tasks)
 

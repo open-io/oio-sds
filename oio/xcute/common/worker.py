@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@ from oio.common.kafka import (
     KafkaSender,
     kafka_options_from_conf,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+    get_delay_granularity,
 )
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
@@ -57,7 +58,8 @@ class XcuteWorker(object):
             self.kafka_producer = KafkaSender(
                 self.conf["broker_endpoint"],
                 self.logger,
-                kafka_conf,
+                conf=kafka_conf,
+                delay_granularity=get_delay_granularity(self.conf["namespace"]),
             )
 
     def process(self, job):

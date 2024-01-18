@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 from datetime import datetime
 from time import sleep, time
 
-from oio.common.kafka import DEFAULT_DELAYED_TOPIC, KafkaSender
+from oio.common.kafka import DEFAULT_DELAYED_TOPIC, KafkaSender, get_delay_granularity
 from oio.event.evob import EventError
 from oio.event.filters.base import Filter
 
@@ -37,8 +37,11 @@ class DelayedFilter(Filter):
         self.topic = self.conf.get("topic", DEFAULT_DELAYED_TOPIC)
 
     def process(self, env, cb):
+        delay_granularity = get_delay_granularity(self.conf["namespace"])
         if not self._producer:
-            self._producer = KafkaSender(self.endpoints, self.logger)
+            self._producer = KafkaSender(
+                self.endpoints, self.logger, delay_granularity=delay_granularity
+            )
 
         data = env.get("data", {})
         due_time = data.get("due_time", 0)

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ import re
 from urllib.parse import unquote
 
 from oio.common.json import json
-from oio.common.kafka import KafkaSendException, KafkaSender
+from oio.common.kafka import KafkaSendException, KafkaSender, get_delay_granularity
 from oio.event.evob import Event, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -174,7 +174,11 @@ class KafkaNotifyFilter(NotifyFilter):
 
     def send_event(self, event, data):
         if not self.producer:
-            self.producer = KafkaSender(self.endpoints, self.logger)
+            self.producer = KafkaSender(
+                self.endpoints,
+                self.logger,
+                delay_granularity=get_delay_granularity(self.conf["namespace"]),
+            )
             self.producer.ensure_topics_exist([self.topic])
 
         topic = self.topic

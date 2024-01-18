@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -29,6 +29,7 @@ from oio.common.kafka import (
     KafkaConsumer,
     KafkaSender,
     kafka_options_from_conf,
+    get_delay_granularity,
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time
@@ -230,7 +231,10 @@ class KafkaConsumerWorker(Process):
     def _connect(self):
         if self._producer is None:
             self._producer = KafkaSender(
-                self.endpoint, self.logger, conf=self._kafka_conf
+                self.endpoint,
+                self.logger,
+                conf=self._kafka_conf,
+                delay_granularity=get_delay_granularity(self.app_conf["namespace"]),
             )
 
     def run(self):
