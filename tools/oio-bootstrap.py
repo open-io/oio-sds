@@ -1389,6 +1389,7 @@ ${NOBS}event-agent=${EVENT_CNXSTRING}
 ${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
+ns.delay_granularity=60
 
 # Small pagination to avoid time-consuming tests
 meta2.flush_limit=64

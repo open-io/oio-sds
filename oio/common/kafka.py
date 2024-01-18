@@ -26,6 +26,7 @@ from confluent_kafka import (
     OFFSET_BEGINNING,
     OFFSET_INVALID,
 )
+from oio.common.configuration import load_namespace_conf
 from oio.common.exceptions import OioException
 from oio.event.evob import EventTypes
 
@@ -44,8 +45,9 @@ KAFKA_CONF_PREFIX = "kafka_"
 POLL_TIMEOUT = 10
 
 
-def get_delay_granularity(conf):
-    return conf.get("delay_granularity", DEFAULT_DELAY_GRANULARITY)
+def get_delay_granularity(namespace):
+    sds_conf = load_namespace_conf(namespace) or {}
+    return int(sds_conf.get("ns.delay_granularity", DEFAULT_DELAY_GRANULARITY))
 
 
 class KafkaSendException(OioException):
