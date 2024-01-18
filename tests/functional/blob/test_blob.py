@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -951,7 +951,11 @@ class RawxTestSuite(CommonTestCase):
             {"x-oio-check-hash": True, "x-oio-chunk-meta-chunk-hash": "A" * 32},
         )
         self.assertEqual(412, resp.status)
-        os.remove(local_path)
+
+        # We used to call os.remove(local_path), but this lets a dead entry
+        # in rdir services, and make other tests fail. Doing a real HTTP
+        # request will trigger an event which will deindex the chunk.
+        self._http_request(chunkurl, "DELETE", "", {})
 
         # Check without xattr
         chunkid_woattr = chunkid[:3] + random_chunk_id()[3:]
