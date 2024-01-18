@@ -2916,7 +2916,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		goto end;
 	}
 
-	gchar *cfg = oio_cfg_get_eventagent(m2b->nsinfo->name);
+	gchar *cfg = oio_cfg_get_beanstalk(m2b->nsinfo->name);
 	if (!cfg) {
 		err = SYSERR("Missing queue URL");
 		goto end;
@@ -2925,8 +2925,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	gchar **eventagent_urls = g_strsplit(cfg, OIO_CSV_SEP2, -1);
 	for (gchar **eventagent_url = eventagent_urls; *eventagent_url && !err;
 			++eventagent_url) {
-		if (g_str_has_prefix(*eventagent_url, BEANSTALKD_PREFIX))
+		if (g_str_has_prefix(*eventagent_url, BEANSTALKD_PREFIX)) {
 			queue_url = g_strdup(*eventagent_url);
+			break;
+		}
 	}
 	g_strfreev(eventagent_urls);
 	if (!queue_url) {

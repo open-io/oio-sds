@@ -339,6 +339,7 @@ pkg_check_modules(CURL curl libcurl)
 if (NOT SDK_ONLY)
 pkg_check_modules(RABBITMQ librabbitmq>=0.8)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+pkg_check_modules(KAFKA REQUIRED rdkafka)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
 endif (NOT SDK_ONLY)
 
