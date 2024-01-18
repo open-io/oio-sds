@@ -26,6 +26,7 @@ from confluent_kafka import TopicPartition
 from oio.common.easy_value import float_value, int_value
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
+    DEFAULT_DELAY_GRANULARITY,
     KafkaConsumer,
     KafkaSender,
     kafka_options_from_conf,
@@ -155,6 +156,23 @@ class RetryLater(RejectMessage):
     but maybe later.
     """
 
+    DELAY = DEFAULT_DELAY_GRANULARITY
+
+    def __init__(self, *args: object, delay=None, evt_data=None) -> None:
+        super().__init__(*args)
+        self._delay = delay
+        self._evt_data = evt_data
+
+    @property
+    def delay(self):
+        if not self._delay:
+            return self.DELAY
+        return self._delay
+
+    @property
+    def evt_data(self):
+        return self._evt_data
+
 
 class KafkaConsumerWorker(Process):
     """
@@ -221,9 +239,18 @@ class KafkaConsumerWorker(Process):
                 self.acknowledge_message(event)
 
             except RejectMessage as err:
-                self.reject_message(event, retry_later=isinstance(err, RetryLater))
-            except Exception:
-                self.logger.exception("Failed to process message %s", event)
+                retry_later = isinstance(err, RetryLater)
+                delay = None
+                if retry_later:
+                    if err.evt_data:
+                        event["data"] = err.evt_data
+                    if err.delay:
+                        delay = err.delay
+                self.reject_message(event, retry_later=retry_later, delay=delay)
+            except Exception as exc:
+                self.logger.exception(
+                    "Failed to process message %s, %s", event, str(exc)
+                )
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
                 self.reject_message(event, retry_later=False)
@@ -281,7 +308,7 @@ class KafkaConsumerWorker(Process):
             )
             return False
 
-    def reject_message(self, message, retry_later=False):
+    def reject_message(self, message, retry_later=False, delay=None):
         try:
             self.acknowledge_message(message)
             if not self._producer:
@@ -290,7 +317,7 @@ class KafkaConsumerWorker(Process):
                 raise SystemError("No producer available")
 
             if retry_later:
-                self._producer.send(message["topic"], message["data"], 60)
+                self._producer.send(message["topic"], message["data"], delay=delay)
             else:
                 self._producer.send(
                     DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
