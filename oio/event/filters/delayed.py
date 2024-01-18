@@ -62,6 +62,7 @@ class DelayedFilter(Filter):
             new_env = env.copy()
             data = new_env.get("data", {})
             data["delay"] = delay - 1
+            data["due_time"] = due_time + delay_granularity
             self._producer.send(self.topic, new_env)
         else:
             # Restore original event data
