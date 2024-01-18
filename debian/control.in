@@ -40,6 +40,7 @@ Depends:
   zlib1g,
   libglib2.0-0,
   libjson-c3 | libjson-c4,
+  librdkafka1,
   librabbitmq4,
   libzmq5,
   asn1c,

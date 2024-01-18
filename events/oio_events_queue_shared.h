@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -41,11 +41,13 @@ struct _queue_with_endpoint_s
 	gchar *endpoint;
 	gchar *username;
 	gchar *password;
-	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ
+	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ, topic for Kafka
 	gchar *routing_key;  // only for RabbitMQ
 	gchar *exchange_name;  // only for RabbitMQ
 	gchar *exchange_type;  // only for RabbitMQ
 	gchar **extra_args;  // only for RabbitMQ
+	gchar *topic_prefix; // only for Kafka
+
 	gint64 pending_events;
 
 	volatile gboolean running;  // used to control the infinite loop
