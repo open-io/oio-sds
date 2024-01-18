@@ -1612,7 +1612,7 @@ pipeline = delay
 
 [filter:delay]
 use = egg:oio#delayed
-topic = oio-delay
+topic = oio-delayed
 
 [filter:logger]
 use = egg:oio#logger
@@ -3142,6 +3142,7 @@ def generate(options):
             "oio-xcute",
             "oio-xcute-reply",
             "oio-deadletter",
+            "oio-delayed",
         ]
 
         rawx_hosts = hosts[:nb_rawx]
