@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,7 @@ from oio.common.constants import (
     SIMULATEVERSIONING_HEADER,
     VERSIONID_HEADER,
 )
+from oio.event.evob import EventTypes
 from oio.common.easy_value import boolean_value
 from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
@@ -1915,8 +1916,9 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.new",)
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_NEW,),
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1931,8 +1933,9 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_UPDATE,),
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1947,8 +1950,10 @@ class TestMeta2Contents(BaseTestCase):
             reqid=reqid,
             replication_destinations="dst1;dst2",
         )
-        event = self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.update",)
+
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_UPDATE,),
         )
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)
@@ -1963,8 +1968,6 @@ class TestMeta2Contents(BaseTestCase):
             replication_destinations="dst1;dst2",
             create_delete_marker=True,
         )
-        event = self.wait_for_event(
-            "oio-preserved", reqid=reqid, types=("storage.content.new",)
-        )
+        event = self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTENT_NEW,))
         self.assertIsNotNone(event)
         self.assertEqual("dst1;dst2", event.destinations)

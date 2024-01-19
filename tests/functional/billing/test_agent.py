@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -76,7 +76,6 @@ class TestBillingAgent(BaseTestCase):
         conf = self.CONF.copy()
         conf["fdb_file"] = conf["fdb_file"] % self.ns
         self.agent = BillingAgent(conf, logger=self.logger)
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     @classmethod
     def _monkey_patch(cls):
@@ -475,8 +474,8 @@ class TestBillingAgent(BaseTestCase):
                     data=data,
                     reqid=reqid,
                 )
-                self.wait_for_event(
-                    "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
+                self.wait_for_kafka_event(
+                    reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
                 )
             top_objects.append((bucket_name, nb_objects))
             top_bytes.append((bucket_name, len(data) * nb_objects))

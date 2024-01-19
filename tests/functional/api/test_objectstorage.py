@@ -21,6 +21,7 @@ import random
 import time
 from mock import MagicMock as Mock, patch
 from functools import partial
+from urllib3.util import parse_url
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
@@ -58,7 +59,6 @@ class ObjectStorageApiTestBase(BaseTestCase):
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = []
         self.created_containers = set()
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()
@@ -101,9 +101,9 @@ class ObjectStorageApiTestBase(BaseTestCase):
             self.account, name, properties=properties
         )
 
-    def _set_properties(self, name, properties=None):
+    def _set_properties(self, name, properties=None, reqid=None):
         return self.api.container_set_properties(
-            self.account, name, properties=properties
+            self.account, name, properties=properties, reqid=reqid
         )
 
     def _upload_empty(self, container, *objs, **kwargs):
@@ -150,8 +150,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
         )
         # Account
         if reqid:
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 fields={"user": name},
                 reqid=reqid,
                 types=[EventTypes.CONTAINER_STATE],
@@ -412,12 +411,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(res, True)
 
         # container_set_properties on existing container
-        self.api.container_set_properties(self.account, name, metadata)
+        reqid = request_id()
+        self.api.container_set_properties(self.account, name, metadata, reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
+        self.assertIsNotNone(event)
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
@@ -426,12 +427,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         key = random_str(32)
         value = random_str(32)
         metadata2 = {key: value}
-        self._set_properties(name, metadata2)
+        reqid = request_id()
+        self._set_properties(name, metadata2, reqid=reqid)
         metadata.update(metadata2)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -442,11 +444,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         value = random_str(32)
         metadata3 = {key: value}
         metadata.update(metadata3)
-        self.api.container_set_properties(self.account, name, metadata3)
+        reqid = request_id()
+        self.api.container_set_properties(self.account, name, metadata3, reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -458,11 +461,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event_properties = {key: None for key in metadata}
         metadata = {key: value}
         event_properties.update(metadata)
-        self.api.container_set_properties(self.account, name, metadata, clear=True)
+        reqid = request_id()
+        self.api.container_set_properties(
+            self.account, name, metadata, clear=True, reqid=reqid
+        )
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -495,12 +501,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(res, True)
 
         # container_set_properties properties
-        self.api.container_set_properties(self.account, name, metadata)
+        reqid = request_id()
+        self.api.container_set_properties(self.account, name, metadata, reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
+        self.assertIsNotNone(event)
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
@@ -508,11 +516,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # container_del_properties a property
         _metadata = metadata.copy()
         key, _ = _metadata.popitem()
-        self.api.container_del_properties(self.account, name, [key])
+        reqid = request_id()
+        self.api.container_del_properties(self.account, name, [key], reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], _metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -520,11 +529,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         # container_set_properties the same property with the same value
         _metadata = {key: metadata[key]}
-        self.api.container_set_properties(self.account, name, _metadata)
+        reqid = request_id()
+        self.api.container_set_properties(self.account, name, _metadata, reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -635,9 +645,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         reqid = request_id()
         res = self._create(name, metadata, reqid=reqid)
         self.assertEqual(res, True)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_NEW], reqid=reqid
-        )
+        event = self.wait_for_kafka_event(types=[EventTypes.CONTAINER_NEW], reqid=reqid)
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
@@ -645,11 +653,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         key, _ = metadata.popitem()
 
         # container_del_properties on existing container
-        self.api.container_del_properties(self.account, name, [key])
+        reqid = request_id()
+        self.api.container_del_properties(self.account, name, [key], reqid=reqid)
         data = self._get_properties(name)
         self.assertNotIn(key, data["properties"])
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -660,22 +669,24 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # self.assertRaises(
         #     exc.NoSuchContainer, self.api.container_del_properties,
         #     self.account, name, [key])
-        self.api.container_del_properties(self.account, name, [key])
+        reqid = request_id()
+        self.api.container_del_properties(self.account, name, [key], reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual({key: None}, event.data["properties"])
 
         # Delete all container properties
-        self.api.container_del_properties(self.account, name, [])
+        reqid = request_id()
+        self.api.container_del_properties(self.account, name, [], reqid=reqid)
         data = self._get_properties(name)
         self.assertDictEqual({}, data["properties"])
-        event = self.wait_for_event(
-            "oio-preserved", types=[EventTypes.CONTAINER_UPDATE]
+        event = self.wait_for_kafka_event(
+            types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertDictEqual(event_url, event.url)
         self.assertDictEqual({}, event.data["system"])
@@ -1131,7 +1142,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for container_name in container_names:
             self.api.container_create(account, container_name)
         for _ in container_names:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 'oio-preserved', types=[EventTypes.CONTAINER_NEW])
 
         buckets = self.api.container_list(account, s3_buckets_only=True)
@@ -1159,7 +1170,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for container_name in container_names:
             self.api.container_create(account, container_name)
         for _ in container_names:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 'oio-preserved', types=[EventTypes.CONTAINER_NEW])
 
         buckets = self.api.container_list(account, s3_buckets_only=True,
@@ -1195,7 +1206,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for container_name in container_names:
             self.api.container_create(account, container_name)
         for _ in container_names:
-            self.wait_for_event(
+            self.wait_for_kafka_event(
                 'oio-preserved', types=[EventTypes.CONTAINER_NEW])
 
         buckets = self.api.container_list(account, s3_buckets_only=True)
@@ -1220,8 +1231,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name, reqid=reqid)
         ref_time = time.time()
         # ensure container event has been emitted and processed
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             fields={"account": account, "user": name},
             types=[EventTypes.CONTAINER_NEW],
@@ -1232,8 +1242,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_refresh(account, name, reqid=reqid)
         # Container events are buffered 1s by default.
         # See "events.common.pending.delay" configuration parameter.
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             fields={"account": account, "user": name},
             types=[EventTypes.CONTAINER_STATE],
@@ -1248,8 +1257,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         ref_time = mtime
         reqid = request_id()
         self.api.object_create(account, name, data="data", obj_name=name, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             fields={"account": account, "user": name},
             types=[EventTypes.CONTAINER_STATE],
@@ -1257,8 +1265,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # container_refresh on existing container with data
         reqid = request_id()
         self.api.container_refresh(account, name, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             fields={"account": account, "user": name},
             types=[EventTypes.CONTAINER_STATE],
@@ -1275,8 +1282,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_delete(account, name, reqid=reqid)
         # Again, wait for the container event to be processed.
         for _ in range(2):
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 fields={"account": account, "user": name},
                 types=(EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED),
@@ -1314,16 +1320,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         name = "test_account_refresh_" + random_str(6)
         reqid = request_id()
         self.api.object_create(account, name, data=b"data", obj_name=name, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,
         )
         reqid = request_id()
         self.api.account_refresh(account, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,
@@ -1337,21 +1341,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         reqid = request_id()
         self.api.container_delete(account, name, reqid=reqid)
         # Again, wait for the container event to be processed.
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account},
             types=(EventTypes.ACCOUNT_SERVICES,),
             reqid=reqid,
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account},
             types=(EventTypes.CONTAINER_DELETED,),
             reqid=reqid,
             timeout=5.0,
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,
@@ -1363,7 +1364,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_account_refresh_all(self):
         self.wait_for_score(("account", "meta2"))
-        self.beanstalkd0.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         # clear accounts
         accounts = depaginate(
             self.api.account.account_list,
@@ -1411,7 +1412,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name1)
         name2 = "acct-flush-" + random_str(6)
         self.api.container_create(account, name2)
-        self.beanstalkd.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         time.sleep(0.1)
         self.api.account_flush(account)
         containers = self.api.container_list(account)
@@ -1423,7 +1424,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_delete(account, name1)
         self.api.container_delete(account, name2)
-        self.beanstalkd.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         time.sleep(0.1)
         self.api.account_delete(account)
 
@@ -2443,6 +2444,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
+    EXPECTED_CHUNKS_PER_POLICY = {
+        "EC": 9,
+        "SINGLE": 1,
+        "THREECOPIES": 3,
+        "TWOCOPIES": 2,
+    }
+
     def setUp(self):
         super(TestObjectChangePolicy, self).setUp()
         self.chunk_size = self.conf["chunk_size"]
@@ -2538,22 +2546,29 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         )
         if expected_size_by_policy[new_policy] == 0:
             del expected_size_by_policy[new_policy]
-        # One of the checks below verifies that the old chunks have actually
-        # been deleted. Since this is an asynchronous process, we used to see
-        # random failures when the event treatment was a little slow.
-        evt = self.wait_for_event(
-            "oio-preserved",
-            types=(EventTypes.CHUNK_DELETED, EventTypes.CONTENT_BROKEN),
-            timeout=5.0,
-        )
-        if evt.event_type == EventTypes.CONTENT_BROKEN:
-            self.logger.warning(
-                "One of the new chunks was not uploaded, "
-                "wait a few seconds for the rebuilder "
-                "to rebuild it."
+
+        # Wait for old policy chunks removal
+        expected_events = self.EXPECTED_CHUNKS_PER_POLICY[old_policy]
+        for i in range(expected_events):
+            evt = self.wait_for_kafka_event(
+                types=(EventTypes.CHUNK_DELETED),
+                timeout=5.0,
+                reqid=reqid,
             )
-            self.wait_for_event(
-                "oio-preserved", types=(EventTypes.CHUNK_NEW,), timeout=6.0
+            self.assertIsNotNone(
+                evt, f"All events were not processed: {i}/{expected_events}"
+            )
+
+        # Wait for new policy to be created
+        expected_events = self.EXPECTED_CHUNKS_PER_POLICY[new_policy]
+        for i in range(expected_events):
+            evt = self.wait_for_kafka_event(
+                types=(EventTypes.CHUNK_NEW),
+                timeout=5.0,
+                reqid=reqid,
+            )
+            self.assertIsNotNone(
+                evt, f"All events were not processed: {i}/{expected_events}"
             )
 
         obj2, chunks2 = self.api.object_locate(
@@ -2784,6 +2799,20 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         self.patched_args = None
         self.patched_kwargs = None
 
+    def _wait_for_chunk_event(self, types, reqid, chunks):
+        chunks_svc_ids = [parse_url(c["url"]).hostname for c in chunks]
+
+        for svc_id in chunks_svc_ids:
+            evt = self.wait_for_kafka_event(
+                types=types,
+                reqid=reqid,
+                svcid=svc_id,
+                timeout=5.0,
+            )
+
+            self.assertIsNotNone(evt)
+            self.assertEqual(1, sum(data["type"] == "chunks" for data in evt.data))
+
     def _test_restore_drained(self, data_size):
         name = "restore-drained-" + random_str(6)
         self._create(name)
@@ -2812,17 +2841,8 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         # Drain the object
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
-        evt = self.wait_for_event(
-            "oio-preserved",
-            types=(EventTypes.CONTENT_DRAINED),
-            reqid=reqid,
-            timeout=5.0,
-        )
 
-        self.assertIsNotNone(evt)
-        self.assertEqual(
-            len(chunks), sum(data["type"] == "chunks" for data in evt.data)
-        )
+        self._wait_for_chunk_event((EventTypes.CONTENT_DRAINED,), reqid, chunks)
 
         # Check the object is really drained (to be sure that restore actually
         # do something)
@@ -2956,17 +2976,8 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         # Drain the object
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
-        evt = self.wait_for_event(
-            "oio-preserved",
-            types=(EventTypes.CONTENT_DRAINED),
-            reqid=reqid,
-            timeout=5.0,
-        )
 
-        self.assertIsNotNone(evt)
-        self.assertEqual(
-            len(chunks), sum(data["type"] == "chunks" for data in evt.data)
-        )
+        self._wait_for_chunk_event((EventTypes.CONTENT_DRAINED,), reqid, chunks)
 
         # pylint: disable=protected-access
         with patch(
@@ -3000,17 +3011,8 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         # Drain the object
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
-        evt = self.wait_for_event(
-            "oio-preserved",
-            types=(EventTypes.CONTENT_DRAINED),
-            reqid=reqid,
-            timeout=5.0,
-        )
 
-        self.assertIsNotNone(evt)
-        self.assertEqual(
-            len(chunks), sum(data["type"] == "chunks" for data in evt.data)
-        )
+        self._wait_for_chunk_event((EventTypes.CONTENT_DRAINED,), reqid, chunks)
 
         data = random_data(self.chunk_size)
 
@@ -3046,17 +3048,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         # Drain the object
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
-        evt = self.wait_for_event(
-            "oio-preserved",
-            types=(EventTypes.CONTENT_DRAINED),
-            reqid=reqid,
-            timeout=5.0,
-        )
-
-        self.assertIsNotNone(evt)
-        self.assertEqual(
-            len(chunks), sum(data["type"] == "chunks" for data in evt.data)
-        )
+        self._wait_for_chunk_event((EventTypes.CONTENT_DRAINED,), reqid, chunks)
 
         data = random_data(self.chunk_size * 2)
         self.assertRaises(
@@ -3088,8 +3080,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         # Drain the object
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             types=(EventTypes.CONTENT_DRAINED),
             reqid=reqid,
             timeout=5.0,
@@ -3752,8 +3743,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertDictEqual(expected_cache, self.cache)
         # Wait until all the original chunks are deleted
         for _ in range(len(cached_chunks)):
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(EventTypes.CHUNK_DELETED,),
                 timeout=5.0,
@@ -3807,8 +3797,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertDictEqual(expected_cache, self.cache)
         # Wait until all the original chunks are deleted
         for _ in range(len(cached_chunks)):
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(EventTypes.CHUNK_DELETED,),
                 timeout=5.0,

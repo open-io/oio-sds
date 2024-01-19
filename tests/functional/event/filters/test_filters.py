@@ -17,15 +17,10 @@
 # License along with this library.
 
 import time
-from random import choice
 from urllib.parse import quote
 
-from oio.account.client import AccountClient
 from oio.blob.rebuilder import BlobRebuilder
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
-from oio.event.beanstalk import Beanstalk
-from oio.event.filters.notify import BeanstalkdNotifyFilter
-from oio.event.filters.replicate import ReplicateFilter
+from oio.event.filters.notify import KafkaNotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 from testtools.testcase import ExpectedException
 
@@ -63,16 +58,11 @@ class TestContentRebuildFilter(BaseTestCase):
             self.account, self.container
         )["system"]
         self.container_id = syst["sys.name"].split(".", 1)[0]
-        queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
-        self.queue_url = queue_addr
-        self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = BlobRebuilder.DEFAULT_WORKER_TUBE
-        self.notify_filter = BeanstalkdNotifyFilter(
-            app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
+        self.conf["queue_url"] = self.ns_conf["event-agent"]
+        self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
+        self.notify_filter = KafkaNotifyFilter(
+            app=_App, conf=self.conf, endpoint=self.ns_conf["event-agent"]
         )
-        bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.drain_tube(BlobRebuilder.DEFAULT_WORKER_TUBE, timeout=0.5)
-        bt.close()
         self.wait_for_score(("rawx", "meta2"), score_threshold=10, timeout=5.0)
         self.objects_created = list()
 
@@ -134,10 +124,8 @@ class TestContentRebuildFilter(BaseTestCase):
                 return False
         return True
 
-    def _rebuild(self, event, job_id=0):
-        bt = Beanstalk.from_url(self.conf["queue_url"])
-        bt.wait_until_empty(BlobRebuilder.DEFAULT_WORKER_TUBE, timeout=0.5)
-        bt.close()
+    def _rebuild(self):
+        self.wait_until_empty("oio-rebuild", "event-agent-rebuild")
         time.sleep(2)
 
     def _remove_chunks(self, obj_meta, chunks):
@@ -166,7 +154,7 @@ class TestContentRebuildFilter(BaseTestCase):
         missing_pos = [chunk["pos"] for chunk in chunks_to_remove]
         event = self._create_event(obj_meta, chunks, missing_pos)
         self.notify_filter.process(event, None)
-        self._rebuild(event)
+        self._rebuild()
         _, after = self.storage.object_locate(
             account=self.account,
             container=self.container,
@@ -399,24 +387,16 @@ class TestContentRebuildFilter(BaseTestCase):
         self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
 
 
-class TestNotifyFilterBase(BaseTestCase):
+class TestKafkaNotifyFilter(BaseTestCase):
     def setUp(self):
-        super(TestNotifyFilterBase, self).setUp()
-        queue_addr = choice(self.conf["services"]["beanstalkd"])["addr"]
-        self.queue_url = queue_addr
-        self.conf["queue_url"] = "beanstalk://" + self.queue_url
-        self.conf["tube"] = "oio-repli"
+        super(TestKafkaNotifyFilter, self).setUp()
+        self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        self.conf["queue_url"] = self.ns_conf["event-agent"]
+        self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
         self.conf["exclude"] = []
-        self.notify_filter = self.filter_class(
+        self.notify_filter = KafkaNotifyFilter(
             app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
         )
-
-    def tearDown(self):
-        super(TestNotifyFilterBase, self).tearDown()
-
-
-class TestBeanstalkdNotifyFilter(TestNotifyFilterBase):
-    filter_class = BeanstalkdNotifyFilter
 
     def test_parsing(self):
         expected = {
@@ -447,64 +427,3 @@ class TestBeanstalkdNotifyFilter(TestNotifyFilterBase):
         self.assertTrue(
             self.notify_filter._should_notify(random_str(16), random_str(16))
         )
-
-
-class TestReplicateFilter(TestNotifyFilterBase):
-    """
-    Test the "replicate" filter, forwarding object or container events to
-    the "replicator" service.
-    """
-
-    filter_class = ReplicateFilter
-
-    def setUp(self):
-        super(TestReplicateFilter, self).setUp()
-        self.notify_filter.check_account = True
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestReplicateFilter, cls).setUpClass()
-        cls.account_client = AccountClient({"namespace": cls._cls_ns})
-        _App.app_env["account_client"] = cls.account_client
-
-    def test_replication_always_enabled(self):
-        # Disable the account check
-        self.notify_filter.check_account = False
-        bname = "repli" + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account)
-        now = time.time()
-        # Disable replication for this bucket
-        self.storage.bucket.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: "false"}, None, account=self.account
-        )
-        self.storage.account.container_update(
-            self.account, bname, now, 0, 0, bucket=bname
-        )
-        # Replication is disabled for this bucket,
-        # but the filter won't do the check,
-        # and forward the event anyway.
-        self.assertTrue(self.notify_filter._should_notify(self.account, bname))
-
-    def test_replication_enabled(self):
-        bname = "repli" + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account)
-        now = time.time()
-        self.storage.bucket.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: "true"}, None, account=self.account
-        )
-        self.storage.account.container_update(
-            self.account, bname, now, 0, 0, bucket=bname
-        )
-        self.assertTrue(self.notify_filter._should_notify(self.account, bname))
-
-    def test_replication_disabled(self):
-        bname = "repli" + random_str(4)
-        self.storage.bucket.bucket_create(bname, self.account)
-        now = time.time()
-        self.storage.bucket.bucket_update(
-            bname, {BUCKET_PROP_REPLI_ENABLED: "false"}, None, account=self.account
-        )
-        self.storage.account.container_update(
-            self.account, bname, now, 0, 0, bucket=bname
-        )
-        self.assertFalse(self.notify_filter._should_notify(self.account, bname))

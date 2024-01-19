@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ import re
 import tempfile
 
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
@@ -47,7 +47,6 @@ class ContainerTest(CliTestCase):
 
     def setUp(self):
         super(ContainerTest, self).setUp()
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def _test_container_show(self, with_cid=False):
         opts = self.get_format_opts(fields=("container",))
@@ -152,8 +151,8 @@ class ContainerTest(CliTestCase):
                 "--oio-account %s object create %s %s --name test"
                 % (account, cname, file_.name)
             )
-        self.wait_for_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        self.wait_for_kafka_event(
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
         opts = self.get_format_opts(
@@ -165,8 +164,8 @@ class ContainerTest(CliTestCase):
         self.assertEqual(account + "\n4\n1\n1\n", output)
         # Refresh account
         output = self.openio("account refresh " + account)
-        self.wait_for_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        self.wait_for_kafka_event(
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # show bucket
         output = self.openio(
@@ -187,8 +186,8 @@ class ContainerTest(CliTestCase):
             output = self.openio(
                 "object create %s %s --name test" % (cname, file_.name)
             )
-        self.wait_for_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
+        self.wait_for_kafka_event(
+            fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
         # Show bucket
         opts = self.get_format_opts(
@@ -257,9 +256,12 @@ class ContainerTest(CliTestCase):
     def test_unicode_container_list(self):
         opts = self.get_format_opts(fields=("Name",)) + " -a " + self.account
         cname = "Intérêts-" + uuid.uuid4().hex
-        self.storage.container_create(self.account, cname)
-        self.wait_for_event(
-            "oio-preserved", fields={"user": cname}, types=(EventTypes.CONTAINER_NEW,)
+        reqid = request_id()
+        self.storage.container_create(self.account, cname, reqid=reqid)
+        self.wait_for_kafka_event(
+            reqid=reqid,
+            fields={"user": cname},
+            types=(EventTypes.CONTAINER_NEW,),
         )
         output = self.openio("container list " + opts)
         self.assertIn(cname, output)
@@ -535,20 +537,6 @@ class ContainerTest(CliTestCase):
 
     def test_container_set_properties_with_cid(self):
         self._test_container_set_properties(with_cid=True)
-
-    def test_drain_tube(self):
-        tube = "oio-test-drain"
-        self.beanstalkd0.use(tube)
-        tubes = self.beanstalkd0.tubes()
-        self.assertIn(tube, tubes)
-        self.beanstalkd0.put("job1")
-        self.beanstalkd0.put("job2")
-        stats = self.beanstalkd0.stats_tube(tube)
-        self.assertEqual(stats["current-jobs-ready"], 2)
-        drain = self.openio("events drain --tube " + tube + " --non-interactive")
-        stats = self.beanstalkd0.stats_tube(tube)
-        self.assertEqual(stats["current-jobs-ready"], 0)
-        self.assertIn("Drained", drain)
 
 
 class TestContainerSharding(CliTestCase):

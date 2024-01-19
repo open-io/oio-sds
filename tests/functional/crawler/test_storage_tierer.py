@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -43,7 +43,7 @@ class TestStorageTierer(BaseTestCase):
         }
         self.api.container = ContainerClient(self.gridconf)
         self._populate()
-        self.beanstalkd0.wait_until_empty("oio", initial_delay=0.5)
+        self.wait_until_empty(topic="oio", group_id="event-agent")
 
     def _populate(self):
         self.container_0_name = "container_empty"

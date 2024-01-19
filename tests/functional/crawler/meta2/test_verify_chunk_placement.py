@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -137,8 +137,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
             policy=policy,
             reqid=self.reqid,
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=self.reqid,
             timeout=5.0,
             types=(EventTypes.CHUNK_NEW,),
@@ -527,8 +526,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
             data=data,
             policy="JUSTENOUGH",
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=self.reqid,
             timeout=5.0,
             types=(EventTypes.CHUNK_NEW,),

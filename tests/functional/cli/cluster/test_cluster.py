@@ -127,6 +127,7 @@ class ClusterTest(CliTestCase):
         time.sleep(1.0)
         output = self.openio("cluster list rdir --locked --stats" + opts)
         data = json.loads(output)
+        self.assertNotEqual(0, len(data))
         self.assertEqual(data[0]["Locks"], "put=True get=False")
 
     def test_cluster_wait(self):

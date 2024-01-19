@@ -307,6 +307,9 @@ test_cli () {
 	randomize_env
 	# Some tests require events to be preserved after being handled
 	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
+	if is_running_test_suite "with-service-id"; then
+		args="${args} -U"
+	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	cd $SRCDIR
@@ -357,6 +360,7 @@ if is_running_test_suite "single" ; then
 	fi
 	func_tests $opts \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
@@ -365,6 +369,7 @@ fi
 if is_running_test_suite "repli" ; then
 	echo -e "\n### Replication tests"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
@@ -376,6 +381,7 @@ if is_running_test_suite "worm" ; then
 	for nb in 0 1 2 3 ; do
 		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 			-f "${SRCDIR}/etc/bootstrap-option-worm.yml" \
+			-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
 	done
 	unset WORM
@@ -387,6 +393,7 @@ if is_running_test_suite "slave" ; then
 	for nb in 0 1 2 3 ; do
 		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 			-f "${SRCDIR}/etc/bootstrap-option-slave.yml" \
+			-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
 	done
 	unset SLAVE
@@ -395,12 +402,14 @@ fi
 if is_running_test_suite "cli" ; then
 	echo -e "\n### CLI tests"
 	test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
 if is_running_test_suite "3copies" ; then
 	echo -e "\n### 3copies tests"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3hosts.yml"
 fi
 
@@ -408,6 +417,7 @@ if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
 
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-4hosts.yml"
 fi
 
@@ -415,14 +425,8 @@ if is_running_test_suite "multi-beanstalk" ; then
 	echo -e "\n### Tests with multiple beanstalkd"
 	func_tests \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
-fi
-
-if is_running_test_suite "rabbitmq-cluster-resiliency" ; then
-	echo -e "\n### Tests resiliency with rabbitmq cluster"
-	test_rabbitmq_resiliency \
-		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
 fi
 
 func_tests_rebuilder_mover () {
@@ -491,10 +495,12 @@ if is_running_test_suite "rebuilder" ; then
 		-f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
 
 	func_tests_rebuilder_mover \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
 
 	unset REBUILDER
@@ -508,6 +514,7 @@ if is_running_test_suite "mover" ; then
 	func_tests_rebuilder_mover \
 		-f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 

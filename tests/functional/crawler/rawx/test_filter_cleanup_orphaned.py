@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -48,7 +48,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
     def setUp(self):
         super(TestFilterCleanupOrphaned, self).setUp()
         self.api = self.storage
-        self.beanstalkd0.wait_until_empty("oio")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
         self.rawx_srv_list = self.conscience.all_services(
             service_type="rawx",
         )
@@ -95,8 +95,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             policy=policy,
             reqid=reqid,
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             timeout=5.0,
             types=(EventTypes.CHUNK_NEW,),

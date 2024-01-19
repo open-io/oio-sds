@@ -28,12 +28,14 @@ from urllib.parse import urlencode
 
 import yaml
 import testtools
+from confluent_kafka import TopicPartition, OFFSET_END
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time, get_watchdog, eventlet
+from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_PRESERVED_TOPIC, KafkaConsumer
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -44,6 +46,8 @@ CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
 CODE_POLICY_NOT_SATISFIABLE = 481
 CODE_POLICY_NOT_SUPPORTED = 480
+
+DEFAULT_GROUP_ID_TEST = "event-agent-test"
 
 
 def ec(fnc):
@@ -120,6 +124,9 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
     TEST_HEADERS = {REQID_HEADER: "7E571D0000000000"}
+
+    _cls_kafka_consumer = None
+    _cls_logger = logging.getLogger("test")
 
     def _compression(self):
         rx = self.conf.get("rawx", {})
@@ -228,6 +235,19 @@ class CommonTestCase(testtools.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
+        group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
+        cls._cls_kafka_consumer = KafkaConsumer(
+            DEFAULT_ENDPOINT,
+            [DEFAULT_PRESERVED_TOPIC],
+            group_id,
+            logger=cls._cls_logger,
+            app_conf=cls._cls_conf,
+            kafka_conf={
+                "enable.auto.commit": True,
+                "auto.offset.reset": "latest",
+            },
+        )
+
     def setUp(self):
         super(CommonTestCase, self).setUp()
         # Some test classes do not call setUpClass
@@ -253,6 +273,8 @@ class CommonTestCase(testtools.TestCase):
         self._storage_api = None
         self._watchdog = None
         self._bucket = None
+        self._preserved_offset = None
+
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
         # Namespace configuration as it was when the test started
@@ -261,6 +283,44 @@ class CommonTestCase(testtools.TestCase):
         # Set of containers to flush and remove at teardown
         self._containers_to_clean = set()
         self._deregister_at_teardown = []
+
+        self._assigned_partitions = []
+        self._cached_events = {}
+        self._used_events = []
+
+        self._wait_kafka_partition_assignment()
+        self._set_kafka_offset()
+
+    def _wait_kafka_partition_assignment(self):
+        if not self._cls_kafka_consumer:
+            return
+        while not self._assigned_partitions:
+            self._cls_kafka_consumer._client.poll(1.0)
+            self._assigned_partitions = self._cls_kafka_consumer._client.assignment()
+        self.logger.warning(
+            "Assigned partitions: [%s]",
+            ",".join(
+                [
+                    f"(topic: {p.topic},part:{p.partition},offset:{p.offset})"
+                    for p in self._assigned_partitions
+                ],
+            ),
+        )
+
+    def _set_kafka_offset(self, offset=OFFSET_END):
+        if not self._cls_kafka_consumer:
+            return
+        self.logger.warning("Seek partition offset: %s", offset)
+        for part in self._assigned_partitions:
+            watermark = self._cls_kafka_consumer._client.get_watermark_offsets(
+                part, timeout=5
+            )
+            self.logger.warning("Get watermark for %s = %s", str(part), str(watermark))
+            self.assertIsNotNone(watermark)
+            _, high_offset = watermark
+            self._cls_kafka_consumer._client.seek(
+                TopicPartition(part.topic, part.partition, high_offset)
+            )
 
     def tearDown(self):
         for acct, ct in self._containers_to_clean:
@@ -285,6 +345,9 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         super(CommonTestCase, cls).tearDownClass()
+        if cls._cls_kafka_consumer is not None:
+            # Close consumer
+            cls._cls_kafka_consumer.close()
 
     @property
     def conscience(self):
@@ -317,6 +380,21 @@ class CommonTestCase(testtools.TestCase):
             self._beanstalkd0 = Beanstalk.from_url(self.conf["main_queue_url"])
         return self._beanstalkd0
 
+    def get_kafka_consumer(self, topics=None, group_id=DEFAULT_GROUP_ID_TEST):
+        endpoint = DEFAULT_ENDPOINT
+        kafka_consumer = KafkaConsumer(
+            endpoint,
+            topics,
+            group_id,
+            logger=self.logger,
+            app_conf=self.conf,
+            kafka_conf={
+                "enable.auto.commit": False,
+                "auto.offset.reset": "latest",
+            },
+        )
+        return kafka_consumer
+
     @property
     def bucket_client(self):
         return self.storage.bucket
@@ -347,9 +425,7 @@ class CommonTestCase(testtools.TestCase):
 
     @property
     def logger(self):
-        if not self._logger:
-            self._logger = logging.getLogger("test")
-        return self._logger
+        return self._cls_logger
 
     @property
     def watchdog(self):
@@ -663,7 +739,7 @@ class BaseTestCase(CommonTestCase):
                         if not all_svcs:
                             wait = True
                 except Exception as err:
-                    logging.warn("Could not check service score: %s", err)
+                    logging.warning("Could not check service score: %s", err)
                     wait = True
                 if wait:
                     # No need to check other types, we have to wait anyway
@@ -706,7 +782,7 @@ class BaseTestCase(CommonTestCase):
                     continue
                 logging.info("event %s", data)
                 return event
-            logging.warn(
+            logging.warning(
                 "wait_for_event(reqid=%s, types=%s, fields=%s, timeout=%s) "
                 "reached its timeout",
                 reqid,
@@ -715,5 +791,110 @@ class BaseTestCase(CommonTestCase):
                 timeout,
             )
         except ResponseError as err:
-            logging.warn("%s", err)
+            logging.warning("%s", err)
         return None
+
+    def wait_for_kafka_event(
+        self,
+        reqid=None,
+        svcid=None,
+        types=None,
+        fields=None,
+        timeout=30.0,
+    ):
+        """
+        Wait for an event in the specified tube.
+        If reqid, types and/or fields are specified, drain events until the
+        specified event is found.
+
+        :param fields: dict of fields to look for in the event's URL
+        :param types: list of types of events the method should look for
+        """
+
+        def match_event(key, event):
+            if types and event.event_type not in types:
+                logging.debug("ignore event %s (event mismatch)", event)
+                return False
+            if reqid and event.reqid != reqid:
+                logging.info("ignore event %s (request_id mismatch)", event)
+                return False
+            if svcid and event.svcid != svcid:
+                logging.info("ignore event %s (service_id mismatch)", event)
+                return False
+            if fields and any(fields[k] != event.url.get(k) for k in fields):
+                logging.info("ignore event %s (filter mismatch)", event)
+                return False
+            logging.info("event %s", event)
+            self._used_events.append(key)
+            return True
+
+        # Check if event is already present
+        for key, event in self._cached_events.items():
+            if key in self._used_events:
+                continue
+            if match_event(key, event):
+                return event
+
+        now = time.time()
+        deadline = now + timeout
+        try:
+            for event in self._cls_kafka_consumer.fetch_events():
+                now = time.time()
+                if now > deadline:
+                    # Stop fetching events
+                    break
+                if not event or event.error():
+                    continue
+                event_key = f"{event.topic()},{event.partition()},{event.offset()}"
+                logging.debug("Got event: %s", event_key)
+                data = event.value()
+                event = Event(jsonlib.loads(data))
+
+                # Add to cache
+                self._cached_events[event_key] = event
+
+                if match_event(event_key, event):
+                    return event
+
+            logging.warning(
+                "wait_for_kafka_event(reqid=%s, types=%s, svcid=%s, fields=%s,"
+                " timeout=%s) reached its timeout",
+                reqid,
+                types,
+                svcid,
+                fields,
+                timeout,
+            )
+        except ResponseError as err:
+            logging.warning("%s", err)
+        return None
+
+    def wait_until_empty(
+        self,
+        topic,
+        group_id,
+        timeout=30.0,
+        poll_interval=2.0,
+        initial_delay=0.0,
+    ):
+        """
+        Wait until all events in the specified topic are consumed or the timeout
+        expires.
+        """
+        deadline = time.time() + timeout
+        if initial_delay > 0.0:
+            time.sleep(initial_delay)
+        kafka_consumer = self.get_kafka_consumer(topics=[], group_id=group_id)
+        try:
+            while True:
+                time.sleep(poll_interval)
+                lags = kafka_consumer.get_topic_lag(topic)
+                sum_lag = sum(lags.values())
+                if sum_lag == 0:
+                    break
+                if time.time() > deadline:
+                    raise TimeoutError(
+                        f"Topic {topic} not empty after {timeout} (lag={sum_lag})"
+                    )
+        finally:
+            kafka_consumer.close()

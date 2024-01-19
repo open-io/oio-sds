@@ -15,7 +15,7 @@
 
 import time
 from random import choice
-
+from oio.blob.client import BlobClient
 from oio.common import exceptions
 from oio.common.json import json
 from oio.common.utils import request_id
@@ -40,7 +40,8 @@ class ServiceDecommissionTest(CliTestCase):
 
     def setUp(self):
         super().setUp()
-        self.beanstalkd0.drain_tube("oio-preserved")
+        self._containers = []
+        self.blob_client = BlobClient(conf=self.conf, watchdog=self.watchdog)
 
     def create_objects(self, cname, n_obj=10, reqid=None):
         self.clean_later(cname)
@@ -55,14 +56,16 @@ class ServiceDecommissionTest(CliTestCase):
                 reqid=reqid,
             )
 
-    def wait_for_chunk_events(self, n_events, reqid=None, event=EventTypes.CHUNK_NEW):
-        for _ in range(n_events):
-            self.wait_for_event(
-                "oio-preserved",
+    def wait_for_chunk_events(
+        self, expected_events, reqid=None, event=EventTypes.CHUNK_NEW
+    ):
+        for i in range(expected_events):
+            _event = self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(event,),
-                timeout=1.0,
+                timeout=10.0,
             )
+            self.assertIsNotNone(_event, f"Received events {i}/{expected_events}")
 
     def _test_meta2_decommission(self, decommission_percentage=None):
         """
@@ -83,10 +86,16 @@ class ServiceDecommissionTest(CliTestCase):
                 # Creating so many containers in a row puts high pressure on the
                 # system. We can still run the test with a few containers missing.
                 container_count -= 1
-        for _ in range(container_count):
-            self.wait_for_event(
-                "oio-preserved", reqid=create_reqid, types=(EventTypes.CONTAINER_NEW,)
+        for i in range(container_count):
+            cname = f"xcute-decommission-{i:0>3}"
+            event = self.wait_for_kafka_event(
+                reqid=create_reqid,
+                types=(EventTypes.CONTAINER_NEW,),
+                fields={"user": cname},
+                timeout=10,
             )
+            self.assertIsNotNone(event, f"Received events {i}/{container_count}")
+
         list_reqid = request_id("xcute-decom-")
         candidate = self.storage.conscience.next_instance("meta2")["addr"]
         total_bases = len(
@@ -134,7 +143,7 @@ class ServiceDecommissionTest(CliTestCase):
     def test_meta2_decommission_percentage(self):
         return self._test_meta2_decommission(decommission_percentage=50)
 
-    def _run_rawx_decommission(self, service, usage_target=0, exclude=None):
+    def _run_rawx_decommission(self, service, usage_target=0, exclude=None, reqid=None):
         """
         Run a decommission task, then wait for it to be finished.
 
@@ -165,7 +174,10 @@ class ServiceDecommissionTest(CliTestCase):
         # Wait for the chunk deletion events (if any expected)
         if usage_target < 100:
             self.wait_for_chunk_events(
-                decoded["tasks.processed"] - decoded["errors.total"],
+                decoded["tasks.processed"]
+                - decoded.get("results.orphan_chunks", 0)
+                - decoded.get("results.skipped_chunks_no_longer_exist", 0)
+                - decoded["errors.total"],
                 event=EventTypes.CHUNK_DELETED,
             )
         else:
@@ -181,19 +193,34 @@ class ServiceDecommissionTest(CliTestCase):
         if len(self.conf["services"]["rawx"]) < 4:
             self.skip("This test requires at least 4 rawx services")
 
-        cname = "xcute-decom-{time.time()}"
+        candidate = self.storage.conscience.next_instance("rawx")["addr"]
+
+        # Clean up selected rawx for stability purpose
+        list_reqid = request_id("xcute-decom-")
+        all_chunks = list(
+            self.rdir.chunk_fetch(
+                candidate, limit=100000, reqid=list_reqid, full_urls=True
+            )
+        )
+        for cid, url, _ in all_chunks:
+            self.blob_client.chunk_delete(url, cid=cid)
+
+        cname = f"xcute-decom-{time.time()}"
         create_reqid = request_id("xcute-decom-")
         self.create_objects(cname, 15, reqid=create_reqid)
         self.wait_for_chunk_events(15 * 3, reqid=create_reqid)  # THREECOPIES
 
         list_reqid = request_id("xcute-decom-")
-        candidate = self.storage.conscience.next_instance("rawx")["addr"]
-        total_chunks = len(
-            list(self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid))
+        all_chunks = list(
+            self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid)
         )
-
+        total_chunks = len(all_chunks)
+        rawx_reqid = request_id("xcute-decom-")
         job_result = self._run_rawx_decommission(
-            service=candidate, usage_target=usage_target, exclude=exclude
+            service=candidate,
+            usage_target=usage_target,
+            exclude=exclude,
+            reqid=rawx_reqid,
         )
 
         all_chunks_after = list(

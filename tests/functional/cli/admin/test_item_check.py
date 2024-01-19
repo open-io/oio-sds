@@ -76,16 +76,13 @@ class ItemCheckTest(CliTestCase):
         self.account = "item_check_account_" + random_str(4)
         self.container = "item_check_container" + random_str(4)
         self.obj_name = "item_check_obj_" + random_str(4)
-
-        self.beanstalkd0.drain_tube("oio-preserved")
         self.api.account_create(self.account)
 
         self.limit_listings = 0
 
-    def _wait_for_events(self, chunks, reqid):
+    def _wait_for_kafka_events(self, chunks, reqid):
         for _ in range(2 + len(chunks)):
-            self.wait_for_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(
                     EventTypes.CHUNK_NEW,
@@ -93,6 +90,7 @@ class ItemCheckTest(CliTestCase):
                     EventTypes.CONTAINER_STATE,
                 ),
             )
+            self.assertIsNotNone(event)
 
     def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
         _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)
@@ -115,7 +113,7 @@ class ItemCheckTest(CliTestCase):
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
         )
-        self._wait_for_events(obj_chunks, reqid)
+        self._wait_for_kafka_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta["version"])
         )
@@ -127,7 +125,7 @@ class ItemCheckTest(CliTestCase):
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
             account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
         )
-        self._wait_for_events(obj_chunks, reqid)
+        self._wait_for_kafka_events(obj_chunks, reqid)
         self.__class__.OBJECTS_CREATED.append(
             (account, container, obj_name, obj_meta["version"])
         )
@@ -1831,7 +1829,10 @@ class ItemCheckTest(CliTestCase):
 
         # Remove container from account service
         self.api.account_flush(self.account)
-
+        self.wait_for_kafka_event(
+            fields={"account": self.account, "user": self.container},
+            types=(EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED),
+        )
         # Check with missing container
         output = self.openio_admin(
             "chunk check %s %s" % (chunk["url"], self.check_opts), expected_returncode=1
