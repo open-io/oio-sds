@@ -74,6 +74,7 @@ M2_REPLICAS="m2-replicas"
 #-------------------------------------------------------------------------------
 
 cmd_openio="openio --oio-ns $NS"
+cmd_openio_admin="openio-admin"
 G_DEBUG_LEVEL=WARN
 if [ $verbose != 0 ] ; then
     G_DEBUG_LEVEL=TRACE
@@ -136,6 +137,10 @@ if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
     if [ $verbose -ge 1 ] ; then opts="${opts} -v" ; fi
     if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
     openio --oio-ns "$NS" zk bootstrap ${opts}
+fi
+if grep -q kafka $HOME/.oio/sds.conf ; then
+    echo -e "\n### creating kafka topics"
+    $cmd_openio_admin kafka create-topics --reset $HOME/.oio/sds/conf/topics.yml
 fi
 
 $SYSTEMCTL daemon-reload

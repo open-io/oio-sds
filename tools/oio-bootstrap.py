@@ -617,6 +617,9 @@ shallow_copy ${SHALLOW_COPY}
 ${USE_TLS}tls_cert_file ${SRCDIR}/${TLS_CERT_FILE}
 ${USE_TLS}tls_key_file ${SRCDIR}/${TLS_KEY_FILE}
 ${USE_TLS}tls_rawx_url ${IP}:${TLS_PORT}
+
+events true
+topic  ${TOPIC}
 """
 
 template_wsgi_service_host = """
@@ -1344,25 +1347,6 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
-template_systemd_service_blob_rebuilder = """
-[Unit]
-Description=[OpenIO] Service blob rebuilder ${SRVNUM}
-PartOf=${PARENT}
-OioGroup=${NS},${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_local_header = """
 [default]
 """
@@ -1380,8 +1364,7 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
 ${NOBS}event-agent=${EVENT_CNXSTRING}
-${NOBS}event-agent.rawx=${EVENT_CNXSTRING_RAWX}
-${NOBS}event-agent.meta2=${EVENT_CNXSTRING_M2}
+${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
 
@@ -1391,6 +1374,11 @@ meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
 
 admin=${IP}:${PORT_ADMIN}
+"""
+
+template_meta_config = """
+[${NS}]
+events.kafka.options=client.id=${SERVICE_ID}
 """
 
 template_systemd_service_event_agent = """
@@ -1428,13 +1416,13 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
-queue_url=${QUEUE_URL}
-# Commented out on purpuse: use the parameters defined in the namespace conf
-#queue_args = ${QUEUE_ARGS}
-#queue_name = ${QUEUE_NAME}
-routing_key = ${ROUTING_KEY}
-exchange_name = ${EXCHANGE_NAME}
-tube = ${QUEUE_NAME}
+broker_endpoint = ${QUEUE_URL}
+topic = ${QUEUE_NAME}
+group_id = ${GROUP_ID}
+event_queue_type = ${QUEUE_TYPE}
+event_queue_ids = ${QUEUE_IDS}
+
+kafka_consumer_group.instance.id = ${SRVTYPE}.${SRVNUM}
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
@@ -1442,54 +1430,35 @@ rdir_read_timeout = 5.0
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
-# pipeline = async_replication
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.update]
-# pipeline = async_replication webhook
 pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.append]
-# pipeline = webhook
 pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.broken]
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
-# pipeline = content_cleaner
-
 # New pipeline with a separate oio-event-agent doing deletions
 pipeline = ${WEBHOOK} notify_deleted
 
-# Old pipeline with deletion done by the main oio-event-agent
-# pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
-
 [handler:storage.content.drained]
-# pipeline = content_cleaner
-pipeline = notify_deleted notify_drained
-# pipeline = content_cleaner notify_drained ${PRESERVE}
+pipeline = notify_deleted
 
 [handler:storage.container.new]
-# pipeline = account_update
 pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.update]
-# pipeline =
 pipeline = ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = account_update
 pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.state]
 pipeline = account_update ${PRESERVE}
-
-[handler:storage.chunk.new]
-pipeline = volume_index ${PRESERVE}
-
-[handler:storage.chunk.deleted]
-pipeline = volume_index ${PRESERVE}
 
 [handler:storage.meta2.deleted]
 pipeline = volume_index ${PRESERVE}
@@ -1509,8 +1478,8 @@ timeout = 4.5
 
 [filter:content_rebuild]
 use = egg:oio#notify
-tube = oio-rebuild
-queue_url = ${MAIN_QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+topic = oio-rebuild
 
 [filter:account_update]
 use = egg:oio#account_update
@@ -1526,10 +1495,9 @@ endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:async_replication]
 use = egg:oio#notify
-tube = oio-replication
-queue_url = ${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+topic = oio-replication
 required_fields = destinations
-exchange_name = oio-replication
 
 [filter:bury]
 use = egg:oio#bury
@@ -1543,35 +1511,20 @@ use = egg:oio#noop
 [filter:notify_deleted]
 # Forward storage.content.deleted events to another queue. Another
 # oio-event-agent will read this queue and delete chunks at a limited rate.
-use = egg:oio#notify
-tube = oio-delete
-queue_url = ${QUEUE_URL}
-#queue_args = ${QUEUE_ARGS}
-# In exchange "oio", all messages are routed to the queue "oio". To prevent
-# loops, we need another exchange.
-exchange_name = oio-delete
-strip_fields = aliases,contents_headers
-
-# This filter is only to demonstrate policy regexes
-[filter:notify_drained]
-use = egg:oio#notify
-queue_url = ${QUEUE_URL}
-queue_args = x-queue-type=classic
-tube = oio-drained
-policy_regex_EC = ^EC.*
-tube_EC = oio-drained-ec
-exchange_name = oio-drained
+use = egg:oio#delete
+broker_endpoint = ${QUEUE_URL}
+topic_prefix = oio-delete-
 
 [filter:logger]
 use = egg:oio#logger
 
 [filter:preserve]
-# Preserve all events in the oio-preserved tube. This filter is intended
+# Preserve all events in the oio-preserved topic. This filter is intended
 # to be placed at the end of each pipeline, to allow tests to check an
 # event has been handled properly.
 use = egg:oio#notify
-tube = oio-preserved
-queue_url = ${MAIN_QUEUE_URL}
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_event_agent_delete_handlers = """
@@ -1595,12 +1548,57 @@ timeout = 4.5
 use = egg:oio#logger
 
 [filter:preserve]
-# Preserve all events in the oio-preserved tube. This filter is intended
+# Preserve all events in the oio-preserved topic. This filter is intended
 # to be placed at the end of each pipeline, to allow tests to check an
 # event has been handled properly.
 use = egg:oio#notify
-tube = oio-preserved
-queue_url = ${MAIN_QUEUE_URL}
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_chunks_handlers = """
+### handlers
+[handler:storage.chunk.new]
+pipeline = volume_index ${PRESERVE}
+
+[handler:storage.chunk.deleted]
+pipeline = volume_index ${PRESERVE}
+
+### filters
+[filter:volume_index]
+use = egg:oio#volume_index
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_delay_handlers = """
+[handler:delayed]
+pipeline = delay
+
+[filter:delay]
+use = egg:oio#delay
+topic = oio-delayed
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
+template_event_agent_rebuilder_handlers = """
+[handler:storage.content.broken]
+pipeline = rebuild
+
+[filter:rebuild]
+use = egg:oio#blob_rebuilder
+topic = oio-rebuild
+
+[filter:logger]
+use = egg:oio#logger
 """
 
 template_systemd_service_xcute_event_agent = """
@@ -1625,7 +1623,7 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-tube = oio-xcute
+topic = oio-xcute
 namespace = ${NS}
 user = ${USER}
 workers = 2
@@ -1635,7 +1633,8 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
-queue_url=${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+group_id = ${GROUP_ID}
 """
 
 template_xcute_event_agent_handlers = """
@@ -1735,9 +1734,8 @@ workers = 2
 
 [xcute-orchestrator]
 orchestrator_id = orchestrator-${SRVNUM}
-beanstalkd_workers_tube = oio-xcute
-beanstalkd_reply_tube = oio-xcute.reply
-beanstalkd_reply_addr = ${QUEUE_URL}
+broker_endpoint = ${QUEUE_URL}
+jobs_topic = oio-xcute
 """
 
 template_rdir = """
@@ -1951,6 +1949,10 @@ def mkdir_noerror(d):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise e
+
+
+def get_rawx_slot(idx):
+    return "even" if idx % 2 == 0 else "odd"
 
 
 def generate(options):
@@ -2313,9 +2315,32 @@ def generate(options):
         beanstalkd_cnxstring = ";".join(
             "beanstalk://" + str(h) + ":" + str(p) for _, h, p in all_beanstalkd
         )
-        ENV.update({"EVENT_CNXSTRING": beanstalkd_cnxstring, "NOBS": ""})
+        ENV.update(
+            {
+                "BEANSTALK_CNXSTRING": beanstalkd_cnxstring,
+                "EVENT_CNXSTRING": beanstalkd_cnxstring,
+                "NOBS": "",
+            }
+        )
     else:
-        ENV.update({"EVENT_CNXSTRING": "***disabled***", "NOBS": "#"})
+        ENV.update(
+            {
+                "EVENT_CNXSTRING": "***disabled***",
+                "BEANSTALK_CNXSTRING": "***disabled***",
+                "NOBS": "#",
+            }
+        )
+
+    # Kafka
+    use_kafka = False
+    if "endpoint" in options["kafka"]:
+        endpoints = options["kafka"]["endpoint"]
+        if isinstance(endpoints, str):
+            endpoints = [endpoints]
+        kafka_cnxstring = ";".join((f"kafka://{endpoint}" for endpoint in endpoints))
+        ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
+        ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
+        use_kafka = True
 
     # For testing purposes, some events must go to the main queue
     if all_beanstalkd:
@@ -2323,74 +2348,6 @@ def generate(options):
         ENV["MAIN_QUEUE_URL"] = f"beanstalk://{host}:{port}"
 
     event_target = register_target("event", root_target)
-    # If a RabbitMQ endpoint is configured, configure it only for meta2 and rawx
-    if "endpoint" in options["rabbitmq"]:
-        endpoints = options["rabbitmq"]["endpoint"]
-        if isinstance(endpoints, str):
-            endpoints = [endpoints]
-        queue_args_list = []
-        queue_url_list = []
-        for endpoint in endpoints:
-            num += 1
-            url_parts = urlsplit(endpoint)
-            queue_args = {
-                k[6:]: v
-                for k, v in parse_qsl(url_parts.query)
-                if k.startswith("queue_")
-            }
-            queue_url = urlunsplit(url_parts[:3] + ("", ""))
-            queue_args_list.append(queue_args)
-            queue_url_list.append(queue_url)
-        first_args = queue_args_list[0]
-        for args in queue_args_list[1:]:
-            if args != first_args:
-                raise Exception("Arguments of rabbitmq queues are not the same")
-        ENV.update(
-            {
-                "EVENT_CNXSTRING_M2": ";".join(queue_url_list),
-                "EVENT_CNXSTRING_RAWX": ";".join(queue_url_list),
-                "RABBIT_QUEUE_ARGS": ",".join(
-                    "=".join((k, v)) for k, v in first_args.items()
-                ),
-                "RABBIT_QUEUE_URL": ";".join(queue_url_list),
-            }
-        )
-        env = subenv(
-            {
-                "SRVTYPE": "event-agent",
-                "SRVNUM": num,
-                "EXCHANGE_NAME": "oio",
-                "QUEUE_NAME": "oio",
-                "QUEUE_ARGS": ENV["RABBIT_QUEUE_ARGS"],
-                "QUEUE_URL": ENV["RABBIT_QUEUE_URL"],
-                "ROUTING_KEY": "#",
-                "EXE": "oio-event-agent-rabbitmq",
-                "EVENT_WORKERS": "2",
-            }
-        )
-        register_service(
-            env,
-            template_systemd_service_event_agent,
-            event_target,
-            # FIXME(FVE): we must set concurrency=multiprocessing in a config file
-            # and set COVERAGE_RCFILE in environment
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+") as f:
-            tpl = Template(template_event_agent)
-            f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as f:
-            tpl = Template(template_event_agent_handlers)
-            f.write(tpl.safe_substitute(env))
-
-    else:
-        ENV.update(
-            {
-                "EVENT_CNXSTRING_M2": ENV["EVENT_CNXSTRING"],
-                "EVENT_CNXSTRING_RAWX": ENV["EVENT_CNXSTRING"],
-            }
-        )
 
     meta2_volumes = []
 
@@ -2403,6 +2360,7 @@ def generate(options):
                 "PORT": next(ports),
                 "EXE": "oio-" + t + "-server",
                 "EXTRA": ext_opt,
+                "OPTARGS": "",
             }
         )
         if service_id:
@@ -2411,7 +2369,6 @@ def generate(options):
             env["OPTARGS"] = "-O ServiceId=%s" % env["SERVICE_ID"]
         else:
             env["WANT_SERVICE_ID"] = "#"
-            env["OPTARGS"] = ""
         register_service(env, tpl, parent_target)
         # watcher
         tpl = Template(template_meta_watch)
@@ -2420,6 +2377,13 @@ def generate(options):
 
         if t == "meta2":
             meta2_volumes.append("{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(**env))
+
+        if t in ("meta1", "meta2"):
+            if env.get("SERVICE_ID"):
+                tpl = Template(template_meta_config)
+                with open(config(env), "w+") as f:
+                    f.write(tpl.safe_substitute(env))
+                env["OPTARGS"] += " -O Config=%s" % config(env)
 
     # meta0
     nb_meta0 = max(
@@ -2545,28 +2509,36 @@ def generate(options):
     # RAWX
     srvtype = "rawx"
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults["NB_RAWX"])
+    rawx_per_host = {}
     if nb_rawx:
         rawx_volumes = []
         rawx_target = register_target("rawx", root_target)
         for i in range(nb_rawx):
+            host_idx = i % len(hosts)
+            host = hosts[host_idx]
+            slot = get_rawx_slot(host_idx + 1)
             env = subenv(
                 {
+                    "IP": host,
                     "SRVTYPE": srvtype,
                     "SRVNUM": i + 1,
                     "EXE": "oio-rawx",
                     "PORT": next(ports),
                     "COMPRESSION": ENV["COMPRESSION"] if i % 2 else "off",
-                    "EXTRASLOT": ("rawx-even" if i % 2 else "rawx-odd"),
+                    "EXTRASLOT": f"rawx-{slot}",
                     "FSYNC": ("enabled" if options[FSYNC_RAWX] else "disabled"),
                     "HASH_WIDTH": defaults[HASH_WIDTH],
                     "HASH_DEPTH": defaults[HASH_DEPTH],
                     "SHALLOW_COPY": (
                         "enabled" if options[SHALLOW_COPY] else "disabled"
                     ),
+                    "TOPIC": f"oio-chunks-{host}",
                 }
             )
             rawx_volumes.append(env["VOLUME"])
             env["SERVICE_ID"] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
+            host_rawxs = rawx_per_host.setdefault(host, [])
+            host_rawxs.append(env["SERVICE_ID"])
             if options.get("use_tls", False):
                 env["TLS_CERT_FILE"] = ENV["TLS_CERT_FILE"]
                 env["TLS_KEY_FILE"] = ENV["TLS_KEY_FILE"]
@@ -2831,19 +2803,30 @@ def generate(options):
     event_agents_target = register_target("event-agent", event_target)
     xcute_agents_target = register_target("xcute-event-agent", event_target)
 
-    # Event agent configuration -> one per beanstalkd
-    for num, host, port in all_beanstalkd:
-        bnurl = "beanstalk://{0}:{1}".format(host, port)
+    event_agent_bin = "oio-event-agent"
+    event_agent_count = getint(options["event-agent"].get(SVC_NB), len(all_beanstalkd))
 
+    def get_instance(kafka=False):
+        if kafka:
+            for i in range(event_agent_count):
+                yield i + 1, ENV["KAFKA_QUEUE_URL"], "oio-event-agent-kafka"
+        else:
+            for i, host, port in all_beanstalkd:
+                yield i, "beanstalk://{0}:{1}".format(host, port), "oio-event-agent"
+
+    # Event agent configuration -> one per beanstalkd
+    for num, url, event_agent_bin in get_instance(use_kafka):
         env = subenv(
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
                 "QUEUE_NAME": "oio",
-                "QUEUE_ARGS": "",
-                "QUEUE_URL": bnurl,
-                "EXE": "oio-event-agent",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
                 "EVENT_WORKERS": "2",
+                "GROUP_ID": "event-agent",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(
@@ -2860,12 +2843,163 @@ def generate(options):
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
+    # Configure a special oio-event-agent dedicated to chunk deletions per host
+    # -------------------------------------------------------------------------
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        for i, host in enumerate(hosts):
+            slot = get_rawx_slot(i + 1)
+            num += 1
+            env = subenv(
+                {
+                    "SRVTYPE": "event-agent",
+                    "SRVNUM": num,
+                    "QUEUE_NAME": f"oio-delete-{host}-{slot}",
+                    "QUEUE_URL": url,
+                    "EXE": event_agent_bin,
+                    "EVENT_WORKERS": len(rawx_per_host[host]),
+                    "GROUP_ID": "event-agent-delete",
+                    "QUEUE_TYPE": "per_service",
+                    "QUEUE_IDS": ";".join(rawx_per_host[host]).lower(),
+                }
+            )
+            register_service(
+                env,
+                template_systemd_service_event_agent,
+                event_agents_target,
+                coverage_wrapper=shutil.which("coverage")
+                + " run --context event-agent --concurrency=eventlet -p ",
+            )
+            with open(config(env), "w+", encoding="utf8") as outf:
+                tpl = Template(template_event_agent)
+                outf.write(tpl.safe_substitute(env))
+            with open(
+                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+            ) as outf:
+                tpl = Template(template_event_agent_delete_handlers)
+                outf.write(tpl.safe_substitute(env))
+
+        break
+
+    # Configure a special oio-event-agent dedicated to chunk events per host
+    # -------------------------------------------------------------------------
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        for host in hosts:
+            num += 1
+            env = subenv(
+                {
+                    "SRVTYPE": "event-agent",
+                    "SRVNUM": num,
+                    "QUEUE_NAME": f"oio-chunks-{host}",
+                    "QUEUE_URL": url,
+                    "EXE": event_agent_bin,
+                    "EVENT_WORKERS": len(rawx_per_host[host]),
+                    "GROUP_ID": "event-agent-chunks",
+                    "QUEUE_TYPE": "default",
+                    "QUEUE_IDS": "",
+                }
+            )
+            register_service(
+                env,
+                template_systemd_service_event_agent,
+                event_agents_target,
+                coverage_wrapper=shutil.which("coverage")
+                + " run --context event-agent --concurrency=eventlet -p ",
+            )
+            with open(config(env), "w+", encoding="utf8") as outf:
+                tpl = Template(template_event_agent)
+                outf.write(tpl.safe_substitute(env))
+            with open(
+                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+            ) as outf:
+                tpl = Template(template_event_agent_chunks_handlers)
+                outf.write(tpl.safe_substitute(env))
+
+        break
+
+    # Configure a special oio-event-agent dedicated to delayed events
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        env = subenv(
+            {
+                "SRVTYPE": "event-agent",
+                "SRVNUM": num,
+                "QUEUE_NAME": "oio-delayed",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
+                "EVENT_WORKERS": "1",
+                "GROUP_ID": "event-agent-delay",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
+            }
+        )
+        register_service(
+            env,
+            template_systemd_service_event_agent,
+            event_agents_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent --concurrency=eventlet -p ",
+        )
+        with open(config(env), "w+", encoding="utf8") as outf:
+            tpl = Template(template_event_agent)
+            outf.write(tpl.safe_substitute(env))
+        with open(
+            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+        ) as outf:
+            tpl = Template(template_event_agent_delay_handlers)
+            outf.write(tpl.safe_substitute(env))
+
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to content broken events
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        env = subenv(
+            {
+                "SRVTYPE": "event-agent",
+                "SRVNUM": num,
+                "QUEUE_NAME": "oio-rebuild",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
+                "EVENT_WORKERS": "1",
+                "GROUP_ID": "event-agent-rebuild",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
+            }
+        )
+        register_service(
+            env,
+            template_systemd_service_event_agent,
+            event_agents_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent --concurrency=eventlet -p ",
+        )
+        with open(config(env), "w+", encoding="utf8") as outf:
+            tpl = Template(template_event_agent)
+            outf.write(tpl.safe_substitute(env))
+        with open(
+            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+        ) as outf:
+            tpl = Template(template_event_agent_rebuilder_handlers)
+            outf.write(tpl.safe_substitute(env))
+
+        # We need only one service
+        break
+
+    # Xcute event-agent
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_instance(use_kafka):
         env = subenv(
             {
                 "SRVTYPE": "xcute-event-agent",
                 "SRVNUM": num,
-                "QUEUE_URL": bnurl,
-                "EXE": "oio-event-agent",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
+                "GROUP_ID": "event-agent-xcute",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
             }
         )
         register_service(
@@ -2876,53 +3010,26 @@ def generate(options):
             coverage_wrapper=shutil.which("coverage")
             + " run --context xcute --concurrency=eventlet -p ",
         )
-        with open(config(env), "w+") as f:
+        with open(config(env), "w+", encoding="utf8") as f:
             tpl = Template(template_xcute_event_agent)
             f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + "/xcute-event-handlers-" + str(num) + ".conf", "w+") as f:
+        with open(
+            CFGDIR + "/xcute-event-handlers-" + str(num) + ".conf",
+            "w+",
+            encoding="utf8",
+        ) as f:
             tpl = Template(template_xcute_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
-    # Configure a special oio-event-agent dedicated to chunk deletions
-    # -------------------------------------------------------------------------
-    num += 1
-    use_rabbitmq = "RABBIT_QUEUE_URL" in ENV
-    env = subenv(
-        {
-            "SRVTYPE": "event-agent",
-            "SRVNUM": num,
-            "EXCHANGE_NAME": "oio-delete",
-            "QUEUE_NAME": "oio-delete",
-            "QUEUE_ARGS": ENV.get("RABBIT_QUEUE_ARGS", ""),
-            "QUEUE_URL": ENV.get("RABBIT_QUEUE_URL", ENV["MAIN_QUEUE_URL"]),
-            "ROUTING_KEY": "oio-delete",
-            "EXE": "oio-event-agent" + ("-rabbitmq" if use_rabbitmq else ""),
-            "EVENT_WORKERS": "1",
-        }
-    )
-    register_service(
-        env,
-        template_systemd_service_event_agent,
-        event_agents_target,
-        coverage_wrapper=shutil.which("coverage")
-        + " run --context event-agent --concurrency=eventlet -p ",
-    )
-    with open(config(env), "w+") as outf:
-        tpl = Template(template_event_agent)
-        outf.write(tpl.safe_substitute(env))
-    with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as outf:
-        tpl = Template(template_event_agent_delete_handlers)
-        outf.write(tpl.safe_substitute(env))
     # -------------------------------------------------------------------------
 
-    # xcute
     env = subenv(
         {
             "SRVTYPE": "xcute",
             "SRVNUM": 1,
             "PORT": next(ports),
             "REDIS_PORT": 6379,
-            "QUEUE_URL": bnurl,
+            "QUEUE_URL": ENV["KAFKA_QUEUE_URL"],
             "EXE": "oio-xcute",
         }
     )
@@ -2936,7 +3043,7 @@ def generate(options):
     with open(config(env), "w+") as f:
         tpl = Template(template_xcute)
         f.write(tpl.safe_substitute(env))
-    with open(watch(env), "w+") as f:
+    with open(watch(env), "w+", encoding="utf8") as f:
         tpl = Template(template_xcute_watch)
         f.write(tpl.safe_substitute(env))
 
@@ -2963,20 +3070,6 @@ def generate(options):
         crawler_target,
         add_service_to_conf=False,
     )
-
-    # blob-rebuilder configuration -> one per beanstalkd
-    rebuilder_target = register_target("blob-rebuilder", root_target)
-    for num, host, port in all_beanstalkd:
-        bnurl = "beanstalk://{0}:{1}".format(host, port)
-        env = subenv(
-            {
-                "SRVTYPE": "blob-rebuilder",
-                "SRVNUM": num,
-                "QUEUE_URL": bnurl,
-                "EXE": "oio-blob-rebuilder",
-            }
-        )
-        register_service(env, template_systemd_service_blob_rebuilder, rebuilder_target)
 
     # webhook test server
     if WEBHOOK:
@@ -3024,9 +3117,41 @@ def generate(options):
     for _, v in targets.items():
         generate_target(v)
 
+    # Generate topics declaration file
+    if use_kafka:
+        topics_to_declare = [
+            "oio",
+            "oio-deadletter",
+            "oio-delayed",
+            "oio-drained",
+            "oio-preserved",
+            "oio-rebuild",
+            "oio-replication",
+            "oio-xcute",
+            "oio-xcute-reply",
+        ]
+
+        rawx_hosts = hosts[:nb_rawx]
+        # Add delete topics per host
+        topics_to_declare.extend(
+            [f"oio-delete-{h}-{get_rawx_slot(i + 1)}" for i, h in enumerate(rawx_hosts)]
+        )
+        # Add chunks topics per host
+        topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
+
+        with open(f"{CFGDIR}/topics.yml", "w+") as f:
+            f.write(
+                yaml.dump(
+                    {
+                        "brokers": options["kafka"]["endpoint"],
+                        "topics": {k: None for k in topics_to_declare},
+                    }
+                )
+            )
+
     # ensure volumes for srvtype in final_services:
-    for srvtype in final_services:
-        for rec in final_services[srvtype]:
+    for srvtype, services in final_services.items():
+        for rec in services:
             if "path" in rec:
                 mkdir_noerror(rec["path"])
             if "path" in rec and "addr" in rec:
@@ -3189,6 +3314,8 @@ def main():
     opts[SHALLOW_COPY] = False
     opts["beanstalkd"] = {SVC_NB: None, SVC_HOSTS: None}
     opts["rabbitmq"] = {}
+    opts["event-agent"] = {SVC_NB: None}
+    opts["rebuilder"] = {SVC_NB: None}
 
     options = parser.parse_args()
 
