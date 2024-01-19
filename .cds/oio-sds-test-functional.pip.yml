@@ -4,9 +4,8 @@ environment: oio-sds-env
 jobs:
   - job: Run functional tests
     steps:
-
       - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+        checkout: "{{ .cds.workspace }}"
 
       - name: Install dependencies
         script: |+
@@ -20,6 +19,14 @@ jobs:
           echo "deb [trusted=yes] http://${DEB_SNAPSHOT}-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal main" > /etc/apt/sources.list.d/snapmirror-focal.list
           echo "deb [trusted=yes] http://${DEB_SNAPSHOT}-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal-updates main" > /etc/apt/sources.list.d/snapmirror-focal-updates.list
           # We have troubles with FoundationDB when systemd is restarted.
+          # Docker repo for docker compose plugin should be removed after https://jira.ovhcloud.tools/browse/CORDEV-2545 completion
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          sudo chmod a+r /etc/apt/keyrings/docker.gpg
+          echo \
+            "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+            "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           # Prevent it from being upgraded (and thus restarted).
           SYSTEMD_VERSION=$(dpkg -s libsystemd0 | sed -n -E -e 's/^Version: (\w+)/\1/p')
           apt-mark hold libsystemd0 systemd
@@ -69,6 +76,13 @@ jobs:
           done
           sleep 1
           docker exec rabbit-1 rabbitmqctl await_online_nodes 3
+          # Start Redpanda (kafka)
+          docker-compose -f docker/redpanda.docker-compose.yml up -d
+          until [ "$(docker inspect -f "{{.State.Status}}" redpanda-0)" = "running" ]
+          do
+            sleep 1
+          done
+          sleep 1
 
       - name: Run functional tests
         script: |+
@@ -89,7 +103,7 @@ jobs:
         always_executed: true
         optional: true
         script:
-          - '[ -f everything.log ] && mv everything.log everything.{{.cds.env.TEST_SUITE}}.log && worker upload everything.{{.cds.env.TEST_SUITE}}.log || true'
+          - "[ -f everything.log ] && mv everything.log everything.{{.cds.env.TEST_SUITE}}.log && worker upload everything.{{.cds.env.TEST_SUITE}}.log || true"
           - '[ -f "/tmp/integrity.log" ] && mv "/tmp/integrity.log" integrity.{{.cds.env.TEST_SUITE}}.log && worker upload integrity.{{.cds.env.TEST_SUITE}}.log || true'
 
       - name: Save coverage and test information
@@ -99,8 +113,8 @@ jobs:
           - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - '[ -n "$(echo $HOME/go_coverage.output.*)" ] && (cd rawx; gocov convert $HOME/go_coverage.output.* > {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json) || true'
           - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
-          - '[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml'
-          - '[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json'
+          - "[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml"
+          - "[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json"
 
       - name: Publish test reports on CDS
         optional: true
@@ -108,4 +122,4 @@ jobs:
         jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
 
     requirements:
-        - model: '{{ .cds.env.MODEL}}'
+      - model: "{{.cds.env.MODEL}}"

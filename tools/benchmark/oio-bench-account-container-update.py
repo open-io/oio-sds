@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -73,7 +73,7 @@ def create_loop(api, prefix, results):
             print(err)
 
 
-def main(myid, queue, concurrency, delay=5.0, duration=DURATION):
+def main(myid, queue, concurrency, NS, delay=5.0, duration=DURATION):
     counter = 0
     created = list()
     results = LightQueue(concurrency * 10)
@@ -139,7 +139,9 @@ if __name__ == "__main__":
     QUEUE = multiprocessing.Queue()
     PROCESSES = list()
     for sub in range(N_PROC):
-        PROCESSES.append(multiprocessing.Process(target=main, args=(sub, QUEUE, COROS)))
+        PROCESSES.append(
+            multiprocessing.Process(target=main, args=(sub, QUEUE, COROS, NS))
+        )
     for proc in PROCESSES:
         proc.start()
     RATE = 0

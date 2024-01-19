@@ -1,18 +1,19 @@
 version: v1.0
 name: oio-sds-lint
 jobs:
-- job: Run coding style tests
-  steps:
-
+  - job: Run coding style tests
+    steps:
       - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
-        
+        checkout: "{{ .cds.workspace }}"
+
       - name: Install dependencies
         script:
-          - eval $(worker key install --env-git proj-ssh-openio)
+          - set -x
           - export DEBIAN_FRONTEND=noninteractive
+          - eval $(worker key install --env-git proj-ssh-openio)
           - apt update
-          - apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
+          # We don't need docker compose
+          - apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
           - virtualenv -p /usr/bin/python3 $HOME/venv
           - . $HOME/venv/bin/activate
           - pip install --progress-bar off -r requirements.txt -r test-requirements.txt
@@ -25,5 +26,5 @@ jobs:
           - pylint --rcfile=.pylintrc --exit-zero -E "oio" "tests" "tools" "bin"
           - flake8 --config .flake8 --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
 
-  requirements:
+    requirements:
       - model: ubuntu-focal
