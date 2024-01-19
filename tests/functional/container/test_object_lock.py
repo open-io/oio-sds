@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -92,9 +92,7 @@ class TestObjectLock(BaseTestCase):
                 properties=properties,
             )
         if bucket:
-            self.wait_for_event(
-                "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTAINER_STATE,))
 
     def _check_no_deletion(self, object_name, version, reqid):
         # Check the object still exists
@@ -104,8 +102,7 @@ class TestObjectLock(BaseTestCase):
         b"".join(data)  # drain the data stream
 
         # Check not events has been created
-        events = self.wait_for_event(
-            "oio-preserved",
+        events = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.CONTENT_DELETED, EventTypes.CHUNK_DELETED),
             timeout=5.0,

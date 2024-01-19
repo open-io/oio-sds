@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,9 +16,9 @@
 # License along with this library.
 
 from time import time as now
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.draining import Draining
 from oio.event.evob import EventTypes
@@ -69,7 +69,7 @@ class TestDrainingFilter(BaseTestCase):
         self.cname = "ct-%d" % int(now())
         self.created = []
         self.containers = []
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         self.container_sharding = ContainerSharding(self.conf)
         self.app_env = dict()
         self.app_env["api"] = self.storage
@@ -88,7 +88,7 @@ class TestDrainingFilter(BaseTestCase):
             self.storage.object_delete_many(self.account, self.cname, objs=self.created)
             # FIXME temporary cleaning, this should be handled by deleting
             # root container
-            self.wait_for_event("oio-preserved", types=(EventTypes.CONTAINER_STATE,))
+            self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
             if self.use_sharding:
                 resp = self.storage.account.container_list(self.shards_account)
                 for cont in resp["listing"]:
@@ -124,19 +124,23 @@ class TestDrainingFilter(BaseTestCase):
         return meta2db_env
 
     def _add_objects(self, cname, number_of_obj, pattern_name="content"):
-        for i in range(number_of_obj):
-            file_name = str(i) + pattern_name
+        for _ in range(number_of_obj):
+            file_name = random_str(8) + pattern_name
+            reqid = request_id()
             self.storage.object_create(
                 self.account,
                 cname,
                 obj_name=file_name,
                 data="data",
                 chunk_checksum_algo=None,
+                reqid=reqid,
             )
             self.created.append(file_name)
         # Wait for the event from the last object created
-        self.wait_for_event(
-            "oio-preserved", types=(EventTypes.CONTENT_NEW,), fields={"path": file_name}
+        self.wait_for_kafka_event(
+            types=(EventTypes.CONTENT_NEW,),
+            fields={"path": file_name},
+            reqid=reqid,
         )
 
     def _set_draining_flag(self, flag=DRAINING_STATE_NEEDED):
@@ -174,14 +178,13 @@ class TestDrainingFilter(BaseTestCase):
 
         # pylint: disable=protected-access
         if self.expected_successes >= 1:
-            self.beanstalkd0.drain_tube("oio-preserved")
-
             # Get all chunk urls of the container
             resp = self.storage.object_list(None, None, cid=cid)
             self.assertEqual(
                 nb_objects + len(out_of_range_objects), len(resp["objects"])
             )
             chunk_urls = []
+            object_names = []
             for object_ in resp["objects"]:
                 _, chunks = self.storage.object_locate(
                     None, None, object_["name"], cid=cid
@@ -189,6 +192,7 @@ class TestDrainingFilter(BaseTestCase):
                 if object_["name"] not in out_of_range_objects:
                     for chunk in chunks:
                         chunk_urls.append(chunk["url"])
+                    object_names.append((object_["name"], len(chunks)))
 
         # Process the draining
         if not meta2db_env:
@@ -202,15 +206,19 @@ class TestDrainingFilter(BaseTestCase):
 
         if self.expected_successes >= 1:
             # All chunks should have received a draining event
-            for _ in range(0, nb_objects):
-                event = self.wait_for_event(
-                    "oio-preserved", types=(EventTypes.CONTENT_DRAINED,)
-                )
-                for event_data in event.data:
-                    if event_data.get("type") == "chunks":
-                        chunk_url = event_data.get("id")
-                        self.logger.debug("Drain event for %s received", chunk_url)
-                        chunk_urls.remove(chunk_url)
+            for i in range(nb_objects):
+                object_name, nb_chunks = object_names[i]
+                for _ in range(nb_chunks):
+                    event = self.wait_for_kafka_event(
+                        types=(EventTypes.CONTENT_DRAINED,),
+                        fields={"path": object_name},
+                    )
+                    self.assertIsNotNone(event)
+                    for event_data in event.data:
+                        if event_data.get("type") == "chunks":
+                            chunk_url = event_data.get("id")
+                            self.logger.debug("Drain event for %s received", chunk_url)
+                            chunk_urls.remove(chunk_url)
             self.assertEqual(0, len(chunk_urls))
             # Check if the out-of-range objects are not drained
             for obj_name in out_of_range_objects:
@@ -334,9 +342,8 @@ class TestDrainingFilter(BaseTestCase):
 
     def test_drain_on_shard_containing_out_of_range_objects(self):
         nb_obj_to_add = 8
-
         self._add_objects(self.cname, nb_obj_to_add)
-
+        self.created.sort()
         # Make sharding (split in 2)
         params = {"partition": "50,50", "threshold": 1}
         shards = self.container_sharding.find_shards(
@@ -360,7 +367,7 @@ class TestDrainingFilter(BaseTestCase):
             None,
             cid=shard_id,
             system={
-                M2_PROP_SHARDING_LOWER: ">1content",
+                M2_PROP_SHARDING_LOWER: ">" + self.created[1],
                 M2_PROP_OBJECTS: "2",
             },
         )
@@ -368,6 +375,4 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
-        self._process_draining(
-            2, cid=shard_id, out_of_range_objects=["0content", "1content"]
-        )
+        self._process_draining(2, cid=shard_id, out_of_range_objects=self.created[:2])

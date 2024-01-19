@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -61,8 +61,7 @@ class TestRdirCrawler(BaseTestCase):
                 )
                 pass
 
-        self.beanstalkd0.wait_until_empty("oio")
-        self.beanstalkd0.drain_tube("oio-preserved")
+        self.wait_until_empty(topic="oio", group_id="event-agent")
 
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
@@ -81,8 +80,8 @@ class TestRdirCrawler(BaseTestCase):
             reqid=reqid,
         )
         for _ in chunks:
-            self.wait_for_event(
-                "oio-preserved", reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
+            self.wait_for_kafka_event(
+                reqid=reqid, timeout=5.0, types=(EventTypes.CHUNK_NEW,)
             )
         self.clean_later(container)
         return chunks

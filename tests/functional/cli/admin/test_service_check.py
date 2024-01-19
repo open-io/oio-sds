@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -46,8 +46,7 @@ class ServiceCheckTest(CliTestCase):
         )
         output = self.storage.object_locate(self.account, container, obj)
         for _ in range(1 + len(output[1])):
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_NEW),
             )
@@ -67,8 +66,7 @@ class ServiceCheckTest(CliTestCase):
         reqid = request_id()
         self.storage.object_delete(self.account, container, obj, reqid=reqid)
         for _ in range(1 + len(output[1])):
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 types=(EventTypes.CONTAINER_STATE, EventTypes.CHUNK_DELETED),
             )

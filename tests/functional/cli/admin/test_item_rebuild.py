@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -50,16 +50,21 @@ class ItemRebuildTest(CliTestCase):
         self.obj_name = "item_rebuild_obj_" + random_str(4)
         self.clean_later(self.container, self.account)
 
-        self.beanstalkd0.drain_tube("oio-preserved")
+    def tearDown(self):
+        for acct, ct in self._containers_to_clean:
+            try:
+                self.storage.container_flush(acct, ct)
+                self.storage.container_delete(acct, ct)
+            except Exception as exc:
+                self.logger.info("Failed to clean container %s", exc)
+        super().tearDown()
 
     def _wait_events(self, account, container, obj_name):
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
         )

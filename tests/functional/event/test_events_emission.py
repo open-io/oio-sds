@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,7 +38,6 @@ class TestMeta2EventsEmission(BaseTestCase):
         self.container_name = "TestEventsEmission%f" % time.time()
         self.container_id = cid_from_name(self.account, self.container_name)
         self.container_client = self.storage.container
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def wait_for_all_events(self, types, reqid=None):
         pulled_events = {}
@@ -46,8 +45,7 @@ class TestMeta2EventsEmission(BaseTestCase):
             pulled_events[event_type] = []
 
         while True:
-            event = self.wait_for_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 types=types,
                 reqid=reqid,
                 timeout=REASONABLE_EVENT_DELAY,
@@ -119,7 +117,6 @@ class TestMeta2EventsEmission(BaseTestCase):
             [x.get("host") for x in raw_dir_info if x.get("type") == "meta2"]
         )
 
-        self.beanstalkd0.drain_tube("oio-preserved")
         # Fire up the event
         reqid = request_id()
         self.container_client.container_delete(
@@ -158,7 +155,6 @@ class TestEventRouting(BaseTestCase):
     def setUp(self):
         super().setUp()
         self.container_name = "TestEventrouting%f" % time.time()
-        self.beanstalkd0.drain_tube("oio-preserved")
 
     def test_beanstalkd_to_rabbitmq(self):
         """

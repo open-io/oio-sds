@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -67,7 +67,7 @@ class TestSharding(BaseTestCase):
         self.cname = f"test_sharding_{time.time()}"
         self.created = {}
         self.container_sharding = ContainerSharding(self.conf)
-        self.beanstalkd0.drain_tube("oio-preserved")
+
         self.versioning_enabled = False
         self.system = {}
         self.objects_properties = {}
@@ -182,9 +182,7 @@ class TestSharding(BaseTestCase):
             else:
                 self.created[cname_root].add(obj_name)
         if bucket:
-            self.wait_for_event(
-                "oio-preserved", reqid=reqid, types=(EventTypes.CONTAINER_STATE,)
-            )
+            self.wait_for_kafka_event(reqid=reqid, types=(EventTypes.CONTAINER_STATE,))
             self._check_bucket_stats(cname_root, bucket, account=account)
 
     def _delete_objects(
@@ -211,8 +209,7 @@ class TestSharding(BaseTestCase):
                 else:
                     self.created[cname].remove(obj_name)
         if bucket:
-            self.wait_for_event(
-                "oio-preserved",
+            self.wait_for_kafka_event(
                 reqid=reqid,
                 fields={"account": self.account, "user": cname},
                 types=(EventTypes.CONTAINER_STATE,),
@@ -565,16 +562,16 @@ class TestSharding(BaseTestCase):
 
         if self.wait_event:
             # check that all chunk urls are matching expected ones
-            event = self.wait_for_event(
-                "oio-preserved",
-                reqid="delete-from-shards",
-                types=(EventTypes.CONTENT_DELETED,),
-            )
-            self.assertIsNotNone(event)
-            for event_data in event.data:
-                if event_data.get("type") == "chunks":
-                    chunk_urls.remove(event_data.get("id"))
-            self.assertEqual(0, len(chunk_urls))
+            for _ in range(len(chunk_urls)):
+                event = self.wait_for_kafka_event(
+                    reqid="delete-from-shards",
+                    types=(EventTypes.CONTENT_DELETED,),
+                )
+                self.assertIsNotNone(event)
+                event_chunks = [
+                    data for data in event.data if data.get("type") == "chunks"
+                ]
+                self.assertEqual(1, len(event_chunks))
 
     # test shards with empty container
     def test_shard_with_empty_container(self):
@@ -985,11 +982,11 @@ class TestSharding(BaseTestCase):
 
         # Wait for the update of the root and the 2 new shards
         for _ in range(3):
-            self.wait_for_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid="testingisdoubting",
                 types=(EventTypes.CONTAINER_STATE,),
             )
+            self.assertIsNotNone(event)
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats["objects"], 10)
@@ -1011,12 +1008,12 @@ class TestSharding(BaseTestCase):
 
         # Wait for the deletion of the parent and update of the 2 new shards
         for _ in range(3):
-            self.wait_for_event(
-                "oio-preserved",
+            event = self.wait_for_kafka_event(
                 reqid="fixingisfailing",
                 fields={"account": shards_account},
                 types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
             )
+            self.assertIsNotNone(event)
         self._check_bucket_stats(cname, bucket, account=self.account)
         stats = self.storage.account.account_show(self.account)
         self.assertEqual(stats["objects"], 10)
@@ -1354,11 +1351,11 @@ class TestSharding(BaseTestCase):
                 # Wait for the deletion of the smaller and update of the root
                 nb_events = 2
             for _ in range(nb_events):
-                self.wait_for_event(
-                    "oio-preserved",
+                event = self.wait_for_kafka_event(
                     reqid=reqid,
                     types=(EventTypes.CONTAINER_DELETED, EventTypes.CONTAINER_STATE),
                 )
+                self.assertIsNotNone(event)
             stats = self.storage.bucket.bucket_show(bucket, account=self.account)
             self.assertEqual(len(self.created[cname]), stats["objects"])
         return new_shards

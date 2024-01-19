@@ -18,6 +18,7 @@
 import time
 
 from oio import ObjectStorageApi
+from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from tests.utils import random_str
 from tests.functional.cli import CliTestCase
@@ -29,24 +30,29 @@ class ServiceRebuildTest(CliTestCase):
         super(ServiceRebuildTest, cls).setUpClass()
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
 
-    def _wait_events(self, account, container, obj_name):
-        self.wait_for_event(
-            "oio-preserved",
+    def _wait_events(self, account, container, obj_name, reqid):
+        self.wait_for_kafka_event(
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
+            reqid=reqid,
         )
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
+            reqid=reqid,
         )
 
     def create_object(self, account, container, obj_name):
+        reqid = request_id()
         self.api.object_create(
-            account, container, obj_name=obj_name, data="test_service_rebuild"
+            account,
+            container,
+            obj_name=obj_name,
+            data="test_service_rebuild",
+            reqid=reqid,
         )
         obj_meta, obj_chunks = self.api.object_locate(account, container, obj_name)
-        self._wait_events(account, container, obj_name)
+        self._wait_events(account, container, obj_name, reqid=reqid)
         return obj_meta, obj_chunks
 
     def test_account_service_rebuild(self):
@@ -56,7 +62,10 @@ class ServiceRebuildTest(CliTestCase):
         self.create_object(account, container, obj_name)
 
         # Create a container only in account service
-        self.api.account.container_update(account, container, time.time(), 0, 0)
+        reqid = request_id()
+        self.api.account.container_update(
+            account, container, time.time(), 0, 0, reqid=reqid
+        )
 
         account_info = self.api.account_show(account)
         self.assertEqual(0, account_info["bytes"])
@@ -73,10 +82,10 @@ class ServiceRebuildTest(CliTestCase):
         self.assertIn("%s|%s OK None" % (self.ns, account), entries)
         self.assertIn("%s|%s|%s OK None" % (self.ns, account, container), entries)
 
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
+            reqid=reqid,
         )
 
         account_info = self.api.account_show(account)

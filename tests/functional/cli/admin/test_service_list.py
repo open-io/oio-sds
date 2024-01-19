@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -63,8 +63,7 @@ class ServiceListTest(CliTestCase):
 
         reqid = request_id("rlc")
         self.storage.object_delete(self.account, container, obj, reqid=reqid)
-        self.wait_for_event(
-            "oio-preserved",
+        self.wait_for_kafka_event(
             reqid=reqid,
             timeout=5.0,
             types=(EventTypes.CHUNK_DELETED,),

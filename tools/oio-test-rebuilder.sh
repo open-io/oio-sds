@@ -591,6 +591,7 @@ openioadmin_all_rebuild()
   echo "********** oio-all-rebuilders **********"
   echo ""
 
+
   META1=$(check_and_remove_meta "meta1")
   if [ -z "${META1}" ]; then
     printf "\noio-meta1-rebuilder: SKIP (need at least 2 meta1 to run)\n"
@@ -612,6 +613,12 @@ openioadmin_all_rebuild()
   IFS=$OLD_IFS
   /bin/rm -rf "${TMP_VOLUME}_meta2"
   /bin/cp -a "${TMP_VOLUME}" "${TMP_VOLUME}_meta2"
+
+
+  if [ -n "${USE_KAFKA}" ]; then
+    printf "\noio-rawx-rebuilder: SKIP (only Xcute is supported with Kafka)\n"
+    return
+  fi
 
   RAWX=$(remove_rawx)
   if [ -z "${RAWX}" ]; then
