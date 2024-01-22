@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -271,9 +271,14 @@ sqlx_pack_FREEZE(const struct sqlx_name_s *name, gint64 deadline)
 }
 
 GByteArray *
-sqlx_pack_PROPGET(const struct sqlx_name_s *name, gint64 deadline)
+sqlx_pack_PROPGET(const struct sqlx_name_s *name, gboolean local,
+		gint64 deadline)
 {
-	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_PROPGET, NULL, name, deadline));
+	MESSAGE msg = make_request(NAME_MSGNAME_SQLX_PROPGET, NULL, name, deadline);
+	if (local) {
+		metautils_message_add_field_strint(msg, NAME_MSGKEY_LOCAL, 1);
+	}
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray *

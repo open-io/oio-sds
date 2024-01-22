@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -81,7 +81,8 @@ GByteArray* sqlx_pack_ENABLE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_FREEZE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_DISABLE (const struct sqlx_name_s *name, gint64 deadline);
 
-GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, gint64 deadline);
+GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, gboolean local,
+		gint64 deadline);
 GByteArray* sqlx_pack_PROPDEL (struct oio_url_s *url,
 		const struct sqlx_name_s *name, const gchar * const *k, gint64 deadline);
 
