@@ -876,7 +876,9 @@ class ContainerSharding(ProxyClient):
                 continue
 
         # Check the sharding properties of a new shard
-        meta = self.container.container_get_properties(cid=shard["cid"], **kwargs)
+        meta = self.container.container_get_properties(
+            cid=shard["cid"], params={"urgent": 1}, **kwargs
+        )
         root_cid_, shard_ = self.meta_to_shard(meta)
         if root_cid != root_cid_ or not self._shards_equal(shard, shard_):
             raise OioException("New shard is malformed")
@@ -1393,7 +1395,7 @@ class ContainerSharding(ProxyClient):
         if parent_shard["cid"] != root_cid:
             # Check if the parent shard belongs to the root container
             meta = self.container.container_get_properties(
-                cid=parent_shard["cid"], **kwargs
+                cid=parent_shard["cid"], params={"urgent": "1"}, **kwargs
             )
             sys = meta["system"]
             if int_value(sys.get(M2_PROP_SHARDS), 0):
@@ -1493,7 +1495,9 @@ class ContainerSharding(ProxyClient):
 
     @ensure_request_id
     def replace_shard(self, account, container, new_shards, enable=False, **kwargs):
-        meta = self.container.container_get_properties(account, container, **kwargs)
+        meta = self.container.container_get_properties(
+            account, container, params={"urgent": 1}, **kwargs
+        )
 
         sys = meta["system"]
         if int_value(sys.get(M2_PROP_SHARDS), 0):
@@ -1516,7 +1520,9 @@ class ContainerSharding(ProxyClient):
                 "metadata": None,
             }
         else:
-            root_meta = self.container.container_get_properties(cid=root_cid, **kwargs)
+            root_meta = self.container.container_get_properties(
+                cid=root_cid, params={"urgent": 1}, **kwargs
+            )
             root_sys = root_meta["system"]
             root_account = root_sys.get(M2_PROP_ACCOUNT_NAME)
             root_container = root_sys.get(M2_PROP_CONTAINER_NAME)
@@ -1704,7 +1710,9 @@ class ContainerSharding(ProxyClient):
 
     @ensure_request_id
     def find_smaller_neighboring_shard(self, shard, root_cid=None, **kwargs):
-        meta = self.container.container_get_properties(cid=shard["cid"], **kwargs)
+        meta = self.container.container_get_properties(
+            cid=shard["cid"], params={"urgent": 1}, **kwargs
+        )
 
         sys = meta["system"]
         if int_value(sys.get(M2_PROP_SHARDS), 0):
@@ -1753,7 +1761,7 @@ class ContainerSharding(ProxyClient):
         smaller_shard = None
         for neighboring_shard in neighboring_shards:
             neighboring_shard_meta = self.container.container_get_properties(
-                cid=neighboring_shard["cid"], **kwargs
+                cid=neighboring_shard["cid"], params={"urgent": 1}, **kwargs
             )
             if self.sharding_in_progress(neighboring_shard_meta):
                 self.logger.info(
@@ -1981,7 +1989,9 @@ class ContainerSharding(ProxyClient):
         # Check and format
         shards = list()
         for shard in shards_to_merge:
-            meta = self.container.container_get_properties(cid=shard["cid"], **kwargs)
+            meta = self.container.container_get_properties(
+                cid=shard["cid"], params={"urgent": 1}, **kwargs
+            )
             sys = meta["system"]
             if int_value(sys.get(M2_PROP_SHARDS), 0):
                 raise ValueError("It is a root container")

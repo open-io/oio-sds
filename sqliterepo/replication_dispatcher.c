@@ -1550,10 +1550,12 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
+	gboolean urgent = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_URGENT, FALSE);
 
 	/* Action */
 	err = sqlx_repository_open_and_lock(repo, &n0,
-			_mode_masterslave(flags),
+			_mode_masterslave(flags)|(urgent ? SQLX_OPEN_URGENT : 0),
 			&sq3, NULL);
 	if (err) {
 		reply->send_error(0, err);

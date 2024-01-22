@@ -262,6 +262,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	GError *err = NULL;
 	(void) jargs;
 	gboolean local = _request_get_flag(args, "local");
+	gboolean urgent = _request_get_flag(args, "urgent");
 
 	/* Query the services */
 	const char *type = TYPE();
@@ -273,7 +274,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	gint64 seq = 1;
 	CLIENT_CTX(ctx, args, dirtype, seq);
 
-	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, local, DL()); }
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, local, urgent, DL()); }
 	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
