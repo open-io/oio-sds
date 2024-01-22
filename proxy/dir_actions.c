@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -102,18 +102,38 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 	return NEWERROR (CODE_UNAVAILABLE, "No meta1 answered");
 }
 
-GError * _m1_locate_and_action (struct oio_url_s *url,
+GError * _m1_locate_and_action(struct req_args_s *args,
 		GError * (*hook) (const char * m1addr)) {
+	GError *err = NULL;
 	gchar **m1v = NULL;
-	GError *err = hc_resolve_reference_directory(
-			resolver, url, &m1v, FALSE, oio_ext_get_deadline());
-	if (NULL != err) {
-		g_prefix_error (&err, "No META1: ");
-		return err;
+	struct oio_url_s *url = args->url;
+	const char *service_id = SERVICE_ID();
+	if (service_id) {
+		gchar **service_ids = g_strsplit(service_id, OIO_CSV_SEP, -1);
+		if (g_strv_length(service_ids) > 1) {
+			err = BADREQ("Only one service can be requested");
+		} else {
+			GPtrArray *tmp = g_ptr_array_new();
+			for (gchar **sid = service_ids; *sid; sid++) {
+				g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|",
+						NAME_SRVTYPE_META1, *sid));
+			}
+			g_ptr_array_add(tmp, NULL);
+			m1v = (gchar **) g_ptr_array_free(tmp, FALSE);
+		}
+		g_strfreev(service_ids);
+	} else {
+		err = hc_resolve_reference_directory(
+				resolver, url, &m1v, FALSE, oio_ext_get_deadline());
+		if (err) {
+			g_prefix_error(&err, "No META1: ");
+		}
 	}
-	EXTRA_ASSERT (m1v != NULL);
-	err = _m1_action (url, m1v, hook);
-	g_strfreev (m1v);
+	if (!err) {
+		EXTRA_ASSERT(m1v != NULL);
+		err = _m1_action(url, m1v, hook);
+	}
+	g_strfreev(m1v);
 	return err;
 }
 
@@ -173,7 +193,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 				oio_ext_get_deadline());
 	}
 
-	GError *err = _m1_locate_and_action (args->url, hook);
+	GError *err = _m1_locate_and_action(args, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
 		 * and it will probably silently succeed  */
@@ -213,7 +233,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 	GError *err = meta1_service_url_load_json_object (jargs, &m1u);
 
 	if (!err)
-		err = _m1_locate_and_action (args->url, hook);
+		err = _m1_locate_and_action(args, hook);
 	if (m1u) {
 		meta1_service_url_clean (m1u);
 		m1u = NULL;
@@ -250,7 +270,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 				oio_ext_get_deadline());
 	}
 
-	GError *err = _m1_locate_and_action (args->url, hook);
+	GError *err = _m1_locate_and_action(args, hook);
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
@@ -337,7 +357,7 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 		}
 		kept = meta1_pack_url (m1u_kept);
 		repl = m1u_repl ? meta1_pack_url (m1u_repl) : NULL;
-		err = _m1_locate_and_action (args->url, hook);
+		err = _m1_locate_and_action(args, hook);
 		g_free (kept);
 		g_free (repl);
 	}
@@ -372,7 +392,7 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 					m1, args->url, keys, &pairs,
 					oio_ext_get_deadline());
 		}
-		err = _m1_locate_and_action(args->url, hook);
+		err = _m1_locate_and_action(args, hook);
 		g_strfreev(keys);
 		keys = NULL;
 	}
@@ -409,7 +429,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 				m1, args->url, pairs, flush,
 				oio_ext_get_deadline());
 	}
-	err = _m1_locate_and_action (args->url, hook);
+	err = _m1_locate_and_action(args, hook);
 	g_strfreev(pairs);
 	if (!err)
 		return _reply_success_json (args, NULL);
@@ -429,7 +449,7 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	}
 
 	if (!err) {
-		err = _m1_locate_and_action (args->url, hook);
+		err = _m1_locate_and_action(args, hook);
 		g_strfreev (keys);
 		keys = NULL;
 	}
@@ -445,7 +465,7 @@ action_dir_ref_create_with_properties (struct req_args_s *args, gchar **props) {
 				m1, args->url, props,
 				oio_ext_get_deadline());
 	}
-	GError *err = _m1_locate_and_action (args->url, hook);
+	GError *err = _m1_locate_and_action(args, hook);
 	if (!err)
 		return _reply_created (args);
 	if (err->code == CODE_CONTAINER_EXISTS) {
@@ -559,7 +579,7 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 			return meta1v2_remote_list_reference_services (
 					m1, args->url, type, &urlv, oio_ext_get_deadline());
 		}
-		err = _m1_locate_and_action (args->url, hook);
+		err = _m1_locate_and_action(args, hook);
 	}
 
 	if (!err) {
@@ -621,7 +641,7 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 				m1, args->url, force,
 				oio_ext_get_deadline());
 	}
-	GError *err = _m1_locate_and_action (args->url, hook);
+	GError *err = _m1_locate_and_action(args, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
 		 * and it will probably silently succeed  */
@@ -743,7 +763,7 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 				oio_ext_get_deadline());
 	}
 
-	GError *err = _m1_locate_and_action (args->url, hook);
+	GError *err = _m1_locate_and_action(args, hook);
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,

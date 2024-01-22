@@ -1349,7 +1349,7 @@ retry:
 				if (urlv) g_strfreev (urlv);
 				return e;
 			}
-			err = _m1_locate_and_action (args->url, hook_dir);
+			err = _m1_locate_and_action(args, hook_dir);
 			if (!err)
 				goto retry;
 		}
@@ -1424,7 +1424,7 @@ action_m2_container_destroy (struct req_args_s *args)
 			return meta1v2_remote_unlink_service(
 					m1, args->url, n.type, oio_ext_get_deadline());
 		}
-		err = _m1_locate_and_action (args->url, _unlink);
+		err = _m1_locate_and_action(args, _unlink);
 		if (err != NULL) {
 			/* Rolling back will be hard if there is any chance the UNLINK has
 			 * been managed by the server, despite a time-out that occurred. */
@@ -1460,7 +1460,7 @@ action_m2_container_destroy (struct req_args_s *args)
 				g_free(packed);
 				return e;
 			}
-			GError *_err = _m1_locate_and_action(args->url, _link);
+			GError *_err = _m1_locate_and_action(args, _link);
 			if (_err) {
 				GRID_ERROR("Failed to re-link the meta2 services for %s: "
 						"(%d) %s", oio_url_get(args->url, OIOURL_HEXID),
@@ -1837,7 +1837,7 @@ _container_snapshot(struct req_args_s *args, gchar *src_service_id,
 		}
 		return err2;
 	}
-	err = _m1_locate_and_action(dest_url, hook_dir);
+	err = _m1_locate_and_action(args, hook_dir);
 	if (err)
 		goto cleanup;
 

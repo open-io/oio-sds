@@ -299,7 +299,7 @@ enum proxy_preference_e _prefer_master (void);
 	struct client_ctx_s ctx = {0}; \
 	client_init(&ctx, args, type, seq, suffix, how, decoder, out)
 
-GError * _m1_locate_and_action (struct oio_url_s *url,
+GError * _m1_locate_and_action(struct req_args_s *args,
 		GError * (*hook) (const char *m1addr));
 
 typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *,

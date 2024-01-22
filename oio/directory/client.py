@@ -17,6 +17,7 @@
 from oio.common import exceptions
 from oio.common.client import ProxyClient
 from oio.common.json import json
+from oio.directory.admin import service_id_to_string
 
 
 class DirectoryClient(ProxyClient):
@@ -29,13 +30,17 @@ class DirectoryClient(ProxyClient):
             conf, request_prefix="/reference", **kwargs
         )
 
-    def _make_params(self, account=None, reference=None, service_type=None, cid=None):
+    def _make_params(
+        self, account=None, reference=None, service_type=None, cid=None, service_id=None
+    ):
         if cid:
             params = {"cid": cid}
         else:
             params = {"acct": account, "ref": reference}
         if service_type:
-            params.update({"type": service_type})
+            params["type"] = service_type
+        if service_id:
+            params["service_id"] = service_id_to_string(service_id)
         return params
 
     def create(self, account=None, reference=None, properties=None, **kwargs):
@@ -68,13 +73,23 @@ class DirectoryClient(ProxyClient):
             return False
         return True
 
-    def list(self, account=None, reference=None, cid=None, service_type=None, **kwargs):
+    def list(
+        self,
+        account=None,
+        reference=None,
+        cid=None,
+        service_type=None,
+        service_id=None,
+        **kwargs
+    ):
         """
         List the services linked to the reference.
         """
         params = self._make_params(
             account, reference, cid=cid, service_type=service_type
         )
+        if service_id:
+            params["service_id"] = service_id
         _resp, body = self._request("GET", "/show", params=params, **kwargs)
         return body
 
