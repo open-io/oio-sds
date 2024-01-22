@@ -20,7 +20,6 @@ import random
 from oio.api.io import ChunkReader
 from oio.api.ec import ECChunkDownloadHandler
 from oio.common import exceptions as exc
-from oio.common.constants import OBJECT_METADATA_PREFIX
 from oio.common.http import http_header_from_ranges
 from oio.common.decorators import ensure_headers
 
@@ -183,26 +182,6 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
         offset += clist[0]["size"]
 
     return chunks
-
-
-def _make_object_metadata(headers):
-    meta = {}
-    props = {}
-
-    prefix = OBJECT_METADATA_PREFIX
-
-    for k, v in headers.items():
-        k = k.lower()
-        if k.startswith(prefix):
-            key = k.replace(prefix, "")
-            # TODO temporary workaround
-            # This is used by properties set through swift
-            if key.startswith("x-"):
-                props[key[2:]] = v
-            else:
-                meta[key.replace("-", "_")] = v
-    meta["properties"] = props
-    return meta
 
 
 @ensure_headers
