@@ -987,7 +987,7 @@ meta1_backend_services_list(struct meta1_backend_s *m1,
 	GError *err = NULL;
 
 label_retry:
-	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	err = _open_and_lock(m1, url, _mode_masterslave(), &sq3);
 	if (err) {
 		if (retry && err->code == CODE_RANGE_NOTFOUND) {
 			retry = FALSE;

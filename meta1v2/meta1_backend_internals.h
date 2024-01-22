@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -51,6 +51,9 @@ GError* __create_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 /*! check the container exists */
 GError * __info_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean autocreate, struct oio_url_s ***result);
+
+/* Check if "force_master" mode is enabled */
+enum m1v2_open_type_e _mode_masterslave(void);
 
 /*! Open and lock the META1 base responsible for the given container. */
 GError* _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,

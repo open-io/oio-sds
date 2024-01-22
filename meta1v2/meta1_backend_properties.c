@@ -2,6 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -280,7 +281,7 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(result != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	GError *err = _open_and_lock(m1, url, _mode_masterslave(), &sq3);
 	if (err) return err;
 
 	struct sqlx_repctx_s *repctx = NULL;

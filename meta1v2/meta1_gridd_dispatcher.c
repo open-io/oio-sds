@@ -387,6 +387,18 @@ typedef gboolean (*action) (struct gridd_reply_ctx_s *, struct meta1_backend_s *
 static gboolean meta1_dispatch_all(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer callback)
 {
+	gchar force_master[16];
+	GError *err = NULL;
+
+	/* Extract force master */
+	memset(force_master, 0, sizeof(force_master));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_FORCE_MASTER, force_master, sizeof(force_master));
+	if (err) {
+		g_clear_error(&err);
+	}
+	oio_ext_set_force_master(oio_str_parse_bool(force_master, FALSE));
+
 	struct oio_url_s *url = metautils_message_extract_url(reply->request);
 
 	const gchar *_err;
@@ -400,6 +412,7 @@ static gboolean meta1_dispatch_all(struct gridd_reply_ctx_s *reply,
 	gboolean ret = (*ptr)(reply, m1, url);
 	oio_url_pclean(&url);
 
+	oio_ext_set_force_master(FALSE);
 	return ret;
 }
 
