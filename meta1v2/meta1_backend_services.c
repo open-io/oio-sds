@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -323,52 +323,6 @@ __configure_service(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	}
 
 	return err;
-}
-
-static GError *
-__get_all_services(struct sqlx_sqlite3_s *sq3,
-		struct meta1_service_url_s ***result)
-{
-	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-	GPtrArray *gpa;
-	int rc;
-
-	// Prepare the statement
-	sqlite3_prepare_debug(rc, sq3->db,
-			"SELECT DISTINCT srvtype,url FROM services order by srvtype,url",
-			-1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		return M1_SQLITE_GERROR(sq3->db, rc);
-
-	// Run the result
-	gpa = g_ptr_array_new();
-	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		struct meta1_service_url_s *u;
-		u = g_malloc0(sizeof(struct meta1_service_url_s) +
-				1 + sqlite3_column_bytes(stmt, 3));
-		u->seq = 0;
-		g_strlcpy(u->srvtype, (gchar*)sqlite3_column_text(stmt, 0),
-				sizeof(u->srvtype));
-		g_strlcpy(u->host,    (gchar*)sqlite3_column_text(stmt, 1),
-				sizeof(u->host)-1);
-		u->args[0] = '\0';
-		g_ptr_array_add(gpa, u);
-	}
-
-	if (rc != SQLITE_DONE && rc != SQLITE_OK)
-		err = M1_SQLITE_GERROR(sq3->db, rc);
-
-	sqlite3_finalize_debug(rc, stmt);
-
-	if (err) {
-		gpa_str_free(gpa);
-		return err;
-	}
-
-	g_ptr_array_add(gpa, NULL);
-	*result = (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
-	return NULL;
 }
 
 static GError *
@@ -915,32 +869,6 @@ meta1_backend_services_set(struct meta1_backend_s *m1,
 	if (err && NULL != strstr(err->message, "UNIQUE"))
 		err->code = CODE_SRV_ALREADY;
 
-	return err;
-}
-
-GError *
-meta1_backend_services_all(struct meta1_backend_s *m1,
-		struct oio_url_s *url, gchar ***result)
-{
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-	if (err) return err;
-
-	struct sqlx_repctx_s *repctx = NULL;
-	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-		struct meta1_service_url_s **used = NULL;
-		if (NULL != (err = __get_all_services(sq3, &used)))
-			g_prefix_error(&err, "Query error: ");
-		else {
-			struct meta1_service_url_s **expanded = expand_urlv(used);
-			*result = pack_urlv(expanded);
-			meta1_service_url_cleanv(expanded);
-			meta1_service_url_cleanv(used);
-		}
-		err = sqlx_transaction_end(repctx, err);
-	}
-
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 

@@ -2,6 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2016 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -40,6 +41,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NAME_MSGNAME_M1V2_PROPSET     "M1_PSET"
 #define NAME_MSGNAME_M1V2_PROPDEL     "M1_PDEL"
 #define NAME_MSGNAME_M1V2_GETPREFIX   "M1_ALLPREF"
-#define NAME_MSGNAME_M1V2_SRVALLONM1  "M1_ALLSRV"
 
 #endif /*OIO_SDS__meta1v2__internals_h*/

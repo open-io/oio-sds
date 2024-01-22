@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -255,26 +255,6 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, struct oio_url_s *url)
-{
-	reply->subject("url:%s\thexid:%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
-	reply->send_reply(CODE_TEMPORARY, "Received");
-
-	gchar **result = NULL;
-	GError *err = meta1_backend_services_all(m1, url, &result);
-	if (NULL != err) {
-		reply->send_error(0, err);
-	} else {
-		reply->add_body(STRV_encode_gba(result));
-		reply->send_reply(CODE_FINAL_OK, "OK");
-	}
-
-	g_strfreev(result);
-	return TRUE;
-}
-
-static gboolean
 meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
@@ -443,7 +423,6 @@ meta1_gridd_get_requests(void)
 		{NAME_MSGNAME_M1V2_PROPSET,     (hook) meta1_dispatch_all, meta1_dispatch_v2_PROPSET},
 		{NAME_MSGNAME_M1V2_PROPDEL,     (hook) meta1_dispatch_all, meta1_dispatch_v2_PROPDEL},
 
-		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_all, meta1_dispatch_v2_SRV_ALLONM1},
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_all, meta1_dispatch_v2_GET_PREFIX},
 
 		{NAME_MSGNAME_M1V2_SRVRELINK,   (hook) meta1_dispatch_all, meta1_dispatch_v2_SRVRELINK},
