@@ -2535,6 +2535,8 @@ def generate(options):
         template_systemd_service_meta2_crawler,
         crawler_target,
         add_service_to_conf=False,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context meta2-crawler --concurrency=eventlet -p ",
     )
 
     # oio-meta2-placement-checker-crawler
@@ -2558,6 +2560,8 @@ def generate(options):
         template_systemd_service_placement_checker_crawler,
         None,
         add_service_to_conf=False,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context meta2-crawler --concurrency=eventlet -p ",
     )
 
     # RAWX

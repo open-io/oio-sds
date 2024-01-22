@@ -3,7 +3,7 @@
 
 # oio-test-suites.sh
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -287,6 +287,8 @@ func_tests () {
 	# Sequential wait for all processes to stop
 	$OPENIOCTL stop
 	sleep 0.5
+	# This allows to check if all processes have actually stopped
+	${OPENIOCTL} status
 }
 
 test_meta2_filters () {
@@ -478,6 +480,7 @@ func_tests_rebuilder_mover () {
 
 	$SYSTEMCTL stop oio-cluster.target
 	sleep 8
+	${OPENIOCTL} status
 }
 
 if is_running_test_suite "rebuilder" ; then
