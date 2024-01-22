@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -717,6 +717,16 @@ _snapshot_from(const gchar *src_addr, struct sqlx_repository_s *repo,
 #define FLAG_CHUNKED                0x10
 #define FLAG_FLUSH                  0x20
 #define FLAG_PROPAGATE_TO_SHARDS    0x40
+
+static enum sqlx_open_type_e
+_mode_masterslave(guint32 flags)
+{
+	if (oio_ext_has_force_master()) {
+		return SQLX_OPEN_MASTERONLY;
+	}
+	return (flags & FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+}
 
 static GError *
 _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
@@ -1542,9 +1552,9 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* Action */
-	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
-	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
+	err = sqlx_repository_open_and_lock(repo, &n0,
+			_mode_masterslave(flags),
+			&sq3, NULL);
 	if (err) {
 		reply->send_error(0, err);
 	} else {
@@ -2142,6 +2152,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 {
 	hook hk;
 	gchar admin[16];
+	gchar force_master[16];
 	gchar user_agent[1024];
 	GError *err = NULL;
 	gboolean res = TRUE;
@@ -2152,15 +2163,25 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	memset(admin, 0, sizeof(admin));
 	err = metautils_message_extract_string(reply->request,
 			NAME_MSGKEY_ADMIN_COMMAND, admin, sizeof(admin));
-	if (err)
+	if (err) {
 		g_clear_error(&err);
+	}
 	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+	/* Extract force master */
+	memset(force_master, 0, sizeof(force_master));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_FORCE_MASTER, force_master, sizeof(force_master));
+	if (err) {
+		g_clear_error(&err);
+	}
+	oio_ext_set_force_master(oio_str_parse_bool(force_master, FALSE));
 	/* Extract user-agent */
 	memset(user_agent, 0, sizeof(user_agent));
 	err = metautils_message_extract_string(reply->request,
 			NAME_MSGKEY_USER_AGENT, user_agent, sizeof(user_agent));
-	if (err)
+	if (err) {
 		g_clear_error(&err);
+	}
 	oio_ext_set_user_agent(user_agent);
 	oio_ext_set_shared_properties(NULL);
 	oio_ext_allow_long_timeout(FALSE);
@@ -2173,6 +2194,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	}
 
 	oio_ext_set_admin(FALSE);
+	oio_ext_set_force_master(FALSE);
 	oio_ext_set_user_agent(NULL);
 	oio_ext_set_shared_properties(NULL);
 	oio_ext_allow_long_timeout(FALSE);

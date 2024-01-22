@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -114,11 +114,11 @@ static GError* _meta2_abort_sharding(struct meta2_backend_s *m2b,
 static enum m2v2_open_type_e
 _mode_masterslave(guint32 flags)
 {
-	if ((flags & M2V2_FLAG_MASTER) || oio_ext_has_force_master())
+	if ((flags & M2V2_FLAG_MASTER) || oio_ext_has_force_master()) {
 		return M2V2_OPEN_MASTERONLY;
+	}
 	return (flags & M2V2_FLAG_LOCAL)
 		? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERSLAVE;
-
 }
 
 static enum m2v2_open_type_e
