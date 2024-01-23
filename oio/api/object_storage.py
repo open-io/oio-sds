@@ -18,11 +18,12 @@
 from __future__ import absolute_import
 
 from io import BytesIO
+import json
 import os
 import warnings
 import time
 
-from urllib.parse import unquote
+from urllib.parse import unquote, unquote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -1807,7 +1808,6 @@ class ObjectStorageApi(object):
         )
         if obj_meta.get("properties"):
             obj_meta["qualities"] = pop_chunk_qualities(obj_meta["properties"])
-
         storage_method = STORAGE_METHODS.load(obj_meta["chunk_method"])
         if link:
             if not policy:
@@ -1857,6 +1857,35 @@ class ObjectStorageApi(object):
             if obj_meta["chunk_method"] != "drained":
                 obj_meta["status"] = "Skipped"
                 return None, obj_meta["size"], obj_meta["hash"], obj_meta
+
+        crypto_body_meta = json.loads(
+            unquote_plus(properties.get("x-object-sysmeta-crypto-body-meta"))
+        )
+        crypto_resiliency = {}
+        crypto_resiliency['body_key'] = crypto_body_meta['body_key']
+        crypto_resiliency['iv'] = crypto_body_meta['iv']
+        if crypto_body_meta['key_id'].get('ssec') is not None:
+            crypto_resiliency['ssec'] = True
+        elif crypto_body_meta['key_id'].get('sses3') is not None:
+            crypto_resiliency['sses3'] = True
+
+        def flatten_dict(d, parent_key=""):
+            items = []
+            for k, v in d.items():
+                new_key = f"{parent_key}.{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(flatten_dict(v, new_key).items())
+                else:
+                    items.append((new_key, v))
+            return dict(items)
+
+        crypto_resiliency = flatten_dict(crypto_resiliency)
+        crypto_resiliency = ",".join(
+            [f"{k}={v}" for k, v in crypto_resiliency.items()]
+        )
+        kwargs["headers"][
+            "X-Oio-Ext-Cryptography-Resiliency"
+        ] = crypto_resiliency
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account,
