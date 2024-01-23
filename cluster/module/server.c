@@ -1772,7 +1772,7 @@ _task_publish_stale_services(gpointer p UNUSED)
 }
 
 static void
-_prepare_serialized_cache(GHashTable **srv_cache_p, service_callback_f *serializer)
+_prepare_one_serialized_cache(GHashTable **srv_cache_p, service_callback_f *serializer)
 {
 	GError *err = NULL;
 	GHashTable *new_srv_cache = g_hash_table_new_full(
@@ -1803,6 +1803,15 @@ _prepare_serialized_cache(GHashTable **srv_cache_p, service_callback_f *serializ
 	}
 }
 
+static void
+_prepare_serialized_cache()
+{
+	if (cache_service_lists)
+		_prepare_one_serialized_cache(&srv_list_cache, _prepare_cached);
+	if (cache_full_service_lists)
+		_prepare_one_serialized_cache(&full_srv_list_cache, _prepare_full);
+}
+
 static void *
 _worker_prepare_serialized_cache(gpointer p UNUSED)
 {
@@ -1810,10 +1819,7 @@ _worker_prepare_serialized_cache(gpointer p UNUSED)
 			G_GINT64_FORMAT"µs interval", srv_cache_interval);
 	while (grid_main_is_running()) {
 		gint64 start = oio_ext_monotonic_time();
-		if (cache_service_lists)
-			_prepare_serialized_cache(&srv_list_cache, _prepare_cached);
-		if (cache_full_service_lists)
-			_prepare_serialized_cache(&full_srv_list_cache, _prepare_full);
+		_prepare_serialized_cache();
 		gint64 duration = oio_ext_monotonic_time() - start;
 		if (duration >= srv_cache_interval) {
 			GRID_WARN("Service cache serialization took %"G_GINT64_FORMAT
@@ -2539,12 +2545,8 @@ _cs_configure(int argc, char **argv)
 
 	/* Start internal tasks */
 	grid_task_queue_register(gtq_admin, 1, _task_expire, NULL, NULL);
-	if (cache_service_lists || cache_full_service_lists) {
-		srv_cache_thread = g_thread_new(
-				"srv-cache", _worker_prepare_serialized_cache, NULL);
-		g_assert(srv_cache_thread != NULL);
-	}
 
+	/* Optionally preload service lists from a persistence file */
 	if (persistence_path) {
 		restart_srv_from_file(persistence_path->str);
 		grid_task_queue_register(gtq_admin, persistence_period,
@@ -2553,9 +2555,11 @@ _cs_configure(int argc, char **argv)
 	}
 
 	if (hub_running) {
+		/* Optionally preload service lists from other conscience instances */
 		if (synchronize_at_startup) {
 			restart_srv_from_other_consciences();
 		}
+		/* Optionally wait for services updated from the hub */
 		if (hub_startup_delay > 0) {
 			GRID_INFO("HUB: waiting %ds before serving requests",
 					hub_startup_delay);
@@ -2566,6 +2570,16 @@ _cs_configure(int argc, char **argv)
 			grid_task_queue_register(
 					gtq_admin, 5, _task_publish_stale_services, NULL, NULL);
 		}
+	}
+
+	/* If configured, prepare a cache of serialized services */
+	if (cache_service_lists || cache_full_service_lists) {
+		/* Do it once now, */
+		_prepare_serialized_cache();
+		/* then start a thread to do it regularly. */
+		srv_cache_thread = g_thread_new(
+				"srv-cache", _worker_prepare_serialized_cache, NULL);
+		g_assert(srv_cache_thread != NULL);
 	}
 
 	return TRUE;
