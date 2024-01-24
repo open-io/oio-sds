@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,16 +38,12 @@ class Meta2DecommissionTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload["container_id"]
 
-        moved = self.meta2.move(container_id, self.src, dst=self.dst, reqid=reqid)
+        moved = self.meta2.move(
+            container_id, self.src, dst=self.dst, raise_error=True, reqid=reqid
+        )
 
         resp = Counter()
-
         for res in moved:
-            if res["err"] is not None:
-                resp["errors"] += 1
-
-                continue
-
             resp["moved_seq"] += 1
             resp["to." + res["dst"]] += 1
 

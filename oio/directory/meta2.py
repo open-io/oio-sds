@@ -354,7 +354,7 @@ class Meta2Database(object):
                 exc,
             )
 
-    def _safe_move(self, bseq, src, dst, **kwargs):
+    def _safe_move(self, bseq, src, dst, raise_error=False, **kwargs):
         err = None
         try:
             self._check_src_service(bseq, src)
@@ -426,11 +426,13 @@ class Meta2Database(object):
             self.logger.error(
                 "Failed to move base (base=%s src=%s dst=%s): %s", bseq, src, dst, exc
             )
+            if raise_error:
+                raise
             err = exc
         return dst, err
 
     @ensure_request_id2(prefix="m2mov-")
-    def move(self, base, src, dst=None, **kwargs):
+    def move(self, base, src, dst=None, raise_error=False, **kwargs):
         """
         Move a database from `src` to `dst`.
         If `dst` is None, find one automatically.
@@ -443,14 +445,18 @@ class Meta2Database(object):
             self.logger.error(
                 "Failed to load peers (base=%s src=%s dst=%s): %s", base, src, dst, exc
             )
+            if raise_error:
+                raise
             yield {"base": base, "src": src, "dst": dst, "err": exc}
             return
 
         for bseq in bases_seq:
-            _dst, err = self._safe_move(bseq, src, dst, **kwargs)
+            _dst, err = self._safe_move(
+                bseq, src, dst, raise_error=raise_error, **kwargs
+            )
             yield {"base": bseq, "src": src, "dst": _dst, "err": err}
 
-    def _safe_rebuild(self, bseq, **kwargs):
+    def _safe_rebuild(self, bseq, raise_error=False, **kwargs):
         err = None
         try:
             self.logger.debug("Rebuilding base (base=%s)")
@@ -481,11 +487,13 @@ class Meta2Database(object):
                 raise Exception(exceptions)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error("Failed to rebuild base (base=%s): %s", bseq, exc)
+            if raise_error:
+                raise
             err = exc
         return err
 
     @ensure_request_id2(prefix="m2reb-")
-    def rebuild(self, base, **kwargs):
+    def rebuild(self, base, raise_error=False, **kwargs):
         """
         Rebuild a database.
         """
@@ -495,9 +503,11 @@ class Meta2Database(object):
             bases_seq = self._get_bases_seq(base, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error("Failed to load peers (base=%s): %s", base, exc)
+            if raise_error:
+                raise
             yield {"base": base, "err": exc}
             return
 
         for bseq in bases_seq:
-            err = self._safe_rebuild(bseq, **kwargs)
+            err = self._safe_rebuild(bseq, raise_error=raise_error, **kwargs)
             yield {"base": bseq, "err": err}

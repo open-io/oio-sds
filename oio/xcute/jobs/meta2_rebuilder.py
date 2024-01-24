@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,16 +35,10 @@ class Meta2RebuildTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload["container_id"]
 
-        rebuilt = self.meta2.rebuild(container_id, reqid=reqid)
+        rebuilt = self.meta2.rebuild(container_id, raise_error=True, reqid=reqid)
 
         resp = Counter()
-
-        for res in rebuilt:
-            if res["err"] is not None:
-                resp["errors"] += 1
-
-                continue
-
+        for _ in rebuilt:
             resp["rebuilt_seq"] += 1
 
         return resp
