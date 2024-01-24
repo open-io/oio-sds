@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -155,7 +155,7 @@ class CrawlerWorker(object):
             return
         # Create marker dir if it does not exist
         if not isdir(self.marker_dir):
-            makedirs(self.marker_dir)
+            makedirs(self.marker_dir, exist_ok=True)
             # Folder does not exist, no marker for sure.
             self.marker_current = "0"
             return
@@ -180,7 +180,7 @@ class CrawlerWorker(object):
             return
         # Create marker dir if it does not exist
         if not isdir(self.marker_dir):
-            makedirs(self.marker_dir)
+            makedirs(self.marker_dir, exist_ok=True)
 
         with open(self.marker_path, "w") as marker_file:
             marker_file.write(self.marker_current)
