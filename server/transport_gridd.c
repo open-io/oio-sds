@@ -1013,12 +1013,11 @@ next:
 			if (needs_seconds) {
 				len = g_snprintf(tmp, sizeof(tmp),
 						"%.6lf\n", st->value/(double)G_TIME_SPAN_SECOND);
-				g_byte_array_append(body, (guint8*)tmp, len);
 			} else {
 				len = g_snprintf(tmp, sizeof(tmp),
 						"%"G_GUINT64_FORMAT"\n", st->value);
-				g_byte_array_append(body, (guint8*)tmp, len);
 			}
+			g_byte_array_append(body, (guint8*)tmp, len);
 		}
 		g_string_free(labels_suffix, TRUE);
 		g_string_free(key_suffix, TRUE);

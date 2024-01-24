@@ -71,7 +71,7 @@ def main_loop(threads, delay=2.0, duration=60.0):
     return rate
 
 
-def main(threads, delay=2.0, duration=60.0):
+def main(threads, delay=10.0, duration=60.0):
     global API, CS_ADDR
     admin = AdminClient(
         {"namespace": API.namespace}, pôol_manager=API.container.pool_manager

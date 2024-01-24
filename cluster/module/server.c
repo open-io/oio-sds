@@ -102,6 +102,7 @@ static GQuark gq_time_hub_update = 0;
 /** Hold a serialized version of the list of services of each type. */
 static gboolean cache_service_lists = FALSE;
 static gboolean cache_full_service_lists = FALSE;
+static GMutex srv_lists_lock = {0};
 static GHashTable *srv_list_cache = NULL;
 static GHashTable *full_srv_list_cache = NULL;
 static GThread *srv_cache_thread = NULL;
@@ -1407,9 +1408,13 @@ _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	const gboolean full = metautils_message_extract_flag(
 			reply->request, NAME_MSGKEY_FULL, FALSE);
 
-	/* Take a reference to the cache, so it's not freed while we use it */
+	/* Take a reference to the cache, so it's not freed while we use it.
+	 * There is a race condition if someone calls g_hash_table_unref
+	 * while we are calling g_hash_table_ref, hence the lock. */
+	g_mutex_lock(&srv_lists_lock);
 	GHashTable *srv_cache_ref =
 			g_hash_table_ref(full? full_srv_list_cache : srv_list_cache);
+	g_mutex_unlock(&srv_lists_lock);
 	GByteArray *gba = g_byte_array_sized_new(8192);
 	g_byte_array_append(gba, header, 2);
 
@@ -1793,10 +1798,13 @@ _prepare_one_serialized_cache(GHashTable **srv_cache_p, service_callback_f *seri
 		g_clear_error(&err);
 		g_hash_table_unref(new_srv_cache);
 	} else {
+		GHashTable *old_srv_cache = NULL;
+		g_mutex_lock(&srv_lists_lock);
 		/* Keep a pointer to the old cache. */
-		GHashTable *old_srv_cache = *srv_cache_p;
+		old_srv_cache = *srv_cache_p;
 		/* Atomically replace the pointer to the new cache. */
 		*srv_cache_p = new_srv_cache;
+		g_mutex_unlock(&srv_lists_lock);
 		/* Then decrease the reference count of the old cache.
 		 * The last thread using it will free it. */
 		g_hash_table_unref(old_srv_cache);
@@ -2067,6 +2075,7 @@ _cs_action(void)
 		return;
 	}
 
+	GRID_NOTICE("[NS=%s] Starting serving requests", oio_server_namespace);
 	network_server_run (server, _reconfigure_on_SIGHUP);
 }
 
@@ -2534,10 +2543,12 @@ _cs_configure(int argc, char **argv)
 	nsinfo_cache = namespace_info_marshall (nsinfo, NULL);
 
 	/* Prepare serialized service lists cache */
+	g_mutex_lock(&srv_lists_lock);
 	srv_list_cache = g_hash_table_new_full(
 			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	full_srv_list_cache = g_hash_table_new_full(
 			g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+	g_mutex_unlock(&srv_lists_lock);
 
 	/* Prepare the ASN.1 request server */
 	transport_gridd_dispatcher_add_requests (dispatcher, descr, NULL);
@@ -2592,6 +2603,7 @@ _cs_set_defaults(void)
 	server = network_server_init();
 	dispatcher = transport_gridd_build_empty_dispatcher ();
 
+	g_mutex_init(&srv_lists_lock);
 	g_rw_lock_init(&rwlock_srv);
 	srvtypes = g_tree_new_full(metautils_strcmp3, NULL,
 			g_free, (GDestroyNotify) conscience_srvtype_destroy);
@@ -2637,11 +2649,14 @@ _cs_specific_fini(void)
 	}
 
 	metautils_gba_unref (nsinfo_cache);
+	g_mutex_lock(&srv_lists_lock);
 	g_hash_table_unref(srv_list_cache);
 	g_hash_table_unref(full_srv_list_cache);
+	g_mutex_unlock(&srv_lists_lock);
 	namespace_info_free (nsinfo);
 
 	g_rw_lock_clear(&rwlock_srv);
+	g_mutex_clear(&srv_lists_lock);
 	if (srvtypes)
 		g_tree_destroy(srvtypes);
 
