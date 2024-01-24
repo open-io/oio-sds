@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1298,6 +1298,8 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	GString *key = NULL;
 	if ((err = _request_to_key(jbody, FALSE, &key)))
 		return _reply_format_error(args->rp, err);
+
+	args->rp->access_tail("key:%s", key->str);
 
 	/* Eventually remove the record from the database */
 	err = _db_vol_delete(volid, key);
