@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1204,6 +1204,27 @@ class ContainerSharding(ProxyClient):
             )
             return False
 
+    def _delete_shard(self, shard, attempts=8, **kwargs):
+        """
+        By default, try again several times to allow oioproxy services
+        to update its cache.
+        """
+        for i in range(attempts):
+            try:
+                return self.container.container_delete(
+                    cid=shard["cid"], force=True, **kwargs
+                )
+            except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+                if i >= attempts - 1:
+                    raise
+                self.logger.warning(
+                    "Failed to delete shard (CID=%s), retrying...: %s",
+                    shard["cid"],
+                    exc,
+                )
+                # One of the services used may be restarting
+                time.sleep(1)
+
     def _shard_container(
         self, root_account, root_container, parent_shard, new_shards, **kwargs
     ):
@@ -1277,9 +1298,7 @@ class ContainerSharding(ProxyClient):
         else:
             # Delete parent shard
             try:
-                self.container.container_delete(
-                    cid=parent_shard["cid"], force=True, **kwargs
-                )
+                self._delete_shard(parent_shard, **kwargs)
             except Exception as exc:
                 # "Create" an orphan shard
                 self.logger.warning(
@@ -1333,9 +1352,7 @@ class ContainerSharding(ProxyClient):
                 continue
             self.logger.info("Deleting new shard (CID=%s)", new_shard["cid"])
             try:
-                self.container.container_delete(
-                    cid=new_shard["cid"], force=True, **kwargs
-                )
+                self._delete_shard(new_shard, **kwargs)
             except Exception as exc:
                 # "Create" an orphan shard
                 self.logger.warning(
@@ -1844,9 +1861,7 @@ class ContainerSharding(ProxyClient):
 
         # Delete old smaller shard
         try:
-            self.container.container_delete(
-                cid=smaller_shard["cid"], force=True, **kwargs
-            )
+            self._delete_shard(smaller_shard, **kwargs)
         except Exception as exc:
             # "Create" an orphan shard
             self.logger.warning(
