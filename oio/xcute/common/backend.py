@@ -275,19 +275,17 @@ class XcuteBackend(RedisConnection):
         """
         local mtime = KEYS[1];
         local job_id = KEYS[2];
+        local info_key = 'xcute:job:info:' .. job_id;
 
-        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
-                                  'job.status');
+        local status = redis.call('HGET', info_key, 'job.status');
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
         if status == 'RUNNING' then
-            local request_pause = redis.call(
-                'HGET', 'xcute:job:info:' .. job_id, 'job.request_pause');
+            local request_pause = redis.call('HGET', info_key, 'job.request_pause');
             if request_pause == 'True' then
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
-                           'job.request_pause', 'False');
+                redis.call('HSET', info_key, 'job.request_pause', 'False');
     """
         + _lua_update_mtime
         + """
@@ -295,11 +293,9 @@ class XcuteBackend(RedisConnection):
             return;
         end;
 
-        if status == 'PAUSED' or status == 'FAILED' then
-            redis.call('HSET', 'xcute:job:info:' .. job_id,
-                       'job.request_pause', 'False');
-            redis.call('HSET', 'xcute:job:info:' .. job_id,
-                       'job.status', 'WAITING');
+        if status == 'PAUSED' then
+            redis.call('HSET', info_key, 'job.request_pause', 'False');
+            redis.call('HSET', info_key, 'job.status', 'WAITING');
             redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
     """
         + _lua_update_mtime
@@ -322,8 +318,7 @@ class XcuteBackend(RedisConnection):
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status ~= 'ON_HOLD' and status ~= 'PAUSED'
-                and status ~= 'FAILED' then
+        if status ~= 'ON_HOLD' and status ~= 'PAUSED' then
             return redis.error_reply('job_must_be_paused:' .. status);
         end;
 
@@ -592,7 +587,7 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('job_running');
         end;
 
-        if status == 'WAITING' or status == 'PAUSED' or status == 'FAILED' then
+        if status == 'WAITING' or status == 'PAUSED' then
     """
         + _lua_release_lock
         + """
