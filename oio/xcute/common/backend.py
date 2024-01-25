@@ -61,15 +61,13 @@ class XcuteBackend(RedisConnection):
             "A job with the same lock ({}) is already in progress",
         ),
         "no_job": (NotFound, "The job does not exist"),
-        "job_must_be_paused": (Forbidden, "The job must be paused"),
-        "job_must_be_running": (Forbidden, "The job must be running"),
+        "job_must_be_paused": (Forbidden, "The job must be paused: {}"),
+        "job_must_be_running": (Forbidden, "The job must be running: {}"),
         "job_cannot_be_paused_all_tasks_sent": (
             Forbidden,
             "The job cannot be paused anymore, all jobs have been sent",
         ),
-        "job_on_hold": (Forbidden, "The job is on hold"),
         "job_running": (Forbidden, "The job is running"),
-        "job_finished": (Forbidden, "The job is finished"),
     }
 
     key_job_ids = "xcute:job:ids"
@@ -183,7 +181,7 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
         if status ~= 'RUNNING' then
-            return redis.error_reply('job_must_be_running');
+            return redis.error_reply('job_must_be_running:' .. status);
         end;
 
         local orchestrator_id = redis.call(
@@ -212,7 +210,7 @@ class XcuteBackend(RedisConnection):
         end;
 
         if status ~= 'RUNNING' then
-            return redis.error_reply('job_must_be_running');
+            return redis.error_reply('job_must_be_running:' .. status);
         end;
 
         redis.call('HSET', 'xcute:job:info:' .. job_id,
@@ -240,8 +238,8 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
 
-        if status == 'ON_HOLD' then
-            return redis.error_reply('job_on_hold');
+        if status == 'PAUSED' then
+            return;
         end;
 
         if status == 'WAITING' then
@@ -260,19 +258,16 @@ class XcuteBackend(RedisConnection):
             if all_tasks_sent == 'True' then
                 return redis.error_reply(
                     'job_cannot_be_paused_all_tasks_sent');
-            else
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
-                           'job.request_pause', 'True');
+            end;
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'job.request_pause', 'True');
     """
         + _lua_update_mtime
         + """
-                return;
-            end;
+            return;
         end;
 
-        if status == 'FINISHED' then
-            return redis.error_reply('job_finished');
-        end;
+        return redis.error_reply('job_must_be_running:' .. status);
     """
     )
 
@@ -296,8 +291,8 @@ class XcuteBackend(RedisConnection):
     """
         + _lua_update_mtime
         + """
-                return;
             end;
+            return;
         end;
 
         if status == 'PAUSED' or status == 'FAILED' then
@@ -312,9 +307,7 @@ class XcuteBackend(RedisConnection):
             return;
         end;
 
-        if status == 'FINISHED' then
-            return redis.error_reply('job_finished');
-        end;
+        return redis.error_reply('job_must_be_paused:' .. status);
     """
     )
 
@@ -331,7 +324,7 @@ class XcuteBackend(RedisConnection):
         end;
         if status ~= 'ON_HOLD' and status ~= 'PAUSED'
                 and status ~= 'FAILED' then
-            return redis.error_reply('job_must_be_paused');
+            return redis.error_reply('job_must_be_paused:' .. status);
         end;
 
         redis.call('HSET', 'xcute:job:info:' .. job_id, 'config', job_config);
