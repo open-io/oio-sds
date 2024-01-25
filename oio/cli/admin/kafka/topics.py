@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 from enum import IntEnum
 import yaml
 
-from confluent_kafka import TopicCollection, Consumer
+from confluent_kafka import TopicCollection
 from confluent_kafka.admin import (
     AdminClient,
     NewTopic,
@@ -35,50 +35,32 @@ class KafkaCommandMixinBase:
 
     @property
     def admin_client(self):
-        if not hasattr(self, "_kafka_admin_client") or not self._kafka_admin_client:
-            self.logger.info("Instantiate admin Kafka client")
+        if not hasattr(self, "_kafka_admin_client"):
+            self.init_client()
+        return getattr(self, "_kafka_admin_client")
+
+    def init_client(self, endpoints=None):
+        self.logger.info("Instantiate admin Kafka client")
+        if not endpoints:
             conf = self.app.client_manager.sds_conf
-            endpoint = conf.get("event-agent", "")
+            endpoints = conf.get("event-agent", "")
 
-            if not endpoint.startswith("kafka://"):
-                raise Exception("Endpoint is not a Kafka server")
-
-            # Remove kafka:// prefix
-            endpoint = endpoint[8:]
-            # There is no way to redirect log messages. A PR has been created on Github
-            # (https://github.com/confluentinc/confluent-kafka-python/pull/1674).
-            # We should add `logger=self.logger` argument to constructor if this PR is
-            # merged.
-            self._kafka_admin_client = AdminClient(
-                {
-                    "bootstrap.servers": endpoint,
-                },
+        if not endpoints.startswith("kafka://"):
+            raise ValueError(
+                "Endpoint is not a Kafka server, should starts with kafka://"
             )
-        return self._kafka_admin_client
 
-    @property
-    def consumer_client(self):
-        if (
-            not hasattr(self, "_kafka_consumer_client")
-            or not self._kafka_consumer_client
-        ):
-            self.logger.info("Instantiate consumer client")
-            conf = self.app.client_manager.sds_conf
-            endpoint = conf.get("event-agent", "")
-
-            if not endpoint.startswith("kafka://"):
-                raise Exception("Endpoint is not a Kafka server")
-
-            # Remove kafka:// prefix
-            endpoint = endpoint[8:]
-
-            self._kafka_consumer_client = Consumer(
-                {
-                    "bootstrap.servers": endpoint,
-                },
-                logger=self.logger,
-            )
-        return self._kafka_consumer_client
+        # Remove kafka:// prefix
+        endpoints = endpoints[8:]
+        # There is no way to redirect log messages. A PR has been created on Github
+        # (https://github.com/confluentinc/confluent-kafka-python/pull/1674).
+        # We should add `logger=self.logger` argument to constructor if this PR is
+        # merged.
+        self._kafka_admin_client = AdminClient(
+            {
+                "bootstrap.servers": endpoints,
+            },
+        )
 
     def list_topics(self, exclude_internal=True):
         """List the topics declared on cluster"""
@@ -384,6 +366,7 @@ class KafkaCreateTopics(KafkaCommandMixinBase, Lister):
         topics_to_process = {}
         with open(schema, "r", encoding="utf8") as file:
             schema = yaml.safe_load(file)
+            endpoints = schema.get("endpoints")
             default_options = schema.get("options", {})
             default_replicas = schema.get("replicas", 1)
             default_partitions = schema.get("partitions", 1)
@@ -401,14 +384,16 @@ class KafkaCreateTopics(KafkaCommandMixinBase, Lister):
                     "partitions": topic_details.get("partitions", default_partitions),
                     "replicas": topic_details.get("replicas", default_replicas),
                 }
-        return topics_to_process
+        return topics_to_process, endpoints
 
     def take_action(self, parsed_args):
         # Get topics and options from conf
-        topics_to_process = self._load_topics_from_config(parsed_args.schema)
+        topics_to_process, endpoints = self._load_topics_from_config(parsed_args.schema)
         self.logger.info(
             "Topics to declared %s", ", ".join([t for t in topics_to_process])
         )
+
+        self.init_client(endpoints)
 
         # List topics declared on cluster
         remote_topics = self.list_topics(exclude_internal=True)
