@@ -200,31 +200,43 @@ class XcuteBackend(RedisConnection):
         """
         local mtime = KEYS[1];
         local job_id = KEYS[2];
+        local info_key = 'xcute:job:info:' .. job_id;
 
-        local info = redis.call('HMGET', 'xcute:job:info:' .. job_id,
-                                'job.status', 'job.lock');
+        local info = redis.call('HMGET', info_key, 'job.status', 'job.lock');
         local status = info[1];
         local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
-        if status ~= 'RUNNING' then
-            return redis.error_reply('job_must_be_running:' .. status);
+        if status == 'FAILED' then
+            return;
         end;
 
-        redis.call('HSET', 'xcute:job:info:' .. job_id,
-                   'job.status', 'FAILED');
+        if status == 'RUNNING' or status == 'PAUSED' then
+            redis.call('HSET', info_key, 'job.status', 'FAILED');
     """
         + _lua_release_lock
         + """
-        -- remove the job of the orchestrator
-        local orchestrator_id = redis.call(
-            'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
-        redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
-                   job_id);
+            if status == 'RUNNING' then
+                redis.call('HSET', info_key, 'job.request_pause', 'False');
+                -- remove the job of the orchestrator
+                local orchestrator_id = redis.call(
+                    'HGET', info_key, 'orchestrator.id');
+                redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                           job_id);
+            end;
+
+            -- remove the running tasks
+            redis.call('DEL', 'xcute:tasks:running:' .. job_id);
     """
         + _lua_update_mtime
+        + """
+            return;
+        end;
+
+        return redis.error_reply('job_must_be_running:' .. status);
+    """
     )
 
     lua_request_pause = (
@@ -341,6 +353,9 @@ class XcuteBackend(RedisConnection):
         local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
+        end;
+        if status ~= 'RUNNING' then
+            return redis.error_reply('job_must_be_running:' .. status);
         end;
 
         local old_last_sent = redis.call('HGET', info_key, 'tasks.last_sent');

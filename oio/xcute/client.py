@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,6 +82,10 @@ class XcuteClient(ServiceClient):
 
     def job_update(self, job_id, job_config=None):
         _, data = self.xcute_request(job_id, "POST", "/job/update", json=job_config)
+        return data
+
+    def job_abort(self, job_id):
+        _, data = self.xcute_request(job_id, "POST", "/job/abort")
         return data
 
     def job_delete(self, job_id):

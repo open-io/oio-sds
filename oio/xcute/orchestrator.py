@@ -23,7 +23,7 @@ from redis import (
 )
 
 from oio.common.easy_value import int_value
-from oio.common.exceptions import OioTimeout
+from oio.common.exceptions import Forbidden, OioTimeout
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit, sleep, threading, time
 from oio.common.json import json
@@ -443,9 +443,15 @@ class XcuteOrchestrator(object):
             exc = None
             sent = False
             while not sent:
-                (job_status, old_last_sent), exc = self.handle_backend_errors(
-                    self.backend.update_tasks_sent, job_id, tasks.keys()
-                )
+                try:
+                    res, exc = self.handle_backend_errors(
+                        self.backend.update_tasks_sent, job_id, tasks.keys()
+                    )
+                except Forbidden as exc:
+                    if "The job must be running: FAILED" not in str(exc):
+                        raise
+                    self.logger.info("[job_id=%s] The job was aborted", job_id)
+                    return
                 if exc is not None:
                     self.logger.warn(
                         "[job_id=%s] Job could not update the sent tasks: %s",
@@ -453,6 +459,7 @@ class XcuteOrchestrator(object):
                         exc,
                     )
                     break
+                job_status, old_last_sent = res
                 sent = self.dispatch_tasks_batch(
                     beanstalkd_workers, job_id, job_type, job_config, tasks
                 )
@@ -497,12 +504,18 @@ class XcuteOrchestrator(object):
             # before being processed
             sent = False
             while not sent:
-                (job_status, old_last_sent), exc = self.handle_backend_errors(
-                    self.backend.update_tasks_sent,
-                    job_id,
-                    tasks.keys(),
-                    all_tasks_sent=True,
-                )
+                try:
+                    res, exc = self.handle_backend_errors(
+                        self.backend.update_tasks_sent,
+                        job_id,
+                        tasks.keys(),
+                        all_tasks_sent=True,
+                    )
+                except Forbidden as exc:
+                    if "The job must be running: FAILED" not in str(exc):
+                        raise
+                    self.logger.info("[job_id=%s] The job was aborted", job_id)
+                    return
                 if exc is not None:
                     self.logger.warn(
                         "[job_id=%s] Job could not update the sent tasks: %s",
@@ -510,6 +523,7 @@ class XcuteOrchestrator(object):
                         exc,
                     )
                     break
+                job_status, old_last_sent = res
                 if tasks:
                     sent = self.dispatch_tasks_batch(
                         beanstalkd_workers, job_id, job_type, job_config, tasks

@@ -70,6 +70,7 @@ class XcuteServer(WerkzeugApp):
                         Rule("/job/pause", endpoint="job_pause", methods=["POST"]),
                         Rule("/job/resume", endpoint="job_resume", methods=["POST"]),
                         Rule("/job/update", endpoint="job_update", methods=["POST"]),
+                        Rule("/job/abort", endpoint="job_abort", methods=["POST"]),
                         Rule("/job/delete", endpoint="job_delete", methods=["DELETE"]),
                         Rule("/lock/list", endpoint="lock_list", methods=["GET"]),
                         Rule("/lock/show", endpoint="lock_show", methods=["GET"]),
@@ -174,6 +175,13 @@ class XcuteServer(WerkzeugApp):
 
         self.backend.update_config(job_id, job_config)
         return Response(json.dumps(job_config), mimetype="application/json", status=202)
+
+    @handle_exceptions
+    def on_job_abort(self, req):
+        job_id = self._get_job_id(req)
+        self.backend.fail(job_id)
+        job_info = self.backend.get_job_info(job_id)
+        return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
     def on_job_delete(self, req):

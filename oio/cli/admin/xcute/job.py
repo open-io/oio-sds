@@ -322,6 +322,39 @@ class JobUpdate(XcuteCommand, ShowOne):
         return zip(*sorted(flat_dict_from_dict(parsed_args, new_job_config).items()))
 
 
+class JobAbort(XcuteCommand, Lister):
+    """
+    Abort the jobs.
+    """
+
+    columns = ("ID", "Aborted")
+
+    def get_parser(self, prog_name):
+        parser = super(JobAbort, self).get_parser(prog_name)
+        parser.add_argument(
+            "job_ids",
+            nargs="+",
+            metavar="<job_id>",
+            help="IDs of the job to to abort",
+        )
+        return parser
+
+    def _take_action(self, parsed_args):
+        for job_id in parsed_args.job_ids:
+            aborted = True
+            try:
+                self.xcute.job_abort(job_id)
+            except Exception as exc:
+                self.logger.error("Failed to aborted job %s: %s", job_id, exc)
+                aborted = False
+            yield (job_id, aborted)
+
+    def take_action(self, parsed_args):
+        self.logger.debug("take_action(%s)", parsed_args)
+
+        return self.columns, self._take_action(parsed_args)
+
+
 class JobDelete(XcuteCommand, Lister):
     """
     Delete all information about the jobs.
