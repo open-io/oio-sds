@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -320,9 +320,12 @@ network_server_clean(struct network_server_s *srv)
 	network_server_close_servers(srv);
 
 	if (srv->endpointv) {
-		for (struct endpoint_s **u=srv->endpointv; *u ;u++)
+		for (struct endpoint_s **u = srv->endpointv; *u; u++) {
 			g_free(*u);
+			*u = NULL;
+		}
 		g_free(srv->endpointv);
+		srv->endpointv = NULL;
 	}
 
 	metautils_pclose(&(srv->eventfd));
