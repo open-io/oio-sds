@@ -802,7 +802,7 @@ class XcuteOrchestrator(object):
             for beanstalkd_addr in removed_beanstalkds:
                 self.logger.info("Remove beanstalkd %s" % beanstalkd_addr)
 
-            self.logger.info("Refresh beanstalkd workers")
+            self.logger.debug("Refresh beanstalkd workers")
             self.beanstalkd_workers = beanstalkd_workers
 
             for _ in range(self.refresh_time_beanstalkd_workers):
