@@ -2181,12 +2181,12 @@ def generate(options):
             {
                 "PREFIX": systemd_prefix,
                 "PARENT": target.systemd_name if target else "",
-                "SERVICEUSER": "User={}".format(env["USER"])
-                if is_systemd_system()
-                else "",
-                "SERVICEGROUP": "Group={}".format(env["GROUP"])
-                if is_systemd_system()
-                else "",
+                "SERVICEUSER": (
+                    "User={}".format(env["USER"]) if is_systemd_system() else ""
+                ),
+                "SERVICEGROUP": (
+                    "Group={}".format(env["GROUP"]) if is_systemd_system() else ""
+                ),
             }
         )
         service_name = systemd_service(env)

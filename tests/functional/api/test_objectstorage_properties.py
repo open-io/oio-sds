@@ -66,9 +66,9 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
         expected_properties = properties.copy()
-        expected_properties[
-            "max-buckets"
-        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        expected_properties["max-buckets"] = (
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        )
         self.assertDictEqual(data["properties"], expected_properties)
 
         self.api.account_del_properties(aname, properties.keys())
@@ -112,9 +112,9 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
         expected_properties = {"enabled-beta-features": ["lifecycle", "replication"]}
-        expected_properties[
-            "max-buckets"
-        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        expected_properties["max-buckets"] = (
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        )
         self.assertDictEqual(data["properties"], expected_properties)
 
         self.api.account_del_properties(aname, properties.keys())
@@ -134,9 +134,9 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.api.account_set_properties(aname, properties)
         data = self.api.account_get_properties(aname)
         expected_properties = properties.copy()
-        expected_properties[
-            "max-buckets"
-        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        expected_properties["max-buckets"] = (
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        )
         self.assertDictEqual(data["properties"], expected_properties)
 
         self.api.account_del_properties(aname, properties.keys())

@@ -1308,11 +1308,15 @@ class TestSharding(BaseTestCase):
             min(smaller_shard["lower"], bigger_shard["lower"]), new_shard["lower"]
         )
         self.assertEqual(
-            smaller_shard["upper"]
-            if smaller_shard["upper"] == ""
-            else bigger_shard["upper"]
-            if bigger_shard["upper"] == ""
-            else max(smaller_shard["upper"], bigger_shard["upper"]),
+            (
+                smaller_shard["upper"]
+                if smaller_shard["upper"] == ""
+                else (
+                    bigger_shard["upper"]
+                    if bigger_shard["upper"] == ""
+                    else max(smaller_shard["upper"], bigger_shard["upper"])
+                )
+            ),
             new_shard["upper"],
         )
         self.assertEqual(expected_objects, new_shard["count"])

@@ -311,8 +311,8 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
         self.tool_conf["report_interval"] = parsed_args.report_interval
         self.tool_conf["items_per_second"] = parsed_args.items_per_second
         if self.distributed:  # distributed
-            self.tool_conf[
-                "distributed_beanstalkd_worker_tube"
-            ] = parsed_args.distributed_tube
+            self.tool_conf["distributed_beanstalkd_worker_tube"] = (
+                parsed_args.distributed_tube
+            )
         else:  # local
             self.tool_conf["concurrency"] = parsed_args.concurrency

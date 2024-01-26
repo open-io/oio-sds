@@ -120,9 +120,9 @@ class AccountTest(CliTestCase):
         output = self.openio("account show " + self.NAME + opts)
         data = self.json_loads(output)
         expected_properties = {"enabled-beta-features": ["lifecycle", "replication"]}
-        expected_properties[
-            "max-buckets"
-        ] = AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        expected_properties["max-buckets"] = (
+            AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT
+        )
         self.assertDictEqual(data["metadata"], expected_properties)
 
         self.openio(

@@ -182,9 +182,9 @@ class ObjectStorageApi(object):
                 {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
             )
             # Share the connection pool
-            self._acct_kwargs[
-                "pool_manager"
-            ] = self._account_metrics_client.pool_manager
+            self._acct_kwargs["pool_manager"] = (
+                self._account_metrics_client.pool_manager
+            )
         return self._account_metrics_client
 
     @property

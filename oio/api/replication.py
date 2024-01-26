@@ -337,11 +337,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     and int(rawx_chunk_size) != bytes_transferred
                 ):
                     conn.failed = True
-                    conn.chunk[
-                        "error"
-                    ] = "chunk size mismatch: %d (local), %s (rawx)" % (
-                        bytes_transferred,
-                        rawx_chunk_size,
+                    conn.chunk["error"] = (
+                        "chunk size mismatch: %d (local), %s (rawx)"
+                        % (
+                            bytes_transferred,
+                            rawx_chunk_size,
+                        )
                     )
                     failures.append(conn.chunk)
                 else:

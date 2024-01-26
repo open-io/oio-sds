@@ -76,9 +76,11 @@ def segment_range_to_fragment_range(
     fragment_end = (
         None
         if segment_end is None
-        else ((segment_end + 1) // segment_size * fragment_size)
-        if segment_start is None
-        else ((segment_end + 1) // segment_size * fragment_size) - 1
+        else (
+            ((segment_end + 1) // segment_size * fragment_size)
+            if segment_start is None
+            else ((segment_end + 1) // segment_size * fragment_size) - 1
+        )
     )
 
     return (fragment_start, fragment_end)
@@ -111,9 +113,11 @@ def meta_chunk_range_to_segment_range(meta_start, meta_end, segment_size):
     segment_end = (
         None
         if meta_end is None
-        else (((int(meta_end // segment_size) + 1) * segment_size) - 1)
-        if meta_start is not None
-        else (int(math.ceil((float(meta_end) / segment_size) + 1)) * segment_size)
+        else (
+            (((int(meta_end // segment_size) + 1) * segment_size) - 1)
+            if meta_start is not None
+            else (int(math.ceil((float(meta_end) / segment_size) + 1)) * segment_size)
+        )
     )
     return (segment_start, segment_end)
 
@@ -1114,22 +1118,24 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     and writer.checksum
                     and checksum.lower() != writer.checksum.hexdigest()
                 ):
-                    writer.chunk[
-                        "error"
-                    ] = "checksum mismatch: %s (local), %s (rawx)" % (
-                        writer.checksum.hexdigest(),
-                        checksum.lower(),
+                    writer.chunk["error"] = (
+                        "checksum mismatch: %s (local), %s (rawx)"
+                        % (
+                            writer.checksum.hexdigest(),
+                            checksum.lower(),
+                        )
                     )
                     self.failed_chunks.append(writer.chunk)
                 elif (
                     chunk_size is not None
                     and int(chunk_size) != writer.bytes_transferred
                 ):
-                    writer.chunk[
-                        "error"
-                    ] = "chunk size mismatch: %d (local), %s (rawx)" % (
-                        writer.bytes_transferred,
-                        chunk_size,
+                    writer.chunk["error"] = (
+                        "chunk size mismatch: %d (local), %s (rawx)"
+                        % (
+                            writer.bytes_transferred,
+                            chunk_size,
+                        )
                     )
                     self.failed_chunks.append(writer.chunk)
                 else:
