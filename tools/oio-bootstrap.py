@@ -1445,7 +1445,7 @@ group_id = ${GROUP_ID}
 event_queue_type = ${QUEUE_TYPE}
 event_queue_ids = ${QUEUE_IDS}
 
-kafka_group.instance.id = ${SRVTYPE}.${SRVNUM}
+kafka_consumer_group.instance.id = ${SRVTYPE}.${SRVNUM}
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0

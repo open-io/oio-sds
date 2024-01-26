@@ -41,7 +41,9 @@ DEFAULT_DEADLETTER_TOPIC = "oio-deadletter"
 DEFAULT_XCUTE_JOB_TOPIC = "oio-xcute"
 DEFAULT_XCUTE_JOB_REPLY_TOPIC = DEFAULT_XCUTE_JOB_TOPIC + "-reply"
 DEFAULT_DELAY_GRANULARITY = 5
-KAFKA_CONF_PREFIX = "kafka_"
+KAFKA_CONF_COMMON_PREFIX = "kafka_common_"
+KAFKA_CONF_CONSUMER_PREFIX = "kafka_consumer_"
+KAFKA_CONF_PRODUCER_PREFIX = "kafka_producer_"
 POLL_TIMEOUT = 10
 
 
@@ -65,11 +67,16 @@ class KafkaPartitionNotAssignedException(OioException):
 def kafka_options_from_conf(conf):
     if conf is None:
         conf = {}
-    return {
-        k[len(KAFKA_CONF_PREFIX) :]: v
-        for k, v in conf.items()
-        if k.startswith(KAFKA_CONF_PREFIX)
-    }
+    kafka_conf = {"consumer": {}, "producer": {}}
+    for k, v in conf.items():
+        if k.startswith(KAFKA_CONF_COMMON_PREFIX):
+            kafka_conf["producer"][k[len(KAFKA_CONF_COMMON_PREFIX) :]] = v
+            kafka_conf["consumer"][k[len(KAFKA_CONF_COMMON_PREFIX) :]] = v
+        if k.startswith(KAFKA_CONF_CONSUMER_PREFIX):
+            kafka_conf["consumer"][k[len(KAFKA_CONF_CONSUMER_PREFIX) :]] = v
+        if k.startswith(KAFKA_CONF_PRODUCER_PREFIX):
+            kafka_conf["producer"][k[len(KAFKA_CONF_PRODUCER_PREFIX) :]] = v
+    return kafka_conf
 
 
 class KafkaClient:

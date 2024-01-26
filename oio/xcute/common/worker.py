@@ -53,7 +53,7 @@ class XcuteWorker(object):
             kafka_conf = {
                 "acks": "all",
             }
-            kafka_conf.update(kafka_options_from_conf(self.conf))
+            kafka_conf.update(kafka_options_from_conf(self.conf).get("producer"))
 
             self.kafka_producer = KafkaSender(
                 self.conf["broker_endpoint"],

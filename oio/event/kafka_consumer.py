@@ -260,7 +260,7 @@ class KafkaConsumerWorker(Process):
             self._producer = KafkaSender(
                 self.endpoint,
                 self.logger,
-                conf=self._kafka_conf,
+                conf=self._kafka_conf.get("producer"),
                 delay_granularity=get_delay_granularity(self.app_conf["namespace"]),
             )
 
@@ -480,14 +480,15 @@ class KafkaBatchFeeder(Process):
 
     def _connect(self):
         if not self._consumer:
+            kafka_conf = self._kafka_conf.get("consumer")
             for key in ["client.id", "group.instance.id"]:
-                if key in self._kafka_conf:
-                    self._kafka_conf[key] = self._kafka_conf[key].format(
+                if key in kafka_conf:
+                    kafka_conf[key] = kafka_conf[key].format(
                         pid=os.getpid(), worker=self._worker_id
                     )
             # Force auto commit to False and retrieve events from last commited offset
             conf = {
-                **self._kafka_conf,
+                **kafka_conf,
                 "enable.auto.commit": False,
                 "auto.offset.reset": "earliest",
             }
