@@ -7,3 +7,8 @@ ce3c452730f92685281ec2564cf25b8e51ddfc71
 # Date:   Thu Feb 2 10:38:47 2023 +0100
 #    apply new black 23.1.0 version on oio sds
 54c97fe4ade5dccc06159d07b236ecec4800d6a6
+
+# Author: Aymeric Ducroquetz <aymeric.ducroquetz@ovhcloud.com>
+# Date:   Fri Jan 26 11:40:21 2024 +0100
+#    Apply new black 24.1.0 version
+870ee2820133f606b2bfb206595c4bcde0a0c68b
