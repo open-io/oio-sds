@@ -42,6 +42,7 @@ from oio.common.exceptions import (
     BadRequest,
     DeadlineReached,
     OioException,
+    OioNetworkException,
     OioTimeout,
     ServiceBusy,
     from_multi_responses,
@@ -1216,7 +1217,7 @@ class ContainerSharding(ProxyClient):
                 return self.container.container_delete(
                     cid=shard["cid"], force=True, **kwargs
                 )
-            except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+            except (OioNetworkException, ServiceBusy, DeadlineReached) as exc:
                 if i >= attempts - 1:
                     raise
                 self.logger.warning(
