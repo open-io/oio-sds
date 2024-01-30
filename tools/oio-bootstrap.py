@@ -819,27 +819,10 @@ stats:
 """
 
 template_conscience_service = """
-[General]
-to_op=1000
-to_cnx=1000
-
-flag.NOLINGER=true
-flag.SHUTDOWN=false
-flag.KEEPALIVE=false
-flag.QUICKACK=false
-
 [Server.conscience]
 listen=${IP}:${PORT}
-plugins=conscience,stats,ping,fallback
-
-[Service]
-namespace=${NS}
-type=conscience
-register=false
-load_ns_info=false
 
 [Plugin.conscience]
-path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 
 # Multi-conscience
@@ -871,7 +854,6 @@ param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
 # Service scoring and pools definitions
 param_service_conf=${CFGDIR}/${NS}-service-{pool,type}*.conf
-
 """
 
 template_conscience_policies = """
