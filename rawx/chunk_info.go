@@ -306,6 +306,11 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 			chunk.ContentChunkMethod = serializeChunkMethod(chunkMethodType, params)
 		}
 	}
+    cryptoResiliency, err := getAttr("user.oio.ext.Cryptography-Resiliency")
+	if err == nil {
+	    chunk.ExtMeta = make(map[string]string)
+        chunk.ExtMeta["Cryptography-Resiliency"] = cryptoResiliency
+    }
 	return chunk, nil
 }
 
@@ -598,6 +603,11 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
+    if chunk.ExtMeta != nil {
+        for key, value := range chunk.ExtMeta {
+            setHeader(headers, "X-Oio-Ext-" + key, value)
+        }
+    }
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
