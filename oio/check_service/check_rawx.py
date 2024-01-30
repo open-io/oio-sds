@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -94,7 +94,7 @@ class CheckRawx(CheckService):
     def _cycle(self, rawx_host):
         length = 1024
 
-        chunk_data = random_buffer(string.printable, length)
+        chunk_data = random_buffer(string.printable, length).encode("utf-8")
         metachunk_size = 9 * length
         metachunk_hash = get_hasher("blake3").hexdigest()
 

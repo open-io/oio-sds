@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -350,7 +350,8 @@ class TestFilterChangelocation(BaseTestCase):
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)
         # wait until the services are unlocked
-        time.sleep(5)
+        time.sleep(3)
+        self.wait_for_score(("rawx",), timeout=5.0)
         # For each misplaced chunk apply the improver
         for (
             chunk_id,
@@ -397,7 +398,8 @@ class TestFilterChangelocation(BaseTestCase):
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)
         # wait until the services are unlocked
-        time.sleep(5)
+        time.sleep(3)
+        self.wait_for_score(("rawx",), timeout=5.0)
         # For each misplaced chunk apply the improver
         for (
             chunk_id,
@@ -501,7 +503,7 @@ class TestFilterChangelocation(BaseTestCase):
                 volume_id,
             )
             self.assertEqual(changelocation.errors, 1)
-            # Renamed by changin next time attempt
+            # Renamed by changing next time attempt
             self.assertFalse(isfile(chunk_symlink_path))
             self.assertTrue(isdir("/".join(chunk_path.split("/")[:-1])))
             self.assertEqual(changelocation.orphan_chunks_found, 0)
@@ -613,7 +615,7 @@ class TestFilterChangelocation(BaseTestCase):
         self.assertEqual(changelocation.created_symlinks, 1)
         # Check if the irrelevant symlink has been deleted
         self.assertEqual(changelocation.removed_symlinks, 1)
-        # Check if the new misplaced chunk has been created where it shoud be
+        # Check if the new misplaced chunk has been created where it should be
         _, final_chunks = self.api.container.content_locate(
             self.account, container, object_name
         )
