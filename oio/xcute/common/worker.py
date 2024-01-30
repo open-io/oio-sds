@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 # License along with this library.
 
 from collections import Counter
-from six import iteritems
 
 from oio.common.constants import STRLEN_REQID
 from oio.common.green import ratelimit
@@ -68,7 +67,7 @@ class XcuteWorker(object):
             task_errors[type(init_error).__name__] += len(tasks)
         else:
             tasks_run_time = 0
-            for task_id, task_payload in iteritems(tasks):
+            for task_id, task_payload in tasks.items():
                 tasks_run_time = ratelimit(tasks_run_time, tasks_per_second)
 
                 reqid = job_id + request_id(f"-{job_type[:10]}-")
@@ -78,7 +77,11 @@ class XcuteWorker(object):
                     task_results.update(task_result)
                 except Exception as exc:
                     self.logger.warning(
-                        "[job_id=%s] Fail to process task %s: %s", job_id, task_id, exc
+                        "[job_id=%s reqid=%s] Failed to process task %s: %s",
+                        job_id,
+                        reqid,
+                        task_id,
+                        exc,
                     )
                     task_errors[type(exc).__name__] += 1
 

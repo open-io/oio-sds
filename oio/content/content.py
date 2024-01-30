@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ from oio.common import exceptions as exc
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
+from oio.common.decorators import ensure_request_id2
 from oio.common.exceptions import UnrecoverableContent
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_functions import _get_weighted_random_score
@@ -269,6 +270,7 @@ class Content(object):
             cid=self.container_id, path=self.path, **kwargs
         )
 
+    @ensure_request_id2(prefix="move-chunk-")
     def move_chunk(
         self,
         chunk_id,
@@ -279,7 +281,6 @@ class Content(object):
         cur_items=None,
         force_fair_constraints=True,
         adjacent_mode=False,
-        headers={},
         **kwargs
     ):
         """
@@ -350,7 +351,10 @@ class Content(object):
             for src in duplicate_chunks:
                 try:
                     self.logger.info(
-                        "Copying chunk from %s to %s", src.url, spare_urls[0]
+                        "Copying chunk from %s to %s (reqid=%s)",
+                        src.url,
+                        spare_urls[0],
+                        kwargs.get("reqid"),
                     )
                     # TODO(FVE): retry to copy (max_attempts times)
                     self.blob_client.chunk_copy(
@@ -362,29 +366,32 @@ class Content(object):
                         path=self.path,
                         version=self.version,
                         content_id=self.content_id,
-                        headers=headers,
                         **kwargs
                     )
                     break
                 except Exception as err:
-                    self.logger.warn(
-                        "Failed to copy chunk from %s to %s: %s",
+                    self.logger.warning(
+                        "Failed to copy chunk from %s to %s: %s (reqid=%s)",
                         src.url,
                         spare_urls[0],
                         err,
+                        kwargs.get("reqid"),
                     )
                     if len(duplicate_chunks) == 1:
                         raise
             else:
                 raise UnrecoverableContent("No copy available of chunk to move")
 
-            self._update_spare_chunk(current_chunk, spare_urls[0])
+            self._update_spare_chunk(current_chunk, spare_urls[0], **kwargs)
 
             try:
                 self.blob_client.chunk_delete(current_chunk.url, **kwargs)
             except Exception as err:
-                self.logger.warn(
-                    "Failed to delete chunk %s: %s", current_chunk.url, err
+                self.logger.warning(
+                    "Failed to delete chunk %s: %s (reqid=%s)",
+                    current_chunk.url,
+                    err,
+                    kwargs.get("reqid"),
                 )
 
         current_chunk.url = spare_urls[0]
@@ -392,18 +399,27 @@ class Content(object):
 
         return current_chunk.raw()
 
-    def move_linked_chunk(self, chunk_id, from_url):
+    @ensure_request_id2(prefix="move-chunk-")
+    def move_linked_chunk(self, chunk_id, from_url, **kwargs):
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None:
             raise exc.OrphanChunk("Chunk not found in content")
 
-        _, to_url = self.blob_client.chunk_link(from_url, None, self.full_path)
-        self.logger.debug("link chunk %s from %s to %s", chunk_id, from_url, to_url)
+        _, to_url = self.blob_client.chunk_link(
+            from_url, None, self.full_path, **kwargs
+        )
+        self.logger.debug(
+            "link chunk %s from %s to %s (reqid=%s)",
+            chunk_id,
+            from_url,
+            to_url,
+            kwargs.get("reqid"),
+        )
 
-        self._update_spare_chunk(current_chunk, to_url)
+        self._update_spare_chunk(current_chunk, to_url, **kwargs)
 
         try:
-            self.blob_client.chunk_delete(current_chunk.url)
+            self.blob_client.chunk_delete(current_chunk.url, **kwargs)
         except Exception as err:
             self.logger.warn("Failed to delete chunk %s: %s", current_chunk.url, err)
 
