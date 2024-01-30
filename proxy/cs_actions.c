@@ -763,9 +763,11 @@ action_conscience_list (struct req_args_s *args)
 						__FUNCTION__, lmax - ltype);
 				GBytes *json = g_bytes_new_from_bytes (prepared, ltype, lmax-ltype);
 				g_bytes_unref (prepared);
+				args->rp->access_tail("cache:HIT");
 				return _reply_success_bytes(args, HTTP_CONTENT_TYPE_JSON, json);
 			} else {
 				GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "cache miss");
+				args->rp->access_tail("cache:MISS");
 			}
 		} else {
 			GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "stats expected");
@@ -786,8 +788,6 @@ action_conscience_list (struct req_args_s *args)
 
 	// Refresh down hosts with current value
 	gridd_client_update_global_down_hosts(sl);
-
-	args->rp->access_tail("%s=%u", type, g_slist_length(sl));
 
 	if (json_format) {
 		return _reply_success_json(args,
