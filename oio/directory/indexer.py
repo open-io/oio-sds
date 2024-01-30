@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 # License along with this library.
 
 from datetime import datetime
-import six
 from oio.blob.utils import check_volume_for_service_type
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_REFERENCEID
@@ -154,17 +153,11 @@ class Meta2IndexingWorker(object):
             ]
 
             container_id = db_id.rsplit(".")[0]
-
-            if six.PY2:
-                if isinstance(account, six.text_type):
-                    account = account.encode("utf-8")
-                if isinstance(container, six.text_type):
-                    container = container.encode("utf-8")
             cont_url = "{0}/{1}/{2}".format(self.namespace, account, container)
 
             if not is_peer:
                 self.warn(
-                    "Trying to index a container that isn't handled bythis volume",
+                    "Trying to index a container that isn't handled by this volume",
                     db_id,
                 )
                 if self.attempt_bad_index_removal:

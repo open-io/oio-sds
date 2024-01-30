@@ -15,7 +15,6 @@
 # License along with this library.
 
 from functools import wraps
-from six import string_types
 from oio.common.client import ProxyClient
 
 
@@ -23,7 +22,7 @@ def service_id_to_string(service_id):
     """Convert a list of service IDs to a comma separated string."""
     if not service_id:
         return None
-    elif isinstance(service_id, string_types):
+    elif isinstance(service_id, str):
         return service_id
     else:
         try:
@@ -204,11 +203,11 @@ class AdminClient(ProxyClient):
         """
         Set user or system properties in the admin table of an sqliterepo base.
         """
-        data = dict()
+        data = {}
         if properties:
             data["properties"] = properties
         if system:
-            data["system"] = dict()
+            data["system"] = {}
             for k, v in system:
                 data["system"][k if k.startswith("sys.") else "sys." + k] = v
         self._request("POST", "/set_properties", params=params, json=data, **kwargs)

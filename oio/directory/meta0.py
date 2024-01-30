@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,8 +15,6 @@
 # License along with this library.
 
 """Meta0 client and meta1 balancing operations"""
-from six import itervalues, iteritems, string_types
-from six.moves import range
 import random
 from math import ceil
 
@@ -37,10 +35,10 @@ def _loc(svc):
     """Extract the location of a service and ensure it is well formed."""
     loc = svc.get("tags", {}).get("tag.loc", None)
     if not loc:
-        raise ConfigurationException("No location on {0}".format(svc))
+        raise ConfigurationException(f"No location on {svc}")
     tokens = loc.split(".")
     if len(tokens) > 4:
-        raise ConfigurationException("Malformed location for {0}".format(svc))
+        raise ConfigurationException(f"Malformed location for {svc}")
     return tokens
 
 
@@ -86,7 +84,7 @@ def _slice_services(allsrv, level):
 
 
 def _patch_service(srv):
-    s = dict()
+    s = {}
     s.update(srv)
     s["bases"] = set()
     return s
@@ -153,7 +151,7 @@ def _modulo_peek(tab, offset, num):
     :param num: a strictly positive natural number
     :return: a new tuple of <num> elements from <tab>, starting at <offset>
     """
-    result, tablen = list(), len(tab)
+    result, tablen = [], len(tab)
     assert tablen > 0
     assert num > 0
     assert offset >= 0
@@ -226,7 +224,7 @@ class Meta0PrefixMapping(MetaMapping):
         the total number of service locations,
         and the number of services per location.
         """
-        available_svcs_by_location = dict()
+        available_svcs_by_location = {}
 
         for svc_id, svc in self.services.items():
             if self.get_score(svc) <= 0:
@@ -238,7 +236,7 @@ class Meta0PrefixMapping(MetaMapping):
 
         if len(available_svcs_by_location) < self.replicas:
             raise ValueError(
-                "Less than %s locations have a positve score, "
+                "Less than %s locations have a positive score, "
                 "we won't rebalance (currently: %s)"
                 % (self.replicas, len(available_svcs_by_location))
             )
@@ -283,7 +281,7 @@ class Meta0PrefixMapping(MetaMapping):
         return set(self.raw_services_by_base.get(base))
 
     def _get_peers_by_base(self, base):
-        return {v["addr"] for v in self.services_by_base.get(base, list())}
+        return {v["addr"] for v in self.services_by_base.get(base, [])}
 
     def _get_service_type_by_base(self, base):
         return "meta1"
@@ -310,7 +308,7 @@ class Meta0PrefixMapping(MetaMapping):
         - service IP address if `default` is None or "addr"
         - `default` for any other value.
         """
-        if isinstance(svc, string_types):
+        if isinstance(svc, str):
             svc = self.services.get(svc, {"addr": svc})
         loc = svc.get("tags", {}).get("tag.loc", default)
         if not loc or loc == "addr":
@@ -336,14 +334,14 @@ class Meta0PrefixMapping(MetaMapping):
 
     def get_score(self, svc):
         """Get the score of a service, or 0 if it is unknown"""
-        if isinstance(svc, string_types):
+        if isinstance(svc, str):
             svc = self.services.get(svc, {"addr": svc})
         score = int(svc.get("score", 0))
         return score
 
     def get_managed_bases(self, svc):
         """Get the list of bases managed by the service"""
-        if isinstance(svc, string_types):
+        if isinstance(svc, str):
             svc = self.services.get(svc, {"addr": svc})
         return svc.get("bases", set())
 
@@ -361,7 +359,7 @@ class Meta0PrefixMapping(MetaMapping):
         min_base = self.prefix_to_base(pfx)
         max_base = str(min_base[: self.digits]).ljust(4, "F")
         return [
-            "%04X" % base for base in range(int(min_base, 16), int(max_base, 16) + 1)
+            f"{base:04X}" for base in range(int(min_base, 16), int(max_base, 16) + 1)
         ]
 
     def _extend(self, bases=None):
@@ -371,7 +369,7 @@ class Meta0PrefixMapping(MetaMapping):
 
         :param bases: if set, only extend the mapping for the specified bases
         """
-        extended = dict()
+        extended = {}
         if not bases:
             svc_by_base = self.services_by_base
         else:
@@ -379,7 +377,7 @@ class Meta0PrefixMapping(MetaMapping):
         if self.digits == 4:
             # nothing to extend: there is one base for each prefix
             return svc_by_base
-        for base, services in iteritems(svc_by_base):
+        for base, services in svc_by_base.items():
             for pfx in self.prefix_siblings(base):
                 extended[pfx] = services
         return extended
@@ -389,13 +387,13 @@ class Meta0PrefixMapping(MetaMapping):
         Serialize the mapping to a JSON string suitable
         as input for 'meta0_force' request.
         """
-        simplified = dict()
-        for pfx, services in iteritems(self._extend(bases)):
+        simplified = {}
+        for pfx, services in self._extend(bases).items():
             simplified[pfx] = [x["addr"] for x in services]
         return json.dumps(simplified)
 
     def _learn(self, base, addrs):
-        services = list()
+        services = []
         for svc_addr in addrs:
             svc = self.services.get(svc_addr, {"addr": svc_addr})
             services.append(svc)
@@ -407,15 +405,14 @@ class Meta0PrefixMapping(MetaMapping):
         """
         Load the mapping from a JSON string
         """
-        if isinstance(json_mapping, string_types):
+        if isinstance(json_mapping, str):
             raw_mapping = json.loads(json_mapping)
         elif isinstance(json_mapping, dict):
             raw_mapping = json_mapping
         else:
             raw_mapping = self.m0.list(**kwargs)
 
-        # pylint: disable=no-member
-        for pfx, services_addrs in iteritems(raw_mapping):
+        for pfx, services_addrs in raw_mapping.items():
             base = pfx[: self.digits]
             self._learn(base, services_addrs)
 
@@ -426,7 +423,7 @@ class Meta0PrefixMapping(MetaMapping):
         raw_mapping = self.m0.list(**kwargs)
 
         # pylint: disable=no-member
-        for pfx, services_addrs in iteritems(raw_mapping):
+        for pfx, services_addrs in raw_mapping.items():
             base = pfx[: self.digits]
             self._learn(base, services_addrs)
 
@@ -437,7 +434,7 @@ class Meta0PrefixMapping(MetaMapping):
         :param known: an iterable of already know services
         :param lookup: a function that returns an iterable of services
         """
-        services = known if known else list()
+        services = known if known else []
         known_locations = {self.get_loc(svc) for svc in services}
         iterations = 0
         while len(services) < self.replicas and iterations < max_lookup:
@@ -460,7 +457,7 @@ class Meta0PrefixMapping(MetaMapping):
     def find_services_less_bases(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
-            known = list()
+            known = []
         filtered = [x for x in self.services.values() if self.get_score(x) >= min_score]
         # Reverse the list so we can quickly pop the service
         # with less managed bases
@@ -478,7 +475,7 @@ class Meta0PrefixMapping(MetaMapping):
     def find_services_more_availability(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
-            known = list()
+            known = []
         filtered = [x for x in self.services.values() if self.get_score(x) >= min_score]
         filtered.sort(
             key=(lambda svc: svc["upper_limit"] - len(self.get_managed_bases(svc)))
@@ -501,7 +498,7 @@ class Meta0PrefixMapping(MetaMapping):
                                     managed by some services
         """
         if fail_if_already_set and base in self.services_by_base:
-            raise ValueError("Base %s already managed" % base)
+            raise ValueError(f"Base {base} already managed")
         for svc in services:
             base_set = svc.get("bases") or set()
             base_set.add(base)
@@ -510,7 +507,7 @@ class Meta0PrefixMapping(MetaMapping):
 
     def bootstrap(self, level="volume", degradation=0):
         """
-        Spread the prefixe to balance accross sites. By default the token
+        Spread the prefixe to balance across sites. By default the token
         describing the site is <0>.
         Put one short_prefix into each slice (corresponding to a location
         level) and balance well into each level. At the end, expand each
@@ -540,7 +537,7 @@ class Meta0PrefixMapping(MetaMapping):
         for srv in allsrv:
             for prefix in srv["bases"]:
                 bases[prefix].add(srv["addr"])
-        for base, srv in iteritems(bases):
+        for base, srv in bases.items():
             self._learn(base, srv)
 
     def count_pfx_by_svc(self):
@@ -548,8 +545,8 @@ class Meta0PrefixMapping(MetaMapping):
         Build a dict with service addresses as keys and
         the number of managed bases as values.
         """
-        pfx_by_svc = dict()
-        for svc in itervalues(self.services):
+        pfx_by_svc = {}
+        for svc in self.services.values():
             addr = svc["addr"]
             pfx_by_svc[addr] = len(self.get_managed_bases(svc))
         return pfx_by_svc
@@ -558,7 +555,7 @@ class Meta0PrefixMapping(MetaMapping):
         """Check that all bases have the right number of replicas"""
         error = False
         grand_total = 0
-        for base, services in iteritems(self.services_by_base):
+        for base, services in self.services_by_base.items():
             if len(services) < self.replicas:
                 self.logger.error(
                     "Base %s is managed by %d services, %d required",
@@ -569,13 +566,13 @@ class Meta0PrefixMapping(MetaMapping):
                 self.logger.error("%s", [x["addr"] for x in services])
                 error = True
             elif len(services) > self.replicas:
-                self.logger.warn(
+                self.logger.warning(
                     "Base %s is managed by %d services, %d expected",
                     base,
                     len(services),
                     self.replicas,
                 )
-                self.logger.warn("%s", [x["addr"] for x in services])
+                self.logger.warning("%s", [x["addr"] for x in services])
             grand_total += len(services)
         self.logger.info(
             "Grand total: %d (expected: %d)",
@@ -609,7 +606,7 @@ class Meta0PrefixMapping(MetaMapping):
             each service should host
         :type compute_upper_limit: `bool`
         """
-        if isinstance(svc, string_types):
+        if isinstance(svc, str):
             svc = self.services[svc]
         if not try_:
             saved_score = svc["score"]
@@ -621,7 +618,7 @@ class Meta0PrefixMapping(MetaMapping):
             # Remove extra digits and duplicates
             bases_to_remove = {b[: self.digits] for b in bases_to_remove}
         else:
-            bases_to_remove = set(svc.get("bases", list()))
+            bases_to_remove = set(svc.get("bases", []))
         if not strategy:
             strategy = self.find_services_more_availability
         for base in bases_to_remove:
@@ -644,7 +641,7 @@ class Meta0PrefixMapping(MetaMapping):
     def rebalance(self, max_loops=4096):
         """Reassign bases from the services which manage the most"""
 
-        moved_bases = dict()
+        moved_bases = {}
 
         def _decommission(svc, bases, try_=False):
             moved = self.decommission(svc, bases, compute_upper_limit=False, try_=try_)
@@ -657,7 +654,7 @@ class Meta0PrefixMapping(MetaMapping):
                 old_peers = self._get_old_peers_by_base(base)
                 new_peers = [v for v in peers if v not in old_peers]
                 if len(new_peers) != 1:
-                    raise ValueError("New missing or too many peers for base %s" % base)
+                    raise ValueError(f"New missing or too many peers for base {base}")
                 moved_bases[base] = new_peers[0]
                 nb_really_moved += 1
             return nb_really_moved
@@ -669,7 +666,7 @@ class Meta0PrefixMapping(MetaMapping):
                 more_info = ""
                 bases_too_many = len(svc_bases) - svc["upper_limit"]
                 if bases_too_many > 0:
-                    more_info = " (still %d bases in excess)" % bases_too_many
+                    more_info = f" (still {bases_too_many} bases in excess)"
                 self.logger.info(
                     "meta1 %s will host %d bases%s",
                     svc["addr"],
@@ -678,8 +675,8 @@ class Meta0PrefixMapping(MetaMapping):
                 )
 
         if self.digits == 0:
-            self.logger.warn(
-                "No equilibration possible when " + "meta1_digits is set to 0"
+            self.logger.warning(
+                "No equilibration possible when meta1_digits is set to 0"
             )
             return None
 
@@ -695,15 +692,15 @@ class Meta0PrefixMapping(MetaMapping):
         )
 
         for base, addrs in self.raw_services_by_base.items():
-            addrs_by_location = dict()
+            addrs_by_location = {}
             for addr in addrs:
                 addrs_by_location.setdefault(
-                    self.services[addr]["location"], list()
+                    self.services[addr]["location"], []
                 ).append(addr)
             if len(addrs_by_location) == self.replicas:
                 continue
 
-            for location, svc_addrs in addrs_by_location.items():
+            for svc_addrs in addrs_by_location.values():
                 if len(svc_addrs) < 2:
                     continue
                 # Decommission base of the fuller service
@@ -805,7 +802,7 @@ def count_prefixes(digits):
 def generate_short_prefixes(digits):
     if digits == 0:
         return ("",)
-    elif digits <= 4:
+    if digits <= 4:
         from itertools import product
 
         hexa = "0123456789ABCDEF"
