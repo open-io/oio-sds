@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,6 @@ import math
 import time
 from io import BytesIO
 from urllib.parse import urlparse
-from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
@@ -26,7 +25,6 @@ from oio.common.exceptions import (
     BadRequest,
     NotFound,
     UnrecoverableContent,
-    ServiceBusy,
 )
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import cid_from_name
@@ -57,6 +55,7 @@ class TestPlainContent(BaseTestCase):
         self.container_client.container_create(
             account=self.account, reference=self.container_name
         )
+        self.clean_later(self.container_name, self.account)
         self.container_id = cid_from_name(self.account, self.container_name).upper()
         self.content = "%s-%s" % (self.__class__.__name__, random_str(4))
         self.stgpol = "SINGLE"
@@ -183,7 +182,6 @@ class TestPlainContent(BaseTestCase):
         content,
         broken_chunks_info,
         full_rebuild_pos,
-        allow_frozen_container=False,
     ):
         rebuild_pos, rebuild_idx = full_rebuild_pos
         rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
@@ -191,7 +189,6 @@ class TestPlainContent(BaseTestCase):
         content.rebuild_chunk(
             rebuild_chunk_info["id"],
             service_id=service_id,
-            allow_frozen_container=allow_frozen_container,
         )
 
         # get the new structure of the content
@@ -213,7 +210,7 @@ class TestPlainContent(BaseTestCase):
             self.assertEqual(meta["chunk_id"], c.id)
             self.assertEqual(hash_stream(stream), rebuild_chunk_info["dl_hash"])
             self.assertEqual(c.checksum, rebuild_chunk_info["hash"])
-            self.assertThat(c.url, NotEquals(rebuild_chunk_info["url"]))
+            self.assertNotEqual(c.url, rebuild_chunk_info["url"])
             self.assertGreaterEqual(
                 meta["chunk_mtime"], rebuild_chunk_info["dl_meta"]["chunk_mtime"]
             )
@@ -264,24 +261,12 @@ class TestPlainContent(BaseTestCase):
 
         try:
             full_rebuild_pos = (0, 0)
-            rebuild_pos, rebuild_idx = full_rebuild_pos
-            rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
-            service_id = urlparse(rebuild_chunk_info["url"]).netloc
-            self.assertRaises(
-                ServiceBusy,
-                content.rebuild_chunk,
-                rebuild_chunk_info["id"],
-                service_id=service_id,
-            )
+            self._rebuild_and_check(content, broken_chunks_info, full_rebuild_pos)
         finally:
             system["sys.status"] = str(OIO_DB_ENABLED)
             self.container_client.container_set_properties(
                 self.account, self.container_name, None, system=system
             )
-
-        self._rebuild_and_check(
-            content, broken_chunks_info, full_rebuild_pos, allow_frozen_container=True
-        )
 
     def _test_fetch(self, stgpol, data_size, broken_pos_list):
         data = random_data(data_size)

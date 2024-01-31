@@ -188,7 +188,7 @@ class Content(object):
         }
 
         # path is required in order to redirect the request to the appropriate
-        # shard. version should not be required, but we can pass it anyway.
+        # shard. version is not required, but we can pass it anyway.
         self.container_client.container_raw_insert(
             data, cid=self.container_id, path=self.path, version=self.version, **kwargs
         )
@@ -254,7 +254,7 @@ class Content(object):
         service_id=None,
         allow_same_rawx=False,
         chunk_pos=None,
-        allow_frozen_container=False,
+        allow_frozen_container=True,
         reqid=None,
     ):
         raise NotImplementedError()

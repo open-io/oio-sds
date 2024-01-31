@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,9 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-import sys
-from six import reraise
 
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.storage_functions import _sort_chunks, fetch_stream
@@ -66,7 +63,7 @@ class PlainContent(Content):
         service_id=None,
         allow_same_rawx=False,
         chunk_pos=None,
-        allow_frozen_container=False,
+        allow_frozen_container=True,
         reqid=None,
         cur_items=None,
     ):
@@ -142,12 +139,10 @@ class PlainContent(Content):
                         # Now that chunk IDs are predictable,
                         # it is possible to have conflicts
                         # with another chunk being rebuilt at the same time.
-                        exc_info = sys.exc_info()
                         first = False
                         self.logger.warning(
-                            "The chunk destination is already used "
-                            "by another chunk, "
-                            "retrying to use another destination: %s",
+                            "The destination is already in use by another "
+                            "chunk, retrying with another destination: %s",
                             exc,
                         )
                         try:
@@ -166,7 +161,7 @@ class PlainContent(Content):
                             self.logger.warning(
                                 "Failed to find another destination: %s", exc2
                             )
-                        reraise(exc_info[0], exc_info[1], exc_info[2])
+                        raise exc  # not exc2
                 self.logger.debug(
                     "Chunk copied from %s to %s, registering it", src.url, spare_url
                 )
@@ -182,12 +177,13 @@ class PlainContent(Content):
                 errors.append((src.url, err))
         else:
             raise UnrecoverableContent(
-                "No copy available of missing chunk, or could not copy them. %s"
-                % (group_chunk_errors(errors),)
+                "No copy available of missing chunk, or could not copy them. "
+                f"{group_chunk_errors(errors)}"
             )
 
         try:
             # Register the spare chunk in object's metadata
+            # TODO(FVE): remove the parameter "frozen" once meta2 are up-to-date
             if chunk_id is None:
                 self._add_raw_chunk(
                     current_chunk, spare_url, frozen=allow_frozen_container, reqid=reqid

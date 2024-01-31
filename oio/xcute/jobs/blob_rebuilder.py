@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,6 @@ class RawxRebuildTask(XcuteTask):
 
         self.service_id = job_params["service_id"]
         self.rawx_timeout = job_params["rawx_timeout"]
-        self.allow_frozen_container = job_params["allow_frozen_container"]
         self.allow_same_rawx = job_params["allow_same_rawx"]
         self.try_chunk_delete = job_params["try_chunk_delete"]
         self.dry_run = job_params["dry_run"]
@@ -63,7 +62,6 @@ class RawxRebuildTask(XcuteTask):
                 path=path,
                 version=version,
                 try_chunk_delete=self.try_chunk_delete,
-                allow_frozen_container=self.allow_frozen_container,
                 allow_same_rawx=self.allow_same_rawx,
                 reqid=reqid,
             )
@@ -110,6 +108,7 @@ class RawxRebuildJob(XcuteRdirJob):
             job_params.get("try_chunk_delete"), cls.DEFAULT_TRY_CHUNK_DELETE
         )
 
+        # TODO(FVE): remove this once every xcute worker is up-to-date
         sanitized_job_params["allow_frozen_container"] = boolean_value(
             job_params.get("allow_frozen_container"), cls.DEFAULT_ALLOW_FROZEN_CT
         )
