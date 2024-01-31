@@ -25,7 +25,7 @@ jobs:
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
           # Configure environment
-          echo "export PATH=/opt/${GO_PACKAGE}/bin:/opt/${ZOOKEEPER_PACKAGE}/bin:/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
+          echo "export PATH=/opt/${GO_PACKAGE}/bin:/usr/lib/rust-${RUST_VERSION}/bin:/opt/${ZOOKEEPER_PACKAGE}/bin:/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
           echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${PYTHON_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
           echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh

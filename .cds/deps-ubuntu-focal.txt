@@ -4,6 +4,7 @@ attr
 beanstalkd
 bison
 build-essential
+cargo-1.80
 cmake
 curl
 default-jre-headless

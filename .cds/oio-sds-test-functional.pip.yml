@@ -36,7 +36,7 @@ jobs:
           systemctl disable apache2.service redis.service
           # Configure environment
           echo "export COVERAGE_PROCESS_START=.coveragerc" > $HOME/oio-env.sh
-          echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:$PATH" >> $HOME/oio-env.sh
+          echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:/usr/lib/rust-${RUST_VERSION}/bin:$PATH" >> $HOME/oio-env.sh
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
           echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
           echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
