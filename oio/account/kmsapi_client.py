@@ -13,41 +13,40 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import json
-import time
+import gevent.monkey
 
-from oio.api.base import HttpApi
-from oio.common import exceptions
-from oio.common.easy_value import boolean_value
-from oio.common.logger import get_logger
-from oio.common.statsd import get_statsd
-from oio.common.utils import get_hasher
+gevent.monkey.patch_ssl()
+
+import json  # noqa: E402
+import urllib3  # noqa: E402
+import time  # noqa: E402
+
+from oio.common.easy_value import boolean_value, float_value  # noqa: E402
+from oio.common.exceptions import from_response  # noqa: E402
+from oio.common.logger import get_logger  # noqa: E402
+from oio.common.statsd import get_statsd  # noqa: E402
+from oio.common.utils import get_hasher  # noqa: E402
 
 
-class KmsApiClient(HttpApi):
+class KmsApiClient(object):
     """Simple client for the external KMS API."""
 
     def __init__(self, conf, logger, **kwargs):
         self.logger = logger or get_logger(conf)
-        self.key_id = conf.get("kmsapi_key_id")
         self.enabled = boolean_value(conf.get("kmsapi_enabled"))
-        super(KmsApiClient, self).__init__(
-            service_type="kmsapi",
-            endpoint=conf.get("kmsapi_endpoint"),
+        self.endpoint = conf.get("kmsapi_endpoint")
+        self.key_id = conf.get("kmsapi_key_id")
+        self.http = urllib3.PoolManager(
             cert_reqs="CERT_REQUIRED",
             ca_certs=conf.get("kmsapi_ca_certs_file"),
             cert_file=conf.get("kmsapi_cert_file"),
             key_file=conf.get("kmsapi_key_file"),
-            **kwargs,
+            timeout=urllib3.Timeout(
+                connect=float_value(conf.get("kmsapi_connect_timeout"), 1.0),
+                read=float_value(conf.get("kmsapi_read_timeout"), 1.0),
+            ),
         )
         self.statsd = get_statsd(conf=conf)
-
-    def send_to_statsd(self, label, status, start_time):
-        duration = time.monotonic() - start_time
-        self.statsd.timing(
-            f"openio.account.kmsapi.{label}.{status}.timing",
-            duration * 1000,  # in milliseconds
-        )
 
     def checksum(self, data=b""):
         """Get the blake3 checksum of the provided data."""
@@ -55,7 +54,31 @@ class KmsApiClient(HttpApi):
         hasher.update(data)
         return hasher.hexdigest()
 
-    def encrypt(self, plaintext, context, **kwargs):
+    def request(self, method, url, body, headers, label):
+        start_time = time.monotonic()
+        try:
+            resp = self.http.request(
+                method,
+                f"{self.endpoint}/v1/{url}",
+                body=body,
+                headers=headers,
+            )
+            status = resp.status
+        except Exception as exc:
+            self.logger.exception(exc)
+            status = type(exc).__name__
+            raise exc
+        finally:
+            duration = time.monotonic() - start_time
+            self.statsd.timing(
+                f"openio.account.kmsapi.{label}.{status}.timing",
+                duration * 1000,  # in milliseconds
+            )
+        if status != 200:
+            raise from_response(resp, resp.data)
+        return json.loads(resp.data)
+
+    def encrypt(self, plaintext, context):
         """
         Encrypts data, up to 4Kb in size, using service key provided.
 
@@ -72,19 +95,20 @@ class KmsApiClient(HttpApi):
                 }
             }
         """
-        start_time = time.monotonic()
-        resp, body = self._request(
+        return self.request(
             "POST",
-            f"v1/servicekey/{self.key_id}/encrypt",
-            json={"plaintext": plaintext, "context": self.checksum(context)},
-            **kwargs,
+            f"servicekey/{self.key_id}/encrypt",
+            body=json.dumps(
+                {
+                    "plaintext": plaintext,
+                    "context": self.checksum(context),
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+            label="encrypt",
         )
-        self.send_to_statsd("encrypt", resp.status, start_time)
-        if resp.status != 200:
-            raise exceptions.from_response(resp, body)
-        return json.loads(body)
 
-    def decrypt(self, key_id, ciphertext, context, **kwargs):
+    def decrypt(self, key_id, ciphertext, context):
         """
         Decrypts data previously encrypted with the encrypt method.
 
@@ -101,14 +125,15 @@ class KmsApiClient(HttpApi):
             }
         }
         """
-        start_time = time.monotonic()
-        resp, body = self._request(
+        return self.request(
             "POST",
-            f"v1/servicekey/{key_id}/decrypt",
-            json={"ciphertext": ciphertext, "context": self.checksum(context)},
-            **kwargs,
+            f"servicekey/{key_id}/decrypt",
+            body=json.dumps(
+                {
+                    "ciphertext": ciphertext,
+                    "context": self.checksum(context),
+                }
+            ),
+            headers={"Content-Type": "application/json"},
+            label="decrypt",
         )
-        self.send_to_statsd("decrypt", resp.status, start_time)
-        if resp.status != 200:
-            raise exceptions.from_response(resp, body)
-        return json.loads(body)
