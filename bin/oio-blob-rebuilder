@@ -2,7 +2,7 @@
 
 # oio-blob-rebuilder.py
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -110,7 +110,7 @@ tube for broken chunks events.
              '(default=%s)' % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE)
     parser.add_argument(
         '--allow-frozen-container', action='store_true',
-        help="Allow rebuilding a chunk in a frozen container.")
+        help="DEPRECATED Allow rebuilding a chunk in a frozen container.")
     parser.add_argument(
         '--allow-same-rawx', action='store_true',
         default=BlobRebuilder.DEFAULT_ALLOW_SAME_RAWX,
@@ -142,7 +142,6 @@ def main():
 
     conf = {}
     # common
-    conf['allow_frozen_container'] = args.allow_frozen_container
     conf['allow_same_rawx'] = args.allow_same_rawx
     conf['dry_run'] = args.dry_run
     conf['namespace'] = args.namespace

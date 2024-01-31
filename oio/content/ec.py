@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,7 @@ class ECContent(Content):
         service_id=None,
         allow_same_rawx=False,
         chunk_pos=None,
-        allow_frozen_container=False,
+        allow_frozen_container=True,
         reqid=None,
         cur_items=None,
     ):
@@ -134,6 +134,7 @@ class ECContent(Content):
             )
 
         # Register the spare chunk in object's metadata
+        # TODO(FVE): remove the parameter "frozen" once meta2 are up-to-date
         if chunk_id is None:
             self._add_raw_chunk(
                 current_chunk, spare_url[0], frozen=allow_frozen_container, reqid=reqid

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 # License along with this library.
 
 from datetime import datetime
-from six import iteritems
 
 from oio.api.object_storage import _sort_chunks
 from oio.blob.operator import ChunkOperator
@@ -213,8 +212,8 @@ class ContentRepairerWorker(ToolWorker):
         namespace, account, container, obj_name, version = item
         if namespace != self.tool.namespace:
             raise ValueError(
-                "Invalid namespace (actual=%s, expected=%s)"
-                % (namespace, self.tool.namespace)
+                "Invalid namespace "
+                f"(actual={namespace}, expected={self.tool.namespace})"
             )
 
         obj_meta, chunks = self.container_client.content_locate(
@@ -226,10 +225,10 @@ class ContentRepairerWorker(ToolWorker):
         )
         content_id = obj_meta["id"]
 
-        exceptions = list()
+        exceptions = []
         stg_met = STORAGE_METHODS.load(obj_meta["chunk_method"])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
-        for pos, chunks in iteritems(chunks_by_pos):
+        for pos, chunks in chunks_by_pos.items():
             try:
                 exceptions += self._repair_metachunk(
                     item=item,

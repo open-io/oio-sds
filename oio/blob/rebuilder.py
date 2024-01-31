@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,7 +36,6 @@ class BlobRebuilder(Tool):
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = "oio-rebuild"
     DEFAULT_RDIR_FETCH_LIMIT = 100
     DEFAULT_RDIR_TIMEOUT = 60.0
-    DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
@@ -303,11 +302,6 @@ class BlobRebuilderWorker(ToolWorker):
     def __init__(self, tool, queue_workers, queue_reply):
         super(BlobRebuilderWorker, self).__init__(tool, queue_workers, queue_reply)
 
-        self.allow_frozen_container = true_value(
-            self.tool.conf.get(
-                "allow_frozen_container", self.tool.DEFAULT_ALLOW_FROZEN_CT
-            )
-        )
         self.allow_same_rawx = true_value(
             self.tool.conf.get("allow_same_rawx", self.tool.DEFAULT_ALLOW_SAME_RAWX)
         )
@@ -345,7 +339,6 @@ class BlobRebuilderWorker(ToolWorker):
                 path=path,
                 version=version,
                 try_chunk_delete=self.try_chunk_delete,
-                allow_frozen_container=self.allow_frozen_container,
                 allow_same_rawx=self.allow_same_rawx,
             )
         except OioException as exc:
