@@ -77,10 +77,11 @@ class XcuteWorker(object):
                     task_results.update(task_result)
                 except Exception as exc:
                     self.logger.warning(
-                        "[job_id=%s reqid=%s] Failed to process task %s: %s",
+                        "[job_id=%s reqid=%s] Failed to process task %s: (%s) %s",
                         job_id,
                         reqid,
                         task_id,
+                        exc.__class__.__name__,
                         exc,
                     )
                     task_errors[type(exc).__name__] += 1
