@@ -23,7 +23,7 @@ import os
 import warnings
 import time
 
-from urllib.parse import unquote, unquote_plus
+from urllib.parse import unquote, unquote_plus, quote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -1869,7 +1869,9 @@ class ObjectStorageApi(object):
             crypto_resiliency = ",".join(
                 [f"{k}={v}" for k, v in crypto_resiliency.items()]
             )
-            kwargs["headers"]["X-Oio-Ext-Cryptography-Resiliency"] = crypto_resiliency
+            kwargs["headers"]["X-Oio-Ext-Cryptography-Resiliency"] = quote_plus(
+                crypto_resiliency
+            )
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account,

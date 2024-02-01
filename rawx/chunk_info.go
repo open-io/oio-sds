@@ -445,7 +445,7 @@ func (chunk *chunkInfo) loadExtHeaders(headers *http.Header) {
 	}
 	for key, value := range *headers {
 		if strippedKey, found := hasPrefix(key, "X-Oio-Ext-"); found {
-			chunk.ExtMeta[strippedKey] = value[0]
+			chunk.ExtMeta[strippedKey], _ = url.PathUnescape(value[0])
 		}
 	}
 }
@@ -605,7 +605,7 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
     if chunk.ExtMeta != nil {
         for key, value := range chunk.ExtMeta {
-            setHeader(headers, "X-Oio-Ext-" + key, value)
+            setHeader(headers, "X-Oio-Ext-" + key, url.PathEscape(value))
         }
     }
 }
