@@ -72,7 +72,7 @@ class XcuteOrchestrator(object):
             "beanstalkd_reply_tube", self.beanstalkd_workers_tube + ".reply"
         )
         self.logger.info(
-            "Using beanstalkd reply : %s %s",
+            "Using beanstalkd reply: %s %s",
             self.beanstalkd_reply_addr,
             self.beanstalkd_reply_tube,
         )
@@ -88,19 +88,19 @@ class XcuteOrchestrator(object):
         )
 
         self.running = True
-        self.beanstalkd_workers = dict()
+        self.beanstalkd_workers = {}
 
         self.refresh_beanstalkd_workers_thread = None
         self.listen_beanstalkd_reply_thread = None
-        self.dispatch_tasks_threads = dict()
-        self.compute_total_tasks_threads = dict()
+        self.dispatch_tasks_threads = {}
+        self.compute_total_tasks_threads = {}
 
     def handle_backend_errors(self, func, *args, **kwargs):
         while True:
             try:
                 return func(*args, **kwargs), None
             except (RedisConnectionError, RedisTimeoutError) as exc:
-                self.logger.warn("Fail to communicate with redis: %s", exc)
+                self.logger.warning("Failed to communicate with redis: %s", exc)
                 if not self.running:
                     return None, exc
                 sleep(1)
@@ -109,24 +109,26 @@ class XcuteOrchestrator(object):
         try:
             self.run_forever()
         except Exception as exc:
-            self.logger.exception("Fail to run forever: %s", exc)
+            self.logger.exception("Failed to run forever: %s", exc)
             self.exit_gracefully()
 
         if self.refresh_beanstalkd_workers_thread:
-            self.logger.info("Waiting thread to refresh beanstalkd workers")
+            self.logger.info("Waiting for the thread refreshing beanstalkd workers")
             self.refresh_beanstalkd_workers_thread.join()
         if self.listen_beanstalkd_reply_thread:
-            self.logger.info("Waiting thread to listen beanstalkd reply")
+            self.logger.info("Waiting for the thread listening to beanstalkd replies")
             self.listen_beanstalkd_reply_thread.join()
         for job_id, dispatch_tasks_thread in self.dispatch_tasks_threads.items():
-            self.logger.info("[job_id=%s] Waiting thread to dispatch tasks", job_id)
+            self.logger.info(
+                "[job_id=%s] Waiting for the thread dispatching tasks", job_id
+            )
             dispatch_tasks_thread.join()
         for (
             job_id,
             compute_total_tasks_thread,
         ) in self.compute_total_tasks_threads.items():
             self.logger.info(
-                "[job_id=%s] Waiting thread to compute total tasks", job_id
+                "[job_id=%s] Waiting for the thread computing total tasks", job_id
             )
             compute_total_tasks_thread.join()
         self.logger.info("Exited running thread")
@@ -152,17 +154,25 @@ class XcuteOrchestrator(object):
             return
 
         # restart running jobs
-        self.logger.debug("Look for unfinished jobs")
+        self.logger.info(
+            "Orchestrator %s looking for unfinished jobs", self.orchestrator_id
+        )
         orchestrator_jobs, exc = self.handle_backend_errors(
             self.backend.list_orchestrator_jobs, self.orchestrator_id
         )
         if exc is not None:
-            self.logger.warn(
-                "Unable to list running jobs for this orchestrator: %s", exc
+            self.logger.warning(
+                "Unable to list running jobs for orchestrator %s: %s",
+                self.orchestrator_id,
+                exc,
             )
             return
         if orchestrator_jobs:
-            self.logger.info("Resume %d jobs currently running for this orchestrator")
+            self.logger.info(
+                "Orchestrator %s resuming %d jobs currently running",
+                self.orchestrator_id,
+                len(orchestrator_jobs),
+            )
             for job_info in orchestrator_jobs:
                 if not self.running:
                     return
@@ -175,7 +185,11 @@ class XcuteOrchestrator(object):
                 self.backend.run_next, self.orchestrator_id
             )
             if exc is not None:
-                self.logger.warn("Unable to run next job: %s", exc)
+                self.logger.warning(
+                    "Orchestrator %s unable to run next job: %s",
+                    self.orchestrator_id,
+                    exc,
+                )
                 return
             if not job_info:
                 continue
@@ -191,7 +205,7 @@ class XcuteOrchestrator(object):
             self.logger.exception("Failed to run job %s: %s", job_id, exc)
             _, exc = self.handle_backend_errors(self.backend.fail, job_id)
             if exc is not None:
-                self.logger.warn(
+                self.logger.warning(
                     "[job_id=%s] Job has not been updated with the failure: %s",
                     job_id,
                     exc,
@@ -248,14 +262,16 @@ class XcuteOrchestrator(object):
         and update the backend.
         """
         try:
-            self.logger.info("[job_id=%s] Start to dispatch tasks", job_id)
+            self.logger.info("[job_id=%s] Starting to dispatch tasks", job_id)
             self.dispatch_tasks(job_id, job_type, job_info, job)
-            self.logger.info("[job_id=%s] Finish to dispatch tasks", job_id)
+            self.logger.info("[job_id=%s] Finished dispatching tasks", job_id)
         except Exception as exc:
-            self.logger.exception("[job_id=%s] Fail to dispatch tasks: %s", job_id, exc)
+            self.logger.exception(
+                "[job_id=%s] Failed to dispatch tasks: %s", job_id, exc
+            )
             _, exc = self.handle_backend_errors(self.backend.fail, job_id)
             if exc is not None:
-                self.logger.warn(
+                self.logger.warning(
                     "[job_id=%s] Job has not been updated with the failure: %s",
                     job_id,
                     exc,
@@ -483,7 +499,7 @@ class XcuteOrchestrator(object):
                     self.logger.info("[job_id=%s] The job was aborted", job_id)
                     return
                 if exc is not None:
-                    self.logger.warn(
+                    self.logger.warning(
                         "[job_id=%s] Job could not update the sent tasks: %s",
                         job_id,
                         exc,
@@ -494,7 +510,7 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers, job_id, job_type, job_config, tasks
                 )
                 if not sent:
-                    self.logger.warn(
+                    self.logger.warning(
                         "[job_id=%s] Job aborting the last sent tasks", job_id
                     )
                     job_status, exc = self.handle_backend_errors(
@@ -504,7 +520,7 @@ class XcuteOrchestrator(object):
                         old_last_sent,
                     )
                     if exc is not None:
-                        self.logger.warn(
+                        self.logger.warning(
                             "[job_id=%s] Job could not abort the last sent tasks: %s",
                             job_id,
                             exc,
@@ -547,7 +563,7 @@ class XcuteOrchestrator(object):
                     self.logger.info("[job_id=%s] The job was aborted", job_id)
                     return
                 if exc is not None:
-                    self.logger.warn(
+                    self.logger.warning(
                         "[job_id=%s] Job could not update the sent tasks: %s",
                         job_id,
                         exc,
@@ -561,7 +577,7 @@ class XcuteOrchestrator(object):
                 else:
                     sent = True
                 if not sent:
-                    self.logger.warn(
+                    self.logger.warning(
                         "[job_id=%s] Job aborting the last sent tasks", job_id
                     )
                     job_status, exc = self.handle_backend_errors(
@@ -571,7 +587,7 @@ class XcuteOrchestrator(object):
                         old_last_sent,
                     )
                     if exc is not None:
-                        self.logger.warn(
+                        self.logger.warning(
                             "[job_id=%s] Job could not abort the last sent tasks: %s",
                             job_id,
                             exc,
@@ -591,14 +607,16 @@ class XcuteOrchestrator(object):
                     break
                 sleep(1)
 
-        self.logger.warn("[job_id=%s] Job was stopped before it was finished", job_id)
+        self.logger.warning(
+            "[job_id=%s] Job was stopped before it was finished", job_id
+        )
 
         _, exc = self.handle_backend_errors(self.backend.free, job_id)
         if exc is not None:
-            self.logger.warn("[job_id=%s] Job has not been freed: %s", job_id, exc)
+            self.logger.warning("[job_id=%s] Job has not been freed: %s", job_id, exc)
 
     def dispatch_tasks_batch(
-        self, beanstalkd_workers, job_id, job_type, job_config, tasks
+        self, beanstalkd_workers_gen, job_id, job_type, job_config, tasks
     ):
         """
         Try sending a task until it's ok
@@ -610,19 +628,20 @@ class XcuteOrchestrator(object):
 
         if len(beanstalkd_payload) > 2**16:
             raise ValueError(
-                "Task payload is too big (length=%s)" % len(beanstalkd_payload)
+                f"Task payload is too big (length={len(beanstalkd_payload)})"
             )
 
         # max 2 minutes per task
         ttr = len(tasks) * DEFAULT_TTR
 
         i = 0
-        for beanstalkd_worker in beanstalkd_workers:
+        for beanstalkd_worker in beanstalkd_workers_gen:
             if not self.running:
                 return False
             i += 1
             if beanstalkd_worker is None:
                 # Try for at least 30 seconds
+                # (there is a delay in beanstalkd_workers_gen)
                 if i > 30:
                     break
                 continue
@@ -637,8 +656,8 @@ class XcuteOrchestrator(object):
                 )
                 return True
             except Exception as exc:
-                self.logger.warn(
-                    "[job_id=%s] Fail to send beanstalkd job: %s", job_id, exc
+                self.logger.warning(
+                    "[job_id=%s] Failed to send beanstalkd job: %s", job_id, exc
                 )
                 # TODO(adu): We could be more lenient
                 # and wait for a few errors in a row
@@ -671,20 +690,22 @@ class XcuteOrchestrator(object):
         """
         try:
             self.logger.info(
-                "[job_id=%s] Start to compute the total number of tasks", job_id
+                "[job_id=%s] Starting to compute the total number of tasks", job_id
             )
             self.compute_total_tasks(job_id, job_type, job_info, job)
             self.logger.info(
-                "[job_id=%s] Finish to compute the total number of tasks", job_id
+                "[job_id=%s] Finished computing the total number of tasks", job_id
             )
         except Exception as exc:
             self.logger.exception(
-                "[job_id=%s] Fail to compute the total number of tasks: %s", job_id, exc
+                "[job_id=%s] Failed to compute the total number of tasks: %s",
+                job_id,
+                exc,
             )
         finally:
             del self.compute_total_tasks_threads[job_id]
 
-        self.logger.debug("[job_id=%s] Exited thread to compute total tasks", job_id)
+        self.logger.debug("[job_id=%s] Exited thread computing total tasks", job_id)
 
     def compute_total_tasks(self, job_id, job_type, job_info, job):
         job_params = job_info["config"]["params"]
@@ -696,7 +717,7 @@ class XcuteOrchestrator(object):
                 self.backend.incr_total_tasks, job_id, total_marker, tasks_incr
             )
             if exc is not None:
-                self.logger.warn(
+                self.logger.warning(
                     "[job_id=%s] Job has not been updated with total tasks: %s",
                     job_id,
                     exc,
@@ -709,7 +730,7 @@ class XcuteOrchestrator(object):
             self.backend.total_tasks_done, job_id
         )
         if exc is not None:
-            self.logger.warn(
+            self.logger.warning(
                 "[job_id=%s] Job has not been updated with last total tasks: %s",
                 job_id,
                 exc,
@@ -757,7 +778,7 @@ class XcuteOrchestrator(object):
                 sleep(2)
 
         listener.close()
-        self.logger.info("Exited thread to listen beanstalkd reply")
+        self.logger.info("Exited thread listening to beanstalkd replies")
 
     def listen_loop(self, listener):
         """
@@ -804,7 +825,7 @@ class XcuteOrchestrator(object):
                 if finished:
                     self.logger.info("Job %s is finished", job_id)
             else:
-                self.logger.warn(
+                self.logger.warning(
                     "[job_id=%s] Job has not been updated with the processed tasks: %s",
                     job_id,
                     exc,
@@ -823,11 +844,11 @@ class XcuteOrchestrator(object):
             try:
                 beanstalkd_workers = self._find_beanstalkd_workers()
             except Exception as exc:
-                self.logger.error("Fail to find beanstalkd workers: %s", exc)
+                self.logger.error("Failed to find beanstalkd workers: %s", exc)
                 # TODO(adu): We could keep trying to send jobs
                 # to the beanstalkd we already found.
                 # But we need the score to know how to dispatch the tasks...
-                beanstalkd_workers = dict()
+                beanstalkd_workers = {}
 
             old_beanstalkd_workers_addr = set(self.beanstalkd_workers.keys())
             new_beanstalkd_workers_addr = set(beanstalkd_workers.keys())
@@ -836,7 +857,7 @@ class XcuteOrchestrator(object):
                 new_beanstalkd_workers_addr - old_beanstalkd_workers_addr
             )
             for beanstalkd_addr in added_beanstalkds:
-                self.logger.info("Add beanstalkd %s" % beanstalkd_addr)
+                self.logger.info("Adding beanstalkd %s", beanstalkd_addr)
                 beanstalkd = beanstalkd_workers[beanstalkd_addr]
                 beanstalkd.use(self.beanstalkd_workers_tube)
 
@@ -844,9 +865,9 @@ class XcuteOrchestrator(object):
                 old_beanstalkd_workers_addr - new_beanstalkd_workers_addr
             )
             for beanstalkd_addr in removed_beanstalkds:
-                self.logger.info("Remove beanstalkd %s" % beanstalkd_addr)
+                self.logger.info("Removing beanstalkd %s", beanstalkd_addr)
 
-            self.logger.debug("Refresh beanstalkd workers")
+            self.logger.debug("Refreshing beanstalkd workers")
             self.beanstalkd_workers = beanstalkd_workers
 
             for _ in range(self.refresh_time_beanstalkd_workers):
@@ -854,7 +875,7 @@ class XcuteOrchestrator(object):
                     break
                 sleep(1)
 
-        self.logger.info("Exited thread to refresh beanstalkd workers")
+        self.logger.info("Exited thread refreshing beanstalkd workers")
 
     def _find_beanstalkd_workers(self):
         """
@@ -863,7 +884,7 @@ class XcuteOrchestrator(object):
         """
         all_beanstalkd = self.conscience_client.all_services("beanstalkd")
 
-        beanstalkd_workers = dict()
+        beanstalkd_workers = {}
         for beanstalkd_info in all_beanstalkd:
             try:
                 beanstalkd = self._check_beanstalkd_worker(beanstalkd_info)
@@ -871,7 +892,7 @@ class XcuteOrchestrator(object):
                     continue
                 beanstalkd_workers[beanstalkd.addr] = beanstalkd
             except Exception as exc:
-                self.logger.error("Fail to check beanstalkd: %s", exc)
+                self.logger.error("Failed to check beanstalkd: %s", exc)
         return beanstalkd_workers
 
     def _check_beanstalkd_worker(self, beanstalkd_info):
@@ -910,7 +931,7 @@ class XcuteOrchestrator(object):
             beanstalkd_jobs_reserved = current_stats["current-jobs-reserved"]
             if beanstalkd_jobs_reserved <= 0:
                 beanstalkd.is_broken = True
-                self.logger.warn(
+                self.logger.warning(
                     "Ignore beanstalkd %s: The worker doesn't process task "
                     "(current-jobs-ready=%d, current-jobs-reserved=%d)",
                     beanstalkd_addr,
@@ -925,7 +946,7 @@ class XcuteOrchestrator(object):
 
             if beanstalkd_jobs_ready >= self.max_jobs_per_beanstalkd:
                 beanstalkd.is_broken = True
-                self.logger.warn(
+                self.logger.warning(
                     "Ignore beanstalkd %s: The queue is full "
                     "(current-jobs-ready=%d, current-jobs-reserved=%d)",
                     beanstalkd_addr,
@@ -966,7 +987,7 @@ class XcuteOrchestrator(object):
         """
 
         beanstalkd_workers_id = None
-        beanstalkd_workers = list()
+        beanstalkd_workers = []
         while True:
             if not self.beanstalkd_workers:
                 self.logger.info("No beanstalkd worker available")
@@ -976,7 +997,7 @@ class XcuteOrchestrator(object):
 
             if id(self.beanstalkd_workers) != beanstalkd_workers_id:
                 beanstalkd_workers_id = id(self.beanstalkd_workers)
-                beanstalkd_workers = list()
+                beanstalkd_workers = []
                 for beanstalkd in self.beanstalkd_workers.values():
                     for _ in range(beanstalkd.occurrence):
                         beanstalkd_workers.append(beanstalkd)
