@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -55,8 +55,8 @@ class ServiceDecommissionTest(CliTestCase):
                 reqid=reqid,
             )
 
-    def wait_for_chunk_events(self, n_obj, reqid=None, event=EventTypes.CHUNK_NEW):
-        for _ in range(n_obj * 3):
+    def wait_for_chunk_events(self, n_events, reqid=None, event=EventTypes.CHUNK_NEW):
+        for _ in range(n_events):
             self.wait_for_event(
                 "oio-preserved",
                 reqid=reqid,
@@ -184,7 +184,7 @@ class ServiceDecommissionTest(CliTestCase):
         cname = "xcute-decom-{time.time()}"
         create_reqid = request_id("xcute-decom-")
         self.create_objects(cname, 15, reqid=create_reqid)
-        self.wait_for_chunk_events(15, reqid=create_reqid)
+        self.wait_for_chunk_events(15 * 3, reqid=create_reqid)  # THREECOPIES
 
         list_reqid = request_id("xcute-decom-")
         candidate = self.storage.conscience.next_instance("rawx")["addr"]
