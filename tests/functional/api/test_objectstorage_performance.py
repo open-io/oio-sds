@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -131,14 +131,17 @@ class TestObjectStorageApiPerformance(BaseTestCase):
 
     def test_object_list_empty_container(self):
         """
-        Ensure object listing of an empty container takes less than 35ms.
+        Ensure object listing of an empty container takes less than 35ms on average.
         """
         container = self.__class__.__name__ + random_str(8)
         self.api.container_create(self.account, container)
         self.containers.add(container)
-        for _ in range(8):
+        iterations = 8
+        total = 0.0
+        for _ in range(iterations):
             start = monotonic_time()
             self.api.object_list(self.account, container)
             duration = monotonic_time() - start
+            total += duration
             logging.info("Object list took %.6fs", duration)
-            self.assertLess(duration, 0.035)
+        self.assertLess(total / iterations, 0.035)

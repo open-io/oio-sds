@@ -104,6 +104,11 @@ class ItemCheckTest(CliTestCase):
             self.logger.info("Waiting for chunk %s to be indexed in rdir", chunk_url)
             time.sleep(1.0)
 
+        if time.monotonic() > deadline:
+            self.logger.warning(
+                "Chunk %s not found in rdir after %.3fs", chunk_url, timeout
+            )
+
     def create_object(self, account, container, obj_name):
         reqid = request_id(self.__class__.__name__)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
