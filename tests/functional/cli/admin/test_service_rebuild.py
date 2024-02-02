@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -67,11 +67,11 @@ class ServiceRebuildTest(CliTestCase):
         self.assertEqual(0, containers_list[0][1])
         self.assertEqual(0, containers_list[0][2])
 
-        opts = self.get_opts(["Entry", "Status"])
+        opts = self.get_opts(["Entry", "Status", "Errors"])
         output = self.openio_admin("account-service rebuild %s" % opts)
         entries = output.rstrip("\n").split("\n")
-        self.assertIn("%s|%s OK" % (self.ns, account), entries)
-        self.assertIn("%s|%s|%s OK" % (self.ns, account, container), entries)
+        self.assertIn("%s|%s OK None" % (self.ns, account), entries)
+        self.assertIn("%s|%s|%s OK None" % (self.ns, account, container), entries)
 
         self.wait_for_event(
             "oio-preserved",
