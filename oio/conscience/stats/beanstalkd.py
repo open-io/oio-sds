@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,29 +32,29 @@ class BeanstalkdStat(BaseStat):
     }
 
     def __init__(self, *args, **kwargs):
-        super(BeanstalkdStat, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._beanstalkd = None
         self._host = None
         self._port = None
 
     def configure(self):
-        super(BeanstalkdStat, self).configure()
+        super().configure()
         for k in ("host", "port"):
             if k not in self.stat_conf:
                 raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k
+                    f'Missing field "{k}" in configuration'
                 )
 
     @property
     def beanstalkd(self):
         if self._beanstalkd is None:
-            host = self.stat_conf["host"]
-            port = int(self.stat_conf["port"])
-            self._beanstalkd = Beanstalk(host, port)
+            self._host = self.stat_conf["host"]
+            self._port = int(self.stat_conf["port"])
+            self._beanstalkd = Beanstalk(self._host, self._port)
         return self._beanstalkd
 
     def get_stats(self, reqid=None):
-        stats = dict()
+        stats = {}
         try:
             all_stats = self.beanstalkd.stats()
             for bkey, skey in self.stat_keys.items():

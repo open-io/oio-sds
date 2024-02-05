@@ -316,6 +316,8 @@ _service_info_incr_stats(GHashTable *stats, const gchar *mid_key, gint32 score)
 	gint32 intervals[6] = {G_MAXINT32, 80, 60, 40, 20, 0};
 	gchar *key = NULL;
 
+	score = MAX(score, 0);
+
 	key = g_strdup_printf("conscience_scores_count{%s}", mid_key);
 	gint64 count = GPOINTER_TO_INT(g_hash_table_lookup(stats, key));
 	g_hash_table_insert(stats, key, GINT_TO_POINTER(count + 1));

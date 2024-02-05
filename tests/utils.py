@@ -434,6 +434,7 @@ class CommonTestCase(testtools.TestCase):
         self.assertIn(resp.status, (200, 204))
 
     def _flush_proxy(self):
+        """Flush high and low caches, and the internal load-balancer."""
         url = self.uri + "/v3.0/cache/flush/local"
         resp = self.request("POST", url, "", headers=self.TEST_HEADERS)
         self.assertEqual(resp.status // 100, 2)
@@ -460,6 +461,7 @@ class CommonTestCase(testtools.TestCase):
         cls.static_request("POST", url, json=config)
 
     def _reload_proxy(self):
+        """Ask oio-proxy to reload the whole list of services from conscience."""
         url = "{0}/v3.0/{1}/lb/reload".format(self.uri, self.ns)
         resp = self.request("POST", url, "", headers=self.TEST_HEADERS)
         self.assertEqual(resp.status // 100, 2)
