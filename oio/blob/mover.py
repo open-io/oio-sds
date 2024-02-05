@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -102,38 +102,26 @@ class BlobMoverWorker(object):
 
         pool = GreenPool(self.concurrency)
         paths_list = OrderedDict()
-        paths_list["chunks"] = {"paths": [], "symlink_folder": None}
         paths_list["misplaced_chunks"] = {
-            "paths": [],
+            "paths": (
+                (os.path.realpath(item), item)
+                for item in paths_gen(os.path.join(self.volume, self.NON_OPTIMAL_DIR))
+            ),
             "symlink_folder": self.NON_OPTIMAL_DIR,
         }
         paths_list["orphaned_chunks"] = {
-            "paths": [],
+            "paths": (
+                (os.path.realpath(item), item)
+                for item in paths_gen(os.path.join(self.volume, self.ORPHANS_DIR))
+            ),
             "symlink_folder": self.ORPHANS_DIR,
         }
-        paths_list["misplaced_chunks"]["paths"] = [
-            (os.path.realpath(item), item)
-            for item in paths_gen(os.path.join(self.volume, self.NON_OPTIMAL_DIR))
-        ]
-        paths_list["orphaned_chunks"]["paths"] = [
-            (os.path.realpath(item), item)
-            for item in paths_gen(os.path.join(self.volume, self.ORPHANS_DIR))
-        ]
-        # The list of chunk here contains all chunks path that
-        # does not have any symlink
-        paths_list["chunks"]["paths"] = list(
-            set(
-                paths_gen(
-                    self.volume, excluded_dirs=(self.NON_OPTIMAL_DIR, self.ORPHANS_DIR)
-                )
-            ).difference(
-                [
-                    path[0]
-                    for path in paths_list["misplaced_chunks"]["paths"]
-                    + paths_list["orphaned_chunks"]["paths"]
-                ]
-            )
-        )
+        paths_list["chunks"] = {
+            "paths": paths_gen(
+                self.volume, excluded_dirs=(self.NON_OPTIMAL_DIR, self.ORPHANS_DIR)
+            ),
+            "symlink_folder": None,
+        }
         for value in paths_list.values():
             self.mover_pass(
                 report_time,
@@ -148,19 +136,15 @@ class BlobMoverWorker(object):
         pool.waitall()
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
-            "%(elapsed).02f "
-            "%(errors)d "
-            "%(chunk_rate).2f "
-            "%(bytes_rate).2f "
-            "%(mover_time).2f "
-            "%(mover_rate).2f"
+            "Elapsed: %(elapsed).02f "
+            "Errors: %(errors)d "
+            "Chunk/s: %(chunk_rate).2f "
+            "Bytes/s: %(bytes_rate).2f "
             % {
                 "elapsed": elapsed,
                 "errors": total_errors + self.errors,
                 "chunk_rate": self.total_chunks_processed / elapsed,
                 "bytes_rate": self.total_bytes_processed / elapsed,
-                "mover_time": mover_time,
-                "mover_rate": mover_time / elapsed,
             }
         )
 
