@@ -127,9 +127,12 @@ class RetryLater(RejectMessage):
     but maybe later.
     """
 
-    def __init__(self, *args, delay=None):
+    def __init__(self, *args, delay=None, default_ttl=-1, force_ttl=False, cb=None):
         super().__init__(*args)
         self.delay = delay
+        self.default_ttl = default_ttl
+        self.force_ttl = force_ttl
+        self.cb = cb
 
 
 class KafkaConsumerWorker(Process):
@@ -194,7 +197,31 @@ class KafkaConsumerWorker(Process):
             except RejectMessage as err:
                 delay = None
                 if isinstance(err, RetryLater):
-                    delay = err.delay
+                    if not event.ttl or err.force_ttl:
+                        event.ttl = err.default_ttl
+                    else:
+                        if event.ttl > 0:
+                            # if ttl is already set, ttl needs to be decremented
+                            event.ttl -= 1
+                    # Maximum retry times reached
+                    if event.ttl == 0:
+                        if err.cb:
+                            try:
+                                err.cb()
+                                return
+                            except Exception as exc:
+                                # After callback failure the event will be
+                                # added to deadletter.
+                                self.logger.exception(
+                                    "Too many retries for message %s, "
+                                    "callback failure %s",
+                                    event,
+                                    exc,
+                                )
+                    else:
+                        # Set the time to wait before retry
+                        delay = err.delay
+
                 self.reject_message(event, delay=delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
