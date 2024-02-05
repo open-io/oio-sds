@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -96,24 +96,36 @@ class ClusterTest(CliTestCase):
             self.assertEquals(0, srv["Score"])
 
     def test_detailed_lock_unlock(self):
+        netloc = "127.0.0.1:666"
+        self._deregister_at_teardown.append({"type": "rdir", "addr": netloc})
         opts = self.get_format_opts("json")
+
         # Check lock of get score only (default value)
-        output = self.openio("cluster lock rdir 127.0.0.1:666 -S get" + opts)
+        output = self.openio(f"cluster lock rdir {netloc} -S get {opts}")
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "locked to get=0")
+        #  Need to wait for the "registration batch"
+        time.sleep(1.0)
+        #  --stats is a hack to bypass oio-proxy's cache
+        output = self.openio(f"cluster list rdir --locked --stats {opts}")
+        data = json.loads(output)
+        self.assertEqual(data[0]["Locks"], "put=False get=True")
+
         # Lock of put score to 50
-        output = self.openio("cluster lock rdir 127.0.0.1:666 -S put=50" + opts)
+        output = self.openio(f"cluster lock rdir {netloc} -S put=50 {opts}")
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "locked to put=50")
+        time.sleep(1.0)
+        output = self.openio(f"cluster list rdir --locked --stats {opts}")
+        data = json.loads(output)
+        self.assertEqual(data[0]["Locks"], "put=True get=True")
+
         # Check unlock of get score only
-        output = self.openio("cluster unlock rdir 127.0.0.1:666 -U get" + opts)
+        output = self.openio(f"cluster unlock rdir {netloc} -U get {opts}")
         data = json.loads(output)
         self.assertEqual(data[0]["Result"], "unlocked")
         time.sleep(1.0)
-        # Ensure the proxy reloads its LB pool
-        self._flush_proxy()
-        self._reload_proxy()
-        output = self.openio("cluster list --locked" + opts)
+        output = self.openio("cluster list rdir --locked --stats" + opts)
         data = json.loads(output)
         self.assertEqual(data[0]["Locks"], "put=True get=False")
 

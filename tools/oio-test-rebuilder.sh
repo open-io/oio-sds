@@ -88,7 +88,7 @@ update_timeout()
           "http://${PROXY}/v3.0/forward/config?id=${URL}" 1>/dev/null
     done
   done
-  sleep 10
+  sleep 5
 }
 
 blake3sum()
