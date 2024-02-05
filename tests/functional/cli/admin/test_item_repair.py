@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@ class ItemRepairTest(CliTestCase):
     """Functional tests for item repair"""
 
     def setUp(self):
-        super(ItemRepairTest, self).setUp()
+        super().setUp()
         if int(self.conf.get("container_replicas", 1)) < 3:
             self.skipTest("Container replication must be enabled")
 
@@ -41,7 +41,7 @@ class ItemRepairTest(CliTestCase):
                 return meta2["path"]
 
     def sqldiff(self, path1, path2):
-        return execute("sqldiff %s %s" % (path1, path2))
+        return execute(f"sqldiff {path1} {path2}")[0]
 
     def get_path(self, peer, container):
         cid = self.storage.directory.list(self.account, container)["cid"]
@@ -59,7 +59,7 @@ class ItemRepairTest(CliTestCase):
         os.remove(path)
         self.assertRaises(OSError, os.stat, path)
         output = self.openio_admin(
-            "container repair %s %s --oio-account %s" % (container, opts, self.account)
+            f"container repair {container} {opts} --oio-account {self.account}"
         ).strip()
 
         expected_output = "|".join([self.ns, self.account, container]) + " OK None"

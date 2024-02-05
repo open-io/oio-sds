@@ -97,17 +97,18 @@ class ItemCheckTest(CliTestCase):
     def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
         _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)
         deadline = time.monotonic() + timeout
-        while (
-            not self.rdir.chunk_search(rawx_service, chunk_id)
-            and time.monotonic() < deadline
-        ):
+        rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
+        while not rdir_entries and time.monotonic() < deadline:
             self.logger.info("Waiting for chunk %s to be indexed in rdir", chunk_url)
             time.sleep(1.0)
+            rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
 
-        if time.monotonic() > deadline:
+        if not rdir_entries:
             self.logger.warning(
                 "Chunk %s not found in rdir after %.3fs", chunk_url, timeout
             )
+        else:
+            self.logger.debug("Chunk %s found in rdir: %s", chunk_url, rdir_entries)
 
     def create_object(self, account, container, obj_name):
         reqid = request_id(self.__class__.__name__)
@@ -1654,31 +1655,24 @@ class ItemCheckTest(CliTestCase):
 
         chunk = random.choice(obj_chunks)
 
-        expected_items = list()
-        expected_items.append("account account=%s OK" % self.account)
+        expected_items = []
+        expected_items.append(f"account account={self.account} OK")
         expected_items.append(
-            "container account=%s, container=%s, cid=%s OK"
-            % (self.account, self.container, cid)
+            f"container account={self.account}, "
+            f"container={self.container}, cid={cid} OK"
         )
         expected_items.append(
-            "object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, "
-            "version=%s OK"
-            % (
-                self.account,
-                self.container,
-                cid,
-                self.obj_name,
-                obj_meta["id"],
-                obj_meta["version"],
-            )
+            f"object account={self.account}, container={self.container}, "
+            f"cid={cid}, obj={self.obj_name}, content_id={obj_meta['id']}, "
+            f"version={obj_meta['version']} OK"
         )
-        expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
+        expected_items.append(f"chunk chunk={chunk['url']} OK")
 
         self._wait_for_chunk_indexation(chunk["url"])
 
         # Check with checksum
         output = self.openio_admin(
-            "chunk check %s --checksum %s" % (chunk["url"], self.check_opts)
+            f"chunk check {chunk['url']} --checksum {self.check_opts}",
         )
         self.assert_list_output(expected_items, output)
 
@@ -1687,19 +1681,22 @@ class ItemCheckTest(CliTestCase):
 
         # Check without checksum
         output = self.openio_admin(
-            "chunk check %s %s" % (chunk["url"], self.check_opts)
+            f"chunk check {chunk['url']} {self.check_opts}",
         )
         self.assert_list_output(expected_items, output)
 
-        expected_items.remove("chunk chunk=%s OK" % (chunk["url"]))
-        expected_items.append("chunk chunk=%s error" % (chunk["url"]))
+        expected_items.remove(f"chunk chunk={chunk['url']} OK")
+        expected_items.append(f"chunk chunk={chunk['url']} error")
 
         # Check with checksum
-        output = self.openio_admin(
-            "chunk check %s --checksum %s" % (chunk["url"], self.check_opts),
+        output, stderr = self.openio_admin_with_stderr(
+            f"chunk check {chunk['url']} --checksum {self.check_opts}",
             expected_returncode=1,
         )
-        self.assert_list_output(expected_items, output)
+        try:
+            self.assert_list_output(expected_items, output)
+        finally:
+            self.logger.info("stderr was:\n%s", stderr)
 
     def test_chunk_check_with_missing_chunk(self):
         self.maxDiff = 1024
@@ -1740,6 +1737,7 @@ class ItemCheckTest(CliTestCase):
             CalledProcessError, self._service, "oio-event.target", "status", wait=0
         )
 
+        stderr = None
         try:
             # Delete the selected chunk
             self.api.blob_client.chunk_delete(missing_chunk["url"])
@@ -1750,12 +1748,13 @@ class ItemCheckTest(CliTestCase):
                 f"chunk chunk={missing_chunk['url']} error "
                 "Not found: n/a (HTTP 404) (STATUS Not Found)"
             )
-            output = self.openio_admin(
+            output, stderr = self.openio_admin_with_stderr(
                 f"chunk check {missing_chunk['url']} {check_opts}",
                 expected_returncode=1,
             )
             self.assert_list_output(expected_items, output)
         finally:
+            self.logger.info("stderr was:\n%s", stderr)
             self._service("oio-event.target", "start", wait=3)
 
     def test_chunk_check_with_missing_object(self):

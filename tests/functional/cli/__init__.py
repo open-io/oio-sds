@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -53,7 +53,7 @@ def execute(cmd, stdin=None, env=None, expected_returncode=0):
     result = result.decode("utf-8")
     if proc.returncode not in expected_returncode:
         raise CommandFailed(proc.returncode, cmd, result, result_err)
-    return result
+    return result, result_err.decode("utf-8")
 
 
 class CliTestCase(BaseTestCase):
@@ -65,14 +65,14 @@ class CliTestCase(BaseTestCase):
     @classmethod
     def openio(cls, cmd, coverage="--coverage ", **kwargs):
         """Executes openio CLI command."""
-        return execute("openio " + coverage + cmd, **kwargs)
+        return execute("openio " + coverage + cmd, **kwargs)[0]
 
     @classmethod
     def openio_batch(cls, commands, coverage="--coverage", **kwargs):
         """Execute several commands in the same openio CLI process."""
         script = "\n".join(commands)
         try:
-            return execute("openio " + coverage, stdin=script, **kwargs)
+            return execute("openio " + coverage, stdin=script, **kwargs)[0]
         except CommandFailed:
             print("Stdin was:\n\n%s" % (script,))
             raise
@@ -80,12 +80,19 @@ class CliTestCase(BaseTestCase):
     @classmethod
     def openio_admin(cls, cmd, coverage="--coverage ", **kwargs):
         """Executes openio-admin CLI command."""
+        return execute("openio-admin " + coverage + cmd, **kwargs)[0]
+
+    @classmethod
+    def openio_admin_with_stderr(cls, cmd, coverage="--coverage ", **kwargs):
+        """Executes openio-admin CLI command."""
         return execute("openio-admin " + coverage + cmd, **kwargs)
 
     @classmethod
     def openio_admin_batch(cls, commands, coverage="--coverage", **kwargs):
         """Execute several commands in the same openio-admin CLI process."""
-        return execute("openio-admin " + coverage, stdin="\n".join(commands), **kwargs)
+        return execute("openio-admin " + coverage, stdin="\n".join(commands), **kwargs)[
+            0
+        ]
 
     # FIXME(FVE): deprecate this
     @classmethod
