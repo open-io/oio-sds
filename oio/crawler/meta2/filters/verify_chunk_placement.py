@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -131,8 +131,10 @@ class VerifyChunkPlacement(Filter):
                         data_security,
                         storage_constraints,
                     )
-                except Exception:
-                    self.logger.exception("Failed to fetch data %s policy", policy)
+                except Exception as exc:
+                    self.logger.exception(
+                        "Failed to fetch policy data of %s: %s.", policy, exc
+                    )
                     continue
             self.last_services_update = now
 
@@ -146,9 +148,7 @@ class VerifyChunkPlacement(Filter):
         :return: chunks to rebuild, version, path
         :rtype: tuple
         """
-        policy = obj_data[0][3]
-        version = obj_data[0][5]
-        path = obj_data[0][4]
+        _, _, _, policy, obj_name, version = obj_data[0]
         nb_chunks = len(obj_data)
         # Fetch positions really occupied
         positions = [chunk[1] for chunk in obj_data]
@@ -158,7 +158,7 @@ class VerifyChunkPlacement(Filter):
         data_security = self.policy_data[policy][1]
         diff = expected - nb_chunks
         if diff == 0:
-            return [], version, path
+            return [], version, obj_name
         if nb_chunks < expected:
             # One metachunk
             to_rebuild = self._get_chunk_to_rebuild_from_metachunk(
@@ -170,7 +170,7 @@ class VerifyChunkPlacement(Filter):
             to_rebuild = self._get_chunks_to_rebuild_from_metachunks(
                 data_security, expected, positions=positions
             )
-        return to_rebuild, version, path
+        return to_rebuild, version, obj_name
 
     def _get_chunk_to_rebuild_from_metachunk(
         self, data_security, expected, diff, positions
@@ -296,18 +296,18 @@ class VerifyChunkPlacement(Filter):
         misplaced_chunks_pos = list()
         counters = {}
         container_id = cid_from_name(account, container)
-        content_id = obj_data[0][2]
-        policy = obj_data[0][3]
+        _, _, content_id, policy, obj_name, _ = obj_data[0]
         try:
             # Constraint defined for all the chunks object
             fair_location_constraint = self.policy_data[policy][2]
-        except KeyError:
-            #
+        except KeyError as exc:
             self.logger.warning(
-                "Policy %s has no fair location constraint defined, \
-                    cannot verify chunks placement for the content %s",
+                "Policy %s has no fair location constraint defined, "
+                "cannot verify chunks placement for the object %s, cid %s: %s.",
                 policy,
-                content_id,
+                obj_name,
+                container_id,
+                exc,
             )
             return misplaced_chunks_pos
         self._rebuild_chunks_if_needed(obj_data, container_id, content_id)
@@ -350,23 +350,25 @@ class VerifyChunkPlacement(Filter):
                     version=version,
                 )
                 self.logger.debug(
-                    "Chunk of object %s at position %s rebuilt",
-                    content_id,
+                    "Chunk of object %s at position %s rebuilt, cid %s.",
+                    path,
                     position,
+                    container_id,
                 )
                 self.rebuilt_chunks += 1
-            except Exception:
+            except Exception as exc:
                 self.logger.exception(
-                    "Rebuild chunk of object %s at position %s has failed",
-                    content_id,
+                    "Rebuild chunk of object %s at position %s has failed, cid %s: %s.",
+                    path,
                     position,
+                    container_id,
+                    exc,
                 )
                 self.failed_rebuild += 1
 
-    def _find_and_tag_misplaced_chunks(self, chunks, account, container):
+    def _find_misplaced_chunks(self, chunks, account, container):
         """
-        Find the misplaced chunks among the list of chunks belonging to an object
-        and for each misplaced chunk send a post request to tag them as so
+        Find misplaced chunks among object chunks.
 
         :param chunks: object chunks data
             [(rawx_srv_id, position, content_id, policy, object name, version), ...]
@@ -399,7 +401,12 @@ class VerifyChunkPlacement(Filter):
                         for chunk_loc in chunks_loc
                     }
                 except (NoSuchObject, NotFound):
-                    self.logger.warning("Object %s not found", obj_name)
+                    self.logger.warning(
+                        "Object %s not found account %s, container %s.",
+                        obj_name,
+                        account,
+                        container,
+                    )
                     raise
 
             url = chunk_urls[pos]
@@ -439,26 +446,27 @@ class VerifyChunkPlacement(Filter):
                 # following object
                 obj_chunks = chunks[:-1]
                 chunks = chunks[-1:]
-                try:
-                    misplaced_chunk_urls = self._find_and_tag_misplaced_chunks(
-                        chunks=obj_chunks, account=account, container=container
-                    )
-                    self.api.blob_client.tag_misplaced_chunk(
-                        misplaced_chunk_urls, self.logger
-                    )
-                except Exception:
-                    self.logger.exception(
-                        "Find misplaced chunk of the object %s failed",
-                        content_id,
-                    )
-                    continue
+                self._tag_misplaced_chunks(account, container, obj_chunks)
                 content_id = None
                 last_scan_time = ratelimit(last_scan_time, self.max_scanned_per_second)
         except StopIteration:
             pass
         finally:  # The last object will be handled by the call below
             obj_chunks = chunks
-            misplaced_chunk_urls = self._find_and_tag_misplaced_chunks(
+            self._tag_misplaced_chunks(account, container, obj_chunks)
+
+    def _tag_misplaced_chunks(self, account, container, obj_chunks):
+        """Add non optimal placement tag to misplaced chunks
+
+        :param account: account name
+        :type account: str
+        :param container: container name
+        :type container: str
+        :param obj_chunks: list of chunks
+        :type obj_chunks: list
+        """
+        try:
+            misplaced_chunk_urls = self._find_misplaced_chunks(
                 chunks=obj_chunks, account=account, container=container
             )
             created_symlinks, failed_post = self.api.blob_client.tag_misplaced_chunk(
@@ -466,6 +474,17 @@ class VerifyChunkPlacement(Filter):
             )
             self.created_symlinks += created_symlinks
             self.failed_post += failed_post
+        except Exception as exc:
+            if obj_chunks:
+                obj_name = obj_chunks[0][-2]
+                self.logger.exception(
+                    "Tag misplaced chunks of the object %s failed,"
+                    " container %s, account %s: %s.",
+                    obj_name,
+                    container,
+                    account,
+                    exc,
+                )
 
     def _get_all_chunks(self, meta2db_cur):
         """
@@ -513,8 +532,8 @@ class VerifyChunkPlacement(Filter):
                 finally:
                     # Close the cursor of the meta2 database local copy
                     cursor.close()
-        except Exception:
-            self.logger.exception("Error while analysing meta2db %s", db_path)
+        except Exception as exc:
+            self.logger.exception("Error while analysing meta2db %s: %s.", db_path, exc)
             raise
 
     def _copy_meta2_db(self, meta2db):
@@ -538,14 +557,16 @@ class VerifyChunkPlacement(Filter):
             return True, None
         except Exception as exc:
             self.logger.exception(
-                "Failed to make meta2 local copy cid = %s",
+                "Failed to make meta2 local copy cid = %s, meta2db path %s: %s",
                 meta2db.cid,
+                meta2db.env["path"],
+                exc,
             )
             return False, exc
 
     def _delete_copy(self, meta2db):
         """
-        Delete the local meta2db
+        Delete the local meta2db copy
 
         :param meta2db: meta2db representation
         :type meta2db: Meta2DB
@@ -561,13 +582,18 @@ class VerifyChunkPlacement(Filter):
             res = self.admin_client.remove_base(**params)
             if res[self.volume_id]["status"]["status"] != 200:
                 self.logger.warning(
-                    f"Request to remove the meta2db copy failed, \
-                        cid = {0} msg {1}".format(
-                        meta2db.cid, res[self.volume_id]["status"]["message"]
-                    )
+                    "Request to remove the meta2db copy failed, "
+                    "cid = %s meta2db path %s error msg %s",
+                    meta2db.cid,
+                    meta2db.env["path"] + "." + self.suffix,
+                    res[self.volume_id]["status"]["message"],
                 )
-        except Exception:
-            self.logger.exception("Failed to remove meta2db copy")
+        except Exception as exc:
+            self.logger.exception(
+                "Failed to remove this meta2db copy %s: %s.",
+                meta2db.env["path"] + "." + self.suffix,
+                exc,
+            )
 
     def process(self, env, cb):
         """
@@ -616,7 +642,9 @@ class VerifyChunkPlacement(Filter):
 
         except Exception as exc:
             self.logger.exception(
-                "Failed to verify misplaced chunks",
+                "Failed to verify misplaced chunks referenced in %s: %s",
+                meta2db.env["path"],
+                exc,
             )
             self.errors += 1
             resp = Meta2DBError(
