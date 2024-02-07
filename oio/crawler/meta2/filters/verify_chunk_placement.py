@@ -18,7 +18,7 @@ import time
 from collections import Counter
 from urllib.parse import urlparse
 from oio.blob.operator import ChunkOperator
-from oio.common.easy_value import int_value
+from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import NoSuchObject, NotFound
 from oio.common.green import ratelimit
 from oio.common.utils import (
@@ -66,6 +66,8 @@ class VerifyChunkPlacement(Filter):
         self.service_update_interval = int_value(
             self.conf.get("service_update_interval"), self.SERVICE_UPDATE_INTERVAL
         )
+        self.dry_run_rebuild = true_value(self.conf.get("dry_run_rebuild", False))
+        self.dry_run_checker = true_value(self.conf.get("dry_run_checker", False))
         # Used to rebuild invalid chunks
         self.chunk_operator = ChunkOperator(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
@@ -342,20 +344,27 @@ class VerifyChunkPlacement(Filter):
         chunk_pos_to_rebuild, version, path = self._get_chunk_to_rebuild(obj_data)
         for position in chunk_pos_to_rebuild:
             try:
-                self.chunk_operator.rebuild(
-                    container_id,
-                    content_id,
-                    position,
-                    path=path,
-                    version=version,
-                )
+                if self.dry_run_rebuild:
+                    # This chunk would be rebuilt
+                    msg = "Chunk of object %s at position %s would be rebuilt, cid %s."
+                else:
+                    self.chunk_operator.rebuild(
+                        container_id,
+                        content_id,
+                        position,
+                        path=path,
+                        version=version,
+                    )
+                    msg = "Chunk of object %s at position %s rebuilt, cid %s."
+
+                self.rebuilt_chunks += 1
                 self.logger.debug(
-                    "Chunk of object %s at position %s rebuilt, cid %s.",
+                    msg,
                     path,
                     position,
                     container_id,
                 )
-                self.rebuilt_chunks += 1
+
             except Exception as exc:
                 self.logger.exception(
                     "Rebuild chunk of object %s at position %s has failed, cid %s: %s.",
@@ -387,7 +396,7 @@ class VerifyChunkPlacement(Filter):
         for index, pos in enumerate(misplaced_chunks_pos):
             if index == 0:
                 # We only need to do this one time
-                obj_name, version = chunks[0][4], chunks[0][5]
+                _, _, _, _, obj_name, version = chunks[0]
                 try:
                     # Get object location to fetch the chunks url
                     _, chunks_loc = self.api.object_locate(
@@ -410,6 +419,15 @@ class VerifyChunkPlacement(Filter):
                     raise
 
             url = chunk_urls[pos]
+            self.logger.debug(
+                "Chunk %s of object %s at position %s identified as misplaced,"
+                " account %s, container %s",
+                url,
+                obj_name,
+                pos,
+                account,
+                container,
+            )
             yield url
 
     def _verify_chunks_from_meta2_db(self, account, container, chunks_data):
@@ -469,11 +487,17 @@ class VerifyChunkPlacement(Filter):
             misplaced_chunk_urls = self._find_misplaced_chunks(
                 chunks=obj_chunks, account=account, container=container
             )
+            if self.dry_run_checker:
+                # Show the number of symlinks that would be created
+                self.created_symlinks += len(misplaced_chunk_urls)
+                return
+
             created_symlinks, failed_post = self.api.blob_client.tag_misplaced_chunk(
                 misplaced_chunk_urls, self.logger
             )
             self.created_symlinks += created_symlinks
             self.failed_post += failed_post
+
         except Exception as exc:
             if obj_chunks:
                 obj_name = obj_chunks[0][-2]
@@ -538,7 +562,7 @@ class VerifyChunkPlacement(Filter):
 
     def _copy_meta2_db(self, meta2db):
         """
-        Copy localy meta2 master database
+        Copy locally meta2 master database
 
         :param meta2db: meta2db representation
         :type meta2db: Meta2DB
@@ -660,7 +684,8 @@ class VerifyChunkPlacement(Filter):
         return {
             "successes": self.successes,
             "errors": self.errors,
-            "symlink_created": self.created_symlinks,
+            "created_symlinks": self.created_symlinks,
+            "failed_post": self.failed_post,
             "slave_volume_skipped": self.slave_volume_skipped,
             "rebuilt_chunks": self.rebuilt_chunks,
             "failed_rebuild": self.failed_rebuild,

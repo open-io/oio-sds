@@ -107,3 +107,12 @@ use = egg:oio#verify_chunk_placement
 max_scanned_per_second  = 10000
 # Time interval after which service data are updated
 service_update_interval = 3600
+# Before checking chunks placement, the placement checker
+# verfies if all chunks are there, if not it will launch
+# a rebuild on missing chunks. By setting dry_run_rebuild
+# to True, it will show the number of chunks that would be
+# rebuilt without actually rebuilding them.
+dry_run_rebuild = False
+# if True placement checker will identify the misplaced chunks
+# but will not tag them as so.
+dry_run_checker = False
