@@ -66,6 +66,7 @@ use = egg:oio#content_cleaner
 # (if timeout is not defined)
 #connection_timeout=1.0
 #read_timeout=5.0
+#allow_retry=true
 
 # -----------------------------------------------------------------
 # For container events: update counters inside the account service

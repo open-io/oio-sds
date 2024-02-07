@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,21 +16,27 @@
 
 from oio.blob.client import BlobClient
 from oio.common.constants import REQID_HEADER
-from oio.common.easy_value import int_value, float_value
+from oio.common.easy_value import int_value, float_value, boolean_value
 from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS, urllib3
+from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id
-from oio.event.evob import Event, EventTypes
+from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
 
 class ContentReaperFilter(Filter):
     """Filter that deletes chunks on content deletion events"""
 
+    def __init__(self, *args, **kwargs):
+        self._retry_delay = None
+        super().__init__(*args, **kwargs)
+
     def init(self):
         kwargs = {k: v for k, v in self.conf.items() if k in URLLIB3_POOLMANAGER_KWARGS}
         self.blob_client = BlobClient(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"], **kwargs
         )
+        self._retry_delay = get_retry_delay(self.conf)
         self.chunk_concurrency = int_value(self.conf.get("concurrency"), 3)
         self.chunk_timeout = float_value(self.conf.get("timeout"), None)
         if not self.chunk_timeout:
@@ -39,6 +45,7 @@ class ContentReaperFilter(Filter):
             self.chunk_timeout = urllib3.Timeout(
                 connect=connection_timeout, read=read_timeout
             )
+        self._allow_retry = boolean_value(self.conf.get("allow_retry"), True)
 
     def _process_rawx(self, url, chunks, reqid):
         cid = url.get("id")
@@ -55,11 +62,13 @@ class ContentReaperFilter(Filter):
             concurrency=self.chunk_concurrency,
             timeout=self.chunk_timeout,
         )
+        errs = []
         for resp in resps:
             if isinstance(resp, Exception):
+                url = resp.chunk.get("real_url", resp.chunk["url"])
                 self.logger.warn(
                     "failed to delete chunk %s (%s)",
-                    resp.chunk.get("real_url", resp.chunk["url"]),
+                    url,
                     resp,
                 )
             elif resp.status not in (204, 404):
@@ -68,6 +77,12 @@ class ContentReaperFilter(Filter):
                     resp.chunk.get("real_url", resp.chunk["url"]),
                     resp.status,
                 )
+            else:
+                # No error
+                continue
+
+            errs.append(resp.chunk)
+        return errs
 
     def process(self, env, cb):
         event = Event(env)
@@ -90,7 +105,14 @@ class ContentReaperFilter(Filter):
                     content_headers.append(item)
             if chunks:
                 reqid = event.reqid or request_id("content-cleaner-")
-                self._process_rawx(url, chunks, reqid)
+                errs = self._process_rawx(url, chunks, reqid)
+                if self._allow_retry and errs:
+                    err_resp = RetryableEventError(
+                        event=event,
+                        body="Unable to delete all chunks",
+                        delay=self._retry_delay,
+                    )
+                    return err_resp(env, cb)
                 return self.app(env, cb)
 
         return self.app(env, cb)
