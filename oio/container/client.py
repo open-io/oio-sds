@@ -177,7 +177,10 @@ class ContainerClient(ProxyClient):
         rawx_services = self.conscience_client.all_services("rawx")
         rawx_scores = dict()
         for rawx_service in rawx_services:
-            score = rawx_service["score"]
+            # The score is only used to locate chunks (read)
+            score = rawx_service.get("scores", {}).get(
+                "score.get", rawx_service["score"]
+            )
             if score == 0 and not rawx_service.get("tags", {}).get("tag.up"):
                 # The oioproxy service assigns a score of -1 on the chunk location
                 # where the rawx service is down and not scored

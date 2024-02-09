@@ -2375,7 +2375,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             container,
             obj_name=path,
             data=random_data(12),
-            policy="SINGLE",
             reqid=reqid,
         )
 
@@ -2396,6 +2395,15 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         service_id = down_chunk["url"].split("/")[2]
         systemd_key = self.service_to_systemd_key(service_id, "rawx")
         try:
+            # Set the PUT scores to 0 to verify that it is not used
+            for chunk in expected_chunks:
+                service_id = chunk["url"].split("/")[2]
+                srv_definition = self.conscience.get_service_definition(
+                    "rawx",
+                    service_id,
+                    scores={"score.put": 0},
+                )
+                self.conscience.lock_score(srv_definition)
             self._service(systemd_key, "stop")
 
             for _ in range(8):
@@ -2408,7 +2416,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                     if chunk["url"] == down_chunk["url"]:
                         down_chunk_score = chunk["score"]
                     else:
-                        self.assertGreaterEqual(chunk["score"], 0)
+                        self.assertGreater(chunk["score"], 0)
                     del chunk["score"]
                 self.assertDictEqual(expected_obj_meta, obj_meta)
                 self.assertListEqual(expected_chunks, chunks)
@@ -2417,6 +2425,16 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 self.assertGreaterEqual(down_chunk_score, 0)
             self.assertEqual(-1, down_chunk_score)
         finally:
+            try:
+                for chunk in expected_chunks:
+                    service_id = chunk["url"].split("/")[2]
+                    srv_definition = self.conscience.get_service_definition(
+                        "rawx",
+                        service_id,
+                    )
+                    self.conscience.unlock_score(srv_definition)
+            except Exception as exc:
+                self.logger.warning("Failed to unlock rawx services: %s", exc)
             self._service(systemd_key, "start", wait=4)
 
 
@@ -3640,6 +3658,15 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         service_id = down_chunk["url"].split("/")[2]
         systemd_key = self.service_to_systemd_key(service_id, "rawx")
         try:
+            # Set the PUT scores to 0 to verify that it is not used
+            for chunk in expected_chunks:
+                service_id = chunk["url"].split("/")[2]
+                srv_definition = self.conscience.get_service_definition(
+                    "rawx",
+                    service_id,
+                    scores={"score.put": 0},
+                )
+                self.conscience.lock_score(srv_definition)
             self._service(systemd_key, "stop")
 
             for _ in range(8):
@@ -3652,7 +3679,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
                     if chunk["url"] == down_chunk["url"]:
                         down_chunk_score = chunk["score"]
                     else:
-                        self.assertGreaterEqual(chunk["score"], 0)
+                        self.assertGreater(chunk["score"], 0)
                     del chunk["score"]
                 self.assertDictEqual(expected_obj_meta, obj_meta)
                 self.assertListEqual(expected_chunks, chunks)
@@ -3663,6 +3690,16 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
                 self.assertGreaterEqual(down_chunk_score, 0)
             self.assertEqual(-1, down_chunk_score)
         finally:
+            try:
+                for chunk in expected_chunks:
+                    service_id = chunk["url"].split("/")[2]
+                    srv_definition = self.conscience.get_service_definition(
+                        "rawx",
+                        service_id,
+                    )
+                    self.conscience.unlock_score(srv_definition)
+            except Exception as exc:
+                self.logger.warning("Failed to unlock rawx services: %s", exc)
             self._service(systemd_key, "start", wait=4)
 
     def test_object_fetch(self):
