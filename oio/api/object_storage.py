@@ -1583,24 +1583,8 @@ class ObjectStorageApi(object):
         )
 
         try:
-            start_time = monotonic_time()
             # Verify that the first block is recoverable before responding.
             first_block = next(stream)
-
-            if monotonic_time() - start_time > 2:  # TTFB
-                # If the information comes from the cache, the scores may no longer
-                # be adapted to the situation of rawx services.
-                # If the information does not come from the cache, the selected
-                # rawx services are not healthy.
-                # For the next attempt (if there is one), it is best to retrieve
-                # the updated information.
-                del_cached_object_metadata(
-                    account=account,
-                    reference=container,
-                    path=obj,
-                    version=version,
-                    **kwargs
-                )
         except exc.UnrecoverableContent:
             # Maybe we got this error because the cached object
             # metadata was stale or maybe the metadata is from an out of sync

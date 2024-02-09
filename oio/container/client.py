@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -177,7 +177,12 @@ class ContainerClient(ProxyClient):
         rawx_services = self.conscience_client.all_services("rawx")
         rawx_scores = dict()
         for rawx_service in rawx_services:
-            rawx_scores[rawx_service["id"]] = rawx_service["score"]
+            score = rawx_service["score"]
+            if score == 0 and not rawx_service.get("tags", {}).get("tag.up"):
+                # The oioproxy service assigns a score of -1 on the chunk location
+                # where the rawx service is down and not scored
+                score = -1
+            rawx_scores[rawx_service["id"]] = score
         return rawx_scores
 
     def __refresh_rawx_scores(self, is_async=False):
@@ -934,7 +939,8 @@ class ContainerClient(ProxyClient):
         if content_meta is not None and chunks is not None:
             self._maybe_refresh_rawx_scores(**kwargs)
             for chunk in chunks:
-                chunk["score"] = self.rawx_scores.get(chunk["url"].split("/")[2], 0)
+                # If the rawx is not in the dict, consider it down
+                chunk["score"] = self.rawx_scores.get(chunk["url"].split("/")[2], -1)
             return content_meta, chunks
 
         uri = self._make_uri("content/locate")

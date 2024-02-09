@@ -3542,6 +3542,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(1, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
+        # First locate without properties not in cache
         expected_obj_meta, expected_chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=False
         )
@@ -3550,52 +3551,57 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         expected_obj_meta = expected_obj_meta.copy()
         expected_chunks = copy.deepcopy(expected_chunks)
         for expected_chunk in expected_chunks:
-            del expected_chunk["score"]
+            self.assertGreaterEqual(expected_chunk.pop("score"), 0)
         self.assertEqual(2, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
+        # Locate without properties in cache
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=False
         )
         for chunk in chunks:
-            del chunk["score"]
+            self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(2, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
+        # Locate with properties not in cache
         expected_obj_meta["properties"] = properties
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=True
         )
         for chunk in chunks:
-            del chunk["score"]
+            self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
+        # Locate with properties in cache
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=True
         )
         for chunk in chunks:
-            del chunk["score"]
+            self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
+        # Locate without properties in cache
         expected_obj_meta["properties"] = dict()
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=False
         )
         for chunk in chunks:
-            del chunk["score"]
+            self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
+        # Get properties in cache (use properties of location cache)
         expected_obj_meta["properties"] = properties
         obj_meta = self.api.object_get_properties(
             self.account, self.container, self.path
@@ -3603,6 +3609,61 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
+
+    def test_object_locate_with_down_rawx(self):
+        # First locate with all UP services not in cache
+        expected_obj_meta, expected_chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=False
+        )
+        self.assertIsNotNone(expected_obj_meta)
+        self.assertIsNotNone(expected_chunks)
+        expected_obj_meta = expected_obj_meta.copy()
+        expected_chunks = copy.deepcopy(expected_chunks)
+        for expected_chunk in expected_chunks:
+            self.assertGreaterEqual(expected_chunk.pop("score"), 0)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        # Locate with all UP services in cache
+        obj_meta, chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=False
+        )
+        for chunk in chunks:
+            self.assertGreaterEqual(chunk.pop("score"), 0)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertListEqual(expected_chunks, chunks)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        # With a DOWN service
+        down_chunk = random.choice(expected_chunks)
+        service_id = down_chunk["url"].split("/")[2]
+        systemd_key = self.service_to_systemd_key(service_id, "rawx")
+        try:
+            self._service(systemd_key, "stop")
+
+            for _ in range(8):
+                time.sleep(1)
+                obj_meta, chunks = self.api.object_locate(
+                    self.account, self.container, self.path, properties=False
+                )
+                down_chunk_score = None
+                for chunk in chunks:
+                    if chunk["url"] == down_chunk["url"]:
+                        down_chunk_score = chunk["score"]
+                    else:
+                        self.assertGreaterEqual(chunk["score"], 0)
+                    del chunk["score"]
+                self.assertDictEqual(expected_obj_meta, obj_meta)
+                self.assertListEqual(expected_chunks, chunks)
+                self.assertEqual(1, self.api.container._direct_request.call_count)
+                self.assertEqual(1, len(self.cache))
+                if down_chunk_score == -1:
+                    break
+                self.assertGreaterEqual(down_chunk_score, 0)
+            self.assertEqual(-1, down_chunk_score)
+        finally:
+            self._service(systemd_key, "start", wait=4)
 
     def test_object_fetch(self):
         # Fetch the original object to make sure the cache is filled
