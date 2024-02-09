@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -203,6 +203,10 @@ def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=N
     :return: the current items on the host, e.g: 12.12.4.1
     :rtype: str
     """
+    if not current and not rawx_id:
+        if logger:
+            logger.warning("Cannot calculate current items without chunk id or rawx id")
+        return None
     try:
         counters = {}
         # Location of the current chunk
