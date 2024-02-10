@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2020-2023 OVH SAS
+// Copyright (C) 2020-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -185,8 +185,6 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url && req.Host != rawx.tlsUrl) {
 		rawxreq.replyCode(http.StatusTeapot)
-	} else if !rawx.isIOok() {
-		rawxreq.replyIoError(rawx)
 	} else {
 		for _dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]

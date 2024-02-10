@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2022 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -93,6 +93,25 @@ func incrementStatReq(rr *rawxRequest) (uint64, uint64) {
 	}
 
 	return spent, ttfb
+}
+
+func IncrementStatReqMethod(rr *rawxRequest) (uint64, uint64) {
+	switch rr.req.Method {
+	case "PUT":
+		return IncrementStatReqPut(rr)
+	case "POST":
+		return IncrementStatReqPost(rr)
+	case "COPY":
+		return IncrementStatReqCopy(rr)
+	case "HEAD":
+		return IncrementStatReqHead(rr)
+	case "GET":
+		return IncrementStatReqGet(rr)
+	case "DELETE":
+		return IncrementStatReqDel(rr)
+	default:
+		return IncrementStatReqOther(rr)
+	}
 }
 
 func IncrementStatReqPut(rr *rawxRequest) (uint64, uint64) {
@@ -280,18 +299,21 @@ func (rr *rawxRequest) serveStat() {
 
 	var spent uint64
 	var ttfb uint64
-	switch rr.req.Method {
-	case "GET", "HEAD":
-		if rr.req.URL.Query().Get("format") == "prometheus" {
-			doGetStatsPrometheus(rr)
-		} else {
-			doGetStats(rr)
+	if !rr.rawx.isIOok() {
+		rr.replyIoError(rr.rawx)
+	} else {
+		switch rr.req.Method {
+		case "GET", "HEAD":
+			if rr.req.URL.Query().Get("format") == "prometheus" {
+				doGetStatsPrometheus(rr)
+			} else {
+				doGetStats(rr)
+			}
+		default:
+			rr.replyCode(http.StatusMethodNotAllowed)
 		}
-		spent, ttfb = IncrementStatReqStat(rr)
-	default:
-		rr.replyCode(http.StatusMethodNotAllowed)
-		spent, ttfb = IncrementStatReqOther(rr)
 	}
+	spent, ttfb = IncrementStatReqStat(rr)
 
 	if isVerbose() {
 		LogHttp(AccessLogEvent{

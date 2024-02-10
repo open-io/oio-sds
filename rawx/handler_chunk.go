@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -611,53 +611,51 @@ func (rr *rawxRequest) serveChunk() {
 
 	var spent uint64
 	var ttfb uint64
-	switch rr.req.Method {
-	case "GET":
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.downloadChunk()
+	if !rr.rawx.isIOok() {
+		rr.replyIoError(rr.rawx)
+	} else {
+		switch rr.req.Method {
+		case "GET":
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.downloadChunk()
+			}
+		case "PUT":
+			rr.uploadChunk()
+		case "DELETE":
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.removeChunk()
+			}
+		case "HEAD":
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.checkChunk()
+			}
+		case "COPY":
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.copyChunk()
+			}
+		case "POST":
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.updateChunk()
+			}
+		default:
+			if err := rr.drain(); err != nil {
+				rr.replyError("", err)
+			} else {
+				rr.replyCode(http.StatusMethodNotAllowed)
+			}
 		}
-		spent, ttfb = IncrementStatReqGet(rr)
-	case "PUT":
-		rr.uploadChunk()
-		spent, ttfb = IncrementStatReqPut(rr)
-	case "DELETE":
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.removeChunk()
-		}
-		spent, ttfb = IncrementStatReqDel(rr)
-	case "HEAD":
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.checkChunk()
-		}
-		spent, ttfb = IncrementStatReqHead(rr)
-	case "COPY":
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.copyChunk()
-		}
-		spent, ttfb = IncrementStatReqCopy(rr)
-	case "POST":
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.updateChunk()
-		}
-		spent, ttfb = IncrementStatReqPost(rr)
-	default:
-		if err := rr.drain(); err != nil {
-			rr.replyError("", err)
-		} else {
-			rr.replyCode(http.StatusMethodNotAllowed)
-		}
-		spent, ttfb = IncrementStatReqOther(rr)
 	}
+	spent, ttfb = IncrementStatReqMethod(rr)
 
 	if shouldAccessLog(rr.status, rr.req.Method) {
 		LogHttp(AccessLogEvent{

@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -55,14 +55,18 @@ func (rr *rawxRequest) serveInfo() {
 
 	var spent uint64
 	var ttfb uint64
-	switch rr.req.Method {
-	case "GET", "HEAD":
-		doGetInfo(rr)
-		spent, ttfb = IncrementStatReqInfo(rr)
-	default:
-		rr.replyCode(http.StatusMethodNotAllowed)
-		spent, ttfb = IncrementStatReqOther(rr)
+	if !rr.rawx.isIOok() {
+		rr.replyIoError(rr.rawx)
+	} else {
+		switch rr.req.Method {
+		case "GET", "HEAD":
+			doGetInfo(rr)
+		default:
+			rr.replyCode(http.StatusMethodNotAllowed)
+		}
 	}
+	spent, ttfb = IncrementStatReqInfo(rr)
+
 	if isVerbose() {
 		LogHttp(AccessLogEvent{
 			Status:    rr.status,
