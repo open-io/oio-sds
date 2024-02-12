@@ -61,6 +61,36 @@ def get_retry_delay(conf, default_delay=None):
     return int_value(conf.get("retry_delay"), default_delay)
 
 
+def kafka_options_from_conf(app_conf):
+    """Retrieve kafka option from app configuration"""
+    kafka_conf = {}
+
+    for key, value in app_conf.items():
+        for prefix in (
+            KAFKA_CONF_COMMON_PREFIX,
+            KAFKA_CONF_CONSUMER_PREFIX,
+            KAFKA_CONF_PRODUCER_PREFIX,
+        ):
+            if key.startswith(prefix):
+                prefix_conf = kafka_conf.setdefault(prefix, {})
+                key = key[len(prefix) :]
+                prefix_conf[key] = value
+                break
+
+    # Reduce confs
+    consumer_conf = {
+        **(kafka_conf.get(KAFKA_CONF_COMMON_PREFIX, {})),
+        **(kafka_conf.get(KAFKA_CONF_CONSUMER_PREFIX, {})),
+    }
+
+    producer_conf = {
+        **(kafka_conf.get(KAFKA_CONF_COMMON_PREFIX, {})),
+        **(kafka_conf.get(KAFKA_CONF_PRODUCER_PREFIX, {})),
+    }
+
+    return consumer_conf, producer_conf
+
+
 class KafkaBaseException(OioException):
     pass
 
@@ -147,32 +177,7 @@ class KafkaClient:
         raise NotImplementedError()
 
     def _kafka_options_from_conf(self):
-        kafka_conf = {}
-
-        for key, value in self.app_conf.items():
-            for prefix in (
-                KAFKA_CONF_COMMON_PREFIX,
-                KAFKA_CONF_CONSUMER_PREFIX,
-                KAFKA_CONF_PRODUCER_PREFIX,
-            ):
-                if key.startswith(prefix):
-                    prefix_conf = kafka_conf.setdefault(prefix, {})
-                    key = key[len(prefix) :]
-                    prefix_conf[key] = value
-                    break
-
-        # Reduce confs
-        consumer_conf = {
-            **(kafka_conf.get(KAFKA_CONF_COMMON_PREFIX, {})),
-            **(kafka_conf.get(KAFKA_CONF_CONSUMER_PREFIX, {})),
-        }
-
-        producer_conf = {
-            **(kafka_conf.get(KAFKA_CONF_COMMON_PREFIX, {})),
-            **(kafka_conf.get(KAFKA_CONF_PRODUCER_PREFIX, {})),
-        }
-
-        return consumer_conf, producer_conf
+        return kafka_options_from_conf(self.app_conf)
 
     def _get_conf(self):
         raise NotImplementedError()
