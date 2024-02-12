@@ -28,40 +28,38 @@ from oio.common.statsd import get_statsd  # noqa: E402
 from oio.common.utils import get_hasher  # noqa: E402
 
 
-class KmsApiClient(object):
-    """Simple client for the external KMS API."""
+class HttpClient(object):
+    """Http client for a given KMS domain"""
 
-    def __init__(self, conf, logger, **kwargs):
-        self.logger = logger or get_logger(conf)
-        self.enabled = boolean_value(conf.get("kmsapi_enabled"))
-        self.endpoint = conf.get("kmsapi_endpoint")
-        self.key_id = conf.get("kmsapi_key_id")
+    def __init__(self, conf, logger, domain):
+        self.logger = logger
+        self.domain = domain
+        self.endpoint = conf.get(f"kmsapi_{domain}_endpoint")
+        self.key_id = conf.get(f"kmsapi_{domain}_key_id")
         self.http = urllib3.PoolManager(
             cert_reqs="CERT_REQUIRED",
-            ca_certs=conf.get("kmsapi_ca_certs_file"),
-            cert_file=conf.get("kmsapi_cert_file"),
-            key_file=conf.get("kmsapi_key_file"),
+            ca_certs=conf.get(f"kmsapi_{domain}_ca_certs_file"),
+            cert_file=conf.get(f"kmsapi_{domain}_cert_file"),
+            key_file=conf.get(f"kmsapi_{domain}_key_file"),
             timeout=urllib3.Timeout(
-                connect=float_value(conf.get("kmsapi_connect_timeout"), 1.0),
-                read=float_value(conf.get("kmsapi_read_timeout"), 1.0),
+                connect=float_value(conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0),
+                read=float_value(conf.get(f"kmsapi_{domain}_read_timeout"), 1.0),
             ),
         )
         self.statsd = get_statsd(conf=conf)
 
-    def checksum(self, data=b""):
-        """Get the blake3 checksum of the provided data."""
-        hasher = get_hasher("blake3")
-        hasher.update(data)
-        return hasher.hexdigest()
+    def request(self, action, body, key_id=None):
+        if key_id is None:
+            key_id = self.key_id
+        url = f"{self.endpoint}/v1/servicekey/{key_id}/{action}"
 
-    def request(self, method, url, body, headers, label):
         start_time = time.monotonic()
         try:
             resp = self.http.request(
-                method,
-                f"{self.endpoint}/v1/{url}",
+                "POST",
+                url,
                 body=body,
-                headers=headers,
+                headers={"Content-Type": "application/json"},
             )
             status = resp.status
         except Exception as exc:
@@ -71,12 +69,46 @@ class KmsApiClient(object):
         finally:
             duration = time.monotonic() - start_time
             self.statsd.timing(
-                f"openio.account.kmsapi.{label}.{status}.timing",
+                f"openio.account.kmsapi.{self.domain}.{action}.{status}.timing",
                 duration * 1000,  # in milliseconds
             )
         if status != 200:
             raise from_response(resp, resp.data)
         return json.loads(resp.data)
+
+
+class KmsApiClient(object):
+    """Simple client for the external KMS API."""
+
+    def __init__(self, conf, logger, **kwargs):
+        self.conf = conf
+        self.logger = logger or get_logger(conf)
+        self.enabled = boolean_value(conf.get("kmsapi_enabled"))
+        domains = [d for d in conf.get("kmsapi_domains", "").split(",") if d]
+        if self.enabled and domains:
+            self.http_clients = []
+            for domain in domains:
+                client = HttpClient(conf, logger, domain)
+                self.http_clients.append(client)
+
+    def checksum(self, data=b""):
+        """Get the blake3 checksum of the provided data."""
+        hasher = get_hasher("blake3")
+        hasher.update(data)
+        return hasher.hexdigest()
+
+    def request(self, action, body, key_id=None):
+        exc = None
+        for client in self.http_clients:
+            try:
+                return client.request(action, body, key_id)
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to get a response from KMS domain {client.domain}: {e}"
+                )
+                exc = e
+        if exc:
+            raise exc
 
     def encrypt(self, plaintext, context):
         """
@@ -96,16 +128,13 @@ class KmsApiClient(object):
             }
         """
         return self.request(
-            "POST",
-            f"servicekey/{self.key_id}/encrypt",
+            action="encrypt",
             body=json.dumps(
                 {
-                    "plaintext": plaintext,
+                    "plaintext": plaintext.decode("utf-8"),
                     "context": self.checksum(context),
                 }
             ),
-            headers={"Content-Type": "application/json"},
-            label="encrypt",
         )
 
     def decrypt(self, key_id, ciphertext, context):
@@ -126,14 +155,12 @@ class KmsApiClient(object):
         }
         """
         return self.request(
-            "POST",
-            f"servicekey/{key_id}/decrypt",
+            action="decrypt",
             body=json.dumps(
                 {
                     "ciphertext": ciphertext,
                     "context": self.checksum(context),
                 }
             ),
-            headers={"Content-Type": "application/json"},
-            label="decrypt",
+            key_id=key_id,
         )
