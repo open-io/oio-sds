@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -346,9 +346,6 @@ struct oio_lb_pool_LOCAL_s
 	 * Cannot be 0. */
 	guint16 min_dist;
 
-	/* If true, look for items close to each other. */
-	gboolean nearby_mode : 16;
-
 	/* Absolute maximum number of services to select per location level. */
 	guint8 strict_max_items[OIO_LB_LOC_LEVELS];
 
@@ -689,7 +686,8 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 				g_datalist_id_get_data(ctx->counters + level, key));
 		popularity_by_level[level] = (guint8) MIN(popularity, 255);
 		// Maximum number of elements with this location that we can take
-		guint32 max = (ctx->force_fair_constraints)?ctx->fair_max_items[level]:ctx->strict_max_items[level];
+		guint32 max = (ctx->force_fair_constraints)?
+			ctx->fair_max_items[level] : ctx->strict_max_items[level];
 		if (max == 0) {
 			// We are considering a subtree of services. Compute the proportion
 			// this subtree represents compared to the whole cluster, and
@@ -909,7 +907,7 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 
 static struct oio_lb_selected_item_s *
 _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
-		gboolean reversed, struct polling_ctx_s *ctx, guint i)
+		struct polling_ctx_s *ctx, guint i)
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
@@ -928,22 +926,15 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 			return NULL;
 		}
 	}
-	if (reversed) {
-		// Check the item is not too far from already polled items
-		if (_item_is_too_far(ctx->polled, loc, distance))
-			return NULL;
-		// Check item has not been already polled
-		if (_item_is_too_close(ctx->polled, loc, 1))
-			return NULL;
-	} else {
-		// Check the item is not too close to already polled items
-		if (_item_is_too_close(ctx->polled, loc,
-				ctx->check_distance? distance : 1))
-			return NULL;
-		// Check the item has not been chosen too much already
-		if (_item_is_too_popular(ctx, loc, slot, pop_by_level, max_by_level))
-			return NULL;
-	}
+
+	// Check the item is not too close to already polled items
+	if (_item_is_too_close(ctx->polled, loc,
+			ctx->check_distance? distance : 1))
+		return NULL;
+	// Check the item has not been chosen too much already
+	if (_item_is_too_popular(ctx, loc, slot, pop_by_level, max_by_level))
+		return NULL;
+
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
 
@@ -979,7 +970,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
  * a distant location. */
 static struct oio_lb_selected_item_s *
 _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
-		gboolean reversed, struct polling_ctx_s *ctx, guint n_targets)
+		struct polling_ctx_s *ctx, guint n_targets)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
 		_warn_dirty_poll("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
@@ -1003,7 +994,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 	 * we can slacken the distance checks, and rely only on the "popularity"
 	 * mechanism. */
 	if (oio_lb_allow_distance_bypass &&
-			!reversed && ctx->check_distance && distance > 1) {
+			ctx->check_distance && distance > 1) {
 		guint16 level = distance - 1;
 		if (n_targets > slot->locs_by_level[level]) {
 			GRID_TRACE("%u targets, distance %u and %u locations at level %u: "
@@ -1030,7 +1021,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 		EXTRA_ASSERT(i >= 0);
 		EXTRA_ASSERT((guint)i < slot->items->len);
 		if ((selected =
-				_accept_item(slot, distance, reversed, ctx, i))) {
+				_accept_item(slot, distance, ctx, i))) {
 			return selected;
 		}
 	}
@@ -1040,7 +1031,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 	while (iter++ < slot->items->len) {
 		i = (i + slot->jump) % slot->items->len;
 		if ((selected =
-				_accept_item(slot, distance, reversed, ctx, i))) {
+				_accept_item(slot, distance, ctx, i))) {
 			return selected;
 		}
 	}
@@ -1069,8 +1060,7 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
 		} else if ((selected =
-				_local_slot__poll(slot, distance,
-						lb->nearby_mode, ctx, n_targets))) {
+				_local_slot__poll(slot, distance, ctx, n_targets))) {
 			selected->expected_slot = g_strdup(target);
 			selected->final_slot = g_strdup(name);
 			break;
@@ -1263,14 +1253,11 @@ _local__patch(struct oio_lb_pool_s *self,
 	for (; i < count_targets+1; i++)
 		polled[i] = 0;
 
-	/* In normal mode (resp. nearby mode), distance starts high
-	 * (resp. low), because we want services far from (resp. close to)
-	 * each other. Then we reduce (resp. increase) the distance and thus
+	/* Distance starts high, because we want services far from
+	 * each other. Then we reduce the distance and thus
 	 * have more chances to find services matching the other criteria. */
 	guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
-	guint16 start_dist = lb->nearby_mode? lb->min_dist : max_dist;
-	guint16 end_dist = (lb->nearby_mode? max_dist + 1 : lb->min_dist - 1);
-	guint16 reached_dist = start_dist;
+	guint16 reached_dist = max_dist;
 
 	struct polling_ctx_s ctx = {
 		.avoids = avoids,
@@ -1302,22 +1289,20 @@ _local__patch(struct oio_lb_pool_s *self,
 	gchar *unmatched_targets[count_targets+1];
 	_match_known_services_with_targets(lb, &ctx, unmatched_targets);
 
-	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
 	GError *err = NULL;
 	for (gchar **ptarget = unmatched_targets; *ptarget; ++ptarget) {
 		struct oio_lb_selected_item_s *selected = NULL;
 		selected = _local_target__is_satisfied(lb, *ptarget, &ctx, FALSE);
 		guint16 dist;
-		for (dist = start_dist; !selected && dist != end_dist; dist += incr) {
+		for (dist = max_dist; !selected && dist >= lb->min_dist; dist -= 1) {
 			selected = _local_target__poll(lb, *ptarget, dist, &ctx);
 		}
 		if (selected) {
 			/* Do not trust the loop counter, we may have slackened
 			 * the distance constraint in the polling function. */
 			dist = selected->final_dist;
-			if ((lb->nearby_mode && dist > reached_dist) ||
-					(!lb->nearby_mode && dist < reached_dist))
+			if (dist < reached_dist)
 				reached_dist = dist;
 		} else {
 			GString *max_items = g_string_sized_new(32);
@@ -1350,7 +1335,7 @@ _local__patch(struct oio_lb_pool_s *self,
 
 	void _set_dists(gpointer element, guint cur) {
 		struct oio_lb_selected_item_s *sel = element;
-		sel->expected_dist = start_dist;
+		sel->expected_dist = max_dist;
 		sel->warn_dist = lb->warn_dist;
 		if (sel->item) {
 			/* Recompute the distance between chunks.
@@ -1377,13 +1362,9 @@ _local__patch(struct oio_lb_pool_s *self,
 	} else {
 		if (flawed) {
 			GRID_DEBUG(
-					"nearby_mode=%d, reached_dist=%u, "
-					"warn_dist=%u, fallbacks=%d",
-					lb->nearby_mode, reached_dist,
-					lb->warn_dist, ctx.fallback_used);
-			*flawed = (lb->nearby_mode && reached_dist >= lb->warn_dist) ||
-					(!lb->nearby_mode && reached_dist <= lb->warn_dist) ||
-					ctx.fallback_used;
+					"reached_dist=%u, warn_dist=%u, fallbacks=%d",
+					reached_dist, lb->warn_dist, ctx.fallback_used);
+			*flawed = (reached_dist <= lb->warn_dist) || ctx.fallback_used;
 		}
 		void _forward(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 			if (sel->item)
@@ -1506,8 +1487,6 @@ oio_lb_world__set_pool_option(struct oio_lb_pool_s *self, const char *key,
 		} else {
 			lb->warn_dist = warn;
 		}
-	} else if (!strcmp(key, OIO_LB_OPT_NEARBY)) {
-		lb->nearby_mode = oio_str_parse_bool(value, FALSE);
 	} else if (!strcmp(key, OIO_LB_OPT_HARD_MAX)) {
 		_max_items_to_tab(value, lb->strict_max_items);
 	} else if (!strcmp(key, OIO_LB_OPT_SOFT_MAX)) {
@@ -1573,9 +1552,6 @@ oio_lb_world__dump_pool_options(struct oio_lb_pool_s *self)
 			g_string_append(dump, name);
 		}
 	}
-
-	if (lb->nearby_mode)
-		g_string_append_static(dump, OIO_CSV_SEP2"nearby_mode=true");
 
 	g_string_append_printf(dump, "%c%s=%u%c%s=%u",
 			OIO_CSV_SEP2_C, OIO_LB_OPT_WARN_DIST, lb->warn_dist,
@@ -1677,7 +1653,6 @@ oio_lb_world__create_pool (struct oio_lb_world_s *world, const char *name)
 	lb->targets = g_malloc0 (4 * sizeof(gchar*));
 	lb->initial_dist = OIO_LB_LOC_LEVELS;
 	lb->min_dist = 1;
-	lb->nearby_mode = FALSE;
 	return (struct oio_lb_pool_s*) lb;
 }
 

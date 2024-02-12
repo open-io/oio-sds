@@ -927,8 +927,6 @@ template_service_pools = """
 # metadata will be saved in order to trigger a placement improvement.
 # This can be defined in place of "warn_dist".
 #
-# "nearby_mode" is a boolean telling to find services close to each other.
-#
 # "min_dist" is the absolute minimum distance between services returned
 # by the pool. It defaults to 1, which is the minimum. If you set it too
 # high, there is a risk the pool fails to find a service set matching
@@ -978,11 +976,6 @@ warn_dist=${WARN_DIST}
 [pool:zonedrawx3]
 # Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
 targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
-
-[pool:rawx3nearby]
-targets=3,rawx
-nearby_mode=true
-warn_dist=0
 
 [pool:rawx3faraway]
 targets=3,rawx

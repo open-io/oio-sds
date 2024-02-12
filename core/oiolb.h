@@ -165,8 +165,6 @@ void oio_lb_world__rehash_all_slots(struct oio_lb_world_s *self);
 #define OIO_LB_OPT_MIN_DIST       "min_dist"
 /* Distance between services at which the LB will emit a warning */
 #define OIO_LB_OPT_WARN_DIST      "warn_dist"
-/* Look for services close to each other (boolean string) */
-#define OIO_LB_OPT_NEARBY         "nearby_mode"
 /* Strict maximum number of items to select for each location level */
 #define OIO_LB_OPT_HARD_MAX       "strict_location_constraint"
 /* Number of services per location level that will trigger, when surpassed,

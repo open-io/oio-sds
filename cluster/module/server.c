@@ -2452,9 +2452,6 @@ _load_service_pool_section(GKeyFile *svc_conf_file, const char *section)
 	/*** sample **************************************************************
 	[pool:rawx3]
 	targets = 1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
-	mask = FFFFFFFFFFFF0000
-	mask_max_shift = 16
-	nearby_mode=false
 	*************************************************************************/
 	const char *pool = section + strlen(GROUP_PREFIX_POOL);
 	GHashTable *content = g_hash_table_new_full(
