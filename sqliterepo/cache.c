@@ -451,6 +451,7 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b, gboolean deleted)
 	hashstr_t *n = b->name;
 
 	b->handle = NULL;
+	b->heat = 0;
 	b->owner = NULL;
 	b->name = NULL;
 	b->count_open = 0;
@@ -801,6 +802,7 @@ retry:
 					}
 
 					base->count_waiting ++;
+					base->heat = 1;
 
 					/* The lock is held by another thread/request.
 					   Do not use 'now' because it can be a fake clock */
@@ -839,6 +841,12 @@ retry:
 		if (base_has_been_opened) {
 			grid_single_rrd_add(base->open_attempts, now_secs, 1);
 			grid_single_rrd_add(base->open_wait_time, now_secs, wait_time);
+			/* Base has been opened very quickly, consider it cold. */
+			if (attempts == 1
+					&& wait_time < G_TIME_SPAN_MILLISECOND
+					&& base->count_waiting < 2) {
+				base->heat = 0;
+			}
 		}
 		oio_ext_incr_db_wait(wait_time);
 		oio_ext_add_perfdata("db_wait", wait_time / G_TIME_SPAN_SECOND);

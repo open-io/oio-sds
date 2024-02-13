@@ -702,7 +702,7 @@
 
 			{ "type": "uint32", "name": "_cache_heat_threshold",
 				"key": "sqliterepo.cache.heat_threshold",
-				"descr": "Sets the heat value below which a databse is considered hot",
+				"descr": "Sets the heat value over which a database is considered hot",
 				"def": 1, "min": 1, "max": "1 << 32 - 1" },
 
 			{ "type": "monotonic", "name": "_cache_grace_delay_cool",

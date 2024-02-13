@@ -1502,7 +1502,7 @@ Used by `gcc`
 
 ### sqliterepo.cache.heat_threshold
 
-> Sets the heat value below which a databse is considered hot
+> Sets the heat value over which a database is considered hot
 
  * default: **1**
  * type: guint32
