@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +22,7 @@ from oio.common.daemon import Daemon
 from oio.common.exceptions import NotFound
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit
+from oio.common.utils import ratelimit
 
 SLEEP_TIME = 30
 

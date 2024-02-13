@@ -22,9 +22,9 @@ from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import ConfigurationException
-from oio.common.green import get_watchdog, ratelimit, time, ContextPool
+from oio.common.green import get_watchdog, time, ContextPool
 from oio.common.logger import get_logger
-from oio.common.utils import paths_gen
+from oio.common.utils import paths_gen, ratelimit
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
 

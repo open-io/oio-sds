@@ -18,9 +18,10 @@ import signal
 
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioException, OioTimeout, RetryLater
-from oio.common.green import ContextPool, eventlet, ratelimit, sleep, threading, time
+from oio.common.green import ContextPool, eventlet, sleep, threading, time
 from oio.common.json import json
 from oio.common.logger import get_logger
+from oio.common.utils import ratelimit
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender
 

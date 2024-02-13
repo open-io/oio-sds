@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,11 +22,11 @@ from oio.blob.operator import ChunkOperator
 from oio.blob.utils import check_volume
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
-from oio.common.green import get_watchdog, ratelimit, time, ContextPool
+from oio.common.green import get_watchdog, time, ContextPool
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger, logging
-from oio.common.utils import request_id
+from oio.common.utils import request_id, ratelimit
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 

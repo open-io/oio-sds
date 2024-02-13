@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,8 +19,8 @@ from datetime import datetime
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Conflict, NotFound
-from oio.common.green import ratelimit, time
-from oio.common.utils import is_chunk_id_valid, paths_gen
+from oio.common.green import time
+from oio.common.utils import is_chunk_id_valid, paths_gen, ratelimit
 from oio.container.client import ContainerClient
 
 

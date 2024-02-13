@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,11 +16,12 @@
 
 import random
 import signal
-from oio.common.green import ratelimit, eventlet, threading, ContextPool, time
+from oio.common.green import eventlet, threading, ContextPool, time
 
 from oio.common.easy_value import int_value
 from oio.common import exceptions
 from oio.common.logger import get_logger
+from oio.common.utils import ratelimit
 
 
 # TODO(FVE): rename class and module

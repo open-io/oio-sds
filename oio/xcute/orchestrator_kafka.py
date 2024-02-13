@@ -22,7 +22,7 @@ from redis import (
 
 from oio.common.exceptions import Forbidden
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit, sleep, threading, time
+from oio.common.green import sleep, threading, time
 from oio.common.json import json
 from oio.common.kafka import (
     KafkaConsumer,
@@ -30,6 +30,7 @@ from oio.common.kafka import (
     DEFAULT_XCUTE_JOB_TOPIC,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
 )
+from oio.common.utils import ratelimit
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus

@@ -20,13 +20,13 @@ from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.common.daemon import Daemon
 from oio.common.easy_value import int_value, boolean_value
-from oio.common.green import ratelimit, ContextPool
+from oio.common.green import ContextPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
-from oio.common.utils import paths_gen
 from oio.directory.client import DirectoryClient
 from oio.rdir.client import RdirClient
 from oio.common.green import time
+from oio.common.utils import paths_gen, ratelimit
 
 
 class Meta2IndexingWorker(object):

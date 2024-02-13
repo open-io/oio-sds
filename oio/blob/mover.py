@@ -17,7 +17,7 @@
 import os
 from collections import OrderedDict
 from oio.common.constants import CHUNK_HEADERS
-from oio.common.green import get_watchdog, ratelimit, time, GreenPool
+from oio.common.green import get_watchdog, time, GreenPool
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.common.exceptions import ContentDrained, ContentNotFound, SpareChunkException
@@ -29,6 +29,7 @@ from oio.common.utils import (
     paths_gen,
     statfs,
     cid_from_name,
+    ratelimit,
 )
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger

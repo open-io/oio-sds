@@ -25,8 +25,9 @@ from redis import (
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden, OioTimeout
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit, sleep, threading, time
+from oio.common.green import sleep, threading, time
 from oio.common.json import json
+from oio.common.utils import ratelimit
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import (
     Beanstalk,

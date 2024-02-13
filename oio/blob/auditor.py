@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,8 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import ratelimit
-
 from contextlib import closing
 import zlib
 import time
@@ -24,7 +22,7 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen
+from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen, ratelimit
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.storage_method import parse_chunk_method

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,9 @@ import hashlib
 import pwd
 import re
 import sys
+import time
+
+# specific import to avoid using the monkey patched one
 from time import monotonic as monotonic_time
 from urllib.parse import parse_qs, quote as _quote, urlparse
 
@@ -710,3 +713,16 @@ def oio_versionid_to_str_versionid(version_id):
         return "%.6f" % (int(version_id) / 1000000.0)
     else:
         return "null"
+
+
+def ratelimit(run_time, max_rate, increment=1, rate_buffer=5, time_time=None):
+    if max_rate <= 0 or increment <= 0:
+        return run_time
+    clock_accuracy = 1000.0
+    now = (time_time or time.time()) * clock_accuracy
+    time_per_request = clock_accuracy * (float(increment) / max_rate)
+    if now - run_time > rate_buffer * clock_accuracy:
+        run_time = now
+    elif run_time - now > 0:
+        time.sleep((run_time - now) / clock_accuracy)
+    return run_time + time_per_request
