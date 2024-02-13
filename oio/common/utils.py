@@ -716,13 +716,47 @@ def oio_versionid_to_str_versionid(version_id):
 
 
 def ratelimit(run_time, max_rate, increment=1, rate_buffer=5, time_time=None):
+    """
+    Will time.sleep() for the appropriate time so that the max_rate
+    is never exceeded. If max_rate is 0, will not ratelimit.  The
+    maximum recommended rate should not exceed (1000 * increment) a second
+    as time.sleep() does involve some overhead. Returns run_time
+    that should be used for subsequent calls.
+
+    :param run_time: the running time in milliseconds of the next
+                     allowable request. Best to start at zero.
+    :param max_rate: The maximum rate per second allowed for the process.
+    :param increment: How much to increment the counter. Useful if you want
+                      to ratelimit 1024 bytes/sec and have differing sizes
+                      of requests. Must be > 0 to engage rate-limiting
+                      behavior.
+    :param rate_buffer: Number of seconds the rate counter can drop and be
+                        allowed to catch up (at a faster than listed rate).
+                        A larger number will result in larger spikes in rate
+                        but better average accuracy. Must be > 0 to engage
+                        rate-limiting behavior.
+    :param time_time: useful to not use default time.time()
+    """
     if max_rate <= 0 or increment <= 0:
         return run_time
+
+    # 1,000 milliseconds = 1 second
     clock_accuracy = 1000.0
+
+    # Convert seconds to milliseconds
     now = (time_time or time.time()) * clock_accuracy
+
+    # Calculate time per request in milliseconds
     time_per_request = clock_accuracy * (float(increment) / max_rate)
+
+    # Convert rate_buffer to milliseconds and compare
     if now - run_time > rate_buffer * clock_accuracy:
         run_time = now
     elif run_time - now > 0:
+        # Convert diff back to a floating point number of seconds and sleep
         time.sleep((run_time - now) / clock_accuracy)
+
+    # Return the absolute time for the next interval in milliseconds; note
+    # that time could have passed well beyond that point, but the next call
+    # will catch that and skip the sleep.
     return run_time + time_per_request
