@@ -63,6 +63,7 @@ static void sqlx_service_specific_interrupt(void);
 static void sqlx_service_specific_stop(void);
 
 // Periodic tasks & thread's workers
+static void _task_read_memory_usage(gpointer p);
 static void _task_probe_repository(gpointer p);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
@@ -640,6 +641,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 1, _task_read_memory_usage, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 5, _task_probe_repository, NULL, ss);
 
 	return TRUE;
@@ -1079,6 +1081,16 @@ _task_probe_repository(gpointer p)
 	}
 
 	grid_daemon_notify_io_status(ss->dispatcher, TRUE, NULL);
+}
+
+static void
+_task_read_memory_usage(gpointer p)
+{
+	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
+	if (!cache)
+		return;
+	gint64 usage = network_server_get_memory_usage(SRV.server);
+	sqlx_cache_set_last_memory_usage(cache, usage);
 }
 
 static void

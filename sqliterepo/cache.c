@@ -109,6 +109,8 @@ struct sqlx_cache_s
 	guint bases_max_hard;
 	guint bases_used;
 
+	gint64 last_memory_usage;
+
 	/* Doubly linked lists of tables, one by status */
 	struct beacon_s beacon_free;
 	struct beacon_s beacon_idle;
@@ -122,19 +124,10 @@ struct sqlx_cache_s
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-_ram_exhausted(void)
+_ram_exhausted(sqlx_cache_t *cache)
 {
 	if (sqliterepo_max_rss) {
-		struct rusage usage;
-		gint64 total;
-		int ret = getrusage(RUSAGE_SELF, &usage);
-
-		if (ret < 0) {
-			GRID_NOTICE("getrusage failed: %s (%d)", strerror(errno), errno);
-			return FALSE;
-		}
-
-		total = usage.ru_maxrss * 1024;
+		gint64 total = cache->last_memory_usage;
 		if (total > sqliterepo_max_rss) {
 			GRID_DEBUG("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
 					total / (1024 * 1024),
@@ -946,7 +939,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 					 * that will be expired won't return its memory pages to
 					 * the kernel but to the sqlite3 pool. The pages will
 					 * become available to other bases. */
-					if (_ram_exhausted() && _has_idle_unlocked(cache))
+					if (_ram_exhausted(cache) && _has_idle_unlocked(cache))
 						sqlx_expire_first_idle_base(cache, 0);
 				}
 			}
@@ -1100,3 +1093,8 @@ sqlx_cache_count(sqlx_cache_t *cache)
 	return count;
 }
 
+void
+sqlx_cache_set_last_memory_usage(sqlx_cache_t *cache, gint64 usage)
+{
+	cache->last_memory_usage = usage;
+}

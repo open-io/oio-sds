@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -79,5 +79,7 @@ struct cache_counts_s
 /** Returns several statistics about the current cache. Returns zeroed
  * stats is 'cache' is NULL. */
 struct cache_counts_s sqlx_cache_count(sqlx_cache_t *cache);
+
+void sqlx_cache_set_last_memory_usage(sqlx_cache_t *cache, gint64 usage);
 
 #endif /*OIO_SDS__sqliterepo__cache_h*/

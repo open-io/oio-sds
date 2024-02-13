@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -346,10 +346,10 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	/* Check the rights on the volume */
 	if (-1 == stat(vol, &s))
-		return NEWERROR(errno, "Invalid directory : %s", strerror(errno));
+		return NEWERROR(errno, "Invalid directory: %s", strerror(errno));
 
 	if (!S_ISDIR(s.st_mode))
-		return NEWERROR(errno, "Invalid directory : not a directory");
+		return NEWERROR(errno, "Invalid directory: not a directory");
 
 	int ok_usr = ((s.st_mode & S_IRWXU) == S_IRWXU);
 	int ok_grp = ((s.st_mode & S_IRWXG) == S_IRWXG);
@@ -360,7 +360,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 		|| (ok_usr && getuid() == s.st_uid);
 
 	if (!ok)
-		return NEWERROR(errno, "Invalid directory : insufficient permissions");
+		return NEWERROR(errno, "Invalid directory: insufficient permissions");
 
 	/* Create the directory used by dump/restore functions */
 	g_snprintf(tmpdir, sizeof(tmpdir), "%s/tmp", vol);
@@ -903,7 +903,7 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 				bd, args->name.base, args->name.type,
 				(*result != NULL) ? "already" : "not");
 
-	if (NULL != *result)
+	if (*result)
 		return NULL;
 
 	if (!(e0 = __open_not_cached(args, result))) {
@@ -919,7 +919,7 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 		g_clear_error(&e1);
 	}
 
-	GRID_DEBUG("Opening error : (%d) %s", e0->code, e0->message);
+	GRID_DEBUG("Opening error: (%d) %s", e0->code, e0->message);
 	return e0;
 }
 
