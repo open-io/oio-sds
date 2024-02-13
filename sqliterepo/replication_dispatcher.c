@@ -2029,7 +2029,10 @@ _info_server(struct gridd_reply_ctx_s *reply, GString *gstr)
 	g_string_append_static(gstr, "},\"connections\":{");
 	oio_str_gstring_append_json_pair_int(gstr, "clients",
 			reply->client->server->cnx_clients);
-	g_string_append_static(gstr, "}}");
+	g_string_append_static(gstr, "},");
+	oio_str_gstring_append_json_pair_int(gstr, "memory_usage",
+			network_server_get_memory_usage(reply->client->server));
+	g_string_append_static(gstr, "}");
 }
 
 static void

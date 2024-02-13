@@ -848,7 +848,7 @@ dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 	if (ram_before > 0 && ram_after > 0) {
 		GRID_INFO("malloc_trim released %"G_GINT64_FORMAT
 				" bytes to the system (reqid=%s)",
-				ram_after - ram_before, oio_ext_get_reqid());
+				ram_before - ram_after, oio_ext_get_reqid());
 	}
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;

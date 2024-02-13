@@ -152,15 +152,22 @@ _constructor (void)
 gint64
 network_server_get_memory_usage(struct network_server_s *srv UNUSED)
 {
-	struct rusage usage;
-	int ret = getrusage(RUSAGE_SELF, &usage);
-
-	if (ret < 0) {
-		GRID_NOTICE("getrusage failed: %s (%d)", strerror(errno), errno);
-		return -1;
+	GError *err = NULL;
+	gint64 usage = -1;
+	gchar *content = NULL;
+	/* See man procfs(5) for a description of statm file. */
+	if (g_file_get_contents("/proc/self/statm", &content, NULL, &err)) {
+		gchar *endptr = NULL;
+		/* 1st field is VmSize, skip it */
+		endptr = strchr(content, ' ') + 1;
+		/* 2nd field is VmRSS (number of memory pages) */
+		usage = g_ascii_strtoll(endptr, &endptr, 10) * getpagesize();
+	} else {
+		GRID_NOTICE("Cannot read memory usage: %s", err->message);
 	}
-
-	return usage.ru_maxrss * 1024;
+	g_clear_error(&err);
+	g_free(content);
+	return usage;
 }
 
 gboolean
