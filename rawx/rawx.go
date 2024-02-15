@@ -44,6 +44,11 @@ type rawxService struct {
 	lastIOSuccess time.Time
 	lastIOMsg     string
 	lastIOReport  time.Time
+
+	// for diskStat
+	lastDiskstatProbe time.Time
+	lastBusyMs        uint64
+	diskBusyPercent   uint
 }
 
 type rawxRequest struct {

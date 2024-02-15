@@ -38,6 +38,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"github.com/prometheus/procfs"
+	"github.com/prometheus/procfs/blockdevice"
 )
 
 type httpServer struct {
@@ -261,6 +263,63 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 			}
 		}
 	}()
+}
+
+func taskProbeDiskstat(rawx *rawxService, finished chan bool, proc *procfs.Proc, procDisk *blockdevice.FS) {
+	for {
+		select {
+		case <-finished:
+			LogInfo("Stop the diskstat probe")
+			return
+		default:
+		}
+
+		time.Sleep(time.Second)
+
+		mounts, err := proc.MountInfo()
+		if err != nil {
+			LogWarning("Unable to retrieve Diskstats: %v", err)
+			continue
+		}
+
+		device := ""
+		for _, mount := range mounts {
+			if strings.HasPrefix(mount.MountPoint, "/srv/node") && strings.HasPrefix(rawx.path, mount.MountPoint) {
+				device = mount.Source
+				break
+			}
+		}
+
+		if device == "" {
+			LogWarning("unable to find device on which our docroot (%s) is mounted", rawx.path)
+			continue
+		}
+
+		stats, err := procDisk.ProcDiskstats()
+		if err != nil {
+			LogWarning("Unable to retrieve Diskstats: %v", err)
+			break
+		} else {
+			for _, stat := range stats {
+				_device := "/proc/" + stat.DeviceName
+				if _device == device {
+					busy_ms := stat.IOsTotalTicks
+					//backlog_ms := stat.WeightedIOTicks
+					now := time.Now()
+					if !rawx.lastDiskstatProbe.IsZero() && rawx.lastBusyMs > 0 { // don't update on first loop
+						busy_percent := int64(busy_ms - rawx.lastBusyMs) / now.Sub(rawx.lastDiskstatProbe).Milliseconds()
+						if busy_percent > 100 {
+							busy_percent = 100
+						}
+						rawx.diskBusyPercent = uint(busy_percent)
+					}
+					rawx.lastBusyMs = busy_ms
+					rawx.lastDiskstatProbe = now
+					break
+				}
+			}
+		}
+	}
 }
 
 func taskProbeRepository(rawx *rawxService, finished chan bool) {
@@ -578,8 +637,19 @@ func main() {
 		}
 	}
 
+	proc, err := procfs.Self()
+	if err != nil {
+		LogFatal("Unable to open /proc FS: %v", err)
+	}
+
+	procDisk, err := blockdevice.NewDefaultFS()
+	if err != nil {
+		LogFatal("Unable to open /proc and /sys for block device: %v", err)
+	}
+
 	finished := make(chan bool)
 	go taskProbeRepository(&rawx, finished)
+	go taskProbeDiskstat(&rawx, finished, &proc, &procDisk)
 
 	// run HTTP server
 	if err := Run(&wg, &srv, "", ""); err != nil {
