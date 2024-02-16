@@ -41,7 +41,8 @@ DEFAULT_DELAY_GRANULARITY = 60
 KAFKA_CONF_COMMON_PREFIX = "kafka_common_"
 KAFKA_CONF_CONSUMER_PREFIX = "kafka_consumer_"
 KAFKA_CONF_PRODUCER_PREFIX = "kafka_producer_"
-POLL_TIMEOUT = 10
+POLL_TIMEOUT = 0
+FLUSH_TIMEOUT = 10
 
 
 def get_delay_granularity(conf):
@@ -60,21 +61,25 @@ def get_retry_delay(conf, default_delay=None):
     return int_value(conf.get("retry_delay"), default_delay)
 
 
-class KafkaError(OioException):
+class KafkaBaseException(OioException):
     pass
 
 
-class KafkaSendException(KafkaError):
+class KafkaSendException(KafkaBaseException):
     def __init__(self, *args, retriable=False):
         super().__init__(args)
         self.retriable = retriable
 
 
-class KafkaTopicNotFoundException(KafkaError):
+class KafkaTopicNotFoundException(KafkaBaseException):
     pass
 
 
-class KafkaPartitionNotAssignedException(KafkaError):
+class KafkaPartitionNotAssignedException(KafkaBaseException):
+    pass
+
+
+class KafkaFatalException(KafkaBaseException):
     pass
 
 
@@ -107,16 +112,22 @@ class KafkaClient:
             **options,
         }
 
-        for key, value in conf.items():
-            self._logger.info("Setting option %s=%s", key, value)
+        self._logger.info(
+            "Instantiate %s (options: %s)",
+            self.__client_class.__name__,
+            ", ".join(f"{k}={v}" for k, v in conf.items()),
+        )
         try:
-            self._client = self.__client_class(conf, logger=self._logger)
-        except KafkaException as err:
+            self._client = self.__client_class(conf)
+        except KafkaException as exc:
             self._logger.error(
                 "Failed to start Kafka client (%s), reason: %s",
                 self.__client_class.__name__,
-                str(err),
+                exc,
             )
+            err = exc.args[0]
+            if not err.retriable():
+                raise KafkaFatalException() from exc
 
     def ensure_topics_exist(self, topics):
         for topic in topics:
@@ -191,23 +202,35 @@ class KafkaSender(KafkaClient):
         super()._connect(options)
         self.ensure_topics_exist([self._delayed_topic])
 
-    def _send(self, topic, data, flush=False, callback=None):
+    def _produce_callback(self, err, msg):
+        if err:
+            if not err.retriable():
+                self._logger.error("Unable to produce event, reason: %s", str(err))
+                raise KafkaFatalException(err)
+            else:
+                self._logger.warning(
+                    "Unable to produce event, retry later. Reason: %s", str(err)
+                )
+
+    def _send(self, topic, data, flush=False):
         try:
             if isinstance(data, str):
                 data = data.encode("utf8")
             elif isinstance(data, dict):
                 data = json.dumps(data, separators=(",", ":")).encode("utf8")
 
-            self._client.produce(topic, data, callback=callback)
-            self._client.poll(0)
+            self._client.produce(topic, data, callback=self._produce_callback)
 
             if flush:
-                nb_msg = self._client.flush(10.0)
+                nb_msg = self._client.flush(1.0)
                 if nb_msg > 0:
                     self._logger.warning(
                         "All events are not flushed. %d are still in queue", nb_msg
                     )
-        except KafkaException as exc:
+            else:
+                self._client.poll(POLL_TIMEOUT)
+
+        except (BufferError, KafkaException) as exc:
             self._logger.warning(
                 "Failed to send event to topic %s, reason: %s", topic, exc
             )
@@ -240,20 +263,23 @@ class KafkaSender(KafkaClient):
 
         return delayed_event
 
-    def send(self, topic, data, delay=0, flush=False, callback=None):
+    def send(self, topic, data, delay=0, flush=False):
         if delay > 0:
             # Encapsulate event in a delayed one
             data = self._generate_delayed_event(topic, data, delay)
             topic = self._delayed_topic
 
-        self._send(topic, data, flush=flush, callback=callback)
+        self._send(topic, data, flush=flush)
 
     def flush(self, timeout=None):
         return self._client.flush(timeout)
 
     def _close(self):
-        self._client.poll(POLL_TIMEOUT)
-        self._client.flush()
+        remaining = self._client.flush(FLUSH_TIMEOUT)
+        if remaining > 0:
+            self._logger.error(
+                "Some produced events may not be acknowledged (%d)", remaining
+            )
 
     def _get_conf(self):
         _, producer_conf = self._kafka_options_from_conf()
@@ -305,7 +331,14 @@ class KafkaConsumer(KafkaClient):
 
     def fetch_events(self):
         while True:
-            yield self._client.poll(1.0)
+            try:
+                yield self._client.poll(1.0)
+            except KafkaException as exc:
+                self._logger.error("Failed to fetch event, reason %s", exc)
+                error = exc.args[0]
+                if not error.retriable():
+                    raise KafkaFatalException() from exc
+                yield None
 
     def _is_valid_offset(self):
         return self.consumer.assignment()[0].offset != OFFSET_INVALID
@@ -361,16 +394,25 @@ class KafkaConsumer(KafkaClient):
         kwargs = {"asynchronous": False}
         if offsets:
             kwargs["offsets"] = offsets
+            log_message = f"offsets: {offsets}"
         else:
             kwargs["message"] = message
+            log_message = f"message: {message}"
+        self._logger.debug("Commiting %s", log_message)
         try:
             partitions = self._client.commit(**kwargs)
             errors = [p.error for p in partitions if p.error]
-
             if errors:
                 self._logger.error("Failed to commit partitions: %s", errors)
-        except KafkaException as err:
-            self._logger.error("Failed to commit: %s", str(err))
+                return False
+        except KafkaException as exc:
+            self._logger.error("Failed to commit %s, reason: %s", log_message, str(exc))
+            err = exc.args[0]
+            if not err.retriable():
+                raise KafkaFatalException() from exc
+            return False
+        self._logger.info("Successfuly commit %s", log_message)
+        return True
 
     def _get_conf(self):
         consumer_conf, _ = self._kafka_options_from_conf()

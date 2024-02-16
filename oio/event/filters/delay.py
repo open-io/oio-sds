@@ -39,10 +39,11 @@ class DelayFilter(Filter):
     def init(self):
         self.topic = self.conf.get("topic", DEFAULT_DELAYED_TOPIC)
         self._delay_granularity = get_delay_granularity(self.conf)
+
+    def process(self, env, cb):
         if not self._producer:
             self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
 
-    def process(self, env, cb):
         # Ensure the event contains all required data
         data = env.get("data")
         if not data:
@@ -72,7 +73,7 @@ class DelayFilter(Filter):
             new_env = env.copy()
             data = new_env["data"]
             data["next_due_time"] = datetime.now().timestamp() + self._delay_granularity
-            self._producer.send(self.topic, new_env)
+            self._producer.send(self.topic, new_env, flush=True)
         else:
             # Restore original event data
             source_event = env["data"]["source_event"]

@@ -27,6 +27,7 @@ from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
     KafkaConsumer,
     KafkaSender,
+    KafkaFatalException,
     get_retry_delay,
 )
 from oio.common.logger import get_logger
@@ -398,7 +399,10 @@ class KafkaBatchFeeder(Process):
                 self._fetched_events += 1
 
             elif event and event.error():
-                self.logger.error("Failed to fetch event, reason: %s", event.error())
+                error = event.error()
+                self.logger.error("Failed to fetch event, reason: %s", error)
+                if not error.retriable():
+                    raise KafkaFatalException(error)
 
             if self._fetched_events == self._batch_size:
                 # Batch complete
@@ -432,14 +436,17 @@ class KafkaBatchFeeder(Process):
         start_offsets = {}
         try:
             while True:
-                # Reset batch
-                self._fetched_events = 0
-                self._offsets_to_commit = {}
-                self._connect()
-                # Retrieve events
-                start_offsets = self._fill_batch()
-                self._wait_batch_processed()
-                self._commit_batch(start_offsets)
+                try:
+                    # Reset batch
+                    self._fetched_events = 0
+                    self._offsets_to_commit = {}
+                    self._connect()
+                    # Retrieve events
+                    start_offsets = self._fill_batch()
+                    self._wait_batch_processed()
+                    self._commit_batch(start_offsets)
+                except KafkaFatalException:
+                    self._close()
         except StopIteration:
             ...
         # Try to commit even a partial batch
@@ -462,6 +469,12 @@ class KafkaBatchFeeder(Process):
                     "worker": self._worker_id,
                 },
             )
+
+    def _close(self):
+        if self._consumer:
+            self.logger.info("Terminating consumer")
+            self._consumer.close()
+            self._consumer = None
 
     def _commit_batch(self, start_offsets):
         _offsets = []
