@@ -1041,6 +1041,7 @@ _task_probe_repository(gpointer p)
 {
 	struct sqlx_service_s *ss = PSRV(p);
 	int rc, errsav;
+	gchar *msg = NULL;
 	GError *err = NULL;
 	gchar path[PATH_MAX], subdir[16], filename[16];
 
@@ -1056,31 +1057,32 @@ _task_probe_repository(gpointer p)
 	errsav = errno;
 	(void) g_rmdir(path);
 	if (rc != 0) {
-		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
+		msg = g_strdup_printf("IO error on %s %s: (%d) %s",
 				_get_url(ss), path, errsav, strerror(errsav));
-		GRID_WARN("%s", msg);
-		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);
-		g_free(msg);
-		return;
+		GRID_WARN("%s, leaving all elections in master state", msg);
+	} else {
+		/* Try a file creation */
+		g_strlcpy(path, ss->volume, sizeof(path));
+		g_strlcat(path, "/probe-", sizeof(path));
+		g_strlcat(path, filename, sizeof(path));
+		GRID_DEBUG("Probing file %s", path);
+		rc = g_file_set_contents(path, "", 0, &err);
+		(void) g_unlink(path);
+		if (!rc) {
+			msg = g_strdup_printf("IO error on %s %s: (%d) %s",
+					_get_url(ss), path, err->code, err->message);
+			GRID_WARN("%s, leaving all elections in master state", msg);
+			g_clear_error(&err);
+		}
 	}
 
-	/* Try a file creation */
-	g_strlcpy(path, ss->volume, sizeof(path));
-	g_strlcat(path, "/probe-", sizeof(path));
-	g_strlcat(path, filename, sizeof(path));
-	GRID_DEBUG("Probing file %s", path);
-	rc = g_file_set_contents(path, "", 0, &err);
-	(void) g_unlink(path);
-	if (!rc) {
-		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
-				_get_url(ss), path, err->code, err->message);
-		GRID_WARN("%s", msg);
-		g_clear_error(&err);
-		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);
-		return;
+	if (msg != NULL && election_manager_configured(SRV.election_manager)) {
+		election_manager_balance_masters(
+				SRV.election_manager, G_MAXINT32, 0, FALSE);
 	}
 
-	grid_daemon_notify_io_status(ss->dispatcher, TRUE, NULL);
+	grid_daemon_notify_io_status(ss->dispatcher, msg == NULL, msg);
+	g_free(msg);
 }
 
 static void
