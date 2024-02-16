@@ -1589,6 +1589,18 @@ topic = oio-delayed
 use = egg:oio#logger
 """
 
+template_event_agent_replication_delay_handlers = """
+[handler:delayed]
+pipeline = delay
+
+[filter:delay]
+use = egg:oio#delay
+topic = oio-replication-delayed
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
 template_event_agent_rebuilder_handlers = """
 [handler:storage.content.broken]
 pipeline = rebuild
@@ -2952,6 +2964,42 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to delayed events from replicator
+    # --------------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_instance(use_kafka):
+        env = subenv(
+            {
+                "SRVTYPE": "event-agent",
+                "SRVNUM": num,
+                "QUEUE_NAME": "oio-replication-delayed",
+                "QUEUE_URL": url,
+                "EXE": event_agent_bin,
+                "EVENT_WORKERS": "1",
+                "GROUP_ID": "event-agent-replication-delay",
+                "QUEUE_TYPE": "default",
+                "QUEUE_IDS": "",
+            }
+        )
+        register_service(
+            env,
+            template_systemd_service_event_agent,
+            event_agents_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context event-agent --concurrency=eventlet -p ",
+        )
+        with open(config(env), "w+", encoding="utf8") as outf:
+            tpl = Template(template_event_agent)
+            outf.write(tpl.safe_substitute(env))
+        with open(
+            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
+        ) as outf:
+            tpl = Template(template_event_agent_replication_delay_handlers)
+            outf.write(tpl.safe_substitute(env))
+
+        # We need only one service
+        break
+
     # Configure a special oio-event-agent dedicated to content broken events
     # -------------------------------------------------------------------------
     num += 1
@@ -3127,6 +3175,7 @@ def generate(options):
             "oio-preserved",
             "oio-rebuild",
             "oio-replication",
+            "oio-replication-delayed",
             "oio-xcute",
             "oio-xcute-reply",
         ]
