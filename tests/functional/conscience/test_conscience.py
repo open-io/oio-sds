@@ -19,7 +19,6 @@ import random
 import re
 import time
 
-from flaky import flaky
 from oio.common.json import json
 from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase
@@ -62,7 +61,7 @@ class TestConscienceFunctional(BaseTestCase):
         :param expect_empty: if True, expect an empty list. When False, and
                              an empty list is received, retry (2 times).
         """
-        for _ in range(3):
+        for _ in range(4):
             resp = self.request("GET", self._url_cs("list"), params={"type": "echo"})
             self.assertEqual(resp.status, 200)
             parsed = self.json_loads(resp.data)
@@ -345,7 +344,6 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(2, my_rawx["scores"]["score.get"])
         self.conscience.unlock_score(one_rawx)
 
-    @flaky()
     def test_deregister_services(self):
         self._flush_cs("echo")
         self._reload()
@@ -354,8 +352,6 @@ class TestConscienceFunctional(BaseTestCase):
         expected_services.append(self._srv("echo", ip="127.0.0.2"))
         expected_services.append(self._srv("echo", ip="127.0.0.3"))
         self._register_srv(expected_services)
-        # Sometimes the proxy's service registration thread is slow,
-        # and we get only a partial list, hence the flaky decorator.
         services = self._list_srvs("echo")
         self.assertListEqual(
             sorted([srv["addr"] for srv in expected_services]),

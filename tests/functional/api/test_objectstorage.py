@@ -115,6 +115,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
             )
             self.created.append((container, obj, obj_meta["version"]))
             created.append(obj_meta)
+        self.clean_later(container)
         return created
 
     def _check_stats(
@@ -206,7 +207,7 @@ class UnreliableResponse(CustomHTTPResponse):
 class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_container_show(self):
         # container_show on unknown container
-        name = random_str(32)
+        name = "ct-show-" + random_str(6)
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_show, self.account, name
         )
@@ -225,7 +226,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_container_create(self):
-        name = random_str(32)
+        name = "ct-create-" + random_str(6)
         res = self._create(name)
         self.assertEqual(res, True)
 
@@ -246,7 +247,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(exc.ClientException, self._create, name)
 
     def test_create_properties(self):
-        name = random_str(32)
+        name = "ct-create-prop-" + random_str(6)
 
         metadata = {
             random_str(32): random_str(32),
@@ -359,7 +360,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_get_properties_filtered(self):
         self.skipTest("Server side properties filtering not implemented")
-        name = random_str(32)
+        name = "ct-prop-" + random_str(6)
 
         res = self._create(name)
         self.assertEqual(res, True)
@@ -1288,7 +1289,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(account)
 
     def test_container_refresh_user_not_found(self):
-        name = random_str(32)
+        name = "ct-refresh-" + random_str(6)
         self.wait_for_score(("account", "meta2"))
         self.api.account.container_update(name, name, time.time(), 0, 0)
         self.api.container_refresh(name, name)
@@ -1402,13 +1403,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_account_flush(self):
         self.wait_for_score(("account", "meta2"))
         # account_flush on unknown account
-        account = random_str(32)
+        account = "acct-flush-" + random_str(6)
         self.assertRaises(exc.NoSuchAccount, self.api.account_flush, account)
 
         # account_flush on existing account
-        name1 = random_str(32)
+        name1 = "acct-flush-" + random_str(6)
         self.api.container_create(account, name1)
-        name2 = random_str(32)
+        name2 = "acct-flush-" + random_str(6)
         self.api.container_create(account, name2)
         self.beanstalkd.wait_until_empty("oio")
         time.sleep(0.1)
@@ -1819,7 +1820,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_content_id(self):
         def _check_content_id(content_id=None):
-            name = random_str(32)
+            name = "obj-create-id-" + random_str(6)
+            self.clean_later(name)
             chunks, _, _ = self.api.object_create(
                 self.account, name, data=b"data", obj_name=name, content_id=content_id
             )
@@ -1834,7 +1836,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_delete(self):
         container = "obj-del-" + random_str(6)
-        obj = random_str(6)
+        obj = "obj-del-" + random_str(6)
         self._create(container)
         obj_meta = self._upload_empty(container, obj)[0]
 
@@ -1855,7 +1857,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_delete_with_versioning(self):
         container = "obj-del-" + random_str(6)
-        obj = random_str(6)
+        obj = "obj-del-" + random_str(6)
         self._create(container, versioning=True)
         obj_meta = self._upload_empty(container, obj)[0]
 
@@ -1909,8 +1911,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
 
     def test_object_delete_many(self):
-        container = random_str(8)
-        objects = ["obj%d" % i for i in range(8)]
+        container = "del-many-" + random_str(6)
+        self.clean_later(container)
+        objects = [f"del-many-{i}" for i in range(8)]
         for obj in objects:
             self.api.object_create(
                 self.account, container, obj_name=obj, data=obj.encode("utf-8")
@@ -1927,7 +1930,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_delete_with_delete_marker(self):
         container = "cont-del-" + random_str(6)
-        obj = random_str(6)
+        obj = "del-marker-" + random_str(6)
         self._create(container, versioning=True)
         obj_meta = self._upload_empty(container, obj)[0]
 
@@ -2135,7 +2138,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertFalse(self.api.object_head(self.account, cname, path, trust_level=2))
 
     def test_object_create_without_autocreate_and_missing_container(self):
-        name = random_str(32)
+        name = "obj-create-" + random_str(6)
         self.assertRaises(
             exc.NoSuchContainer,
             self.api.object_create,
@@ -2436,6 +2439,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             except Exception as exc:
                 self.logger.warning("Failed to unlock rawx services: %s", exc)
             self._service(systemd_key, "start", wait=4)
+            self.wait_for_score(("rawx",))
 
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
@@ -3701,6 +3705,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             except Exception as exc:
                 self.logger.warning("Failed to unlock rawx services: %s", exc)
             self._service(systemd_key, "start", wait=4)
+            self.wait_for_score(("rawx",))
 
     def test_object_fetch(self):
         # Fetch the original object to make sure the cache is filled

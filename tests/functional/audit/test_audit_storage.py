@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,7 +33,7 @@ from oio.common.fullpath import encode_fullpath
 class TestContent(object):
     def __init__(self, account, ref):
         self.cid = cid_from_name(account, ref)
-        self.path = random_str(6)
+        self.path = "test-content-" + random_str(6)
         self.version = int(time.time() * 1000000)
         self.id = random_id(32)
         self.fullpath = encode_fullpath(account, ref, self.path, self.version, self.id)
@@ -58,7 +58,7 @@ class TestChunk(object):
     ):
         self.pos = 0
         self.id = compute_chunk_id(cid, path, version, self.pos, policy)
-        self.url = "%s/%s" % (rawx_id, self.id)
+        self.url = f"{rawx_id}/{self.id}"
         self.path = rawx_loc + "/" + self.id[0:3] + "/" + self.id
         self.metachunk_size = metachunk_size
         self.metachunk_hash = metachunk_hash
@@ -71,7 +71,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
         super(TestBlobAuditorFunctional, self).setUp()
         self.namespace = self.conf["namespace"]
         self.account = self.conf["account"]
-        self.ref = random_str(8)
+        self.ref = "blob-auditor-" + random_str(6)
 
         _, rawx_loc, rawx_addr, rawx_uuid = self.get_service_url("rawx")
         self.rawx_id = "http://" + (rawx_uuid if rawx_uuid else rawx_addr)

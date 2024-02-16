@@ -370,19 +370,20 @@ class Checker(object):
                         err,
                     )
 
-    def recover_and_complete_object_meta(self, target, chunk):
+    def recover_and_complete_object_meta(self, target, chunk, attempts=3):
         _, rawx_service, chunk_id = chunk.rsplit("/", 2)
         # 1. Fetch chunk list from rdir (could be cached).
         # Unfortunately we cannot seek for a chunk ID.
-        entries = [
-            x
-            for x in self.rdir_client.chunk_fetch(rawx_service, limit=-1)
-            if x[1] == chunk_id
-        ]
-        if not entries:
-            self.logger.warn("Chunk %s not found in rdir" % chunk_id)
+        for _ in range(attempts):
+            entries = self.rdir_client.chunk_search(rawx_service, chunk_id, limit=10000)
+            if entries:
+                break
+        else:
+            self.logger.warn(
+                "Chunk %s not found in rdir after %d attempts", chunk_id, attempts
+            )
             return
-        elif len(entries) > 1:
+        if len(entries) > 1:
             self.logger.info("Chunk %s appears in %d objects", chunk_id, len(entries))
         # 2. Find content and container IDs
         target.cid = entries[0][0]
