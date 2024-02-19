@@ -104,6 +104,8 @@ broker_endpoint = kafka://localhost:19092
 topic_prefix = oio-delete-
 # Time in seconds before an event should be reprocessed
 retry_delay = 60
+# Cache duration for rawx services
+services_cache_duration = 3600
 
 # -----------------------------------------------------------------
 # Spread delete events accross rawx servers
