@@ -191,10 +191,16 @@ class KafkaConsumerWorker(Process):
                 self.process_message(body, properties)
                 self.acknowledge_message(event)
 
-            except RejectMessage as err:
+            except RejectMessage as exc:
                 delay = None
-                if isinstance(err, RetryLater):
-                    delay = err.delay
+                if isinstance(exc, RetryLater):
+                    delay = exc.delay
+                if delay:
+                    self.logger.debug("Retry later message %s: %s", event, exc)
+                else:
+                    self.logger.error(
+                        "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
+                    )
                 self.reject_message(event, delay=delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
