@@ -126,7 +126,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
         handler = self.handlers.get(message.get("event"), None)
         if not handler:
             self.log_and_statsd(start, 404, replacements)
-            raise RejectMessage
+            raise RejectMessage(f"No handler for {message.get('event')}")
 
         def cb(status, msg, **kwargs):
             self.log_and_statsd(start, status, replacements)
@@ -150,6 +150,8 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 self.logger.error(
                     "event handling failure (rejecting): %s reqid=%s", msg, reqid
                 )
-                raise RejectMessage
+                raise RejectMessage(
+                    f"Failed to process message {msg}: ({reqid}) {status}"
+                )
 
         handler(message, cb)
