@@ -234,10 +234,11 @@ class KafkaSender(KafkaClient):
             self._logger.warning(
                 "Failed to send event to topic %s, reason: %s", topic, exc
             )
-            retriable = False
-            if isinstance(KafkaException, exc):
+            if isinstance(exc, KafkaException):
                 err = exc.args[0]
                 retriable = err.retriable()
+            else:  # Internal queue is full, we can retry later
+                retriable = True
             raise KafkaSendException(
                 "Failed to send event", retriable=retriable
             ) from exc
@@ -402,7 +403,7 @@ class KafkaConsumer(KafkaClient):
         else:
             kwargs["message"] = message
             log_message = f"message: {message}"
-        self._logger.debug("Commiting %s", log_message)
+        self._logger.debug("Committing %s", log_message)
         try:
             partitions = self._client.commit(**kwargs)
             errors = [p.error for p in partitions if p.error]
@@ -415,7 +416,7 @@ class KafkaConsumer(KafkaClient):
             if not err.retriable():
                 raise KafkaFatalException() from exc
             return False
-        self._logger.info("Successfuly commit %s", log_message)
+        self._logger.debug("Successfully commit %s", log_message)
         return True
 
     def _get_conf(self):
