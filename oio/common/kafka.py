@@ -234,8 +234,12 @@ class KafkaSender(KafkaClient):
             self._logger.warning(
                 "Failed to send event to topic %s, reason: %s", topic, exc
             )
+            retriable = False
+            if isinstance(KafkaException, exc):
+                err = exc.args[0]
+                retriable = err.retriable()
             raise KafkaSendException(
-                "Failed to send event", retriable=exc.retriable()
+                "Failed to send event", retriable=retriable
             ) from exc
 
     def _generate_delayed_event(self, topic, event, delay):
