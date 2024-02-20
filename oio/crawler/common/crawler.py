@@ -272,6 +272,7 @@ class CrawlerWorker(object):
                 self.logger.info("stop asked for loop paths")
                 break
 
+            # process_path() is supposed to be exception-safe
             if not self.process_path(path):
                 continue
 
@@ -282,12 +283,18 @@ class CrawlerWorker(object):
             )
 
             if self.use_marker:
-                nb_path_processed = nb_path_processed + 1
+                nb_path_processed += 1
                 if nb_path_processed >= self.scanned_between_markers:
                     # Update marker and reset counter
                     nb_path_processed = 0
                     self.marker_current = path.rsplit("/", 1)[-1]
-                    self._write_marker()
+                    try:
+                        self._write_marker()
+                    except OSError as err:
+                        self.report("ended with error", force=True)
+                        raise OSError(
+                            f"Failed to write progress marker: {err}"
+                        ) from err
 
             self.report("running")
 
@@ -299,10 +306,13 @@ class CrawlerWorker(object):
         self.successes = 0
         self.ignored_paths = 0
         self.invalid_paths = 0
-        if self.use_marker:
+        if self.use_marker and self.marker_current != "0":
             # reset marker
             self.marker_current = "0"
-            self._write_marker()
+            try:
+                self._write_marker()
+            except OSError as err:
+                self.logger.error("Failed to reset progress marker: %s", err)
 
     def run(self):
         if self.wait_random_time_before_starting:
@@ -313,34 +323,36 @@ class CrawlerWorker(object):
                     return
                 time.sleep(1)
         while self.running:
+            start_crawl = time.time()
             try:
-                start_crawl = time.time()
                 self.crawl_volume()
-                crawling_duration = time.time() - start_crawl
-                self.logger.debug(
-                    "start_crawl %d crawling_duration %d",
-                    start_crawl,
-                    crawling_duration,
-                )
-                if self.one_shot:
-                    # For one shot crawler, we exit after the first execution
-                    return
-                waiting_time_to_restart = self.scans_interval - crawling_duration
-                if waiting_time_to_restart > 0:
-                    for _ in range(int(waiting_time_to_restart)):
-                        if not self.running:
-                            return
-                        time.sleep(1)
-                else:
-                    self.logger.warning(
-                        "crawling_duration=%d for volume_id=%s"
-                        " is higher than interval=%d",
-                        crawling_duration,
-                        self.volume_id,
-                        self.scans_interval,
-                    )
+            except OSError as err:
+                self.logger.error("Failed to crawl volume: %s", err)
             except Exception:
                 self.logger.exception("Failed to crawl volume")
+            crawling_duration = time.time() - start_crawl
+            self.logger.debug(
+                "start_crawl %d crawling_duration %d",
+                start_crawl,
+                crawling_duration,
+            )
+            if self.one_shot:
+                # For one shot crawler, we exit after the first execution
+                return
+            waiting_time_to_restart = self.scans_interval - crawling_duration
+            if waiting_time_to_restart > 0:
+                for _ in range(int(waiting_time_to_restart)):
+                    if not self.running:
+                        return
+                    time.sleep(1)
+            else:
+                self.logger.warning(
+                    "crawling_duration=%d for volume_id=%s"
+                    " is higher than interval=%d",
+                    crawling_duration,
+                    self.volume_id,
+                    self.scans_interval,
+                )
 
     def stop(self):
         """
