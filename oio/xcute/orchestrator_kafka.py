@@ -640,6 +640,7 @@ class XcuteOrchestrator(object):
         )
 
         while self.running:
+            kafka_consumer = None
             try:
                 kafka_consumer = KafkaConsumer(
                     self.kafka_endpoints,
@@ -674,7 +675,8 @@ class XcuteOrchestrator(object):
             except Exception as exc:
                 self.logger.error("Error processing reply: %s", exc)
             finally:
-                kafka_consumer.close()
+                if kafka_consumer:
+                    kafka_consumer.close()
 
         self.logger.info("Exited thread to listen reply")
 
