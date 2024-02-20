@@ -407,7 +407,7 @@ class KafkaConsumer(KafkaClient):
         else:
             kwargs["message"] = message
             log_message = f"message: {message}"
-        self._logger.debug("Commiting %s", log_message)
+        self._logger.debug("Committing %s", log_message)
         try:
             partitions = self._client.commit(**kwargs)
             errors = [p.error for p in partitions if p.error]
@@ -420,7 +420,7 @@ class KafkaConsumer(KafkaClient):
             if not err.retriable():
                 raise KafkaFatalException() from exc
             return False
-        self._logger.info("Successfuly commit %s", log_message)
+        self._logger.debug("Successfully commit %s", log_message)
         return True
 
     def _get_conf(self):
