@@ -1507,6 +1507,10 @@ pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
 
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
+
 [filter:content_rebuild]
 use = egg:oio#notify
 tube = oio-rebuild
@@ -1576,10 +1580,14 @@ queue_url = ${MAIN_QUEUE_URL}
 
 template_event_agent_delete_handlers = """
 [handler:storage.content.deleted]
-pipeline = content_cleaner ${PRESERVE}
+pipeline = content_cleaner mpu_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
 pipeline = content_cleaner ${PRESERVE}
+
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner

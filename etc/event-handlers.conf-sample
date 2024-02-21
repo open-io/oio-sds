@@ -18,7 +18,7 @@ pipeline = content_rebuild
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
-pipeline = content_cleaner
+pipeline = content_cleaner mpu_cleaner
 
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
@@ -66,6 +66,12 @@ use = egg:oio#content_cleaner
 # (if timeout is not defined)
 #connection_timeout=1.0
 #read_timeout=5.0
+
+#
+#
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
 
 # -----------------------------------------------------------------
 # For container events: update counters inside the account service
