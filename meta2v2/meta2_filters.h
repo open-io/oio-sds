@@ -52,7 +52,7 @@ void _m2b_notify_beans2(
 		struct oio_events_queue_s *notifier,
 		struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks,
-		const char* dests);
+		const char* dests, const char* etag);
 
 /* -------------------------------------------------------------------------- */
 
@@ -84,6 +84,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_delete_marker);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_bypass_governance);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_dryrun);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_nb_mpu_parts);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_etag);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_maxvers);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_repli_destinations);

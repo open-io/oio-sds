@@ -378,6 +378,7 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_flags32,
 	meta2_filter_extract_header_optional_nb_mpu_parts,
+	meta2_filter_extract_header_optional_etag,
 	meta2_filter_extract_header_optional_repli_destinations,
 	meta2_filter_extract_force_versioning,
 	meta2_filter_extract_simulate_versioning,

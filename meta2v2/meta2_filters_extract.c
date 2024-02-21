@@ -307,6 +307,18 @@ meta2_filter_extract_header_optional_nb_mpu_parts(
 	return FILTER_OK;
 }
 
+
+int
+meta2_filter_extract_header_optional_etag(
+		struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_ETAG);
+	return FILTER_OK;
+}
+
 int
 meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
