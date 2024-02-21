@@ -242,6 +242,14 @@ class ContainerClient(ProxyClient):
             data["nb_mpu_parts"] = nb_mpu_parts
         return data
 
+    def _add_etag(self, data, **kwargs):
+        if data is None:
+            data = {}
+        etag = kwargs.get("etag")
+        if etag:
+            data["etag"] = etag
+        return data
+
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
     ):
@@ -855,6 +863,7 @@ class ContainerClient(ProxyClient):
         )
 
         data = self._add_replication_destinations({}, **kwargs)
+        data = self._add_etag(data, **kwargs)
         data = json.dumps(data)
         resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
         delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))

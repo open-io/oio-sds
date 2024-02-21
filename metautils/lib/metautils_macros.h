@@ -62,6 +62,7 @@ License along with this library.
 #define NAME_MSGKEY_DELIMITER          "DELIMITER"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
+#define NAME_MSGKEY_ETAG               "ETAG"
 #define NAME_MSGKEY_EVENT              "E"
 #define NAME_MSGKEY_EXTEND             "EXT"
 #define NAME_MSGKEY_FLAGS              "FLAGS"

@@ -48,6 +48,7 @@ class Event(object):
     url = _event_env_property("url")
     when = _event_env_property("when")
     destinations = _event_env_property("destinations")
+    etag = _event_env_property("etag")
 
     def __init__(self, env):
         self.env = env

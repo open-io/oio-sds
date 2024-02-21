@@ -143,6 +143,7 @@ GByteArray* m2v2_remote_pack_DEL(
 		gboolean dryrun,
 		const char *destinations,
         gint64 nb_mpu_parts,
+		const char *etag,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(

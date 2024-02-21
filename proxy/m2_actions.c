@@ -4426,8 +4426,12 @@ static GError *_m2_json_delete (struct req_args_s *args,
 	json_object_object_get_ex(jbody, "replication_destinations", &jdests);
 	const gchar *destinations = !jdests ? NULL : json_object_get_string(jdests);
 
+	struct json_object *jetag = NULL;
+	json_object_object_get_ex(jbody, "etag", &jetag);
+	const gchar *etag = !jetag ? NULL : json_object_get_string(jetag);
+
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, destinations, 0, DL()); }
+			bypass_governance, create_delete_marker, dryrun, destinations, 0, etag, DL()); }
 	gboolean delete_marker = FALSE;
 	gint64 version = -1;
 	struct list_result_s del_result = {0};
@@ -4542,7 +4546,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 
 	json_object *jarray = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
-			bypass_governance, create_delete_marker, dryrun, NULL, nb_mpu_parts, DL()); }
+			bypass_governance, create_delete_marker, dryrun, NULL, nb_mpu_parts, NULL, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,
