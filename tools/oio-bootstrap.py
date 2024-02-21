@@ -2528,7 +2528,7 @@ def generate(options):
         for i in range(nb_rawx):
             host_idx = i % len(hosts)
             host = hosts[host_idx]
-            slot = get_rawx_slot(host_idx + 1)
+            slot = get_rawx_slot(i)
             env = subenv(
                 {
                     "IP": host,
@@ -2818,7 +2818,7 @@ def generate(options):
     event_agent_bin = "oio-event-agent"
     event_agent_count = getint(options["event-agent"].get(SVC_NB), len(all_beanstalkd))
 
-    def get_instance(kafka=False):
+    def get_event_agent_details(kafka=False):
         if kafka:
             for i in range(event_agent_count):
                 yield i + 1, ENV["KAFKA_QUEUE_URL"], "oio-event-agent-kafka"
@@ -2826,19 +2826,27 @@ def generate(options):
             for i, host, port in all_beanstalkd:
                 yield i, "beanstalk://{0}:{1}".format(host, port), "oio-event-agent"
 
-    # Event agent configuration -> one per beanstalkd
-    for num, url, event_agent_bin in get_instance(use_kafka):
+    def add_event_agent_conf(
+        num,
+        queue_name,
+        url,
+        workers,
+        group_id,
+        template,
+        queue_type="default",
+        queue_ids="",
+    ):
         env = subenv(
             {
                 "SRVTYPE": "event-agent",
                 "SRVNUM": num,
-                "QUEUE_NAME": "oio",
+                "QUEUE_NAME": queue_name,
                 "QUEUE_URL": url,
                 "EXE": event_agent_bin,
-                "EVENT_WORKERS": "2",
-                "GROUP_ID": "event-agent",
-                "QUEUE_TYPE": "default",
-                "QUEUE_IDS": "",
+                "EVENT_WORKERS": workers,
+                "GROUP_ID": group_id,
+                "QUEUE_TYPE": queue_type,
+                "QUEUE_IDS": queue_ids,
             }
         )
         register_service(
@@ -2852,114 +2860,68 @@ def generate(options):
             tpl = Template(template_event_agent)
             f.write(tpl.safe_substitute(env))
         with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as f:
-            tpl = Template(template_event_agent_handlers)
+            tpl = Template(template)
             f.write(tpl.safe_substitute(env))
+
+    # Event agent configuration -> one per beanstalkd
+    for num, url, event_agent_bin in get_event_agent_details(use_kafka):
+        add_event_agent_conf(
+            num,
+            "oio",
+            url,
+            workers="2",
+            group_id="event-agent",
+            template=template_event_agent_handlers,
+        )
 
     # Configure a special oio-event-agent dedicated to chunk deletions per host
     # -------------------------------------------------------------------------
-    for _, url, event_agent_bin in get_instance(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
         for i, host in enumerate(hosts):
-            slot = get_rawx_slot(i + 1)
-            num += 1
-            env = subenv(
-                {
-                    "SRVTYPE": "event-agent",
-                    "SRVNUM": num,
-                    "QUEUE_NAME": f"oio-delete-{host}-{slot}",
-                    "QUEUE_URL": url,
-                    "EXE": event_agent_bin,
-                    "EVENT_WORKERS": len(rawx_per_host[host]),
-                    "GROUP_ID": "event-agent-delete",
-                    "QUEUE_TYPE": "per_service",
-                    "QUEUE_IDS": ";".join(rawx_per_host[host]).lower(),
-                }
-            )
-            register_service(
-                env,
-                template_systemd_service_event_agent,
-                event_agents_target,
-                coverage_wrapper=shutil.which("coverage")
-                + " run --context event-agent --concurrency=eventlet -p ",
-            )
-            with open(config(env), "w+", encoding="utf8") as outf:
-                tpl = Template(template_event_agent)
-                outf.write(tpl.safe_substitute(env))
-            with open(
-                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-            ) as outf:
-                tpl = Template(template_event_agent_delete_handlers)
-                outf.write(tpl.safe_substitute(env))
+            for j in range(2):
+                slot = get_rawx_slot(j)
+                num += 1
+                add_event_agent_conf(
+                    num,
+                    f"oio-delete-{host}-{slot}",
+                    url,
+                    workers=len(rawx_per_host[host]),
+                    group_id="event-agent-delete",
+                    queue_type="per_service",
+                    queue_ids=";".join(rawx_per_host[host]).lower(),
+                    template=template_event_agent_delete_handlers,
+                )
 
         break
 
     # Configure a special oio-event-agent dedicated to chunk events per host
     # -------------------------------------------------------------------------
-    for _, url, event_agent_bin in get_instance(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
         for host in hosts:
             num += 1
-            env = subenv(
-                {
-                    "SRVTYPE": "event-agent",
-                    "SRVNUM": num,
-                    "QUEUE_NAME": f"oio-chunks-{host}",
-                    "QUEUE_URL": url,
-                    "EXE": event_agent_bin,
-                    "EVENT_WORKERS": len(rawx_per_host[host]),
-                    "GROUP_ID": "event-agent-chunks",
-                    "QUEUE_TYPE": "default",
-                    "QUEUE_IDS": "",
-                }
+            add_event_agent_conf(
+                num,
+                f"oio-chunks-{host}",
+                url,
+                workers=len(rawx_per_host[host]),
+                group_id="event-agent-chunks",
+                template=template_event_agent_chunks_handlers,
             )
-            register_service(
-                env,
-                template_systemd_service_event_agent,
-                event_agents_target,
-                coverage_wrapper=shutil.which("coverage")
-                + " run --context event-agent --concurrency=eventlet -p ",
-            )
-            with open(config(env), "w+", encoding="utf8") as outf:
-                tpl = Template(template_event_agent)
-                outf.write(tpl.safe_substitute(env))
-            with open(
-                CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-            ) as outf:
-                tpl = Template(template_event_agent_chunks_handlers)
-                outf.write(tpl.safe_substitute(env))
 
         break
 
     # Configure a special oio-event-agent dedicated to delayed events
     # -------------------------------------------------------------------------
     num += 1
-    for _, url, event_agent_bin in get_instance(use_kafka):
-        env = subenv(
-            {
-                "SRVTYPE": "event-agent",
-                "SRVNUM": num,
-                "QUEUE_NAME": "oio-delayed",
-                "QUEUE_URL": url,
-                "EXE": event_agent_bin,
-                "EVENT_WORKERS": "1",
-                "GROUP_ID": "event-agent-delay",
-                "QUEUE_TYPE": "default",
-                "QUEUE_IDS": "",
-            }
+    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+        add_event_agent_conf(
+            num,
+            "oio-delayed",
+            url,
+            workers="1",
+            group_id="event-agent-delay",
+            template=template_event_agent_delay_handlers,
         )
-        register_service(
-            env,
-            template_systemd_service_event_agent,
-            event_agents_target,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+", encoding="utf8") as outf:
-            tpl = Template(template_event_agent)
-            outf.write(tpl.safe_substitute(env))
-        with open(
-            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-        ) as outf:
-            tpl = Template(template_event_agent_delay_handlers)
-            outf.write(tpl.safe_substitute(env))
 
         # We need only one service
         break
@@ -2967,35 +2929,15 @@ def generate(options):
     # Configure a special oio-event-agent dedicated to delayed events from replicator
     # --------------------------------------------------------------------------------
     num += 1
-    for _, url, event_agent_bin in get_instance(use_kafka):
-        env = subenv(
-            {
-                "SRVTYPE": "event-agent",
-                "SRVNUM": num,
-                "QUEUE_NAME": "oio-replication-delayed",
-                "QUEUE_URL": url,
-                "EXE": event_agent_bin,
-                "EVENT_WORKERS": "1",
-                "GROUP_ID": "event-agent-replication-delay",
-                "QUEUE_TYPE": "default",
-                "QUEUE_IDS": "",
-            }
+    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+        add_event_agent_conf(
+            num,
+            "oio-replication-delayed",
+            url,
+            workers="1",
+            group_id="event-agent-replication-delay",
+            template=template_event_agent_replication_delay_handlers,
         )
-        register_service(
-            env,
-            template_systemd_service_event_agent,
-            event_agents_target,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+", encoding="utf8") as outf:
-            tpl = Template(template_event_agent)
-            outf.write(tpl.safe_substitute(env))
-        with open(
-            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-        ) as outf:
-            tpl = Template(template_event_agent_replication_delay_handlers)
-            outf.write(tpl.safe_substitute(env))
 
         # We need only one service
         break
@@ -3003,42 +2945,22 @@ def generate(options):
     # Configure a special oio-event-agent dedicated to content broken events
     # -------------------------------------------------------------------------
     num += 1
-    for _, url, event_agent_bin in get_instance(use_kafka):
-        env = subenv(
-            {
-                "SRVTYPE": "event-agent",
-                "SRVNUM": num,
-                "QUEUE_NAME": "oio-rebuild",
-                "QUEUE_URL": url,
-                "EXE": event_agent_bin,
-                "EVENT_WORKERS": "1",
-                "GROUP_ID": "event-agent-rebuild",
-                "QUEUE_TYPE": "default",
-                "QUEUE_IDS": "",
-            }
+    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+        add_event_agent_conf(
+            num,
+            "oio-rebuild",
+            url,
+            workers="1",
+            group_id="event-agent-rebuild",
+            template=template_event_agent_rebuilder_handlers,
         )
-        register_service(
-            env,
-            template_systemd_service_event_agent,
-            event_agents_target,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+", encoding="utf8") as outf:
-            tpl = Template(template_event_agent)
-            outf.write(tpl.safe_substitute(env))
-        with open(
-            CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+", encoding="utf8"
-        ) as outf:
-            tpl = Template(template_event_agent_rebuilder_handlers)
-            outf.write(tpl.safe_substitute(env))
 
         # We need only one service
         break
 
     # Xcute event-agent
     # -------------------------------------------------------------------------
-    for num, url, event_agent_bin in get_instance(use_kafka):
+    for num, url, event_agent_bin in get_event_agent_details(use_kafka):
         env = subenv(
             {
                 "SRVTYPE": "xcute-event-agent",
@@ -3182,9 +3104,9 @@ def generate(options):
 
         rawx_hosts = hosts[:nb_rawx]
         # Add delete topics per host
-        topics_to_declare.extend(
-            [f"oio-delete-{h}-{get_rawx_slot(i + 1)}" for i, h in enumerate(rawx_hosts)]
-        )
+        for i in range(2):
+            slot = get_rawx_slot(i)
+            topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
         # Add chunks topics per host
         topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
 
