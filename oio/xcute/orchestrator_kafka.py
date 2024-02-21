@@ -39,6 +39,7 @@ from oio.xcute.jobs import JOB_TYPES
 
 class XcuteOrchestrator(object):
     DEFAULT_DISPATCHER_TIMEOUT = 2
+    DEFAULT_ORCHESTRATOR_GROUP_ID = "xcute-orchestrator"
     MAX_PAYLOAD_SIZE = 2**16
 
     def __init__(self, conf, logger=None):
@@ -57,6 +58,7 @@ class XcuteOrchestrator(object):
         self.kafka_reply_topic = self.conf.get(
             "reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
         )
+        self.group_id = self.conf.get("group_id", self.DEFAULT_ORCHESTRATOR_GROUP_ID)
 
         self.logger.info("Using reply topic: %s", self.kafka_reply_topic)
 
@@ -645,7 +647,7 @@ class XcuteOrchestrator(object):
                 kafka_consumer = KafkaConsumer(
                     self.kafka_endpoints,
                     [self.kafka_reply_topic],
-                    "xcute-orchestrator",
+                    self.group_id,
                     self.logger,
                     app_conf=self.conf,
                     kafka_conf={
