@@ -132,7 +132,49 @@ class RetryLater(RejectMessage):
         self.delay = delay
 
 
-class KafkaConsumerWorker(Process):
+class KafkaRejectorMixin:
+    def __init__(self, endpoint, logger, conf):
+        self.endpoint = endpoint
+        self.logger = logger
+        self.conf = conf
+        self._producer = None
+
+    def _connect_producer(self):
+        if self._producer is None:
+            self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+
+    def close_producer(self):
+        if self._producer is not None:
+            self._producer.close()
+
+    def reject_message(self, message, callback=None, delay=None):
+        try:
+            self._connect_producer()
+            if not self._producer:
+                raise SystemError("No producer available")
+
+            if delay:
+                self._producer.send(
+                    message["topic"], message["data"], delay=delay, flush=True
+                )
+            else:
+                self._producer.send(
+                    DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
+                )
+            if callback:
+                callback(message)
+            return True
+        except Exception:
+            self.logger.exception(
+                "Failed to reject message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
+            return False
+
+
+class KafkaConsumerWorker(Process, KafkaRejectorMixin):
     """
     Base class for processes listening to messages on an Kafka topic.
     """
@@ -149,7 +191,8 @@ class KafkaConsumerWorker(Process):
         app_conf=None,
         **kwargs,
     ):
-        super().__init__()
+        Process.__init__(self)
+        KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
         self.endpoint = endpoint
         self.app_conf = app_conf or {}
         self.logger = logger
@@ -161,8 +204,6 @@ class KafkaConsumerWorker(Process):
         self._events_queue = events_queue
         self._offsets_queue = offsets_queue
         self._events_queue_id = self._events_queue.get_queue_id(worker_id)
-
-        self._producer = None
 
         self._rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
 
@@ -201,22 +242,12 @@ class KafkaConsumerWorker(Process):
                     self.logger.error(
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
                     )
-                self.reject_message(event, delay=delay)
+                self.reject_message(event, self.acknowledge_message, delay=delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
-                self.reject_message(event)
-
-    def _connect(self):
-        if self._producer is None:
-            self._producer = KafkaSender(
-                self.endpoint, self.logger, app_conf=self.app_conf
-            )
-
-    def _close_conn(self):
-        if self._producer is not None:
-            self._producer.close()
+                self.reject_message(event, self.acknowledge_message)
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
@@ -231,13 +262,13 @@ class KafkaConsumerWorker(Process):
             if self._stop_requested.is_set():
                 break
             try:
-                self._connect()
                 self.post_connect()
                 self._consume()
             except Exception:
                 self.logger.exception("Error, reconnecting")
             finally:
-                self._close_conn()
+                self.close_producer()
+                self.close()
 
     def stop(self):
         """
@@ -260,32 +291,6 @@ class KafkaConsumerWorker(Process):
         except Exception:
             self.logger.exception(
                 "Failed to ack message (topic=%s, partition=%s, offset=%s)",
-                message["topic"],
-                message["partition"],
-                message["offset"],
-            )
-            return False
-
-    def reject_message(self, message, delay=None):
-        try:
-            if not self._producer:
-                self._connect()
-            if not self._producer:
-                raise SystemError("No producer available")
-
-            if delay:
-                self._producer.send(
-                    message["topic"], message["data"], delay=delay, flush=True
-                )
-            else:
-                self._producer.send(
-                    DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
-                )
-            self.acknowledge_message(message)
-            return True
-        except Exception:
-            self.logger.exception(
-                "Failed to reject message (topic=%s, partition=%s, offset=%s)",
                 message["topic"],
                 message["partition"],
                 message["offset"],
@@ -322,7 +327,7 @@ class KafkaConsumerWorker(Process):
         raise NotImplementedError
 
 
-class KafkaBatchFeeder(Process):
+class KafkaBatchFeeder(Process, KafkaRejectorMixin):
     def __init__(
         self,
         endpoint,
@@ -335,7 +340,8 @@ class KafkaBatchFeeder(Process):
         app_conf,
         **kwargs,
     ):
-        super().__init__()
+        Process.__init__(self)
+        KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
         self.endpoint = endpoint
         self.topic = topic
         self.logger = logger
@@ -356,6 +362,7 @@ class KafkaBatchFeeder(Process):
         self._events_queue = events_queue
         self._offsets_queue = offsets_queue
         self._offsets_to_commit = {}
+        self._registered_offsets = 0
 
     @property
     def events_queue(self):
@@ -364,6 +371,12 @@ class KafkaBatchFeeder(Process):
     @property
     def offsets_queue(self):
         return self._offsets_queue
+
+    def _register_offset(self, topic, partition, offset):
+        self._registered_offsets += 1
+        partitions = self._offsets_to_commit.setdefault(topic, {})
+        offsets = partitions.setdefault(partition, [])
+        bisect.insort(offsets, offset)
 
     def _fill_batch(self):
         start_offsets = {}
@@ -391,17 +404,30 @@ class KafkaBatchFeeder(Process):
                 if offset < min_offset:
                     offsets_partition[partition] = offset
 
-                event_data = json.loads(value)
-                queue_id = self._events_queue.id_from_event(event_data)
-                self._events_queue.put(
-                    queue_id,
-                    {
-                        "topic": topic,
-                        "partition": partition,
-                        "offset": offset,
-                        "data": event_data,
-                    },
-                )
+                try:
+                    event_data = json.loads(value)
+                    queue_id = self._events_queue.id_from_event(event_data)
+                    self._events_queue.put(
+                        queue_id,
+                        {
+                            "topic": topic,
+                            "partition": partition,
+                            "offset": offset,
+                            "data": event_data,
+                        },
+                    )
+                except json.JSONDecodeError as exc:
+                    self.logger.error("Unable to parse event, reason: %s", exc)
+                    self.reject_message(
+                        {
+                            "topic": topic,
+                            "partition": partition,
+                            "offset": offset,
+                            "data": value,
+                        }
+                    )
+                    self._register_offset(topic, partition, offset)
+
                 self._fetched_events += 1
 
             elif event and event.error():
@@ -422,19 +448,17 @@ class KafkaBatchFeeder(Process):
     def _wait_batch_processed(self):
         if self._fetched_events > 0:
             # Wait all events are processed
-            ready_events = 0
             while True:
                 if self._stop_requested.is_set():
                     raise StopIteration()
                 try:
                     offset = self._offsets_queue.get(True, timeout=1.0)
+                    self._register_offset(
+                        offset["topic"], offset["partition"], offset["offset"]
+                    )
                 except Empty:
-                    continue
-                partitions = self._offsets_to_commit.setdefault(offset["topic"], {})
-                offsets = partitions.setdefault(offset["partition"], [])
-                bisect.insort(offsets, offset["offset"])
-                ready_events += 1
-                if ready_events == self._fetched_events:
+                    pass
+                if self._registered_offsets == self._fetched_events:
                     # All events had been processed and are ready to be commited
                     break
 
@@ -446,6 +470,7 @@ class KafkaBatchFeeder(Process):
                     # Reset batch
                     self._fetched_events = 0
                     self._offsets_to_commit = {}
+                    self._registered_offsets = 0
                     self._connect()
                     # Retrieve events
                     start_offsets = self._fill_batch()
@@ -453,6 +478,7 @@ class KafkaBatchFeeder(Process):
                     self._commit_batch(start_offsets)
                 except KafkaFatalException:
                     self._close()
+
         except StopIteration:
             ...
         # Try to commit even a partial batch
@@ -481,6 +507,7 @@ class KafkaBatchFeeder(Process):
             self.logger.info("Terminating consumer")
             self._consumer.close()
             self._consumer = None
+        self.close_producer()
 
     def _commit_batch(self, start_offsets):
         _offsets = []
@@ -517,9 +544,6 @@ class KafkaBatchFeeder(Process):
         if _offsets:
             self.logger.info("Commit offsets: %s", _offsets)
             self._consumer.commit(offsets=_offsets)
-
-        # Prepare for next batch
-        self._offsets_to_commit = {}
 
     def stop(self):
         """
