@@ -2925,22 +2925,22 @@ def generate(options):
 
         # We need only one service
         break
+    if options.get("replication_events"):
+        # Configure oio-event-agent dedicated to delayed events from replicator
+        # -----------------------------------------------------------------------
+        num += 1
+        for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+            add_event_agent_conf(
+                num,
+                "oio-replication-delayed",
+                url,
+                workers="1",
+                group_id="event-agent-replication-delay",
+                template=template_event_agent_replication_delay_handlers,
+            )
 
-    # Configure a special oio-event-agent dedicated to delayed events from replicator
-    # --------------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
-        add_event_agent_conf(
-            num,
-            "oio-replication-delayed",
-            url,
-            workers="1",
-            group_id="event-agent-replication-delay",
-            template=template_event_agent_replication_delay_handlers,
-        )
-
-        # We need only one service
-        break
+            # We need only one service
+            break
 
     # Configure a special oio-event-agent dedicated to content broken events
     # -------------------------------------------------------------------------
@@ -3097,10 +3097,11 @@ def generate(options):
             "oio-preserved",
             "oio-rebuild",
             "oio-replication",
-            "oio-replication-delayed",
             "oio-xcute",
             "oio-xcute-reply",
         ]
+        if options.get("replication_events"):
+            topics_to_declare.append("oio-replication-delayed")
 
         rawx_hosts = hosts[:nb_rawx]
         # Add delete topics per host
