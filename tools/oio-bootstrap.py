@@ -1457,7 +1457,7 @@ pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${WEBHOOK} notify_deleted
+pipeline = ${WEBHOOK} mpu_cleaner notify_deleted
 
 [handler:storage.content.drained]
 pipeline = notify_deleted
@@ -1489,6 +1489,10 @@ concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
+
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
 
 [filter:content_rebuild]
 use = egg:oio#notify
