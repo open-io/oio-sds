@@ -242,6 +242,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(1, my_rawx["scores"]["score.get"])
 
         self.conscience.unlock_score(one_rawx)
+        self.wait_for_score(("rawx",), score_threshold=5)
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
         self.assertIn("tag.lock", my_rawx["tags"])
@@ -277,6 +278,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertNotEqual(1, my_rawx["scores"]["score.get"])
 
         self.conscience.unlock_score(one_rawx)
+        self.wait_for_score(("rawx",), score_threshold=5)
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
         self.assertIn("tag.putlock", my_rawx["tags"])
@@ -306,6 +308,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(1, my_rawx["scores"]["score.get"])
 
         self.conscience.unlock_score(one_rawx)
+        self.wait_for_score(("rawx",), score_threshold=5)
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
         self.assertIn("tag.getlock", my_rawx["tags"])
