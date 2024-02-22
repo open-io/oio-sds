@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -50,9 +50,9 @@ from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
 
 
-def random_content():
+def random_content(length=16):
     """Generate an object name."""
-    return random_str(16)
+    return random_str(length)
 
 
 def random_container():
@@ -1552,6 +1552,100 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 200)
         for r in json_data["contents"]:
             self.assertEqual(r["status"], 204)
+
+    def test_delete_range1(self):
+        """delete range bounds are same as [fist last]"""
+        params = self.param_ref(self.ref)
+        objs = []
+        base_name = "obj"
+        etag = random_content(48)
+        nb_parts = 10
+        bounds = []
+        for idx in range(nb_parts):
+            path = "/".join([base_name, etag, str(idx)])
+            objs.append(path)
+            self._create_content(path)
+
+        resp = self.request(
+            "GET", self.url_container("list"), params=merge(params, {"all": 1})
+        )
+        data = json.loads(resp.data)
+        self.assertEqual(nb_parts, len(data["objects"]))
+
+        bounds = [objs[0], objs[9]]
+        resp = self.request("POST", self.url_container("get_properties"), params=params)
+        data = json.loads(resp.data)
+        self.assertNotIn("sys.m2.policy.version", data["system"].keys())
+
+        data = {
+            "contents": [{"name": bounds[0]}, {"name": bounds[1]}],
+            "nb_mpu_parts": nb_parts,
+        }
+        resp = self.request(
+            "POST",
+            self.url_content("delete_many"),
+            params=params,
+            data=json.dumps(data),
+        )
+        self.assertEqual(resp.status, 200)
+
+        resp = self.request("POST", self.url_container("get_properties"), params=params)
+        data = json.loads(resp.data)
+        self.assertNotIn("sys.m2.policy.version", data["system"].keys())
+        self.assertEqual("0", data["system"].get(M2_PROP_OBJECTS, -1))
+
+        resp = self.request(
+            "GET", self.url_container("list"), params=merge(params, {"all": 1})
+        )
+        data = json.loads(resp.data)
+        self.assertEqual(0, len(data["objects"]))
+
+    def test_delete_range2(self):
+        """delete range bounds are different from [fist last]"""
+        params = self.param_ref(self.ref)
+        objs = []
+        base_name = "obj"
+        etag = random_content(48)
+        nb_parts = 12
+        bounds = []
+        for idx in range(nb_parts):
+            path = "/".join([base_name, etag, str(idx)])
+            objs.append(path)
+            self._create_content(path)
+
+        resp = self.request(
+            "GET", self.url_container("list"), params=merge(params, {"all": 1})
+        )
+        data = json.loads(resp.data)
+        self.assertEqual(nb_parts, len(data["objects"]))
+
+        bounds = ["/".join([base_name, etag, "0"]), "/".join([base_name, etag, "9"])]
+        resp = self.request("POST", self.url_container("get_properties"), params=params)
+        data = json.loads(resp.data)
+        self.assertNotIn("sys.m2.policy.version", data["system"].keys())
+
+        data = {
+            "contents": [{"name": bounds[0]}, {"name": bounds[1]}],
+            "nb_mpu_parts": nb_parts,
+        }
+        resp = self.request(
+            "POST",
+            self.url_content("delete_many"),
+            params=params,
+            data=json.dumps(data),
+        )
+        self.assertEqual(resp.status, 200)
+
+        resp = self.request("POST", self.url_container("get_properties"), params=params)
+        data = json.loads(resp.data)
+        self.assertNotIn("sys.m2.policy.version", data["system"].keys())
+        self.assertEqual("0", data["system"].get(M2_PROP_OBJECTS, -1))
+
+        resp = self.request(
+            "GET", self.url_container("list"), params=merge(params, {"all": 1})
+        )
+        data = json.loads(resp.data)
+        self.assertEqual(0, len(data["objects"]))
 
     def test_cycle_properties(self):
         path = random_content()

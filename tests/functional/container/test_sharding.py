@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -154,6 +154,7 @@ class TestSharding(BaseTestCase):
         account=None,
         cname_root=None,
         properties=None,
+        separator="_",
     ):
         reqid = None
         if not account:
@@ -161,7 +162,7 @@ class TestSharding(BaseTestCase):
         if not cname_root:
             cname_root = cname
         for i in range(nb_objects):
-            obj_name = "%s_%d" % (prefix, i)
+            obj_name = "%s%s%d" % (prefix, separator, i)
             reqid = request_id()
             data = obj_name
             if self.versioning_enabled:
@@ -188,11 +189,19 @@ class TestSharding(BaseTestCase):
             self._check_bucket_stats(cname_root, bucket, account=account)
 
     def _delete_objects(
-        self, cname, nb_objects, prefix="content", bucket=None, object_lock=False
+        self,
+        cname,
+        nb_objects,
+        prefix="content",
+        bucket=None,
+        object_lock=False,
+        delete_many=False,
+        bounds=None,
+        separator="_",
     ):
         reqid = None
         for i in range(nb_objects):
-            obj_name = "%s_%d" % (prefix, i)
+            obj_name = "%s%s%d" % (prefix, separator, i)
             reqid = request_id()
             if object_lock:
                 self.assertRaises(
@@ -202,6 +211,10 @@ class TestSharding(BaseTestCase):
                     cname,
                     obj_name,
                     reqid=reqid,
+                )
+            elif delete_many:
+                self.storage.object_delete_many(
+                    self.account, cname, bounds, nb_mpu_parts=nb_objects, reqid=reqid
                 )
             else:
                 self.storage.object_delete(self.account, cname, obj_name, reqid=reqid)
@@ -575,6 +588,60 @@ class TestSharding(BaseTestCase):
                 if event_data.get("type") == "chunks":
                     chunk_urls.remove(event_data.get("id"))
             self.assertEqual(0, len(chunk_urls))
+
+    def test_delete_many_objects_from_shards(self):
+        chunk_urls = []
+        self._create(self.cname)
+        # Add objects:
+
+        nb_objects = 9
+        prefix = "objmpu/NjE3ZjJjZjMtYmU5ZS00NTMxLWFkZmUtNzgwZTE2NmI4YjI0"
+        bounds = [
+            "objmpu/NjE3ZjJjZjMtYmU5ZS00NTMxLWFkZmUtNzgwZTE2NmI4YjI0/0",
+            "objmpu/NjE3ZjJjZjMtYmU5ZS00NTMxLWFkZmUtNzgwZTE2NmI4YjI0/8",
+        ]
+        self._add_objects(self.cname, nb_objects, prefix=prefix, separator="/")
+
+        test_shards = [
+            {
+                "index": 0,
+                "lower": "",
+                "upper": "objmpu/NjE3ZjJjZjMtYmU5ZS00NTMxLWFkZmUtNzgwZTE2NmI4YjI0/5",
+            },
+            {
+                "index": 1,
+                "lower": "objmpu/NjE3ZjJjZjMtYmU5ZS00NTMxLWFkZmUtNzgwZTE2NmI4YjI0/5",
+                "upper": "",
+            },
+        ]
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True
+        )
+        self.assertTrue(modified)
+        shards = self.container_sharding.show_shards(self.account, self.cname)
+        self.assertEqual(len(list(shards)), 2)  # two shards
+
+        # select random object
+        obj_name = random.sample(self.created[self.cname], 1)[0]
+        # get all chunks urls before removal
+        _, chunks = self.storage.object_locate(self.account, self.cname, obj_name)
+        for chunk in chunks:
+            chunk_urls.append(chunk["url"])
+        # remove all objects that match pattern
+
+        self._check_objects(self.cname)
+
+        self._delete_objects(
+            self.cname,
+            nb_objects,
+            bounds=bounds,
+            delete_many=True,
+        )
+
+        if not self.object_lock:
+            self.created[self.cname].clear()
+        self._check_objects(self.cname)
 
     # test shards with empty container
     def test_shard_with_empty_container(self):
@@ -2094,6 +2161,7 @@ class TestShardingObjectLockRetention(TestSharding):
         account=None,
         cname_root=None,
         properties=None,
+        separator="_",
     ):
         super(TestShardingObjectLockRetention, self)._add_objects(
             cname,
