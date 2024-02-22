@@ -49,12 +49,13 @@ class VolumeIndexFilter(Filter):
         except Exception as exc:
             self.logger.warning(
                 "Failed to deindex chunk %s from %s (reqid=%s container_id=%s "
-                "content_id=%s): %s",
+                "content_id=%s): %s: %s",
                 chunk_id,
                 volume_id,
                 reqid,
                 container_id,
                 content_id,
+                type(exc),
                 exc,
             )
 
@@ -84,12 +85,13 @@ class VolumeIndexFilter(Filter):
         except Exception as exc:
             self.logger.warning(
                 "Failed to index chunk %s from %s (reqid=%s container_id=%s "
-                "content_id=%s): %s",
+                "content_id=%s): %s: %s",
                 chunk_id,
                 volume_id,
                 reqid,
                 container_id,
                 content_id,
+                type(exc),
                 exc,
             )
 

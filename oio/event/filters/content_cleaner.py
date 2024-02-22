@@ -73,9 +73,10 @@ class ContentReaperFilter(Filter):
                 )
             elif resp.status not in (204, 404):
                 self.logger.warn(
-                    "failed to delete chunk %s (HTTP %s)",
+                    "failed to delete chunk %s (%s %s)",
                     resp.chunk.get("real_url", resp.chunk["url"]),
                     resp.status,
+                    resp.reason,
                 )
             else:
                 # No error
