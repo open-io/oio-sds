@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -320,9 +320,11 @@ func LogHttp(evt AccessLogEvent) {
 
 	if statsdClient != nil {
 		prefix := fmt.Sprintf("openio.rawx.request.%s.%d", evt.Method, evt.Status)
-		// .TimeSpent and .TTFB are already in ms
-		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent), 1.0)
-		statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB), 1.0)
+		// .TimeSpent and .TTFB are in µs while statsd expects ms
+		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent / 1000), 1.0)
+		if evt.Method == "GET" {
+			statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB / 1000), 1.0)
+		}
 		statsdClient.Inc(fmt.Sprintf("%s.in.xfer", prefix), int64(evt.BytesIn), 1.0)
 		statsdClient.Inc(fmt.Sprintf("%s.out.xfer", prefix), int64(evt.BytesOut), 1.0)
 	}
