@@ -15,7 +15,7 @@
 import time
 
 from oio.account.client import AccountClient
-from oio.common.easy_value import float_value
+from oio.common.easy_value import boolean_value, float_value
 from oio.common.green import get_watchdog
 from oio.conscience.client import ConscienceClient
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
@@ -92,6 +92,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
             self.conf.get("handlers_conf"), global_conf=self.conf, app=self
         )
 
+        self._events_siding = boolean_value(self.conf.get("events_siding"), False)
+        self.logger_events_siding = get_logger(self.conf, name="events-siding")
+
     def log_and_statsd(self, start, status, _extra):
         extra = {
             "request_id": "-",
@@ -111,6 +114,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
             extra["duration"] * 1000,
         )
 
+    def _log_event(self, topic, event):
+        self.logger_events_siding.info("topic=%s\tevent=%s", topic, event)
+
     def process_message(self, message, _properties):
         start = time.monotonic()
         reqid = message.get("request_id")
@@ -122,11 +128,6 @@ class KafkaEventWorker(KafkaConsumerWorker):
             "topic": self.topic,
             "event": event,
         }
-
-        handler = self.handlers.get(message.get("event"), None)
-        if not handler:
-            self.log_and_statsd(start, 404, replacements)
-            raise RejectMessage(f"No handler for {message.get('event')}")
 
         def cb(status, msg, **kwargs):
             self.log_and_statsd(start, status, replacements)
@@ -154,4 +155,14 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     f"Failed to process message {msg}: ({reqid}) {status}"
                 )
 
-        handler(message, cb)
+        if self._events_siding:
+            # Degraded mode, events are not processed but logged
+            self._log_event(self.topic, message)
+            self.log_and_statsd(start, 200, replacements)
+        else:
+            handler = self.handlers.get(message.get("event"), None)
+            if not handler:
+                self.log_and_statsd(start, 404, replacements)
+                raise RejectMessage(f"No handler for {message.get('event')}")
+
+            handler(message, cb)
