@@ -24,8 +24,8 @@ class BlobRebuilderFilter(Filter):
     """Filter that rebuilds broken chunks on rebuild events"""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self._retry_delay = None
+        super().__init__(*args, **kwargs)
 
     def init(self):
         self.chunk_operator = ChunkOperator(
