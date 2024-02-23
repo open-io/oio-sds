@@ -868,12 +868,12 @@ SINGLE=NONE:NONE
 TWOCOPIES=rawx2:DUPONETWO
 THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
-EC=NONE:EC
-EC21=NONE:EC21
-ECX21=NONE:ECX21
+EC=NONE:E63
+EC21=NONE:E21
+ECX21=NONE:EX21
 
-JUSTENOUGH=justenoughrawx:EC
-NOTENOUGH=notenoughrawx:EC
+JUSTENOUGH=justenoughrawx:E63
+NOTENOUGH=notenoughrawx:E63
 ANY-E93=rawx_12:E93
 
 [DATA_SECURITY]
@@ -888,9 +888,9 @@ DUPONETHREE=plain/max_dist=2,min_dist=1,nb_copy=3
 DUP17=plain/min_dist=1,nb_copy=17
 
 E93=ec/k=9,m=3,algo=liberasurecode_rs_vand,min_dist=1
-EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
-EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
-ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
+E63=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
+E21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
+EX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 
 # List of possible values for the "algo" parameter of "ec" data security:
 # "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
