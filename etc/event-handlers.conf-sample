@@ -176,6 +176,8 @@ endpoint = http://localhost:8000/invoke
 # Display the body of each event passing through (for debugging).
 [filter:logger]
 use = egg:oio#logger
+#log_name=logger_filter
+#log_format=X-OVH-TOKEN:XXXXXXXXX    topic:%(topic)s    event:%(event)s
 
 # -----------------------------------------------------------------
 # Bury each event passing through (for debugging).
