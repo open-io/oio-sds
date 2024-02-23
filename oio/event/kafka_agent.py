@@ -58,7 +58,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
         rdir_refresh_interval = float_value(
             self.conf.get("rdir_refresh_interval"), 3600.0
         )
-        self.app_env = {}
+        self.app_env = {
+            "logger": self.logger,
+        }
         self.app_env["account_client"] = AccountClient(
             self.conf,
             logger=self.logger,

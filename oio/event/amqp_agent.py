@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -36,7 +36,9 @@ class AmqpEventWorker(AmqpConsumerWorker):
         rdir_refresh_interval = float_value(
             self.conf.get("rdir_refresh_interval"), 3600.0
         )
-        self.app_env = {}
+        self.app_env = {
+            "logger": self.logger,
+        }
         self.app_env["account_client"] = AccountClient(
             self.conf,
             logger=self.logger,
