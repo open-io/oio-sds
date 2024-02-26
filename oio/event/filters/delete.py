@@ -36,6 +36,7 @@ class DeleteFilter(Filter):
 
     DEFAULT_CACHE_DURATION = 3600
     CACHE_UPDATE_COOLDOWN = 10
+    SLOT_SEPATATORS = (".", "-", "_")
 
     def __init__(self, *args, endpoint=None, **kwargs):
         self.endpoint = endpoint
@@ -90,9 +91,18 @@ class DeleteFilter(Filter):
                 svc_id = svc.get("id", "").lower()
                 svc_addr = svc.get("addr")
                 svc_ip = svc_addr.split(":")[0]
-                slots = svc.get("tags", {}).get("tag.slots", "").split(",")
+                all_slots = svc.get("tags", {}).get("tag.slots", "").split(",")
+                slots = []
+                for slot in all_slots:
+                    if slot.startswith("rawx"):
+                        slot = slot[4:]
+                    if not slot:
+                        continue
+                    if slot[0] in self.SLOT_SEPATATORS:
+                        slot = slot[1:]
+                    slots.append(slot)
+                slots.sort()
                 # Remove prefix ('rawx') and separator
-                slots = [s[5:] for s in slots if s[5:]]
                 topic_suffix = "-".join(slots)
                 rawx_services_per_id[svc_id] = f"{svc_ip}-{topic_suffix}"
                 rawx_services_per_addr[svc_addr] = f"{svc_ip}-{topic_suffix}"
