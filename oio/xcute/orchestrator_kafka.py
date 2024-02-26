@@ -273,6 +273,7 @@ class XcuteOrchestrator(object):
             ):
                 return last_check
 
+            now = time.time()
             job_mtime = job_info["job"]["mtime"]
             max_tasks_per_second = job_info["config"]["tasks_per_second"]
             max_tasks_batch_size = job_info["config"]["tasks_batch_size"]
@@ -280,10 +281,17 @@ class XcuteOrchestrator(object):
             pending_tasks = job_info["tasks"]["sent"] - tasks_processed
 
             if last_check is None:  # Initialize
-                last_check = dict()
-                last_check["last"] = job_mtime
+                last_check = {}
+                last_check["last"] = now
+                last_check["mtime"] = job_mtime
                 last_check["processed"] = tasks_processed
-                if pending_tasks / max_tasks_per_second >= period:
+                if not pending_tasks:
+                    # If there are no pending tasks, there is no point
+                    # in using current mtime.
+                    # This would slow down the speed of the job,
+                    # while the job can restart normally.
+                    last_check["mtime"] = now
+                elif pending_tasks / max_tasks_per_second >= period:
                     waiting_time = period
                     self.logger.error(
                         "[job_id=%s] Too many pending tasks "
@@ -300,7 +308,8 @@ class XcuteOrchestrator(object):
 
             tasks_processed_in_period = tasks_processed - last_check["processed"]
             if tasks_processed_in_period == 0:
-                last_check["last"] = job_mtime
+                last_check["last"] = now
+                last_check["mtime"] = job_mtime
                 last_check["processed"] = tasks_processed
                 waiting_time = period
                 self.logger.error(
@@ -312,10 +321,29 @@ class XcuteOrchestrator(object):
                 )
                 continue
 
-            elapsed = job_mtime - last_check["last"]
+            # Using mtime allows for more reliable speed
+            elapsed = job_mtime - last_check["mtime"]
+            if elapsed <= 0:
+                # Should never happen
+                last_check["last"] = now
+                previous_mtime = last_check["mtime"]
+                last_check["mtime"] = job_mtime
+                last_check["processed"] = tasks_processed
+                waiting_time = period
+                self.logger.error(
+                    "[job_id=%s] The new mtime (%f) is older "
+                    "than the previous one (%f); "
+                    "wait %d seconds and check again",
+                    job_id,
+                    job_mtime,
+                    previous_mtime,
+                    waiting_time,
+                )
+                continue
             actual_tasks_per_second = tasks_processed_in_period / float(elapsed)
             if pending_tasks / actual_tasks_per_second >= period:
-                last_check["last"] = job_mtime
+                last_check["last"] = now
+                last_check["mtime"] = job_mtime
                 last_check["processed"] = tasks_processed
                 waiting_time = period
                 self.logger.error(
@@ -368,7 +396,8 @@ class XcuteOrchestrator(object):
                     actual_tasks_per_second,
                 )
 
-            last_check["last"] = job_mtime
+            last_check["last"] = now
+            last_check["mtime"] = job_mtime
             last_check["processed"] = tasks_processed
             if new_tasks_per_second is not None:
                 new_tasks_per_second = max(new_tasks_per_second, 1)
