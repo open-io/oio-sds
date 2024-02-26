@@ -36,16 +36,22 @@ class HttpClient(object):
         self.domain = domain
         self.endpoint = conf.get(f"kmsapi_{domain}_endpoint")
         self.key_id = conf.get(f"kmsapi_{domain}_key_id")
-        self.http = urllib3.PoolManager(
-            cert_reqs="CERT_REQUIRED",
-            ca_certs=conf.get(f"kmsapi_{domain}_ca_certs_file"),
-            cert_file=conf.get(f"kmsapi_{domain}_cert_file"),
-            key_file=conf.get(f"kmsapi_{domain}_key_file"),
-            timeout=urllib3.Timeout(
-                connect=float_value(conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0),
-                read=float_value(conf.get(f"kmsapi_{domain}_read_timeout"), 1.0),
-            ),
-        )
+        kmsapi_mock_server = boolean_value(conf.get("kmsapi_mock_server"))
+        if kmsapi_mock_server:
+            self.http = urllib3.PoolManager()
+        else:
+            self.http = urllib3.PoolManager(
+                cert_reqs="CERT_REQUIRED",
+                ca_certs=conf.get(f"kmsapi_{domain}_ca_certs_file"),
+                cert_file=conf.get(f"kmsapi_{domain}_cert_file"),
+                key_file=conf.get(f"kmsapi_{domain}_key_file"),
+                timeout=urllib3.Timeout(
+                    connect=float_value(
+                        conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0
+                    ),
+                    read=float_value(conf.get(f"kmsapi_{domain}_read_timeout"), 1.0),
+                ),
+            )
         self.statsd = get_statsd(conf=conf)
 
     def request(self, action, body, key_id=None):

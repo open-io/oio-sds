@@ -208,6 +208,26 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
+template_systemd_service_kms = """
+[Unit]
+Description=[OpenIO] Service KMS (KMSAPI Mock Server)
+PartOf=${PARENT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
 template_systemd_service_xcute = """
 [Unit]
 Description=[OpenIO] Service xcute ${SRVNUM}
@@ -1732,6 +1752,29 @@ fdb_file = ${CLUSTERFILE}
 
 time_window_clear_deleted = 60
 allow_empty_policy_name = False
+
+# KMS API
+kmsapi_enabled = True
+kmsapi_mock_server = True
+kmsapi_domains = domain1, domain2
+kmsapi_domain1_endpoint = http://${IP}:${PORT_KMSAPI_MOCK_SERVER}/domain1
+kmsapi_domain1_key_id = abcdefgh-aaaa-bbbb-cccc-123456789abc
+kmsapi_domain2_endpoint = http://${IP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
+kmsapi_domain2_key_id = abcdefgh-aaaa-bbbb-cccc-123456789def
+"""
+
+template_kms = """
+[kmsapi-mock-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+namespace = ${NS}
+workers = 2
+worker_class = gevent
+autocreate = true
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 """
 
 template_xcute = """
@@ -1997,6 +2040,7 @@ def generate(options):
     port_proxy = next(ports)
     port_account = next(ports)
     port_admin = next(ports)
+    port_kmsapi_mock_server = next(ports)
 
     versioning = 1
     stgpol = "SINGLE"
@@ -2060,6 +2104,7 @@ def generate(options):
         PORT_PROXYD=port_proxy,
         PORT_ACCOUNT=port_account,
         PORT_ADMIN=port_admin,
+        PORT_KMSAPI_MOCK_SERVER=port_kmsapi_mock_server,
         M1_DIGITS=meta1_digits,
         M1_REPLICAS=meta1_replicas,
         M2_REPLICAS=meta2_replicas,
@@ -2774,6 +2819,20 @@ def generate(options):
 
     with open(watch(env), "w+") as f:
         tpl = Template(template_proxy_watch)
+        f.write(tpl.safe_substitute(env))
+
+    # kmsapi-mock-server
+    env = subenv(
+        {
+            "SRVTYPE": "kmsapi-mock-server",
+            "SRVNUM": 1,
+            "EXE": "oio-kmsapi-mock-server",
+            "PORT": port_kmsapi_mock_server,
+        }
+    )
+    register_service(env, template_systemd_service_kms, root_target)
+    with open(config(env), "w+") as f:
+        tpl = Template(template_kms)
         f.write(tpl.safe_substitute(env))
 
     # account

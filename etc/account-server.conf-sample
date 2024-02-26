@@ -27,6 +27,7 @@ allow_empty_policy_name = True
 
 # KMS API
 kmsapi_enabled = False
+kmsapi_mock_server = False
 kmsapi_domains = domain1, domain2
 kmsapi_domain1_endpoint = https://api.kms.gra.preprod.enablers.ovh
 kmsapi_domain1_ca_certs_file = /etc/oio/OPENIO/account/domain1-kms-public-ca.crt

@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+# oio-kmsapi-mock-server.py
+# Copyright (C) 2024 OVH SAS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from base64 import b64encode, b64decode
+import json
+from optparse import OptionParser
+from oio.common.configuration import parse_options, read_conf
+from oio.common.constants import HTTP_CONTENT_TYPE_JSON
+from oio.common.logger import get_logger
+from oio.common.wsgi import Application, ServiceLogger, WerkzeugApp
+from werkzeug.routing import Map, Rule
+from werkzeug.wrappers import Response
+
+
+class KmsApiMockServer(WerkzeugApp):
+    # pylint: disable=no-member
+
+    def __init__(self, conf):
+        self.conf = conf
+        self.logger = get_logger(conf)
+        self.logger.info("Starting KMSAPI Mock Server")
+        self.url_map = Map(
+            [
+                Rule(
+                    "/<domain>/v1/servicekey/<key_id>/encrypt",
+                    endpoint="encrypt",
+                    methods=["POST"],
+                ),
+                Rule(
+                    "/<domain>/v1/servicekey/<key_id>/decrypt",
+                    endpoint="decrypt",
+                    methods=["POST"],
+                )
+            ]
+        )
+        super(KmsApiMockServer, self).__init__(self.url_map, self.logger)
+
+    def on_encrypt(self, req, **kwargs):
+        """ Blindly return the request payload as base64 encoded string """
+        data = req.get_data()
+        ciphertext = b64encode(data).decode()
+        self.logger.info(f"KMS encrypt with data={data} ciphertext={ciphertext}")
+        resp = {
+            "ciphertext": ciphertext,
+        }
+        return Response(
+            json.dumps(resp),
+            mimetype=HTTP_CONTENT_TYPE_JSON,
+            status=200
+        )
+
+    def on_decrypt(self, req, **kwargs):
+        """ Blindly return the plaintext from a base64 encoded ciphertext """
+        data = req.get_json()
+        payload = b64decode(data["ciphertext"]).decode()
+        self.logger.info(f"KMS decrypt with data={data} payload={payload}")
+        resp = {
+            "plaintext": payload["plaintext"],
+        }
+        return Response(
+            json.dumps(resp),
+            mimetype=HTTP_CONTENT_TYPE_JSON,
+            status=200
+        )
+
+
+if __name__ == '__main__':
+    parser = OptionParser("%prog CONFIG [options]")
+    conf_file, options = parse_options(parser)
+    conf = read_conf(conf_file, 'kmsapi-mock-server')
+    app = KmsApiMockServer(conf)
+    Application(app, conf, logger_class=ServiceLogger).run()
