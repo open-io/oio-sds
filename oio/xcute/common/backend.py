@@ -456,7 +456,7 @@ class XcuteBackend(RedisConnection):
     """
         + _lua_update_mtime
         + """
-        return {redis.call('HGET', info_key, 'job.status')};
+        return redis.call('HGET', info_key, 'job.status');
     """
     )
 
