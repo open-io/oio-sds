@@ -295,7 +295,7 @@ class EventWorker(Worker):
             "request_id": event.get("request_id"),
             "tube": self.tube,
             "topic": self.tube,
-            "event": event.get("event").replace(".", "-"),
+            "event": event.get("event"),
         }
 
         handler = self.get_handler(event)

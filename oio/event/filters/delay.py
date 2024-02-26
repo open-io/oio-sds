@@ -14,8 +14,9 @@
 # License along with this library.
 
 from datetime import datetime
-from time import sleep, time
+from time import sleep
 
+from oio.common.easy_value import int_value
 from oio.common.kafka import (
     DEFAULT_DELAYED_TOPIC,
     get_delay_granularity,
@@ -26,6 +27,8 @@ from oio.event.filters.base import Filter
 
 
 class DelayFilter(Filter):
+    DEFAULT_EVENT_TIME_TO_LIVE = 3600 * 24  # One day
+
     """
     Forward events to another topic when due date is reached.
     """
@@ -33,12 +36,16 @@ class DelayFilter(Filter):
     def __init__(self, *args, endpoint=None, **kwargs):
         self.endpoint = endpoint
         self._producer = None
+        self._events_time_to_live = None
         self.topic = None
         super().__init__(*args, **kwargs)
 
     def init(self):
         self.topic = self.conf.get("topic", DEFAULT_DELAYED_TOPIC)
         self._delay_granularity = get_delay_granularity(self.conf)
+        self._events_time_to_live = int_value(
+            self.conf.get("events_time_to_live"), self.DEFAULT_EVENT_TIME_TO_LIVE
+        )
 
     def process(self, env, cb):
         if not self._producer:
@@ -61,9 +68,21 @@ class DelayFilter(Filter):
         if not destination_topic:
             return EventError(body="'dest_topic' field is missing")(env, cb)
 
+        source_event = data.get("source_event")
+        if not source_event:
+            return EventError(body="'source_event' field is missing")(env, cb)
+
         requeue = due_time > next_due_time
         now = datetime.now().timestamp()
-        delta_time = min(due_time, next_due_time) - now
+        delta_time = max(min(due_time, next_due_time) - now, 0)
+
+        # Ensure source event is not expired yet
+        when_sec = source_event.get("when", 0) / 1000000
+        expirency_date = when_sec + self._events_time_to_live
+        if now + delta_time > expirency_date:
+            return EventError(
+                body=f"Event expired (older than {self._events_time_to_live}s)"
+            )
 
         if delta_time > 0:
             sleep(delta_time)
@@ -76,9 +95,8 @@ class DelayFilter(Filter):
             self._producer.send(self.topic, new_env, flush=True)
         else:
             # Restore original event data
-            source_event = env["data"]["source_event"]
-            # Update time
-            source_event["when"] = time()
+            source_event = data["source_event"]
+
             self._producer.send(destination_topic, source_event)
 
         return self.app(env, cb)

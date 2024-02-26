@@ -115,6 +115,12 @@ use = egg:oio#blob_rebuilder
 # Time in seconds before an event should be reprocessed
 retry_delay = 60
 
+# -----------------------------------------------------------------
+# Retry events
+[filter:delay]
+use = egg:oio#delay
+# Events time to live in seconds (one day)
+events_time_to_live = 86400
 
 # -----------------------------------------------------------------
 # Example of the notify filter: redirect some events to another tube,

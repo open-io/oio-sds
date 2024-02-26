@@ -105,6 +105,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
 
         extra["duration"] = time.monotonic() - start
         extra["status"] = status
+        extra["event"] = str(extra["event"]).replace(".", "-")
         if self.logger_request is not None:
             self.logger_request.info("", extra=extra)
         self.statsd.timing(
@@ -116,16 +117,14 @@ class KafkaEventWorker(KafkaConsumerWorker):
     def process_message(self, message, _properties):
         start = time.monotonic()
         reqid = message.get("request_id")
-        event = message.get("event").replace(".", "-")
-
+        event = message.get("event")
         replacements = {
             "request_id": reqid,
             "tube": self.topic,
             "topic": self.topic,
             "event": event,
         }
-
-        handler = self.handlers.get(message.get("event"), None)
+        handler = self.handlers.get(event, None)
         if not handler:
             self.log_and_statsd(start, 404, replacements)
             raise RejectMessage(f"No handler for {message.get('event')}")
