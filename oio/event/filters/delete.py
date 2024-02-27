@@ -136,7 +136,10 @@ class DeleteFilter(Filter):
 
     def _get_service_name(self, url):
         url_parts = urlparse(url)
-        return url_parts.hostname
+        name = url_parts.hostname
+        if url_parts.port:
+            name += f":{url_parts.port}"
+        return name
 
     def process(self, env, cb):
         event = Event(env)
