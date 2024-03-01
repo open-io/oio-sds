@@ -23,6 +23,68 @@ from oio.directory.client import DirectoryClient
 from oio.rdir.client import RdirClient
 
 
+def get_cid_and_seq(base):
+    len_base = len(base)
+    if len_base > 64:
+        try:
+            if base[64] != ".":
+                raise ValueError()
+            seq = int(base[65:])
+            return (base[:64], seq)
+        except ValueError:
+            raise ValueError("Bad format for the base name (base=%s)" % base)
+    else:
+        return (base.ljust(64, "0"), None)
+
+
+class Meta2DBContext(object):
+
+    def __init__(self, directory_client, base):
+        self.directory = directory_client
+        self.base = base
+        self.services_by_base = {}
+
+    def get_bases_seq(self, **kwargs):
+        base_seqs = {}
+        cid, seq = get_cid_and_seq(self.base)
+        linked_services = self.directory.list(cid=cid, **kwargs)
+
+        for service in linked_services["srv"]:
+            if service["type"] != self.service_type:
+                continue
+            if seq is not None and seq != service["seq"]:
+                continue
+
+            bseq = cid + "." + str(service["seq"])
+            services = base_seqs.get(bseq, {})
+            services[service.pop("host")] = service
+            base_seqs[bseq] = services
+
+        for bseq, services in base_seqs.items():
+            self.services_by_base[bseq] = services
+            # FIXME(adu): Check nb of peers
+            yield bseq
+
+    def get_peers(self, bseq):
+        return self.services_by_base[bseq].keys()
+
+    def set_peers(self, bseq, src, dst, **kwargs):
+        cid, _ = get_cid_and_seq(bseq)
+        current_peers = self._get_peers(bseq)
+        new_peers = [v for v in current_peers if v != src]
+        new_peers.append(dst)
+
+        if len(current_peers) != len(new_peers):
+            raise ValueError(
+                "Not the same number of peers (current_peers=%s new_peers=%s)"
+                % (current_peers, new_peers)
+            )
+
+        self.logger.debug("Setting peers (base=%s new_peers=%s)", bseq, new_peers)
+        self.admin.set_peers(self.service_type, cid=cid, peers=new_peers, **kwargs)
+        self.services_by_base[bseq][dst] = self.services_by_base[bseq].pop(src)
+
+
 class Meta2Database(object):
     """
     Execute maintenance operations on meta2 databases (or compatible services).
@@ -47,8 +109,7 @@ class Meta2Database(object):
         self._rdir = rdir_client
         self._directory = directory_client
 
-        self.services_by_base = dict()
-        self.all_service_ids = list()
+        self.all_service_ids = []
 
         self.reload_all_services()
 
@@ -76,12 +137,6 @@ class Meta2Database(object):
             self._directory = DirectoryClient(self.conf)
         return self._directory
 
-    def reset_peers(self):
-        """
-        Reset the base allocations and reload the services from Conscience.
-        """
-        self.services_by_base.clear()
-
     def reload_all_services(self):
         """
         Load the list of all services of type `self.service_type`.
@@ -89,60 +144,6 @@ class Meta2Database(object):
         self.all_service_ids = [
             s["id"] for s in self.conscience.all_services(self.service_type)
         ]
-
-    @staticmethod
-    def get_cid_and_seq(base):
-        len_base = len(base)
-        if len_base > 64:
-            try:
-                if base[64] != ".":
-                    raise ValueError()
-                seq = int(base[65:])
-                return (base[:64], seq)
-            except ValueError:
-                raise ValueError("Bad format for the base name (base=%s)" % base)
-        else:
-            return (base.ljust(64, "0"), None)
-
-    def _get_bases_seq(self, base, **kwargs):
-        base_seqs = dict()
-        cid, seq = self.get_cid_and_seq(base)
-        linked_services = self.directory.list(cid=cid, **kwargs)
-
-        for service in linked_services["srv"]:
-            if service["type"] != self.service_type:
-                continue
-            if seq is not None and seq != service["seq"]:
-                continue
-
-            bseq = cid + "." + str(service["seq"])
-            services = base_seqs.get(bseq, dict())
-            services[service.pop("host")] = service
-            base_seqs[bseq] = services
-
-        for bseq, services in base_seqs.items():
-            self.services_by_base[bseq] = services
-            # FIXME(adu): Check nb of peers
-            yield bseq
-
-    def _get_peers(self, bseq):
-        return self.services_by_base[bseq].keys()
-
-    def _set_peers(self, bseq, src, dst, **kwargs):
-        cid, _ = self.get_cid_and_seq(bseq)
-        current_peers = self._get_peers(bseq)
-        new_peers = [v for v in current_peers if v != src]
-        new_peers.append(dst)
-
-        if len(current_peers) != len(new_peers):
-            raise ValueError(
-                "Not the same number of peers (current_peers=%s new_peers=%s)"
-                % (current_peers, new_peers)
-            )
-
-        self.logger.debug("Setting peers (base=%s new_peers=%s)", bseq, new_peers)
-        self.admin.set_peers(self.service_type, cid=cid, peers=new_peers, **kwargs)
-        self.services_by_base[bseq][dst] = self.services_by_base[bseq].pop(src)
 
     def _get_args(self, bseq):
         for _host, service in self.services_by_base[bseq].items():
@@ -167,7 +168,7 @@ class Meta2Database(object):
                 services_found = self.conscience.poll(
                     self.service_type, known=known, avoid=avoid, **kwargs
                 )
-                dst = services_found[0].get("tags", dict()).get("tag.service_id", None)
+                dst = services_found[0].get("tags", {}).get("tag.service_id", None)
                 if dst is None:
                     dst = services_found[0]["addr"]
             except Exception as exc:  # pylint: disable=broad-except
@@ -195,8 +196,8 @@ class Meta2Database(object):
         """
         Check which of the old peers actually host the database.
         """
-        cid, _ = self.get_cid_and_seq(bseq)
-        peers_to_copy_from = list()
+        cid, _ = get_cid_and_seq(bseq)
+        peers_to_copy_from = []
         master = None
 
         has = self.admin.has_base(self.service_type, cid=cid, **kwargs)
@@ -235,7 +236,7 @@ class Meta2Database(object):
         return peers_to_copy_from
 
     def _copy_base(self, bseq, dst, peers_to_copy_from, **kwargs):
-        cid, _ = self.get_cid_and_seq(bseq)
+        cid, _ = get_cid_and_seq(bseq)
 
         for true_src in peers_to_copy_from:
             self.logger.debug(
@@ -276,7 +277,7 @@ class Meta2Database(object):
                     raise
 
     def _link_service(self, bseq, src, dst, **kwargs):
-        cid, seq = self.get_cid_and_seq(bseq)
+        cid, seq = get_cid_and_seq(bseq)
         peers = self._get_peers(bseq)
         args = self._get_args(bseq)
 
@@ -308,7 +309,7 @@ class Meta2Database(object):
         Reset the election, try to remove `base` from its old host,
         then trigger an election with the new peers.
         """
-        cid, _ = self.get_cid_and_seq(bseq)
+        cid, _ = get_cid_and_seq(bseq)
         peers = self._get_peers(bseq)
 
         if src in peers:
@@ -437,8 +438,6 @@ class Meta2Database(object):
         Move a database from `src` to `dst`.
         If `dst` is None, find one automatically.
         """
-        self.reset_peers()
-
         try:
             bases_seq = self._get_bases_seq(base, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -469,7 +468,7 @@ class Meta2Database(object):
                     "Failed to check if each peer exists (base=%s): %s", bseq, exc
                 )
                 raise
-            exceptions = list()
+            exceptions = []
             missing_bases = [
                 x for x in self._get_peers(bseq) if x not in available_bases
             ]
@@ -497,8 +496,6 @@ class Meta2Database(object):
         """
         Rebuild a database.
         """
-        self.reset_peers()
-
         try:
             bases_seq = self._get_bases_seq(base, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
