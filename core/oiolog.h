@@ -2,6 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -116,6 +117,9 @@ void oio_log_noop(const gchar *log_domain, GLogLevelFlags log_level,
 
 /** Send the mesage though /dev/syslog, with simple layout */
 void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
+		const gchar *message, gpointer user_data);
+
+void oio_log_event_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
 guint16 oio_log_thread_id(GThread *thread);

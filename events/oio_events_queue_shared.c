@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -35,6 +35,17 @@ _event_dropped(const char *msg, const size_t msglen)
 {
 	GRID_NOTICE("Dropped %d bytes event: %.*s",
 			(int)msglen, (int)MIN(msglen,2048), msg);
+}
+
+void
+_drop_event(const gchar *queue_name, const gchar *msg)
+{
+	g_log(
+		OIO_EVENT_DOMAIN,
+		G_LOG_LEVEL_INFO,
+		"topic:%s\tevent:%s",
+		queue_name,
+		msg);
 }
 
 void
@@ -81,13 +92,14 @@ _q_flush_pending(struct _queue_with_endpoint_s *q)
 	while (0 < g_async_queue_length(q->queue)) {
 		gchar *msg = g_async_queue_try_pop(q->queue);
 		if (msg) {
-			_event_dropped(msg, strlen(msg));
+			_drop_event(q->queue_name, msg);
 			oio_str_clean(&msg);
 			++ count;
 		}
 	}
-	if (count > 0)
+	if (count > 0) {
 		GRID_WARN("%u events lost", count);
+	}
 }
 
 gboolean

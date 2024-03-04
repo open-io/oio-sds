@@ -265,22 +265,36 @@
 				"key": "events.beanstalkd.ttr",
 				"descr": "Sets the TTR (time to run) allow on the treatment of the notification sent to the beanstalkd",
 				"def": 120, "min": 0, "max": 86400 },
+
 			{ "type": "string", "name": "oio_events_kafka_options",
 				"key": "events.kafka.options",
 				"descr": "Set the Kafka client options",
 				"limit": 1024, "def": "" },
-			{ "type": "epoch", "name": "oio_events_kafka_timeouts_flush",
-				"key": "events.kafka.timeouts.flush",
+
+			{ "type": "monotonic", "name": "oio_events_kafka_timeout_flush",
+				"key": "events.kafka.timeout.flush",
 				"descr": "Set the Kafka client flush timeout",
-				"def": 0, "min": 0, "max": 86400 },
+				"def": 0, "min": 0, "max": "1d" },
+
 			{ "type": "string", "name": "oio_events_kafka_acks",
 				"key": "events.kafka.acks",
 				"descr": "Set the acknowledgement policy. Allowed values: all, -1, 0, 1",
 				"def": "all", "limit": 4 },
+
 			{ "type": "bool", "name": "oio_events_kafka_flush",
 				"key": "events.kafka.flush",
 				"def": true,
-				"descr": "Flush message after produce" }
+				"descr": "Flush message after produce" },
+
+			{ "type": "monotonic", "name": "oio_events_kafka_timeouts_flush_shutdown",
+				"key": "events.kafka.timeouts.flush",
+				"descr": "Set the Kafka client flush timeout on events queue shutdown (ms)",
+				"def": "10s", "min": 0, "max": "1d" },
+
+			{ "type": "string", "name": "oio_events_fallback_log_token_id",
+				"key": "events.fallback.log.token_id",
+				"descr": "Set the token_id for event logging in case of cluster failure ",
+				"def": "", "limit": 256 }
 		]
 	},
 	"resolver": {

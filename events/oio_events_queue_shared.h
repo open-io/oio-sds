@@ -46,7 +46,6 @@ struct _queue_with_endpoint_s
 	gchar *exchange_name;  // only for RabbitMQ
 	gchar *exchange_type;  // only for RabbitMQ
 	gchar **extra_args;  // only for RabbitMQ
-	gchar *topic_prefix; // only for Kafka
 
 	gint64 pending_events;
 
@@ -71,6 +70,7 @@ typedef gboolean (*_queue_BEANSTALKD_intercept_running_f) (
 extern _queue_BEANSTALKD_intercept_running_f intercept_running;
 
 void _event_dropped(const char *msg, const size_t msglen);
+void _drop_event(const gchar *queue_name, const gchar *msg);
 void _q_destroy (struct oio_events_queue_s *self);
 void _q_flush_buffered(struct _queue_with_endpoint_s *q, gboolean total);
 void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
