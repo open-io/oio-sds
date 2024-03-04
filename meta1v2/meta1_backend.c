@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -79,6 +79,11 @@ meta1_backend_init(struct meta1_backend_s **result,
 	if (oio_ns_meta1_digits > 4)
 		return ERRPTF("Misconfigured number of meta1 digits: "
 				"out of range [0,4]");
+
+	if (*ns && strlen(oio_events_fallback_log_token_id) > 0) {
+		logger_event_syslog_open(
+			OIO_EVENT_DOMAIN, oio_events_fallback_log_token_id);
+	}
 
 	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
 	g_strlcpy (m1->ns_name, ns, sizeof(m1->ns_name));

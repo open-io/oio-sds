@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -263,8 +263,8 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 			rc = FALSE;
 		} else {
 			GRID_WARN("RabbitMQ unrecoverable error with [%s]: (%d) %s",
-					q->endpoint, err->code, err->message);
-			_event_dropped(msg, msglen);
+					q->endpoint, err->code, err->message);\
+			_drop_event(q->queue_name, msg);
 			ctx->attempts_put = 0;
 		}
 		g_clear_error(&err);

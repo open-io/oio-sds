@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,7 @@ oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 		oio_events_queue__send(self, (gchar*)msg);
 		sent++;
 		return TRUE;
-	}
+	};
 
 	const gint64 start = oio_ext_monotonic_time();
 	oio_events_queue_buffer_maybe_flush(buffer, __send, NULL, max);
@@ -52,7 +52,7 @@ oio_events_queue_flush_key(struct oio_events_queue_s *self,
 		g_free(key_);
 		oio_events_queue__send(self, (gchar*)msg);
 		return TRUE;
-	}
+	};
 
 	oio_events_queue_buffer_flush_key(buffer, __send, NULL, key);
 }
