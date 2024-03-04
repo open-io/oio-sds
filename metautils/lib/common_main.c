@@ -45,6 +45,7 @@ static int oio_log_udp_fd = -1;
 
 static volatile gint64 main_log_level_update = 0;
 static int syslog_opened = 0;
+static int event_syslog_opened = 0;
 static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
 static volatile gboolean flag_daemon = FALSE;
@@ -142,6 +143,18 @@ logger_syslog_open (void)
 	syslog_opened = 1;
 	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
 	g_log_set_default_handler(oio_log_syslog, NULL);
+}
+
+void
+logger_event_syslog_open (const gchar* domain, gchar* token)
+{
+	if (event_syslog_opened)
+		return;
+	event_syslog_opened = 1;
+	// Ensure syslog connection has been initiated and default logger handler
+	// setup
+	logger_syslog_open();
+	g_log_set_handler(domain, G_LOG_LEVEL_INFO, oio_log_event_syslog, token);
 }
 
 #define SA(ss) ((struct sockaddr*)(ss))

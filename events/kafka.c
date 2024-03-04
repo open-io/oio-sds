@@ -22,6 +22,7 @@ License along with this library.
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/internals.h>
+#include <events/oio_events_queue.h>
 #include <events/events_variables.h>
 
 GLogLevelFlags log_level_mapping[] = {
@@ -35,11 +36,47 @@ GLogLevelFlags log_level_mapping[] = {
 	GRID_LOGLVL_DEBUG, // 7
 };
 
-static void kafka_log_forward(const rd_kafka_t* rk, int level, const char* fac, const char* buf) {
+static void kafka_log_forward(
+	const rd_kafka_t* rk,
+	int level, const char* fac,
+	const char* buf)
+{
 	// Log level conversion
 	GLogLevelFlags log_level = log_level_mapping[level];
 
 	g_log(G_LOG_DOMAIN, log_level, "%s - %s: %s", fac, rd_kafka_name(rk), buf);
+}
+
+static void log_event(const gchar* topic, const gchar* event)
+{
+	g_log(
+		OIO_EVENT_DOMAIN,
+		G_LOG_LEVEL_INFO,
+		"topic:%s\tevent:%s",
+		topic,
+		event);
+}
+
+static void on_kafka_delivery_report(
+	rd_kafka_t* rk UNUSED,
+	const rd_kafka_message_t *rkmessage,
+	void *opaque UNUSED)
+{
+	if (rkmessage->err == 0) {
+		// Nothing to handle
+		return;
+	}
+
+	gboolean is_purge = (
+		rkmessage->err == RD_KAFKA_RESP_ERR__PURGE_QUEUE
+		|| rkmessage->err == RD_KAFKA_RESP_ERR__PURGE_INFLIGHT);
+
+	if (is_purge) {
+		// Send message to the dedicated log stream
+		const rd_kafka_topic_t* topic = rkmessage->rkt;
+		const char* topic_name = rd_kafka_topic_name(topic);
+		log_event(topic_name, (const gchar*)rkmessage->payload);
+	}
 }
 
 GError*
@@ -59,10 +96,10 @@ kafka_create(const gchar *endpoint, const gchar *topic,
 	rd_kafka_resp_err_t kafka_err;
 	gchar** options = NULL;
 
-
 	// Endpoints
 	GRID_INFO("Setting option bootstap.server=%s", endpoint);
-	kafka_err = rd_kafka_conf_set(kafka_conf, "bootstrap.servers", endpoint, errstr, sizeof(errstr));
+	kafka_err = rd_kafka_conf_set(
+		kafka_conf, "bootstrap.servers", endpoint, errstr, sizeof(errstr));
 	if (kafka_err) {
 		err = BADREQ("Invalid endpoint: %s", errstr);
 	}
@@ -70,7 +107,8 @@ kafka_create(const gchar *endpoint, const gchar *topic,
 	if (!err) {
 		// Acks
 		GRID_INFO("Setting option acks=%s", oio_events_kafka_acks);
-		kafka_err = rd_kafka_conf_set(kafka_conf, "acks", oio_events_kafka_acks, errstr, sizeof(errstr));
+		kafka_err = rd_kafka_conf_set(
+			kafka_conf, "acks", oio_events_kafka_acks, errstr, sizeof(errstr));
 		if (kafka_err) {
 			err = BADREQ("Invalid acknowledgement: %s", errstr);
 		}
@@ -87,12 +125,14 @@ kafka_create(const gchar *endpoint, const gchar *topic,
 				break;
 			}
 			if (key_value[1] == NULL) {
-				err = BADREQ("Missing value in kafka options for key '%s'", key_value[0]);
+				err = BADREQ(
+					"Missing value in kafka options for key '%s'", key_value[0]);
 				g_strfreev(key_value);
 				break;
 			}
 			GRID_INFO("Setting option %s=%s", key_value[0], key_value[1]);
-			kafka_err = rd_kafka_conf_set(kafka_conf, key_value[0], key_value[1], errstr, sizeof(errstr));
+			kafka_err = rd_kafka_conf_set(
+				kafka_conf, key_value[0], key_value[1], errstr, sizeof(errstr));
 			g_strfreev(key_value);
 			if (kafka_err) {
 				err = BADREQ("Invalid option: %s", errstr);
@@ -101,13 +141,19 @@ kafka_create(const gchar *endpoint, const gchar *topic,
 		}
 	}
 
-	// Configure logger redirection
+	// Install callbacks
 	if (!err) {
+		// Logger redirection
 		rd_kafka_conf_set_log_cb(kafka_conf, kafka_log_forward);
+
+		// Delivery report
+		rd_kafka_conf_set_dr_msg_cb(kafka_conf, on_kafka_delivery_report);
 	}
 
+
 	if (!err) {
-		out1.producer = rd_kafka_new(RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr));
+		out1.producer = rd_kafka_new(
+			RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr));
 		if (!out1.producer) {
 			err = BADREQ("Unable to instantiate Kafka producer: %s", errstr);
 		}
@@ -150,6 +196,7 @@ kafka_publish_message(struct kafka_s *kafka,
 		} else {
 			err = BADREQ("Failed to produce to topic %s: %s", topic,
 				rd_kafka_err2str(rd_err));
+				log_event(topic, (const gchar*)msg);
 		}
 	} else {
 		rd_kafka_flush(kafka->producer, oio_events_kafka_timeouts_flush);
@@ -157,7 +204,6 @@ kafka_publish_message(struct kafka_s *kafka,
 
 	return err;
 }
-
 
 GError*
 kafka_destroy(struct kafka_s *kafka)
@@ -169,12 +215,16 @@ kafka_destroy(struct kafka_s *kafka)
 	}
 
 	// Flush
-	rd_kafka_flush(kafka->producer, 10 * 1000);
+	rd_kafka_flush(kafka->producer, oio_events_kafka_timeouts_flush_shutdown);
 
 	int queue_len = rd_kafka_outq_len(kafka->producer);
 	if (queue_len > 0) {
-        err = TIMEOUT("%d message(s) were not delivered", queue_len);
-    }
+		err = TIMEOUT(
+			"%d message(s) were not delivered. Purging", queue_len);
+		// Purge remaining messages
+		rd_kafka_purge(kafka->producer, RD_KAFKA_PURGE_F_QUEUE);
+		rd_kafka_poll(kafka->producer, 0);
+	}
 
 	rd_kafka_destroy(kafka->producer);
 	g_free((gchar*)kafka->topic);

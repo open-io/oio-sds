@@ -118,6 +118,9 @@ void oio_log_noop(const gchar *log_domain, GLogLevelFlags log_level,
 void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
+void oio_log_event_syslog(const gchar *log_domain, GLogLevelFlags log_level,
+		const gchar *message, gpointer user_data);
+
 guint16 oio_log_thread_id(GThread *thread);
 
 guint16 oio_log_current_thread_id(void);

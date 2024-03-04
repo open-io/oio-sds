@@ -19,6 +19,8 @@ License along with this library.
 #ifndef OIO_SDS__sqlx__oio_events_queue_h
 # define OIO_SDS__sqlx__oio_events_queue_h 1
 
+#define  OIO_EVENT_DOMAIN "EVENTS"
+
 struct oio_events_queue_s;
 
 void oio_events_queue__destroy (struct oio_events_queue_s *self);
@@ -37,7 +39,7 @@ void oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
 void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 		gchar *key, gchar *msg);
 
-/* Should emitters stop sending events? 
+/* Should emitters stop sending events?
  * (based on queue reaching maximum pending events) */
 gboolean oio_events_queue__is_stalled (struct oio_events_queue_s *self);
 

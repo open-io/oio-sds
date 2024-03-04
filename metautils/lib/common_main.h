@@ -103,6 +103,9 @@ gboolean logger_udp_open (const char *target);
 /* Activate syslog logging */
 void logger_syslog_open (void);
 
+/* Activate events syslog logging*/
+void logger_event_syslog_open (const gchar* domain, gchar* token);
+
 /** Stops the execution of the processus. This is called by SIGINT signal,
  * and is supposed to implement a "fast" shutdown. */
 void grid_main_interrupt(void);
