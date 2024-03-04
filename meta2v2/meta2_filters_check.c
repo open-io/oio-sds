@@ -166,6 +166,11 @@ meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	TRACE_FILTER ();
 
+	if (event_fallback_installed()) {
+		// No need to check stalled queues as events could be sent to syslog
+		return FILTER_OK;
+	}
+
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	CHECK(m2b->notifier_container_created);
 	CHECK(m2b->notifier_container_deleted);

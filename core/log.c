@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -216,6 +216,28 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	const int severity = oio_log_lvl2severity(log_level);
 	syslog(facility|severity, "%.*s", (int)gstr->len, gstr->str);
+	g_string_free(gstr, TRUE);
+}
+
+void
+oio_log_event_syslog(const gchar *log_domain UNUSED, GLogLevelFlags log_level,
+	const gchar *message, gpointer user_data)
+{
+	if (!glvl_allowed(log_level)) {
+		return;
+	}
+
+	GString *gstr = g_string_sized_new(1024);
+
+	gchar* token = (gchar*)user_data;
+	g_string_append_static(gstr, "X-OVH-TOKEN:");
+	g_string_append(gstr, token);
+	g_string_append_c(gstr, '\t');
+
+	g_string_append(gstr, message);
+
+	const int severity = oio_log_lvl2severity(log_level);
+	syslog(LOG_LOCAL0|severity, "%.*s", (int)gstr->len, gstr->str);
 	g_string_free(gstr, TRUE);
 }
 

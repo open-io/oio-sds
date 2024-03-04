@@ -162,8 +162,12 @@ static GError *
 __check_backend_events (struct meta1_backend_s *m1)
 {
 	EXTRA_ASSERT(m1 != NULL);
-	if (m1->notifier_srv && oio_events_queue__is_stalled (m1->notifier_srv))
-		return BUSY("Too many pending events");
+
+	if (m1->notifier_srv && oio_events_queue__is_stalled (m1->notifier_srv)) {
+		if (!event_fallback_installed()) {
+			return BUSY("Too many pending events");
+		}
+	}
 	return NULL;
 }
 

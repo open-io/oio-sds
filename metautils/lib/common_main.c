@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,7 @@ static int oio_log_udp_fd = -1;
 
 static volatile gint64 main_log_level_update = 0;
 static int syslog_opened = 0;
+static int event_syslog_opened = 0;
 static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
 static volatile gboolean flag_daemon = FALSE;
@@ -142,6 +143,24 @@ logger_syslog_open (void)
 	syslog_opened = 1;
 	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
 	g_log_set_default_handler(oio_log_syslog, NULL);
+}
+
+void
+logger_event_syslog_open (const gchar* domain, gchar* token)
+{
+	if (event_syslog_opened)
+		return;
+	event_syslog_opened = 1;
+	// Ensure syslog connection has been initiated and default logger handler
+	// setup
+	logger_syslog_open();
+	g_log_set_handler(domain, G_LOG_LEVEL_INFO, oio_log_event_syslog, token);
+}
+
+gboolean
+event_fallback_installed (void)
+{
+	return event_syslog_opened == 1;
 }
 
 #define SA(ss) ((struct sockaddr*)(ss))

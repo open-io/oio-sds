@@ -444,6 +444,14 @@ Used by `gcc`
  * cmake directive: *OIO_EVENTS_COMMON_PENDING_MAX*
  * range: 1 -> 1048576
 
+### events.fallback.log.token_id
+
+> Set the token_id for event logging in case of cluster failure 
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_EVENTS_FALLBACK_LOG_TOKEN_ID*
+
 ### events.kafka.acks
 
 > Set the acknowledgement policy. Allowed values: all, -1, 0, 1
@@ -468,14 +476,23 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_EVENTS_KAFKA_OPTIONS*
 
-### events.kafka.timeouts.flush
+### events.kafka.timeout.flush
 
 > Set the Kafka client flush timeout
 
  * default: **0**
  * type: gint64
+ * cmake directive: *OIO_EVENTS_KAFKA_TIMEOUT_FLUSH*
+ * range: 0 -> 1 * G_TIME_SPAN_DAY
+
+### events.kafka.timeouts.flush
+
+> Set the Kafka client flush timeout on events queue shutdown (ms)
+
+ * default: **10 * G_TIME_SPAN_SECOND**
+ * type: gint64
  * cmake directive: *OIO_EVENTS_KAFKA_TIMEOUTS_FLUSH*
- * range: 0 -> 86400
+ * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### events.zmq.max_recv
 

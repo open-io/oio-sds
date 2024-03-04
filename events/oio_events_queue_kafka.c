@@ -134,7 +134,7 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 		} else {
 			GRID_WARN("Kafka unrecoverable error with [%s]: (%d) %s",
 					q->endpoint, err->code, err->message);
-			_event_dropped(msg, msglen);
+			_drop_event(q->queue_name, msg);
 			ctx->attempts_put = 0;
 		}
 		g_clear_error (&err);
@@ -145,14 +145,88 @@ exit:
 	return rc;
 }
 
+static gboolean
+_q_reconnect(struct _queue_with_endpoint_s *q UNUSED, struct _running_ctx_s *ctx)
+{
+	EXTRA_ASSERT(ctx->kafka != NULL);
+
+	if (ctx->kafka && ctx->kafka->producer) {
+		return TRUE;
+	}
+
+	GError *err = kafka_connect(ctx->kafka);
+#ifdef HAVE_EXTRA_DEBUG
+	if (intercept_errors)
+		(*intercept_errors) (err);
+#endif
+
+	if (err) {
+		GRID_WARN("Failed to connect: %s", err->message);
+		g_clear_error(&err);
+		ctx->attempts_connect += 1;
+		return FALSE;
+	}
+
+	ctx->attempts_connect = 0;
+	return TRUE;
+}
+
+
+static gboolean
+_q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
+{
+	EXTRA_ASSERT(ctx->kafka != NULL && ctx->kafka->producer != NULL);
+
+	if (oio_events_beanstalkd_check_period <= 0 ||
+			ctx->last_check >= OLDEST(ctx->now, oio_events_beanstalkd_check_period)) {
+
+		return TRUE;
+	}
+
+	// Trigger callbacks if any
+	kafka_poll(ctx->kafka);
+
+	GError *err = kafka_check_fatal_error(ctx->kafka);
+#ifdef HAVE_EXTRA_DEBUG
+	if (intercept_errors)
+		(*intercept_errors) (err);
+#endif
+
+	if (err) {
+		GRID_WARN("Kafka error with [%s]: (%d) %s",
+			q->endpoint, err->code, err->message);
+		g_clear_error(&err);
+		ctx->attempts_check += 1;
+		q->healthy = FALSE;
+
+		// Force reconnect
+		kafka_close(ctx->kafka);
+
+		ctx->kafka->producer = NULL;
+		return FALSE;
+	}
+
+	ctx->last_check = ctx->now;
+	if (ctx->attempts_check > 0) {
+		// Everything is fine
+		ctx->attempts_check = 0;
+		q->healthy = TRUE;
+	}
+
+	return TRUE;
+}
 
 static GError *
 _q_run(struct _queue_with_endpoint_s *q)
 {
 	GError *err = NULL;
 	struct _running_ctx_s ctx = {0};
+	void __requeue_fn(gchar* msg) {
+		g_async_queue_push_front(q->queue, msg);
+	};
+
 	err = kafka_create(
-			q->endpoint, q->queue_name, &(ctx.kafka));
+			q->endpoint, q->queue_name, __requeue_fn, _drop_event, &(ctx.kafka));
 
 	if (err){
 		return err;
@@ -167,6 +241,17 @@ _q_run(struct _queue_with_endpoint_s *q)
 			ctx.last_flush = ctx.now;
 			_q_flush_buffered(q, FALSE);
 		}
+
+		if (!_q_reconnect(q, &ctx)) {
+			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_connect, 5);
+			continue;
+		}
+
+		if (!_q_maybe_check(q, &ctx)) {
+			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_check, 5);
+			continue;
+		}
+
 		if (!_q_manage_message(q, &ctx)) {
 			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_put, 5);
 		}

@@ -223,6 +223,11 @@ meta2_backend_init(struct meta2_backend_s **result,
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
 
+	if (*ns && strlen(oio_events_fallback_log_token_id) > 0) {
+		logger_event_syslog_open(
+			OIO_EVENT_DOMAIN, oio_events_fallback_log_token_id);
+	}
+
 	struct meta2_backend_s *m2 = g_malloc0(sizeof(struct meta2_backend_s));
 	g_strlcpy(m2->ns_name, ns, sizeof(m2->ns_name));
 	m2->type = NAME_SRVTYPE_META2;

@@ -29,6 +29,7 @@ License along with this library.
 #include "kafka.h"
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
+#include "oio_events_queue_shared.h"
 #include "oio_events_queue_fanout.h"
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_kafka.h"
@@ -48,6 +49,11 @@ void
 oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
 {
 	EXTRA_ASSERT (msg != NULL);
+	if (event_fallback_installed() && oio_events_queue__is_stalled(self)) {
+		struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+		_drop_event(q->queue_name, msg);
+		return;
+	}
 	EVTQ_CALL(self,send)(self,msg);
 }
 
@@ -73,6 +79,11 @@ oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 			&& key && *key) {
 		EVTQ_CALL(self,send_overwritable)(self,key,msg);
 	} else {
+		if (event_fallback_installed() && oio_events_queue__is_stalled(self)) {
+			struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+			_drop_event(q->queue_name, msg);
+			return;
+		}
 		EVTQ_CALL(self,send)(self,msg);
 		g_free(key);  // safe if key is NULL
 	}
