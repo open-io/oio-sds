@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from collections import namedtuple
 from os import makedirs, remove
 from os.path import isdir
 from shutil import move
@@ -23,21 +22,18 @@ from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
 from oio.common.constants import CHUNK_SUFFIX_CORRUPT, CHUNK_QUARANTINE_FOLDER_NAME
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.green import time
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point
 from oio.conscience.client import ConscienceClient
-from oio.crawler.common.base import Filter
+from oio.crawler.common.base import Filter, RawxService, RawxUpMixin
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     RawxCrawlerError,
     RawxCrawlerNotFound,
 )
 
-RawxService = namedtuple("RawxService", ("status", "last_time"))
 
-
-class Checksum(Filter):
+class Checksum(Filter, RawxUpMixin):
     NAME = "Checksum"
 
     def init(self):
@@ -66,34 +62,6 @@ class Checksum(Filter):
         self._rawx_service = RawxService(status=False, last_time=0)
 
         self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
-
-    def _check_rawx_up(self):
-        now = time.time()
-        status, last_time = self._rawx_service
-        # If the conscience has been requested in the last X seconds, return
-        if now < last_time + self.conscience_cache:
-            return status
-
-        status = True
-        try:
-            data = self.conscience_client.all_services("rawx")
-            # Check that all rawx are UP
-            # If one is down, the chunk may be still rebuildable in the future
-            for srv in data:
-                tags = srv["tags"]
-                addr = srv["addr"]
-                up = tags.pop("tag.up", "n/a")
-                if not up:
-                    self.logger.debug(
-                        "service %s is down, rebuild may not be possible", addr
-                    )
-                    status = False
-                    break
-        except exc.OioException:
-            status = False
-
-        self._rawx_service = RawxService(status, now)
-        return status
 
     def error(self, chunk, container_id, msg):
         self.logger.error(

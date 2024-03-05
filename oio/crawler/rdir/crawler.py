@@ -14,7 +14,6 @@
 # License along with this library.
 
 
-from collections import namedtuple
 from os.path import isfile
 from random import randint
 
@@ -28,12 +27,11 @@ from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger, logging
 from oio.common.utils import request_id, ratelimit
 from oio.conscience.client import ConscienceClient
+from oio.crawler.common.base import RawxService, RawxUpMixin
 from oio.rdir.client import RdirClient
 
-RawxService = namedtuple("RawxService", ("status", "last_time"))
 
-
-class RdirWorker(object):
+class RdirWorker(RawxUpMixin):
     """
     Rdir crawler worker responsible for a single volume.
     """
@@ -44,7 +42,7 @@ class RdirWorker(object):
         """
         Initializes an RdirWorker.
 
-        :param volume_path: The volume path to be indexed
+        :param volume_path: path to the volume which must be checked
         :param conf: The configuration to be passed to the needed services
         :param pool_manager: A connection pool manager. If none is given, a
                 new one with a default size of 10 will be created.
@@ -94,34 +92,6 @@ class RdirWorker(object):
             self.conf, logger=self.logger, watchdog=watchdog
         )
 
-    def _check_rawx_up(self):
-        now = time.time()
-        status, last_time = self._rawx_service
-        # If the conscience has been requested in the last X seconds, return
-        if now < last_time + self.conscience_cache:
-            return status
-
-        status = True
-        try:
-            data = self.conscience_client.all_services("rawx")
-            # Check that all rawx are UP
-            # If one is down, the chunk may be still rebuildable in the future
-            for srv in data:
-                tags = srv["tags"]
-                addr = srv["addr"]
-                up = tags.pop("tag.up", "n/a")
-                if not up:
-                    self.logger.debug(
-                        "service %s is down, rebuild may notbe possible", addr
-                    )
-                    status = False
-                    break
-        except exc.OioException:
-            status = False
-
-        self._rawx_service = RawxService(status, now)
-        return status
-
     def report(self, tag, force=False):
         """
         Log the status of the crawler
@@ -165,9 +135,9 @@ class RdirWorker(object):
 
         for i in range(self.hash_depth):
             start = chunk_id[i * self.hash_width :]
-            chunk_path = "{}/{}".format(chunk_path, start[: self.hash_width])
+            chunk_path += f"/{start[: self.hash_width]}"
 
-        chunk_path = "{}/{}".format(chunk_path, chunk_id)
+        chunk_path += f"/{chunk_id}"
 
         return chunk_path
 
@@ -188,12 +158,13 @@ class RdirWorker(object):
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
                 if self._check_rawx_up():
-                    error = "%(err)s, action required" % {"err": str(err)}
+                    error = f"{err}, action required"
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
                 # Note for later: if it an orphan chunk, we should tag it and
                 # increment a counter for stats. Another tool could be
                 # responsible for those tagged chunks.
+                # FIXME(FVE): deindex the chunk
                 self.orphans += 1
             elif isinstance(err, exc.ContentDrained):
                 self.orphans += 1
@@ -243,7 +214,7 @@ class RdirWorker(object):
                     self.error(
                         container_id,
                         chunk_id,
-                        "failed to process, err={}".format(err),
+                        f"failed to process, err={err}",
                         reqid=reqid,
                     )
 
@@ -263,6 +234,11 @@ class RdirWorker(object):
         crawling_duration = time.time() - start_crawl
         waiting_time_to_start = self.scans_interval - crawling_duration
         if waiting_time_to_start > 0:
+            self.logger.info(
+                "Waiting %d seconds before next pass on volume_id=%s",
+                waiting_time_to_start,
+                self.volume_id,
+            )
             for _ in range(int(waiting_time_to_start)):
                 if not self.running:
                     return
@@ -281,7 +257,9 @@ class RdirWorker(object):
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
             self.logger.info(
-                "Waiting %d seconds before starting", waiting_time_to_start
+                "Waiting %d seconds before starting on volume_id=%s",
+                waiting_time_to_start,
+                self.volume_id,
             )
             for _ in range(waiting_time_to_start):
                 if not self.running:
@@ -297,12 +275,14 @@ class RdirWorker(object):
         Could be needed for eventually gracefully stopping.
         """
         self.running = False
+        self.logger.info("Stopping volume_id=%s", self.volume_id)
 
 
 class RdirCrawler(Daemon):
     """
-    A daemon that spawns a greenlet running a RdirWorker
-    for each volume.
+    Periodically check that chunks in rdir really exist in rawx.
+
+    In case a chunk does not exist, try to rebuild it.
     """
 
     def __init__(self, conf, **kwargs):

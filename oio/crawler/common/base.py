@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from collections import Counter
+from collections import Counter, namedtuple
 from os.path import join
 import time
 from urllib.parse import urlparse
@@ -25,6 +25,8 @@ from oio.common.utils import get_nb_chunks, is_chunk_id_valid, service_pool_to_d
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.quality import NB_LOCATION_LEVELS, format_location, get_current_items
+
+RawxService = namedtuple("RawxService", ("status", "last_time"))
 
 
 class Filter(object):
@@ -140,7 +142,7 @@ class ChunkSymlinkFilter(Filter):
 
         :param chunks: list of object chunks
         :type chunks: list
-        :param account: accout name
+        :param account: account name
         :type account: str
         :param container: container name
         :type container: str
@@ -311,3 +313,35 @@ class ChunkSymlinkFilter(Filter):
         res = path.rsplit("/", 1)[1].split(".")
         chunk_id = res[0]
         return len(res) == 3 and is_chunk_id_valid(chunk_id)
+
+
+class RawxUpMixin:
+    """Mixin class providing _check_rawx_up"""
+
+    def _check_rawx_up(self):
+        now = time.time()
+        status, last_time = self._rawx_service
+        # If the conscience has been requested in the last X seconds, return
+        if now < last_time + self.conscience_cache:
+            return status
+
+        status = True
+        try:
+            data = self.conscience_client.all_services("rawx")
+            # Check that all rawx are UP
+            # If one is down, the chunk may be still rebuildable in the future
+            for srv in data:
+                tags = srv["tags"]
+                addr = srv["addr"]
+                up = tags.pop("tag.up", "n/a")
+                if not up:
+                    self.logger.debug(
+                        "service %s is down, rebuild may not be possible", addr
+                    )
+                    status = False
+                    break
+        except exc.OioException:
+            status = False
+
+        self._rawx_service = RawxService(status, now)
+        return status
