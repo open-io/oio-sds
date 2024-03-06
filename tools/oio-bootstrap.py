@@ -1691,7 +1691,7 @@ counter_name = storage.bucket.objects.size
 batch_size = 5
 
 # RabbitMQ
-amqp_url = amqp://guest:guest@localhost:5672/
+amqp_url = ${AMQP_URL}
 amqp_exchange = swift
 amqp_queue = notifications.info
 amqp_durable = True
@@ -3027,6 +3027,7 @@ def generate(options):
             "GROUPTYPE": "billing",
             "EXE": "oio-billing-agent",
             "SRVNUM": 1,
+            "AMQP_URL": options["billing"]["amqp_url"],
         }
     )
     cluster_file = cluster(env)
@@ -3286,7 +3287,7 @@ def main():
     opts["rdir"] = {SVC_NB: None, SVC_HOSTS: None}
     opts[SHALLOW_COPY] = False
     opts["beanstalkd"] = {SVC_NB: None, SVC_HOSTS: None}
-    opts["rabbitmq"] = {}
+    opts["billing"] = {"amqp_url": "amqp://guest:guest@localhost:5672/"}
     opts["kafka"] = {"endpoint": None}
     opts["event-agent"] = {SVC_NB: None}
     opts["rebuilder"] = {SVC_NB: None}
