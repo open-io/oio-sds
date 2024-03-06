@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -139,7 +139,7 @@ class ECChunkDownloadHandler(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **_kwargs
+        **_kwargs,
     ):
         """
         :param connection_timeout: timeout to establish the connections
@@ -161,7 +161,7 @@ class ECChunkDownloadHandler(object):
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
-        self._resp_by_chunk = dict()
+        self._resp_by_chunk = {}
 
     def _get_range_infos(self):
         """
@@ -201,7 +201,7 @@ class ECChunkDownloadHandler(object):
         return range_infos
 
     def _get_fragment(self, chunk_iter, range_infos, storage_method):
-        headers = dict()
+        headers = {}
         headers.update(self.headers)
         if range_infos:
             # only handle one range
@@ -265,8 +265,8 @@ class ECChunkDownloadHandler(object):
             return stream
         else:
             raise exceptions.ServiceUnavailable(
-                "Not enough valid sources to read (%d/%d)"
-                % (len(readers), self.storage_method.ec_nb_data)
+                f"Not enough valid sources to read ({len(readers)}/"
+                f"{self.storage_method.ec_nb_data}+{self.storage_method.ec_nb_parity})"
             )
 
 
@@ -431,7 +431,7 @@ class ECStream(object):
                     if self.perfdata is not None:
                         ec_end = monotonic_time()
                         duration = ec_end - ec_start
-                        rawx_pdata = self.perfdata.setdefault("rawx", dict())
+                        rawx_pdata = self.perfdata.setdefault("rawx", {})
                         rawx_pdata["ec.segments"] = rawx_pdata.get("ec.segments", 0) + 1
                         rawx_pdata["ec.total"] = (
                             rawx_pdata.get("ec.total", 0.0) + duration
@@ -669,7 +669,7 @@ class EcChunkWriter(object):
         chunk_checksum_algo="blake3",
         perfdata=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         self._chunk = chunk
         self._conn = conn
@@ -706,7 +706,7 @@ class EcChunkWriter(object):
         connection_timeout=None,
         write_timeout=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -731,7 +731,7 @@ class EcChunkWriter(object):
         ):
             perfdata = kwargs.get("perfdata", None)
             perfdata_rawx = (
-                perfdata.setdefault("rawx", dict()) if perfdata is not None else None
+                perfdata.setdefault("rawx", {}) if perfdata is not None else None
             )
             conn = io.http_connect(
                 parsed.netloc,
@@ -750,7 +750,7 @@ class EcChunkWriter(object):
             write_timeout=write_timeout,
             reqid=reqid,
             watchdog=watchdog,
-            **kwargs
+            **kwargs,
         )
 
     def start(self, pool):
@@ -782,7 +782,7 @@ class EcChunkWriter(object):
                 self.logger.warning(
                     "Failed to write to %s (%s, reqid=%s)", self.chunk, msg, self.reqid
                 )
-                self.chunk["error"] = "write: %s" % msg
+                self.chunk["error"] = f"write: {msg}"
             # Indicate that the data is completely sent
             self.queue.task_done()
 
@@ -850,12 +850,12 @@ class EcChunkWriter(object):
             self.logger.warning(
                 "Failed to finish %s (%s, reqid=%s)", self.chunk, msg, self.reqid
             )
-            self.chunk["error"] = "finish: %s" % msg
+            self.chunk["error"] = f"finish: {msg}"
             return self.chunk
         finally:
             if self.perfdata is not None:
                 fin_end = monotonic_time()
-                rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+                rawx_perfdata = self.perfdata.setdefault("rawx", {})
                 chunk_url = self.conn.chunk["url"]
                 rawx_perfdata["upload_finish." + chunk_url] = fin_end - fin_start
         return None
@@ -871,7 +871,7 @@ class EcChunkWriter(object):
                 return resp
         finally:
             if self.perfdata is not None:
-                perfdata_rawx = self.perfdata.setdefault("rawx", dict())
+                perfdata_rawx = self.perfdata.setdefault("rawx", {})
                 chunk_url = self.conn.chunk["url"]
                 upload_end = monotonic_time()
                 perfdata_rawx["upload." + chunk_url] = (
@@ -889,7 +889,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         kwargs.setdefault("chunk_buffer_min", storage_method.ec_segment_size)
         kwargs.setdefault("chunk_buffer_max", storage_method.ec_segment_size)
@@ -904,7 +904,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
-        self.failed_chunks = list()
+        self.failed_chunks = []
         self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):
@@ -949,7 +949,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         fragments = ec_stream.send(data)
         if self.perfdata is not None:
             ec_end = monotonic_time()
-            rawx_perfdata = self.perfdata.setdefault("rawx", dict())
+            rawx_perfdata = self.perfdata.setdefault("rawx", {})
             rawx_perfdata["ec.total"] = (
                 rawx_perfdata.get("ec.total", 0.0) + ec_end - ec_start
             )
@@ -1105,7 +1105,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 self.reqid,
                 exc,
             )
-            chunk["error"] = "connect: %s" % msg
+            chunk["error"] = f"connect: {msg}"
             return None, chunk
 
     def _dispatch_response(self, writer, resp, success_chunks):
@@ -1148,7 +1148,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     resp.status,
                     resp.reason,
                 )
-                writer.chunk["error"] = "resp: HTTP %s" % resp.status
+                writer.chunk["error"] = f"resp: HTTP {resp.status}"
                 self.failed_chunks.append(writer.chunk)
         else:
             self.failed_chunks.append(writer.chunk)
@@ -1196,7 +1196,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 self.reqid,
                 msg,
             )
-            writer.chunk["error"] = "resp: %s" % msg
+            writer.chunk["error"] = f"resp: {msg}"
         # close_source() will be called in a finally block later.
         # But we do not want to wait for all writers to have finished writing
         # before closing connections.
@@ -1246,7 +1246,7 @@ class ECWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                **kwargs
+                **kwargs,
             )
             bytes_transferred, checksum, chunks = handler.stream(self.source, max_size)
 
@@ -1282,7 +1282,7 @@ class ECRebuildHandler(object):
         read_timeout=None,
         watchdog=None,
         reqid=None,
-        **_kwargs
+        **_kwargs,
     ):
         self.meta_chunk = meta_chunk
         self.missing = missing
@@ -1380,10 +1380,12 @@ class ECRebuildHandler(object):
             if len(resps) < nb_data:
                 self.logger.error("Unable to read enough valid sources to rebuild")
                 raise exceptions.UnrecoverableContent(
-                    "Not enough valid sources to rebuild"
+                    "Not enough valid sources to rebuild "
+                    f"({len(resps)}/{nb_data}+{self.storage_method.ec_nb_parity})"
                 )
             self.logger.warning(
-                "Use chunk(s) without size information to rebuild a chunk"
+                "Some chunks without size information will be read (reqid=%s)",
+                self.reqid,
             )
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
