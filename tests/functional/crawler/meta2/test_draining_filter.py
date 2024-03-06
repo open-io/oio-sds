@@ -184,15 +184,13 @@ class TestDrainingFilter(BaseTestCase):
                 nb_objects + len(out_of_range_objects), len(resp["objects"])
             )
             chunk_urls = []
-            object_names = []
             for object_ in resp["objects"]:
                 _, chunks = self.storage.object_locate(
                     None, None, object_["name"], cid=cid
                 )
                 if object_["name"] not in out_of_range_objects:
                     for chunk in chunks:
-                        chunk_urls.append(chunk["url"])
-                    object_names.append((object_["name"], len(chunks)))
+                        chunk_urls.append((chunk["url"], object_["content"]))
 
         # Process the draining
         if not meta2db_env:
@@ -206,20 +204,20 @@ class TestDrainingFilter(BaseTestCase):
 
         if self.expected_successes >= 1:
             # All chunks should have received a draining event
-            for i in range(nb_objects):
-                object_name, nb_chunks = object_names[i]
-                for _ in range(nb_chunks):
-                    event = self.wait_for_kafka_event(
-                        types=(EventTypes.CONTENT_DRAINED,),
-                        fields={"path": object_name},
-                    )
-                    self.assertIsNotNone(event)
-                    for event_data in event.data:
-                        if event_data.get("type") == "chunks":
-                            chunk_url = event_data.get("id")
-                            self.logger.debug("Drain event for %s received", chunk_url)
-                            chunk_urls.remove(chunk_url)
-            self.assertEqual(0, len(chunk_urls))
+            drained_chunks = []
+            for _, content in chunk_urls:
+                event = self.wait_for_kafka_event(
+                    types=(EventTypes.CONTENT_DRAINED,),
+                    fields={"content": content},
+                )
+                self.assertIsNotNone(event)
+                for event_data in event.data:
+                    if event_data.get("type") == "chunks":
+                        evt_chunk_url = event_data.get("id")
+                        self.logger.debug("Drain event for %s received", evt_chunk_url)
+                        if evt_chunk_url not in drained_chunks:
+                            drained_chunks.append(evt_chunk_url)
+            self.assertEqual(len(drained_chunks), len(chunk_urls))
             # Check if the out-of-range objects are not drained
             for obj_name in out_of_range_objects:
                 _, chunks = self.storage.object_locate(None, None, obj_name, cid=cid)

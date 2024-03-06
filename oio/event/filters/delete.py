@@ -141,15 +141,26 @@ class DeleteFilter(Filter):
             name += f":{url_parts.port}"
         return name
 
+    def strip_fields(self, event):
+        # Remove useless field in `url` field
+        url = event.get("url")
+        event["url"] = {k: v for k, v in url.items() if k in ("id", "content")}
+
+        # Remove useless data items
+        event["data"] = []
+
+        # Remove extra root fields
+        for field in ("origin", "part", "parts"):
+            if field in event:
+                del event[field]
+
     def process(self, env, cb):
         event = Event(env)
 
         if event.event_type in (EventTypes.CONTENT_DELETED, EventTypes.CONTENT_DRAINED):
             # Create a base event without "chunks"
             base_event = deepcopy(env)
-            base_event["data"] = [
-                d for d in base_event["data"] if d.get("type") != "chunks"
-            ]
+            self.strip_fields(base_event)
             child_events = []
 
             # Split event per servers
@@ -169,7 +180,7 @@ class DeleteFilter(Filter):
 
                 # Add the chunk to the event mean to be sent to a rawx server
                 _event = deepcopy(base_event)
-                _event["data"].append(data)
+                _event["data"].append({"type": "chunks", "id": data.get("id")})
                 _event["service_id"] = service_name
                 child_events.append((topic_name, _event))
 
