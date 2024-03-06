@@ -13,7 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-
+import signal
+from multiprocessing import Event, Process
 from os.path import isfile
 from random import randint
 
@@ -21,7 +22,7 @@ from oio.blob.operator import ChunkOperator
 from oio.blob.utils import check_volume
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
-from oio.common.green import get_watchdog, time, ContextPool
+from oio.common.green import get_watchdog, time
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger, logging
@@ -31,7 +32,7 @@ from oio.crawler.common.base import RawxService, RawxUpMixin
 from oio.rdir.client import RdirClient
 
 
-class RdirWorker(RawxUpMixin):
+class RdirWorker(Process, RawxUpMixin):
     """
     Rdir crawler worker responsible for a single volume.
     """
@@ -55,7 +56,8 @@ class RdirWorker(RawxUpMixin):
             self.volume_id = volume_id
         if not self.volume_path:
             raise exc.ConfigurationException("No volume specified for crawler")
-        self.running = True
+        super().__init__(name=f"rdir-crawler-{self.volume_id}")
+        self._stop_requested = Event()
 
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
@@ -203,7 +205,7 @@ class RdirWorker(RawxUpMixin):
             entries = self.index_client.chunk_fetch(self.volume_id)
 
             for container_id, chunk_id, value in entries:
-                if not self.running:
+                if self._stop_requested.is_set():
                     self.logger.info("Stop asked")
                     break
 
@@ -240,7 +242,7 @@ class RdirWorker(RawxUpMixin):
                 self.volume_id,
             )
             for _ in range(int(waiting_time_to_start)):
-                if not self.running:
+                if self._stop_requested.is_set():
                     return
                 time.sleep(1)
         else:
@@ -254,6 +256,10 @@ class RdirWorker(RawxUpMixin):
         """
         Main worker loop
         """
+        # Ignore these signals, the main thread will ask the workers to stop
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
             self.logger.info(
@@ -262,10 +268,10 @@ class RdirWorker(RawxUpMixin):
                 self.volume_id,
             )
             for _ in range(waiting_time_to_start):
-                if not self.running:
+                if self._stop_requested.is_set():
                     return
                 time.sleep(1)
-        while self.running:
+        while not self._stop_requested.is_set():
             start_crawl = time.time()
             self.crawl_volume()
             self._wait_next_iteration(start_crawl)
@@ -274,8 +280,8 @@ class RdirWorker(RawxUpMixin):
         """
         Could be needed for eventually gracefully stopping.
         """
-        self.running = False
         self.logger.info("Stopping volume_id=%s", self.volume_id)
+        self._stop_requested.set()
 
 
 class RdirCrawler(Daemon):
@@ -292,16 +298,17 @@ class RdirCrawler(Daemon):
             raise exc.OioException("No rawx volumes provided to index!")
         self.volumes = [x.strip() for x in conf.get("volume_list").split(",")]
         self.watchdog = get_watchdog(called_from_main_application=True)
-        self.pool = ContextPool(len(self.volumes))
         self.volume_workers = [
-            RdirWorker(conf, x, watchdog=self.watchdog) for x in self.volumes
+            RdirWorker(conf, x, logger=self.logger, watchdog=self.watchdog)
+            for x in self.volumes
         ]
 
     def run(self, *args, **kwargs):
         self.logger.info("Started rdir crawler service")
         for worker in self.volume_workers:
-            self.pool.spawn(worker.run)
-        self.pool.waitall()
+            worker.start()
+        for worker in self.volume_workers:
+            worker.join()
 
     def stop(self):
         self.logger.info("Stopping rdir crawler")
