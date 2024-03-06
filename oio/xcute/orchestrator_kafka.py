@@ -19,30 +19,47 @@ from redis import (
     ConnectionError as RedisConnectionError,
     TimeoutError as RedisTimeoutError,
 )
-
+from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden
 from oio.common.logger import get_logger
 from oio.common.green import sleep, threading, time
 from oio.common.json import json
 from oio.common.kafka import (
     KafkaConsumer,
+    KafkaFatalException,
     KafkaSender,
     DEFAULT_XCUTE_JOB_TOPIC,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
 )
 from oio.common.utils import ratelimit
 from oio.event.evob import EventTypes
+from oio.event.kafka_consumer import KafkaRejectorMixin, KafkaOffsetHelperMixin
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
 
 
-class XcuteOrchestrator(object):
+class XcuteReplyListener(KafkaConsumer, KafkaRejectorMixin):
+    def __init__(self, endpoint, topic, group_id, logger, app_conf, kafka_conf):
+        KafkaConsumer.__init__(
+            self, endpoint, [topic], group_id, logger, app_conf, kafka_conf
+        )
+        KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
+
+    def close(self):
+        KafkaConsumer.close(self)
+        KafkaRejectorMixin.close_producer(self)
+
+
+class XcuteOrchestrator(KafkaOffsetHelperMixin):
     DEFAULT_DISPATCHER_TIMEOUT = 2
     DEFAULT_ORCHESTRATOR_GROUP_ID = "xcute-orchestrator"
     MAX_PAYLOAD_SIZE = 2**16
+    DEFAULT_BATCH_SIZE = 100
+    DEFAULT_BATCH_COMMIT_TIMEOUT = 10
 
     def __init__(self, conf, logger=None):
+        KafkaOffsetHelperMixin.__init__(self)
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.backend = XcuteBackend(self.conf, logger=self.logger)
@@ -66,6 +83,14 @@ class XcuteOrchestrator(object):
         if not self.kafka_endpoints:
             raise ValueError("Missing endpoints")
         self.logger.info("Using endpoints: %s", self.kafka_endpoints)
+
+        self.batch_size = int_value(
+            self.conf.get("batch_size"), self.DEFAULT_BATCH_SIZE
+        )
+
+        self.commit_timeout = int_value(
+            self.conf.get("batch_commit_timeout"), self.DEFAULT_BATCH_COMMIT_TIMEOUT
+        )
 
         self.running = True
 
@@ -671,43 +696,64 @@ class XcuteOrchestrator(object):
         )
 
         while self.running:
-            kafka_consumer = None
+            reply_listener = None
+            self.reset_offsets()
+            fatal_error = False
             try:
-                kafka_consumer = KafkaConsumer(
+                reply_listener = XcuteReplyListener(
                     self.kafka_endpoints,
-                    [self.kafka_reply_topic],
+                    self.kafka_reply_topic,
                     self.group_id,
                     self.logger,
-                    app_conf=self.conf,
-                    kafka_conf={
+                    self.conf,
+                    {
                         "client.id": self.orchestrator_id,
                         "enable.auto.commit": False,
                         "auto.offset.reset": "earliest",
                     },
                 )
 
-                # keep the job results in memory
-                for event in kafka_consumer.fetch_events():
+                for event in reply_listener.fetch_events():
                     if not self.running:
                         break
+                    # Commit if needed
+                    if self.need_commit(self.batch_size, self.commit_timeout):
+                        offsets = self.get_offsets_to_commit()
+                        if offsets:
+                            reply_listener.commit(offsets=offsets)
+                            self.reset_offsets()
                     if not event:
                         sleep(1)
                         continue
                     if event.error():
-                        self.logger.error(
-                            "Failed to fetch event, reason: %s", event.error()
-                        )
+                        error = event.error()
+                        self.logger.error("Failed to fetch event, reason: %s", error)
+                        if not error.retriable():
+                            raise KafkaFatalException(error)
                         continue
+                    topic = event.topic()
+                    partition = event.partition()
+                    offset = event.offset()
+
+                    self.register_offset(topic, partition, offset)
 
                     success = self.process_reply(event.value())
 
-                    if success:
-                        kafka_consumer.commit(event)
+                    if not success:
+                        reply_listener.reject_message(event)
+
+                    self.set_offset_ready_to_commit(topic, partition, offset)
+            except KafkaFatalException as exc:
+                self.logger.error("Kafka client error: %s", exc)
+                fatal_error = True
             except Exception as exc:
                 self.logger.error("Error processing reply: %s", exc)
             finally:
-                if kafka_consumer:
-                    kafka_consumer.close()
+                if reply_listener:
+                    if not fatal_error and self._ready_offsets > 0:
+                        offsets = self.get_offsets_to_commit()
+                        reply_listener.commit(offsets=offsets)
+                    reply_listener.close()
 
         self.logger.info("Exited thread to listen reply")
 
@@ -732,7 +778,7 @@ class XcuteOrchestrator(object):
             if exc is None:
                 if finished:
                     self.logger.info("Job %s is finished", job_id)
-                    return True
+                return True
             else:
                 self.logger.warning(
                     "[job_id=%s] Job has not been updated with the processed tasks: %s",

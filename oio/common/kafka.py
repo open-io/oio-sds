@@ -402,7 +402,7 @@ class KafkaConsumer(KafkaClient):
         Aknowledge message or a list of offsets
         """
         kwargs = {"asynchronous": False}
-        if offsets:
+        if offsets is not None:
             kwargs["offsets"] = offsets
             log_message = f"offsets: {offsets}"
         else:

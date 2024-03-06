@@ -132,6 +132,79 @@ class RetryLater(RejectMessage):
         self.delay = delay
 
 
+class KafkaOffsetHelperMixin:
+    def __init__(self):
+        self._offsets_to_commit = {}
+        self.start_offsets = {}
+        self._registered_offsets = 0
+        self._ready_offsets = 0
+        self._first_ready_offset = time.time()
+
+    def reset_offsets(self):
+        self._offsets_to_commit = {}
+        self.start_offsets = {}
+        self._registered_offsets = 0
+        self._ready_offsets = 0
+        self._first_ready_offset = time.time()
+
+    def register_offset(self, topic, partition, offset):
+        self._registered_offsets += 1
+        offsets_partition = self.start_offsets.setdefault(topic, {})
+        min_offset = offsets_partition.setdefault(partition, offset)
+        if offset < min_offset:
+            offsets_partition[partition] = offset
+
+    def set_offset_ready_to_commit(self, topic, partition, offset):
+        self._ready_offsets += 1
+        partitions = self._offsets_to_commit.setdefault(topic, {})
+        offsets = partitions.setdefault(partition, [])
+        bisect.insort(offsets, offset)
+
+    def need_commit(self, batch_size, timeout):
+        if self._ready_offsets >= batch_size:
+            return True
+        now = time.time()
+        if timeout is not None and now > self._first_ready_offset + timeout:
+            return True
+        return False
+
+    def has_registered_offsets(self):
+        return self._registered_offsets > 0
+
+    def get_offsets_to_commit(self):
+        _offsets = []
+
+        for topic, partitions in self._offsets_to_commit.items():
+            for partition, offsets in partitions.items():
+                top_offset = -1
+                start_offset = self.start_offsets.get(topic, {}).get(partition, -1)
+                first_offset = offsets[0] if offsets else -1
+                if start_offset != first_offset:
+                    self.logger.warning(
+                        "First event not ready to commit (topic=%s partition=%s)."
+                        " Expected %d, got %d",
+                        topic,
+                        partition,
+                        start_offset,
+                        first_offset,
+                    )
+                    continue
+                for offset in offsets:
+                    # Ensure we do not skip offset
+                    if top_offset != -1 and top_offset + 1 != offset:
+                        break
+                    top_offset = offset
+                if top_offset != -1:
+                    _offsets.append(
+                        TopicPartition(
+                            topic,
+                            partition,
+                            top_offset + 1,
+                        )
+                    )
+        return _offsets
+
+
 class KafkaRejectorMixin:
     def __init__(self, endpoint, logger, conf):
         self.endpoint = endpoint
@@ -327,7 +400,7 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin):
         raise NotImplementedError
 
 
-class KafkaBatchFeeder(Process, KafkaRejectorMixin):
+class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
     def __init__(
         self,
         endpoint,
@@ -342,6 +415,7 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
     ):
         Process.__init__(self)
         KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
+        KafkaOffsetHelperMixin.__init__(self)
         self.endpoint = endpoint
         self.topic = topic
         self.logger = logger
@@ -354,15 +428,10 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
         self._commit_interval = float_value(
             self._app_conf.get("batch_commit_interval_"), DEFAULT_BATCH_INTERVAL
         )
-
-        self._fetched_events = 0
-
         self._consumer = None
         self._stop_requested = Event()
         self._events_queue = events_queue
         self._offsets_queue = offsets_queue
-        self._offsets_to_commit = {}
-        self._registered_offsets = 0
 
     @property
     def events_queue(self):
@@ -372,15 +441,7 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
     def offsets_queue(self):
         return self._offsets_queue
 
-    def _register_offset(self, topic, partition, offset):
-        self._registered_offsets += 1
-        partitions = self._offsets_to_commit.setdefault(topic, {})
-        offsets = partitions.setdefault(partition, [])
-        bisect.insort(offsets, offset)
-
     def _fill_batch(self):
-        start_offsets = {}
-
         deadline = monotonic_time() + self._commit_interval
         for event in self._consumer.fetch_events():
             if self._stop_requested.is_set():
@@ -398,11 +459,7 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
                     partition,
                     offset,
                 )
-                # Determine lower offset per partition
-                offsets_partition = start_offsets.setdefault(topic, {})
-                min_offset = offsets_partition.setdefault(partition, offset)
-                if offset < min_offset:
-                    offsets_partition[partition] = offset
+                self.register_offset(topic, partition, offset)
 
                 try:
                     event_data = json.loads(value)
@@ -426,9 +483,7 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
                             "data": value,
                         }
                     )
-                    self._register_offset(topic, partition, offset)
-
-                self._fetched_events += 1
+                    self.set_offset_ready_to_commit(topic, partition, offset)
 
             elif event and event.error():
                 error = event.error()
@@ -436,53 +491,48 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
                 if not error.retriable():
                     raise KafkaFatalException(error)
 
-            if self._fetched_events == self._batch_size:
+            if self._registered_offsets == self._batch_size:
                 # Batch complete
                 break
-            if self._fetched_events > 0 and monotonic_time() > deadline:
+            if self._registered_offsets > 0 and monotonic_time() > deadline:
                 # Deadline reached
                 break
 
-        return start_offsets
-
     def _wait_batch_processed(self):
-        if self._fetched_events > 0:
+        if self.has_registered_offsets():
             # Wait all events are processed
             while True:
                 if self._stop_requested.is_set():
                     raise StopIteration()
                 try:
                     offset = self._offsets_queue.get(True, timeout=1.0)
-                    self._register_offset(
+                    self.set_offset_ready_to_commit(
                         offset["topic"], offset["partition"], offset["offset"]
                     )
                 except Empty:
                     pass
-                if self._registered_offsets == self._fetched_events:
+                if self._registered_offsets == self._ready_offsets:
                     # All events had been processed and are ready to be commited
                     break
 
     def run(self):
-        start_offsets = {}
         try:
             while True:
                 try:
                     # Reset batch
-                    self._fetched_events = 0
-                    self._offsets_to_commit = {}
-                    self._registered_offsets = 0
+                    self.reset_offsets()
                     self._connect()
                     # Retrieve events
-                    start_offsets = self._fill_batch()
+                    self._fill_batch()
                     self._wait_batch_processed()
-                    self._commit_batch(start_offsets)
+                    self._commit_batch()
                 except KafkaFatalException:
                     self._close()
 
         except StopIteration:
             ...
         # Try to commit even a partial batch
-        self._commit_batch(start_offsets)
+        self._commit_batch()
 
     def _connect(self):
         if not self._consumer:
@@ -509,37 +559,8 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin):
             self._consumer = None
         self.close_producer()
 
-    def _commit_batch(self, start_offsets):
-        _offsets = []
-
-        for topic, partitions in self._offsets_to_commit.items():
-            for partition, offsets in partitions.items():
-                top_offset = -1
-                start_offset = start_offsets.get(topic, {}).get(partition, -1)
-                first_offset = offsets[0] if offsets else -1
-                if start_offset != first_offset:
-                    self.logger.warning(
-                        "First event not ready to commit (topic=%s partition=%s)."
-                        " Expected %d, got %d",
-                        topic,
-                        partition,
-                        start_offset,
-                        first_offset,
-                    )
-                    continue
-                for offset in offsets:
-                    # Ensure we do not skip offset
-                    if top_offset != -1 and top_offset + 1 != offset:
-                        break
-                    top_offset = offset
-                if top_offset != -1:
-                    _offsets.append(
-                        TopicPartition(
-                            topic,
-                            partition,
-                            top_offset + 1,
-                        )
-                    )
+    def _commit_batch(self):
+        _offsets = self.get_offsets_to_commit()
 
         if _offsets:
             self.logger.info("Commit offsets: %s", _offsets)
