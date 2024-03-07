@@ -29,7 +29,7 @@ from oio.common.utils import (
 )
 from oio.content.quality import NB_LOCATION_LEVELS, format_location
 from oio.crawler.common.base import Filter
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
+from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, delete_meta2_db
 from oio.directory.admin import AdminClient
 
 
@@ -595,29 +595,13 @@ class VerifyChunkPlacement(Filter):
         :param meta2db: meta2db representation
         :type meta2db: Meta2DB
         """
-        try:
-            # Check if local copy exists by removing it successfully
-            params = {
-                "service_type": "meta2",
-                "cid": meta2db.cid,
-                "service_id": self.volume_id,
-                "suffix": self.suffix,
-            }
-            res = self.admin_client.remove_base(**params)
-            if res[self.volume_id]["status"]["status"] != 200:
-                self.logger.warning(
-                    "Request to remove the meta2db copy failed, "
-                    "cid = %s meta2db path %s error msg %s",
-                    meta2db.cid,
-                    meta2db.env["path"] + "." + self.suffix,
-                    res[self.volume_id]["status"]["message"],
-                )
-        except Exception as exc:
-            self.logger.exception(
-                "Failed to remove this meta2db copy %s: %s.",
-                meta2db.env["path"] + "." + self.suffix,
-                exc,
-            )
+        cid = meta2db.cid
+        path = meta2db.env["path"]
+        suffix = self.suffix
+        volume_id = self.volume_id
+        admin_client = self.admin_client
+        logger = self.logger
+        delete_meta2_db(cid, path, suffix, volume_id, admin_client, logger)
 
     def process(self, env, cb):
         """

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,9 +15,11 @@
 
 
 import re
+import time
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.crawler.common.crawler import Crawler, CrawlerWorker
-from oio.crawler.meta2.meta2db import Meta2DB
+from oio.crawler.meta2.meta2db import Meta2DB, delete_meta2_db
+from oio.directory.admin import AdminClient
 
 
 class Meta2Worker(CrawlerWorker):
@@ -32,6 +34,7 @@ class Meta2Worker(CrawlerWorker):
             conf, volume_path, logger=logger, api=api, **kwargs
         )
         self.sharding_suffix_regex = re.compile(r"sharding-([\d]+)-([\d])")
+        self.admin_client = None
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
@@ -46,6 +49,37 @@ class Meta2Worker(CrawlerWorker):
             return False
         db_id = path.rsplit("/")[-1].rsplit(".")
         if len(db_id) != 3:
+            if "VerifyChunkPlacement-" in db_id[-1]:
+                # This is a meta2 db copy left over after
+                # placement-checker-crawler execution, we need to delete it.
+
+                # We will delete copies older than two days
+                # to avoid to delete meta2 db currently being
+                # used by placement-checker-crawler
+                timestamp = int(db_id[-1].split("-")[-1])
+                if time.time() > (timestamp + 172800):
+                    if not self.admin_client:
+                        self.admin_client = AdminClient(
+                            self.conf,
+                            logger=self.logger,
+                            pool_manager=self.app_env["api"].container.pool_manager,
+                        )
+                    delete_meta2_db(
+                        cid=db_id[0],
+                        path=path,
+                        suffix=db_id[-1],
+                        volume_id=self.volume_id,
+                        admin_client=self.admin_client,
+                        logger=self.logger,
+                    )
+                    self.logger.warning(
+                        "Delete meta2 db copy coming from previous "
+                        "placement-checker-crawler execution: %s",
+                        path,
+                    )
+                self.invalid_paths += 1
+                return False
+
             if (len(db_id)) == 4 and self.sharding_suffix_regex.match(db_id[3]):
                 self.ignored_paths += 1
                 return False

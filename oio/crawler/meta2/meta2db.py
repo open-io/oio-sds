@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,6 +66,32 @@ def _fetch_system(meta2db):
         return debinarize(system)
     finally:
         meta2db_conn.close()
+
+
+def delete_meta2_db(cid, path, suffix, volume_id, admin_client, logger):
+    """Delete meta2 db specified"""
+    try:
+        params = {
+            "service_type": "meta2",
+            "cid": cid,
+            "service_id": volume_id,
+            "suffix": suffix,
+        }
+        res = admin_client.remove_base(**params)
+        if res[volume_id]["status"]["status"] != 200:
+            logger.warning(
+                "Request to remove the meta2db copy failed, "
+                "cid = %s meta2db path %s error msg %s",
+                cid,
+                path + "." + suffix,
+                res[volume_id]["status"]["message"],
+            )
+    except Exception as exc:
+        logger.exception(
+            "Failed to remove this meta2db copy %s: %s.",
+            path + "." + suffix,
+            exc,
+        )
 
 
 class Meta2DB:
