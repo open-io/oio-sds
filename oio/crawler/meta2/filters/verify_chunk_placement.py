@@ -14,12 +14,12 @@
 # License along with this library.
 
 import sqlite3
-import time
 from collections import Counter
 from urllib.parse import urlparse
 from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import NoSuchObject, NotFound
+from oio.common.green import time
 from oio.common.utils import (
     cid_from_name,
     get_nb_chunks,
