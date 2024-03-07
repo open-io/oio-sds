@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -137,11 +137,13 @@ class RawxListObjects(ServiceListCommand):
     columns = ("Name", "Chunk", "Object", "Version", "Mtime", "Content ID")
     reqid_prefix = "ACLI-RLO-"
 
-    def _list_objects(self, rawx, cid=None, chunk_id=None, translate=False):
+    def _list_objects(
+        self, rawx, cid=None, chunk_id=None, translate=False, before_incident=False
+    ):
         reqid = self.app.request_id(self.reqid_prefix)
         trans = self.translate_cid if translate else lambda x: x
         for container, chunk, obj in self.rdir.chunk_fetch(
-            rawx, container_id=cid, reqid=reqid
+            rawx, container_id=cid, rebuild=before_incident, reqid=reqid
         ):
             if chunk_id and chunk != chunk_id:
                 continue
@@ -156,6 +158,11 @@ class RawxListObjects(ServiceListCommand):
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        parser.add_argument(
+            "--before-incident",
+            help="List objects which existed before the last incident",
+            action="store_true",
+        )
         parser.add_argument(
             "--cid",
             help="Filter results on this container ID",
@@ -180,6 +187,7 @@ class RawxListObjects(ServiceListCommand):
             cid=parsed_args.cid,
             chunk_id=parsed_args.chunk_id,
             translate=not parsed_args.no_translation,
+            before_incident=parsed_args.before_incident,
         )
 
 
