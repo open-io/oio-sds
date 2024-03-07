@@ -1515,8 +1515,9 @@ use = egg:oio#delete
 broker_endpoint = ${QUEUE_URL}
 topic_prefix = oio-delete-
 
-[filter:logger]
+[filter:log]
 use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -1544,8 +1545,9 @@ pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
 
-[filter:logger]
+[filter:log]
 use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -1585,8 +1587,9 @@ pipeline = delay
 use = egg:oio#delay
 topic = oio-delayed
 
-[filter:logger]
+[filter:log]
 use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_replication_delay_handlers = """
@@ -1597,8 +1600,9 @@ pipeline = delay
 use = egg:oio#delay
 topic = oio-replication-delayed
 
-[filter:logger]
+[filter:log]
 use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_rebuilder_handlers = """
@@ -1609,8 +1613,9 @@ pipeline = rebuild
 use = egg:oio#blob_rebuilder
 topic = oio-rebuild
 
-[filter:logger]
+[filter:log]
 use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_systemd_service_xcute_event_agent = """
