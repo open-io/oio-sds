@@ -1883,10 +1883,12 @@ TLS_CERT_FILE = None
 TLS_KEY_FILE = None
 HASH_WIDTH = "hash_width"
 HASH_DEPTH = "hash_depth"
+KAFKA_ENDPOINT = "kafka_endpoint"
 
 defaults = {
     "NS": "OPENIO",
     SVC_HOSTS: ("127.0.0.1",),
+    KAFKA_ENDPOINT: "127.0.0.1:19092",
     "ZK": "127.0.0.1:2181",
     "NB_CS": 1,
     "NB_M0": 1,
@@ -2349,15 +2351,12 @@ def generate(options):
         )
 
     # Kafka
-    use_kafka = False
-    if "endpoint" in options["kafka"]:
-        endpoints = options["kafka"]["endpoint"]
-        if isinstance(endpoints, str):
-            endpoints = [endpoints]
-        kafka_cnxstring = ";".join((f"kafka://{endpoint}" for endpoint in endpoints))
-        ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
-        ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
-        use_kafka = True
+    endpoints = options["kafka"]["endpoint"] or defaults[KAFKA_ENDPOINT]
+    if isinstance(endpoints, str):
+        endpoints = [endpoints]
+    kafka_cnxstring = ";".join((f"kafka://{endpoint}" for endpoint in endpoints))
+    ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
+    ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
 
     # For testing purposes, some events must go to the main queue
     if all_beanstalkd:
@@ -2823,13 +2822,9 @@ def generate(options):
     event_agent_bin = "oio-event-agent"
     event_agent_count = getint(options["event-agent"].get(SVC_NB), len(all_beanstalkd))
 
-    def get_event_agent_details(kafka=False):
-        if kafka:
-            for i in range(event_agent_count):
-                yield i + 1, ENV["KAFKA_QUEUE_URL"], "oio-event-agent-kafka"
-        else:
-            for i, host, port in all_beanstalkd:
-                yield i, "beanstalk://{0}:{1}".format(host, port), "oio-event-agent"
+    def get_event_agent_details():
+        for i in range(event_agent_count):
+            yield i + 1, ENV["KAFKA_QUEUE_URL"], "oio-event-agent-kafka"
 
     def add_event_agent_conf(
         num,
@@ -2869,7 +2864,7 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     # Event agent configuration -> one per beanstalkd
-    for num, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio",
@@ -2881,7 +2876,7 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to chunk deletions per host
     # -------------------------------------------------------------------------
-    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details():
         for i, host in enumerate(hosts):
             for j in range(2):
                 slot = get_rawx_slot(j)
@@ -2901,7 +2896,7 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to chunk events per host
     # -------------------------------------------------------------------------
-    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details():
         for host in hosts:
             num += 1
             add_event_agent_conf(
@@ -2918,7 +2913,7 @@ def generate(options):
     # Configure a special oio-event-agent dedicated to delayed events
     # -------------------------------------------------------------------------
     num += 1
-    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-delayed",
@@ -2934,7 +2929,7 @@ def generate(options):
         # Configure oio-event-agent dedicated to delayed events from replicator
         # -----------------------------------------------------------------------
         num += 1
-        for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+        for _, url, event_agent_bin in get_event_agent_details():
             add_event_agent_conf(
                 num,
                 "oio-replication-delayed",
@@ -2950,7 +2945,7 @@ def generate(options):
     # Configure a special oio-event-agent dedicated to content broken events
     # -------------------------------------------------------------------------
     num += 1
-    for _, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for _, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-rebuild",
@@ -2965,7 +2960,7 @@ def generate(options):
 
     # Xcute event-agent
     # -------------------------------------------------------------------------
-    for num, url, event_agent_bin in get_event_agent_details(use_kafka):
+    for num, url, event_agent_bin in get_event_agent_details():
         env = subenv(
             {
                 "SRVTYPE": "xcute-event-agent",
@@ -3093,38 +3088,37 @@ def generate(options):
         generate_target(v)
 
     # Generate topics declaration file
-    if use_kafka:
-        topics_to_declare = [
-            "oio",
-            "oio-deadletter",
-            "oio-delayed",
-            "oio-drained",
-            "oio-preserved",
-            "oio-rebuild",
-            "oio-replication",
-            "oio-xcute",
-            "oio-xcute-reply",
-        ]
-        if options.get("replication_events"):
-            topics_to_declare.append("oio-replication-delayed")
+    topics_to_declare = [
+        "oio",
+        "oio-deadletter",
+        "oio-delayed",
+        "oio-drained",
+        "oio-preserved",
+        "oio-rebuild",
+        "oio-replication",
+        "oio-xcute",
+        "oio-xcute-reply",
+    ]
+    if options.get("replication_events"):
+        topics_to_declare.append("oio-replication-delayed")
 
-        rawx_hosts = hosts[:nb_rawx]
-        # Add delete topics per host
-        for i in range(2):
-            slot = get_rawx_slot(i)
-            topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
-        # Add chunks topics per host
-        topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
+    rawx_hosts = hosts[:nb_rawx]
+    # Add delete topics per host
+    for i in range(2):
+        slot = get_rawx_slot(i)
+        topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
+    # Add chunks topics per host
+    topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
 
-        with open(f"{CFGDIR}/topics.yml", "w+") as f:
-            f.write(
-                yaml.dump(
-                    {
-                        "brokers": options["kafka"]["endpoint"],
-                        "topics": {k: None for k in topics_to_declare},
-                    }
-                )
+    with open(f"{CFGDIR}/topics.yml", "w+") as f:
+        f.write(
+            yaml.dump(
+                {
+                    "brokers": options["kafka"]["endpoint"],
+                    "topics": {k: None for k in topics_to_declare},
+                }
             )
+        )
 
     # ensure volumes for srvtype in final_services:
     for srvtype, services in final_services.items():
@@ -3291,6 +3285,7 @@ def main():
     opts[SHALLOW_COPY] = False
     opts["beanstalkd"] = {SVC_NB: None, SVC_HOSTS: None}
     opts["rabbitmq"] = {}
+    opts["kafka"] = {"endpoint": None}
     opts["event-agent"] = {SVC_NB: None}
     opts["rebuilder"] = {SVC_NB: None}
 
