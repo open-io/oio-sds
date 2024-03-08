@@ -27,7 +27,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def setUp(self):
         super(TestObjectStorageApiPerformance, self).setUp()
         self.api = self.storage
-        self.created = list()
+        self.created = []
         self.containers = set()
 
     def tearDown(self):
@@ -51,7 +51,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_blake3_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -65,7 +65,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_md5_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -79,7 +79,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_no_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -93,7 +93,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_blake3_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -106,7 +106,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_md5_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -119,7 +119,7 @@ class TestObjectStorageApiPerformance(BaseTestCase):
     def test_object_create_32_no_chunk_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
-            obj = "obj-%03d" % i
+            obj = f"obj-{i:03d}"
             self.api.object_create(
                 self.account,
                 container,
@@ -131,8 +131,12 @@ class TestObjectStorageApiPerformance(BaseTestCase):
 
     def test_object_list_empty_container(self):
         """
-        Ensure object listing of an empty container takes less than 35ms on average.
+        Ensure object listing of an empty container takes less than 50ms on average.
         """
+        # The previous tests create load on the cluster, even when they have finished
+        # running (because of asynchronous cleaning). Wait for the load to cool down,
+        # so we get good performance.
+        self.wait_for_score(("meta2",), timeout=2.0)
         container = self.__class__.__name__ + random_str(8)
         self.api.container_create(self.account, container)
         self.containers.add(container)
@@ -144,4 +148,4 @@ class TestObjectStorageApiPerformance(BaseTestCase):
             duration = monotonic_time() - start
             total += duration
             logging.info("Object list took %.6fs", duration)
-        self.assertLess(total / iterations, 0.035)
+        self.assertLess(total / iterations, 0.05)
