@@ -2,7 +2,6 @@ black
 coverage
 fixtures>=1.4.0
 flake8
-flaky
 gcovr
 mock>=1.0
 nose

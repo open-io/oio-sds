@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,16 +17,9 @@
 import os
 import time
 
-from flaky import flaky
-
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions
 from tests.utils import BaseTestCase, random_str
-
-
-def is_election_error(err, *args):
-    """Tell if the first exception is related to an election error."""
-    return isinstance(err[0], exceptions.ServiceBusy)
 
 
 class TestContainerReplication(BaseTestCase):
@@ -146,7 +139,6 @@ class TestContainerReplication(BaseTestCase):
             self.account, cname, params={"service_id": master}
         )
 
-    @flaky(rerun_filter=is_election_error)
     def test_disabled_synchronous_restore(self):
         """
         Test what happens when the synchronous DB_RESTORE mechanism has been
@@ -162,7 +154,6 @@ class TestContainerReplication(BaseTestCase):
             self.must_restart_meta2 = True
         self._test_restore_after_missed_diff()
 
-    @flaky(rerun_filter=is_election_error)
     def test_synchronous_restore(self):
         """
         Test DB_RESTORE mechanism (the master send a dump of the whole
@@ -174,7 +165,6 @@ class TestContainerReplication(BaseTestCase):
             self.skipTest("Too buggy to run on public CI")
         self._test_restore_after_missed_diff()
 
-    @flaky(rerun_filter=is_election_error)
     def test_asynchronous_restore(self):
         """
         Test DB_DUMP/DB_PIPEFROM mechanism (a slave peer knows it needs
