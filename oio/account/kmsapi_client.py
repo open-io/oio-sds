@@ -84,8 +84,16 @@ class KmsApiClient(object):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.enabled = boolean_value(conf.get("kmsapi_enabled"))
-        domains = [d for d in conf.get("kmsapi_domains", "").split(",") if d]
-        if self.enabled and domains:
+        domains = [
+            d
+            for d in conf.get("kmsapi_domains", conf.get("kmsapi_endpoint", "")).split(
+                ","
+            )
+            if d
+        ]
+        if self.enabled:
+            if not domains:
+                raise ValueError("kmsapi_domains parameter is empty")
             self.http_clients = []
             for domain in domains:
                 client = HttpClient(conf, logger, domain)
@@ -143,7 +151,7 @@ class KmsApiClient(object):
 
         :param ciphertext: String to be decrypted
         :param context: Use the same context provided in encrypt operation
-        :returns: a dictionnary with details about decrypted ciphertext
+        :returns: a dictionary with details about decrypted ciphertext
 
         Return example:
         {
