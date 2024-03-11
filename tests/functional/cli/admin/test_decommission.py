@@ -203,7 +203,10 @@ class ServiceDecommissionTest(CliTestCase):
             )
         )
         for cid, url, _ in all_chunks:
-            self.blob_client.chunk_delete(url, cid=cid)
+            try:
+                self.blob_client.chunk_delete(url, cid=cid)
+            except exceptions.NotFound:
+                pass
 
         cname = f"xcute-decom-{time.time()}"
         create_reqid = request_id("xcute-decom-")
