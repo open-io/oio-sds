@@ -74,7 +74,12 @@ class HttpClient(object):
             )
         if status != 200:
             raise from_response(resp, resp.data)
-        return json.loads(resp.data)
+
+        # Inject the key_id associated to the request into the response
+        json_data = json.loads(resp.data)
+        json_data["key_id"] = key_id
+
+        return json_data
 
 
 class KmsApiClient(object):

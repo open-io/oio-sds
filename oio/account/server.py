@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1589,7 +1589,7 @@ class Account(WerkzeugApp):
         try:
             data = self.kms_api.encrypt(resp["secret"], context)
             ciphertext = data["ciphertext"]
-            key_id = data["context"]["key_id"]
+            key_id = data["key_id"]
         except Exception as exc:
             self.logger.error(
                 f"Failed to encrypt bucket {account_id}/{bname} secret: {exc}"
