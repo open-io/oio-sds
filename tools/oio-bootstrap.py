@@ -1035,6 +1035,7 @@ score_timeout=120
 put_score_expr=root(4, (pow(2, (clamp((((num stat.space) - 1) * 1.010101), 0, 100))) * clamp((((num stat.cpu) - 5) * 6.666667), 1, 100) * clamp((((num stat.io) - 5) * 1.333333), 1, 100)))
 get_score_expr=root(2, (clamp((((num stat.cpu) - 5) * 6.666667), 0, 100) * clamp((((num stat.io) - 5) * 1.333333), 0, 100)))
 score_timeout=120
+score_variation_bound=50
 
 [type:rdir]
 score_expr=((num stat.space)>1) * root(3,((1 + (num stat.cpu))*(num stat.space)*(1 + (num stat.io))))
@@ -1061,6 +1062,7 @@ put_score_expr=root(4, (pow(2, (clamp((((num stat.space) - 20) * 1.25), 0, 100))
 get_score_expr=root(2, (clamp((((num stat.cpu) - 5) * 6.666667), 0, 100) * clamp((((num stat.io) - 5) * 1.333333), 0, 100)))
 score_timeout=10
 score_variation_bound=50
+lock_at_first_register=false
 
 [type:oioproxy]
 score_expr=(1 + (num stat.cpu))

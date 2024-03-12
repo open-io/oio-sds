@@ -228,6 +228,7 @@ class TestConscienceFunctional(BaseTestCase):
         one_rawx["scores"]["score.get"] = 1
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
+        time.sleep(0.1)  # Inter-conscience communication
 
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
@@ -264,6 +265,7 @@ class TestConscienceFunctional(BaseTestCase):
         one_rawx["scores"].pop("score.get")
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
+        time.sleep(0.1)  # Inter-conscience communication
 
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
@@ -294,6 +296,7 @@ class TestConscienceFunctional(BaseTestCase):
         one_rawx["scores"]["score.get"] = 1
         one_rawx["type"] = "rawx"
         self.conscience.lock_score(one_rawx)
+        time.sleep(0.1)  # Inter-conscience communication
 
         all_rawx = self.conscience.all_services("rawx")
         my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
@@ -378,7 +381,7 @@ class TestConscienceFunctional(BaseTestCase):
         srv0 = self._srv("echo", ip="127.0.0.3")
 
         def check(isFound):
-            srv_list = self.conscience.all_services("echo", id=srv0["addr"])
+            srv_list = self.conscience.all_services("echo")
             print(srv_list)
             if isFound:
                 self.assertNotEqual(srv_list, [])
@@ -408,14 +411,33 @@ class TestConscienceFunctional(BaseTestCase):
         """
         Test getscore is 100 even if stat.space is low
         """
+        self._flush_cs("rawx")
         srv0 = self._srv(
             "rawx",
             lowport=7000,
             highport=7000,
             extra_tags={"stat.cpu": 100, "stat.space": 10, "stat.io": 100},
         )
+        # Services are locked when registered for the 1st time, we need to unlock them,
+        # and register them twice. Besides, the score variation is bound to 50,
+        # therefore we must start high if we don't want to wait too long.
+        srv0["score"] = 99
         self._register_srv(srv0)
-        self.wait_for_score(["rawx"], score_threshold=100, score_type="get")
+        self._unlock_srv(srv0)
+        srv0["score"] = -2  # Special value: SCORE_UNLOCK
+        for _ in range(22):
+            self._register_srv(srv0)
+            srv_list = [
+                s
+                for s in self.conscience.all_services("rawx", full=True)
+                if s["addr"] == srv0["addr"]
+            ]
+            if srv_list and srv_list[0]["scores"]["score.get"] == 100:
+                break
+            time.sleep(0.5)
+        logging.debug("Fake service: %s", srv0)
+        logging.debug("Filtered services: %s", srv_list)
+        self.assertEqual(srv_list[0]["scores"]["score.get"], 100)
 
     def test_restart_conscience_with_locked_services(self):
         services = self._list_srvs("rawx")

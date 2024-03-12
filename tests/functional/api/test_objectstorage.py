@@ -2410,7 +2410,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 self.conscience.lock_score(srv_definition)
             self._service(systemd_key, "stop")
 
-            for _ in range(10):
+            for _ in range(12):
                 time.sleep(1)
                 obj_meta, chunks = self.api.object_locate(
                     self.account, container, path, properties=False
