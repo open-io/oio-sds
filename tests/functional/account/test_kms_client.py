@@ -128,6 +128,7 @@ class TestKmsClient(BaseTestCase):
         self.assertEqual(expected, actual)
 
         self.kms.delete_secret(self.account, self.bucket, secret_id="0")
-        expected = expected[1:]
+        # Deleting now only displays a log
+        # expected = expected[1:]
         actual = self.kms.list_secrets(self.account, self.bucket)["secrets"]
         self.assertEqual(expected, actual)
