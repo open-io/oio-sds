@@ -18,9 +18,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -120,7 +122,7 @@ func (chunk chunkInfo) saveExtMetaAttr(out decorable) error {
 			return err
 		}
 	}
-    return nil
+	return nil
 }
 
 func (chunk chunkInfo) saveAttr(out decorable) error {
@@ -306,11 +308,60 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 			chunk.ContentChunkMethod = serializeChunkMethod(chunkMethodType, params)
 		}
 	}
-    cryptoResiliency, err := getAttr("user.oio.ext.Cryptography-Resiliency")
-	if err == nil {
-	    chunk.ExtMeta = make(map[string]string)
-        chunk.ExtMeta["Cryptography-Resiliency"] = cryptoResiliency
-    }
+
+	//listAttr := func(k string) ([]bytes, error) {
+	//	l, err := inChunk.listAttr(buf)
+	//	if l <= 0 || err != nil {
+	//		return "", err
+	//	} else {
+	//		return string(buf[:l]), nil
+	//	}
+	//}
+	//attrs, err := listAttr()
+
+	//attrListBuf := xattrBufferPool.Acquire()
+	//defer xattrBufferPool.Release(attrListBuf)
+	////attrList := []byte{}
+	//l, err := inChunk.listAttr(attrListBuf)
+	//println("LME rawx listAttr ", l)
+	//println("LME rawx listAttr ", string(attrListBuf))
+	//for _, b := range attrListBuf {
+	//    println("LME rawx listAttr ", string(b))
+	//}
+
+	//TODO: LME try to call listAttr with a already allocated buffer
+	chunk.ExtMeta = make(map[string]string)
+
+	//if buffer is to small
+	size, err := inChunk.listAttr(nil)
+	attributes := make([]byte, size)
+	_, err = inChunk.listAttr(attributes)
+	// attributes names are separated by null bytes
+	for i := 0; i < len(attributes); i++ {
+		if attributes[i] == byte(0) {
+			attrKey := attributes[:i]
+			extMetaKey, hasPrefix := bytes.CutPrefix(attrKey, []byte("user.oio.ext."))
+			if hasPrefix {
+				extMetaAttr, err := getAttr(string(attrKey))
+				if err == nil {
+					fmt.Printf("LME rawx attr [%s] = %s \n", string(extMetaKey), extMetaAttr)
+					chunk.ExtMeta[string(extMetaKey)] = extMetaAttr
+				} else {
+					println("LME getAttr err =", err.Error())
+				}
+			}
+			attributes = attributes[i+1:]
+			i = -1
+		}
+	}
+
+	println("LME rawx listAttr ", string(attributes))
+
+	//cryptoResiliency, err := getAttr("user.oio.ext.Cryptography-Resiliency")
+	//if err == nil {
+	//	chunk.ExtMeta = make(map[string]string)
+	//	chunk.ExtMeta["Cryptography-Resiliency"] = cryptoResiliency
+	//}
 	return chunk, nil
 }
 
@@ -603,11 +654,11 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
-    if chunk.ExtMeta != nil {
-        for key, value := range chunk.ExtMeta {
-            setHeader(headers, "X-Oio-Ext-" + key, url.PathEscape(value))
-        }
-    }
+	if chunk.ExtMeta != nil {
+		for key, value := range chunk.ExtMeta {
+			setHeader(headers, "X-Oio-Ext-"+key, url.PathEscape(value))
+		}
+	}
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx

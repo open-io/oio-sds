@@ -18,12 +18,11 @@
 from __future__ import absolute_import
 
 from io import BytesIO
-import json
 import os
 import warnings
 import time
 
-from urllib.parse import unquote, unquote_plus, quote_plus
+from urllib.parse import unquote, quote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -896,6 +895,7 @@ class ObjectStorageApi(object):
         key_file=None,
         append=False,
         properties=None,
+        extra_properties=None,
         properties_callback=None,
         **kwargs,
     ):
@@ -923,6 +923,9 @@ class ObjectStorageApi(object):
         :type mime_type: `str`
         :keyword properties: a dictionary of properties
         :type properties: `dict`
+        :keyword extra_properties: a dictionary of extra properties that need
+            to be stored in rawx xattr
+        :type extra_properties: `dict`
         :keyword policy: name of the storage policy
         :type policy: `str`
         :keyword key_file:
@@ -988,6 +991,7 @@ class ObjectStorageApi(object):
                 src,
                 sysmeta,
                 properties=properties,
+                extra_properties=extra_properties,
                 policy=policy,
                 key_file=key_file,
                 append=append,
@@ -1003,6 +1007,7 @@ class ObjectStorageApi(object):
                     srcf,
                     sysmeta,
                     properties=properties,
+                    extra_properties=extra_properties,
                     policy=policy,
                     key_file=key_file,
                     append=append,
@@ -1826,6 +1831,7 @@ class ObjectStorageApi(object):
         source,
         sysmeta,
         properties=None,
+        extra_properties=None,
         properties_callback=None,
         policy=None,
         key_file=None,
@@ -1843,35 +1849,32 @@ class ObjectStorageApi(object):
                 obj_meta["status"] = "Skipped"
                 return None, obj_meta["size"], obj_meta["hash"], obj_meta
 
-        if properties and properties.get("x-object-sysmeta-crypto-body-meta"):
-            crypto_body_meta = json.loads(
-                unquote_plus(properties.get("x-object-sysmeta-crypto-body-meta"))
-            )
-            crypto_resiliency = {}
-            crypto_resiliency["body_key"] = crypto_body_meta["body_key"]
-            crypto_resiliency["iv"] = crypto_body_meta["iv"]
-            if crypto_body_meta["key_id"].get("ssec") is not None:
-                crypto_resiliency["ssec"] = True
-            elif crypto_body_meta["key_id"].get("sses3") is not None:
-                crypto_resiliency["sses3"] = True
+        # if properties and properties.get("x-object-sysmeta-crypto-body-meta"):
+        #    crypto_body_meta = json.loads(
+        #        unquote_plus(properties.get("x-object-sysmeta-crypto-body-meta"))
+        #    )
+        #    crypto_resiliency = {}
+        #    crypto_resiliency["body_key"] = crypto_body_meta["body_key"]
+        #    crypto_resiliency["iv"] = crypto_body_meta["iv"]
+        #    if crypto_body_meta["key_id"].get("ssec") is not None:
+        #        crypto_resiliency["ssec"] = True
+        #    elif crypto_body_meta["key_id"].get("sses3") is not None:
+        #        crypto_resiliency["sses3"] = True
 
-            def flatten_dict(d, parent_key=""):
-                items = []
-                for k, v in d.items():
-                    new_key = f"{parent_key}.{k}" if parent_key else k
-                    if isinstance(v, dict):
-                        items.extend(flatten_dict(v, new_key).items())
-                    else:
-                        items.append((new_key, v))
-                return dict(items)
+        #    crypto_resiliency = flatten_dict(crypto_resiliency)
+        #    crypto_resiliency = ",".join(
+        #        [f"{k}={v}" for k, v in crypto_resiliency.items()]
+        #    )
+        #    kwargs["headers"]["X-Oio-Ext-Cryptography-Resiliency"] = quote_plus(
+        #        crypto_resiliency
+        #    )
 
-            crypto_resiliency = flatten_dict(crypto_resiliency)
-            crypto_resiliency = ",".join(
-                [f"{k}={v}" for k, v in crypto_resiliency.items()]
-            )
-            kwargs["headers"]["X-Oio-Ext-Cryptography-Resiliency"] = quote_plus(
-                crypto_resiliency
-            )
+        print(
+            "LME: _object_create try to read extra_properties = "
+            + str(extra_properties)
+        )
+        for key, value in extra_properties.items():
+            kwargs["headers"][key] = quote_plus(value)
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account,
