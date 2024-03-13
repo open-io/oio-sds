@@ -1113,6 +1113,11 @@ sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
 		guint32 flags)
 {
 	GRID_TRACE2("%s(%p)", __FUNCTION__, sq3);
+	if (!sq3) {
+		GRID_WARN("%s called on NULL pointer (reqid=%s)",
+				__FUNCTION__, oio_ext_get_reqid());
+		return;
+	}
 	GError *e = sqlx_repository_unlock_and_close2(sq3, flags);
 	if (e) {
 		GRID_WARN("DB closure error: (%d) %s", e->code, e->message);

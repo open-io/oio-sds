@@ -547,7 +547,8 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 			sqlx_repository_call_change_callback(sq3);
 		}
 	}
-	sqlx_repository_unlock_and_close_noerror(sq3);
+	if (sq3)
+		sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
