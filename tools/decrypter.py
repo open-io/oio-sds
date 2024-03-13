@@ -51,6 +51,9 @@ parser.add_argument(
 parser.add_argument(
     "--obj", type=str, required=True, help="name of the object to fetch"
 )
+parser.add_argument(
+    "--bucket_secret", type=str, required=False, help="bucket_secret can be providied"
+)
 args = parser.parse_args()
 
 # Read metadata
@@ -65,6 +68,7 @@ decrypter = Decrypter(
     container=args.container,
     obj=args.obj,
     metadata=metadata,
+    bucket_secret=args.bucket_secret,
 )
 decrypted_metadata = decrypter.decrypt_metadata()
 with open(args.metadata, "w") as outfile:
