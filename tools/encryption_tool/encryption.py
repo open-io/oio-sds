@@ -458,7 +458,15 @@ class Decrypter:
     kms.
     """
 
-    def __init__(self, root_key, account=None, container=None, obj=None, metadata=None):
+    def __init__(
+        self,
+        root_key,
+        account=None,
+        container=None,
+        obj=None,
+        metadata=None,
+        bucket_secret=None,
+    ):
         self.account = account
         self.container = container
         self.obj = obj
@@ -467,6 +475,7 @@ class Decrypter:
         self.api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
         self.root_key = root_key
+        self.bucket_secret = bucket_secret
         self.body_key = None
         self.iv = {}
         self.iv[USER_METADATA_IVS] = {}
@@ -569,7 +578,11 @@ class Decrypter:
         key_id = crypto_meta.get("key_id")
         put_keys = {}
         put_keys["id"] = {}
-        if key_id and not (key_id.get("ssec", False) or key_id.get("sses3", False)):
+        if self.bucket_secret is not None:
+            # The bucket_secret was given
+            object_key = decode_secret(self.bucket_secret)
+            put_keys["id"]["sses3"] = True
+        elif key_id and not (key_id.get("ssec", False) or key_id.get("sses3", False)):
             # The object is encrypted with ROOT_KEY
             account_path = os.path.join(os.sep, self.account)
             path = os.path.join(account_path, self.container, self.obj)
