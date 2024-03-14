@@ -520,6 +520,28 @@ class Decrypter:
         )
         return decrypt_ctxt.update(chunk)
 
+    def get_decrypted_etag(self, metadata=None):
+        """
+        Decrypt X-Object-Sysmeta-Crypto-Etag from metadata and return ETag (md5
+        digest) of the plaintext body.
+
+        :param metadata: object metadata
+        :return ETag
+        """
+        if metadata is None:
+            metadata = self.metadata
+        crypto_etag_key = metadata.get("properties").get(CRYPTO_ETAG_KEY)
+
+        # Get object key
+        crypto_meta = metadata.get("properties").get(CRYPTO_BODY_META_KEY)
+        _, _, keys = self.get_cipher_keys(crypto_meta)
+
+        # decrypt CRYPTO_ETAG_KEY with object key
+        decrypted_etag, iv = self._decrypt_value_with_meta(
+            crypto_etag_key, keys["object"], True, bytes_to_wsgi
+        )
+        return decrypted_etag
+
     def get_ivs(self):
         """
         Returns dict with IVs in order to re-use them for re-encryption
