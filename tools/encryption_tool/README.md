@@ -72,12 +72,12 @@ $ curl "127.0.0.1:6001/v1.0/kms/get-secret?account=AUTH_demo&bucket=bucket&secre
   "account": "AUTH_demo",
   "bucket": "bucket",
   "secret_id": "0",
-  "secret": "ZQElQztyEZEcMiiTmVSVIX6Lv5dfSwKX8TJSvDR79jw="
+  "secret": "Xiup6SX2YpRhlIIC8+Dat3yazd3+qziiYFWgHnXcPpA="
 }
-#use try_bucket_secret.py show ETag form metadata and show ETag calculated form encrypted body with provided key
-$ cat encrypted-body | ./try_bucket_secret.py --container bucket --obj obj --metadata metadata.json --bucket_secret ZQElQztyEZEcMiiTmVSVIX6Lv5dfSwKX8TJSvDR79jw=
-ETag from X-Object-Sysmeta-Crypto-Etag metadata:
-e4575c610d8d11511348a229e609d1a0
-md5 of object plaintext body decrypted with the provided key:
-e4575c610d8d11511348a229e609d1a0
+#use try_bucket_secret.py to show HMAC calculated with ETag and provided key and show HMAC stored in metadata
+$ cat encrypted-body | ./try_bucket_secret.py --container bucket --obj obj --metadata metadata.json --bucket_secret Xiup6SX2YpRhlIIC8+Dat3yazd3+qziiYFWgHnXcPpA=
+Calculate HMAC with ETag from X-Object-Sysmeta-Crypto-Etag metadata and provided key:
++vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=
+HMAC form X-Object-Sysmeta-Crypto-Etag-Mac metadata:
++vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=
 ```

@@ -16,10 +16,9 @@
 # License along with this library.
 
 import argparse
-import hashlib
 import json
 import sys
-from encryption_tool.encryption import Decrypter
+from encryption_tool.encryption import Decrypter, decode_secret, hmac_etag
 
 ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"
 
@@ -55,9 +54,9 @@ with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
     infile.close()
 
-# Try to decrypt with bucket_secret and check if hash of decrypted body
-# corresponds to the plaintext md5 include in X-Object-Sysmeta-Crypto-Etag.
-
+# Use bucket secret to decrypt X-Object-Sysmeta-Crypto-Etag, use this ETag
+# and object_key to calculate the HMAC, the result should be the same as the
+# metadata key X-Object-Sysmeta-Crypto-Etag-Mac.
 decrypter = Decrypter(
     root_key=ROOT_KEY,
     account=args.account,
@@ -66,20 +65,25 @@ decrypter = Decrypter(
     metadata=metadata,
     bucket_secret=args.bucket_secret,
 )
+etag_from_metadata = decrypter.get_decrypted_etag(metadata=metadata)
 
-etag_form_metadata = decrypter.get_decrypted_etag(metadata=metadata)
-print("ETag from X-Object-Sysmeta-Crypto-Etag metadata:")
-print(etag_form_metadata)
+print(
+    "Calculate HMAC with ETag from X-Object-Sysmeta-Crypto-Etag metadata and \
+provided key:"
+)
+object_key = decode_secret(args.bucket_secret)
+etag_from_metadata_hamc = hmac_etag(object_key, etag_from_metadata)
+print(etag_from_metadata_hamc)
 
-# Decrypt object and calculate md5sum
-plaintext_md5 = hashlib.md5(b"")
-while 1:
-    chunk = sys.stdin.buffer.read()
-    if not chunk:
-        break
-    decrypted_chunk = decrypter.decrypt(chunk)
-    plaintext_md5.update(decrypted_chunk)
+print("HMAC from X-Object-Sysmeta-Crypto-Etag-Mac metadata:")
+etag_mac_from_metadata = metadata.get("properties").get(
+    "x-object-sysmeta-crypto-etag-mac"
+)
+print(etag_mac_from_metadata)
 
-plaintext_etag = plaintext_md5.hexdigest()
-print("md5 of object plaintext body decrypted with the provided key:")
-print(plaintext_etag)
+if etag_from_metadata_hamc == etag_mac_from_metadata:
+    print("The provided key is the RIGHT key!")
+    sys.exit(0)
+else:
+    print("The provided key is the WRONG key.")
+    sys.exit(1)

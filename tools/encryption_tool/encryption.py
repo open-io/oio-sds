@@ -276,6 +276,20 @@ def decode_secret(b64_secret):
     return binary_secret
 
 
+def hmac_etag(key, etag):
+    """
+    Compute an HMAC-SHA256 using given key and etag.
+
+    :param key: The starting key for the hash.
+    :param etag: The etag to hash.
+    :returns: a Base64-encoded representation of the HMAC
+    """
+    if not isinstance(etag, bytes):
+        etag = wsgi_to_bytes(etag)
+    result = hmac.new(key, etag, digestmod=hashlib.sha256).digest()
+    return base64.b64encode(result).decode()
+
+
 # The Crypto class is copied from crypto_utils.py and modified.
 # self.logger has been removed
 # EncryptionException has been replaced with Exception
@@ -891,7 +905,7 @@ class Encrypter:
 
             # Also add an HMAC of the etag for use when evaluating
             # conditional requests
-            metadata[CRYPTO_ETAG_MAC_KEY] = self._hmac_etag(
+            metadata[CRYPTO_ETAG_MAC_KEY] = hmac_etag(
                 self.keys["object"], plaintext_etag
             )
 
@@ -930,16 +944,3 @@ class Encrypter:
             base64.b64encode(crypto_ctxt.update(wsgi_to_bytes(value)))
         )
         return enc_val, crypto_meta
-
-    def _hmac_etag(self, key, etag):
-        """
-        Compute an HMAC-SHA256 using given key and etag.
-
-        :param key: The starting key for the hash.
-        :param etag: The etag to hash.
-        :returns: a Base64-encoded representation of the HMAC
-        """
-        if not isinstance(etag, bytes):
-            etag = wsgi_to_bytes(etag)
-        result = hmac.new(key, etag, digestmod=hashlib.sha256).digest()
-        return base64.b64encode(result).decode()
