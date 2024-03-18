@@ -33,6 +33,7 @@ import (
 
 type oioLogger interface {
 	close()
+	writeEvent(message string)
 	writeAccess(message string)
 	writeInfo(message string)
 	writeError(message string)
@@ -46,9 +47,11 @@ var accessLogDel = configAccessLogDefaultDelete
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var requestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
 var accessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
+var eventLogFormat = "event INF {{ .Topic }} {{ .Event }}"
 var logTemplate *template.Template = nil
 var requestLogTemplate *template.Template = nil
 var accessLogTemplate *template.Template = nil
+var eventLogTemplate *template.Template = nil
 
 // Activate the extreme verbosity on the RAWX. This is has to be set at the
 // startup of the service.
@@ -83,6 +86,11 @@ type AccessLogEvent struct {
 	ReqId     string
 	TLS       bool
 	TTFB      uint64
+}
+
+type EventLogEvent struct {
+	Topic string
+	Event string
 }
 
 type NoopLogger struct{}
@@ -151,6 +159,10 @@ func InitLogTemplates() error {
 		return err
 	}
 	accessLogTemplate, err = template.New("accessLogTemplate").Funcs(log_funcs).Parse(accessLogFormat)
+	if err != nil {
+		return err
+	}
+	eventLogTemplate, err = template.New("eventLogTemplate").Funcs(log_funcs).Parse(eventLogFormat)
 	return err
 }
 
@@ -340,20 +352,35 @@ func (evt AccessLogEvent) String() string {
 	return output.String()
 }
 
+func (evt EventLogEvent) String() string {
+	var output bytes.Buffer
+	err := eventLogTemplate.Execute(&output, evt)
+
+	if err != nil {
+		log.Printf("Error while executing eventLogTemplate: %v", err)
+		return ""
+	}
+	return output.String()
+}
+
 func LogHttp(evt AccessLogEvent) {
 
 	if statsdClient != nil {
 		prefix := fmt.Sprintf("openio.rawx.request.%s.%d", evt.Method, evt.Status)
 		// .TimeSpent and .TTFB are in µs while statsd expects ms
-		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent / 1000), 1.0)
+		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent/1000), 1.0)
 		if evt.Method == "GET" {
-			statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB / 1000), 1.0)
+			statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB/1000), 1.0)
 		}
 		statsdClient.Inc(fmt.Sprintf("%s.in.xfer", prefix), int64(evt.BytesIn), 1.0)
 		statsdClient.Inc(fmt.Sprintf("%s.out.xfer", prefix), int64(evt.BytesOut), 1.0)
 	}
 
 	logger.writeAccess(evt.String())
+}
+
+func LogEvent(evt EventLogEvent) {
+	logger.writeEvent(evt.String())
 }
 
 func InitStatsd(addr string, prefix string) {
@@ -378,6 +405,7 @@ func InitNoopLogger() {
 	logger = &NoopLogger{}
 }
 
+func (*NoopLogger) writeEvent(string)  {}
 func (*NoopLogger) writeAccess(string) {}
 func (*NoopLogger) writeInfo(string)   {}
 func (*NoopLogger) writeError(string)  {}
@@ -396,6 +424,7 @@ func (l *StderrLogger) writeAll(m string) {
 	l.logger.Println(fmt.Sprintf("%v.%06d", now.Unix(), (now.UnixNano()/1000)%1000000), m)
 }
 
+func (l *StderrLogger) writeEvent(m string)  { l.writeAll(m) }
 func (l *StderrLogger) writeAccess(m string) { l.writeAll(m) }
 func (l *StderrLogger) writeInfo(m string)   { l.writeAll(m) }
 func (l *StderrLogger) writeError(m string)  { l.writeAll(m) }
@@ -429,6 +458,18 @@ func InitSysLogger(syslogID string) {
 		l.wg.Done()
 	}()
 	logger = l
+}
+
+func (l *SysLogger) writeEvent(m string) {
+	select {
+	case l.queue <- m: // no-blocking call, everything is fine
+	default:
+		if l.alertThrottle.Ok() {
+			LogWarning("syslog clogged")
+		}
+		// FIXME(jfs): Uncomment this upon an absolute necessity
+		// l.queue <- m
+	}
 }
 
 func (l *SysLogger) writeAccess(m string) {
