@@ -68,14 +68,6 @@ jobs:
           systemctl disable foundationdb.service
           rm -rf fdb-packages
           docker login -u {{ .cds.proj.artifactory_user }} -p {{ .cds.proj.artifactory_token }} pu-objectstorage-default-docker.artifactory.ovhcloud.tools
-          docker-compose -f tests/functional/rabbitmq/cluster-config/docker-compose.yml up -d
-          # wait for the rabbitmq nodes to form a cluster
-          until [ "$(docker inspect -f "{{.State.Health.Status}}" rabbit-1)" = "healthy" ]
-          do
-            sleep 1
-          done
-          sleep 1
-          docker exec rabbit-1 rabbitmqctl await_online_nodes 3
           # Start Redpanda (kafka)
           docker-compose -f docker/redpanda.docker-compose.yml up -d
           until [ "$(docker inspect -f "{{.State.Status}}" redpanda-0)" = "running" ]
