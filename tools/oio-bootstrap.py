@@ -673,6 +673,8 @@ log_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	message:{{ .M
 log_request_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	message:{{ .Message }}"
 # Access log
 log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ .Status }}	bytes_recvd_int:{{ .BytesIn }}	bytes_sent_int:{{ .BytesOut }}	request_time_float:{{ .TimeSpent | div1M | printf \\"%.6f\\" }}	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	ttfb:{{ .TTFB }}"
+# Event log
+log_event_format "level_name:INFO	X-OVH-TOKEN:my_token	topic:{{ .Topic }}	event:{{ .Event }}"
 
 # Don't know why, but there is a risk our test suites do not pass
 # if we set a lower number of connections.
