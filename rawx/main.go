@@ -324,6 +324,9 @@ func main() {
 	if opts["log_access_format"] != "" {
 		accessLogFormat = opts["log_access_format"]
 	}
+	if opts["log_event_format"] != "" {
+		eventLogFormat = opts["log_event_format"]
+	}
 	if err := InitLogTemplates(); err != nil {
 		log.Fatalf("Unable to init log templates: %v", err.Error())
 	}
