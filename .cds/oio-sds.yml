@@ -98,8 +98,8 @@ workflow:
     pipeline: oio-sds-coverage
     application: oio-sds
     depends_on:
-      - tests-cli
       - tests-fast
+      - tests-cli
       - tests-single
       - tests-ec
       - tests-fullrepli

@@ -63,7 +63,7 @@ jobs:
           - pgrep rsyslogd || rsyslogd &
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-failfast.sh
-          - coverage combine .coverage.*-vm*
+          - coverage combine .coverage.*.*
           - mv .coverage .coverage.build
           - rm -f .coverage.*-vm*
 
@@ -72,7 +72,7 @@ jobs:
           - . $HOME/oio-env.sh
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-unit.sh
-          - coverage combine .coverage.*-vm*
+          - coverage combine .coverage.*.*
           - mv .coverage .coverage.unit
           - rm -f .coverage.*-vm*
 
