@@ -36,7 +36,80 @@ LOAD_PIPELINES = {
 TAGS_TO_DEBUG = ["starting"]
 
 
-class CrawlerWorker(object):
+class CrawlerWorkerMarkerMixin(object):
+    """Crawler worker mixin to add marker property"""
+
+    MARKERS_DIR = "markers"
+    # Every 60 seconds if the crawler can reach the max scanned_per_second asked.
+    # If the max is not reached, the marker will be updated less often, it is
+    # kind of a way to reduce the load/iops.
+    DEFAULT_SCANNED_BETWEEN_MARKERS = None
+
+    def init_current_marker(self, volume_path, chunks_per_second):
+        """Init variables used to handle crawler markers
+
+        :param volume_path: volume to crawl
+        :type volume_path: str
+        :param chunks_per_second: max number of chunks per second
+        :type chunks_per_second: int
+        """
+        self.DEFAULT_SCANNED_BETWEEN_MARKERS = chunks_per_second * 60
+        self.scanned_between_markers = int_value(
+            self.conf.get("scanned_between_markers"),
+            self.DEFAULT_SCANNED_BETWEEN_MARKERS,
+        )
+
+        # Take the name of the conf file (remove its path) and remove its extension
+        service_name = splitext(basename(self.conf["conf_file"]))[0]
+        self.marker_dir = f"{volume_path}/{self.MARKERS_DIR}"
+
+        # Read marker if it exists, default to 0 otherwise.
+        self.marker_path = f"{self.marker_dir}/{service_name}"
+        try:
+            self.read_marker()
+        except IOError as err:
+            self.logger.warning("Failed to read marker: %s", err)
+
+    def read_marker(self):
+        """Read marker and store it in current_marker attribute"""
+        if not self.use_marker:
+            self.logger.error("trying to open marker file while feature disabled")
+            return
+        # Create marker dir if it does not exist
+        if not isdir(self.marker_dir):
+            makedirs(self.marker_dir, exist_ok=True)
+            # Folder does not exist, no marker for sure.
+            self.current_marker = "0"
+            return
+
+        # Create file if does not exist
+        if not isfile(self.marker_path):
+            # File does not exist, no marker for sure.
+            self.current_marker = "0"
+            return
+
+        # Open it RW (file should exist as checked above)
+        with open(self.marker_path, "r") as marker_file:
+            self.current_marker = marker_file.readline()
+            if self.current_marker == "":
+                self.current_marker = "0"
+
+    def write_marker(self):
+        """Save current marker into marker file"""
+        if not self.use_marker:
+            self.logger.error(
+                f"trying to write marker={self.current_marker} while feature disabled"
+            )
+            return
+        # Create marker dir if it does not exist
+        if not isdir(self.marker_dir):
+            makedirs(self.marker_dir, exist_ok=True)
+
+        with open(self.marker_path, "w") as marker_file:
+            marker_file.write(self.current_marker)
+
+
+class CrawlerWorker(CrawlerWorkerMarkerMixin):
     """
     Crawler Worker responsible for a single volume.
     """
@@ -44,15 +117,10 @@ class CrawlerWorker(object):
     SERVICE_TYPE = None
     WORKING_DIR = ""
     EXCLUDED_DIRS = None
-    MARKERS_DIR = "markers"
 
     DEFAULT_SCAN_INTERVAL = 1800
     DEFAULT_REPORT_INTERVAL = 300
     DEFAULT_SCANNED_PER_SECOND = 30
-    # Every 60 seconds if the crawler can reach the max scanned_per_second asked.
-    # If the max is not reached, the marker will be updated less often, it is
-    # kind of a way to reduce the load/iops.
-    DEFAULT_SCANNED_BETWEEN_MARKERS = DEFAULT_SCANNED_PER_SECOND * 60
 
     def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
         """
@@ -93,12 +161,6 @@ class CrawlerWorker(object):
         self.namespace, self.volume_id = check_volume_for_service_type(
             self.volume, self.SERVICE_TYPE
         )
-        self.use_marker = boolean_value(self.conf.get("use_marker"), False)
-        self.scanned_between_markers = int_value(
-            self.conf.get("scanned_between_markers"),
-            self.DEFAULT_SCANNED_BETWEEN_MARKERS,
-        )
-
         self.passes = 0
         self.successes = 0
         self.errors = 0
@@ -123,21 +185,15 @@ class CrawlerWorker(object):
         self.pipeline = LOAD_PIPELINES[type(self).__name__](
             self.conf.get("conf_file"), global_conf=self.conf, app=self
         )
-
-        # Init marker if used
-        self.marker_current = None
-        self.marker_dir = None
-        self.marker_path = None
         self.hash_width = 0
         self.hash_depth = 0
+        self.current_marker = None
+        self.use_marker = boolean_value(self.conf.get("use_marker"), False)
         if self.use_marker:
-            # Take the name of the conf file (remove its path) and remove its extension
-            service_name = splitext(basename(self.conf["conf_file"]))[0]
-            self.marker_dir = f"{volume_path}/{self.MARKERS_DIR}"
-
-            # Read marker if it exists, default to 0 otherwise.
-            self.marker_path = f"{self.marker_dir}/{service_name}"
-            self._read_marker()
+            # Add marker if option enabled
+            CrawlerWorkerMarkerMixin.init_current_marker(
+                self, volume_path, self.max_scanned_per_second
+            )
             self.hash_width = int_value(self.conf.get("hash_width"), 0)
             if not self.hash_width:
                 raise ConfigurationException(
@@ -148,42 +204,6 @@ class CrawlerWorker(object):
                 raise ConfigurationException(
                     "No hash_depth specified (mandatory if marker is used)"
                 )
-
-    def _read_marker(self):
-        if not self.use_marker:
-            self.logger.error("trying to open marker file while feature disabled")
-            return
-        # Create marker dir if it does not exist
-        if not isdir(self.marker_dir):
-            makedirs(self.marker_dir, exist_ok=True)
-            # Folder does not exist, no marker for sure.
-            self.marker_current = "0"
-            return
-
-        # Create file if does not exist
-        if not isfile(self.marker_path):
-            # File does not exist, no marker for sure.
-            self.marker_current = "0"
-            return
-
-        # Open it RW (file should exist as checked above)
-        with open(self.marker_path, "r") as marker_file:
-            self.marker_current = marker_file.readline()
-            if self.marker_current == "":
-                self.marker_current = "0"
-
-    def _write_marker(self):
-        if not self.use_marker:
-            self.logger.error(
-                f"trying to write marker={self.marker_current} while feature disabled"
-            )
-            return
-        # Create marker dir if it does not exist
-        if not isdir(self.marker_dir):
-            makedirs(self.marker_dir, exist_ok=True)
-
-        with open(self.marker_path, "w") as marker_file:
-            marker_file.write(self.marker_current)
 
     def cb(self, status, msg):
         raise NotImplementedError("cb not implemented")
@@ -257,7 +277,7 @@ class CrawlerWorker(object):
         paths = paths_gen(
             volume_path=join(self.volume, self.working_dir),
             excluded_dirs=excluded_dirs,
-            marker=self.marker_current,
+            marker=self.current_marker,
             hash_width=self.hash_width,
             hash_depth=self.hash_depth,
         )
@@ -287,9 +307,9 @@ class CrawlerWorker(object):
                 if nb_path_processed >= self.scanned_between_markers:
                     # Update marker and reset counter
                     nb_path_processed = 0
-                    self.marker_current = path.rsplit("/", 1)[-1]
+                    self.current_marker = path.rsplit("/", 1)[-1]
                     try:
-                        self._write_marker()
+                        self.write_marker()
                     except OSError as err:
                         self.report("ended with error", force=True)
                         raise OSError(
@@ -306,11 +326,11 @@ class CrawlerWorker(object):
         self.successes = 0
         self.ignored_paths = 0
         self.invalid_paths = 0
-        if self.use_marker and self.marker_current != "0":
+        if self.use_marker and self.current_marker != "0":
             # reset marker
-            self.marker_current = "0"
+            self.current_marker = "0"
             try:
-                self._write_marker()
+                self.write_marker()
             except OSError as err:
                 self.logger.error("Failed to reset progress marker: %s", err)
 

@@ -15,8 +15,8 @@
 
 import os
 import random
-
-from oio.common.utils import request_id
+from os.path import basename, exists, isdir, splitext, join
+from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.rdir.crawler import RdirWorker
 from oio.event.evob import EventTypes
@@ -220,3 +220,185 @@ class TestRdirCrawler(BaseTestCase):
             return self._test_rdir_crawler_m_chunks(container, object_name)
         finally:
             container_sharding.clean_container(self.account, container)
+
+    def test_rdir_crawler_check_marker_creation(self):
+        """Check if marker are created as expected"""
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        cid = cid_from_name(self.account, container)
+        object_name = "m_chunk-" + random_str(8)
+        self._minimum_2_chunks_or_skip(container, object_name)
+        old_chunks = self._create(container, object_name)
+        chunk = random.choice(old_chunks)
+        chunk_path, volume_path = self._chunk_info(chunk)
+        self.conf["use_marker"] = True
+        self.conf["conf_file"] = "/rdir-crawler.conf"
+        self.conf["chunks_per_second"] = 1
+        marker_path = join(
+            volume_path,
+            RdirWorker.MARKERS_DIR,
+            splitext(basename(self.conf["conf_file"]))[0],
+        )
+        if exists(marker_path):
+            # Reset marker if already set
+            os.remove(marker_path)
+        rdir_crawler = RdirWorker(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+
+        # Marker folder created in the volume path
+        self.assertTrue(
+            isdir(
+                join(
+                    volume_path,
+                    RdirWorker.MARKERS_DIR,
+                )
+            )
+        )
+
+        def write_marker(worker):
+            """Save current marker into marker file"""
+            with open(worker.marker_path, "a") as marker_file:
+                marker_file.write(worker.current_marker + "\n")
+
+        rdir_crawler.write_marker = lambda: write_marker(rdir_crawler)
+        rdir_crawler.crawl_volume()
+        # If there are no error
+        if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+            # Due to chunks_per_second equals to 1,
+            # marker will be created after each chunk checked.
+            # We expect here to find the marker corresponding to the
+            # chunk selected above
+            with open(rdir_crawler.marker_path, "r") as marker_file:
+                markers = marker_file.read().splitlines()
+                self.assertIn("|".join([cid, chunk_path.rsplit("/", 1)[-1]]), markers)
+                self.assertIn("0", markers)
+
+    def test_rdir_crawler_check_marker_work_as_expected(self):
+        """Check if marker already set are working as expected"""
+        container_a = "rdir_crawler_m_chunks_" + random_str(6)
+        cid_a = cid_from_name(self.account, container_a)
+        object_name_a = "m_chunk-" + random_str(8)
+        self._minimum_2_chunks_or_skip(container_a, object_name_a)
+        old_chunks_a = self._create(container_a, object_name_a)
+        chunk = random.choice(old_chunks_a)
+        chunk_path_a, volume_path = self._chunk_info(chunk)
+        chunk_id_a = chunk_path_a.rsplit("/", 1)[-1]
+        # Remove selected chunk
+        os.remove(chunk_path_a)
+        # Creating a second container having objects with
+        # chunks on the same volume as the last container
+        container_b = "rdir_crawler_m_chunks_" + random_str(5)
+        cid_b = cid_from_name(self.account, container_b)
+        v_path = ""
+        while v_path != volume_path:
+            object_name_b = "m_chunk-" + random_str(8)
+            old_chunks_b = self._create(container_b, object_name_b)
+            for chunk in old_chunks_b:
+                chunk_path_b, v_path = self._chunk_info(chunk)
+                if v_path == volume_path:
+                    break
+        # Remove selected chunk
+        os.remove(chunk_path_b)
+        chunk_id_b = chunk_path_b.rsplit("/", 1)[-1]
+
+        # Enable marker
+        self.conf["use_marker"] = True
+        self.conf["conf_file"] = "/rdir-crawler.conf"
+        marker_path = join(
+            volume_path,
+            RdirWorker.MARKERS_DIR,
+            splitext(basename(self.conf["conf_file"]))[0],
+        )
+        # Setting a marker
+        with open(marker_path, "w") as marker_file:
+            if cid_a > cid_b:
+                # Marker is set to start on objects in container a
+                marker = "|".join([cid_a, "0"])
+            else:
+                # Marker is set to start on objects in container b
+                marker = "|".join([cid_b, "0"])
+            marker_file.write(marker)
+        # The objective here is to prove that rdir crawler
+        # will begin after the marker defined
+        rdir_crawler = RdirWorker(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+
+        # Marker folder created in the volume path
+        self.assertTrue(
+            isdir(
+                join(
+                    volume_path,
+                    RdirWorker.MARKERS_DIR,
+                )
+            )
+        )
+        rdir_crawler.crawl_volume()
+        # If there are no error
+        if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+            # Check that one chunk is repaired
+            self.assertGreaterEqual(rdir_crawler.repaired, 1)
+            _, new_chunks_a = self.api.container.content_locate(
+                self.account, container_a, object_name_a
+            )
+            _, new_chunks_b = self.api.container.content_locate(
+                self.account, container_b, object_name_b
+            )
+            if cid_a > cid_b:
+                # Only object in container a will be repaired
+                new_chunk_path = [
+                    self._chunk_info(chunk)[0]
+                    for chunk in new_chunks_a
+                    if chunk_id_a in chunk["url"]
+                ][0]
+                self.assertTrue(exists(new_chunk_path))
+                # The chunk located before the marker has not been rebuilt
+                self.assertFalse(exists(chunk_path_b))
+            else:
+                # Only object in container b will be repaired
+                new_chunk_path = [
+                    self._chunk_info(chunk)[0]
+                    for chunk in new_chunks_b
+                    if chunk_id_b in chunk["url"]
+                ][0]
+                self.assertTrue(exists(new_chunk_path))
+                # The chunk located before the marker has not been rebuilt
+                self.assertFalse(exists(chunk_path_a))
+            with open(rdir_crawler.marker_path, "r") as marker_file:
+                markers = marker_file.read().splitlines()
+                self.assertEqual(["0"], markers)
+            # The marker has been reset at the end of the last crawl
+            rdir_crawler.crawl_volume()
+            # If there are no error
+            if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+                # Check that one chunk is repaired
+                self.assertGreaterEqual(rdir_crawler.repaired, 1)
+                # we should be able to find the chunk not selected for rebuild
+                # the last pass
+                _, new_chunks_a = self.api.container.content_locate(
+                    self.account, container_a, object_name_a
+                )
+                _, new_chunks_b = self.api.container.content_locate(
+                    self.account, container_b, object_name_b
+                )
+                # Objects from previously not selected container will be repaired
+                if cid_a > cid_b:
+                    new_chunk_path = [
+                        self._chunk_info(chunk)[0]
+                        for chunk in new_chunks_b
+                        if chunk_id_b in chunk["url"]
+                    ][0]
+                    self.assertTrue(exists(new_chunk_path))
+                else:
+                    new_chunk_path = [
+                        self._chunk_info(chunk)[0]
+                        for chunk in new_chunks_a
+                        if chunk_id_a in chunk["url"]
+                    ][0]
+                    self.assertTrue(exists(new_chunk_path))
