@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,9 +21,8 @@ from urllib.parse import urlparse
 
 from collections import defaultdict
 
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
-from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
@@ -33,15 +32,13 @@ from oio.content.quality import location_constraint_margin
 
 class TestPerfectibleContent(BaseTestCase):
     def setUp(self):
-        super(TestPerfectibleContent, self).setUp()
-        self.api = ObjectStorageApi(
-            self.ns, endpoint=self.uri, pool_manager=self.http_pool
-        )
+        super().setUp()
+        self.api = self.storage
         self.nb_rawx = len(self.conf["services"]["rawx"])
 
     def tearDown(self):
-        super(TestPerfectibleContent, self).tearDown()
         self.wait_for_score(("rawx",), timeout=5.0, score_threshold=8)
+        super(TestPerfectibleContent, self).tearDown()
 
     @classmethod
     def tearDownClass(cls):
@@ -68,6 +65,9 @@ class TestPerfectibleContent(BaseTestCase):
         by_slot = self._aggregate_services(
             "rawx", lambda x: x["tags"].get("tag.slots", "rawx").rsplit(",", 2)[-1]
         )
+        self.logger.debug(
+            "Services by slot: %s", {k: len(v) for k, v in by_slot.items()}
+        )
         if "rawx-even" not in by_slot or "rawx-odd" not in by_slot:
             self.skip('This test requires "rawx-even" and "rawx-odd" slots')
         return by_slot
@@ -75,6 +75,9 @@ class TestPerfectibleContent(BaseTestCase):
     def _aggregate_rawx_by_place(self):
         by_place = self._aggregate_services(
             "rawx", lambda x: x["tags"]["tag.loc"].rsplit(".", 1)[0]
+        )
+        self.logger.debug(
+            "Services by location: %s", {k: len(v) for k, v in by_place.items()}
         )
         if len(by_place) < 3:
             self.skip("This test requires 3 different 2nd level locations")
@@ -131,18 +134,32 @@ class TestPerfectibleContent(BaseTestCase):
         for chunk in chunks:
             abs_link = self._get_symlink_non_optimal_path(chunk["real_url"])
             if self._is_symlink(abs_link):
+                self.logger.debug(
+                    "Found symlink for %s: %s", chunk["real_url"], abs_link
+                )
                 symlink_found = True
                 break
-        self.assertEqual(should_exist, symlink_found)
+        try:
+            self.assertEqual(should_exist, symlink_found)
+        except Exception:
+            self.logger.debug("Chunks: %s", chunks)
+            raise
 
     def test_upload_ok(self):
         """Check that no symlink is created when everything is ok."""
-        self.wait_for_score(("rawx",))
+        self.wait_for_score(("rawx",), score_threshold=8)
+        self._reload_proxy()
         # Check we have enough service locations.
-        self._aggregate_rawx_by_place()
+        by_place = self._aggregate_rawx_by_place()
+        for svcs in by_place.values():
+            for svc in svcs:
+                if svc["tags"]["tag.putlock"]:
+                    self.conscience.unlock_score(svc)
+                    self.logger.debug("%s was locked by a previous test", svc)
+                    time.sleep(1.0)
 
         # Upload an object.
-        container = self._random_user()
+        container = f"upload-ok-{random_str(4)}"
         reqid = request_id("perfectible-")
         chunks, _, _ = self.api.object_create(
             self.account,
@@ -160,7 +177,7 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Check that a symlink is created when the warning distance is reached.
         """
-        self.wait_for_score(("rawx",))
+        self.wait_for_score(("rawx",), score_threshold=8)
         # Check we have enough service locations.
         by_place = self._aggregate_rawx_by_place()
         keys = list(by_place.keys())
@@ -168,9 +185,16 @@ class TestPerfectibleContent(BaseTestCase):
         banned_locs = list(map(lambda x: keys[x], range(2, len(keys))))
         for banned_loc in banned_locs:
             self._lock_services("rawx", by_place[banned_loc], wait=2.0)
+        # We have a clue that service lock are not propagated immediately
+        by_place = self._aggregate_rawx_by_place()
+        for banned_loc in banned_locs:
+            for svc in by_place[banned_loc]:
+                if not svc["tags"]["tag.putlock"]:
+                    time.sleep(2.0)
+                    break
 
         # Upload an object.
-        container = self._random_user()
+        container = f"upload-warn-dist-{random_str(4)}"
         reqid = request_id("perfectible-")
         chunks, _, _ = self.api.object_create(
             self.account,
@@ -194,6 +218,12 @@ class TestPerfectibleContent(BaseTestCase):
         # Lock all services of the 'rawx-even' slot.
         banned_slot = "rawx-even"
         self._lock_services("rawx", by_slot[banned_slot], wait=2.0)
+        # We have a clue that service lock are not propagated immediately
+        by_slot = self._aggregate_rawx_by_slot()
+        for svc in by_slot[banned_slot]:
+            if not svc["tags"]["tag.putlock"]:
+                time.sleep(2.0)
+                break
 
         # Upload an object.
         container = self._random_user()
