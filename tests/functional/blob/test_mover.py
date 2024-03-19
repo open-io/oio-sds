@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ class TestBlobMover(BaseTestCase):
         )
         self.rawx_services = self.conscience.all_services("rawx")
         if len(chunks) >= len([s for s in self.rawx_services if s["score"] > 0]):
-            self.skipTest("need at least %d rawx to run" % (len(chunks) + 1))
+            self.skipTest(f"need at least {len(chunks) + 1} rawx to run")
 
         self.rawx_volumes = {}
         self.rawx_tags_loc = {}
@@ -187,15 +187,25 @@ class TestBlobMover(BaseTestCase):
         )
 
     def _check_symlink(self, new_volume_path, volume_path, symlink_folder, chunk_id):
+        """
+        Check that a symlink exists in the new volume,
+        but does not exist in the old one.
+        """
         symlink_folder_path = join(new_volume_path, symlink_folder, chunk_id[:3])
-        symlinks = [file for file in listdir(symlink_folder_path) if chunk_id in file]
+        try:
+            new_symlinks = [f for f in listdir(symlink_folder_path) if chunk_id in f]
+        except FileNotFoundError:
+            new_symlinks = []
         # Check if the symlink has been moved too
-        self.assertEqual(len(symlinks), 1)
         symlink_folder_path = join(volume_path, symlink_folder, chunk_id[:3])
-        symlinks = [file for file in listdir(symlink_folder_path) if chunk_id in file]
+        try:
+            old_symlinks = [f for f in listdir(symlink_folder_path) if chunk_id in f]
+        except FileNotFoundError:
+            old_symlinks = []
         if new_volume_path != volume_path:  # Able to move the chunk
             # Check if the old symlink has been removed
-            self.assertEqual(len(symlinks), 0)
+            self.assertEqual(len(old_symlinks), 0)
+        self.assertEqual(len(new_symlinks), 1)
 
     def _test_local_mover(
         self, misplaced_chunk=False, corrupt_data=False, no_adjacent_services=False
@@ -211,18 +221,19 @@ class TestBlobMover(BaseTestCase):
         ) = self._init_objects(misplaced_chunk, corrupt_data)
         initial_location = self.rawx_tags_loc[volume]
         locked_svc = []
-        # Stop adjacent services, so that mover choose distant services
+        # Stop adjacent services, so that mover chooses distant services.
         if no_adjacent_services:
-            # Stop adjacent services, so that mover choose distant services
-            # lock rawx services on selected host
-            # The objective is to be sure that the mover does not find
-            # adjacent services with spare chunks
+            # Stop adjacent services, so that mover chooses distant services.
+            # Lock rawx services on the selected host.
+            # The objective is to be sure that the mover does not select spare chunks
+            # on adjacent services.
             for rawx in self.rawx_services:
                 if get_distance(rawx["tags"]["tag.loc"], initial_location) == 1:
                     rawx["score"] = 0
                     rawx["type"] = "rawx"
                     locked_svc.append(rawx)
             self._lock_services("rawx", locked_svc, wait=2.0)
+            self._reload_proxy()
         mover = BlobMoverWorker(self.conf, None, volume_path, watchdog=self.watchdog)
         mover.process()
         if no_adjacent_services:
@@ -244,7 +255,7 @@ class TestBlobMover(BaseTestCase):
                         object_name in corrupted_objects
                         and chunk_id in corrupted_objects[object_name]
                     ):
-                        # Checking that the chunk has been skipped
+                        # Check that the chunk has been skipped
                         self.assertEqual(volume_path, new_volume_path)
                         self.assertEqual(
                             get_distance(initial_location, new_location), 0
@@ -266,7 +277,7 @@ class TestBlobMover(BaseTestCase):
                     if object_name in object_with_misplaced and any(
                         loc
                         for loc in object_with_misplaced[object_name]
-                        if get_distance(initial_location, loc) in [1, 0]
+                        if get_distance(initial_location, loc) in (1, 0)
                     ):
                         if volume_path != new_volume_path:  # Able to move the chunk
                             # The location has been improved
