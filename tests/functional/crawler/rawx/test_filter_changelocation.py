@@ -48,6 +48,7 @@ class TestFilterChangelocation(BaseTestCase):
 
     def setUp(self):
         super(TestFilterChangelocation, self).setUp()
+        self.wait_for_score(("rawx",), timeout=5.0, score_threshold=8)
         self.api = self.storage
         self.wait_until_empty(topic="oio", group_id="event-agent")
         self.rawx_srv_list = self.conscience.all_services(
@@ -64,7 +65,7 @@ class TestFilterChangelocation(BaseTestCase):
             self.rawx_volumes[service_id] = volume
         self.conf.update({"quarantine_mountpoint": False})
         self.nb_rawx = len(self.conf["services"]["rawx"])
-        self.containers = []
+        self.containers = set()
 
     def tearDown(self):
         try:
@@ -83,11 +84,7 @@ class TestFilterChangelocation(BaseTestCase):
 
     def _create(self, container, path, policy=None):
         reqid = request_id()
-        self.containers = (
-            self.containers
-            if container in self.containers
-            else self.containers + [container]
-        )
+        self.containers.add(container)
         chunks, _, _ = self.api.object_create(
             self.account,
             container,
@@ -515,8 +512,6 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunks_bis, _ = self._get_misplaced_chunks(new_chunks)
         for c_id, _, _, _, _ in misplaced_chunks_bis:
             self.assertIn(c_id, chunk_ids)
-        # Unlock rawx services
-        self.conscience.unlock_score(self.locked_svc)
 
     def test_change_location_filter_tag_misplaced_ones(self):
         """
