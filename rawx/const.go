@@ -141,10 +141,10 @@ const (
 
 const (
 	// Default size (in bytes) of each buffer allocated for xattr operations
-	xattrBufferSizeDefault = 2 * 1024
+	xattrBufferSizeDefault = 16 * 1024
 
 	// Total amount (in bytes) of buffers allocated for xattr operations
-	xattrBufferTotalSizeDefault = 256 * 1024
+	xattrBufferTotalSizeDefault = 4 * 1024 * 1024
 
 	// Default size (in bytes) of each buffer allocated for the upload
 	uploadBufferSizeDefault = 2 * 1024 * 1024
