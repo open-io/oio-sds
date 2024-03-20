@@ -406,7 +406,8 @@ if is_running_test_suite "ec" ; then
 
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-kafka.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-4hosts.yml"
+		-f "${SRCDIR}/etc/bootstrap-option-4hosts.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
 if is_running_test_suite "multi-beanstalk" ; then

@@ -299,22 +299,20 @@ class TestFilterChangelocation(BaseTestCase):
         chunks_info = []
         for chunk in chunks:
             url = chunk["url"]
-            volume_id = url.split("/", 3)[2]
-            chunk_id = url.split("/", 3)[3]
+            _, volume_id, chunk_id = url.rsplit("/", 2)
             volume_path = self.rawx_volumes[volume_id]
             chunk_path = join(volume_path, chunk_id[:3], chunk_id)
             symlink_folder = join(
                 volume_path, Changelocation.NON_OPTIMAL_DIR, chunk_id[:3]
             )
-            files = (
-                [file for file in listdir(symlink_folder) if chunk_id in file]
-                if exists(symlink_folder)
-                else []
-            )
-            if len(files) != 0:
+            if exists(symlink_folder):
+                links = [f for f in listdir(symlink_folder) if chunk_id in f]
+            else:
+                links = None
+            if links:
                 chunk_symlink_path = join(
                     symlink_folder,
-                    files[0],
+                    links[0],
                 )
                 chunks_info.append(
                     (chunk_id, chunk_path, chunk_symlink_path, volume_path, volume_id)
@@ -342,6 +340,7 @@ class TestFilterChangelocation(BaseTestCase):
         object_name = "m_chunk-" + random_str(8)
         chunks = self._create(container, object_name, policy="ANY-E93")
         misplaced_chunks, _ = self._get_misplaced_chunks(chunks)
+        self.logger.debug("misplaced_chunks: %s", misplaced_chunks)
         misplaced_chunk_dir = Changelocation.NON_OPTIMAL_DIR
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)

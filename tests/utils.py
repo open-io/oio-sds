@@ -348,6 +348,7 @@ class CommonTestCase(testtools.TestCase):
         if cls._cls_kafka_consumer is not None:
             # Close consumer
             cls._cls_kafka_consumer.close()
+            cls._cls_kafka_consumer = None
 
     @property
     def conscience(self):
