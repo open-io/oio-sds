@@ -1,2 +1,3 @@
 config:
   proxy.cache.enabled: true
+  proxy.period.cs.downstream: 2

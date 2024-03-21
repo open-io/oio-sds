@@ -88,14 +88,12 @@ class TestBlobRebuilder(BaseTestCase):
         )
         try:
             # Set the score of the rawx to 0 and wait for the proxy to update
-            self.conscience.lock_score([rawx_definition])
-            self._reload_proxy()
+            self._lock_services("rawx", [rawx_definition], score=0)
             for _ in range(5):
                 time.sleep(1.0)
                 srv = self.wait_for_service("rawx", zero_scored_rawx_id, timeout=2.0)
                 if srv and srv["score"] == 0:
                     break
-                self.conscience.lock_score([rawx_definition])
             else:
                 raise Exception(
                     f"The rawx {zero_scored_rawx_id} still has a non-zero score: {srv}"

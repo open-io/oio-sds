@@ -255,7 +255,7 @@ class TestFilterChangelocation(BaseTestCase):
             _,
             _,
             symb_link_path,
-            chunk_env,
+            _,
             _,
             _,
         ) = self._init_test_objects()
@@ -325,16 +325,15 @@ class TestFilterChangelocation(BaseTestCase):
         """Test placement improver after"""
         if self.nb_rawx < 16:
             self.skipTest("need at least 16 rawx to run")
-        address, _ = self.rawx_srv_list[0]["addr"].split(":")
+        host, _ = self.rawx_srv_list[0]["addr"].split(":")
         # lock rawx services on selected host
         # The objective is to be sure that some chunks are
         # misplaced.
         for rawx in self.rawx_srv_list:
-            if address in rawx["addr"]:
-                rawx["score"] = 0
+            if rawx["addr"].split(":", 1)[0] == host:
                 rawx["type"] = "rawx"
                 self.locked_svc.append(rawx)
-        self._lock_services("rawx", self.locked_svc, wait=2.0)
+        self._lock_services("rawx", self.locked_svc, score=0, wait=3.0)
         # Create object
         container = "rawx_crawler_m_chunk_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
@@ -344,9 +343,9 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunk_dir = Changelocation.NON_OPTIMAL_DIR
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)
+        self._reload_proxy()
         # wait until the services are unlocked
-        time.sleep(3)
-        self.wait_for_score(("rawx",), timeout=5.0)
+        self.wait_for_score(("rawx",), timeout=10.0)
         # For each misplaced chunk apply the improver
         for (
             chunk_id,
@@ -368,22 +367,22 @@ class TestFilterChangelocation(BaseTestCase):
         )
         # Check if there is no more misplaced chunk
         misplaced_chunks, _ = self._get_misplaced_chunks(new_chunks)
+        self.logger.debug("misplaced_chunks: %s", misplaced_chunks)
         self.assertEqual(len(misplaced_chunks), 0)
 
     def test_change_location_filter_remove_irrelevant_symlink(self):
         """Test placement improver in case of symlinks on well located chunks"""
         if self.nb_rawx < 16:
             self.skipTest("need at least 16 rawx to run")
-        address, _ = self.rawx_srv_list[0]["addr"].split(":")
+        host, _ = self.rawx_srv_list[0]["addr"].split(":")
         # lock rawx services on selected host
         # The objective is to be sure that some chunks are
         # misplaced.
         for rawx in self.rawx_srv_list:
-            if address in rawx["addr"]:
-                rawx["score"] = 0
+            if rawx["addr"].split(":", 1)[0] == host:
                 rawx["type"] = "rawx"
                 self.locked_svc.append(rawx)
-        self._lock_services("rawx", self.locked_svc, wait=2.0)
+        self._lock_services("rawx", self.locked_svc, score=0, wait=3.0)
         # Create object
         container = "rawx_crawler_m_chunk_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
@@ -392,9 +391,9 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunk_dir = Changelocation.NON_OPTIMAL_DIR
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)
+        self._reload_proxy()
         # wait until the services are unlocked
-        time.sleep(3)
-        self.wait_for_score(("rawx",), timeout=5.0)
+        self.wait_for_score(("rawx",), timeout=10.0)
         # For each misplaced chunk apply the improver
         for (
             chunk_id,
@@ -462,16 +461,15 @@ class TestFilterChangelocation(BaseTestCase):
         """
         if self.nb_rawx < 16:
             self.skipTest("need at least 16 rawx to run")
-        address, _ = self.rawx_srv_list[0]["addr"].split(":")
+        host, _ = self.rawx_srv_list[0]["addr"].split(":")
         # lock rawx services on selected host
         # The objective is to be sure that some chunks are
         # misplaced.
         for rawx in self.rawx_srv_list:
-            if address in rawx["addr"]:
-                rawx["score"] = 0
+            if rawx["addr"].split(":", 1)[0] == host:
                 rawx["type"] = "rawx"
                 self.locked_svc.append(rawx)
-        self._lock_services("rawx", self.locked_svc, wait=2.0)
+        self._lock_services("rawx", self.locked_svc, score=0, wait=3.0)
         # Create object
         container = "rawx_crawler_m_chunk_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
@@ -519,16 +517,15 @@ class TestFilterChangelocation(BaseTestCase):
         """
         if self.nb_rawx < 16:
             self.skipTest("need at least 16 rawx to run")
-        address, _ = self.rawx_srv_list[0]["addr"].split(":")
+        host, _ = self.rawx_srv_list[0]["addr"].split(":")
         # lock rawx services on selected host
         # The objective is to be sure that some chunks are
         # misplaced.
         for rawx in self.rawx_srv_list:
-            if address in rawx["addr"]:
-                rawx["score"] = 0
+            if rawx["addr"].split(":", 1)[0] == host:
                 rawx["type"] = "rawx"
                 self.locked_svc.append(rawx)
-        self._lock_services("rawx", self.locked_svc, wait=2.0)
+        self._lock_services("rawx", self.locked_svc, score=0, wait=3.0)
         # Create object
         container = "rawx_crawler_m_chunk_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
@@ -539,8 +536,9 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunk_dir = Changelocation.NON_OPTIMAL_DIR
         # Unlock rawx services before running the improver
         self.conscience.unlock_score(self.locked_svc)
+        self._reload_proxy()
         # wait until the services are unlocked
-        time.sleep(5)
+        self.wait_for_score(("rawx",), timeout=10.0)
         # For each misplaced chunk apply the improver
         # except for the last one
         for (

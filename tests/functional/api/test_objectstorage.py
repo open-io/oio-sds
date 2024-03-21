@@ -145,7 +145,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
             self.wait_for_kafka_event(
                 fields={"user": name},
                 reqid=reqid,
-                types=[EventTypes.CONTAINER_STATE],
+                types=(EventTypes.CONTAINER_STATE,),
             )
         containers = self.api.container_list(self.account)
         if expected_containers is not None:
@@ -2546,7 +2546,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         expected_events = self.EXPECTED_CHUNKS_PER_POLICY[old_policy]
         for i in range(expected_events):
             evt = self.wait_for_kafka_event(
-                types=(EventTypes.CHUNK_DELETED),
+                types=(EventTypes.CHUNK_DELETED,),
                 timeout=5.0,
                 reqid=reqid,
             )
@@ -2558,7 +2558,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         expected_events = self.EXPECTED_CHUNKS_PER_POLICY[new_policy]
         for i in range(expected_events):
             evt = self.wait_for_kafka_event(
-                types=(EventTypes.CHUNK_NEW),
+                types=(EventTypes.CHUNK_NEW,),
                 timeout=5.0,
                 reqid=reqid,
             )
@@ -3076,7 +3076,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         reqid = request_id()
         self.api.object_drain(self.account, name, name, reqid=reqid)
         self.wait_for_kafka_event(
-            types=(EventTypes.CONTENT_DRAINED),
+            types=(EventTypes.CONTENT_DRAINED,),
             reqid=reqid,
             timeout=5.0,
         )
