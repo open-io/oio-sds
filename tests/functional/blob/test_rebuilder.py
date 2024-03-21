@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,23 +89,16 @@ class TestBlobRebuilder(BaseTestCase):
         try:
             # Set the score of the rawx to 0 and wait for the proxy to update
             self.conscience.lock_score([rawx_definition])
-            self._flush_proxy()
             self._reload_proxy()
             for _ in range(5):
                 time.sleep(1.0)
-                data = self.conscience.all_services("rawx")
-                for srv in data:
-                    service_id = srv["tags"].get("tag.service_id", srv["addr"])
-                    if zero_scored_rawx_id == service_id and srv["score"] == 0:
-                        break
-                else:
-                    # We didn't find the service or its score was non-zero
-                    continue
-                # We did find it, break the external loop
-                break
+                srv = self.wait_for_service("rawx", zero_scored_rawx_id, timeout=2.0)
+                if srv and srv["score"] == 0:
+                    break
+                self.conscience.lock_score([rawx_definition])
             else:
                 raise Exception(
-                    f"The rawx {zero_scored_rawx_id} still has a non-zero score"
+                    f"The rawx {zero_scored_rawx_id} still has a non-zero score: {srv}"
                 )
 
             # Rebuild the chunk

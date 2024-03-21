@@ -353,11 +353,12 @@ class TestConscienceFunctional(BaseTestCase):
     def test_deregister_services(self):
         self._flush_cs("echo")
         self._reload()
-        expected_services = list()
+        expected_services = []
         expected_services.append(self._srv("echo", ip="127.0.0.1"))
         expected_services.append(self._srv("echo", ip="127.0.0.2"))
         expected_services.append(self._srv("echo", ip="127.0.0.3"))
         self._register_srv(expected_services)
+        self.wait_for_service("echo", expected_services[0]["tags"]["tag.service_id"])
         services = self._list_srvs("echo")
         self.assertListEqual(
             sorted([srv["addr"] for srv in expected_services]),

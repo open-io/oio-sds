@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -309,6 +309,7 @@ class TestDirectoryAPI(BaseTestCase):
         new_rawx["score"] = 0
         self._register_srv(new_rawx)
         self._reload_proxy()
+        self.wait_for_service("rawx", new_rawx["tags"]["tag.service_id"])
 
         all_rawx = disp.assign_all_rawx(replicas=self.conf.get("directory_replicas", 1))
         all_rawx_keys = [x["addr"] for x in all_rawx]
@@ -325,11 +326,12 @@ class TestDirectoryAPI(BaseTestCase):
     def test_link_rdir_unachievable_min_dist(self):
         disp = RdirDispatcher({"namespace": self.ns}, pool_manager=self.http_pool)
 
-        # Register a service, with score locked to zero
+        # Register a service, with score locked to 90
         new_rawx = self._srv("rawx", {"tag.loc": _FAKE_LOCATION})
         new_rawx["score"] = 90
         self._register_srv(new_rawx)
         self._reload_proxy()
+        self.wait_for_service("rawx", new_rawx["tags"]["tag.service_id"])
 
         self.assertRaises(exc.OioException, disp.assign_all_rawx, min_dist=4)
         all_rawx, _ = disp.get_assignments("rawx")
@@ -340,11 +342,9 @@ class TestDirectoryAPI(BaseTestCase):
         )
 
     def _generate_services(self, types, score=50):
-        all_srvs = dict()
+        all_srvs = {}
         for type_, count in types.items():
-            srvs = [
-                self._srv(type_, {"tag.loc": "whatever%d" % i}) for i in range(count)
-            ]
+            srvs = [self._srv(type_, {"tag.loc": f"whatever{i}"}) for i in range(count)]
             for srv in srvs:
                 srv["score"] = score
                 srv["id"] = _make_id(self.ns, type_, srv["addr"])

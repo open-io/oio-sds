@@ -36,6 +36,7 @@ from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time, get_watchdog, eventlet
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_PRESERVED_TOPIC, KafkaConsumer
+from oio.common.storage_method import STORAGE_METHODS
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -608,7 +609,7 @@ class CommonTestCase(testtools.TestCase):
                 "stat.cpu": 1,
                 "tag.vol": "test",
                 "tag.up": True,
-                "tag.id": netloc,
+                "tag.service_id": netloc,
             },
         }
         if extra_tags:
@@ -699,9 +700,11 @@ class BaseTestCase(CommonTestCase):
                 return descr["unit"]
         raise ValueError("%s not found in the list of %s services" % (svc, type_))
 
-    @classmethod
-    def tearDownClass(cls):
-        super(BaseTestCase, cls).tearDownClass()
+    def storage_method_from_policy(self, storage_policy):
+        """Get a StorageMethod instance from a storage policy name."""
+        cluster_info = self.conscience.info()
+        _pool, datasec = cluster_info["storage_policy"][storage_policy].split(":")
+        return STORAGE_METHODS.load(cluster_info["data_security"].get(datasec, "plain"))
 
     def wait_for_score(self, types, timeout=12.0, score_threshold=35, score_type="put"):
         """Wait for services to have a score greater than the threshold.
@@ -751,6 +754,20 @@ class BaseTestCase(CommonTestCase):
         logging.info(
             "Service(s) fails to reach %d score (timeout %d)", score_threshold, timeout
         )
+
+    def wait_for_service(self, service_type, service_id, timeout=5.0):
+        """
+        Wait for a specific service to appear in conscience.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            all_svcs = self.conscience.all_services(service_type)
+            for svc in all_svcs:
+                id_ = svc["tags"].get("tag.service_id", svc["addr"])
+                if id_ == service_id:
+                    return svc
+            time.sleep(1.0)
+        return None
 
     def wait_for_event(self, tube, reqid=None, types=None, fields=None, timeout=30.0):
         """
