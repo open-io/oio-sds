@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ class KmsClient(ServiceClient):
         :returns: a dictionary with details about the secret, including the
                   base64-encoded secret
         """
-        resp_, body = self.kms_request(
+        resp, body = self.kms_request(
             account,
             bucket,
             "PUT",
@@ -48,7 +48,7 @@ class KmsClient(ServiceClient):
             params={"secret_id": secret_id, "secret_bytes": secret_bytes},
             **kwargs
         )
-        return body
+        return (resp, body)
 
     def delete_secret(self, account, bucket, secret_id="1", **kwargs):
         """Delete a secret associated to the bucket."""

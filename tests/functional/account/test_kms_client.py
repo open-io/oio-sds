@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -39,7 +39,8 @@ class TestKmsClient(BaseTestCase):
         super().tearDown()
 
     def test_create_secret(self):
-        secret_meta = self.kms.create_secret(self.account, self.bucket)
+        resp, secret_meta = self.kms.create_secret(self.account, self.bucket)
+        self.assertEqual(201, resp.status)
         self.assertIn("secret", secret_meta)
         self.assertEqual(secret_meta.get("account"), self.account)
         self.assertEqual(secret_meta.get("bucket"), self.bucket)
@@ -47,13 +48,17 @@ class TestKmsClient(BaseTestCase):
         self.assertGreaterEqual(len(secret_meta["secret"]), 16)
 
     def test_create_secret_already_exists(self):
-        secret_meta = self.kms.create_secret(self.account, self.bucket, secret_bytes=20)
-        secret_meta_2 = self.kms.create_secret(
+        resp, secret_meta = self.kms.create_secret(
+            self.account, self.bucket, secret_bytes=20
+        )
+        self.assertEqual(201, resp.status)
+        resp_2, secret_meta_2 = self.kms.create_secret(
             self.account,
             self.bucket,
             secret_id=secret_meta["secret_id"],
             secret_bytes=24,
         )
+        self.assertEqual(200, resp_2.status)
         # Secrets are the same despite the change in secret_bytes
         self.assertEqual(secret_meta, secret_meta_2)
 
@@ -76,7 +81,7 @@ class TestKmsClient(BaseTestCase):
         )
 
     def test_get_secret(self):
-        secret_meta = self.kms.create_secret(self.account, self.bucket)
+        _, secret_meta = self.kms.create_secret(self.account, self.bucket)
         secret_meta_2 = self.kms.get_secret(
             self.account,
             self.bucket,
@@ -85,7 +90,7 @@ class TestKmsClient(BaseTestCase):
         self.assertEqual(secret_meta, secret_meta_2)
 
     def test_get_secret_not_found(self):
-        secret_meta = self.kms.create_secret(self.account, self.bucket)
+        _, secret_meta = self.kms.create_secret(self.account, self.bucket)
         self.assertRaises(
             NotFound,
             self.kms.get_secret,
