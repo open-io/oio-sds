@@ -249,7 +249,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                 last_scan_time = ratelimit(last_scan_time, self.max_chunks_per_second)
                 if self.use_marker:
                     nb_path_processed += 1
-                    if nb_path_processed >= self.max_chunks_per_second:
+                    if nb_path_processed >= self.scanned_between_markers:
                         # Update marker and reset counter
                         nb_path_processed = 0
                         self.current_marker = "|".join([container_id, chunk_id])

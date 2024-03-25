@@ -232,7 +232,7 @@ class TestRdirCrawler(BaseTestCase):
         chunk_path, volume_path = self._chunk_info(chunk)
         self.conf["use_marker"] = True
         self.conf["conf_file"] = "/rdir-crawler.conf"
-        self.conf["chunks_per_second"] = 1
+        self.conf["scanned_between_markers"] = 1
         marker_path = join(
             volume_path,
             RdirWorker.MARKERS_DIR,
