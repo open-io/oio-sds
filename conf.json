@@ -977,7 +977,18 @@
 			{ "type": "uint", "name": "server_request_max_size",
 				"key": "server.request.max_size",
 				"descr": "Maximum size of an ASN.1 request to a 'meta' service. A service will refuse to serve a request bigger than this. Be careful to have enough memory on the system.",
-				"def": "1024Mi", "min": "1Mi", "max": "4194303ki" }
+				"def": "1024Mi", "min": "1Mi", "max": "4194303ki" },
+			{ "type": "string", "name": "server_statsd_host",
+				"key": "server.statsd.host",
+				"descr": "Default statsd host address.",
+				"def": "",
+				"limit": 256
+			   },
+			{ "type": "uint", "name": "server_statsd_port",
+				"key": "server.statsd.port",
+				"descr": "Default statsd port.",
+				"def": 8125, "min": 0, "max": 100000
+			}
 		]
 	},
 	"proxy": {

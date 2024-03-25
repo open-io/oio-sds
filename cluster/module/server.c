@@ -2588,6 +2588,9 @@ _cs_configure(int argc, char **argv)
 	if (statsd_host) {
 		network_server_configure_statsd(
 				server, "openio.conscience", statsd_host, statsd_port);
+	} else if (oio_str_is_set(server_statsd_host)) {
+		network_server_configure_statsd(
+				server, "openio.conscience", server_statsd_host, server_statsd_port);
 	}
 
 	/* Start inter-conscience communication */

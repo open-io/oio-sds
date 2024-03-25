@@ -1429,6 +1429,23 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_REQUEST_MAX_SIZE*
  * range: 1048576 -> 4294966272
 
+### server.statsd.host
+
+> Default statsd host address.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_SERVER_STATSD_HOST*
+
+### server.statsd.port
+
+> Default statsd port.
+
+ * default: **8125**
+ * type: guint
+ * cmake directive: *OIO_SERVER_STATSD_PORT*
+ * range: 0 -> 100000
+
 ### server.task.malloc_trim.period
 
 > In jiffies, how often the periodic task that calls malloc_trim() is fired.
