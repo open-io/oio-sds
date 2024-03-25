@@ -21,6 +21,7 @@ from random import randint
 from oio.blob.operator import ChunkOperator
 from oio.blob.utils import check_volume
 from oio.common import exceptions as exc
+from oio.common.constants import REQID_HEADER
 from oio.common.daemon import Daemon
 from oio.common.green import get_watchdog, time
 from oio.common.easy_value import boolean_value, int_value
@@ -28,6 +29,8 @@ from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger, logging
 from oio.common.utils import request_id, ratelimit
 from oio.conscience.client import ConscienceClient
+from oio.container.client import ContainerClient
+from oio.content.content import ChunksHelper
 from oio.crawler.common.base import RawxService, RawxUpMixin
 from oio.crawler.common.crawler import CrawlerWorkerMarkerMixin
 from oio.rdir.client import RdirClient
@@ -89,6 +92,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         self.errors = 0
         self.service_unavailable = 0
         self.orphans = 0
+        self.deleted_orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
         self.last_report_time = 0
@@ -104,6 +108,9 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             self.conf, logger=self.logger, pool_manager=pool_manager
         )
         self.chunk_operator = ChunkOperator(
+            self.conf, logger=self.logger, watchdog=watchdog
+        )
+        self.container_client = ContainerClient(
             self.conf, logger=self.logger, watchdog=watchdog
         )
         self.current_marker = None
@@ -126,8 +133,8 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         self.logger.info(
             "%s volume_id=%s pass=%d repaired=%d errors=%d "
-            "service_unavailable=%d "
-            "unrecoverable=%d orphans=%d chunks=%d "
+            "no_entries_on_fetch=%d service_unavailable=%d "
+            "unrecoverable=%d orphans=%d deleted_orphans=%d chunks=%d "
             "rate_since_last_report=%.2f/s",
             tag,
             self.volume_id,
@@ -137,6 +144,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             self.service_unavailable,
             self.unrecoverable_content,
             self.orphans,
+            self.deleted_orphans,
             self.scanned_since_last_report,
             self.scanned_since_last_report / since_last_rprt,
         )
@@ -165,6 +173,61 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         return chunk_path
 
+    def _check_orphan(self, container_id, chunk_id, value, reqid):
+        """check and deindex chunk in rdir if not referenced in meta2 db
+
+        :param container_id: cid
+        :type container_id: str
+        :param chunk_id: chunk id to reference
+        :type chunk_id: str
+        :param value: entries registered in rdir
+        :type value: dict
+        :param reqid: request id
+        :type reqid: str
+        """
+        content_id = value["content_id"]
+        version = value["version"]
+        try:
+            _, chunks = self.container_client.content_locate(
+                content=content_id,
+                cid=container_id,
+                version=version,
+                reqid=reqid,
+                force_master=True,
+            )
+            chunkshelper = ChunksHelper(chunks).filter(id=chunk_id, host=self.volume_id)
+            if len(chunkshelper.chunks) > 0:
+                return
+        except exc.NotFound as err:
+            self.logger.debug(
+                "Chunk %s of object %s in container id %s not found: %s",
+                chunk_id,
+                content_id,
+                container_id,
+                err,
+            )
+        # The chunk does not exist on the rawx
+        # and we just confirmed that it is not referenced in
+        # any meta2 database, we can deindex the chunk reference
+        # into rdir.
+        headers = {REQID_HEADER: reqid}
+        self.index_client.chunk_delete(
+            self.volume_id,
+            container_id,
+            content_id,
+            chunk_id,
+            headers=headers,
+        )
+        self.deleted_orphans += 1
+        self.logger.debug(
+            "Chunk %s of object %s in container id %s has been "
+            "deindexed from rdir repertory, volume %s",
+            chunk_id,
+            content_id,
+            container_id,
+            self.volume_id,
+        )
+
     def _rebuild_chunk(self, container_id, chunk_id, value, reqid):
         try:
             self.chunk_operator.rebuild(
@@ -185,11 +248,10 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                     error = f"{err}, action required"
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
-                # Note for later: if it an orphan chunk, we should tag it and
-                # increment a counter for stats. Another tool could be
-                # responsible for those tagged chunks.
-                # FIXME(FVE): deindex the chunk
                 self.orphans += 1
+                # Deindex the chunk if not referenced in any meta2 db
+                self._check_orphan(container_id, chunk_id, value, reqid)
+
             elif isinstance(err, exc.ContentDrained):
                 self.orphans += 1
                 error = f"{err}, chunk considered as orphan"
@@ -219,6 +281,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         # reset crawler stats
         self.errors = 0
         self.orphans = 0
+        self.deleted_orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
         self.service_unavailable = 0

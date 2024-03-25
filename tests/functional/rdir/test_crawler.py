@@ -21,7 +21,7 @@ from oio.container.sharding import ContainerSharding
 from oio.crawler.rdir.crawler import RdirWorker
 from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
-from tests.utils import BaseTestCase, random_str
+from tests.utils import BaseTestCase, random_id, random_str
 
 
 class TestRdirCrawler(BaseTestCase):
@@ -402,3 +402,68 @@ class TestRdirCrawler(BaseTestCase):
                         if chunk_id_a in chunk["url"]
                     ][0]
                     self.assertTrue(exists(new_chunk_path))
+
+    def _test_orphan_entry(self, object_name, cid, chunk_id, content_id, content_ver):
+        max_mtime = 16
+        mtime = random.randrange(0, max_mtime + 1)
+        rawx_id = random.choice(list(self.rawx_volumes.keys()))
+        # Register a false chunk to rdir repertory
+        # This chunk will be considered as orphan
+        # as it is not registered in meta2 db
+        self.rdir.chunk_push(
+            rawx_id,
+            cid,
+            content_id,
+            chunk_id,
+            object_name,
+            content_ver,
+            mtime=mtime,
+        )
+        rdir_crawler = RdirWorker(
+            self.conf,
+            self.rawx_volumes[rawx_id],
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+        entries = self.rdir_client.chunk_fetch(rawx_id, container_id=cid)
+        chunk_ids = [entry[1] for entry in entries]
+        self.assertIn(chunk_id, chunk_ids)
+        # Crawl volume to delete the orphan entry into rdir repertory
+        rdir_crawler.crawl_volume()
+        # Test that at least one orphan chunk entry has been removed
+        self.assertGreaterEqual(rdir_crawler.deleted_orphans, 1)
+        entries = self.rdir_client.chunk_fetch(rawx_id, container_id=cid)
+        chunk_ids = [entry[1] for entry in entries]
+        self.assertNotIn(chunk_id, chunk_ids)
+
+    def test_rdir_orphan_entry_deindexed_object_exists(self):
+        """Test if orphan chunk entry registered to existing object is deindexed"""
+        # Object creation
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        _ = self._create(container, object_name)
+        cid = cid_from_name(self.account, container)
+        # Retrieve version and content id in order
+        # to register a false entry (orphan chunk) into rdir repertory
+        obj_meta, _ = self.api.container.content_locate(
+            path=object_name,
+            cid=cid,
+            force_master=True,
+        )
+        chunk_id = random_id(63)
+        content_id = obj_meta["id"]
+        content_ver = obj_meta["version"]
+        self._test_orphan_entry(object_name, cid, chunk_id, content_id, content_ver)
+
+    def test_rdir_orphan_entry_deindexed_object_does_not_exists(self):
+        """
+        Test if an orphan chunk belonging to an object which does
+        not exits is deindexed
+        """
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        cid = cid_from_name(self.account, container)
+        chunk_id = random_id(63)
+        content_id = random_id(32)
+        content_ver = 1
+        self._test_orphan_entry(object_name, cid, chunk_id, content_id, content_ver)
