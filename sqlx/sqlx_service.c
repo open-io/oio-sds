@@ -802,6 +802,12 @@ sqlx_service_configure(int argc, char **argv)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
 	_patch_and_apply_configuration();
+	/* Load statsd conf and init statsd client*/
+	if (oio_str_is_set(server_statsd_host)) {
+		network_server_configure_statsd(
+				SRV.server, "openio.sqlx", server_statsd_host, server_statsd_port);
+	}
+
 	return rc;
 }
 

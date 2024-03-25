@@ -108,8 +108,6 @@ static GHashTable *full_srv_list_cache = NULL;
 static GThread *srv_cache_thread = NULL;
 static gint64 srv_cache_interval = 250 * G_TIME_SPAN_MILLISECOND;
 
-static gchar *statsd_host = NULL;
-static gint statsd_port = 8125;
 
 /* ------------------------------------------------------------------------- */
 
@@ -2192,10 +2190,6 @@ _cs_configure_with_file(const char *path UNUSED)
 	oio_server_namespace = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_namespace", NULL);
 	g_strlcpy(nsinfo->name, oio_server_namespace, sizeof(nsinfo->name));
-	statsd_host = g_key_file_get_value(gkf,
-			"Plugin.conscience", "statsd.host", NULL);
-	statsd_port = g_key_file_get_integer(gkf,
-			"Plugin.conscience", "statsd.port", NULL);
 
 	g_key_file_free(gkf);
 	gkf = NULL;
@@ -2585,9 +2579,9 @@ _cs_configure(int argc, char **argv)
 	_patch_and_apply_configuration();
 
 	/* Start statsd client */
-	if (statsd_host) {
+	if (oio_str_is_set(server_statsd_host)) {
 		network_server_configure_statsd(
-				server, "openio.conscience", statsd_host, statsd_port);
+				server, "openio.conscience", server_statsd_host, server_statsd_port);
 	}
 
 	/* Start inter-conscience communication */
@@ -2729,7 +2723,6 @@ _cs_specific_fini(void)
 	oio_str_clean(&path_srvcfg);
 	oio_str_clean(&path_stgpol);
 	oio_str_clean((gchar **)&oio_server_namespace);
-	oio_str_clean(&statsd_host);
 }
 
 static struct grid_main_option_s *
