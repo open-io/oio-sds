@@ -1681,14 +1681,7 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
-        self.logger.info(
-            "Delete the secret %s/%s/%s: nothing to do, secrets that are no longer "
-            "used will be cleaned up later",
-            account_id,
-            bname,
-            secret_id,
-        )
-        # self.backend.delete_bucket_secret(account_id, bname, secret_id=secret_id)
+        self.backend.delete_bucket_secret(account_id, bname, secret_id=secret_id)
         return Response(status=204)
 
     @force_master
