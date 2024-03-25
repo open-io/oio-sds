@@ -90,6 +90,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         self.passes = 0
         self.errors = 0
+        self.no_entries_on_fetch = 0
         self.service_unavailable = 0
         self.orphans = 0
         self.repaired = 0
@@ -132,7 +133,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         self.logger.info(
             "%s volume_id=%s pass=%d repaired=%d errors=%d "
-            "service_unavailable=%d "
+            "no_entries_on_fetch=%d service_unavailable=%d "
             "unrecoverable=%d orphans=%d chunks=%d "
             "rate_since_last_report=%.2f/s",
             tag,
@@ -140,6 +141,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             self.passes,
             self.repaired,
             self.errors,
+            self.no_entries_on_fetch,
             self.service_unavailable,
             self.unrecoverable_content,
             self.orphans,
@@ -277,6 +279,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         self.report("starting", force=True)
         # reset crawler stats
         self.errors = 0
+        self.no_entries_on_fetch = 0
         self.orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
@@ -288,8 +291,10 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             if self.use_marker:
                 marker = self.current_marker
             entries = self.index_client.chunk_fetch(self.volume_id, start_after=marker)
-
+            any_entry = False
             for container_id, chunk_id, value in entries:
+                if not any_entry:
+                    any_entry = True
                 if self._stop_requested.is_set():
                     self.logger.info("Stop asked")
                     break
@@ -320,6 +325,9 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                                 f"Failed to write progress marker: {err}"
                             ) from err
                 self.report("running")
+            if not any_entry:
+                self.logger.debug("No entries found for volume: %s", self.volume_path)
+                self.no_entries_on_fetch += 1
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:
             self.logger.debug("Service busy or not available: %s", err)
             self.service_unavailable += 1

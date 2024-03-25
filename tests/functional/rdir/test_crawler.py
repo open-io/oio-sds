@@ -341,7 +341,13 @@ class TestRdirCrawler(BaseTestCase):
         )
         rdir_crawler.crawl_volume()
         # If there are no error
-        if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+        if not any(
+            (
+                rdir_crawler.service_unavailable,
+                rdir_crawler.errors,
+                rdir_crawler.no_entries_on_fetch,
+            )
+        ):
             # Check that one chunk is repaired
             self.assertGreaterEqual(rdir_crawler.repaired, 1)
             _, new_chunks_a = self.api.container.content_locate(
@@ -376,7 +382,13 @@ class TestRdirCrawler(BaseTestCase):
             # The marker has been reset at the end of the last crawl
             rdir_crawler.crawl_volume()
             # If there are no error
-            if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+            if not any(
+                (
+                    rdir_crawler.service_unavailable,
+                    rdir_crawler.errors,
+                    rdir_crawler.no_entries_on_fetch,
+                )
+            ):
                 # Check that one chunk is repaired
                 self.assertGreaterEqual(rdir_crawler.repaired, 1)
                 # we should be able to find the chunk not selected for rebuild
