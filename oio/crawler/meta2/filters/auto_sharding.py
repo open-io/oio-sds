@@ -38,6 +38,7 @@ class AutomaticSharding(Filter):
     NAME = "AutomaticSharding"
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
     DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
+    DEFAULT_HUGE_DB_SIZE = 8 * DEFAULT_SHARDING_DB_SIZE
     DEFAULT_STEP_TIMEOUT = 960
 
     def init(self):
@@ -60,6 +61,9 @@ class AutomaticSharding(Filter):
                 "The database size for sharding "
                 "must be larger than the size for shrinking"
             )
+        self.huge_db_size = int_value(
+            self.conf.get("huge_db_size", None), self.DEFAULT_HUGE_DB_SIZE
+        )
 
         kwargs = {}
         preclean_new_shards = self.sharding_strategy_params.pop(
@@ -90,6 +94,7 @@ class AutomaticSharding(Filter):
             pool_manager=self.api.container.pool_manager,
             **kwargs,
         )
+        self.statsd_client = self.app_env["statsd_client"]
 
         self.skipped = 0
         self.errors = 0
@@ -116,15 +121,22 @@ class AutomaticSharding(Filter):
                 # If there was a cleaning, do nothing else
                 # and let the "auto_vacuum" pass
                 self.skipped += 1
+                self.statsd_client.incr(".".join(("meta2", "skipped", "count")), 1)
                 return self.app(env, cb)
 
             if self.container_sharding.sharding_in_progress({"system": meta2db.system}):
                 self.logger.info("Sharding in progress for container %s", meta2db.cid)
                 self.sharding_in_progress += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "sharding_in_progress", "count")), 1
+                )
                 return self.app(env, cb)
 
             modified = False
             meta2db_size = meta2db.file_status["st_size"]
+            if meta2db_size > self.huge_db_size:
+                self.statsd_client.incr(".".join(("meta2", "huge", "count")), 1)
+
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
                 modified = self._shard(meta2db, reqid=reqid)
             elif self.shrinking_db_size > 0:
@@ -143,10 +155,18 @@ class AutomaticSharding(Filter):
                         modified = self._shrink(meta2db, reqid=reqid)
                     else:
                         self.skipped += 1
+                        self.statsd_client.incr(
+                            ".".join(("meta2", "shrink_skipped", "count")), 1
+                        )
+
                 else:  # Not a shard
                     self.skipped += 1
+                    self.statsd_client.incr(
+                        ".".join(("meta2", "shrink_skipped", "count")), 1
+                    )
             else:  # Neither sharding nor shrinking is enabled
                 self.skipped += 1
+                self.statsd_client.incr(".".join(("meta2", "skipped", "count")), 1)
 
             if modified:
                 # The meta2 database has changed, delete the cache
@@ -167,6 +187,8 @@ class AutomaticSharding(Filter):
                 "Failed to process %s for the container %s", self.NAME, meta2db.cid
             )
             self.errors += 1
+            self.statsd_client.incr(".".join(("meta2", "errors", "count")), 1)
+
             resp = Meta2DBError(
                 meta2db,
                 body=(
@@ -194,6 +216,10 @@ class AutomaticSharding(Filter):
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "possible_orphan_shards", "count")), 1
+                )
+
                 return False
             if sharding_state == EXISTING_SHARD_STATE_LOCKED:
                 self.logger.warning(
@@ -201,6 +227,10 @@ class AutomaticSharding(Filter):
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "possible_orphan_shards", "count")), 1
+                )
+
                 return False
             if sharding_state != NEW_SHARD_STATE_CLEANING_UP:
                 return False
@@ -214,6 +244,9 @@ class AutomaticSharding(Filter):
                 reqid=reqid,
             )
             self.cleaning_successes += 1
+            self.statsd_client.incr(
+                ".".join(("meta2", "cleaning_successes", "count")), 1
+            )
 
             # The meta2 database has changed, delete the cache
             meta2db.file_status = None
@@ -224,6 +257,8 @@ class AutomaticSharding(Filter):
         except Exception as exc:
             self.logger.exception("Failed to clean container %s: %s", meta2db.cid, exc)
             self.cleaning_errors += 1
+            self.statsd_client.incr(".".join(("meta2", "cleaning_errors", "count")), 1)
+
         return True
 
     def _shard(self, meta2db, reqid=None):
@@ -250,6 +285,9 @@ class AutomaticSharding(Filter):
             )
             if modified:
                 self.sharding_successes += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "sharding_successes", "count")), 1
+                )
             else:
                 self.logger.warning(
                     "No change after sharding container %s (reqid=%s)",
@@ -257,6 +295,10 @@ class AutomaticSharding(Filter):
                     reqid,
                 )
                 self.sharding_no_change += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "sharding_no_change", "count")), 1
+                )
+
             return modified
         except FileNotFoundError:
             # The exception is handled in the "process" method
@@ -266,6 +308,7 @@ class AutomaticSharding(Filter):
                 "Failed to shard container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
             )
             self.sharding_errors += 1
+            self.statsd_client.incr(".".join(("meta2", "sharding_errors", "count")), 1)
             raise
 
     def _shrink(self, meta2db, reqid=None):
@@ -295,6 +338,9 @@ class AutomaticSharding(Filter):
             )
             if modified:
                 self.shrinking_successes += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "shrinking_successes", "count")), 1
+                )
             else:
                 self.logger.warning(
                     "No change after merging container %s (reqid=%s)",
@@ -302,6 +348,10 @@ class AutomaticSharding(Filter):
                     reqid,
                 )
                 self.shrinking_no_change += 1
+                self.statsd_client.incr(
+                    ".".join(("meta2", "shrinking_no_change", "count")), 1
+                )
+
             return modified
         except FileNotFoundError:
             # The exception is handled in the "process" method
@@ -311,6 +361,8 @@ class AutomaticSharding(Filter):
                 "Failed to merge container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
             )
             self.shrinking_errors += 1
+            self.statsd_client.incr(".".join(("meta2", "shrinking_errors", "count")), 1)
+
             raise
 
     def _get_filter_stats(self):
