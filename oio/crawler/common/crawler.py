@@ -24,6 +24,7 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import ConfigurationException
 from oio.common.green import get_watchdog, time, ContextPool
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
@@ -109,7 +110,59 @@ class CrawlerWorkerMarkerMixin(object):
             marker_file.write(self.current_marker)
 
 
-class CrawlerWorker(CrawlerWorkerMarkerMixin):
+class CrawlerStatsdMixin:
+    """Crawler worker mixin to add statsd-related functions"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        statsd_conf = {k: v for k, v in self.conf.items() if k.startswith("statsd_")}
+        statsd_prefix = statsd_conf.get("statsd_prefix", "")
+        if not statsd_prefix:
+            if "syslog_prefix" in self.conf:
+                statsd_prefix = f"openio.crawler.{self.conf['syslog_prefix']}"
+            else:
+                # The -crawler suffix may seem redundant, but is there to mimic
+                # what we usually set for syslog_prefix.
+                statsd_prefix = f"openio.crawler.{self.SERVICE_TYPE}_crawler"
+        statsd_prefix += f".{self.volume_id}"
+        statsd_conf["statsd_prefix"] = statsd_prefix.replace("-", "_")
+        self.statsd_client = get_statsd(conf=statsd_conf)
+
+    def report_stats(self, stats, filter_name="main"):
+        exclude = (
+            "elapsed",  # not relevant
+            "pass",  # already sent
+            "scan_rate",  # computed by statsd
+            "successes",  # = total_scanned - errors
+        )
+        # statsd pipelines allow to send several metrics in the same UDP packet
+        with self.statsd_client.pipeline() as spipe:
+            for key, val in stats.items():
+                if key in exclude or not isinstance(val, (int, float)):
+                    continue
+                skey = f"{filter_name}.{key}.count"
+                spipe.set(skey, val)
+
+    def report_duration(self, duration):
+        with self.statsd_client.pipeline() as spipe:
+            spipe.set("main.pass.count", self.passes)
+            spipe.timing("main.pass.timing", duration * 1000)
+        if duration > self.scans_interval:
+            self.logger.warning(
+                "crawling_duration=%d for volume_id=%s is higher than interval=%d",
+                duration,
+                self.volume_id,
+                self.scans_interval,
+            )
+        else:
+            self.logger.info(
+                "crawling_duration=%d for volume_id=%s",
+                duration,
+                self.volume_id,
+            )
+
+
+class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     """
     Crawler Worker responsible for a single volume.
     """
@@ -170,6 +223,8 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
         self.last_report_time = 0
         self.scanned_since_last_report = 0
 
+        super().__init__()
+
         # This dict is passed to all filters called in the pipeline
         # of this worker
         self.app_env = {}
@@ -177,6 +232,7 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
             self.namespace, logger=self.logger
         )
         self.app_env["logger"] = self.logger
+        self.app_env["statsd_client"] = self.statsd_client
         self.app_env["volume_path"] = self.volume
         self.app_env["volume_id"] = self.volume_id
         self.app_env["watchdog"] = watchdog
@@ -222,6 +278,19 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
         since_last_rprt = (now - self.last_report_time) or 0.00001
 
         logger = self.logger.debug if tag in TAGS_TO_DEBUG else self.logger.info
+        stats_dict = {
+            "tag": tag,
+            "volume_id": self.volume_id,
+            "elapsed": elapsed,
+            "pass": self.passes,
+            "ignored_paths": self.ignored_paths,
+            "invalid_paths": self.invalid_paths,
+            "errors": self.errors,
+            "total_scanned": total,
+            "scan_rate": self.scanned_since_last_report / since_last_rprt,
+            "scanned_since_last_report": self.scanned_since_last_report,
+            "successes": self.successes,
+        }
         logger(
             "%(tag)s "
             "volume_id=%(volume_id)s "
@@ -232,18 +301,9 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
             "errors=%(errors)d "
             "total_scanned=%(total_scanned)d "
             "rate=%(scan_rate).2f/s",
-            {
-                "tag": tag,
-                "volume_id": self.volume_id,
-                "elapsed": elapsed,
-                "pass": self.passes,
-                "ignored_paths": self.ignored_paths,
-                "invalid_paths": self.invalid_paths,
-                "errors": self.errors,
-                "total_scanned": total,
-                "scan_rate": self.scanned_since_last_report / since_last_rprt,
-            },
+            stats_dict,
         )
+        self.report_stats(stats_dict)
 
         for filter_name, stats in self.pipeline.get_stats().items():
             logger(
@@ -252,11 +312,10 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
                     "tag": tag,
                     "volume_id": self.volume_id,
                     "filter": filter_name,
-                    "stats": " ".join(
-                        ("%s=%s" % (key, str(value)) for key, value in stats.items())
-                    ),
+                    "stats": " ".join(f"{key}={value}" for key, value in stats.items()),
                 },
             )
+            self.report_stats(stats, filter_name)
 
         self.last_report_time = now
         self.scanned_since_last_report = 0
@@ -283,7 +342,6 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
         )
 
         self.report("starting", force=True)
-        self.start_time = time.time()
         last_scan_time = 0
         nb_path_processed = 0  # only used for markers if feature is used
         for path in paths:
@@ -343,36 +401,27 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
                     return
                 time.sleep(1)
         while self.running:
-            start_crawl = time.time()
+            self.start_time = time.time()
             try:
                 self.crawl_volume()
             except OSError as err:
                 self.logger.error("Failed to crawl volume: %s", err)
             except Exception:
                 self.logger.exception("Failed to crawl volume")
-            crawling_duration = time.time() - start_crawl
-            self.logger.debug(
-                "start_crawl %d crawling_duration %d",
-                start_crawl,
-                crawling_duration,
-            )
+            crawling_duration = time.time() - self.start_time
+            self.report_duration(crawling_duration)
             if self.one_shot:
                 # For one shot crawler, we exit after the first execution
                 return
-            waiting_time_to_restart = self.scans_interval - crawling_duration
-            if waiting_time_to_restart > 0:
-                for _ in range(int(waiting_time_to_restart)):
+            waiting_time_to_start = self.scans_interval - crawling_duration
+            if waiting_time_to_start > 0:
+                self.logger.debug(
+                    "Wait %d seconds before next pass", waiting_time_to_start
+                )
+                for _ in range(int(waiting_time_to_start)):
                     if not self.running:
                         return
                     time.sleep(1)
-            else:
-                self.logger.warning(
-                    "crawling_duration=%d for volume_id=%s"
-                    " is higher than interval=%d",
-                    crawling_duration,
-                    self.volume_id,
-                    self.scans_interval,
-                )
 
     def stop(self):
         """

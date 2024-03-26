@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,7 @@ from oio.common.constants import (
     EXISTING_SHARD_STATE_LOCKED,
 )
 from oio.common.utils import cid_from_name
+from oio.common.statsd import get_statsd
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.auto_sharding import AutomaticSharding
 from oio.crawler.meta2.meta2db import Meta2DB
@@ -69,6 +70,9 @@ class TestAutoSharding(BaseTestCase):
         self.conf["sharding_partition"] = [50, 50]
         self.conf["sharding_threshold"] = 1
         self.conf["shrinking_db_size"] = 262144  # 256KB
+        self.app_env["statsd_client"] = get_statsd(
+            conf={"statsd_prefix": "test-auto-sharding"}
+        )
         self.auto_sharding = AutomaticSharding(App(self.app_env), self.conf)
         created = self.storage.container_create(self.account, self.cname)
         self.assertTrue(created)

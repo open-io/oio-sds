@@ -343,6 +343,8 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
@@ -395,6 +397,8 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
@@ -431,6 +435,8 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 working_dir = non_optimal_placement
 
@@ -478,6 +484,8 @@ conscience_cache = 30
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 """
 
@@ -497,6 +505,8 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 excluded_dirs = non_optimal_placement, orphans
 
@@ -532,6 +542,8 @@ nice_value = 19
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
@@ -565,6 +577,8 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 working_dir = orphans
 
@@ -1302,7 +1316,7 @@ template_systemd_service_cleanup_orphaned_crawler = """
 Description=[OpenIO] Service cleanup orphaned crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},crawler,${SRVTYPE}
+OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
@@ -2117,12 +2131,14 @@ def generate(options):
         PYTHON_VERSION=PYTHON_VERSION,
         REGION=options["config"].get("ns.region"),
         REPLICATION="async_replication" if options.get("replication_events") else "",
+        STATSD_HOST=options.get("statsd", {}).get("host", ""),
+        STATSD_PORT=options.get("statsd", {}).get("port", "8125"),
+        SYSTEMCTL_TIMEOUT_STOP_SEC=systemctl_timeout_stop_sec,
+        TLS_CERT_FILE=TLS_CERT_FILE,
+        TLS_KEY_FILE=TLS_KEY_FILE,
         WANT_SERVICE_ID=want_service_id,
         WEBHOOK=WEBHOOK,
         WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
-        TLS_CERT_FILE=TLS_CERT_FILE,
-        TLS_KEY_FILE=TLS_KEY_FILE,
-        SYSTEMCTL_TIMEOUT_STOP_SEC=systemctl_timeout_stop_sec,
     )
 
     def merge_env(add):

@@ -42,14 +42,20 @@ class NullStatsClient(StatsClientBase):
     def pipeline(self):
         return self
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, typ, value, tb):
+        pass
+
 
 def get_statsd(conf={}):
     if conf is None:
         return NullStatsClient()
 
-    host = conf.get("statsd_host", "127.0.0.1")
+    host = conf.get("statsd_host", "").strip()
 
-    if host is None:
+    if not host:
         return NullStatsClient()
 
     port = conf.get("statsd_port", 8125)

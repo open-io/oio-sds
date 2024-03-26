@@ -222,7 +222,7 @@ class TestRdirCrawler(BaseTestCase):
             container_sharding.clean_container(self.account, container)
 
     def test_rdir_crawler_check_marker_creation(self):
-        """Check if marker are created as expected"""
+        """Check if a marker is created as expected"""
         container = "rdir_crawler_m_chunks_" + random_str(6)
         cid = cid_from_name(self.account, container)
         object_name = "m_chunk-" + random_str(8)
@@ -260,6 +260,7 @@ class TestRdirCrawler(BaseTestCase):
 
         def write_marker(worker):
             """Save current marker into marker file"""
+            os.makedirs(worker.marker_dir, exist_ok=True)
             with open(worker.marker_path, "a") as marker_file:
                 marker_file.write(worker.current_marker + "\n")
 
@@ -267,10 +268,10 @@ class TestRdirCrawler(BaseTestCase):
         rdir_crawler.crawl_volume()
         # If there are no error
         if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
-            # Due to chunks_per_second equals to 1,
-            # marker will be created after each chunk checked.
+            # Due to scanned_between_markers being equal to 1,
+            # a marker will be written after each chunk checked.
             # We expect here to find the marker corresponding to the
-            # chunk selected above
+            # chunk selected above.
             with open(rdir_crawler.marker_path, "r") as marker_file:
                 markers = marker_file.read().splitlines()
                 self.assertIn("|".join([cid, chunk_path.rsplit("/", 1)[-1]]), markers)
@@ -345,7 +346,7 @@ class TestRdirCrawler(BaseTestCase):
             (
                 rdir_crawler.service_unavailable,
                 rdir_crawler.errors,
-                not rdir_crawler.nb_entries,
+                not rdir_crawler.total_scanned,
             )
         ):
             # Check that one chunk is repaired
@@ -386,7 +387,7 @@ class TestRdirCrawler(BaseTestCase):
                 (
                     rdir_crawler.service_unavailable,
                     rdir_crawler.errors,
-                    not rdir_crawler.nb_entries,
+                    not rdir_crawler.total_scanned,
                 )
             ):
                 # Check that one chunk is repaired

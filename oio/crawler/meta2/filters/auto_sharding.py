@@ -38,6 +38,7 @@ class AutomaticSharding(Filter):
     NAME = "AutomaticSharding"
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
     DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
+    DEFAULT_HUGE_DB_SIZE = 8 * DEFAULT_SHARDING_DB_SIZE
     DEFAULT_STEP_TIMEOUT = 960
 
     def init(self):
@@ -60,6 +61,9 @@ class AutomaticSharding(Filter):
                 "The database size for sharding "
                 "must be larger than the size for shrinking"
             )
+        self.huge_db_size = int_value(
+            self.conf.get("huge_db_size", None), self.DEFAULT_HUGE_DB_SIZE
+        )
 
         kwargs = {}
         preclean_new_shards = self.sharding_strategy_params.pop(
@@ -93,9 +97,10 @@ class AutomaticSharding(Filter):
 
         self.skipped = 0
         self.errors = 0
-        self.possible_orphan_shards = 0
         self.cleaning_successes = 0
         self.cleaning_errors = 0
+        self.huge_databases = 0
+        self.possible_orphan_shards = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
         self.sharding_successes = 0
@@ -125,6 +130,9 @@ class AutomaticSharding(Filter):
 
             modified = False
             meta2db_size = meta2db.file_status["st_size"]
+            if meta2db_size > self.huge_db_size:
+                self.huge_databases += 1
+
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
                 modified = self._shard(meta2db, reqid=reqid)
             elif self.shrinking_db_size > 0:
@@ -143,6 +151,7 @@ class AutomaticSharding(Filter):
                         modified = self._shrink(meta2db, reqid=reqid)
                     else:
                         self.skipped += 1
+
                 else:  # Not a shard
                     self.skipped += 1
             else:  # Neither sharding nor shrinking is enabled
@@ -167,6 +176,7 @@ class AutomaticSharding(Filter):
                 "Failed to process %s for the container %s", self.NAME, meta2db.cid
             )
             self.errors += 1
+
             resp = Meta2DBError(
                 meta2db,
                 body=(
@@ -194,6 +204,7 @@ class AutomaticSharding(Filter):
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
+
                 return False
             if sharding_state == EXISTING_SHARD_STATE_LOCKED:
                 self.logger.warning(
@@ -201,6 +212,7 @@ class AutomaticSharding(Filter):
                     meta2db.cid,
                 )
                 self.possible_orphan_shards += 1
+
                 return False
             if sharding_state != NEW_SHARD_STATE_CLEANING_UP:
                 return False
@@ -224,6 +236,7 @@ class AutomaticSharding(Filter):
         except Exception as exc:
             self.logger.exception("Failed to clean container %s: %s", meta2db.cid, exc)
             self.cleaning_errors += 1
+
         return True
 
     def _shard(self, meta2db, reqid=None):
@@ -257,6 +270,7 @@ class AutomaticSharding(Filter):
                     reqid,
                 )
                 self.sharding_no_change += 1
+
             return modified
         except FileNotFoundError:
             # The exception is handled in the "process" method
@@ -302,6 +316,7 @@ class AutomaticSharding(Filter):
                     reqid,
                 )
                 self.shrinking_no_change += 1
+
             return modified
         except FileNotFoundError:
             # The exception is handled in the "process" method
@@ -311,6 +326,7 @@ class AutomaticSharding(Filter):
                 "Failed to merge container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
             )
             self.shrinking_errors += 1
+
             raise
 
     def _get_filter_stats(self):
@@ -320,6 +336,7 @@ class AutomaticSharding(Filter):
             "possible_orphan_shards": self.possible_orphan_shards,
             "cleaning_successes": self.cleaning_successes,
             "cleaning_errors": self.cleaning_errors,
+            "huge_databases": self.huge_databases,
             "sharding_in_progress": self.sharding_in_progress,
             "sharding_no_change": self.sharding_no_change,
             "sharding_successes": self.sharding_successes,
@@ -335,6 +352,7 @@ class AutomaticSharding(Filter):
         self.possible_orphan_shards = 0
         self.cleaning_successes = 0
         self.cleaning_errors = 0
+        self.huge_databases = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
         self.sharding_successes = 0

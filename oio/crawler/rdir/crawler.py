@@ -32,15 +32,16 @@ from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.crawler.common.base import RawxService, RawxUpMixin
-from oio.crawler.common.crawler import CrawlerWorkerMarkerMixin
+from oio.crawler.common.crawler import CrawlerWorkerMarkerMixin, CrawlerStatsdMixin
 from oio.rdir.client import RdirClient
 
 
-class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
+class RdirWorker(CrawlerStatsdMixin, Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
     """
     Rdir crawler worker responsible for a single volume.
     """
 
+    SERVICE_TYPE = "rdir"
     MAX_CHUNKS_PER_SECOND = 30
     SCANS_INTERVAL = 1800
     REPORT_INTERVAL = 300
@@ -95,7 +96,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         self.passes = 0
         self.errors = 0
-        self.nb_entries = 0
+        self.total_scanned = 0
         self.service_unavailable = 0
         self.orphans = 0
         self.deleted_orphans = 0
@@ -139,14 +140,14 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         since_last_rprt = (now - self.last_report_time) or 0.00001
 
         self.logger.info(
-            "%s volume_id=%s nb_entries=%d pass=%d repaired=%d "
+            "%s volume_id=%s total_scanned=%d pass=%d repaired=%d "
             "errors=%d service_unavailable=%d "
             "unrecoverable=%d orphans=%d orphans_check_errors=%d "
             "deleted_orphans=%d chunks=%d "
             "rate_since_last_report=%.2f/s",
             tag,
             self.volume_id,
-            self.nb_entries,
+            self.total_scanned,
             self.passes,
             self.repaired,
             self.errors,
@@ -158,6 +159,21 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             self.scanned_since_last_report,
             self.scanned_since_last_report / since_last_rprt,
         )
+        stats = {
+            k: getattr(self, k)
+            for k in (
+                "deleted_orphans",
+                "errors",
+                "total_scanned",
+                "orphans",
+                "orphans_check_errors",
+                "repaired",
+                "scanned_since_last_report",
+                "service_unavailable",
+                "unrecoverable_content",
+            )
+        }
+        self.report_stats(stats)
         self.last_report_time = now
         self.scanned_since_last_report = 0
 
@@ -299,7 +315,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         self.report("starting", force=True)
         # reset crawler stats
         self.errors = 0
-        self.nb_entries = 0
+        self.total_scanned = 0
         self.orphans = 0
         self.orphans_check_errors = 0
         self.deleted_orphans = 0
@@ -314,7 +330,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                 marker = self.current_marker
             entries = self.index_client.chunk_fetch(self.volume_id, start_after=marker)
             for container_id, chunk_id, value in entries:
-                self.nb_entries += 1
+                self.total_scanned += 1
                 if self._stop_requested.is_set():
                     self.logger.info("Stop asked")
                     break
@@ -345,7 +361,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                                 f"Failed to write progress marker: {err}"
                             ) from err
                 self.report("running")
-            if self.nb_entries == 0:
+            if self.total_scanned == 0:
                 self.logger.debug("No entries found for volume: %s", self.volume_path)
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:
             self.logger.debug("Service busy or not available: %s", err)
@@ -364,8 +380,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             except OSError as err:
                 self.logger.error("Failed to reset progress marker: %s", err)
 
-    def _wait_next_iteration(self, start_crawl):
-        crawling_duration = time.time() - start_crawl
+    def _wait_next_iteration(self, crawling_duration):
         waiting_time_to_start = self.scans_interval - crawling_duration
         if waiting_time_to_start > 0:
             self.logger.info(
@@ -377,12 +392,6 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                 if self._stop_requested.is_set():
                     return
                 time.sleep(1)
-        else:
-            self.logger.warning(
-                "Crawling duration=%.2f for volume_id=%s is high",
-                crawling_duration,
-                self.volume_id,
-            )
 
     def run(self, *args, **kwargs):
         """
@@ -407,11 +416,13 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             try:
                 start_crawl = time.time()
                 self.crawl_volume()
-                self._wait_next_iteration(start_crawl)
             except OSError as err:
                 self.logger.error("Failed to crawl volume: %s", err)
             except Exception:
                 self.logger.exception("Failed to crawl volume")
+            crawling_duration = time.time() - start_crawl
+            self.report_duration(crawling_duration)
+            self._wait_next_iteration(crawling_duration)
 
     def stop(self):
         """
