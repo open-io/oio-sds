@@ -324,6 +324,8 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
+enable_statsd = True
+statsd_prefix = meta2-crawler
 
 [pipeline:main]
 pipeline = logger check_integrity draining auto_vacuum auto_sharding

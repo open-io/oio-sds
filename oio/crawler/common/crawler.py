@@ -24,6 +24,7 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import ConfigurationException
 from oio.common.green import get_watchdog, time, ContextPool
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
@@ -181,6 +182,11 @@ class CrawlerWorker(CrawlerWorkerMarkerMixin):
         self.app_env["volume_id"] = self.volume_id
         self.app_env["watchdog"] = watchdog
         self.app_env["working_dir"] = self.working_dir
+        if boolean_value(self.conf.get("enable_statsd"), False):
+            self.app_env["statsd_client"] = get_statsd(conf=self.conf)
+        else:
+            self.app_env["statsd_client"] = get_statsd(conf={})
+
         # Loading pipeline
         self.pipeline = LOAD_PIPELINES[type(self).__name__](
             self.conf.get("conf_file"), global_conf=self.conf, app=self
