@@ -1581,28 +1581,29 @@ class Account(WerkzeugApp):
 
     # --- KMS -----------------------------------------------------------------
 
-    def _encrypt_plaintext_secret(self, resp):
+    def _encrypt_plaintext_secret(self, client, resp):
         """Try to encrypt and store the resp["secret"]"""
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
         try:
-            data = self.kms_api.encrypt(resp["secret"], context)
+            data = self.kms_api.encrypt(client, resp["secret"], context)
             ciphertext = data["ciphertext"]
             key_id = data["key_id"]
         except Exception as exc:
             self.logger.error(
                 f"Failed to encrypt bucket {account_id}/{bname} secret: {exc}"
             )
-        else:
-            try:
-                self.backend.save_bucket_encrypted_secret(
-                    account_id, bname, ciphertext, key_id, secret_id=resp["secret_id"]
-                )
-            except Exception as exc:
-                self.logger.error(
-                    f"Failed to save bucket {account_id}/{bname} secret: {exc}"
-                )
+        return key, secret
+        #else:
+        #    try:
+        #        self.backend.save_bucket_encrypted_secret(
+        #            account_id, bname, ciphertext, key_id, secret_id=resp["secret_id"]
+        #        )
+        #    except Exception as exc:
+        #        self.logger.error(
+        #            f"Failed to save bucket {account_id}/{bname} secret: {exc}"
+        #        )
 
     def _decrypt_ciphered_secret(self, resp, key_id, ciphertext):
         """Try to decrypt the ciphertext"""
@@ -1642,6 +1643,7 @@ class Account(WerkzeugApp):
         secret = secrets.token_bytes(secret_bytes)
         ciphertext = None
 
+        # Get bucket secret ***
         try:
             self.backend.save_bucket_secret(
                 account_id,
@@ -1667,7 +1669,11 @@ class Account(WerkzeugApp):
             if ciphertext:
                 resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
             else:
-                self._encrypt_plaintext_secret(resp)
+                for idx, client in enumerate(self.kms_api.http_clients):
+                    # Increment the string representation of secret_id
+                    secret_id = int(secret_id) + idx
+                    resp[secret_id] = str(secret_id)
+                    self._encrypt_plaintext_secret(client, resp)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),

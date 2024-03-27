@@ -20,7 +20,9 @@ gevent.monkey.patch_ssl()
 import json  # noqa: E402
 import urllib3  # noqa: E402
 import time  # noqa: E402
+from werkzeug.exceptions import Conflict, NotFound  # noqa: E402
 
+from oio.account.backend_fdb import AccountBackendFdb  # noqa: E402
 from oio.common.easy_value import boolean_value, float_value  # noqa: E402
 from oio.common.exceptions import from_response  # noqa: E402
 from oio.common.logger import get_logger  # noqa: E402
@@ -96,12 +98,26 @@ class KmsApiClient(object):
         self.enabled = boolean_value(conf.get("kmsapi_enabled"))
         domains = [d.strip() for d in conf.get("kmsapi_domains", "").split(",") if d]
         if self.enabled:
+            domains = [
+                d.strip() for d in conf.get("kmsapi_domains", "").split(",")
+                if d
+            ]
             if not domains:
-                raise ValueError("kmsapi_domains parameter is empty")
+                raise ValueError("No KMS domain found")
             self.http_clients = []
+            self.backend = AccountBackendFdb(conf, logger)
+            self.backend.init_db()
             for domain in domains:
-                client = HttpClient(conf, logger, domain)
-                self.http_clients.append(client)
+                self.register_kms_domain(domain)
+
+    def register_kms_domain(self, domain):
+        client = HttpClient(self.conf, self.logger, domain)
+        self.http_clients.append(client)
+        try:
+            self.logger.info(f"Registering new KMS domain {client.key_id}")
+            self.backend.save_kms_domain(client.key_id, client.endpoint)
+        except Conflict as e:
+            self.logger.info(e)
 
     def checksum(self, data=b""):
         """Get the blake3 checksum of the provided data."""
@@ -109,23 +125,11 @@ class KmsApiClient(object):
         hasher.update(data)
         return hasher.hexdigest()
 
-    def request(self, action, body, key_id=None):
-        exc = None
-        for client in self.http_clients:
-            try:
-                return client.request(action, body, key_id)
-            except Exception as e:
-                self.logger.warning(
-                    f"Failed to get a response from KMS domain {client.domain}: {e}"
-                )
-                exc = e
-        if exc:
-            raise exc
-
-    def encrypt(self, plaintext, context):
+    def encrypt(self, client, plaintext, context):
         """
-        Encrypts data, up to 4Kb in size, using service key provided.
+        Encrypts data, up to 4Kb in size.
 
+        :param client: HttpClient performing the request
         :param plaintext: String to be encrypted
         :param context: Additional authenticated data
         :returns: a dictionary with details about the encrypted secret
@@ -133,13 +137,9 @@ class KmsApiClient(object):
         Return example:
             {
                 "ciphertext": "string",
-                "context": {
-                    "key_id": "string",
-                    "key_version": 0
-                }
             }
         """
-        return self.request(
+        return client.request(
             action="encrypt",
             body=json.dumps(
                 {
@@ -153,6 +153,7 @@ class KmsApiClient(object):
         """
         Decrypts data previously encrypted with the encrypt method.
 
+        :param key_id: KMS domain key_id used to encrypt the secret
         :param ciphertext: String to be decrypted
         :param context: Use the same context provided in encrypt operation
         :returns: a dictionary with details about decrypted ciphertext
@@ -160,13 +161,17 @@ class KmsApiClient(object):
         Return example:
         {
             "plaintext": "string",
-            "context": {
-                "key_id": "string",
-                "key_version": 0
-            }
         }
         """
-        return self.request(
+        try:
+            endpoint = self.backend.get_kms_domain_endpoint(key_id)
+            client = [c for c in self.http_clients if c["endpoint"] == endpoint][0]
+        except NotFound as exc:
+            self.logger.exception(exc)
+        except IndexError as exc:
+            self.logger.exception(exc)
+
+        return client.request(
             action="decrypt",
             body=json.dumps(
                 {
