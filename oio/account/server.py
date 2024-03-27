@@ -1581,13 +1581,13 @@ class Account(WerkzeugApp):
 
     # --- KMS -----------------------------------------------------------------
 
-    def _encrypt_plaintext_secret(self, resp):
+    def _encrypt_plaintext_secret(self, client, resp):
         """Try to encrypt and store the resp["secret"]"""
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
         try:
-            data = self.kms_api.encrypt(resp["secret"], context)
+            data = self.kms_api.encrypt(client, resp["secret"], context)
             ciphertext = data["ciphertext"]
             key_id = data["key_id"]
         except Exception as exc:
@@ -1667,7 +1667,8 @@ class Account(WerkzeugApp):
             if ciphertext:
                 resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
             else:
-                self._encrypt_plaintext_secret(resp)
+                for client in self.kms_api.http_clients:
+                    self._encrypt_plaintext_secret(client, resp)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),
