@@ -125,6 +125,8 @@ class AccountBackendFdb(object):
     CTS_TO_DELETE_LIST_PREFIX = "deleted-container"
     # Prefix for the KMS subspace (bucket secret keys)
     KMS_PREFIX = "kms"
+    # KMS domains subspace
+    KMS_DOMAINS_PREFIX = "kms-domains"
     # Metadata prefix
     METADATA_PREFIX = "metadata"
     # Prefix for bucket db
@@ -196,6 +198,9 @@ class AccountBackendFdb(object):
             )
             # Save secret keys for buckets
             self.kms_space = self.namespace.create_or_open(self.db, self.kms_prefix)
+            self.kms_domains_space = self.namespace.create_or_open(
+                self.db, self.kms_domains_prefix
+            )
         except Exception as exc:
             self.logger.warning("Directory create exception %s", exc)
             raise
@@ -228,6 +233,7 @@ class AccountBackendFdb(object):
             "containers_to_delete_prefix", self.CTS_TO_DELETE_LIST_PREFIX
         )
         self.kms_prefix = conf.get("kms_prefix", self.KMS_PREFIX)
+        self.kms_domains_prefix = conf.get("kms_domains_prefix", self.KMS_DOMAINS_PREFIX)
         self.metadata_prefix = conf.get("metadata_prefix", self.METADATA_PREFIX)
         self.metrics_prefix = conf.get("metrics_prefix", self.METRICS_PREFIX)
         self.rankings_prefix = conf.get("rankings_prefix", self.RANKINGS_PREFIX)
@@ -2823,3 +2829,33 @@ class AccountBackendFdb(object):
         secret_space = self.kms_space[account][bucket][secret_id]
         tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
         tr[secret_space.pack(("key_id",))] = key_id.encode("utf-8")
+
+    # KMS DOMAINS -------------------------------------------------------------
+
+    @catch_service_errors
+    def save_kms_domain(self, key_id: str, endpoint: str, **kwargs):
+        for param in (key_id, endpoint):
+            if not isinstance(param, str) or not param:
+                raise ValueError(f"Parameter is not a string or absent: {param}")
+        return self._save_kms_domain(self.db, key_id, endpoint, **kwargs)
+
+    @fdb.transactional
+    def _save_kms_domain(self, tr, key_id, endpoint, **kwargs):
+        domain_space = self.kms_domains_space[key_id]
+        if tr[domain_space.pack(("endpoint",))].present():
+            raise Conflict(f"A domain with key_id={key_id} already exists")
+        tr[domain_space.pack(("endpoint",))] = endpoint.encode("utf-8")
+
+    @catch_service_errors
+    def get_kms_domain_endpoint(self, key_id: str, **kwargs):
+        if not isinstance(key_id, str):
+            raise ValueError(f"Parameter is not a string: {key_id}")
+        return self._get_kms_domain_endpoint(self.db, key_id, **kwargs)
+
+    @fdb.transactional
+    def _get_kms_domain_endpoint(self, tr, key_id, **kwargs):
+        domain_space = self.kms_domains_space[key_id]
+        endpoint = tr[domain_space.pack(("endpoint",))]
+        if not endpoint.present():
+            raise NotFound(f"No endpoint found with key_id {key_id}")
+        return endpoint.value
