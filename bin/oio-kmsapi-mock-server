@@ -67,7 +67,7 @@ class KmsApiMockServer(WerkzeugApp):
     def on_decrypt(self, req, **kwargs):
         """ Blindly return the plaintext from a base64 encoded ciphertext """
         data = req.get_json()
-        payload = b64decode(data["ciphertext"]).decode()
+        payload = json.loads(b64decode(data["ciphertext"]))
         self.logger.info(f"KMS decrypt with data={data} payload={payload}")
         resp = {
             "plaintext": payload["plaintext"],

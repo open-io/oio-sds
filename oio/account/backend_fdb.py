@@ -2708,6 +2708,16 @@ class AccountBackendFdb(object):
         return tr[space.pack((key,))].present()
 
     # KMS ---------------------------------------------------------------------
+    # {kms_space}/{account}/{bucket}/secret/{secret_id}
+    # => Cleartext secret
+    # {kms_space}/{account}/{bucket}/secret/{secret_id}/checksum
+    # => Cleartext secret blake3 checksum
+    # {kms_space}/{account}/{bucket}/secret/{secret_id}/kms/{domain}/ciphertext
+    # => Ciphered secret
+    # {kms_space}/{account}/{bucket}/secret/{secret_id}/kms/{domain}/key_id
+    # => KMS domain service key
+    # {kms_space}/incomplete/{account}/{bucket}/secret/{secret_id}
+    # => Incomplete marker
 
     @catch_service_errors
     def delete_bucket_secret(self, account, bucket, secret_id="1", **kwargs):
@@ -2722,8 +2732,10 @@ class AccountBackendFdb(object):
     def _delete_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
         bucket_space = self.kms_space[account][bucket]
         tr.clear(bucket_space.pack(("secret", secret_id)))
-        secret_range = bucket_space[secret_id].range()
+        secret_range = bucket_space["secret"][secret_id].range()
         tr.clear_range(secret_range.start, secret_range.stop)
+        incomplete_space = self.kms_space["incomplete"][account][bucket]
+        tr.clear(incomplete_space.pack(("secret", secret_id)))
 
     @catch_service_errors
     def get_bucket_secret(self, account, bucket, secret_id="1", **kwargs):
@@ -2735,21 +2747,21 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _get_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
-        bucket_space = self.kms_space[account][bucket]
-        secret = tr[bucket_space.pack(("secret", secret_id))]
+        bucket_space = self.kms_space[account][bucket]["secret"]
+        secret = tr[bucket_space.pack((secret_id,))]
         if not secret.present():
             raise NotFound(
                 f"No secret for {account}/{bucket} with secret_id={secret_id}"
             )
-        ciphertext = tr[bucket_space.pack((secret_id, "ciphertext"))]
-        key_id = tr[bucket_space.pack((secret_id, "key_id"))]
-        if ciphertext.present() and key_id.present():
-            return (
-                secret.value,
-                ciphertext.value.decode("utf-8"),
-                key_id.value.decode("utf-8"),
-            )
-        return secret.value, None, None
+        checksum = tr[bucket_space.pack((secret_id, "checksum"))]
+        kms_space = bucket_space[secret_id]["kms"]
+        kms_range = kms_space.range()
+        kms_secrets = {}
+        for k, v in tr.get_range(kms_range.start, kms_range.stop):
+            domain, key = kms_space.unpack(k)
+            kms_secrets.setdefault(domain, {})
+            kms_secrets[domain][key] = v.decode("utf-8")
+        return (secret.value, checksum.value, kms_secrets)
 
     @catch_service_errors
     def list_bucket_secrets(self, account, bucket, **kwargs):
@@ -2757,69 +2769,69 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _list_bucket_secrets(self, tr, account, bucket, **kwargs):
-        secrets_range = self.kms_space[account][bucket]["secret"].range()
-        iterator = tr.get_range(
-            secrets_range.start,
-            secrets_range.stop,
-        )
-        return [
-            {"secret_id": self.kms_space.unpack(k)[-1], "secret_bytes": len(v)}
-            for k, v in iterator
-        ]
+        secrets_space = self.kms_space[account][bucket]["secret"]
+        secrets_range = secrets_space.range()
+        iterator = tr.get_range(secrets_range.start, secrets_range.stop)
+        secret_list = []
+        for k, v in iterator:
+            key = secrets_space.unpack(k)
+            # secret is the only root key in this space
+            if len(key) == 1:
+                secret_list.append({"secret_id": key[0], "secret_bytes": len(v)})
+        return secret_list
 
     @catch_service_errors
     def save_bucket_secret(
-        self, account, bucket, secret: bytes, secret_id="1", **kwargs
+        self,
+        account,
+        bucket,
+        secret: bytes,
+        checksum,
+        secret_id="1",
+        kms_secrets={},
+        incomplete=False,
+        **kwargs,
     ):
         if not isinstance(secret_id, str) or len(secret_id) < 1:
             raise ValueError("secret_id")
         return self._save_bucket_secret(
-            self.db, account, bucket, secret, secret_id=secret_id, **kwargs
-        )
-
-    @fdb.transactional
-    def _save_bucket_secret(
-        self, tr, account, bucket, secret: bytes, secret_id, **kwargs
-    ):
-        bucket_space = self.kms_space[account][bucket]
-        if tr[bucket_space.pack(("secret", secret_id))].present():
-            raise Conflict(f"A secret with secret_id={secret_id} already exists")
-        tr[bucket_space.pack(("secret", secret_id))] = secret
-
-    @catch_service_errors
-    def save_bucket_encrypted_secret(
-        self,
-        account,
-        bucket,
-        ciphertext: str,
-        key_id: str,
-        secret_id="1",
-        **kwargs,
-    ):
-        for param in (ciphertext, key_id):
-            if not isinstance(param, str) or not param:
-                raise ValueError(f"Parameter is not a string or absent: {param}")
-        return self._save_bucket_encrypted_secret(
             self.db,
             account,
             bucket,
-            ciphertext,
-            key_id,
-            secret_id,
+            secret,
+            checksum,
+            secret_id=secret_id,
+            kms_secrets=kms_secrets,
+            incomplete=incomplete,
             **kwargs,
         )
 
     @fdb.transactional
-    def _save_bucket_encrypted_secret(
+    def _save_bucket_secret(
         self,
         tr,
         account,
         bucket,
-        ciphertext,
-        key_id,
+        secret: bytes,
+        checksum,
         secret_id,
+        kms_secrets,
+        incomplete,
         **kwargs,
     ):
-        secret_space = self.kms_space[account][bucket][secret_id]
-        tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
-        tr[secret_space.pack(("key_id",))] = key_id.encode("utf-8")
+        secret_space = self.kms_space[account][bucket]["secret"]
+        if tr[secret_space.pack((secret_id,))].present():
+            raise Conflict(f"A secret with secret_id={secret_id} already exists")
+        if tr[secret_space.pack((secret_id, "checksum"))].present():
+            raise Conflict(
+                f"A secret checksum for secret_id={secret_id} already exists"
+            )
+        tr[secret_space.pack((secret_id,))] = secret
+        tr[secret_space.pack((secret_id, "checksum"))] = checksum.encode("utf-8")
+        for domain, (key_id, ciphertext) in kms_secrets.items():
+            domain_space = secret_space[secret_id]["kms"][domain]
+            tr[domain_space.pack(("key_id",))] = key_id.encode("utf-8")
+            tr[domain_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
+        if incomplete:
+            incomplete_space = self.kms_space["incomplete"][account][bucket]
+            tr[incomplete_space.pack(("secret", secret_id))] = b"1"

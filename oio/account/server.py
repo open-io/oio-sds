@@ -24,9 +24,10 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
-from oio.common.easy_value import boolean_value, int_value, true_value
+from oio.common.easy_value import boolean_value, int_value, true_value, float_value
 from oio.common.json import json
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd  # noqa: E402
 from oio.common.wsgi import WerkzeugApp
 
 
@@ -55,6 +56,11 @@ class Account(WerkzeugApp):
         self.iam = iam_db
         self.kms_api = kms_api
         self.logger = logger or get_logger(conf)
+        self.statsd = get_statsd(conf=conf)
+
+        self.kmsapi_domains = []
+        if kms_api.enabled:
+            self.init_kms_clients()
 
         self.url_map = Map(
             [
@@ -205,6 +211,34 @@ class Account(WerkzeugApp):
             ]
         )
         super(Account, self).__init__(self.url_map, self.logger)
+
+    def init_kms_clients(self):
+        kmsapi_mock_server = boolean_value(self.conf.get("kmsapi_mock_server"))
+
+        for domain in self.kms_api.domains:
+            endpoint = self.conf.get(f"kmsapi_{domain}_endpoint")
+            key_id = self.conf.get(f"kmsapi_{domain}_key_id")
+            cert_file = self.conf.get(f"kmsapi_{domain}_cert_file")
+            key_file = self.conf.get(f"kmsapi_{domain}_key_file")
+            connect_timeout = float_value(
+                self.conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0
+            )
+            read_timeout = float_value(
+                self.conf.get(f"kmsapi_{domain}_read_timeout"), 1.0
+            )
+            self.kms_api.add_client(
+                domain,
+                endpoint,
+                key_id,
+                cert_file,
+                key_file,
+                connect_timeout,
+                read_timeout,
+                self.logger,
+                self.statsd,
+                kmsapi_mock_server=kmsapi_mock_server,
+            )
+            self.kmsapi_domains.append(domain)
 
     def _get_item_id(self, req, key="id", what="account"):
         """Fetch the name of the requested item, raise an error if missing."""
@@ -1581,48 +1615,64 @@ class Account(WerkzeugApp):
 
     # --- KMS -----------------------------------------------------------------
 
-    def _encrypt_plaintext_secret(self, resp):
-        """Try to encrypt and store the resp["secret"]"""
+    def _encrypt_plaintext_secret(self, domain, resp):
+        """Use the KMS domain to encrypt the resp["secret"]"""
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
-        try:
-            data = self.kms_api.encrypt(resp["secret"], context)
-            ciphertext = data["ciphertext"]
-            key_id = data["key_id"]
-        except Exception as exc:
-            self.logger.error(
-                f"Failed to encrypt bucket {account_id}/{bname} secret: {exc}"
-            )
-        else:
+        return self.kms_api.encrypt(domain, resp["secret"], context)
+
+    def _decrypt_ciphered_secret(self, resp, checksum, kms_secrets):
+        """Use KMS domains to decrypt the ciphered secret"""
+        account_id = resp["account"]
+        bname = resp["bucket"]
+        context = f"{account_id}_{bname}".encode("utf-8")
+        for domain, content in kms_secrets.items():
             try:
-                self.backend.save_bucket_encrypted_secret(
-                    account_id, bname, ciphertext, key_id, secret_id=resp["secret_id"]
+                data = self.kms_api.decrypt(
+                    domain, content["key_id"], content["ciphertext"], context
                 )
             except Exception as exc:
                 self.logger.error(
-                    f"Failed to save bucket {account_id}/{bname} secret: {exc}"
+                    f"Failed to decrypt bucket {account_id}/{bname} secret: {exc}"
                 )
+            else:
+                if data and data["plaintext"]:
+                    cksum = self.kms_api.checksum(
+                        data["plaintext"].encode("utf-8")
+                    ).encode("utf-8")
+                    if cksum == checksum:
+                        resp["secret"] = data["plaintext"]
+                        break
+                    else:
+                        # TODO: Add a statsd metric to monitor this silent error
+                        self.logger.error(f"Bad secret checksum: {cksum} != {checksum}")
+                else:
+                    self.logger.error(
+                        f"Failed to read plaintext from decrypted data: {data}"
+                    )
+        return resp
 
-    def _decrypt_ciphered_secret(self, resp, key_id, ciphertext):
-        """Try to decrypt the ciphertext"""
+    def _get_and_decrypt_secret(self, resp):
         account_id = resp["account"]
         bname = resp["bucket"]
-        context = f"{account_id}_{bname}".encode("utf-8")
-        try:
-            data = self.kms_api.decrypt(key_id, ciphertext, context)
-        except Exception as exc:
-            self.logger.error(
-                f"Failed to decrypt bucket {account_id}/{bname} secret: {exc}"
-            )
-        else:
-            if data and data["plaintext"]:
-                resp["secret"] = data["plaintext"]
-            else:
-                self.logger.error(
-                    f"Failed to read plaintext from decrypted data: {data}"
-                )
-        return resp
+        secret_id = resp["secret_id"]
+        secret, checksum, kms_secrets = self.backend.get_bucket_secret(
+            account_id, bname, secret_id=secret_id
+        )
+        # Try to decipher the secret
+        # TODO: raise in _decrypt_ciphered_secret() if decrypt process fails
+        if self.kms_api.enabled and kms_secrets:
+            resp = self._decrypt_ciphered_secret(resp, checksum, kms_secrets)
+        # Fallback to the current plaintext secret (for now)
+        if "secret" not in resp:
+            resp["secret"] = base64.b64encode(secret)
+
+        return Response(
+            json.dumps(resp, separators=(",", ":")),
+            mimetype=HTTP_CONTENT_TYPE_JSON,
+            status=200,
+        )
 
     @force_master
     def on_kms_create_secret(self, req, **kwargs):
@@ -1639,40 +1689,57 @@ class Account(WerkzeugApp):
                 )
         except ValueError as err:
             return BadRequest(str(err))
-        secret = secrets.token_bytes(secret_bytes)
-        ciphertext = None
-
-        try:
-            self.backend.save_bucket_secret(
-                account_id,
-                bname,
-                secret,
-                secret_id=secret_id,
-            )
-            status = 201
-        except Conflict:
-            secret, ciphertext, key_id = self.backend.get_bucket_secret(
-                account_id, bname, secret_id=secret_id
-            )
-            status = 200
 
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
-            "secret": base64.b64encode(secret),
         }
 
-        if self.kms_api.enabled:
-            if ciphertext:
-                resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
-            else:
-                self._encrypt_plaintext_secret(resp)
+        # Try to get an existing bucket secret
+        try:
+            return self._get_and_decrypt_secret(resp)
+        except NotFound:
+            # already exit if not exception
+            pass
+
+        # Generate secret & checksum
+        secret = secrets.token_bytes(secret_bytes)
+        b64_secret = base64.b64encode(secret)
+        checksum = self.kms_api.checksum(b64_secret)
+        resp["secret"] = b64_secret.decode("utf-8")
+
+        # Try to encrypt the secret on all KMS domains
+        kms_secrets = {}
+        for domain in self.kmsapi_domains:
+            try:
+                data = self._encrypt_plaintext_secret(domain, resp)
+                kms_secrets[domain] = (data["key_id"], data["ciphertext"])
+            except Exception as exc:
+                self.logger.error(
+                    f"Failed to encrypt bucket {account_id}/{bname} secret "
+                    f"using {domain} domain: {exc}"
+                )
+        incomplete = len(kms_secrets) != len(self.kmsapi_domains)
+
+        # Save checksum, plaintext and ciphered secrets
+        try:
+            self.backend.save_bucket_secret(
+                account_id,
+                bname,
+                secret,
+                checksum,
+                secret_id=secret_id,
+                kms_secrets=kms_secrets,
+                incomplete=incomplete,
+            )
+        except Conflict:
+            return self._get_and_decrypt_secret(resp)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),
             mimetype=HTTP_CONTENT_TYPE_JSON,
-            status=status,
+            status=201,
         )
 
     @force_master
@@ -1690,24 +1757,12 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
-        secret, ciphertext, key_id = self.backend.get_bucket_secret(
-            account_id, bname, secret_id=secret_id
-        )
-        secret_b64 = base64.b64encode(secret)
-
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
-            "secret": secret_b64,
         }
-
-        if self.kms_api.enabled and ciphertext:
-            resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
-
-        return Response(
-            json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
-        )
+        return self._get_and_decrypt_secret(resp)
 
     @force_master
     def on_kms_list_secrets(self, req, **kwargs):
