@@ -1510,6 +1510,8 @@ read_timeout=15.0
 
 [filter:volume_index]
 use = egg:oio#volume_index
+retry_delay = 5
+write_quorum = 0
 
 [filter:webhook]
 use = egg:oio#webhook
@@ -1591,6 +1593,8 @@ pipeline = volume_index ${PRESERVE}
 ### filters
 [filter:volume_index]
 use = egg:oio#volume_index
+retry_delay = 5
+write_quorum = 0
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended

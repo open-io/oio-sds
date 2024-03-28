@@ -83,6 +83,13 @@ use = egg:oio#volume_index
 # Time in seconds before an event should be reprocessed
 retry_delay = 60
 
+# How to deal with write errors.
+# - 0: retry on any error
+# - <0: tolerate this number of errors
+# - >0: require this number of successes
+# Default value is 1: require 1 successful write.
+write_quorum = -1
+
 
 # -----------------------------------------------------------------
 # Example of the notify filter: redirect some events to another tube,

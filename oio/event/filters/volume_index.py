@@ -15,6 +15,7 @@
 # License along with this library.
 
 from oio.common.constants import REQID_HEADER
+from oio.common.easy_value import int_value
 from oio.common.kafka import get_retry_delay
 from oio.common.exceptions import OioException, OioTimeout, ServiceBusy
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
@@ -36,15 +37,18 @@ class VolumeIndexFilter(Filter):
 
     def init(self):
         self._retry_delay = get_retry_delay(self.conf)
-
-    _attempts_push = 3
-    _attempts_delete = 3
+        self._write_quorum = int_value(self.conf.get("write_quorum"), 1)
 
     def _chunk_delete(self, reqid, volume_id, container_id, content_id, chunk_id):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_delete(
-                volume_id, container_id, content_id, chunk_id, headers=headers
+                volume_id,
+                container_id,
+                content_id,
+                chunk_id,
+                headers=headers,
+                write_quorum=self._write_quorum,
             )
         except Exception as exc:
             self.logger.warning(
@@ -80,6 +84,7 @@ class VolumeIndexFilter(Filter):
                 content_path,
                 content_ver,
                 headers=headers,
+                write_quorum=self._write_quorum,
                 **args,
             )
         except Exception as exc:
@@ -102,7 +107,12 @@ class VolumeIndexFilter(Filter):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.meta2_index_push(
-                volume_id, url, cid, mtime, headers=headers
+                volume_id,
+                url,
+                cid,
+                mtime,
+                headers=headers,
+                write_quorum=self._write_quorum,
             )
         except Exception as exc:
             self.logger.warning(
@@ -115,7 +125,9 @@ class VolumeIndexFilter(Filter):
             return
         headers = {REQID_HEADER: reqid}
         try:
-            return self.rdir.meta2_index_delete(volume_id, url, cid, headers=headers)
+            return self.rdir.meta2_index_delete(
+                volume_id, url, cid, headers=headers, write_quorum=self._write_quorum
+            )
         except Exception as exc:
             self.logger.warning(
                 "Failed to deindex %s from %s (reqid=%s): %s",
