@@ -370,12 +370,14 @@ class Checker(object):
                         err,
                     )
 
-    def recover_and_complete_object_meta(self, target, chunk, attempts=3):
+    def recover_and_complete_object_meta(self, target, chunk, attempts=4):
         _, rawx_service, chunk_id = chunk.rsplit("/", 2)
         # 1. Fetch chunk list from rdir (could be cached).
         # Unfortunately we cannot seek for a chunk ID.
         for _ in range(attempts):
-            entries = self.rdir_client.chunk_search(rawx_service, chunk_id, limit=10000)
+            entries = self.rdir_client.chunk_search(
+                rawx_service, chunk_id, limit=10000, shuffle_hosts=True
+            )
             if entries:
                 break
         else:

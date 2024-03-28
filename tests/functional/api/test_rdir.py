@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,9 @@ import math
 import random
 from mock import MagicMock as Mock
 
-from oio.common.exceptions import NotFound, OioException
-from oio.common.utils import cid_from_name
+from oio.common.exceptions import NotFound, OioException, OioNetworkException
+from oio.common.utils import cid_from_name, request_id
+from oio.rdir.client import _filter_rdir_hosts, RDIR_ACCT
 from tests.utils import BaseTestCase, random_id
 
 
@@ -600,3 +601,43 @@ class TestRdirClient(BaseTestCase):
             sources=(candidate,),
             dests=(candidate,),
         )
+
+    def test_error_if_write_quorum_not_reached(self):
+        reqid = request_id("test-rdir-client-")
+        resp = self.rdir.directory.list(
+            RDIR_ACCT, self.rawx_id, service_type="rdir", reqid=reqid
+        )
+        rdir_hosts = _filter_rdir_hosts(resp)
+        if len(rdir_hosts) < 2:
+            self.skipTest("This test requires more than 1 rdir assigned per rawx")
+        stopped_rdir = rdir_hosts[0]
+        self._service(self.service_to_systemd_key(stopped_rdir, "rdir"), "stop")
+        container_id = "0" * 64
+        content_id = "0" * 32
+        chunk_id = f"http://{self.rawx_id}/{random.randrange(2**128):064X}"
+        try:
+            # Expect an exception because write_quorum=0 and one rdir is stopped
+            self.assertRaises(
+                OioNetworkException,
+                self.rdir.chunk_push,
+                self.rawx_id,
+                container_id,
+                content_id,
+                chunk_id,
+                content_id,
+                1,
+                mtime=1,
+                reqid=reqid,
+                write_quorum=0,
+            )
+            # No exception because write_quorum=1 and only one rdir is stopped
+            self.rdir.chunk_delete(
+                self.rawx_id,
+                container_id,
+                content_id,
+                chunk_id,
+                reqid=reqid,
+                write_quorum=1,
+            )
+        finally:
+            self._service(self.service_to_systemd_key(stopped_rdir, "rdir"), "start")

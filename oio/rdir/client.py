@@ -61,7 +61,7 @@ def _build_dict_by_id(ns, all_rdir):
 
 
 def _filter_rdir_hosts(allsrv):
-    host_list = list()
+    host_list = []
     for srv in allsrv.get("srv", {}):
         if srv["type"] == "rdir":
             host_list.append(srv["host"])
@@ -162,7 +162,7 @@ class RdirDispatcher(object):
         min_dist=None,
         service_id=None,
         reassign=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Assign an rdir service to all `service_type` servers that aren't
@@ -254,7 +254,7 @@ class RdirDispatcher(object):
                         min_dist=min_dist,
                         reassign=reassign,
                         known_hosts=rdir_hosts,
-                        **kwargs
+                        **kwargs,
                     )
                 except (OioException, ValueError) as exc:
                     self.logger.warning(
@@ -330,7 +330,7 @@ class RdirDispatcher(object):
                     assignments,
                     autocreate=True,
                     replace=is_reassign,
-                    **kwargs
+                    **kwargs,
                 )
                 break
             except ClientException as ex:
@@ -372,7 +372,7 @@ class RdirDispatcher(object):
         dry_run=False,
         known_hosts=None,
         replicas=DEFAULT_RDIR_REPLICAS,
-        **kwargs
+        **kwargs,
     ):
         """
         Force the load balancer to avoid services that already host more
@@ -422,7 +422,7 @@ class RdirDispatcher(object):
                 known=known_ids,
                 min_dist=min_dist,
                 replicas=replicas,
-                **kwargs
+                **kwargs,
             )
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
@@ -435,7 +435,7 @@ class RdirDispatcher(object):
                 known=known_ids,
                 min_dist=min_dist,
                 replicas=replicas,
-                **kwargs
+                **kwargs,
             )
 
         # Prepare the output list of IDs
@@ -466,7 +466,7 @@ class RdirDispatcher(object):
             assignments,
             is_reassign=bool(reassign),
             max_attempts=max_attempts,
-            **kwargs
+            **kwargs,
         )
 
         # Do the creation in the rdir itself
@@ -485,7 +485,7 @@ class RdirDispatcher(object):
         force=False,
         replicas=DEFAULT_RDIR_REPLICAS,
         allow_down_known_services: int = 0,
-        **kwargs
+        **kwargs,
     ):
         """
         Create the special pool for rdir services.
@@ -511,7 +511,7 @@ class RdirDispatcher(object):
             ((jokers, JOKER_SVC_TARGET), (rdirs, "rdir")),
             options=options,
             force=force,
-            **kwargs
+            **kwargs,
         )
 
     def _poll_rdir(
@@ -521,7 +521,7 @@ class RdirDispatcher(object):
         min_dist=None,
         replicas=DEFAULT_RDIR_REPLICAS,
         allow_down_known_services: int = 0,
-        **kwargs
+        **kwargs,
     ):
         """
         Call the special rdir service pool (created if missing).
@@ -556,7 +556,7 @@ class RdirDispatcher(object):
                 force=True,
                 replicas=replicas,
                 allow_down_known_services=allow_down_known_services,
-                **kwargs
+                **kwargs,
             )
 
         try:
@@ -691,24 +691,28 @@ class RdirClient(HttpApi):
         params=None,
         service_type="rawx",
         rdir_hosts=None,
-        **kwargs
+        shuffle_hosts=False,
+        write_quorum=1,
+        **kwargs,
     ):
         if params is None:
-            params = dict()
+            params = {}
         params["vol"] = volume
         if create:
             params["create"] = "1"
         all_uri = self._make_uri(
             action,
             volume,
-            reqid=kwargs["headers"][REQID_HEADER],
+            reqid=kwargs["reqid"],
             service_type=service_type,
             rdir_hosts=rdir_hosts,
         )
+        if shuffle_hosts:
+            random.shuffle(all_uri)
 
         resp = ""
         body = ""
-        errors = list()
+        errors = []
         if method in ("GET", "HEAD"):
             for uri in all_uri:
                 try:
@@ -743,16 +747,14 @@ class RdirClient(HttpApi):
                     body = el[1]
 
         if errors:
-            errorsStr = ["%s: %s" % (type(err).__name__, err) for (_, err) in errors]
+            errors_str = [f"{type(err).__name__}: {err}" for (_, err) in errors]
             self.logger.warning(
-                "rdir request[%s][%s]: %i/%i subrequests failed:\n%s"
-                % (
-                    method,
-                    kwargs["reqid"],
-                    len(errors),
-                    len(all_uri),
-                    "\n".join(errorsStr),
-                )
+                "rdir request[%s][%s]: %i/%i subrequests failed:\n%s",
+                method,
+                kwargs["reqid"],
+                len(errors),
+                len(all_uri),
+                "\n".join(errors_str),
             )
             for _, err in errors:
                 if isinstance(err, NotFound):
@@ -773,7 +775,15 @@ class RdirClient(HttpApi):
             # clear cache if at least one error
             self._clear_cache(volume)
 
-            if len(errors) == len(all_uri):  # all requests failed
+            # Fail if:
+            # - all requests are in error
+            # - the quorum is <= zero and there are more error than abs(quorum)
+            # - the quorum is > zero and there are less successes than the quorum
+            if (
+                (len(errors) >= len(all_uri))
+                or (write_quorum <= 0 and len(errors) > -write_quorum)
+                or (write_quorum > 0 and (len(all_uri) - len(errors)) < write_quorum)
+            ):
                 class_type = type(errors[0][1])
                 same_error = all(isinstance(x, class_type) for (uri, x) in errors)
                 errors = group_chunk_errors(errors)
@@ -781,9 +791,7 @@ class RdirClient(HttpApi):
                     err, addrs = errors.popitem()
                     oio_reraise(type(err), err, str(addrs) + " method:" + method)
                 else:
-                    raise OioException(
-                        "Several errors encountered: %s %s" % errors, method
-                    )
+                    raise OioException(f"Several errors encountered: {errors} {method}")
 
         return resp, body
 
@@ -802,7 +810,8 @@ class RdirClient(HttpApi):
         content_path,
         content_version,
         headers=None,
-        **data
+        mtime=0,
+        **kwargs,
     ):
         """Reference a chunk in the reverse directory"""
         body = {
@@ -813,14 +822,17 @@ class RdirClient(HttpApi):
             "content_id": content_id,
             "path": content_path,
             "version": int(content_version),
+            "mtime": int(mtime),
         }
 
-        # Mostly mtime
-        for key, value in data.items():
-            body[key] = value
-
         self._rdir_request(
-            volume_id, "POST", "push", create=False, json=body, headers=headers
+            volume_id,
+            "POST",
+            "push",
+            create=False,
+            json=body,
+            headers=headers,
+            **kwargs,
         )
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id, **kwargs):
@@ -844,7 +856,7 @@ class RdirClient(HttpApi):
         shuffle=False,
         full_urls=False,
         old_format=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Fetch the list of chunks belonging to the specified volume.
@@ -940,7 +952,7 @@ class RdirClient(HttpApi):
         batch_size=1000,
         create=True,
         reqid=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Copy all chunks records from volume_id from one rdir to another.
@@ -987,7 +999,7 @@ class RdirClient(HttpApi):
                     json=batch,
                     rdir_hosts=dests_rdir_hosts,
                     reqid=reqid,
-                    **kwargs
+                    **kwargs,
                 )
                 batch = []
         if batch:
@@ -999,7 +1011,7 @@ class RdirClient(HttpApi):
                 json=batch,
                 rdir_hosts=dests_rdir_hosts,
                 reqid=reqid,
-                **kwargs
+                **kwargs,
             )
 
     def admin_incident_set(self, volume, date, **kwargs):
@@ -1125,7 +1137,7 @@ class RdirClient(HttpApi):
             create=False,
             json=body,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
         return res, body
 
@@ -1172,7 +1184,7 @@ class RdirClient(HttpApi):
             create=False,
             json=body,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
 
     def meta2_index_fetch(
@@ -1205,7 +1217,7 @@ class RdirClient(HttpApi):
             action="fetch",
             json=params,
             service_type="meta2",
-            **kwargs
+            **kwargs,
         )
         return body
 
@@ -1224,7 +1236,7 @@ class RdirClient(HttpApi):
             # The following is only called when the list is truncated
             # So we can assume there are records in the list
             marker_key=lambda x: x["records"][-1]["container_url"],
-            **kwargs
+            **kwargs,
         )
 
     @ensure_request_id
@@ -1236,7 +1248,7 @@ class RdirClient(HttpApi):
         batch_size=1000,
         create=True,
         reqid=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Copy all meta2 records from volume_id from one rdir to another.
@@ -1282,7 +1294,7 @@ class RdirClient(HttpApi):
                     service_type="meta2",
                     rdir_hosts=dests_rdir_hosts,
                     reqid=reqid,
-                    **kwargs
+                    **kwargs,
                 )
                 batch = []
         if batch:
@@ -1295,5 +1307,5 @@ class RdirClient(HttpApi):
                 service_type="meta2",
                 rdir_hosts=dests_rdir_hosts,
                 reqid=reqid,
-                **kwargs
+                **kwargs,
             )
