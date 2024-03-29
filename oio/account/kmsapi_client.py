@@ -42,7 +42,6 @@ class HttpClient(object):
         else:
             self.http = urllib3.PoolManager(
                 cert_reqs="CERT_REQUIRED",
-                ca_certs=conf.get(f"kmsapi_{domain}_ca_certs_file"),
                 cert_file=conf.get(f"kmsapi_{domain}_cert_file"),
                 key_file=conf.get(f"kmsapi_{domain}_key_file"),
                 timeout=urllib3.Timeout(
@@ -95,13 +94,7 @@ class KmsApiClient(object):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.enabled = boolean_value(conf.get("kmsapi_enabled"))
-        domains = [
-            d
-            for d in conf.get("kmsapi_domains", conf.get("kmsapi_endpoint", "")).split(
-                ","
-            )
-            if d
-        ]
+        domains = [d.strip() for d in conf.get("kmsapi_domains", "").split(",") if d]
         if self.enabled:
             if not domains:
                 raise ValueError("kmsapi_domains parameter is empty")
