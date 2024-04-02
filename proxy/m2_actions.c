@@ -338,7 +338,7 @@ _score_from_chunk_id (const char *id)
 
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 	if (item) {
-		if (!item->get_weight && gridd_client_is_down_host(netloc)) {
+		if (gridd_client_is_down_host(netloc)) {
 			res.score = -1;
 		} else {
 			res.score = item->get_weight;

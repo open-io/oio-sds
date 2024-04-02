@@ -761,7 +761,7 @@ gridd_client_finished(struct gridd_client_s *client)
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:
-			/* The only case where fd<0 is when an error occured,
+			/* The only case where fd<0 is when an error occurred,
 			 * and 'error' MUST have been set */
 			EXTRA_ASSERT(client->fd >= 0);
 			return FALSE;
@@ -919,10 +919,12 @@ gridd_client_replace_global_down_hosts(down_hosts_t *pnew_down, guint nb_down)
 
 	if (nb_down) {
 		if (VARIABLE_PERIOD_SKIP(180)) {
-			GRID_DEBUG("Loaded %d down hosts", nb_down);
+			GRID_DEBUG("Loaded %d down hosts (reqid=%s)",
+					nb_down, oio_ext_get_reqid());
 		} else {
 			/* once per 15 minutes */
-			GRID_NOTICE("Loaded %d down hosts", nb_down);
+			GRID_NOTICE("Loaded %d down hosts (reqid=%s)",
+					nb_down, oio_ext_get_reqid());
 		}
 	}
 }
