@@ -100,11 +100,13 @@ class CliTestCase(BaseTestCase):
         return cls.get_format_opts(format_=format, fields=fields)
 
     @classmethod
-    def get_format_opts(cls, format_="value", fields=[]):
+    def get_format_opts(cls, format_="value", fields=None):
         """
         Get formatting options for OpenIO CLIs,
         to make them output the specified fields in the specified format.
         """
+        if fields is None:
+            fields = []
         return " -f {0} {1}".format(format_, " ".join(["-c " + it for it in fields]))
 
     @classmethod

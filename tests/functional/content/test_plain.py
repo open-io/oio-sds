@@ -149,7 +149,9 @@ class TestPlainContent(BaseTestCase):
     def test_single_create_chunksize_plus_1_bytes(self):
         self._test_create(self.stgpol, self.chunk_size + 1)
 
-    def _new_content(self, stgpol, data, broken_pos_list=[]):
+    def _new_content(self, stgpol, data, broken_pos_list=None):
+        if broken_pos_list is None:
+            broken_pos_list = []
         old_content = self.content_factory.new(
             self.container_id, self.content, len(data), stgpol
         )

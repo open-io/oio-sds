@@ -162,8 +162,10 @@ class TestDrainingFilter(BaseTestCase):
         drain_limit=None,
         drain_limit_per_pass=None,
         cid=None,
-        out_of_range_objects=[],
+        out_of_range_objects=None,
     ):
+        if out_of_range_objects is None:
+            out_of_range_objects = []
         if not meta2db_env:
             cid = cid or cid_from_name(self.account, self.cname)
         else:

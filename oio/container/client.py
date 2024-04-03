@@ -1129,7 +1129,7 @@ class ContainerClient(ProxyClient):
         account=None,
         reference=None,
         path=None,
-        properties=[],
+        properties=None,
         cid=None,
         version=None,
         **kwargs
@@ -1141,6 +1141,9 @@ class ContainerClient(ProxyClient):
         :type properties: `list`
         :returns: True is the property has been deleted
         """
+        if properties is None:
+            properties = []
+
         uri = self._make_uri("content/del_properties")
         params = self._make_params(account, reference, path, cid=cid, version=version)
         # Build a list in case the parameter is a view (not serializable).
