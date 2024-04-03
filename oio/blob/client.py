@@ -72,6 +72,10 @@ def extract_headers_meta(headers, check=True):
         except KeyError:
             if check and mkey not in CHUNK_XATTR_KEYS_OPTIONAL:
                 missing.append(exc.MissingAttribute(mkey))
+    for hkey in headers.keys():
+        if hkey.lower().startswith("x-oio-ext-"):
+            mkey = hkey[len("X-Oio-Ext-") :]
+            meta.setdefault("extra_properties", {})[mkey] = unquote(headers[hkey])
     if check and missing:
         raise exc.FaultyChunk(*missing)
     mtime = meta.get("chunk_mtime")
