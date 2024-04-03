@@ -2741,21 +2741,18 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _get_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
-        bucket_space = self.kms_space[account][bucket]
-        secret = tr[bucket_space.pack(("secret", secret_id))]
+        bucket_space = self.kms_space[account][bucket]["secret"]
+        secret = tr[bucket_space.pack((secret_id,))]
         if not secret.present():
             raise NotFound(
                 f"No secret for {account}/{bucket} with secret_id={secret_id}"
             )
-        ciphertext = tr[bucket_space.pack((secret_id, "ciphertext"))]
-        key_id = tr[bucket_space.pack((secret_id, "key_id"))]
-        if ciphertext.present() and key_id.present():
-            return (
-                secret.value,
-                ciphertext.value.decode("utf-8"),
-                key_id.value.decode("utf-8"),
-            )
-        return secret.value, None, None
+        checksum = tr[bucket_space.pack((secret_id, "checksum"))]
+        secrets_range = bucket_space[secret_id]["kms"].range()
+        kms_secrets = {}
+        for key, _ in tr.get_range(secrets_range.start, secrets_range.stop):
+            kms_secrets.append(secrets_range.unpack(key))
+        return (secret.value, checksum.value, kms_secrets)
 
     @catch_service_errors
     def list_bucket_secrets(self, account, bucket, **kwargs):
@@ -2775,60 +2772,54 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def save_bucket_secret(
-        self, account, bucket, secret: bytes, secret_id="1", **kwargs
+        self,
+        account,
+        bucket,
+        secret: bytes,
+        checksum,
+        secret_id="1",
+        kms_secrets={},
+        uncomplete=False,
+        **kwargs,
     ):
         if not isinstance(secret_id, str) or len(secret_id) < 1:
             raise ValueError("secret_id")
         return self._save_bucket_secret(
-            self.db, account, bucket, secret, secret_id=secret_id, **kwargs
-        )
-
-    @fdb.transactional
-    def _save_bucket_secret(
-        self, tr, account, bucket, secret: bytes, secret_id, **kwargs
-    ):
-        bucket_space = self.kms_space[account][bucket]
-        if tr[bucket_space.pack(("secret", secret_id))].present():
-            raise Conflict(f"A secret with secret_id={secret_id} already exists")
-        tr[bucket_space.pack(("secret", secret_id))] = secret
-
-    @catch_service_errors
-    def save_bucket_encrypted_secret(
-        self,
-        account,
-        bucket,
-        ciphertext: str,
-        key_id: str,
-        secret_id="1",
-        **kwargs,
-    ):
-        for param in (ciphertext, key_id):
-            if not isinstance(param, str) or not param:
-                raise ValueError(f"Parameter is not a string or absent: {param}")
-        return self._save_bucket_encrypted_secret(
             self.db,
             account,
             bucket,
-            ciphertext,
-            key_id,
-            secret_id,
+            secret,
+            checksum,
+            secret_id=secret_id,
+            kms_secrets=kms_secrets,
+            uncomplete=uncomplete,
             **kwargs,
         )
 
     @fdb.transactional
-    def _save_bucket_encrypted_secret(
+    def _save_bucket_secret(
         self,
         tr,
         account,
         bucket,
-        ciphertext,
-        key_id,
+        secret: bytes,
+        checksum,
         secret_id,
+        kms_secrets,
+        uncomplete,
         **kwargs,
     ):
-        secret_space = self.kms_space[account][bucket][secret_id]
-        tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
-        tr[secret_space.pack(("key_id",))] = key_id.encode("utf-8")
+        bucket_space = self.kms_space[account][bucket]["secret"]
+        if tr[bucket_space.pack((secret_id,))].present():
+            raise Conflict(f"A secret with secret_id={secret_id} already exists")
+        tr[bucket_space.pack((secret_id,))] = secret
+        tr[bucket_space.pack((secret_id, "checksum"))] = checksum.encode("utf-8")
+        for key_id, ciphertext in kms_secrets:
+            secret_space = bucket_space[secret_id]["kms"][key_id]
+            tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
+        if uncomplete:
+            uncomplete_space = self.kms_space["uncomplete"][account][bucket]
+            tr[uncomplete_space.pack(("secret",))] = "1"
 
     # KMS DOMAINS -------------------------------------------------------------
 

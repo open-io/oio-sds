@@ -56,6 +56,17 @@ class Account(WerkzeugApp):
         self.kms_api = kms_api
         self.logger = logger or get_logger(conf)
 
+        self.kmsapi_clients = []
+        if kms_api.enabled:
+            for domain in kms_api.domains:
+                client = kms_api.client(domain)
+                self.kmsapi_clients.append(client)
+                try:
+                    self.logger.info(f"Registering new KMS domain {client.key_id}")
+                    backend.save_kms_domain(client.key_id, client.endpoint)
+                except Conflict as e:
+                    self.logger.info(e)
+
         self.url_map = Map(
             [
                 Rule("/status", endpoint="status", methods=["GET"]),
@@ -1582,7 +1593,7 @@ class Account(WerkzeugApp):
     # --- KMS -----------------------------------------------------------------
 
     def _encrypt_plaintext_secret(self, client, resp):
-        """Try to encrypt and store the resp["secret"]"""
+        """Use the KMS client to encrypt the resp["secret"]"""
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
@@ -1594,36 +1605,64 @@ class Account(WerkzeugApp):
             self.logger.error(
                 f"Failed to encrypt bucket {account_id}/{bname} secret: {exc}"
             )
-        return key, secret
-        #else:
-        #    try:
-        #        self.backend.save_bucket_encrypted_secret(
-        #            account_id, bname, ciphertext, key_id, secret_id=resp["secret_id"]
-        #        )
-        #    except Exception as exc:
-        #        self.logger.error(
-        #            f"Failed to save bucket {account_id}/{bname} secret: {exc}"
-        #        )
+        return (key_id, ciphertext)
 
-    def _decrypt_ciphered_secret(self, resp, key_id, ciphertext):
-        """Try to decrypt the ciphertext"""
+    def _decrypt_ciphered_secret(self, resp, checksum, kms_secrets):
+        """Use KMS clients to decrypt the ciphered secret"""
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
-        try:
-            data = self.kms_api.decrypt(key_id, ciphertext, context)
-        except Exception as exc:
-            self.logger.error(
-                f"Failed to decrypt bucket {account_id}/{bname} secret: {exc}"
-            )
-        else:
-            if data and data["plaintext"]:
-                resp["secret"] = data["plaintext"]
-            else:
+        for key_id, ciphertext in kms_secrets:
+            try:
+                client = self._get_kmsapi_client_from_key_id(key_id)
+                data = self.kms_api.decrypt(client, key_id, ciphertext, context)
+            except Exception as exc:
                 self.logger.error(
-                    f"Failed to read plaintext from decrypted data: {data}"
+                    f"Failed to decrypt bucket {account_id}/{bname} secret: {exc}"
                 )
+            else:
+                if data and data["plaintext"]:
+                    cksum = self.kms_api.checksum(data["plaintext"])
+                    if cksum == checksum:
+                        resp["secret"] = data["plaintext"]
+                        break
+                    else:
+                        self.logger.error(
+                            f"Bad secret checksum: {cksum} != {checksum}"
+                        )
+                else:
+                    self.logger.error(
+                        f"Failed to read plaintext from decrypted data: {data}"
+                    )
         return resp
+
+    def _get_kmsapi_client_from_key_id(self, key_id):
+        try:
+            endpoint = self.backend.get_kms_domain_endpoint(key_id)
+            return [c for c in self.kmsapi_clients if c["endpoint"] == endpoint][0]
+        except NotFound as exc:
+            self.logger.exception(exc)
+        except IndexError as exc:
+            self.logger.exception(exc)
+
+    def _get_and_decrypt_secret(self, resp):
+        account_id = resp["account"]
+        bname = resp["bucket"]
+        secret_id = resp["secret_id"]
+        secret, checksum, kms_secrets = self.backend.get_bucket_secret(
+            account_id, bname, secret_id=secret_id
+        )
+        # Try to decypher the secret
+        if self.kms_api.enabled and kms_secrets:
+            resp = self._decrypt_ciphered_secret(resp, checksum, kms_secrets)
+        else:
+            resp["secret"] = base64.b64encode(secret)
+
+        return Response(
+                json.dumps(resp, separators=(",", ":")),
+                mimetype=HTTP_CONTENT_TYPE_JSON,
+                status=200,
+            )
 
     @force_master
     def on_kms_create_secret(self, req, **kwargs):
@@ -1641,44 +1680,49 @@ class Account(WerkzeugApp):
         except ValueError as err:
             return BadRequest(str(err))
         secret = secrets.token_bytes(secret_bytes)
-        ciphertext = None
-
-        # Get bucket secret ***
-        try:
-            self.backend.save_bucket_secret(
-                account_id,
-                bname,
-                secret,
-                secret_id=secret_id,
-            )
-            status = 201
-        except Conflict:
-            secret, ciphertext, key_id = self.backend.get_bucket_secret(
-                account_id, bname, secret_id=secret_id
-            )
-            status = 200
-
+        checksum = self.kms_api.checksum(secret)
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
-            "secret": base64.b64encode(secret),
         }
 
-        if self.kms_api.enabled:
-            if ciphertext:
-                resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
-            else:
-                for idx, client in enumerate(self.kms_api.http_clients):
-                    # Increment the string representation of secret_id
-                    secret_id = int(secret_id) + idx
-                    resp[secret_id] = str(secret_id)
-                    self._encrypt_plaintext_secret(client, resp)
+        # Try to get an existing bucket secret
+        try:
+            return self._get_and_decrypt_secret(resp)
+        except NotFound:
+            # Try to encrypt the secret using all KMS clients
+            uncomplete = False
+            kms_secrets = {}
+            for client in self.kmsapi_clients:
+                try:
+                    key_id, ciphertext = self._encrypt_plaintext_secret(
+                        client, resp
+                    )
+                    kms_secrets[key_id] = ciphertext
+                except Exception as exc:
+                    self.logger.warn(
+                        f"Failed to encrypt secret using {client.endpoint} endpoint"
+                    )
+                    uncomplete = True
+            # Save plaintext and ciphered secrets
+            try:
+                self.backend.save_bucket_secret(
+                    account_id,
+                    bname,
+                    secret,
+                    checksum,
+                    secret_id=secret_id,
+                    kms_secrets=kms_secrets,
+                    uncomplete=uncomplete,
+                )
+            except Conflict:
+                return self._get_and_decrypt_secret(resp)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),
             mimetype=HTTP_CONTENT_TYPE_JSON,
-            status=status,
+            status=201,
         )
 
     @force_master
@@ -1696,24 +1740,12 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, key="bucket", what="bucket")
         account_id = self._get_item_id(req, key="account", what="account")
         secret_id = req.args.get("secret_id", "1")
-        secret, ciphertext, key_id = self.backend.get_bucket_secret(
-            account_id, bname, secret_id=secret_id
-        )
-        secret_b64 = base64.b64encode(secret)
-
         resp = {
             "account": account_id,
             "bucket": bname,
             "secret_id": secret_id,
-            "secret": secret_b64,
         }
-
-        if self.kms_api.enabled and ciphertext:
-            resp = self._decrypt_ciphered_secret(resp, key_id, ciphertext)
-
-        return Response(
-            json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
-        )
+        return self._get_and_decrypt_secret(resp)
 
     @force_master
     def on_kms_list_secrets(self, req, **kwargs):
