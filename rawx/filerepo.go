@@ -97,6 +97,10 @@ func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
 	return syscall.Getxattr(fr.nameToAbsPath(name), key, value)
 }
 
+func (fr *fileRepository) listAttr(name string, value []byte) (int, error) {
+	return syscall.Listxattr(fr.nameToAbsPath(name), value)
+}
+
 func (fr *fileRepository) lock(ns, id string) error {
 	var err error
 	err = setOrHasXattr(fr.root, "user.server.id", id)
@@ -515,6 +519,10 @@ func (fr *realFileReader) File() *os.File {
 
 func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
 	return syscall.Fgetxattr(fr.fd(), key, value)
+}
+
+func (fr *realFileReader) listAttr(value []byte) (int, error) {
+	return syscall.Flistxattr(fr.fd(), value)
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {

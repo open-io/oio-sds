@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -120,7 +121,7 @@ func (chunk chunkInfo) saveExtMetaAttr(out decorable) error {
 			return err
 		}
 	}
-    return nil
+	return nil
 }
 
 func (chunk chunkInfo) saveAttr(out decorable) error {
@@ -205,6 +206,8 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 
 	buf := xattrBufferPool.Acquire()
 	defer xattrBufferPool.Release(buf)
+	attrListBuf := xattrBufferPool.Acquire()
+	defer xattrBufferPool.Release(attrListBuf)
 
 	getAttr := func(k string) (string, error) {
 		l, err := inChunk.getAttr(k, buf)
@@ -213,6 +216,29 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 		} else {
 			return string(buf[:l]), nil
 		}
+	}
+
+	/* form the list of extended attributes, get attribute that start with prefix */
+	getExtMeta := func(listBuffer []byte) (map[string]string, error) {
+		prefix := "user.oio.ext."
+		res := make(map[string]string)
+		var err error
+		for i:=0; i < len(listBuffer); i++ {
+			// attributes names are separated by null bytes
+			if listBuffer[i] == byte(0) {
+				attrKey := listBuffer[:i]
+				extMetaKey, hasPrefix := bytes.CutPrefix(attrKey, []byte(prefix))
+				if hasPrefix {
+					extMetaAttr, err := getAttr(string(attrKey))
+					if err == nil {
+						res[string(extMetaKey)] = extMetaAttr
+					}
+				}
+				listBuffer = listBuffer[i+1:]
+				i = -1
+			}
+		}
+		return res, err
 	}
 
 	/* keep AttrNameContentStgPol above AttrNameMetachunkChecksum and AttrNameMetachunkSize */
@@ -306,6 +332,22 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 			chunk.ContentChunkMethod = serializeChunkMethod(chunkMethodType, params)
 		}
 	}
+
+	chunk.ExtMeta = make(map[string]string)
+
+	/* To avoid calling syscall Listxattr twice, first call with buffer already
+	* allocated, if its size is not sufficient, allocate a new buffer and call
+	* listAttr again. */
+	size, err := inChunk.listAttr(attrListBuf)
+	if size < len(attrListBuf) {
+		chunk.ExtMeta, err = getExtMeta(attrListBuf)
+	} else {
+		// buffer is to small
+		attributes := make([]byte, size)
+		_, err = inChunk.listAttr(attributes)
+		chunk.ExtMeta, err = getExtMeta(attributes)
+	}
+
 	return chunk, nil
 }
 
@@ -440,7 +482,7 @@ func (chunk *chunkInfo) loadExtHeaders(headers *http.Header) {
 	}
 	for key, value := range *headers {
 		if strippedKey, found := hasPrefix(key, "X-Oio-Ext-"); found {
-			chunk.ExtMeta[strippedKey] = value[0]
+			chunk.ExtMeta[strippedKey], _ = url.PathUnescape(value[0])
 		}
 	}
 }
@@ -598,6 +640,11 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
+	if chunk.ExtMeta != nil {
+		for key, value := range chunk.ExtMeta {
+			setHeader(headers, "X-Oio-Ext-"+key, value)
+		}
+	}
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
