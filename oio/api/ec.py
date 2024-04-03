@@ -706,6 +706,7 @@ class EcChunkWriter(object):
         connection_timeout=None,
         write_timeout=None,
         watchdog=None,
+        headers=None,
         **kwargs,
     ):
         if not watchdog:
@@ -719,6 +720,7 @@ class EcChunkWriter(object):
 
         hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
         hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
+        hdrs.update(headers)
 
         # in the trailer
         # metachunk_size & metachunk_hash
@@ -889,6 +891,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
+        headers=None,
         **kwargs,
     ):
         kwargs.setdefault("chunk_buffer_min", storage_method.ec_segment_size)
@@ -905,6 +908,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = []
+        self.headers = headers or {}
         self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):
@@ -1094,6 +1098,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 perfdata=self.perfdata,
                 logger=self.logger,
                 watchdog=self.watchdog,
+                headers=self.headers,
             )
             return writer, chunk
         except (Exception, Timeout) as exc:
@@ -1246,6 +1251,7 @@ class ECWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
+                headers=self.headers,
                 **kwargs,
             )
             bytes_transferred, checksum, chunks = handler.stream(self.source, max_size)

@@ -22,7 +22,7 @@ import os
 import warnings
 import time
 
-from urllib.parse import unquote
+from urllib.parse import unquote, quote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -895,6 +895,7 @@ class ObjectStorageApi(object):
         key_file=None,
         append=False,
         properties=None,
+        extra_properties=None,
         properties_callback=None,
         **kwargs,
     ):
@@ -922,6 +923,9 @@ class ObjectStorageApi(object):
         :type mime_type: `str`
         :keyword properties: a dictionary of properties
         :type properties: `dict`
+        :keyword extra_properties: a dictionary of extra properties that need
+            to be stored in rawx xattr
+        :type extra_properties: `dict`
         :keyword policy: name of the storage policy
         :type policy: `str`
         :keyword key_file:
@@ -987,6 +991,7 @@ class ObjectStorageApi(object):
                 src,
                 sysmeta,
                 properties=properties,
+                extra_properties=extra_properties,
                 policy=policy,
                 key_file=key_file,
                 append=append,
@@ -1002,6 +1007,7 @@ class ObjectStorageApi(object):
                     srcf,
                     sysmeta,
                     properties=properties,
+                    extra_properties=extra_properties,
                     policy=policy,
                     key_file=key_file,
                     append=append,
@@ -1825,6 +1831,7 @@ class ObjectStorageApi(object):
         source,
         sysmeta,
         properties=None,
+        extra_properties=None,
         properties_callback=None,
         policy=None,
         key_file=None,
@@ -1841,6 +1848,10 @@ class ObjectStorageApi(object):
             if obj_meta["chunk_method"] != "drained":
                 obj_meta["status"] = "Skipped"
                 return None, obj_meta["size"], obj_meta["hash"], obj_meta
+
+        if isinstance(extra_properties, dict):
+            for key, value in extra_properties.items():
+                kwargs["headers"]["X-Oio-Ext-" + key] = quote_plus(value)
 
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account,

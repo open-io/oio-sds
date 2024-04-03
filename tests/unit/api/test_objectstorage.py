@@ -660,6 +660,7 @@ class ObjectStorageTest(unittest.TestCase):
             key_file=ANY,
             policy=ANY,
             properties=ANY,
+            extra_properties=ANY,
             reqid=ANY,
             properties_callback=ANY,
             **kwargs

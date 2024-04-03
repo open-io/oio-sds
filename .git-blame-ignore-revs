@@ -12,3 +12,8 @@ ce3c452730f92685281ec2564cf25b8e51ddfc71
 # Date:   Fri Jan 26 11:40:21 2024 +0100
 #    Apply new black 24.1.0 version
 870ee2820133f606b2bfb206595c4bcde0a0c68b
+
+# Author: Loic Metzger <loic.metzger@ovhcloud.com>
+# Date:   Wed Jan 24 10:15:29 2024 +0100
+#     Apply black to object_storage.py
+fd9bb0c5142de743e402c5c9e00658ef468432cd
