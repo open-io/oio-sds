@@ -341,7 +341,13 @@ class TestRdirCrawler(BaseTestCase):
         )
         rdir_crawler.crawl_volume()
         # If there are no error
-        if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+        if not any(
+            (
+                rdir_crawler.service_unavailable,
+                rdir_crawler.errors,
+                not rdir_crawler.nb_entries,
+            )
+        ):
             # Check that one chunk is repaired
             self.assertGreaterEqual(rdir_crawler.repaired, 1)
             _, new_chunks_a = self.api.container.content_locate(
@@ -376,7 +382,13 @@ class TestRdirCrawler(BaseTestCase):
             # The marker has been reset at the end of the last crawl
             rdir_crawler.crawl_volume()
             # If there are no error
-            if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+            if not any(
+                (
+                    rdir_crawler.service_unavailable,
+                    rdir_crawler.errors,
+                    not rdir_crawler.nb_entries,
+                )
+            ):
                 # Check that one chunk is repaired
                 self.assertGreaterEqual(rdir_crawler.repaired, 1)
                 # we should be able to find the chunk not selected for rebuild
@@ -441,7 +453,8 @@ class TestRdirCrawler(BaseTestCase):
         # Object creation
         container = "rdir_crawler_m_chunks_" + random_str(6)
         object_name = "m_chunk-" + random_str(8)
-        _ = self._create(container, object_name)
+        chunks = self._create(container, object_name)
+        chunk_ids = [chunk["url"].split("/", 3)[3] for chunk in chunks]
         cid = cid_from_name(self.account, container)
         # Retrieve version and content id in order
         # to register a false entry (orphan chunk) into rdir repertory
@@ -450,12 +463,15 @@ class TestRdirCrawler(BaseTestCase):
             cid=cid,
             force_master=True,
         )
-        chunk_id = random_id(63)
+        while True:
+            chunk_id = random_id(63)
+            if chunk_id not in chunk_ids:
+                break
         content_id = obj_meta["id"]
         content_ver = obj_meta["version"]
         self._test_orphan_entry(object_name, cid, chunk_id, content_id, content_ver)
 
-    def test_rdir_orphan_entry_deindexed_object_does_not_exists(self):
+    def test_rdir_orphan_entry_deindexed_object_does_not_exist(self):
         """
         Test if an orphan chunk belonging to an object which does
         not exits is deindexed

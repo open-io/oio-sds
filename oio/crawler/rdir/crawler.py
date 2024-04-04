@@ -90,9 +90,11 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
 
         self.passes = 0
         self.errors = 0
+        self.nb_entries = 0
         self.service_unavailable = 0
         self.orphans = 0
         self.deleted_orphans = 0
+        self.orphans_check_errors = 0
         self.repaired = 0
         self.unrecoverable_content = 0
         self.last_report_time = 0
@@ -132,18 +134,21 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         since_last_rprt = (now - self.last_report_time) or 0.00001
 
         self.logger.info(
-            "%s volume_id=%s pass=%d repaired=%d errors=%d "
-            "no_entries_on_fetch=%d service_unavailable=%d "
-            "unrecoverable=%d orphans=%d deleted_orphans=%d chunks=%d "
+            "%s volume_id=%s nb_entries=%d pass=%d repaired=%d "
+            "errors=%d service_unavailable=%d "
+            "unrecoverable=%d orphans=%d orphans_check_errors=%d "
+            "deleted_orphans=%d chunks=%d "
             "rate_since_last_report=%.2f/s",
             tag,
             self.volume_id,
+            self.nb_entries,
             self.passes,
             self.repaired,
             self.errors,
             self.service_unavailable,
             self.unrecoverable_content,
             self.orphans,
+            self.orphans_check_errors,
             self.deleted_orphans,
             self.scanned_since_last_report,
             self.scanned_since_last_report / since_last_rprt,
@@ -196,7 +201,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                 force_master=True,
             )
             chunkshelper = ChunksHelper(chunks).filter(id=chunk_id, host=self.volume_id)
-            if len(chunkshelper.chunks) > 0:
+            if len(chunkshelper) > 0:
                 return
         except exc.NotFound as err:
             self.logger.debug(
@@ -206,6 +211,7 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                 container_id,
                 err,
             )
+
         # The chunk does not exist on the rawx
         # and we just confirmed that it is not referenced in
         # any meta2 database, we can deindex the chunk reference
@@ -249,9 +255,16 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
                 self.orphans += 1
-                # Deindex the chunk if not referenced in any meta2 db
-                self._check_orphan(container_id, chunk_id, value, reqid)
-
+                try:
+                    # Deindex the chunk if not referenced in any meta2 db
+                    self._check_orphan(container_id, chunk_id, value, reqid)
+                except exc.OioException as oio_err:
+                    self.orphans_check_errors += 1
+                    error = (
+                        f"{oio_err} "
+                        + "failed to verify orphan chunk is referenced in meta2"
+                    )
+                    self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.ContentDrained):
                 self.orphans += 1
                 error = f"{err}, chunk considered as orphan"
@@ -280,7 +293,9 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         self.report("starting", force=True)
         # reset crawler stats
         self.errors = 0
+        self.nb_entries = 0
         self.orphans = 0
+        self.orphans_check_errors = 0
         self.deleted_orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
@@ -292,8 +307,8 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
             if self.use_marker:
                 marker = self.current_marker
             entries = self.index_client.chunk_fetch(self.volume_id, start_after=marker)
-
             for container_id, chunk_id, value in entries:
+                self.nb_entries += 1
                 if self._stop_requested.is_set():
                     self.logger.info("Stop asked")
                     break
@@ -324,6 +339,8 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                                 f"Failed to write progress marker: {err}"
                             ) from err
                 self.report("running")
+            if self.nb_entries == 0:
+                self.logger.debug("No entries found for volume: %s", self.volume_path)
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:
             self.logger.debug("Service busy or not available: %s", err)
             self.service_unavailable += 1
