@@ -22,37 +22,37 @@ import urllib3  # noqa: E402
 import time  # noqa: E402
 from werkzeug.exceptions import Conflict  # noqa: E402
 
-from oio.common.easy_value import boolean_value, float_value  # noqa: E402
+
 from oio.common.exceptions import from_response  # noqa: E402
 from oio.common.logger import get_logger  # noqa: E402
-from oio.common.statsd import get_statsd  # noqa: E402
 from oio.common.utils import get_hasher  # noqa: E402
 
 
 class HttpClient(object):
     """Http client for a given KMS domain"""
 
-    def __init__(self, conf, logger, domain):
+    def __init__(self, domain, endpoint, key_id,
+                 cert_file, key_file,
+                 connect_timeout, read_timeout,
+                 logger, statsd,
+                 kmsapi_mock_server=False):
         self.logger = logger
         self.domain = domain
-        self.endpoint = conf.get(f"kmsapi_{domain}_endpoint")
-        self.key_id = conf.get(f"kmsapi_{domain}_key_id")
-        kmsapi_mock_server = boolean_value(conf.get("kmsapi_mock_server"))
+        self.endpoint = endpoint
+        self.key_id = key_id
+        self.statsd = statsd
         if kmsapi_mock_server:
             self.http = urllib3.PoolManager()
         else:
             self.http = urllib3.PoolManager(
                 cert_reqs="CERT_REQUIRED",
-                cert_file=conf.get(f"kmsapi_{domain}_cert_file"),
-                key_file=conf.get(f"kmsapi_{domain}_key_file"),
+                cert_file=cert_file,
+                key_file=key_file,
                 timeout=urllib3.Timeout(
-                    connect=float_value(
-                        conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0
-                    ),
-                    read=float_value(conf.get(f"kmsapi_{domain}_read_timeout"), 1.0),
+                    connect=connect_timeout,
+                    read=read_timeout,
                 ),
             )
-        self.statsd = get_statsd(conf=conf)
 
     def request(self, action, body, key_id=None):
         if key_id is None:
@@ -102,9 +102,20 @@ class KmsApiClient(object):
             ]
             if not self.domains:
                 raise ValueError("No KMS domain found")
+        self.domain_to_client = {}
 
-    def client(self, domain):
-        return HttpClient(self.conf, self.logger, domain)
+    def add_client(self, domain, endpoint, key_id,
+                   cert_file, key_file,
+                   connect_timeout, read_timeout,
+                   logger, statsd,
+                   kmsapi_mock_server=False):
+
+        client = HttpClient(domain, endpoint, key_id,
+                            cert_file, key_file,
+                            connect_timeout, read_timeout,
+                            logger, statsd,
+                            kmsapi_mock_server=False)
+        self.domain_to_client[domain] = client
 
     def checksum(self, data=b""):
         """Get the blake3 checksum of the provided data."""
@@ -112,7 +123,7 @@ class KmsApiClient(object):
         hasher.update(data)
         return hasher.hexdigest()
 
-    def encrypt(self, client, plaintext, context):
+    def encrypt(self, domain, plaintext, context):
         """
         Encrypts data, up to 4Kb in size.
 
@@ -126,6 +137,11 @@ class KmsApiClient(object):
                 "ciphertext": "string",
             }
         """
+        try:
+            client = self.domain_to_client[domain]
+        except KeyError:
+            raise Exception(f"No client found for domain {domain}")
+
         return client.request(
             action="encrypt",
             body=json.dumps(
@@ -136,7 +152,7 @@ class KmsApiClient(object):
             ),
         )
 
-    def decrypt(self, client, key_id, ciphertext, context):
+    def decrypt(self, domain, key_id, ciphertext, context):
         """
         Decrypts data previously encrypted with the encrypt method.
 
@@ -150,6 +166,11 @@ class KmsApiClient(object):
             "plaintext": "string",
         }
         """
+        try:
+            client = self.domain_to_client[domain]
+        except KeyError:
+            raise Exception(f"No client found for domain {domain}")
+
         return client.request(
             action="decrypt",
             body=json.dumps(

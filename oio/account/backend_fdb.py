@@ -2749,8 +2749,9 @@ class AccountBackendFdb(object):
             )
         checksum = tr[bucket_space.pack((secret_id, "checksum"))]
         secrets_range = bucket_space[secret_id]["kms"].range()
-        kms_secrets = {}
+        kms_secrets = []
         for key, _ in tr.get_range(secrets_range.start, secrets_range.stop):
+            # Add domain in tuple
             kms_secrets.append(secrets_range.unpack(key))
         return (secret.value, checksum.value, kms_secrets)
 
@@ -2810,11 +2811,14 @@ class AccountBackendFdb(object):
         **kwargs,
     ):
         bucket_space = self.kms_space[account][bucket]["secret"]
-        if tr[bucket_space.pack((secret_id,))].present():
+        if (
+            tr[bucket_space.pack((secret_id,))].present()
+            or tr[bucket_space.pack((secret_id, "checksum"))].present()
+        ):
             raise Conflict(f"A secret with secret_id={secret_id} already exists")
         tr[bucket_space.pack((secret_id,))] = secret
         tr[bucket_space.pack((secret_id, "checksum"))] = checksum.encode("utf-8")
-        for key_id, ciphertext in kms_secrets:
+        for domain, (key_id, ciphertext) in kms_secrets.items():
             secret_space = bucket_space[secret_id]["kms"][key_id]
             tr[secret_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
         if uncomplete:
