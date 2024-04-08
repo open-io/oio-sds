@@ -415,7 +415,15 @@ class TestRdirCrawler(BaseTestCase):
                     ][0]
                     self.assertTrue(exists(new_chunk_path))
 
-    def _test_orphan_entry(self, object_name, cid, chunk_id, content_id, content_ver):
+    def _test_orphan_entry(
+        self,
+        object_name,
+        cid,
+        chunk_id,
+        content_id,
+        content_ver,
+        delete_orphan_entries=True,
+    ):
         max_mtime = 16
         mtime = random.randrange(0, max_mtime + 1)
         rawx_id = random.choice(list(self.rawx_volumes.keys()))
@@ -431,6 +439,7 @@ class TestRdirCrawler(BaseTestCase):
             content_ver,
             mtime=mtime,
         )
+        self.conf["delete_orphan_entries"] = delete_orphan_entries
         rdir_crawler = RdirWorker(
             self.conf,
             self.rawx_volumes[rawx_id],
@@ -442,11 +451,15 @@ class TestRdirCrawler(BaseTestCase):
         self.assertIn(chunk_id, chunk_ids)
         # Crawl volume to delete the orphan entry into rdir repertory
         rdir_crawler.crawl_volume()
-        # Test that at least one orphan chunk entry has been removed
-        self.assertGreaterEqual(rdir_crawler.deleted_orphans, 1)
         entries = self.rdir_client.chunk_fetch(rawx_id, container_id=cid)
         chunk_ids = [entry[1] for entry in entries]
-        self.assertNotIn(chunk_id, chunk_ids)
+        if delete_orphan_entries:
+            # Test that at least one orphan chunk entry has been removed
+            self.assertGreaterEqual(rdir_crawler.deleted_orphans, 1)
+            self.assertNotIn(chunk_id, chunk_ids)
+        else:
+            self.assertEqual(rdir_crawler.deleted_orphans, 0)
+            self.assertIn(chunk_id, chunk_ids)
 
     def test_rdir_orphan_entry_deindexed_object_exists(self):
         """Test if orphan chunk entry registered to existing object is deindexed"""
@@ -483,3 +496,23 @@ class TestRdirCrawler(BaseTestCase):
         content_id = random_id(32)
         content_ver = 1
         self._test_orphan_entry(object_name, cid, chunk_id, content_id, content_ver)
+
+    def test_rdir_orphan_entry_not_enabled(self):
+        """
+        Test if an orphan chunk belonging to an object which does
+        not exits is not deindexed as the feature is not enabled
+        """
+        container = "rdir_crawler_m_chunks_" + random_str(6)
+        object_name = "m_chunk-" + random_str(8)
+        cid = cid_from_name(self.account, container)
+        chunk_id = random_id(63)
+        content_id = random_id(32)
+        content_ver = 1
+        self._test_orphan_entry(
+            object_name,
+            cid,
+            chunk_id,
+            content_id,
+            content_ver,
+            delete_orphan_entries=False,
+        )

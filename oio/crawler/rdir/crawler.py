@@ -71,6 +71,11 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
         )
+        # If True delete chunk orphan entries
+        # set to False by default
+        self.delete_orphan_entries = boolean_value(
+            self.conf.get("delete_orphan_entries"), False
+        )
         self.scans_interval = int_value(self.conf.get("interval"), self.SCANS_INTERVAL)
         self.report_interval = int_value(
             self.conf.get("report_interval"), self.REPORT_INTERVAL
@@ -255,16 +260,17 @@ class RdirWorker(Process, RawxUpMixin, CrawlerWorkerMarkerMixin):
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):
                 self.orphans += 1
-                try:
-                    # Deindex the chunk if not referenced in any meta2 db
-                    self._check_orphan(container_id, chunk_id, value, reqid)
-                except exc.OioException as oio_err:
-                    self.orphans_check_errors += 1
-                    error = (
-                        f"{oio_err} "
-                        + "failed to verify orphan chunk is referenced in meta2"
-                    )
-                    self.error(container_id, chunk_id, error, reqid=reqid)
+                if self.delete_orphan_entries:
+                    try:
+                        # Deindex the chunk if not referenced in any meta2 db
+                        self._check_orphan(container_id, chunk_id, value, reqid)
+                    except exc.OioException as oio_err:
+                        self.orphans_check_errors += 1
+                        error = (
+                            f"{oio_err} "
+                            + "failed to verify orphan chunk is referenced in meta2"
+                        )
+                        self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.ContentDrained):
                 self.orphans += 1
                 error = f"{err}, chunk considered as orphan"
