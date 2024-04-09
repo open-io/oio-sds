@@ -104,10 +104,14 @@ class KmsApiClient(object):
         self.enabled = boolean_value(conf.get("kmsapi_enabled"))
         if self.enabled:
             self.domains = [
-                d.strip() for d in conf.get("kmsapi_domains", "").split(",") if d
+                d.strip().lower()
+                for d in conf.get("kmsapi_domains", "").split(",")
+                if d
             ]
             if not self.domains:
                 raise ValueError("No KMS domain found")
+            if len(self.domains) != len(set(self.domains)):
+                raise ValueError("Duplicate KMS domains")
         self.domain_to_client = {}
 
     def add_client(
