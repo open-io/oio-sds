@@ -432,14 +432,18 @@ def create_key(path, key):
 def create_bucket_secret(
     kms, bucket, account=None, secret_id=None, secret_bytes=32, reqid=None
 ):
-    secret_meta = kms.create_secret(
+    resp, body = kms.create_secret(
         account,
         bucket,
         secret_id=secret_id,
         secret_bytes=secret_bytes,
         reqid=reqid,
     )
-    return secret_meta["secret"]
+    if resp.status >= 300:
+        raise Exception(
+            f"Not possible to create bucket secret: {resp.status} ({resp.reason})"
+        )
+    return body["secret"]
 
 
 # Functions copied and modified from the class SsecKeyMasterContext in
