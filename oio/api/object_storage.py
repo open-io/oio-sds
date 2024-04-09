@@ -17,6 +17,7 @@
 
 from __future__ import absolute_import
 
+from copy import deepcopy
 from io import BytesIO
 import os
 import warnings
@@ -270,7 +271,7 @@ class ObjectStorageApi(object):
             self._conscience_client = ConscienceClient(
                 conf={"namespace": self.namespace},
                 logger=self.logger,
-                **self._init_kwargs
+                **self._init_kwargs,
             )
         return self._conscience_client
 
@@ -363,7 +364,7 @@ class ObjectStorageApi(object):
         prefix=None,
         stats=None,
         sharding_accounts=None,
-        **kwargs
+        **kwargs,
     ):
         """
         List known accounts (except if requested, the sharding accounts
@@ -398,7 +399,7 @@ class ObjectStorageApi(object):
             prefix=prefix,
             stats=stats,
             sharding_accounts=sharding_accounts,
-            **kwargs
+            **kwargs,
         )
         return resp["listing"]
 
@@ -620,7 +621,7 @@ class ObjectStorageApi(object):
             marker=marker,
             end_marker=end_marker,
             prefix=prefix,
-            **kwargs
+            **kwargs,
         )
         return resp["listing"]
 
@@ -686,7 +687,7 @@ class ObjectStorageApi(object):
                 container=dst_container,
                 properties=False,
                 versions=True,
-                **kwargs
+                **kwargs,
             )
             target_beans = []
             copy_beans = []
@@ -711,7 +712,7 @@ class ObjectStorageApi(object):
                     storage_method,
                     self.blob_client,
                     policy=obj_meta["policy"],
-                    **kwargs
+                    **kwargs,
                 )
                 try:
                     chunks_copies = handler.link()
@@ -734,7 +735,7 @@ class ObjectStorageApi(object):
                         dst_account,
                         dst_container,
                         frozen=True,
-                        **kwargs
+                        **kwargs,
                     )
                     target_beans = []
                     copy_beans = []
@@ -745,7 +746,7 @@ class ObjectStorageApi(object):
                     dst_account,
                     dst_container,
                     frozen=True,
-                    **kwargs
+                    **kwargs,
                 )
             self.container.container_touch(dst_account, dst_container)
         finally:
@@ -852,7 +853,7 @@ class ObjectStorageApi(object):
             account=account,
             container=container,
             versions=True,
-            **kwargs
+            **kwargs,
         )
         for obj in objs:
             if obj["name"] != last_object_name:
@@ -896,7 +897,7 @@ class ObjectStorageApi(object):
         append=False,
         properties=None,
         properties_callback=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Create an object or append data to object in *container* of *account*
@@ -991,7 +992,7 @@ class ObjectStorageApi(object):
                 key_file=key_file,
                 append=append,
                 properties_callback=properties_callback,
-                **kwargs
+                **kwargs,
             )
         else:
             with open(src, "rb") as srcf:
@@ -1006,7 +1007,7 @@ class ObjectStorageApi(object):
                     key_file=key_file,
                     append=append,
                     properties_callback=properties_callback,
-                    **kwargs
+                    **kwargs,
                 )
 
     @handle_object_not_found
@@ -1050,7 +1051,7 @@ class ObjectStorageApi(object):
             data=stream,
             policy=policy,
             change_policy=True,
-            **kwargs
+            **kwargs,
         )
 
     @patch_kwargs
@@ -1097,7 +1098,7 @@ class ObjectStorageApi(object):
         version=None,
         bypass_governance=None,
         dryrun=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Delete an object from a container. If versioning is enabled and no
@@ -1124,7 +1125,7 @@ class ObjectStorageApi(object):
             version=version,
             bypass_governance=bypass_governance,
             dryrun=dryrun,
-            **kwargs
+            **kwargs,
         )
 
     @patch_kwargs
@@ -1217,7 +1218,7 @@ class ObjectStorageApi(object):
         deleted=False,
         chunks=False,
         mpu_marker_only=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Lists objects inside a container.
@@ -1251,7 +1252,7 @@ class ObjectStorageApi(object):
             deleted=deleted,
             chunks=chunks,
             mpu_marker_only=mpu_marker_only,
-            **kwargs
+            **kwargs,
         )
 
         for obj in resp_body["objects"]:
@@ -1285,7 +1286,7 @@ class ObjectStorageApi(object):
                         prefix=obj["name"],
                         limit=1,
                         deleted=True,
-                        **kwargs
+                        **kwargs,
                     )
                     if (
                         sub["objects"]
@@ -1326,7 +1327,7 @@ class ObjectStorageApi(object):
         version=None,
         chunk_info=False,
         properties=True,
-        **kwargs
+        **kwargs,
     ):
         """
         Get a description of the object along with the list of its chunks.
@@ -1380,7 +1381,7 @@ class ObjectStorageApi(object):
         target_content_id=None,
         link_content_id=None,
         properties_directive="COPY",
-        **kwargs
+        **kwargs,
     ):
         """
         Make a shallow copy of an object.
@@ -1392,7 +1393,7 @@ class ObjectStorageApi(object):
             target_obj,
             version=target_version,
             content=target_content_id,
-            **kwargs
+            **kwargs,
         )
         link_meta, handler, _ = self._object_prepare(
             link_account,
@@ -1403,7 +1404,7 @@ class ObjectStorageApi(object):
             content_id=link_content_id,
             policy=target_meta["policy"],
             link=True,
-            **kwargs
+            **kwargs,
         )
         link_meta["chunk_method"] = target_meta["chunk_method"]
         link_meta["length"] = target_meta["length"]
@@ -1446,7 +1447,7 @@ class ObjectStorageApi(object):
                 stgpol=link_meta["policy"],
                 mime_type=link_meta["mime_type"],
                 chunk_method=link_meta["chunk_method"],
-                **kwargs
+                **kwargs,
             )
         except (exc.BadRequest, exc.Forbidden) as ex:
             # Only delete chunk if the request really failed.
@@ -1492,7 +1493,7 @@ class ObjectStorageApi(object):
         version=None,
         ranges=None,
         key_file=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Actual implementation of object fetch logic.
@@ -1546,7 +1547,7 @@ class ObjectStorageApi(object):
         version=None,
         ranges=None,
         key_file=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Download an object.
@@ -1579,7 +1580,7 @@ class ObjectStorageApi(object):
             version=version,
             ranges=ranges,
             key_file=key_file,
-            **kwargs
+            **kwargs,
         )
 
         try:
@@ -1596,7 +1597,7 @@ class ObjectStorageApi(object):
                 reference=container,
                 path=obj,
                 version=version,
-                **kwargs
+                **kwargs,
             )
             if kwargs.get("force_master"):
                 # Cache was already ignored.
@@ -1610,7 +1611,7 @@ class ObjectStorageApi(object):
                 version=version,
                 ranges=ranges,
                 key_file=key_file,
-                **kwargs
+                **kwargs,
             )
         except StopIteration:
 
@@ -1642,7 +1643,7 @@ class ObjectStorageApi(object):
                     reference=container,
                     path=obj,
                     version=version,
-                    **kwargs
+                    **kwargs,
                 )
                 # This exception does not occur on the first block, it was
                 # checked before. So the first block of data was already sent
@@ -1724,7 +1725,7 @@ class ObjectStorageApi(object):
             version=version,
             properties={"properties": properties},
             clear=clear,
-            **kwargs
+            **kwargs,
         )
 
     @handle_object_not_found
@@ -1743,6 +1744,39 @@ class ObjectStorageApi(object):
         """
         return self.container.content_del_properties(
             account, container, obj, properties=properties, version=version, **kwargs
+        )
+
+    @handle_object_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def object_update_hash(
+        self, account, container, obj, new_hash, version=None, **kwargs
+    ):
+        """
+        Update the hash of an object.
+
+        :param new_hash: new hash to use for the object
+        :type new_hash: `str`
+        """
+        props = self.container.content_get_properties(
+            account, container, obj, version=version, **kwargs
+        )
+        old = {
+            "type": "header",  # bean name
+            "id": props["id"],
+            "hash": props["hash"],
+            "size": int(props["size"]),
+            "ctime": int(props["ctime"]),
+            "mtime": int(props["mtime"]),
+            "policy": props["policy"],
+            "chunk-method": props["chunk_method"],
+            "mime-type": props["mime_type"],
+        }
+        new = deepcopy(old)
+        new["hash"] = new_hash
+        return self.container.container_raw_update(
+            [old], [new], account, container, path=obj, version=version, **kwargs
         )
 
     def _object_upload(self, ul_handler, **kwargs):
@@ -1775,7 +1809,7 @@ class ObjectStorageApi(object):
         policy=None,
         key_file=None,
         link=False,
-        **kwargs
+        **kwargs,
     ):
         """Call content/prepare, initialize chunk uploaders."""
         chunk_prep = MetachunkPreparer(
@@ -1802,7 +1836,7 @@ class ObjectStorageApi(object):
                 storage_method,
                 self.blob_client,
                 policy=policy,
-                **kwargs
+                **kwargs,
             )
             return obj_meta, handler, None
 
@@ -1828,7 +1862,7 @@ class ObjectStorageApi(object):
         properties_callback=None,
         policy=None,
         key_file=None,
-        **kwargs
+        **kwargs,
     ):
         if kwargs.get("restore_drained"):
             obj_meta = self.object_get_properties(
@@ -1850,7 +1884,7 @@ class ObjectStorageApi(object):
             sysmeta,
             policy=policy,
             key_file=key_file,
-            **kwargs
+            **kwargs,
         )
 
         # XXX content_id and version are necessary to update an existing object
@@ -1927,7 +1961,7 @@ class ObjectStorageApi(object):
                 stgpol=obj_meta["policy"],
                 mime_type=obj_meta["mime_type"],
                 chunk_method=obj_meta["chunk_method"],
-                **kwargs
+                **kwargs,
             )
         except (exc.BadRequest, exc.Forbidden, exc.ServiceBusy) as ex:
             # 436: CODE_CONTAINER_FROZEN
@@ -2005,7 +2039,7 @@ class ObjectStorageApi(object):
                 item_key=lambda x: x["id"],
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
-                **kwargs
+                **kwargs,
             )
         else:
             accounts = [account]
@@ -2024,7 +2058,7 @@ class ObjectStorageApi(object):
                             marker_key=lambda x: x["next_marker"],
                             truncated_key=lambda x: x["truncated"],
                             account=sub_account,
-                            **kwargs
+                            **kwargs,
                         )
                         for container in containers:
                             try:

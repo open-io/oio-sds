@@ -2437,6 +2437,64 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self._service(systemd_key, "start", wait=4)
             self.wait_for_score(("rawx",))
 
+    def test_object_update_hash(self):
+        # Create an object
+        container = "test-object-update_hash-" + random_str(4)
+        self._create(container)
+
+        # Default oca: md5
+        path = "content-default"
+        reqid = request_id()
+        _, _, _, obj_meta = self.api.object_create_ext(
+            self.account,
+            container,
+            obj_name=path,
+            data=random_data(12),
+            reqid=reqid,
+        )
+        self.created.append((container, path, obj_meta["version"]))
+        self.api.object_update_hash(self.account, container, path, "A" * 32)
+        obj_meta, _ = self.api.object_locate(
+            self.account, container, path, properties=False
+        )
+        self.assertEqual("A" * 32, obj_meta["hash"])
+
+        # Force oca: md5
+        path = "content-md5"
+        reqid = request_id()
+        _, _, _, obj_meta = self.api.object_create_ext(
+            self.account,
+            container,
+            obj_name=path,
+            data=random_data(12),
+            reqid=reqid,
+            object_checksum_algo="md5",
+        )
+        self.created.append((container, path, obj_meta["version"]))
+        self.api.object_update_hash(self.account, container, path, "B" * 32)
+        obj_meta, _ = self.api.object_locate(
+            self.account, container, path, properties=False
+        )
+        self.assertEqual("B" * 32, obj_meta["hash"])
+
+        # Force oca: blake3
+        path = "content-blake3"
+        reqid = request_id()
+        _, _, _, obj_meta = self.api.object_create_ext(
+            self.account,
+            container,
+            obj_name=path,
+            data=random_data(12),
+            reqid=reqid,
+            object_checksum_algo="blake3",
+        )
+        self.created.append((container, path, obj_meta["version"]))
+        self.api.object_update_hash(self.account, container, path, "C" * 64)
+        obj_meta, _ = self.api.object_locate(
+            self.account, container, path, properties=False
+        )
+        self.assertEqual("C" * 64, obj_meta["hash"])
+
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
     EXPECTED_CHUNKS_PER_POLICY = {

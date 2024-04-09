@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -461,6 +461,11 @@ class SetObject(ObjectCommandMixin, Command):
             help="Clear previous properties",
             action="store_true",
         )
+        parser.add_argument(
+            "--new-hash",
+            metavar="<new hash>",
+            help="New hash to use for the object",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -472,6 +477,8 @@ class SetObject(ObjectCommandMixin, Command):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
         properties = parsed_args.property
+        new_hash = parsed_args.new_hash
+
         if parsed_args.tagging:
             try:
                 tags = jsonlib.loads(parsed_args.tagging)
@@ -487,15 +494,30 @@ class SetObject(ObjectCommandMixin, Command):
             from oio.container.lifecycle import TAGGING_KEY
 
             properties[TAGGING_KEY] = tags_xml
-        self.app.client_manager.storage.object_set_properties(
-            self.app.client_manager.account,
-            container,
-            obj,
-            properties,
-            version=parsed_args.object_version,
-            clear=parsed_args.clear,
-            cid=cid,
-        )
+
+        if not properties and not new_hash:
+            raise Command("Nothing to do")
+
+        if properties:
+            self.app.client_manager.storage.object_set_properties(
+                self.app.client_manager.account,
+                container,
+                obj,
+                properties,
+                version=parsed_args.object_version,
+                clear=parsed_args.clear,
+                cid=cid,
+            )
+
+        if new_hash:
+            self.app.client_manager.storage.object_update_hash(
+                self.app.client_manager.account,
+                container,
+                obj,
+                new_hash,
+                version=parsed_args.object_version,
+                cid=cid,
+            )
 
 
 class SaveObject(ObjectCommandMixin, Command):

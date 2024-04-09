@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -107,8 +107,8 @@ m2v2_json_load_single_header(struct json_object *j, gpointer *pbean)
 	}
 	if (jhash) {
 		hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
-		if (!hash || hash->len != 16) {
-			err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa16 hash");
+		if (!hash || (hash->len != 16 && hash->len != 32)) {
+			err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not md5 nor blake3 hash");
 			goto exit;
 		}
 	}
