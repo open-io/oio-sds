@@ -1165,8 +1165,8 @@ class RdirClient(HttpApi):
         if not container_path and container_id:
             container_path = self._resolve_cid_to_path(container_id)
         elif container_path and not container_id:
-            _tmp = container_path.rsplit("/")
-            container_id = cid_from_name(_tmp[1], _tmp[3])
+            _, account, container = container_path.split("/", 2)
+            container_id = cid_from_name(account, container)
         elif not container_path and not container_id:
             raise ValueError(
                 "At least the container ID or the container path should be given."
