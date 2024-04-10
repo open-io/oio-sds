@@ -41,6 +41,7 @@ class CrawlerWorkerMarkerMixin(object):
     """Crawler worker mixin to add marker property"""
 
     MARKERS_DIR = "markers"
+    DEFAULT_MARKER = ""
     # Every 60 seconds if the crawler can reach the max scanned_per_second asked.
     # If the max is not reached, the marker will be updated less often, it is
     # kind of a way to reduce the load/iops.
@@ -80,20 +81,20 @@ class CrawlerWorkerMarkerMixin(object):
         if not isdir(self.marker_dir):
             makedirs(self.marker_dir, exist_ok=True)
             # Folder does not exist, no marker for sure.
-            self.current_marker = "0"
+            self.current_marker = self.DEFAULT_MARKER
             return
 
         # Create file if does not exist
         if not isfile(self.marker_path):
             # File does not exist, no marker for sure.
-            self.current_marker = "0"
+            self.current_marker = self.DEFAULT_MARKER
             return
 
         # Open it RW (file should exist as checked above)
         with open(self.marker_path, "r") as marker_file:
             self.current_marker = marker_file.readline()
             if self.current_marker == "":
-                self.current_marker = "0"
+                self.current_marker = self.DEFAULT_MARKER
 
     def write_marker(self):
         """Save current marker into marker file"""
@@ -384,9 +385,9 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.successes = 0
         self.ignored_paths = 0
         self.invalid_paths = 0
-        if self.use_marker and self.current_marker != "0":
+        if self.use_marker and self.current_marker != self.DEFAULT_MARKER:
             # reset marker
-            self.current_marker = "0"
+            self.current_marker = self.DEFAULT_MARKER
             try:
                 self.write_marker()
             except OSError as err:

@@ -275,7 +275,7 @@ class TestRdirCrawler(BaseTestCase):
             with open(rdir_crawler.marker_path, "r") as marker_file:
                 markers = marker_file.read().splitlines()
                 self.assertIn("|".join([cid, chunk_path.rsplit("/", 1)[-1]]), markers)
-                self.assertIn("0", markers)
+                self.assertIn(rdir_crawler.DEFAULT_MARKER, markers)
 
     def test_rdir_crawler_check_marker_work_as_expected(self):
         """Check if marker already set are working as expected"""
@@ -379,8 +379,9 @@ class TestRdirCrawler(BaseTestCase):
                 self.assertFalse(exists(chunk_path_a))
             with open(rdir_crawler.marker_path, "r") as marker_file:
                 markers = marker_file.read().splitlines()
-                self.assertEqual(["0"], markers)
-            # The marker has been reset at the end of the last crawl
+                # The marker has been reset at the end of the last crawl
+                self.assertEqual([], markers)
+
             rdir_crawler.crawl_volume()
             # If there are no error
             if not any(
