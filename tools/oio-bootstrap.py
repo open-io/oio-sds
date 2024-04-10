@@ -1457,7 +1457,7 @@ pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${WEBHOOK} mpu_cleaner notify_deleted
+pipeline = ${WEBHOOK} notify_delete_manifest notify_deleted
 
 [handler:storage.content.drained]
 pipeline = notify_deleted
@@ -1489,10 +1489,6 @@ concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
-
-[filter:mpu_cleaner]
-use = egg:oio#mpu_cleaner
-limit_listing = 100
 
 [filter:content_rebuild]
 use = egg:oio#notify
@@ -1535,6 +1531,15 @@ use = egg:oio#noop
 use = egg:oio#delete
 broker_endpoint = ${QUEUE_URL}
 topic_prefix = oio-delete-
+
+[filter:notify_delete_manifest]
+# Forward storage.content.deleted events to another queue to process mpu parts. Another
+# oio-event-agent will read this queue and delete parts at a limited rate.
+use = egg:oio#notify
+required_fields = etag
+delay = 60
+broker_endpoint = ${QUEUE_URL}
+topic = oio-delete-manifest
 
 [filter:log]
 use = egg:oio#logger
@@ -1635,6 +1640,19 @@ pipeline = rebuild
 [filter:rebuild]
 use = egg:oio#blob_rebuilder
 topic = oio-rebuild
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+"""
+
+template_event_agent_mpu_parts_handlers = """
+[handler:storage.content.deleted]
+pipeline = mpu_cleaner
+
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
 
 [filter:log]
 use = egg:oio#logger
@@ -3095,6 +3113,21 @@ def generate(options):
         # We need only one service
         break
 
+    # Special event agent to handle mpu-parts delete
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-delete-manifest",
+            url,
+            workers="1",
+            group_id="event-agent-delete-mpu-parts",
+            template_handler=template_event_agent_mpu_parts_handlers,
+        )
+
+        # We need only one service
+        break
     # Xcute event-agent
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3234,6 +3267,7 @@ def generate(options):
         "oio",
         "oio-deadletter",
         "oio-delayed",
+        "oio-delete-manifest",
         "oio-drained",
         "oio-preserved",
         "oio-rebuild",

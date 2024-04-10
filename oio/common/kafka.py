@@ -258,7 +258,7 @@ class KafkaSender(KafkaClient):
                 self._delay_granularity,
                 self._delay_granularity - delay,
             )
-        if isinstance(event, bytes):
+        if isinstance(event, bytes) or isinstance(event, str):
             event = json.loads(event)
         now = datetime.now().timestamp()
 

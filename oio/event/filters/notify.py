@@ -17,6 +17,7 @@
 import re
 from urllib.parse import unquote
 
+from oio.common.easy_value import int_value
 from oio.common.json import json
 from oio.common.kafka import KafkaSendException, KafkaSender, get_retry_delay
 from oio.event.beanstalk import Beanstalk, BeanstalkError
@@ -47,6 +48,7 @@ class NotifyFilter(Filter):
         self.required_fields = [
             f for f in self.conf.get("required_fields", "").split(",") if f
         ]
+        self.delay = int_value(self.conf.get("delay"), 0)
         self._load_policy_regex()
 
     @staticmethod
@@ -249,7 +251,7 @@ class KafkaNotifyFilter(NotifyFilter):
                         topic = rule["destination"]
                         break
         try:
-            self.producer.send(topic, data, flush=True)
+            self.producer.send(topic, data, delay=self.delay, flush=True)
         except KafkaSendException as err:
             delay = None
             if err.retriable:
