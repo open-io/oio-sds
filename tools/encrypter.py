@@ -51,6 +51,13 @@ parser.add_argument(
     default="iv.json",
     help="path of json file that contains IVs to reuse",
 )
+parser.add_argument(
+    "--update-metadata",
+    action="store_true",
+    help="Update metadata on meta2",
+    dest="update_metadata",
+    default=False,
+)
 args = parser.parse_args()
 
 
@@ -81,7 +88,10 @@ while 1:
     sys.stdout.buffer.write(ciphertext)
 
 new_metadata = encrypter.encrypt_metadata(metadata)
-encrypter.update_metadata(new_metadata)
+
+if args.update_metadata:
+    encrypter.update_metadata(new_metadata)
+
 with open(args.metadata, "w") as outfile:
     json.dump(new_metadata, outfile)
     outfile.close()

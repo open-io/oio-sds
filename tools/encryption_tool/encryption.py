@@ -29,6 +29,7 @@ from urllib import parse as urlparse
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound
 from oio.common.easy_value import true_value as config_true_value
+from oio.common.utils import get_hasher
 
 CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"
 TRANSIENT_CRYPTO_META_KEY = "x-object-transient-sysmeta-crypto-meta"
@@ -791,7 +792,8 @@ class Encrypter:
             body_key, self.body_crypto_meta.get("iv")
         )
 
-        self.plaintext_md5 = hashlib.md5(b"")
+        self.plaintext_md5 = get_hasher("md5")
+        self.new_blake3 = get_hasher("blake3")
 
     def encrypt(self, chunk):
         """
@@ -807,8 +809,9 @@ class Encrypter:
         :returns: body ciphertext
         """
         self.plaintext_md5.update(chunk)
-
         ciphertext = self.body_crypto_ctxt.update(chunk)
+        self.new_blake3.update(ciphertext)
+
         return ciphertext
 
     def encrypt_metadata(self, metadata):
@@ -916,9 +919,15 @@ class Encrypter:
         return metadata
 
     def update_metadata(self, metadata):
+        """
+        Note that this method will update metadata on the last object version.
+        """
         properties = metadata.get("properties")
         self.api.object_set_properties(
             self.account, self.container, self.obj, properties
+        )
+        self.api.object_update_hash(
+            self.account, self.container, self.obj, self.new_blake3.hexdigest()
         )
 
     # Functions copied from swift/common/middleware/crypto/encrypter.py
