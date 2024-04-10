@@ -1225,8 +1225,6 @@ class RdirClient(HttpApi):
         """
         A wrapper around meta2_index_fetch that loops until no more records
         are available, returning all the records in a certain volume's index.
-
-        WARNING: For testing purposes only
         """
         return depaginate(
             self.meta2_index_fetch,

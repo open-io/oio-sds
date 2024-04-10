@@ -486,7 +486,8 @@ template_rdir_crawler_service = """
 [rdir-crawler]
 namespace = ${NS}
 user = ${USER}
-volume_list = ${RAWX_VOLUMES}
+volume_list = ${VOLUMES}
+volume_type = ${VOLUME_TYPE}
 
 # How many hexdigits must be used to name the indirection directories
 hash_width = ${HASH_WIDTH}
@@ -496,7 +497,7 @@ hash_depth = ${HASH_DEPTH}
 wait_random_time_before_starting = True
 interval = 1200
 report_interval = 300
-chunks_per_second = 10
+items_per_second = 10
 conscience_cache = 30
 log_level = INFO
 log_facility = LOG_LOCAL0
@@ -2612,6 +2613,32 @@ def generate(options):
         + " run --context meta2-crawler --concurrency=eventlet -p ",
     )
 
+    # oio-rdir-crawler-meta2
+    env.update(
+        {
+            "VOLUMES": ",".join(meta2_volumes),
+            "VOLUME_TYPE": "meta2",
+            "SRVTYPE": "rdir-crawler-meta2",
+            "EXE": "oio-rdir-crawler",
+            "GROUPTYPE": "crawler",
+            "SRVNUM": "1",
+            "HASH_WIDTH": defaults[HASH_WIDTH],
+            "HASH_DEPTH": defaults[HASH_DEPTH],
+        }
+    )
+    # first the conf
+    tpl = Template(template_rdir_crawler_service)
+    to_write = tpl.safe_substitute(env)
+    path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+    register_service(
+        env,
+        template_systemd_service_rdir_crawler,
+        crawler_target,
+        add_service_to_conf=False,
+    )
+
     # RAWX
     srvtype = "rawx"
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults["NB_RAWX"])
@@ -2669,11 +2696,12 @@ def generate(options):
             with open(watch(env), "w+") as f:
                 f.write(to_write)
 
-        # oio-rdir-crawler
+        # oio-rdir-crawler-rawx
         env.update(
             {
-                "RAWX_VOLUMES": ",".join(rawx_volumes),
-                "SRVTYPE": "rdir-crawler",
+                "VOLUMES": ",".join(rawx_volumes),
+                "VOLUME_TYPE": "rawx",
+                "SRVTYPE": "rdir-crawler-rawx",
                 "EXE": "oio-rdir-crawler",
                 "GROUPTYPE": "crawler",
                 "SRVNUM": "1",

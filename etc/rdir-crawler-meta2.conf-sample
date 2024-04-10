@@ -2,12 +2,15 @@
 namespace = OPENIO
 user = openio
 # Comma separated list of volumes to watch
-volume_list = /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
+volume_list = /var/lib/oio/sds/vol1/NS/meta2-1/,/var/lib/oio/sds/vol1/NS/meta2-2/
+
+# volume type : rawx or meta2
+volume_type = meta2
 
 # All volumes in <volume_list> should respect those hashes configurations.
 # How many hexdigits must be used to name the indirection directories
 hash_width = 3
-# How many levels of directories are used to store chunks
+# How many levels of directories are used to store meta2 db
 hash_depth = 1
 
 # Wait random time before starting
@@ -18,14 +21,14 @@ interval = 1800
 # In seconds, the interval between two logs entries (for each volume)
 # Defaults to 300 seconds.
 report_interval = 300
-# Maximum chunks to be scanned per second. Defaults to 30.
-chunks_per_second = 30
+# Maximum containers to be scanned per second. Defaults to 30.
+items_per_second = 30
 # In seconds, the interval between two requests to the conscience (to check if
-# rawx services are up). Defaults to 30.
+# meta2 services are up). Defaults to 30.
 conscience_cache = 30
 
 # Common log stuff
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
-syslog_prefix = OIO,OPENIO,rdir-crawler
+syslog_prefix = OIO,OPENIO,rdir-crawler-meta2

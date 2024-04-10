@@ -47,15 +47,15 @@ class CrawlerWorkerMarkerMixin(object):
     # kind of a way to reduce the load/iops.
     DEFAULT_SCANNED_BETWEEN_MARKERS = None
 
-    def init_current_marker(self, volume_path, chunks_per_second):
+    def init_current_marker(self, volume_path, items_per_second):
         """Init variables used to handle crawler markers
 
         :param volume_path: volume to crawl
         :type volume_path: str
-        :param chunks_per_second: max number of chunks per second
-        :type chunks_per_second: int
+        :param items_per_second: max number of items (chunks/containers) per second
+        :type items_per_second: int
         """
-        self.DEFAULT_SCANNED_BETWEEN_MARKERS = chunks_per_second * 60
+        self.DEFAULT_SCANNED_BETWEEN_MARKERS = items_per_second * 60
         self.scanned_between_markers = int_value(
             self.conf.get("scanned_between_markers"),
             self.DEFAULT_SCANNED_BETWEEN_MARKERS,

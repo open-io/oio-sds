@@ -15,34 +15,49 @@
 
 import os
 import random
-from os.path import basename, exists, isdir, splitext, join
+from os.path import basename, exists, isdir, splitext, join, isfile
 from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.rdir.crawler import RdirWorker
+from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
+from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx
 from oio.event.evob import EventTypes
-from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_id, random_str
 
 
-class TestRdirCrawler(BaseTestCase):
+class RdirCrawlerTestTool(BaseTestCase):
+    """Gathers common tool to all rdir crawler test"""
+
+    def create_container(self, container):
+        """Ensure create container works"""
+        while True:
+            reqid = request_id()
+            # Create container
+            res = self.storage.container_create(self.account, container, reqid=reqid)
+            if res:
+                self.wait_for_kafka_event(
+                    reqid=reqid, timeout=5.0, types=(EventTypes.CONTAINER_NEW,)
+                )
+                self.clean_later(container)
+                break
+
+
+class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
     @classmethod
     def setUpClass(cls):
-        super(TestRdirCrawler, cls).setUpClass()
+        super(TestRdirCrawlerForRawx, cls).setUpClass()
         # Prevent the chunks' rebuilds by the rdir crawlers
         cls._service("oio-crawler.target", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
         cls._service("oio-crawler.target", "start", wait=1)
-        super(TestRdirCrawler, cls).tearDownClass()
+        super(TestRdirCrawlerForRawx, cls).tearDownClass()
 
     def setUp(self):
-        super(TestRdirCrawler, self).setUp()
+        super(TestRdirCrawlerForRawx, self).setUp()
         self.api = self.storage
 
         self.conf.update({"hash_width": 3, "hash_depth": 1})
-
-        self.rdir_client = RdirClient(self.conf)
 
         services = self.conscience.all_services("rawx")
         self.rawx_volumes = {}
@@ -54,7 +69,7 @@ class TestRdirCrawler(BaseTestCase):
             volume = tags.get("tag.vol", None)
             self.rawx_volumes[service_id] = volume
             try:
-                self.rdir_client.admin_clear(service_id, clear_all=True)
+                self.rdir.admin_clear(service_id, clear_all=True)
             except Exception as exc:
                 self.logger.warning(
                     "rawx service id %s error message %s", service_id, str(exc)
@@ -100,6 +115,7 @@ class TestRdirCrawler(BaseTestCase):
         due to the SINGLE policy)
         """
         container = "rdir_crawler_1_chunk_" + random_str(6)
+        self.create_container(container)
         object_name = "1_chunk-" + random_str(6)
 
         chunks = self._create(container, object_name, "SINGLE")
@@ -107,7 +123,7 @@ class TestRdirCrawler(BaseTestCase):
         chunk = chunks[0]
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(
+        rdir_crawler = RdirWorkerForRawx(
             self.conf,
             volume_path,
             watchdog=self.watchdog,
@@ -134,6 +150,7 @@ class TestRdirCrawler(BaseTestCase):
         self.assertFalse(os.path.isfile(new_chunk_path))
 
     def _minimum_2_chunks_or_skip(self, container, object_name):
+        self.create_container(container)
         chunks = self._prepare(container, object_name)
         if len(chunks) < 2:
             self.skipTest("need at least 2 chunks to run")
@@ -145,7 +162,7 @@ class TestRdirCrawler(BaseTestCase):
         old_chunks.remove(chunk)
         chunk_path, volume_path = self._chunk_info(chunk)
 
-        rdir_crawler = RdirWorker(
+        rdir_crawler = RdirWorkerForRawx(
             self.conf,
             volume_path,
             watchdog=self.watchdog,
@@ -205,7 +222,6 @@ class TestRdirCrawler(BaseTestCase):
 
         # Shard the container before running the test. We don't really care
         # about the shard bounds since we will upload only one object.
-        self.api.container_create(self.account, container)
         container_sharding = ContainerSharding(self.conf)
         container_sharding.replace_shard(
             self.account,
@@ -235,13 +251,13 @@ class TestRdirCrawler(BaseTestCase):
         self.conf["scanned_between_markers"] = 1
         marker_path = join(
             volume_path,
-            RdirWorker.MARKERS_DIR,
+            RdirWorkerForRawx.MARKERS_DIR,
             splitext(basename(self.conf["conf_file"]))[0],
         )
         if exists(marker_path):
             # Reset marker if already set
             os.remove(marker_path)
-        rdir_crawler = RdirWorker(
+        rdir_crawler = RdirWorkerForRawx(
             self.conf,
             volume_path,
             watchdog=self.watchdog,
@@ -253,7 +269,7 @@ class TestRdirCrawler(BaseTestCase):
             isdir(
                 join(
                     volume_path,
-                    RdirWorker.MARKERS_DIR,
+                    RdirWorkerForRawx.MARKERS_DIR,
                 )
             )
         )
@@ -292,6 +308,7 @@ class TestRdirCrawler(BaseTestCase):
         # Creating a second container having objects with
         # chunks on the same volume as the last container
         container_b = "rdir_crawler_m_chunks_" + random_str(5)
+        self.create_container(container_b)
         cid_b = cid_from_name(self.account, container_b)
         v_path = ""
         while v_path != volume_path:
@@ -308,9 +325,11 @@ class TestRdirCrawler(BaseTestCase):
         # Enable marker
         self.conf["use_marker"] = True
         self.conf["conf_file"] = "/rdir-crawler.conf"
+        marker_directory = join(volume_path, RdirWorkerForRawx.MARKERS_DIR)
+        if not os.path.exists(marker_directory):
+            os.makedirs(marker_directory)
         marker_path = join(
-            volume_path,
-            RdirWorker.MARKERS_DIR,
+            marker_directory,
             splitext(basename(self.conf["conf_file"]))[0],
         )
         # Setting a marker
@@ -324,7 +343,7 @@ class TestRdirCrawler(BaseTestCase):
             marker_file.write(marker)
         # The objective here is to prove that rdir crawler
         # will begin after the marker defined
-        rdir_crawler = RdirWorker(
+        rdir_crawler = RdirWorkerForRawx(
             self.conf,
             volume_path,
             watchdog=self.watchdog,
@@ -336,7 +355,7 @@ class TestRdirCrawler(BaseTestCase):
             isdir(
                 join(
                     volume_path,
-                    RdirWorker.MARKERS_DIR,
+                    RdirWorkerForRawx.MARKERS_DIR,
                 )
             )
         )
@@ -346,7 +365,6 @@ class TestRdirCrawler(BaseTestCase):
             (
                 rdir_crawler.service_unavailable,
                 rdir_crawler.errors,
-                not rdir_crawler.total_scanned,
             )
         ):
             # Check that one chunk is repaired
@@ -388,7 +406,6 @@ class TestRdirCrawler(BaseTestCase):
                 (
                     rdir_crawler.service_unavailable,
                     rdir_crawler.errors,
-                    not rdir_crawler.total_scanned,
                 )
             ):
                 # Check that one chunk is repaired
@@ -429,7 +446,7 @@ class TestRdirCrawler(BaseTestCase):
         max_mtime = 16
         mtime = random.randrange(0, max_mtime + 1)
         rawx_id = random.choice(list(self.rawx_volumes.keys()))
-        # Register a false chunk to rdir repertory
+        # Register a false chunk to rdir directory
         # This chunk will be considered as orphan
         # as it is not registered in meta2 db
         self.rdir.chunk_push(
@@ -442,18 +459,18 @@ class TestRdirCrawler(BaseTestCase):
             mtime=mtime,
         )
         self.conf["delete_orphan_entries"] = delete_orphan_entries
-        rdir_crawler = RdirWorker(
+        rdir_crawler = RdirWorkerForRawx(
             self.conf,
             self.rawx_volumes[rawx_id],
             watchdog=self.watchdog,
             logger=self.logger,
         )
-        entries = self.rdir_client.chunk_fetch(rawx_id, container_id=cid)
+        entries = self.rdir.chunk_fetch(rawx_id, container_id=cid)
         chunk_ids = [entry[1] for entry in entries]
         self.assertIn(chunk_id, chunk_ids)
-        # Crawl volume to delete the orphan entry into rdir repertory
+        # Crawl volume to delete the orphan entry into rdir directory
         rdir_crawler.crawl_volume()
-        entries = self.rdir_client.chunk_fetch(rawx_id, container_id=cid)
+        entries = self.rdir.chunk_fetch(rawx_id, container_id=cid)
         chunk_ids = [entry[1] for entry in entries]
         if delete_orphan_entries:
             # Test that at least one orphan chunk entry has been removed
@@ -467,12 +484,13 @@ class TestRdirCrawler(BaseTestCase):
         """Test if orphan chunk entry registered to existing object is deindexed"""
         # Object creation
         container = "rdir_crawler_m_chunks_" + random_str(6)
+        self.create_container(container)
         object_name = "m_chunk-" + random_str(8)
         chunks = self._create(container, object_name)
         chunk_ids = [chunk["url"].split("/", 3)[3] for chunk in chunks]
         cid = cid_from_name(self.account, container)
         # Retrieve version and content id in order
-        # to register a false entry (orphan chunk) into rdir repertory
+        # to register a false entry (orphan chunk) into rdir directory
         obj_meta, _ = self.api.container.content_locate(
             path=object_name,
             cid=cid,
@@ -518,3 +536,260 @@ class TestRdirCrawler(BaseTestCase):
             content_ver,
             delete_orphan_entries=False,
         )
+
+
+class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
+    @classmethod
+    def setUpClass(cls):
+        super(TestRdirCrawlerForMeta2, cls).setUpClass()
+        # Prevent container to checked by the rdir crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super(TestRdirCrawlerForMeta2, cls).tearDownClass()
+
+    def setUp(self):
+        super(TestRdirCrawlerForMeta2, self).setUp()
+        self.api = self.storage
+        self.nb_meta2 = 0
+        self.conf.update({"hash_width": 3, "hash_depth": 1})
+
+        services = self.conscience.all_services("meta2")
+        self.meta2_volumes = {}
+        for meta2 in services:
+            self.nb_meta2 += 1
+            tags = meta2["tags"]
+            service_id = tags.get("tag.service_id", None)
+            if service_id is None:
+                service_id = meta2["addr"]
+            volume = tags.get("tag.vol", None)
+            self.meta2_volumes[service_id] = volume
+            try:
+                entries = self.rdir.meta2_index_fetch_all(service_id)
+                for entry in entries:
+                    self.rdir.meta2_index_delete(
+                        service_id, container_path=entry["container_url"]
+                    )
+            except Exception as exc:
+                self.logger.warning(
+                    "meta2 service id %s error message %s", service_id, str(exc)
+                )
+                pass
+        self.wait_until_empty(topic="oio", group_id="event-agent")
+
+    def test_crawler_rebuild_meta2(self):
+        """Test if meta2 db is rebuild"""
+        if int(self.conf.get("container_replicas", 1)) < 3:
+            self.skipTest("Container replication must be enabled")
+        container = "rdir_crawler_container_" + random_str(8)
+        self.create_container(container)
+        cid = cid_from_name(self.account, container)
+        status = self.admin.election_status(
+            "meta2", account=self.account, reference=container
+        )
+        volume_id = status.get("master", "")
+        volume_path = self.meta2_volumes[volume_id]
+        self.conf["delete_orphan_entries"] = True
+        rdir_crawler = RdirWorkerForMeta2(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+        meta2_db_path = rdir_crawler._build_db_path(cid)
+        # Remove meta2 db
+        os.remove(meta2_db_path)
+        self.assertFalse(isfile(meta2_db_path))
+        rdir_crawler.crawl_volume()
+        self.assertEqual(rdir_crawler.repaired, 1)
+        self.assertTrue(isfile(meta2_db_path))
+
+    def test_crawler_container_not_exist(self):
+        """Check that not referenced container in meta2,
+        is dexindexed by the rdir-crawler from rdir directory
+        """
+        container = "rdir_crawler_container_" + random_str(6)
+        container_url = "OPENIO/rdir-crawler/test"
+        cid = cid_from_name(self.account, container)
+        max_mtime = 16
+        mtime = random.randrange(0, max_mtime + 1)
+        meta2_id = random.choice(list(self.meta2_volumes.keys()))
+        self.rdir.meta2_index_push(meta2_id, container_url, cid, mtime)
+        entries = self.rdir.meta2_index_fetch_all(meta2_id)
+        container_ids = [entry["container_id"] for entry in entries]
+        self.assertIn(cid, container_ids)
+        self.conf["delete_orphan_entries"] = True
+        rdir_crawler = RdirWorkerForMeta2(
+            self.conf,
+            self.meta2_volumes[meta2_id],
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+        rdir_crawler.crawl_volume()
+        self.assertEqual(rdir_crawler.deindexed_containers, 1)
+        entries = self.rdir.meta2_index_fetch_all(meta2_id)
+        container_ids = [entry["container_id"] for entry in entries]
+        self.assertNotIn(cid, container_ids)
+
+    def test_rdir_crawler_check_marker_creation(self):
+        """Check if marker are created as expected"""
+        container = "rdir_crawler_container_" + random_str(6)
+        self.create_container(container)
+        status = self.admin.election_status(
+            "meta2", account=self.account, reference=container
+        )
+        volume_id = status.get("master", "")
+        volume_path = self.meta2_volumes[volume_id]
+        self.conf["use_marker"] = True
+        self.conf["conf_file"] = "/rdir-crawler.conf"
+        self.conf["scanned_between_markers"] = 1
+        marker_path = join(
+            volume_path,
+            RdirWorkerForMeta2.MARKERS_DIR,
+            splitext(basename(self.conf["conf_file"]))[0],
+        )
+        if exists(marker_path):
+            # Reset marker if already set
+            os.remove(marker_path)
+        rdir_crawler = RdirWorkerForMeta2(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+
+        # Marker folder created in the volume path
+        self.assertTrue(
+            isdir(
+                join(
+                    volume_path,
+                    RdirWorkerForMeta2.MARKERS_DIR,
+                )
+            )
+        )
+
+        def write_marker(worker):
+            """Save current marker into marker file"""
+            with open(worker.marker_path, "a") as marker_file:
+                marker_file.write(worker.current_marker + "\n")
+
+        rdir_crawler.write_marker = lambda: write_marker(rdir_crawler)
+        rdir_crawler.crawl_volume()
+        # If there are no error
+        if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
+            # Due to scanned_between_markers equals to 1,
+            # a marker will be written after each container checked.
+            # We expect here to find the marker corresponding to the
+            # container selected above
+            with open(rdir_crawler.marker_path, "r") as marker_file:
+                markers = marker_file.read().splitlines()
+                cid = cid_from_name(self.account, container)
+                self.assertIn(self.rdir._resolve_cid_to_path(cid), markers)
+                self.assertIn(rdir_crawler.DEFAULT_MARKER, markers)
+
+    def test_rdir_crawler_check_marker_work_as_expected(self):
+        """Check if marker already set are working as expected"""
+        if self.nb_meta2 > 1:
+            self.skip("This test is set to run on a cluster with one meta2")
+        volume_id = list(self.meta2_volumes.keys())[0]
+        volume_path = self.meta2_volumes[volume_id]
+        containers = []
+        for i in range(3):
+            container = "rdir_crawler_container_" + random_str(7)
+            containers.append(container)
+        # Sort containers list
+        containers.sort()
+        for i, container in enumerate(containers):
+            # The first and the third containers are orphan entries in rdir.
+            # The second container is created so a legitime entry
+            # is introduced in the rdir
+            if i == 1:  # create container
+                self.create_container(container)
+                created_container = container
+
+            else:  # Orphan entry introduced
+                max_mtime = 16
+                mtime = random.randrange(0, max_mtime + 1)
+                container_id = cid_from_name(self.account, container)
+                container_url = join(self.conf["namespace"], self.account, container)
+                # Push false entry in meta2 rdir directory
+                while True:
+                    res, _ = self.rdir.meta2_index_push(
+                        volume_id=volume_id,
+                        container_url=container_url,
+                        container_id=container_id,
+                        mtime=mtime,
+                    )
+                    if res[0].status in (204, 201):
+                        break
+
+        cid = cid_from_name(self.account, created_container)
+        self.conf["use_marker"] = True
+        self.conf["delete_orphan_entries"] = True
+        self.conf["conf_file"] = "/rdir-crawler.conf"
+        marker_directory = join(volume_path, RdirWorkerForMeta2.MARKERS_DIR)
+        if not os.path.exists(marker_directory):
+            os.makedirs(marker_directory)
+        marker_path = join(
+            volume_path,
+            RdirWorkerForMeta2.MARKERS_DIR,
+            splitext(basename(self.conf["conf_file"]))[0],
+        )
+        # Setting a marker
+        with open(marker_path, "w") as marker_file:
+            marker = self.rdir._resolve_cid_to_path(cid)
+            marker_file.write(marker)
+        rdir_crawler = RdirWorkerForMeta2(
+            self.conf,
+            volume_path,
+            watchdog=self.watchdog,
+            logger=self.logger,
+        )
+        self.assertEqual(rdir_crawler.current_marker, marker)
+        rdir_crawler.crawl_volume()
+        # If there are no error
+        if not any(
+            (
+                rdir_crawler.service_unavailable,
+                rdir_crawler.errors,
+            )
+        ):
+            # The container deindexed is the one after the marker
+            self.assertEqual(rdir_crawler.containers_not_referenced, 1)
+            self.assertEqual(rdir_crawler.deindexed_containers, 1)
+            self.assertEqual(rdir_crawler.total_scanned, 1)
+            entries = self.rdir.meta2_index_fetch_all(volume_id)
+            container_ids = [entry["container_id"] for entry in entries]
+            self.assertNotIn(cid_from_name(self.account, containers[2]), container_ids)
+            self.assertIn(cid_from_name(self.account, containers[1]), container_ids)
+            self.assertIn(cid_from_name(self.account, containers[0]), container_ids)
+
+            # The container deindexed was previously skipped due to the marker.
+            # After marker reinitialization, the non existing container is checked
+            # and deindexed
+            self.assertEqual(rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER)
+            rdir_crawler.crawl_volume()
+            if not any(
+                (
+                    rdir_crawler.service_unavailable,
+                    rdir_crawler.errors,
+                )
+            ):
+                self.assertEqual(rdir_crawler.containers_not_referenced, 1)
+                self.assertEqual(rdir_crawler.deindexed_containers, 1)
+                self.assertEqual(rdir_crawler.total_scanned, 2)
+                self.assertEqual(
+                    rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER
+                )
+                entries = self.rdir.meta2_index_fetch_all(volume_id)
+                container_ids = [entry["container_id"] for entry in entries]
+                self.assertNotIn(
+                    cid_from_name(self.account, containers[0]),
+                    container_ids,
+                )
+                self.assertIn(
+                    cid_from_name(self.account, containers[1]),
+                    container_ids,
+                )
