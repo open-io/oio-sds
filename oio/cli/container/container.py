@@ -603,6 +603,12 @@ class FlushContainer(ContainerCommandMixin, Command):
             help="""Delay between each iteration (default: 0.0s),
  not relevant with "quickly" option.""",
         )
+        parser.add_argument(
+            "--all-versions",
+            action="store_true",
+            dest="all_versions",
+            help="""Flush all versions (quickly already flushes all versions)""",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -623,7 +629,11 @@ class FlushContainer(ContainerCommandMixin, Command):
                 parsed_args.cid
             )
         self.app.client_manager.storage.container_flush(
-            account, container, fast=parsed_args.quick, **kwargs
+            account,
+            container,
+            fast=parsed_args.quick,
+            all_versions=parsed_args.all_versions,
+            **kwargs,
         )
 
 

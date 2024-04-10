@@ -525,7 +525,9 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_flush(self, account, container, fast=False, delay=None, **kwargs):
+    def container_flush(
+        self, account, container, fast=False, delay=None, all_versions=False, **kwargs
+    ):
         """
         Flush a container
 
@@ -539,17 +541,31 @@ class ObjectStorageApi(object):
         :param delay: delay (in seconds) between each iteration
             (not relevant with fast option)
         :type delay: `float`
+        :param all_versions: flush all objects with versions if true
+            (need versioning disabled to avoid infinite loop)
+        :type all_versions: `bool`
         """
         if fast:
             truncated = True
             while truncated:
+                # Native container flush already deletes all versions
                 resp = self.container.container_flush(account, container, **kwargs)
                 truncated = resp["truncated"]
             return
 
+        if all_versions:
+            props = self.container.container_get_properties(
+                account, container, **kwargs
+            )
+            maxvers = props["system"].get("sys.m2.policy.version", None)
+            if maxvers and int(maxvers) < 0:
+                raise exc.OioException(
+                    "Flushing all versions while versioning is enabled is forbidden"
+                )
+
         while True:
             # No need to keep a marker: we are deleting objects
-            resp = self.object_list(account, container, **kwargs)
+            resp = self.object_list(account, container, versions=all_versions, **kwargs)
             if not resp["objects"]:
                 break
             objects = [obj["name"] for obj in resp["objects"]]

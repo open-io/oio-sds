@@ -326,7 +326,11 @@ class CommonTestCase(testtools.TestCase):
     def tearDown(self):
         for acct, ct in self._containers_to_clean:
             try:
-                self.storage.container_flush(acct, ct)
+                # Disable versioning to be able to fully flush the container.
+                self.storage.container_set_properties(
+                    acct, ct, system={"sys.m2.policy.version": "0"}
+                )
+                self.storage.container_flush(acct, ct, all_versions=True)
                 self.storage.container_delete(acct, ct)
             except Exception as exc:
                 self.logger.info("Failed to clean container %s", exc)
