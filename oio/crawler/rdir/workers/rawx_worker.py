@@ -24,6 +24,7 @@ from oio.crawler.common.base import RawxService, RawxUpMixin
 from oio.crawler.common.crawler import TAGS_TO_DEBUG
 from oio.crawler.rdir.workers.common import RdirWorker
 from oio.common.logger import logging
+from oio.blob.utils import chunk_id_to_path
 
 
 class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
@@ -134,17 +135,6 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
             msg,
         )
 
-    def _build_chunk_path(self, chunk_id):
-        chunk_path = self.volume_path
-
-        for i in range(self.hash_depth):
-            start = chunk_id[i * self.hash_width :]
-            chunk_path += f"/{start[: self.hash_width]}"
-
-        chunk_path += f"/{chunk_id}"
-
-        return chunk_path
-
     def _check_orphan(self, container_id, chunk_id, value, reqid):
         """check and deindex chunk in rdir if not referenced in meta2 db
 
@@ -244,7 +234,12 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
                 self.error(container_id, chunk_id, error, reqid=reqid)
 
     def process_entry(self, container_id, chunk_id, value, reqid):
-        chunk_path = self._build_chunk_path(chunk_id)
+        chunk_path = chunk_id_to_path(
+            chunk_id,
+            hash_width=self.hash_width,
+            hash_depth=self.hash_depth,
+            volume_path=self.volume_path,
+        )
 
         if not isfile(chunk_path):
             self.logger.debug(

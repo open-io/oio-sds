@@ -13,6 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+from os.path import join as path_join
 
 from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
@@ -112,3 +113,16 @@ def read_chunk_metadata(fd, chunk_id):
     if meta["chunk_id"] != chunk_id:
         raise exc.MissingAttribute(CHUNK_XATTR_KEYS["chunk_id"])
     return meta, raw_meta_copy if raw_meta_copy else raw_meta
+
+
+def chunk_id_to_path(chunk_id, hash_width=0, hash_depth=0, volume_path=None):
+    """
+    Build a chunk path from its id
+    """
+    path_parts = [volume_path]
+    for i in range(hash_depth):
+        start = chunk_id[i * hash_width :]
+        path_parts.append(start[:hash_width])
+    path_parts.append(chunk_id)
+
+    return path_join(*path_parts)
