@@ -41,7 +41,6 @@ DATADIR="$SDS/data"
 
 ZKSLOW=0
 verbose=0
-OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
 while getopts "D:P:I:N:f:Z:p:r:CRUv" opt; do
     case $opt in
