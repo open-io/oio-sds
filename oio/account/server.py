@@ -1757,10 +1757,18 @@ class Account(WerkzeugApp):
         account_id = resp["account"]
         bname = resp["bucket"]
         context = f"{account_id}_{bname}".encode("utf-8")
-        for domain, content in kms_secrets.items():
+        for domain in self.kmsapi_domains:
             try:
                 data = self.kms_api.decrypt(
-                    domain, content["key_id"], content["ciphertext"], context
+                    domain,
+                    kms_secrets[domain]["key_id"],
+                    kms_secrets[domain]["ciphertext"],
+                    context,
+                )
+            except KeyError as exc:
+                self.logger.info(
+                    f"No KMS secret found on domain {domain} for bucket "
+                    f"{account_id}/{bname}"
                 )
             except Exception as exc:
                 self.logger.error(
