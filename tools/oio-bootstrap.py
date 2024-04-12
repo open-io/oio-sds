@@ -287,6 +287,23 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
+template_systemd_service_statsd = """
+[Unit]
+Description=[OpenIO] Fake statsd server
+PartOf=${PARENT}
+OioGroup=${NS},${SRVTYPE},${IP}:${STATSD_PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=bash -c "nc -kuld ${IP} ${STATSD_PORT} | sed -E -e 's/(\\|c|\\|s|\\|ms)(.)/\\1\\\\n\\2/' | sed -E -e 's/(\\|c|\\|s|\\|ms)(.)/\\1\\\\n\\2/' > ${DATADIR}/statsd_${STATSD_PORT}.txt"
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
 template_systemd_service_proxy = """
 [Unit]
 Description=[OpenIO] Service proxy ${SRVNUM}
@@ -2850,6 +2867,19 @@ def generate(options):
     with open(config(env), "w+") as f:
         tpl = Template(template_kms)
         f.write(tpl.safe_substitute(env))
+
+    # fake statsd server
+    if options.get("statsd", {}).get("host", ""):
+        env = subenv(
+            {
+                "SRVTYPE": "statsd-server",
+                "SRVNUM": 1,
+            }
+        )
+        register_service(env, template_systemd_service_statsd, root_target)
+        with open(config(env), "w+") as f:
+            tpl = Template(template_kms)
+            f.write(tpl.safe_substitute(env))
 
     # account
     env = subenv(

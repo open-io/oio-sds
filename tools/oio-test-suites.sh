@@ -348,6 +348,7 @@ if is_running_test_suite "single" ; then
 	fi
 	func_tests $opts \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-statsd.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
