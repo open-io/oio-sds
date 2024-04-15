@@ -201,11 +201,12 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 self.not_to_match[rule][action] = []
                 self.to_match_markers[rule][action] = []
 
-    def _copy_db(self):
-        self.cid = cid_from_name(self.account, self.container)
+    def _copy_db(self, container=None):
+        ct = container or self.container
+        self.cid = cid_from_name(self.account, ct)
 
         status = self.admin_client.election_status(
-            "meta2", account=self.account, reference=self.container
+            "meta2", account=self.account, reference=ct
         )
         slaves = status.get("slaves", [])
         if slaves:
@@ -221,10 +222,10 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         )
         self.assertEqual(resp.status, 204)
 
-    def _check_and_apply(self, source, nothing_to_match=False):
+    def _check_and_apply(self, source, container=None, nothing_to_match=False):
         if not nothing_to_match:
             self.assertIsNot(len(self.to_match), 0)
-        self._copy_db()
+        self._copy_db(container)
         time.sleep(1)
         self._exec_rules_via_sql_query(source)
 
@@ -400,6 +401,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         transitions = rule.get("Transitions", [])
         noncureent_expiration = rule.get("NoncurrentVersionExpiration", None)
         noncurrent_transitions = rule.get("NoncurrentVersionTranstitions", [])
+        abort_mpu = rule.get("AbortIncompleteMultipartUpload", None)
         if expiration is not None:
             actions["Expiration"] = [expiration]
         if len(transitions) > 0:
@@ -409,6 +411,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         if len(noncurrent_transitions) > 0:
             actions["NoncurrentVersionTranstitions"] = noncurrent_transitions
 
+        if abort_mpu is not None:
+            actions["AbortIncompleteMultipartUpload"] = [abort_mpu]
         return actions
 
     def _exec_rules_via_sql_query(self, source):
@@ -2548,7 +2552,7 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
                 self.not_to_match[self.rule_id][self.action].append(obj_meta)
             self.api.object_delete(self.account, self.container, obj_meta["name"])
 
-        self._check_and_apply(source, True)
+        self._check_and_apply(source, nothing_to_match=True)
 
     # Current version is delete marker and is only the version
     # action remove delete marker
@@ -4079,3 +4083,281 @@ class TestLifecycleTransitionConflict(TestLifecycleConform):
             self.helper.enable_versioning()
         self._upload_expected_combine1()
         self._check_and_apply(source)
+
+
+class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
+    """
+    Tests for incomplete mpu parts, simulate an incomplete mpu and check
+    for events
+    """
+
+    def setUp(self):
+        super(TestLifecycleAbortIncompleteMpu, self).setUp()
+        self.versioning_enabled = False
+
+        self.source = ""
+        self.action1 = "AbortIncompleteMultipartUpload"
+        self.action_config = {
+            "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}
+        }
+
+        self.rule_1 = "rule1-abort-mpu"
+        self.rules = {
+            self.rule_1: {self.action1},
+        }
+
+        self._init_match_rules()
+
+        self.not_to_match_versions = []
+
+    def tearDown(self):
+        super(TestLifecycleAbortIncompleteMpu, self).tearDown()
+
+    def _upload_incomplete_mpu(self):
+        # match only n non current versions per object
+        for _ in range(self.number_not_match):
+            name = self.prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule_1][self.action1].append(obj_meta)
+            not_prefix = "x/"
+            name = not_prefix + random_str(5)
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_short, random_length=5
+                )
+                self.not_to_match[self.rule_1][self.action1].append(obj_meta)
+        for _ in range(self.number_match):
+            name = self.prefix + random_str(5)
+            incomplete_mpu_property = {"x-object-sysmeta-s3api-has-content-type": "no"}
+            for i in range(self.number_of_versions):
+                obj_meta = self._upload_something(
+                    name=name, data=self.data_long, random_length=6
+                )
+                self.api.object_set_properties(
+                    self.account,
+                    self.container + "+segments",
+                    name,
+                    incomplete_mpu_property,
+                )
+                self.to_match[self.rule_1][self.action1].append(obj_meta)
+
+    def _create_containers_with_mpu(self, lifecycle_source):
+        seg_container = self.container + "+segments"
+        self.api.container_create(
+            self.account,
+            self.container,
+            properties={LIFECYCLE_PROPERTY_KEY: lifecycle_source},
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+
+        self.api.container_create(
+            self.account,
+            seg_container,
+        )
+        if self.versioning_enabled:
+            seg_helper = Helper(self.api, self.account, seg_container)
+            seg_helper.enable_versioning()
+
+    def _get_action_parameters(self, act_type, act):
+        days_after_initiation = None
+        date = None
+        delete_marker = None
+        days_after_initiation = act.get("DaysAfterInitiation")
+        return [days_after_initiation, date, delete_marker]
+
+    def _upload_something(
+        self, prefix="", random_length=4, data=None, name=None, size=None, **kwargs
+    ):
+        seg_container = self.container + "+segments"
+        name = name or (prefix + random_str(random_length))
+        data = data or (random_str(8))
+        self.api.object_create(
+            self.account, seg_container, obj_name=name, data=data, **kwargs
+        )
+        obj_meta = self.api.object_show(self.account, seg_container, name)
+        obj_meta["container"] = seg_container
+        if size is not None:
+            obj_meta["size"] = size
+        return obj_meta
+
+    # Redefine private methods
+    def _exec_rules_via_sql_query(self, source):
+        lc = ContainerLifecycle(self.api, self.account, self.container)
+
+        lc.load_json(source)
+        lc.save()
+        json_dict = json.loads(source)
+
+        count_rules = 0
+        count_actions = 0
+        for rule_id, rule in json_dict["Rules"].items():
+            rule["ID"] = rule_id
+            actions = self._get_actions(rule)
+            for act_type, act_list in actions.items():
+                for act in act_list:
+                    # Force expiration for test
+                    days_in_sec = None
+                    base_sql_query = None
+                    queries = {}
+                    action = ""
+                    days = None
+                    if act_type == "AbortIncompleteMultipartUpload":
+                        action = "AbortIncompleteMultipartUpload"
+                    else:
+                        print("Unsupported action type", type(act))
+                        return
+
+                    days, _, _ = self._get_action_parameters(act_type, act)
+
+                    # For tests(days_in_sec set to 0)
+                    # days_in_sec = 86400 * days_in_sec
+                    if days is not None:
+                        days_in_sec = 0 * days
+                        base_sql_query = lc.abort_incomplete_query(rule, days_in_sec)
+                        queries["base"] = base_sql_query
+
+                    self._check_query_events(
+                        queries,
+                        act_type,
+                        {},
+                        None,
+                        None,
+                        None,
+                        rule_id,
+                    )
+
+                    count_actions += 1
+                    self.assertEqual(len(self.to_match[rule_id][action]), 0)
+        count_rules += 1
+
+    def _check_query_events(
+        self,
+        queries,
+        action,
+        view_queries,
+        newer_non_current_versions,
+        policy,
+        last_rule_action,
+        rule_id,
+    ):
+        for key_query, val_query in queries.items():
+            offset = 0
+            while True:
+                sql_query = val_query
+                sql_query = f"{sql_query} limit {self.batch_size} " f" offset {offset} "
+                kwargs = {}
+                params = {"cid": self.cid, "service_id": self.peer_to_use}
+                data = {}
+                data["action"] = action
+                data["suffix"] = "lifecycle"
+                data["query"] = sql_query
+                data["batch_size"] = self.batch_size
+                data["rule_id"] = rule_id
+
+                reqid = request_id()
+                resp, body = self.proxy_client._request(
+                    "POST",
+                    "/container/lifecycle/apply",
+                    params=params,
+                    reqid=reqid,
+                    json=data,
+                    **kwargs,
+                )
+                self.assertEqual(resp.status, 204)
+                count = int(resp.getheader("x-oio-count", 0))
+                offset += count
+                count_events = 0
+
+                exptected_events = min(
+                    len(self.to_match[rule_id][action]), self.batch_size
+                )
+                while count > 0 and count_events < exptected_events:
+                    event = self.wait_for_kafka_event(
+                        types=(EventTypes.LIFECYCLE_ACTION,)
+                    )
+                    self.assertIsNotNone(event)
+                    self.assertEqual(event.event_type, "storage.lifecycle.action")
+                    self.assertEqual(event.data["account"], self.account)
+                    self.assertEqual(
+                        event.data["container"], self.container + "+segments"
+                    )
+
+                    elements_to_match = (
+                        self.to_match[rule_id][action]
+                        if key_query == "base"
+                        else self.to_match_markers[rule_id][action]
+                    )
+
+                    [found, elem_to_remove] = self._check_event(
+                        elements_to_match, event
+                    )
+                    if not found:
+                        # For debug
+                        print("elements_to_match:", elements_to_match)
+                        print("event.data:", event.data)
+                    self.assertEqual(found, True)
+
+                    list_of_bool = [
+                        True
+                        for elem in self.not_to_match[rule_id][action]
+                        if event.data["object"]
+                        and event.data["version"] in elem.values()
+                    ]
+                    self.assertEqual(any(list_of_bool), False)
+                    elements_to_match.remove(elem_to_remove)
+
+                    self.assertEqual(event.data["action"], action)
+                    count_events += 1
+                if count == 0:
+                    break
+
+    # List of tests
+    def test_abort_all(self):
+        source = (
+            """
+            {"Rules":
+                {  """
+            f'"{self.rule_1}":'
+            """
+                    {"Status":"Enabled","""
+            f'"{self.action1}":'
+            f"{json.dumps(self.action_config[self.action1])},"
+            """
+                    "Filter":{ }
+                    }
+                }
+            }
+            """
+        )
+        self._create_containers_with_mpu(source)
+        self._upload_incomplete_mpu()
+        self._check_and_apply(source, container=self.container + "+segments")
+
+    def test_abort_with_prefix(self):
+        source = (
+            """
+            {"Rules":
+                {  """
+            f'"{self.rule_1}":'
+            """
+                    {"Status":"Enabled","""
+            f'"{self.action1}":'
+            f"{json.dumps(self.action_config[self.action1])},"
+            """
+                    "Filter":
+                        {"Prefix":"""
+            f'"{self.prefix}"'
+            """         }
+                    }
+                }
+            }
+            """
+        )
+
+        self._create_containers_with_mpu(source)
+        self._upload_incomplete_mpu()
+        self._check_and_apply(source, container=self.container + "+segments")
