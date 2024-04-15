@@ -16,12 +16,13 @@
 
 import base64
 import secrets
+import time
 
 from functools import wraps
 
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import NotFound, BadRequest, Conflict
+from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
 
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
 from oio.common.easy_value import boolean_value, int_value, true_value, float_value
@@ -212,6 +213,32 @@ class Account(WerkzeugApp):
         )
         super(Account, self).__init__(self.url_map, self.logger)
 
+    def send_stats(func):
+        @wraps(func)
+        def _send_stats_wrapper(self, req, *args, **kwargs):
+            status = 500
+            start_time = time.monotonic()
+            try:
+                resp = func(self, req, *args, **kwargs)
+                try:
+                    r = resp.get_response()
+                except AttributeError:
+                    r = resp
+                status = r.status_code or r.default_status
+                return resp
+            except HTTPException as exc:
+                status = exc.code
+                raise
+            finally:
+                duration = time.monotonic() - start_time
+                endpoint = func.__name__.lstrip("on_")
+                self.statsd.timing(
+                    f"openio.account.api.{endpoint}.{req.method}.{status}.timing",
+                    duration * 1000,
+                )
+
+        return _send_stats_wrapper
+
     def init_kms_clients(self):
         kmsapi_mock_server = boolean_value(self.conf.get("kmsapi_mock_server"))
 
@@ -396,7 +423,7 @@ class Account(WerkzeugApp):
             )
 
     # ACCT{{
-    # POST /v1.0/account/metrics/recompute
+    # POST /metrics/recompute
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Recompute all global metrics.
@@ -454,6 +481,7 @@ class Account(WerkzeugApp):
     #    myaccount
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_create(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -497,6 +525,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_list(self, req, **kwargs):
         limit = max(
@@ -556,6 +585,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_delete(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -602,6 +632,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -668,6 +699,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -744,6 +776,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_buckets(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -844,6 +877,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_containers(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -926,6 +960,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_container_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -977,6 +1012,7 @@ class Account(WerkzeugApp):
     #    Content-Length: 7
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_container_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -1060,6 +1096,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_container_reset(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -1127,6 +1164,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_container_delete(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -1172,6 +1210,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_refresh(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -1199,6 +1238,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_account_flush(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -1232,6 +1272,7 @@ class Account(WerkzeugApp):
     #    Content-Length: 0
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_reserve(self, req, **kwargs):
         """
@@ -1272,6 +1313,7 @@ class Account(WerkzeugApp):
     #    mybucket
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_create(self, req, **kwargs):
         bname = self._get_item_id(req, what="bucket")
@@ -1308,6 +1350,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_delete(self, req, **kwargs):
         bname = self._get_item_id(req, what="bucket")
@@ -1345,6 +1388,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_release(self, req, **kwargs):
         """
@@ -1379,6 +1423,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     def on_bucket_get_owner(self, req, **kwargs):
         """
         Get bucket owner.
@@ -1434,6 +1479,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_show(self, req, **kwargs):
         """
@@ -1496,6 +1542,7 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_update(self, req, **kwargs):
         """
@@ -1542,6 +1589,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @send_stats
     @force_master
     def on_bucket_refresh(self, req, **kwargs):
         """
@@ -1674,6 +1722,7 @@ class Account(WerkzeugApp):
             status=200,
         )
 
+    @send_stats
     @force_master
     def on_kms_create_secret(self, req, **kwargs):
         """Create (and return) a secret for the specified bucket."""
@@ -1742,6 +1791,7 @@ class Account(WerkzeugApp):
             status=201,
         )
 
+    @send_stats
     @force_master
     def on_kms_delete_secret(self, req, **kwargs):
         """Delete the secret of the specified bucket."""
@@ -1751,6 +1801,7 @@ class Account(WerkzeugApp):
         self.backend.delete_bucket_secret(account_id, bname, secret_id=secret_id)
         return Response(status=204)
 
+    @send_stats
     @force_master
     def on_kms_get_secret(self, req, **kwargs):
         """Get the secret of the specified bucket."""
@@ -1764,6 +1815,7 @@ class Account(WerkzeugApp):
         }
         return self._get_and_decrypt_secret(resp)
 
+    @send_stats
     @force_master
     def on_kms_list_secrets(self, req, **kwargs):
         """List the secrets of the specified bucket."""
