@@ -694,7 +694,7 @@ _reply_list_result (struct req_args_s *args, GError * err,
 	if (err)
 		return _reply_m2_error (args, err);
 
-	/* TODO to be removed as soon as all the clients consime the properties
+	/* TODO to be removed as soon as all the clients consume the properties
 	 * in the headers. */
 	_container_new_props_to_headers (args, out->props);
 
@@ -2135,7 +2135,14 @@ static GError * _list_loop (struct req_args_s *args,
 	PACKER_VOID(_pack) { return packer(&in); }
 
 	struct filter_ctx_s ctx = {0};
-	while (!err && !stop && grid_main_is_running()) {
+	while (!err && !stop) {
+
+		if (!grid_main_is_running()) {
+			err = NEWERROR(CODE_UNAVAILABLE,
+					"Proxy not running");
+			break;
+		}
+
 		iterations++;
 
 		struct list_result_s out = {0};
