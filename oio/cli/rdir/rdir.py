@@ -208,6 +208,7 @@ class RdirAssignments(Lister):
                         if min_dist < parsed_args.min_dist:
                             rdir_status = "Minimum distance requirement failure"
                     if rdir_status:
+                        # The return code will correspond to the number of errors
                         self.success = False
                     else:
                         rdir_status = "OK"

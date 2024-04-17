@@ -195,42 +195,76 @@ def get_all_values(dict_):
     return values
 
 
-class Command(command.Command):
+def _success_property():
     """
-    Wraps cliff's command.Command and sets the process' return code
-    according to the class' "success" field.
+    Get and set the return code.
+    Calling "success" multiple times with the value "False" will increment
+    the return code, which will be the number of errors.
     """
 
-    success = True
+    def getter(self):
+        return self.return_code == 0
+
+    def setter(self, value):
+        if value is True:
+            self.return_code = 0
+        elif value is False:
+            self.return_code += 1
+        else:
+            raise TypeError("Expect boolean value")
+
+    return property(getter, setter, doc="Get and set the return code")
+
+
+class CommandMixin(object):
+    """
+    Allow to define the return code and the success of a command.
+
+    Calling "success" multiple times with the value "False" will increment
+    the return code, which will be the number of errors.
+    """
+
+    return_code = 0
+    success = _success_property()
+
+    def get_return_code(self):
+        """
+        Return the return code, making sure to never return a value greater
+        than 255 (maximum return code).
+        """
+        return min(self.return_code, 255)
+
+
+class Command(CommandMixin, command.Command):
+    """
+    Wraps cliff's command.Command and sets the process' return code
+    according to the class' "return_code" attribute.
+    """
 
     def run(self, parsed_args):
         return_code = super(Command, self).run(parsed_args)
         if return_code == 0:
-            return_code = int(not self.success)
+            return_code = self.get_return_code()
         return return_code
 
 
-class Lister(lister.Lister):
+class Lister(CommandMixin, lister.Lister):
     """
     Wraps cliff's lister.Lister and sets the process' return code
-    according to the class' "success" field.
+    according to the class' "return_code" attribute.
     """
-
-    success = True
 
     def run(self, parsed_args):
         super(Lister, self).run(parsed_args)
-        return int(not self.success)
+        return self.get_return_code()
 
 
-class ShowOne(show.ShowOne):
+class ShowOne(CommandMixin, show.ShowOne):
     """
     Wraps cliff's show.ShowOne and sets the process' return code
-    according to the class' "success" field.
+    according to the class' "return_code" attribute.
     """
-
-    success = True
 
     def run(self, parsed_args):
         super(ShowOne, self).run(parsed_args)
-        return int(not self.success)
+        return self.get_return_code()
