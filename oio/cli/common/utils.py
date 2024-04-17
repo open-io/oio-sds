@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,14 @@ class ValueFormatStoreTrueAction(Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, True)
         setattr(namespace, "formatter", "value")
+
+
+class ValueCheckStoreTrueAction(Action):
+    """Same as 'store_true', but also set 'aggregated' field to 'true'"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, "check", True)
 
 
 def format_detailed_scores(srv):

@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,14 +17,16 @@
 from argparse import ArgumentError
 from logging import getLogger
 from six import iteritems
+from itertools import combinations
 
 from oio.cli import Lister
 from oio.common.exceptions import OioException
 from oio.rdir.client import DEFAULT_RDIR_REPLICAS
-from oio.cli.common.utils import format_detailed_scores
+from oio.cli.common.utils import ValueCheckStoreTrueAction, format_detailed_scores
+from oio.content.quality import get_distance
 
 
-def _format_assignments(all_services, svc_col_title="Rawx"):
+def _format_assignments(all_services, svc_col_title="Rawx", check=False):
     """Prepare the list of results for display"""
     # Possible improvement: if we do not sort by rdir,
     # we can yield results instead of building a list.
@@ -35,17 +37,26 @@ def _format_assignments(all_services, svc_col_title="Rawx"):
             (r["tags"].get("tag.service_id") or r["addr"]) for r in rdirs
         )
         joined_loc = ",".join(r["tags"].get("tag.loc", "n/a") for r in rdirs)
-        results.append(
-            (
-                svc["tags"].get("tag.service_id") or svc["addr"],
-                joined_ids,
-                svc["tags"].get("tag.loc"),
-                joined_loc,
-            )
+        res = (
+            svc["tags"].get("tag.service_id") or svc["addr"],
+            joined_ids,
         )
+        if check:
+            res += (
+                len(svc.get("rdir", [])),
+                svc.get("rdir_min_dist", 0),
+                svc.get("rdir_status", "n/a"),
+            )
+        else:
+            res += (svc["tags"].get("tag.loc"), joined_loc)
+        results.append(res)
 
     results.sort()
-    columns = (svc_col_title, "Rdir", "%s location" % svc_col_title, "Rdir location")
+    columns = (svc_col_title, "Rdir")
+    if check:
+        columns += ("Number of replicas", "Minimum distance", "Check status")
+    else:
+        columns += ("%s location" % svc_col_title, "Rdir location")
     return columns, results
 
 
@@ -136,10 +147,36 @@ class RdirAssignments(Lister):
             action="store_true",
             help="Display additional rdir stats (requires --aggregated)",
         )
+        parser.add_argument(
+            "--check",
+            action="store_true",
+            help="Check rdir assignation is done correctly.",
+        )
+        parser.add_argument(
+            "--min-dist",
+            metavar="<N>",
+            type=int,
+            default=3,
+            action=ValueCheckStoreTrueAction,
+            help=(
+                "(Enables 'check') Minimum required distance between any service "
+                "and its assigned rdir service."
+            ),
+        )
+        parser.add_argument(
+            "--replicas",
+            metavar="<N>",
+            type=int,
+            default=DEFAULT_RDIR_REPLICAS,
+            action=ValueCheckStoreTrueAction,
+            help="(Enables 'check') Number of rdirs per service.",
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
+        if parsed_args.aggregated and parsed_args.check:
+            raise ValueError("--aggregated and --check are mutually exclusive")
 
         dispatcher = self.app.client_manager.rdir_dispatcher
         results = []
@@ -148,8 +185,39 @@ class RdirAssignments(Lister):
                 parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
             )
 
+            if parsed_args.check:
+                for service in all_services:
+                    min_dist = 0
+                    rdir_status = None
+                    if "rdir" not in service or service["rdir"] is None:
+                        rdir_status = "No rdir found"
+                    elif len(service["rdir"]) < parsed_args.replicas:
+                        rdir_status = "Not enough replicas"
+                    elif len(service["rdir"]) > parsed_args.replicas:
+                        rdir_status = "Too many replicas"
+                    else:
+                        min_dist = None
+                        for svc1, svc2 in combinations(service["rdir"] + [service], 2):
+                            dist = get_distance(
+                                svc1["tags"]["tag.loc"], svc2["tags"]["tag.loc"]
+                            )
+                            if min_dist is None:
+                                min_dist = dist
+                            else:
+                                min_dist = min(dist, min_dist)
+                        if min_dist < parsed_args.min_dist:
+                            rdir_status = "Minimum distance requirement failure"
+                    if rdir_status:
+                        self.success = False
+                    else:
+                        rdir_status = "OK"
+                    service["rdir_min_dist"] = min_dist
+                    service["rdir_status"] = rdir_status
+
             columns, results = _format_assignments(
-                all_services, parsed_args.service_type.capitalize()
+                all_services,
+                parsed_args.service_type.capitalize(),
+                check=parsed_args.check,
             )
         else:
             managed_svc = dispatcher.get_aggregated_assignments(
