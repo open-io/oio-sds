@@ -63,7 +63,8 @@ class LifecycleWorker(PipelineWorker):
 
         db_id = full_path.rsplit("/")[-1].rsplit(".")
         # Expected suffix after .meta2
-        if len(db_id) != 6:
+        # Expected pattern: lifecycle.{CID}.1.meta2.{yymmdd}
+        if len(db_id) != 5:
             self.logger.warning("Malformed db file name: %s", full_path)
             self.invalid_paths += 1
             return False
