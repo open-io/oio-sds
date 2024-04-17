@@ -293,8 +293,8 @@ class ServiceDecommissionTest(CliTestCase):
         not_empty = {k: v for k, v in rawx_per_rdir.items() if len(v) > 0}
         candidate = choice(list(not_empty.keys()))
 
-        opts = self.get_format_opts(fields=["job.id"])
-        job_id = self.openio_admin("xcute rdir decommission %s %s" % (candidate, opts))
+        opts = self.get_format_opts(fields=["job.id"]) + " --min-dist 1"
+        job_id = self.openio_admin(f"xcute rdir decommission {candidate} {opts}")
         attempts = 15
         status = None
         opts = self.get_format_opts("json")

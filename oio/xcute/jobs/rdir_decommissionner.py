@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,7 @@ class RdirDecommissionJob(XcuteRdirJob):
 
     ALLOWED_SERVICE_TYPES = ["rawx", "meta2"]
     DEFAULT_DRY_RUN = False
-    DEFAULT_MIN_DIST = 1
+    DEFAULT_MIN_DIST = 3
     DEFAULT_REPLICAS = 3
 
     @classmethod
