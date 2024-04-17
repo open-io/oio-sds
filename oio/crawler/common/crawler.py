@@ -132,7 +132,7 @@ class CrawlerStatsdMixin:
         exclude = (
             "elapsed",  # not relevant
             "pass",  # already sent
-            "scan_rate",  # computed by statsd
+            "scanned_since_last_report",  # not relevant
             "successes",  # = total_scanned - errors
         )
         # statsd pipelines allow to send several metrics in the same UDP packet
@@ -141,11 +141,11 @@ class CrawlerStatsdMixin:
                 if key in exclude or not isinstance(val, (int, float)):
                     continue
                 skey = f"{filter_name}.{key}.count"
-                spipe.set(skey, val)
+                spipe.gauge(skey, val)
 
     def report_duration(self, duration):
         with self.statsd_client.pipeline() as spipe:
-            spipe.set("main.pass.count", self.passes)
+            spipe.gauge("main.pass.count", self.passes)
             spipe.timing("main.pass.timing", duration * 1000)
         if duration > self.scans_interval:
             self.logger.warning(
