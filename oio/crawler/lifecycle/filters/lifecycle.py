@@ -121,6 +121,9 @@ class Lifecycle(Filter):
         self.finished_actions = 0
         # Updated when using user defined order
         self.finished_rules = 0
+        self.count_disabled_rules = 0
+
+        self.conf_not_found = 0
 
     def _get_main_container_props(self, account, container):
         """Get properties from main container.
@@ -204,6 +207,7 @@ class Lifecycle(Filter):
                     account,
                     meta2db.cid,
                 )
+                self.conf_not_found += 1
                 return self.app(env, cb)
 
             lc_instance = ContainerLifecycle(
@@ -224,6 +228,13 @@ class Lifecycle(Filter):
 
             # Reorder rules and apply them by priority
             if self.reorder_rules:
+                for rule in lc_instance.rules:
+                    if not rule.enabled:
+                        self.logger.info(
+                            "Lifecycle rule with id %s is disabled ", rule.id
+                        )
+                        self.count_disabled_rules += 1
+                        continue
                 rules = lc_instance.order_rules(versioning)
                 if versioning:
                     self._exec_rules_versioned(
@@ -252,7 +263,6 @@ class Lifecycle(Filter):
 
             self.successes += 1
         except NotFound as exc:
-            self.errors += 1
             self.logger.warning(
                 "Failed to find local copy cid=%s, msg=%s",
                 meta2db.cid,
@@ -424,10 +434,6 @@ class Lifecycle(Filter):
             rule = item[0]
             action = item[1]
 
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled", rule.id)
-                continue
-
             if not self.is_mpu_container:
                 break
 
@@ -444,10 +450,6 @@ class Lifecycle(Filter):
         for _, item in current_actions.items():
             rule = item[0]
             action = item[1]
-
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled", rule.id)
-                continue
 
             if self.is_mpu_container:
                 break
@@ -484,10 +486,6 @@ class Lifecycle(Filter):
             if self.is_mpu_container:
                 break
 
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled ", rule.id)
-                continue
-
             if self._is_prefix_outside_range(rule):
                 continue
 
@@ -504,10 +502,6 @@ class Lifecycle(Filter):
             if not self.is_mpu_container:
                 break
 
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled ", rule.id)
-                continue
-
             if self._is_prefix_outside_range(rule):
                 continue
 
@@ -519,9 +513,6 @@ class Lifecycle(Filter):
         for _, item in noncurrent_actions.items():
             rule = item[0]
             action = item[1]
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled ", rule.id)
-                continue
 
             if self.is_mpu_container:
                 break
@@ -542,10 +533,6 @@ class Lifecycle(Filter):
 
             if self.is_mpu_container:
                 break
-
-            if not rule.enabled:
-                self.logger.info("Lifecycle rule with id %s is disabled ", rule.id)
-                continue
 
             if self._is_prefix_outside_range(rule):
                 continue
@@ -775,6 +762,7 @@ class Lifecycle(Filter):
         for rule in lc.rules:
             if not rule.enabled:
                 self.logger.info("Lifecycle rule with id %s is disabled ", rule.id)
+                self.count_disabled_rules += 1
                 continue
 
             if self._is_prefix_outside_range(rule):
@@ -868,7 +856,7 @@ class Lifecycle(Filter):
 
                 data["query"] = sql_query
                 data["query_set_tag"] = val_query
-                data["policy"] = policy
+                data["storage_class"] = policy
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
                 # last_rule_action could be used to remove copy at last request
@@ -965,11 +953,26 @@ class Lifecycle(Filter):
         return 86400 * int(days)
 
     def _get_filter_stats(self):
-        return {"successes": self.successes, "errors": self.errors}
+        main_stats = {
+            "successes": self.successes,
+            "errors": self.errors,
+            "total_events": self.total_events,
+            "count_actions": self.count_actions,
+            "finished_actions": self.finished_actions,
+            "finished_rules": self.finished_rules,
+            "count_disabled_rules": self.count_disabled_rules,
+        }
+        # (TODO) append agregated stats per rule/action??
+        return main_stats
 
     def _reset_filter_stats(self):
         self.successes = 0
         self.errors = 0
+        self.total_events = 0
+        self.count_actions = 0
+        self.finished_actions = 0
+        self.finished_rules = 0
+        self.count_disabled_rules = 0
 
 
 def filter_factory(global_conf, **local_conf):
