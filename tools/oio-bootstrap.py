@@ -1697,7 +1697,7 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-topic = oio-xcute
+topic = oio-xcute-job
 namespace = ${NS}
 user = ${USER}
 workers = 2
@@ -1832,7 +1832,7 @@ workers = 2
 [xcute-orchestrator]
 orchestrator_id = orchestrator-${SRVNUM}
 broker_endpoint = ${QUEUE_URL}
-jobs_topic = oio-xcute
+jobs_topic = oio-xcute-job
 """
 
 template_rdir = """
@@ -3242,8 +3242,8 @@ def generate(options):
         "oio-preserved",
         "oio-rebuild",
         "oio-replication",
-        "oio-xcute",
-        "oio-xcute-reply",
+        "oio-xcute-job",
+        "oio-xcute-job-reply",
     ]
     if options.get("replication_events"):
         topics_to_declare.append("oio-replication-delayed")
