@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+from random import shuffle
 
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
@@ -60,7 +62,10 @@ class ECContent(Content):
         broken_list = list()
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
-        spare_url, _quals = self._get_spare_chunk(chunks.all(), broken_list)
+        candidates = list(chunks.all())
+        if read_all_available_sources:
+            shuffle(candidates)  # Workaround bug with silently corrupt chunks
+        spare_url, _quals = self._get_spare_chunk(candidates, broken_list)
         new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
 
         # Regenerate the lost chunk's data, from existing chunks
