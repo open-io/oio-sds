@@ -281,6 +281,7 @@ class Content(object):
         cur_items=None,
         force_fair_constraints=True,
         adjacent_mode=False,
+        copy_from_duplica=True,
         **kwargs
     ):
         """
@@ -328,27 +329,31 @@ class Content(object):
             adjacent_mode=adjacent_mode,
             **kwargs
         )
-
-        # Sort chunks by score to try to copy with higher score.
-        # When scores are close together (e.g. [95, 94, 94, 93, 50]),
-        # don't always start with the highest element.
-        duplicate_chunks = (
-            self.chunks.filter(pos=current_chunk.pos)
-            .sort(
-                key=lambda chunk: _get_weighted_random_score(chunk.raw()), reverse=True
+        chunks_srcs = [current_chunk]
+        if copy_from_duplica:
+            # Sort chunks by score to try to copy with higher score.
+            # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+            # don't always start with the highest element.
+            duplicate_chunks = (
+                self.chunks.filter(pos=current_chunk.pos)
+                .sort(
+                    key=lambda chunk: _get_weighted_random_score(chunk.raw()),
+                    reverse=True,
+                )
+                .all()
             )
-            .all()
-        )
+            # To reduce the load on the rawx to decommission,
+            # use one of the rawx with a copy of the chunk to move.
+            chunks_srcs = duplicate_chunks
+
         if dry_run:
             self.logger.info(
                 "Dry-run: would copy chunk from %s to %s",
-                duplicate_chunks[0].url,
+                chunks_srcs[0].url,
                 spare_urls[0],
             )
         else:
-            # To reduce the load on the rawx to decommission,
-            # use one of the rawx with a copy of the chunk to move.
-            for src in duplicate_chunks:
+            for src in chunks_srcs:
                 try:
                     self.logger.info(
                         "Copying chunk from %s to %s (reqid=%s)",
@@ -377,11 +382,10 @@ class Content(object):
                         err,
                         kwargs.get("reqid"),
                     )
-                    if len(duplicate_chunks) == 1:
+                    if len(chunks_srcs) == 1:
                         raise
             else:
                 raise UnrecoverableContent("No copy available of chunk to move")
-
             self._update_spare_chunk(current_chunk, spare_urls[0], **kwargs)
 
             try:

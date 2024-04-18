@@ -115,6 +115,7 @@ class RawxDecommissionTask(XcuteTask):
                 fake_excluded_chunks=self.fake_excluded_chunks,
                 service_id=self.service_id,
                 reqid=reqid,
+                copy_from_duplica=False,
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
