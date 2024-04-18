@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from random import shuffle
+
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECWriteHandler, ECRebuildHandler
@@ -76,8 +78,11 @@ class ECContent(Content):
         broken_list = []
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
+        candidates = list(chunks.all())
+        if read_all_available_sources:
+            shuffle(candidates)  # Workaround bug with silently corrupt chunks
         spare_url, _quals = self._get_spare_chunk(
-            chunks.all(), broken_list, position=current_chunk.pos, reqid=reqid
+            candidates, broken_list, position=current_chunk.pos, reqid=reqid
         )
         new_chunk = Chunk({"pos": current_chunk.pos, "url": spare_url[0]})
 
