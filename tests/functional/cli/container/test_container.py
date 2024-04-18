@@ -48,15 +48,26 @@ class ContainerTest(CliTestCase):
     def setUp(self):
         super(ContainerTest, self).setUp()
 
-    def _test_container_show(self, with_cid=False):
-        opts = self.get_format_opts(fields=("container",))
+    def _test_container_show(self, with_cid=False, extra_counters=False):
+        opts = self.get_format_opts("json")
         cid_opt = ""
+        extra_opt = ""
         name = self.NAME
         if with_cid:
             cid_opt = "--cid "
             name = self.CID
-        output = self.openio("container show " + cid_opt + name + opts)
-        self.assertEqual(self.NAME + "\n", output)
+        if extra_counters:
+            extra_opt = "--extra-counters "
+        output = self.openio("container show " + cid_opt + name + opts + extra_opt)
+        container = self.json_loads(output)
+        self.assertEqual(self.NAME, container["container"])
+        if with_cid:
+            self.assertIn(self.CID, container["base_name"])
+        if extra_counters:
+            # Check the key exist (only key in extra_counter yet)
+            self.assertIn("objects_drained", container)
+        else:
+            self.assertNotIn("objects_drained", container)
 
     def test_bucket_enable_replication(self):
         cname = "mybucket-" + random_str(4).lower()
@@ -229,6 +240,12 @@ class ContainerTest(CliTestCase):
 
     def test_container_show_with_cid(self):
         self._test_container_show(with_cid=True)
+
+    def test_container_show_extra_counter(self):
+        self._test_container_show(extra_counters=True)
+
+    def test_container_show_extra_counter_with_cid(self):
+        self._test_container_show(with_cid=True, extra_counters=True)
 
     def _test_container_show_table(self, with_cid=False):
         opts = self.get_format_opts("table")

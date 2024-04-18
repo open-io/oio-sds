@@ -272,7 +272,7 @@ sqlx_pack_FREEZE(const struct sqlx_name_s *name, gint64 deadline)
 
 GByteArray *
 sqlx_pack_PROPGET(const struct sqlx_name_s *name, gboolean local,
-		gboolean urgent, gint64 deadline)
+		gboolean urgent, gboolean extra_counters, gint64 deadline)
 {
 	MESSAGE msg = make_request(NAME_MSGNAME_SQLX_PROPGET, NULL, name, deadline);
 	if (local) {
@@ -280,6 +280,9 @@ sqlx_pack_PROPGET(const struct sqlx_name_s *name, gboolean local,
 	}
 	if (urgent) {
 		metautils_message_add_field_strint(msg, NAME_MSGKEY_URGENT, 1);
+	}
+	if (extra_counters) {
+		metautils_message_add_field_strint(msg, NAME_MSGKEY_EXTRA_COUNTERS, 1);
 	}
 	return message_marshall_gba_and_clean(msg);
 }

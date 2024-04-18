@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -740,6 +740,22 @@ GPtrArray* sqlx_admin_get_usage(struct sqlx_sqlite3_s *sq3) {
 	g_ptr_array_add(result, g_strdup("stats.page_size"));
 	g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
 		_sqlx_get_number(sq3, "PRAGMA main.page_size")));
+
+	return result;
+}
+
+GPtrArray* sqlx_admin_get_extra_counters(struct sqlx_sqlite3_s *sq3) {
+	GPtrArray *result = g_ptr_array_new();
+
+	/* Specific meta2 counters */
+	if (g_strcmp0("meta2", sq3->name.type) == 0) {
+		g_ptr_array_add(result, g_strdup("extra_counter.drained"));
+		g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
+			_sqlx_get_number(
+				sq3, "SELECT COUNT(*) FROM contents WHERE chunk_method = 'drained'"
+			)
+		));
+	}
 
 	return result;
 }

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -707,6 +707,12 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
     def get_parser(self, prog_name):
         parser = super(ShowContainer, self).get_parser(prog_name)
         self.patch_parser_container(parser)
+        parser.add_argument(
+            "--extra-counters",
+            default=False,
+            help="Get some extra counters (nb drained objects, ...)",
+            action="store_true",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -720,7 +726,11 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         # container_get_properties() because container_show() does
         # not return system properties (and we need them).
         data = self.app.client_manager.storage.container_get_properties(
-            account, parsed_args.container, cid=parsed_args.cid, admin_mode=True
+            account,
+            parsed_args.container,
+            cid=parsed_args.cid,
+            admin_mode=True,
+            extra_counters=parsed_args.extra_counters,
         )
         sys = data["system"]
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.0
@@ -818,6 +828,10 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                 if parsed_args.formatter == "table":
                     draining_timestamp = int(draining_timestamp)
                 info["draining.timestamp"] = draining_timestamp
+
+        objects_drained = sys.get("extra_counter.drained")
+        if objects_drained:
+            info["objects_drained"] = objects_drained
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):
             info[k] = sys.get(k)

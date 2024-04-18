@@ -502,6 +502,7 @@ class ContainerClient(ProxyClient):
         properties=None,
         cid=None,
         params=None,
+        extra_counters=False,
         **kwargs
     ):
         """
@@ -520,6 +521,9 @@ class ContainerClient(ProxyClient):
             containing respectively a `dict` of user properties and
             a `dict` of system properties.
         """
+        if extra_counters:
+            params["extra_counters"] = 1
+
         container_meta = get_cached_container_metadata(
             account=account, reference=reference, cid=cid, **kwargs
         )

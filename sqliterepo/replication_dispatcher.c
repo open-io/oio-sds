@@ -1553,6 +1553,8 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 	}
 	gboolean urgent = metautils_message_extract_flag(reply->request,
 			NAME_MSGKEY_URGENT, FALSE);
+	gboolean extra_counters = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_EXTRA_COUNTERS, FALSE);
 
 	/* Action */
 	err = sqlx_repository_open_and_lock(repo, &n0,
@@ -1583,6 +1585,17 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 				/* The pointer array is no longer used,
 				 * but the content (dynamically allocated) is still used. */
 				g_ptr_array_free(stats, TRUE);
+			}
+		}
+		if (extra_counters) {
+			GPtrArray *counters = sqlx_admin_get_extra_counters(sq3);
+			if (counters) {
+				for(guint i=0; i < counters->len; i++) {
+					g_ptr_array_add(tmp, g_ptr_array_index(counters, i));
+				}
+				/* The pointer array is no longer used,
+				 * but the content (dynamically allocated) is still used. */
+				g_ptr_array_free(counters, TRUE);
 			}
 		}
 		g_ptr_array_add(tmp, NULL);

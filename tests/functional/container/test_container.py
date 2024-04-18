@@ -1669,11 +1669,22 @@ class TestMeta2Contents(BaseTestCase):
     def test_drain_content(self):
         path = random_content()
         params = self.param_content(self.ref, path)
+        params_ref = self.param_ref(self.ref)
+        params_ref["extra_counters"] = 1
+
+        def check_nb_objects_drained(nb_objects):
+            resp = self.request(
+                "POST", self.url_container("get_properties"), params=params_ref
+            )
+            props = self.json_loads(resp.data)
+            self.assertEqual(nb_objects, int(props["system"]["extra_counter.drained"]))
 
         self._create_content(path)
+        check_nb_objects_drained(0)
         # Drain Content
         resp = self.request("POST", self.url_content("drain"), params=params)
         self.assertEqual(resp.status, 204)
+        check_nb_objects_drained(1)
         # TruncateShouldFail
         trunc_param = {"size": 0}
         trunc_param.update(params)
@@ -1747,11 +1758,14 @@ class TestMeta2Contents(BaseTestCase):
         # DeleteShouldWork
         resp = self.request("POST", self.url_content("delete"), params=params)
         self.assertEqual(resp.status, 204)
+        check_nb_objects_drained(0)
         # CreateShouldWork
         self._create_content(path)
+        check_nb_objects_drained(0)
         self.assertEqual(resp.status, 204)
         resp = self.request("POST", self.url_content("drain"), params=params)
         self.assertEqual(resp.status, 204)
+        check_nb_objects_drained(1)
         self._create_content(path)
         resp = self.request("POST", self.url_content("drain"), params=params)
         self.assertEqual(resp.status, 204)

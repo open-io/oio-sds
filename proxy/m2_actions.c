@@ -2609,7 +2609,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
 
-	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, FALSE, FALSE, DL()); }
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, FALSE, FALSE, FALSE, DL()); }
 	err = gridd_request_replicated_with_retry (args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
