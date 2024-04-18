@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -56,6 +56,9 @@ class XcuteJob(object):
         self.conf = conf
         self.job_id = job_id
         self.logger = logger or get_logger(self.conf)
+        # If not None, the job tasks will be sent to a dedicated
+        # topic having the host IP address as suffix
+        self.topic_suffix = None
 
     @classmethod
     def sanitize_config(cls, job_config):
@@ -146,4 +149,17 @@ class XcuteJob(object):
         NB: do not define if not needed
         """
 
+        return None
+
+    def set_topic_suffix(self, job_params):
+        """
+        Defines the suffix that will be used to set
+        a dedicated topic to a particular host. The suffix is
+        the host IP address. If this suffix is defined
+        all the job tasks related to a service on the host
+        will be sent to the dedicated topic.
+
+        :return: topic suffix
+        :rtype: str
+        """
         return None

@@ -1697,10 +1697,10 @@ WantedBy=${PARENT}
 
 template_xcute_event_agent = """
 [event-agent]
-topic = oio-xcute-job
+topic = ${QUEUE_NAME}
 namespace = ${NS}
 user = ${USER}
-workers = 2
+workers = ${EVENT_WORKERS}
 concurrency = 5
 handlers_conf = ${CFGDIR}/xcute-event-handlers-${SRVNUM}.conf
 log_facility = LOG_LOCAL0
@@ -2977,13 +2977,18 @@ def generate(options):
         url,
         workers,
         group_id,
-        template,
+        template_handler,
+        context="event-agent",
+        handler_prefix="/event-handlers-",
         queue_type="default",
         queue_ids="",
+        srv_type="event-agent",
+        template_agent=template_event_agent,
+        template_systemd=template_systemd_service_event_agent,
     ):
         env = subenv(
             {
-                "SRVTYPE": "event-agent",
+                "SRVTYPE": srv_type,
                 "SRVNUM": num,
                 "QUEUE_NAME": queue_name,
                 "QUEUE_URL": url,
@@ -2996,16 +3001,16 @@ def generate(options):
         )
         register_service(
             env,
-            template_systemd_service_event_agent,
+            template_systemd,
             event_agents_target,
             coverage_wrapper=shutil.which("coverage")
-            + " run --context event-agent --concurrency=eventlet -p ",
+            + " run --context " + context + " --concurrency=eventlet -p ",
         )
         with open(config(env), "w+") as f:
-            tpl = Template(template_event_agent)
+            tpl = Template(template_agent)
             f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + "/event-handlers-" + str(num) + ".conf", "w+") as f:
-            tpl = Template(template)
+        with open(CFGDIR + handler_prefix + str(num) + ".conf", "w+") as f:
+            tpl = Template(template_handler)
             f.write(tpl.safe_substitute(env))
 
     # Event agent configuration -> one per beanstalkd
@@ -3016,7 +3021,7 @@ def generate(options):
             url,
             workers="2",
             group_id="event-agent",
-            template=template_event_agent_handlers,
+            template_handler=template_event_agent_handlers,
         )
 
     # Configure a special oio-event-agent dedicated to chunk deletions per host
@@ -3034,7 +3039,7 @@ def generate(options):
                     group_id="event-agent-delete",
                     queue_type="per_service",
                     queue_ids=";".join(rawx_per_host[host]).lower(),
-                    template=template_event_agent_delete_handlers,
+                    template_handler=template_event_agent_delete_handlers,
                 )
 
         break
@@ -3050,7 +3055,7 @@ def generate(options):
                 url,
                 workers=len(rawx_per_host[host]),
                 group_id="event-agent-chunks",
-                template=template_event_agent_chunks_handlers,
+                template_handler=template_event_agent_chunks_handlers,
             )
 
         break
@@ -3065,7 +3070,7 @@ def generate(options):
             url,
             workers="1",
             group_id="event-agent-delay",
-            template=template_event_agent_delay_handlers,
+            template_handler=template_event_agent_delay_handlers,
         )
 
         # We need only one service
@@ -3081,7 +3086,7 @@ def generate(options):
                 url,
                 workers="1",
                 group_id="event-agent-replication-delay",
-                template=template_event_agent_replication_delay_handlers,
+                template_handler=template_event_agent_replication_delay_handlers,
             )
 
             # We need only one service
@@ -3097,7 +3102,7 @@ def generate(options):
             url,
             workers="1",
             group_id="event-agent-rebuild",
-            template=template_event_agent_rebuilder_handlers,
+            template_handler=template_event_agent_rebuilder_handlers,
         )
 
         # We need only one service
@@ -3106,35 +3111,39 @@ def generate(options):
     # Xcute event-agent
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
-        env = subenv(
-            {
-                "SRVTYPE": "xcute-event-agent",
-                "SRVNUM": num,
-                "QUEUE_URL": url,
-                "EXE": event_agent_bin,
-                "GROUP_ID": "event-agent-xcute",
-                "QUEUE_TYPE": "default",
-                "QUEUE_IDS": "",
-            }
+        add_event_agent_conf(
+            num,
+            queue_name="oio-xcute-job",
+            workers="2",
+            url=url,
+            srv_type="xcute-event-agent",
+            context="xcute",
+            handler_prefix="/xcute-event-handlers-",
+            group_id="event-agent-xcute",
+            template_handler=template_xcute_event_agent_handlers,
+            template_agent=template_xcute_event_agent,
+            template_systemd=template_systemd_service_xcute_event_agent,
         )
-        register_service(
-            env,
-            template_systemd_service_xcute_event_agent,
-            xcute_agents_target,
-            add_service_to_conf=False,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context xcute --concurrency=eventlet -p ",
-        )
-        with open(config(env), "w+", encoding="utf8") as f:
-            tpl = Template(template_xcute_event_agent)
-            f.write(tpl.safe_substitute(env))
-        with open(
-            CFGDIR + "/xcute-event-handlers-" + str(num) + ".conf",
-            "w+",
-            encoding="utf8",
-        ) as f:
-            tpl = Template(template_xcute_event_agent_handlers)
-            f.write(tpl.safe_substitute(env))
+    # Configure a special oio-event-agent dedicated to chunk delete per host
+    # -------------------------------------------------------------------------
+    for _, url, event_agent_bin in get_event_agent_details():
+        for host in hosts:
+            num += 1
+            add_event_agent_conf(
+                num,
+                queue_name=f"oio-xcute-job-{host}",
+                workers="2",
+                url=url,
+                srv_type="xcute-event-agent",
+                context="xcute",
+                handler_prefix="/xcute-event-handlers-",
+                group_id="event-agent-xcute-per-host",
+                template_handler=template_xcute_event_agent_handlers,
+                template_agent=template_xcute_event_agent,
+                template_systemd=template_systemd_service_xcute_event_agent,
+            )
+
+        break
 
     # -------------------------------------------------------------------------
 
@@ -3255,6 +3264,8 @@ def generate(options):
         topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
     # Add chunks topics per host
     topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
+    # Add xcute-job topic per host, to gather delete events from blob mover
+    topics_to_declare.extend([f"oio-xcute-job-{h}" for h in rawx_hosts])
 
     with open(f"{CFGDIR}/topics.yml", "w+") as f:
         f.write(

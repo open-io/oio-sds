@@ -30,6 +30,7 @@ from oio.common.kafka import (
     KafkaSender,
     DEFAULT_XCUTE_JOB_TOPIC,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+    DEFAULT_XCUTE_JOB_PER_HOST_PREFIX,
 )
 from oio.common.utils import ratelimit
 from oio.event.evob import EventTypes
@@ -207,7 +208,8 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, job_id=job_id, logger=self.logger)
-
+        # Set topic suffix
+        job.set_topic_suffix(job_info["config"]["params"])
         if (
             job_info["tasks"]["total"] == 0
             and job_info["tasks"]["is_total_temp"]
@@ -488,7 +490,9 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     )
                     break
                 job_status, old_last_sent = res
-                sent = self.dispatch_tasks_batch(job_id, job_type, job_config, tasks)
+                sent = self.dispatch_tasks_batch(
+                    job_id, job_type, job_config, tasks, job
+                )
                 if not sent:
                     self.logger.warning(
                         "[job_id=%s] Job aborting the last sent tasks", job_id
@@ -552,7 +556,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 job_status, old_last_sent = res
                 if tasks:
                     sent = self.dispatch_tasks_batch(
-                        job_id, job_type, job_config, tasks
+                        job_id, job_type, job_config, tasks, job
                     )
                 else:
                     sent = True
@@ -595,7 +599,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         if exc is not None:
             self.logger.warning("[job_id=%s] Job has not been freed: %s", job_id, exc)
 
-    def dispatch_tasks_batch(self, job_id, job_type, job_config, tasks):
+    def dispatch_tasks_batch(self, job_id, job_type, job_config, tasks, job):
         """
         Try sending a task until it's ok
         """
@@ -612,7 +616,11 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 f"(length={len(payload)}, max={self.MAX_PAYLOAD_SIZE})"
             )
         try:
-            self.kafka_producer.send(self.kafka_jobs_topic, payload, flush=True)
+            topic = self.kafka_jobs_topic
+            if job.topic_suffix:
+                # Send task to dedicated topic
+                topic = DEFAULT_XCUTE_JOB_PER_HOST_PREFIX + job.topic_suffix
+            self.kafka_producer.send(topic, payload, flush=True)
         except Exception as exc:
             self.logger.warn("[job_id=%s] Fail to send job: %s", job_id, exc)
             return False

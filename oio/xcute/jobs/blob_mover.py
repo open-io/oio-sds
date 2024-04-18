@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -293,3 +293,18 @@ class RawxDecommissionJob(XcuteRdirJob):
         )
 
         return chunk_info
+
+    def set_topic_suffix(self, job_params):
+        """
+        Defines the suffix that will be used to set
+        a dedicated topic to a particular host. The suffix is
+        the host IP address. If this suffix is defined
+        all the job tasks related to a service on the host
+        will be sent to the dedicated topic.
+
+        :return: topic suffix
+        :rtype: str
+        """
+        self.topic_suffix = self.conscience_client.resolve_service_id(
+            "rawx", job_params["service_id"]
+        ).split(":")[0]
