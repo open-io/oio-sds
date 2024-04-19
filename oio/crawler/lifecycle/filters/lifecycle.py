@@ -15,6 +15,7 @@
 
 import json
 import os
+import datetime
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
@@ -26,7 +27,7 @@ from oio.common.constants import (
     MULTIUPLOAD_SUFFIX,
     SHARDING_ACCOUNT_PREFIX,
 )
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 
@@ -91,6 +92,14 @@ class Lifecycle(Filter):
         # This is not the case when we deal with noncurrent versions and the
         # the number of versions can vary from one object to another
         self.noncurrent_limit = self.LIMIT * self.batch_size
+
+        # Bypass any days/dates fields and apply a delay of 1 seconds instead
+        # Objectiva is to trigger lifecycle immediately and apply
+        # time comparaison.
+        self.bypass_days_dates = boolean_value(self.conf.get("bypass_days_dates"), True)
+
+        # shorten days / dates
+        self.shorten_days_dates = int_value(self.conf.get("shorten_days_dates"), 1440)
 
         self.suffix = None
 
@@ -750,7 +759,9 @@ class Lifecycle(Filter):
         if versioning_enabled:
             # Current versions: Expiration/Transition
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             view_queries = self._gen_views_current_action(lc, rule, days_in_sec, date)
 
             if delete_marker is not None:
@@ -770,7 +781,9 @@ class Lifecycle(Filter):
                 )
         else:  # non versioned
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             base_sql_query = lc.build_sql_query(rule, days_in_sec, date)
             queries["base"] = base_sql_query
 
@@ -815,7 +828,7 @@ class Lifecycle(Filter):
         # NoncurrentVersions, NoncurrentVersions doesn't support dates
         if non_current_days is None:
             return
-        non_current_days_in_sec = self._days_to_seconds(non_current_days)
+        non_current_days_in_sec = self._days_or_bypass(non_current_days)
 
         # Create views
         view_queries = self._gen_views_non_current_action(
@@ -879,7 +892,7 @@ class Lifecycle(Filter):
 
         # AbortIncompleteMultiPartUpload doesn't depend on versioning
         if abort_action:
-            days_in_sec = self._days_to_seconds(days)
+            days_in_sec = self._days_or_bypass(days)
             base_sql_query = lc_instance.abort_incomplete_query(rule, days_in_sec)
             queries["base"] = base_sql_query
             self._send_query_events(
@@ -906,7 +919,7 @@ class Lifecycle(Filter):
                         container,
                     )
                     return False
-                non_current_days_in_sec = self._days_to_seconds(non_current_days)
+                non_current_days_in_sec = self._days_or_bypass(non_current_days)
 
                 # Create views
                 view_queries = self._gen_views_non_current_action(
@@ -918,7 +931,9 @@ class Lifecycle(Filter):
             # Current versions: Expiration/Transition
             else:
                 if days is not None:
-                    days_in_sec = self._days_to_seconds(days)
+                    days_in_sec = self._days_or_bypass(days)
+                if date is not None:
+                    date = self._date_or_bypass(date)
                 view_queries = self._gen_views_current_action(
                     lc_instance, rule, days_in_sec, date
                 )
@@ -940,7 +955,9 @@ class Lifecycle(Filter):
 
         else:  # non versioned
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             base_sql_query = lc_instance.build_sql_query(rule, days_in_sec, date)
             queries["base"] = base_sql_query
 
@@ -1179,6 +1196,19 @@ class Lifecycle(Filter):
 
     def _days_to_seconds(self, days):
         return 86400 * int(days)
+
+    def _days_or_bypass(self, days):
+        if self.bypass_days_dates:
+            return int(86400 * int(days) / self.shorten_days_dates)
+        return self._days_to_seconds(days)
+
+    def _date_or_bypass(self, date):
+        if self.bypass_days_dates:
+            wait_seconds = int(86400 / self.shorten_days_dates)
+            now = datetime.datetime.now()
+            delayed = now + datetime.timedelta(seconds=wait_seconds)
+            return delayed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return date
 
     def _get_filter_stats(self):
         main_stats = {
