@@ -25,7 +25,7 @@ from oio.common.constants import (
     MULTIUPLOAD_SUFFIX,
     SHARDING_ACCOUNT_PREFIX,
 )
-from oio.common.easy_value import debinarize, int_value
+from oio.common.easy_value import boolean_value, debinarize, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 
@@ -762,6 +762,19 @@ class Lifecycle(Meta2Filter):
 
     def _days_to_seconds(self, days):
         return 86400 * int(days)
+
+    def _days_or_bypass(self, days):
+        if self.bypass_days_dates:
+            return int(86400 * int(days) / self.shorten_days_dates)
+        return self._days_to_seconds(days)
+
+    def _date_or_bypass(self, date):
+        if self.bypass_days_dates:
+            wait_seconds = int(86400 / self.shorten_days_dates)
+            now = datetime.datetime.now()
+            delayed = now + datetime.timedelta(seconds=wait_seconds)
+            return delayed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return date
 
     def _get_filter_stats(self):
         main_stats = {
