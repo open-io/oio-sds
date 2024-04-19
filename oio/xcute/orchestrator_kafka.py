@@ -208,8 +208,10 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, job_id=job_id, logger=self.logger)
-        # Set topic suffix
-        job.set_topic_suffix(job_info["config"]["params"])
+        # If the dedicated host topic is enabled
+        if job_info["config"]["params"].get("enable_host_topic", False):
+            # Set topic suffix
+            job.set_topic_suffix(job_info["config"]["params"])
         if (
             job_info["tasks"]["total"] == 0
             and job_info["tasks"]["is_total_temp"]
@@ -617,6 +619,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             )
         try:
             topic = self.kafka_jobs_topic
+            # If topic name suffix set
             if job.topic_suffix:
                 # Send task to dedicated topic
                 topic = DEFAULT_XCUTE_JOB_PER_HOST_PREFIX + job.topic_suffix

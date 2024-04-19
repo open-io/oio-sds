@@ -3003,8 +3003,12 @@ def generate(options):
             env,
             template_systemd,
             event_agents_target,
-            coverage_wrapper=shutil.which("coverage")
-            + " run --context " + context + " --concurrency=eventlet -p ",
+            coverage_wrapper=(
+                shutil.which("coverage")
+                + " run --context "
+                + context
+                + " --concurrency=eventlet -p "
+            ),
         )
         with open(config(env), "w+") as f:
             tpl = Template(template_agent)

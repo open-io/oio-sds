@@ -17,7 +17,7 @@
 import math
 
 from oio.blob.client import BlobClient
-from oio.common.easy_value import float_value, int_value
+from oio.common.easy_value import float_value, int_value, boolean_value
 from oio.common.exceptions import ContentDrained, ContentNotFound, NotFound, OrphanChunk
 from oio.common.green import time
 from oio.conscience.client import ConscienceClient
@@ -130,6 +130,7 @@ class RawxDecommissionJob(XcuteRdirJob):
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
+    ENABLE_HOST_TOPIC = True
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -167,6 +168,9 @@ class RawxDecommissionJob(XcuteRdirJob):
         # usage_target is parsed by parent class
         sanitized_job_params["usage_check_interval"] = float_value(
             job_params.get("usage_check_interval"), cls.DEFAULT_USAGE_CHECK_INTERVAL
+        )
+        sanitized_job_params["enable_host_topic"] = boolean_value(
+            job_params.get("enable_host_topic"), cls.ENABLE_HOST_TOPIC
         )
 
         return sanitized_job_params, f"rawx/{service_id}"

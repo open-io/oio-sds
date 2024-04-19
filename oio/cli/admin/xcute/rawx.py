@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 from oio.cli.admin.common import SingleServiceCommandMixin
 from oio.cli.admin.xcute import XcuteRdirCommand
+from oio.common.easy_value import boolean_value
 from oio.xcute.jobs.blob_mover import RawxDecommissionJob
 from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
 
@@ -146,6 +147,17 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             ),
         )
         parser.add_argument(
+            "--enable-host-topic",
+            metavar="yes/no",
+            type=boolean_value,
+            help=(
+                "If True job tasks will be sent to a dedicated topic"
+                + " on the service host. Topic name will be"
+                + " {xcute-job-topic}-{host-ip-address} (default=%f)"
+                % self.JOB_CLASS.ENABLE_HOST_TOPIC
+            ),
+        )
+        parser.add_argument(
             "--usage-target",
             type=float,
             default=self.JOB_CLASS.DEFAULT_USAGE_TARGET,
@@ -170,6 +182,7 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "min_chunk_size": parsed_args.min_chunk_size,
             "max_chunk_size": parsed_args.max_chunk_size,
             "excluded_rawx": parsed_args.excluded_rawx,
+            "enable_host_topic": parsed_args.enable_host_topic,
             "usage_target": parsed_args.usage_target,
             "usage_check_interval": parsed_args.usage_check_interval,
         }
