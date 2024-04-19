@@ -24,7 +24,7 @@ from oio.common.constants import (
     SHARDING_ACCOUNT_PREFIX,
     VERSIONING_PROPERTY_KEY,
 )
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 
@@ -100,9 +100,15 @@ class Lifecycle(Filter):
         # the number of versions can vary from one object to another
         self.noncurrent_limit = self.LIMIT * self.batch_size
 
+        # Bypass any days/dates fields and apply a delay of 1 seconds instead
+        # Objectiva is to trigger lifecycle immediately and apply
+        # time comparaison.
+        self.bypass_days_dates = boolean_value(
+            self.conf.get("bypass_days_dates"), False
+        )
+
         now = time.strftime("%Y-%m-%d")
         self.suffix = f"lifecycle-{now}"
-        self.volume_id = self.app_env["volume_id"]
 
         self.successes = 0
         self.errors = 0
@@ -191,7 +197,7 @@ class Lifecycle(Filter):
         Reorder rules and apply each one in defined order
         """
         meta2db = Meta2DB(self.app_env, env)
-        self.peer_to_use = self.volume_id
+        self.peer_to_use = env["volume_id"]
         self.is_mpu_container = False
         self.is_shard_container = False
 
@@ -210,7 +216,6 @@ class Lifecycle(Filter):
             # Get properties from main container (if Lifecycle configis removed between)
             props = self._get_main_container_props(account, container)
             lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
-
             versioning = props["properties"].get(VERSIONING_PROPERTY_KEY)
 
             if lifecycle_config is None:
@@ -595,7 +600,9 @@ class Lifecycle(Filter):
         if versioning_enabled:
             # Current versions: Expiration/Transition
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             view_queries = self._gen_views_current_action(rule, days_in_sec, date)
 
             if type(act.filter) is DeletedMarkerActionFilter:
@@ -619,7 +626,9 @@ class Lifecycle(Filter):
                 queries["marker"] = rule.filter.markers_query()
         else:  # non versioned
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             base_sql_query = rule.filter.to_sql_query(days_in_sec, date)
             queries["base"] = base_sql_query
 
@@ -656,7 +665,7 @@ class Lifecycle(Filter):
         # NoncurrentVersions, NoncurrentVersions doesn't support dates
         if non_current_days is None:
             return
-        non_current_days_in_sec = self._days_to_seconds(non_current_days)
+        non_current_days_in_sec = self._days_or_bypass(non_current_days)
 
         # Create views
         view_queries = self._gen_views_non_current_action(rule, non_current_days_in_sec)
@@ -707,7 +716,7 @@ class Lifecycle(Filter):
 
         # AbortIncompleteMultiPartUpload doesn't depend on versioning
         if abort_action:
-            days_in_sec = self._days_to_seconds(days)
+            days_in_sec = self._days_or_bypass(days)
             base_sql_query = rule.filter.abort_incomplete_query(days_in_sec)
             queries["base"] = base_sql_query
 
@@ -735,7 +744,7 @@ class Lifecycle(Filter):
                         container,
                     )
                     return False
-                non_current_days_in_sec = self._days_to_seconds(non_current_days)
+                non_current_days_in_sec = self._days_or_bypass(non_current_days)
 
                 # Create views
                 view_queries = self._gen_views_non_current_action(
@@ -747,8 +756,9 @@ class Lifecycle(Filter):
             # Current versions: Expiration/Transition
             else:
                 if days is not None:
-                    days_in_sec = self._days_to_seconds(days)
-
+                    days_in_sec = self._days_or_bypass(days)
+                if date is not None:
+                    date = self._date_or_bypass(date)
                 view_queries = self._gen_views_current_action(rule, days_in_sec, date)
 
                 if type(act.filter) is DeletedMarkerActionFilter:
@@ -767,7 +777,9 @@ class Lifecycle(Filter):
                     queries["marker"] = rule.filter.markers_query()
         else:  # non versioned
             if days is not None:
-                days_in_sec = self._days_to_seconds(days)
+                days_in_sec = self._days_or_bypass(days)
+            if date is not None:
+                date = self._date_or_bypass(date)
             base_sql_query = rule.filter.to_sql_query(days_in_sec, date)
             queries["base"] = base_sql_query
 
@@ -1002,6 +1014,16 @@ class Lifecycle(Filter):
 
     def _days_to_seconds(self, days):
         return 86400 * int(days)
+
+    def _days_or_bypass(self, days):
+        if self.bypass_days_dates:
+            return 1
+        return self._days_to_seconds(days)
+
+    def _date_or_bypass(self, date):
+        if self.bypass_days_dates:
+            return time.strftime("%Y-%m-%d")
+        return date
 
     def _get_filter_stats(self):
         main_stats = {
