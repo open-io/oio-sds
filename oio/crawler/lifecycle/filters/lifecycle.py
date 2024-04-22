@@ -81,6 +81,12 @@ class Lifecycle(Filter):
 
         self.batch_size = int_value(self.conf.get("lifecycle_batch_size"), 1000)
 
+        # Budget per container (not bucket), as containers of same bucket would be
+        # handled by different workers.
+        self.budget_per_container = int_value(
+            self.conf.get("budget_per_container"), 25000
+        )
+
         self.reorder_rules = True
 
         # Crawler can remove local copy directly without
@@ -124,6 +130,8 @@ class Lifecycle(Filter):
         self.count_disabled_rules = 0
 
         self.conf_not_found = 0
+
+        self.nb_match_per_container = 0
 
     def _get_main_container_props(self, account, container):
         """Get properties from main container.
@@ -186,6 +194,7 @@ class Lifecycle(Filter):
         self.is_mpu_container = False
         self.is_shard_container = False
 
+        self.nb_match_per_container = 0
         try:
             account, container = self.api.resolve_cid(meta2db.cid)
             if account is None or container is None:
@@ -413,6 +422,12 @@ class Lifecycle(Filter):
                     self.lower,
                     self.upper,
                 )
+                return True
+        return False
+
+    def _is_budget_reached(self):
+        if self.budget_per_container:
+            if self.nb_match_per_container > self.budget_per_container:
                 return True
         return False
 
@@ -817,6 +832,16 @@ class Lifecycle(Filter):
         for key_query, val_query in queries.items():
             offset = 0
             while True:
+                # Check budget first
+                if self._is_budget_reached():
+                    self.logger.info(
+                        "Budget is reached for container cid %s rule %s, action %s",
+                        cid,
+                        rule_id,
+                        action,
+                    )
+                    return
+
                 sql_query = val_query
                 if action_type in (
                     "NoncurrentVersionExpiration",
@@ -879,6 +904,8 @@ class Lifecycle(Filter):
 
                 count = int(resp.getheader("x-oio-count"))
                 offset += count
+
+                self.nb_match_per_container += count
 
                 self._update_container_stats(rule_id, action, count)
                 if count == 0:
