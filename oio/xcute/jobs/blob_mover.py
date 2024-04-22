@@ -82,7 +82,7 @@ class RawxDecommissionTask(XcuteTask):
         version = task_payload["version"]
         chunk_id = task_payload["chunk_id"]
         buf_size = task_payload["buf_size"]
-        rebuild_on_read_failure = task_payload["rebuild_on_read_failure"]
+        rebuild_on_read_failure = boolean_value(task_payload["rebuild_on_read_failure"])
 
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:
@@ -128,6 +128,7 @@ class RawxDecommissionTask(XcuteTask):
                 reqid=reqid,
                 copy_from_duplica=False,
                 buf_size=buf_size,
+                async_delete=True,
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}

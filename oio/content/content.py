@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
+import time
 from oio.common import exceptions as exc
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
@@ -23,6 +25,7 @@ from oio.common.exceptions import UnrecoverableContent
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_functions import _get_weighted_random_score
 from oio.content.quality import ensure_better_chunk_qualities, pop_chunk_qualities
+from oio.event.evob import EventTypes
 
 
 def cmp(x, y):
@@ -283,6 +286,7 @@ class Content(object):
         adjacent_mode=False,
         copy_from_duplica=True,
         buf_size=None,
+        async_delete=False,
         **kwargs
     ):
         """
@@ -391,7 +395,25 @@ class Content(object):
             self._update_spare_chunk(current_chunk, spare_urls[0], **kwargs)
 
             try:
-                self.blob_client.chunk_delete(current_chunk.url, **kwargs)
+                if not async_delete:
+                    self.blob_client.chunk_delete(current_chunk.url, **kwargs)
+                else:
+                    service_name = self.blob_client.get_service_name(current_chunk.url)
+                    data = json.dumps(
+                        {
+                            "when": time.time(),
+                            "event": EventTypes.CONTENT_DELETED,
+                            "url": {
+                                "id": self.container_id,
+                                "content": self.content_id,
+                            },
+                            "request_id": kwargs.get("reqid"),
+                            "data": [{"id": current_chunk.url, "type": "chunks"}],
+                            "service_id": service_name,
+                        }
+                    )
+                    topic = self.blob_client.get_topic_name(service_name)
+                    self.blob_client.send(topic=topic, data=data)
             except Exception as err:
                 self.logger.warning(
                     "Failed to delete chunk %s: %s (reqid=%s)",

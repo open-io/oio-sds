@@ -23,7 +23,7 @@ from functools import wraps
 from urllib.parse import unquote
 from time import mktime
 
-from oio.common.kafka import KafkaProducerMixin
+from oio.common.kafka import GetTopicMixin, KafkaProducerMixin
 from oio.common.logger import get_logger
 from oio.common.http_urllib3 import (
     get_pool_manager,
@@ -97,7 +97,7 @@ def update_rawx_perfdata(func):
     return _update_rawx_perfdata
 
 
-class BlobClient(KafkaProducerMixin):
+class BlobClient(GetTopicMixin, KafkaProducerMixin):
     """A low-level client to rawx services."""
 
     def __init__(
@@ -123,6 +123,12 @@ class BlobClient(KafkaProducerMixin):
         self.http_pool = connection_pool or get_pool_manager(**kwargs)
         self.conscience_client = ConscienceClient(
             conf, logger=self.logger, pool_manager=self.http_pool
+        )
+        GetTopicMixin.__init__(
+            self,
+            conscience_client=self.conscience_client,
+            conf=self.conf,
+            logger=logger,
         )
 
     def resolve_url(self, url):
