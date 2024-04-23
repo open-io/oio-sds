@@ -228,8 +228,8 @@ class Checker(object):
         required_confirmations=0,
         beanstalkd_addr=None,
         beanstalkd_tube=BlobRebuilder.DEFAULT_WORKER_TUBE,
-        cache_size=2**24,
-        **_kwargs
+        cache_size=4 * 1024 * 1024,
+        **_kwargs,
     ):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
@@ -752,7 +752,7 @@ class Checker(object):
         self.logger.info('Checking object "%s"', target)
         new_target = target if self.limit_listings > 1 else target.copy_container()
         container_listing, _ = self.check_container(new_target)
-        errors = list()
+        errors = []
 
         if obj not in container_listing:
             errors.append("Missing from container listing")
@@ -803,7 +803,7 @@ class Checker(object):
         self.send_result(target, errors)
         return chunk_listing, meta
 
-    def check_container(self, target, recurse=0):
+    def check_container(self, target, recurse=0, marker=None, version_marker=None):
         account = target.account
         container = target.container
         cached = self._get_cached_or_lock((account, container))
@@ -812,22 +812,21 @@ class Checker(object):
 
         self.logger.info('Checking container "%s"', target)
         account_listing = self.check_account(target.copy_account())
-        errors = list()
+        errors = []
         if container not in account_listing:
             errors.append("Missing from account listing")
 
-        marker = None
-        version_marker = None
+        truncated = True
         results = []
-        ct_meta = dict()
-        extra_args = dict()
+        ct_meta = {}
+        extra_args = {}
         if self.limit_listings > 1 and target.obj:
             # When we are explicitly checking one object, start the listing
             # where this object is supposed to be. Do not use a limit,
             # but an end marker, in order to fetch all versions of the object.
             extra_args["prefix"] = target.obj
             extra_args["end_marker"] = target.obj + "\x01"  # HACK
-        while True:
+        while truncated:
             try:
                 resp = self.api.object_list(
                     account,
@@ -835,16 +834,19 @@ class Checker(object):
                     marker=marker,
                     version_marker=version_marker,
                     versions=True,
-                    **extra_args
+                    **extra_args,
                 )
             except exc.NoSuchContainer as err:
                 self.container_not_found += 1
-                errors.append("Not found: %s" % (err,))
+                errors.append(f"Not found: {err}")
                 break
             except Exception as err:
                 self.container_exceptions += 1
-                errors.append("Check failed: %s" % (err,))
+                errors.append(f"Check failed: {err}")
                 break
+            finally:
+                # Prevent infinite loop in case of exception
+                truncated = False
 
             truncated = resp.get("truncated", False)
             if truncated:
@@ -852,25 +854,24 @@ class Checker(object):
                 version_marker = resp.get("next_version_marker")
 
             if resp["objects"]:
-                # safeguard, probably useless
-                if not marker:
-                    marker = resp["objects"][-1]["name"]
                 results.extend(resp["objects"])
-                if not truncated or self.limit_listings > 1:
+                if self.limit_listings > 1:
+                    # If the listing is truncated, another listing
+                    # (with a marker) will be scheduled later.
                     break
             else:
                 ct_meta = resp
-                ct_meta.pop("objects")
+                ct_meta.pop("objects", None)
                 break
 
-        container_listing = dict()
+        container_listing = {}
         # Save all object versions, with the most recent first
         for obj in results:
-            container_listing.setdefault(obj["name"], list()).append(obj)
+            container_listing.setdefault(obj["name"], []).append(obj)
         for versions in container_listing.values():
             versions.sort(key=lambda o: o["version"], reverse=True)
 
-        if self.limit_listings <= 1:
+        if self.limit_listings <= 1 and not truncated:
             # We just listed the whole container, keep the result in a cache
             self.list_cache[(account, container)] = container_listing, ct_meta
         self._unlock((account, container))
@@ -883,6 +884,11 @@ class Checker(object):
                     tcopy.content_id = obj["id"]
                     tcopy.version = str(obj["version"])
                     self._spawn_n(self.check_obj, tcopy, recurse - 1)
+
+        if truncated:
+            tcopy = target.copy_container()
+            self._spawn_n(self.check_container, tcopy, recurse=recurse, marker=marker)
+
         new_target = target.copy_container() if self.limit_listings > 1 else target
         if self.limit_listings > 1:
             if self.containers_checked == 0:

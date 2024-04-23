@@ -134,6 +134,20 @@ class RecursiveCheckCommand(ItemCheckCommand):
             )
             % DEFAULT_DEPTH,
         )
+        parser.add_argument(
+            "--limit-listings",
+            type=int,
+            default=2,
+            help=(
+                "Avoid listing the whole container (resp. account) to check if an "
+                "object (resp. container) exists:\n"
+                "0 means no limit (build an exhaustive list "
+                "useful when checking many objects from many containers).\n"
+                "1 means limit only container listings.\n"
+                "2 means limit both container and object listings.\n"
+                "Default is 2."
+            ),
+        )
         return parser
 
 
@@ -173,6 +187,7 @@ class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
 
     def _take_action(self, parsed_args):
         containers = self.resolve_containers(self.app, parsed_args, no_id=True)
+        self.checker.limit_listings = parsed_args.limit_listings
         for account, container_name, _ in containers:
             target = Target(account, container_name)
             self.checker.check(target, parsed_args.depth)
@@ -194,20 +209,6 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
     def get_parser(self, prog_name):
         parser = super(ObjectCheck, self).get_parser(prog_name)
         ObjectCommandMixin.patch_parser(self, parser)
-        parser.add_argument(
-            "--limit-listings",
-            type=int,
-            default=2,
-            help=(
-                "Avoid listing the whole container (resp. account) to check if an "
-                "object (resp. container) exists:\n"
-                "0 means no limit (build an exhaustive list "
-                "useful when checking many objects from many containers).\n"
-                "1 means limit only container listings.\n"
-                "2 means limit both container and object listings."
-            ),
-        )
-
         return parser
 
     def _take_action(self, parsed_args):
@@ -290,7 +291,7 @@ class PeersCheck(ShowOne):
 
     def get_meta2_links(self, account, reference, cid):
         """
-        Retur the meta2 links known by the master meta1 database.
+        Return the meta2 links known by the master meta1 database.
         """
         data_dir = self.storage.directory.list(
             account, reference, cid=cid, force_master=True
