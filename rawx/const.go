@@ -255,3 +255,7 @@ const (
 const (
 	kafka_conf_prefix = "kafka_"
 )
+
+const (
+	statsdPrefixDefault = "openio.rawx"
+)

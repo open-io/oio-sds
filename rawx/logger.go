@@ -343,11 +343,11 @@ func (evt AccessLogEvent) String() string {
 func LogHttp(evt AccessLogEvent) {
 
 	if statsdClient != nil {
-		prefix := fmt.Sprintf("openio.rawx.request.%s.%d", evt.Method, evt.Status)
+		prefix := fmt.Sprintf("request.%s.%d", evt.Method, evt.Status)
 		// .TimeSpent and .TTFB are in µs while statsd expects ms
-		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent / 1000), 1.0)
+		statsdClient.Timing(fmt.Sprintf("%s.duration", prefix), int64(evt.TimeSpent/1000), 1.0)
 		if evt.Method == "GET" {
-			statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB / 1000), 1.0)
+			statsdClient.Timing(fmt.Sprintf("%s.ttfb", prefix), int64(evt.TTFB/1000), 1.0)
 		}
 		statsdClient.Inc(fmt.Sprintf("%s.in.xfer", prefix), int64(evt.BytesIn), 1.0)
 		statsdClient.Inc(fmt.Sprintf("%s.out.xfer", prefix), int64(evt.BytesOut), 1.0)
@@ -361,6 +361,9 @@ func InitStatsd(addr string, prefix string) {
 
 	if addr == "" {
 		return
+	}
+	if prefix == "" {
+		prefix = statsdPrefixDefault
 	}
 
 	config := &statsd.ClientConfig{

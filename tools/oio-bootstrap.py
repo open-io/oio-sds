@@ -628,6 +628,8 @@ docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 namespace         ${NS}
 ${WANT_SERVICE_ID}service_id        ${SERVICE_ID}
 
+statsd_addr       ${STATSD_ADDR}
+
 # How many hexdigits must be used to name the indirection directories
 hash_width        ${HASH_WIDTH}
 
@@ -2106,6 +2108,13 @@ def generate(options):
 
     systemctl_timeout_stop_sec = defaults["SYSTEMCTL_TIMEOUT_STOP_SEC"]
 
+    statsd_host = options.get("statsd", {}).get("host", "")
+    statsd_port = options.get("statsd", {}).get("port", "8125")
+    if statsd_host:
+        statsd_addr = f"{statsd_host}:{statsd_port}"
+    else:
+        statsd_addr = ""
+
     ENV = dict(
         ZK_CNXSTRING=options.get("ZK"),
         NS=ns,
@@ -2148,8 +2157,9 @@ def generate(options):
         PYTHON_VERSION=PYTHON_VERSION,
         REGION=options["config"].get("ns.region"),
         REPLICATION="async_replication" if options.get("replication_events") else "",
-        STATSD_HOST=options.get("statsd", {}).get("host", ""),
-        STATSD_PORT=options.get("statsd", {}).get("port", "8125"),
+        STATSD_HOST=statsd_host,
+        STATSD_PORT=statsd_port,
+        STATSD_ADDR=statsd_addr,
         SYSTEMCTL_TIMEOUT_STOP_SEC=systemctl_timeout_stop_sec,
         TLS_CERT_FILE=TLS_CERT_FILE,
         TLS_KEY_FILE=TLS_KEY_FILE,
