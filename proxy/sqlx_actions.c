@@ -265,6 +265,8 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	gboolean urgent = _request_get_flag(args, "urgent");
 	gboolean extra_counters = _request_get_flag(args, "extra_counters");
 
+	const gchar *suffix = _req_get_option(args, "suffix");
+
 	/* Query the services */
 	const char *type = TYPE();
 	if (!type)
@@ -273,11 +275,14 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
 
 	gint64 seq = 1;
-	CLIENT_CTX(ctx, args, dirtype, seq);
+	enum proxy_preference_e how = CLIENT_PREFER_NONE;
 
-	PACKER_VOID(_pack) {
-		return sqlx_pack_PROPGET(_u, local, urgent, extra_counters, DL());
+	if (oio_str_is_set(suffix)) {
+		how = CLIENT_SPECIFIED;
 	}
+	CLIENT_CTX2(ctx, args, dirtype, seq, suffix, how, NULL, NULL);
+
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, suffix, local, urgent, extra_counters, DL()); }
 	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
