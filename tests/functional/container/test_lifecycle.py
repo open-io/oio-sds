@@ -309,7 +309,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
                 if last_rule_action:
-                    data["last_action"] = 1
+                    # Don't use last_action , delete of copy will be managed by crawlers
+                    # data["last_action"] = 1
+                    pass
 
                 reqid = request_id()
                 if action in (

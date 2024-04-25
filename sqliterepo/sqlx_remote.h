@@ -81,7 +81,7 @@ GByteArray* sqlx_pack_ENABLE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_FREEZE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_DISABLE (const struct sqlx_name_s *name, gint64 deadline);
 
-GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, gboolean local,
+GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, const gchar *suffix, gboolean local,
 		gboolean urgent, gboolean extra_counters, gint64 deadline);
 GByteArray* sqlx_pack_PROPDEL (struct oio_url_s *url,
 		const struct sqlx_name_s *name, const gchar * const *k, gint64 deadline);
