@@ -597,6 +597,20 @@ class Lifecycle(Filter):
         )
         return resp
 
+    def _get_offest(self, cid, action, rule):
+        key = "-".join(["offsets", action, rule])
+        params = {"cid": cid, "service_id": self.peer_to_use, "suffix": self.suffix}
+        resp, body = self.proxy_client._request(
+            "POST",
+            "/container/get_properties",
+            params=params,
+        )
+        offset = body.get("properties", {}).get(key)
+        if offset is None:
+            return 0
+        else:
+            return int(offset)
+
     def _send_query_events(
         self,
         cid,
@@ -610,7 +624,7 @@ class Lifecycle(Filter):
     ):
         action_name = self._get_action_name(action)
         for key_query, val_query in queries.items():
-            offset = 0
+            offset = self._get_offest(cid, action_name, rule_id)
             while True:
                 # Check budget first
                 if self._is_budget_reached():
