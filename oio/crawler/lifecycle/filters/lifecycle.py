@@ -427,7 +427,7 @@ class Lifecycle(Filter):
 
     def _is_budget_reached(self):
         if self.budget_per_container:
-            if self.nb_match_per_container > self.budget_per_container:
+            if self.nb_match_per_container >= self.budget_per_container:
                 return True
         return False
 
@@ -818,6 +818,20 @@ class Lifecycle(Filter):
         )
         return resp
 
+    def _get_offest(self, cid, action, rule):
+        key = "-".join(["offsets", action, rule])
+        params = {"cid": cid, "service_id": self.peer_to_use, "suffix": self.suffix}
+        resp, body = self.proxy_client._request(
+            "POST",
+            "/container/get_properties",
+            params=params,
+        )
+        offset = body.get("properties", {}).get(key)
+        if offset is None:
+            return 0
+        else:
+            return int(offset)
+
     def _send_query_events(
         self,
         cid,
@@ -830,7 +844,7 @@ class Lifecycle(Filter):
     ):
         action_type = self._get_action(action)
         for key_query, val_query in queries.items():
-            offset = 0
+            offset = self._get_offest(cid, action_type, rule_id)
             while True:
                 # Check budget first
                 if self._is_budget_reached():
@@ -906,7 +920,6 @@ class Lifecycle(Filter):
                 offset += count
 
                 self.nb_match_per_container += count
-
                 self._update_container_stats(rule_id, action, count)
                 if count == 0:
                     break

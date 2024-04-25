@@ -157,6 +157,11 @@ class TestLifecycleFilter(BaseTestCase):
         self.expected_successes = 0
         self.expected_errors = 0
 
+        self.budget_per_container = 3
+        self.lifecycle_batch_size = 2
+        self.conf["budget_per_container"] = self.budget_per_container
+        self.conf["lifecycle_batch_size"] = self.lifecycle_batch_size
+
     def tearDown(self):
         try:
             # delete objects
@@ -246,6 +251,7 @@ class TestLifecycleFilter(BaseTestCase):
         nb_passes=1,
         cid=None,
         out_of_range_objects=None,
+        expected_events=None,
     ):
         if out_of_range_objects is None:
             out_of_range_objects = []
@@ -265,17 +271,9 @@ class TestLifecycleFilter(BaseTestCase):
             self.assertEqual(
                 nb_objects + len(out_of_range_objects), len(resp["objects"])
             )
-            chunk_urls = []
-            for object_ in resp["objects"]:
-                _, chunks = self.storage.object_locate(
-                    None, None, object_["name"], cid=cid
-                )
-                if object_["name"] not in out_of_range_objects:
-                    for chunk in chunks:
-                        chunk_urls.append((chunk["url"], object_["content"]))
 
         # Process the lifecycle
-        for _ in range(1):
+        for _ in range(nb_passes):
             lifecycle.process(meta2db_env, callback)
 
         self.assertEqual(self.expected_successes, lifecycle.successes)
@@ -283,11 +281,12 @@ class TestLifecycleFilter(BaseTestCase):
 
         self.assertEqual(self.count_disabled_rules, lifecycle.count_disabled_rules)
         if self.expected_successes >= 1:
-            for object_ in resp["objects"]:
-                event = self.wait_for_kafka_event(
-                    types=(EventTypes.LIFECYCLE_ACTION,),
-                )
-                self.assertIsNotNone(event)
+            if expected_events:
+                for _ in range(expected_events):
+                    event = self.wait_for_kafka_event(
+                        types=(EventTypes.LIFECYCLE_ACTION,),
+                    )
+                    self.assertIsNotNone(event)
 
     def test_basic(self):
         nb_obj_to_add = 4
@@ -300,7 +299,9 @@ class TestLifecycleFilter(BaseTestCase):
         self._make_local_copy(meta2db_env)
         self._make_symoblic_link(meta2db_env)
         time.sleep(2)
-        self._process(nb_obj_to_add)
+        self._process(
+            nb_obj_to_add, meta2db_env=meta2db_env, expected_events=nb_obj_to_add
+        )
 
     def test_disabled_rules(self):
         nb_obj_to_add = 4
@@ -313,4 +314,22 @@ class TestLifecycleFilter(BaseTestCase):
         self._make_local_copy(meta2db_env)
         self._make_symoblic_link(meta2db_env)
         time.sleep(2)
-        self._process(nb_obj_to_add)
+        self._process(nb_obj_to_add, meta2db_env=meta2db_env, expected_events=0)
+
+    def test_offset(self):
+        nb_obj_to_add = 5
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 1
+        self._set_lifecycle_prop(lifecycle_conf)
+        self._add_objects(self.cname, nb_obj_to_add)
+        meta2db_env = self._get_meta2db_env()
+        self._make_local_copy(meta2db_env)
+        self._make_symoblic_link(meta2db_env)
+        time.sleep(2)
+        # First pass makes 2 requests with batch_size = 2
+        # Then breaks as nb of matches > self.budget_per_container
+        self._process(nb_obj_to_add, meta2db_env=meta2db_env, expected_events=4)
+        time.sleep(2)
+        # Next pass finds only one remainingn match
+        self._process(nb_obj_to_add, meta2db_env=meta2db_env, expected_events=1)
