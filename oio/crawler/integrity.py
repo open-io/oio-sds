@@ -521,9 +521,11 @@ class Checker(object):
             self.chunk_exceptions += 1
             errors.append("Check failed: %s" % (err,))
 
-        if not target.obj:
+        if not target.obj or not target.container:
             if xattr_meta:
                 self.complete_target_from_chunk_metadata(target, xattr_meta)
+            elif target.obj and target.cid:
+                target.account, target.container = self.api.resolve_cid(target.cid)
             else:
                 self.recover_and_complete_object_meta(target, chunk)
 
