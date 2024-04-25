@@ -1824,7 +1824,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
                 if last_rule_action:
-                    data["last_action"] = 1
+                    # Don't use last_action , delete of copy will be managed by crawlers
+                    # data["last_action"] = 1
+                    pass
 
                 reqid = request_id()
                 if action in (
@@ -3507,15 +3509,12 @@ class TestLifecycleConformExpirationVersioning(TestLifecycleConformExpiration):
     def test_delete_marker_2(self):
         self.number_match = 2
         # ['greater', 'tag2']
-        source = (
-            """<LifecycleConfiguration>
+        source = """<LifecycleConfiguration>
                 <Rule>
-                    <ID>"""
-            f"{self.rule_id}"
-            """</ID>
+                    <ID>rule1</ID>
                     <Filter>
                         <And>"""
-        )
+
         tag_set = """<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
              <TagSet>"""
 
