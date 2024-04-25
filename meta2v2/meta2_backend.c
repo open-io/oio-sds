@@ -4304,7 +4304,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	gboolean found_match = FALSE;
 
-	gchar *query_update_properties = NULL;
+	gchar *query_update_properties = NULL, *offset_key = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4383,6 +4383,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		}
 	}
 
+	offset_key = g_strdup_printf("user.offsets-%s-%s",action, rule_id);
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 
@@ -4456,8 +4457,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (incr_offset) {
 		*incr_offset = count_rows;
 	}
-
-	if (full_query_set_tag && (!found_match)) {
+	sqlx_admin_inc_i64(sq3, offset_key, count_rows);
+	if (query_set_tag && (!found_match)) {
 		err = sqlx_transaction_begin(sq3, &repctx_clean);
 		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
 		rc = sqlx_exec(sq3->db, query_update_properties);
@@ -4472,6 +4473,7 @@ rollback:
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
+	g_free(offset_key);
 	g_free(full_query);
 	g_free(full_query_set_tag);
 	g_free(query_update_properties);
@@ -4502,7 +4504,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 
 	int batch_size = 0;
 	gboolean found_match = FALSE;
-	gchar *query_update_properties = NULL;
+	gchar *query_update_properties = NULL, *offset_key = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4570,7 +4572,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 
 	full_query = g_strdup_printf("%s %s", base_query, query);
-
+	offset_key = g_strdup_printf("user.offsets-%s-%s",action, rule_id);
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 
@@ -4644,7 +4646,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	*incr_offset = count_rows;
 	err = sqlx_transaction_end(repctx, err);
 	err = sqlx_transaction_begin(sq3, &repctx_clean);
-	if (full_query_set_tag && (!found_match)) {
+	sqlx_admin_inc_i64(sq3, offset_key, count_rows);
+	if (query_set_tag && (!found_match)) {
 		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
 		rc = sqlx_exec(sq3->db, query_update_properties);
 		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
@@ -4658,6 +4661,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
+	g_free(offset_key);
 	g_free(full_query);
 	g_free(full_query_set_tag);
 	g_free(query_update_properties);
