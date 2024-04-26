@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.http_urllib3 import get_pool_manager
 from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
 from oio.common.exceptions import ClientException, VolumeException, from_multi_responses
@@ -37,11 +38,13 @@ class Meta2Database(object):
         rdir_client=None,
         directory_client=None,
         service_type="meta2",
+        pool_manager=None,
     ):
         self.conf = conf
         self.service_type = service_type
         self.logger = logger or get_logger(self.conf)
-
+        if not pool_manager:
+            self.pool_manager = get_pool_manager(pool_connections=10)
         self._admin = admin_client
         self._conscience = conscience_client
         self._rdir = rdir_client
@@ -55,25 +58,29 @@ class Meta2Database(object):
     @property
     def admin(self):
         if not self._admin:
-            self._admin = AdminClient(self.conf)
+            self._admin = AdminClient(self.conf, pool_manager=self.pool_manager)
         return self._admin
 
     @property
     def conscience(self):
         if not self._conscience:
-            self._conscience = ConscienceClient(self.conf, logger=self.logger)
+            self._conscience = ConscienceClient(
+                self.conf, logger=self.logger, pool_manager=self.pool_manager
+            )
         return self._conscience
 
     @property
     def rdir(self):
         if not self._rdir:
-            self._rdir = RdirClient(self.conf, logger=self.logger)
+            self._rdir = RdirClient(
+                self.conf, logger=self.logger, pool_manager=self.pool_manager
+            )
         return self._rdir
 
     @property
     def directory(self):
         if not self._directory:
-            self._directory = DirectoryClient(self.conf)
+            self._directory = DirectoryClient(self.conf, pool_manager=self.pool_manager)
         return self._directory
 
     def reset_peers(self):
