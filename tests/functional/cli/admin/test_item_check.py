@@ -71,6 +71,7 @@ class ItemCheckTest(CliTestCase):
 
     def setUp(self):
         super(ItemCheckTest, self).setUp()
+        self.conf.update({"hash_width": 2, "hash_depth": 2})
         self.rawx_services = None
 
         self.account = "item_check_account_" + random_str(4)
@@ -147,7 +148,12 @@ class ItemCheckTest(CliTestCase):
         else:
             self.fail("No service matches with the chunk %s" % chunk)
         chunk_id = chunk_id.upper()
-        chunk_path = rawx_service_path + "/" + chunk_id[:3] + "/" + chunk_id
+        # Compute chunk path according to hash width and depth in conf
+        chunk_path = rawx_service_path
+        for i in range(self.conf["hash_depth"]):
+            start = chunk_id[i * self.conf["hash_width"] :]
+            chunk_path += f"/{start[: self.conf['hash_width']]}"
+        chunk_path += f"/{chunk_id}"
         with open(chunk_path, "wb") as fp:
             fp.write(b"chunk is dead")
 

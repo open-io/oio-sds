@@ -57,7 +57,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         super(TestRdirCrawlerForRawx, self).setUp()
         self.api = self.storage
 
-        self.conf.update({"hash_width": 3, "hash_depth": 1})
+        self.conf.update({"hash_width": 2, "hash_depth": 2})
 
         services = self.conscience.all_services("rawx")
         self.rawx_volumes = {}
@@ -554,7 +554,7 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
         super(TestRdirCrawlerForMeta2, self).setUp()
         self.api = self.storage
         self.nb_meta2 = 0
-        self.conf.update({"hash_width": 3, "hash_depth": 1})
+        self.conf.update({"hash_width": 2, "hash_depth": 2})
 
         services = self.conscience.all_services("meta2")
         self.meta2_volumes = {}

@@ -1980,8 +1980,8 @@ defaults = {
     COMPRESSION: "off",
     MONITOR_PERIOD: 1,
     M1_DIGITS: 2,
-    HASH_WIDTH: 3,
-    HASH_DEPTH: 1,
+    HASH_WIDTH: 2,
+    HASH_DEPTH: 2,
     # After being stopped (SIGTERM), timeout before sending a SIGKILL
     "SYSTEMCTL_TIMEOUT_STOP_SEC": 30,  # systemctl default value
 }

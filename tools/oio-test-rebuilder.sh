@@ -22,7 +22,7 @@ CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 INTEGRITY="$(command -v oio-crawler-integrity)"
 CONCURRENCY=10
-RAWX_HASH_DEPTH=1
+RAWX_HASH_DEPTH=2
 
 # Some services declare their IP address and port as a service ID,
 # and thus this check does not work anymore.
