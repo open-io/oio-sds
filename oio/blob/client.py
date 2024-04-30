@@ -23,6 +23,7 @@ from functools import wraps
 from urllib.parse import unquote
 from time import mktime
 
+from oio.common.kafka import KafkaProducerMixin
 from oio.common.logger import get_logger
 from oio.common.http_urllib3 import (
     get_pool_manager,
@@ -96,7 +97,7 @@ def update_rawx_perfdata(func):
     return _update_rawx_perfdata
 
 
-class BlobClient(object):
+class BlobClient(KafkaProducerMixin):
     """A low-level client to rawx services."""
 
     def __init__(
@@ -108,6 +109,8 @@ class BlobClient(object):
         watchdog=None,
         **kwargs
     ):
+        KafkaProducerMixin.__init__(self, logger=logger, conf=conf)
+
         self.conf = conf
         self.perfdata = perfdata
         self.watchdog = watchdog

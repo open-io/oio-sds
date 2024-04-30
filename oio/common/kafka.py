@@ -428,3 +428,39 @@ class KafkaConsumer(KafkaClient):
     def _get_conf(self):
         consumer_conf, _ = self._kafka_options_from_conf()
         return consumer_conf
+
+
+class KafkaProducerMixin:
+    def __init__(self, logger, conf, endpoint=None):
+        if not endpoint:
+            ns_conf = load_namespace_conf(conf["namespace"], failsafe=True)
+            endpoint = ns_conf.get("event-agent", DEFAULT_ENDPOINT)
+        self.endpoint = endpoint
+        self.logger = logger
+        self.conf = conf
+        self._producer = None
+
+    def _connect_producer(self):
+        if self._producer is None:
+            self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+
+    def close_producer(self):
+        if self._producer is not None:
+            self._producer.close()
+
+    def send(self, topic, data, callback=None):
+        try:
+            self._connect_producer()
+            if not self._producer:
+                raise SystemError("No producer available")
+
+            self._producer.send(topic, data, flush=True)
+            if callback:
+                callback(data)
+            return True
+        except Exception:
+            self.logger.exception(
+                "Failed to send message topic=%s",
+                topic,
+            )
+            return False

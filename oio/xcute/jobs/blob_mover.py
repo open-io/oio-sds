@@ -14,14 +14,23 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 import math
 
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value, boolean_value
-from oio.common.exceptions import ContentDrained, ContentNotFound, NotFound, OrphanChunk
+from oio.common.exceptions import (
+    ContentDrained,
+    ContentNotFound,
+    CorruptedChunk,
+    NotFound,
+    OrphanChunk,
+)
 from oio.common.green import time
+from oio.common.kafka import DEFAULT_REBUILD_TOPIC
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
+from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
 from oio.xcute.jobs.common import XcuteRdirJob
@@ -73,6 +82,7 @@ class RawxDecommissionTask(XcuteTask):
         version = task_payload["version"]
         chunk_id = task_payload["chunk_id"]
         buf_size = task_payload["buf_size"]
+        rebuild_on_read_failure = task_payload["rebuild_on_read_failure"]
 
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:
@@ -121,6 +131,27 @@ class RawxDecommissionTask(XcuteTask):
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
+        except (CorruptedChunk, IOError):
+            if rebuild_on_read_failure:
+                data = json.dumps(
+                    {
+                        "when": time.time(),
+                        "event": EventTypes.CONTENT_BROKEN,
+                        "url": {
+                            "ns": self.conf["namespace"],
+                            "id": container_id,
+                            "content": content_id,
+                            "path": path,
+                            "version": version,
+                        },
+                        "data": {"missing_chunks": [chunk_id]},
+                    }
+                )
+                # emit rebuild event
+                is_sent = self.blob_client.send(topic=DEFAULT_REBUILD_TOPIC, data=data)
+                if is_sent:
+                    return {"rebuilt_chunks": 1}
+                return {"read_chunk_errors": 1}
 
         return {"moved_chunks": 1, "moved_bytes": chunk_size}
 
@@ -135,6 +166,7 @@ class RawxDecommissionJob(XcuteRdirJob):
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
     DEFAULT_BUFFER_SIZE = 262144
     ENABLE_HOST_TOPIC = True
+    REBUILD_ON_READ_FAILURE = True
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -179,6 +211,9 @@ class RawxDecommissionJob(XcuteRdirJob):
         )
         sanitized_job_params["enable_host_topic"] = boolean_value(
             job_params.get("enable_host_topic"), cls.ENABLE_HOST_TOPIC
+        )
+        sanitized_job_params["rebuild_on_read_failure"] = boolean_value(
+            job_params.get("rebuild_on_read_failure"), cls.REBUILD_ON_READ_FAILURE
         )
 
         return sanitized_job_params, f"rawx/{service_id}"
@@ -265,6 +300,7 @@ class RawxDecommissionJob(XcuteRdirJob):
                 "version": descr["version"],
                 "chunk_id": chunk_id,
                 "buf_size": job_params["buffer_size"],
+                "rebuild_on_read_failure": job_params["rebuild_on_read_failure"],
             }
 
             now = time.time()

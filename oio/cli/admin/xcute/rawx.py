@@ -166,6 +166,16 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             ),
         )
         parser.add_argument(
+            "--rebuild-on-read-failure",
+            metavar="yes/no",
+            type=boolean_value,
+            default=self.JOB_CLASS.REBUILD_ON_READ_FAILURE,
+            help=(
+                "If True, rebuild event is emitted for the unrecoverable chunk"
+                + " (default=%f)" % self.JOB_CLASS.REBUILD_ON_READ_FAILURE
+            ),
+        )
+        parser.add_argument(
             "--usage-target",
             type=float,
             default=self.JOB_CLASS.DEFAULT_USAGE_TARGET,
@@ -192,6 +202,7 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "buffer_size": parsed_args.buffer_size,
             "excluded_rawx": parsed_args.excluded_rawx,
             "enable_host_topic": parsed_args.enable_host_topic,
+            "rebuild_on_read_failure": parsed_args.rebuild_on_read_failure,
             "usage_target": parsed_args.usage_target,
             "usage_check_interval": parsed_args.usage_check_interval,
         }

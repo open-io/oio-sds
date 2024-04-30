@@ -177,6 +177,8 @@ class ServiceDecommissionTest(CliTestCase):
                 decoded["tasks.processed"]
                 - decoded.get("results.orphan_chunks", 0)
                 - decoded.get("results.skipped_chunks_no_longer_exist", 0)
+                - decoded.get("results.rebuilt_chunks", 0)
+                - decoded.get("results.read_chunk_errors", 0)
                 - decoded["errors.total"],
                 event=EventTypes.CHUNK_DELETED,
             )
