@@ -75,6 +75,8 @@ jobs:
             sleep 1
           done
           sleep 1
+          # Disable topic autocreation
+          docker exec redpanda-0 rpk redpanda config set auto_create_topics_enabled false
 
       - name: Run functional tests
         script: |+
