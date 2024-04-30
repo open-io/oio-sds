@@ -72,6 +72,7 @@ class RawxDecommissionTask(XcuteTask):
         path = task_payload["path"]
         version = task_payload["version"]
         chunk_id = task_payload["chunk_id"]
+        buf_size = task_payload["buf_size"]
 
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:
@@ -116,6 +117,7 @@ class RawxDecommissionTask(XcuteTask):
                 service_id=self.service_id,
                 reqid=reqid,
                 copy_from_duplica=False,
+                buf_size=buf_size,
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
@@ -131,6 +133,7 @@ class RawxDecommissionJob(XcuteRdirJob):
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
+    DEFAULT_BUFFER_SIZE = 262144
     ENABLE_HOST_TOPIC = True
 
     @classmethod
@@ -155,6 +158,10 @@ class RawxDecommissionJob(XcuteRdirJob):
 
         sanitized_job_params["max_chunk_size"] = int_value(
             job_params.get("max_chunk_size"), cls.DEFAULT_MAX_CHUNK_SIZE
+        )
+
+        sanitized_job_params["buffer_size"] = int_value(
+            job_params.get("buffer_size"), cls.DEFAULT_BUFFER_SIZE
         )
 
         # Transform the list into a dictionary: when the value is True,
@@ -257,6 +264,7 @@ class RawxDecommissionJob(XcuteRdirJob):
                 "path": descr["path"],
                 "version": descr["version"],
                 "chunk_id": chunk_id,
+                "buf_size": job_params["buffer_size"],
             }
 
             now = time.time()

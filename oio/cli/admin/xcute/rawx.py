@@ -138,6 +138,14 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             help="Only move chunks smaller than the given size.",
         )
         parser.add_argument(
+            "--buffer-size",
+            type=int,
+            help=(
+                "Chunk reader buffer size (default=%d)."
+                % self.JOB_CLASS.DEFAULT_BUFFER_SIZE
+            ),
+        )
+        parser.add_argument(
             "--excluded-rawx",
             help=(
                 "List of rawx (comma-separated) to exclude from possible "
@@ -181,6 +189,7 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "rawx_timeout": parsed_args.rawx_timeout,
             "min_chunk_size": parsed_args.min_chunk_size,
             "max_chunk_size": parsed_args.max_chunk_size,
+            "buffer_size": parsed_args.buffer_size,
             "excluded_rawx": parsed_args.excluded_rawx,
             "enable_host_topic": parsed_args.enable_host_topic,
             "usage_target": parsed_args.usage_target,

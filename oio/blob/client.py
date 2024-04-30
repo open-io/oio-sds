@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -204,7 +204,9 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_get(self, url, check_headers=True, verify_checksum=False, **kwargs):
+    def chunk_get(
+        self, url, check_headers=True, verify_checksum=False, buf_size=None, **kwargs
+    ):
         """
         :keyword check_headers: when True (the default), raise FaultyChunk
             if a mandatory response header is missing.
@@ -212,13 +214,14 @@ class BlobClient(object):
             and compare to the value saved in the chunk's extended attributes.
             If any string, compute the checksum and compare to this string.
             The checksum algorithm is read from the response headers.
+        :keyword buf_size: used to custom chunk reader buffer size
         :returns: a tuple with a dictionary of chunk metadata and a stream
             to the chunk's data.
         """
         url = self.resolve_url(url)
         reader = ChunkReader(
             [{"url": url}],
-            None,
+            buf_size=buf_size,
             verify_checksum=verify_checksum,
             watchdog=self.watchdog,
             **kwargs
@@ -276,13 +279,16 @@ class BlobClient(object):
         version=None,
         content_id=None,
         headers=None,
+        buf_size=None,
         **kwargs
     ):
         stream = None
         # Check source headers only when new fullpath is not provided
         kwargs["check_headers"] = not bool(fullpath)
         try:
-            meta, stream = self.chunk_get(from_url, verify_checksum=True, **kwargs)
+            meta, stream = self.chunk_get(
+                from_url, verify_checksum=True, buf_size=buf_size, **kwargs
+            )
             meta["chunk_id"] = chunk_id or to_url.split("/")[-1]
             meta["full_path"] = fullpath or meta["full_path"]
             meta["container_id"] = cid or meta.get("container_id")
