@@ -518,10 +518,12 @@ class GetTopicMixin:
                         slot = slot[1:]
                     slots.append(slot)
                 slots.sort()
-                # Remove prefix ('rawx') and separator
-                topic_suffix = "-".join(slots)
-                rawx_services_per_id[svc_id] = f"{svc_ip}-{topic_suffix}"
-                rawx_services_per_addr[svc_addr] = f"{svc_ip}-{topic_suffix}"
+                topic_name = svc_ip
+                if slots:
+                    topic_name += f"-{'-'.join(slots)}"
+
+                rawx_services_per_id[svc_id] = topic_name
+                rawx_services_per_addr[svc_addr] = topic_name
             # Update cache
             self._rawx_services_per_addr = rawx_services_per_addr
             self._rawx_services_per_id = rawx_services_per_id

@@ -53,13 +53,9 @@ class DeleteFilter(Filter, GetTopicMixin):
         try:
             self._producer.send(topic, event)
         except KafkaSendException as err:
-            msg = f"delete failure: {err!r}"
-            delay = None
-            if err.retriable:
-                delay = self._retry_delay
-            resp = RetryableEventError(event=event, body=msg, delay=delay)
-            return resp
-        return None
+            msg = f"Topic {topic}: {err!r}"
+            return msg, err.retriable
+        return None, False
 
     def strip_fields(self, event):
         # Remove useless field in `url` field
@@ -106,11 +102,22 @@ class DeleteFilter(Filter, GetTopicMixin):
 
             # Produce events to each topic
             if child_events:
+                has_retriable_errors = False
+                errors = []
                 for dst, evt in child_events:
                     dst_topic = f"{self._topic_prefix}{dst}"
-                    err_resp = self._send_event(dst_topic, evt)
-                    if err_resp:
-                        return err_resp(env, cb)
+                    error, retriable = self._send_event(dst_topic, evt)
+                    if error:
+                        errors.append(error)
+                        # Should retry if at least one error is retriable
+                        has_retriable_errors |= retriable
+                if errors:
+                    delay = None
+                    if has_retriable_errors:
+                        delay = self._retry_delay
+                    msg = f"Failed to send all child events. Reason: {','.join(errors)}"
+                    err_resp = RetryableEventError(event=event, body=msg, delay=delay)
+                    return err_resp(env, cb)
                 # Flush
                 in_flight = self._producer.flush(1.0)
                 if in_flight > 0:
