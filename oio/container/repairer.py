@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ from datetime import datetime
 from oio.common.easy_value import true_value
 from oio.common.exceptions import from_multi_responses
 from oio.common.tool import Tool, ToolWorker
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.container.client import ContainerClient
 from oio.directory.admin import AdminClient
 from oio.directory.meta2 import Meta2Database
@@ -43,7 +43,7 @@ class ContainerRepairer(Tool):
     @staticmethod
     def string_from_item(item):
         namespace, account, container = item
-        return "%s|%s|%s" % (namespace, account, container)
+        return f"{namespace}|{account}|{container}"
 
     def _fetch_items_from_containers(self):
         for obj in self.containers:
@@ -138,28 +138,31 @@ class ContainerRepairerWorker(ToolWorker):
         self.meta2_database = Meta2Database(self.conf, logger=self.logger)
 
     def _process_item(self, item):
+        reqid = request_id("ctrepair-")
         namespace, account, container = item
         if namespace != self.tool.namespace:
             raise ValueError(
-                "Invalid namespace (actual=%s, expected=%s)"
-                % (namespace, self.tool.namespace)
+                "Invalid namespace "
+                f"(actual={namespace}, expected={self.tool.namespace})"
             )
 
-        errors = list()
+        errors = []
 
         if self.rebuild_bases:
             cid = cid_from_name(account, container)
-            for res in self.meta2_database.rebuild(cid):
+            for res in self.meta2_database.rebuild(cid, reqid=reqid):
                 if res["err"]:
-                    errors.append("%s: %s" % (res["base"], res["err"]))
+                    errors.append(f"{res['base']}: {res['err']}")
             if errors:
                 raise Exception(errors)
 
         if self.sync_bases:
             data = self.admin_client.election_sync(
-                service_type="meta2", account=account, reference=container
+                service_type="meta2", account=account, reference=container, reqid=reqid
             )
             from_multi_responses(data, excepted_status=(200, 301))
 
         if self.update_account:
-            self.container_client.container_touch(account=account, reference=container)
+            self.container_client.container_touch(
+                account=account, reference=container, reqid=reqid
+            )

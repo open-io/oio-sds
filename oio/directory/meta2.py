@@ -454,14 +454,26 @@ class Meta2Database(object):
             )
             if raise_error:
                 raise
-            yield {"base": base, "src": src, "dst": dst, "err": exc}
+            yield {
+                "base": base,
+                "src": src,
+                "dst": dst,
+                "err": exc,
+                "reqid": kwargs["reqid"],
+            }
             return
 
         for bseq in bases_seq:
             _dst, err = self._safe_move(
                 bseq, src, dst, raise_error=raise_error, **kwargs
             )
-            yield {"base": bseq, "src": src, "dst": _dst, "err": err}
+            yield {
+                "base": bseq,
+                "src": src,
+                "dst": _dst,
+                "err": err,
+                "reqid": kwargs["reqid"],
+            }
 
     def _safe_rebuild(self, bseq, raise_error=False, **kwargs):
         err = None
@@ -512,9 +524,9 @@ class Meta2Database(object):
             self.logger.error("Failed to load peers (base=%s): %s", base, exc)
             if raise_error:
                 raise
-            yield {"base": base, "err": exc}
+            yield {"base": base, "err": exc, "reqid": kwargs["reqid"]}
             return
 
         for bseq in bases_seq:
             err = self._safe_rebuild(bseq, raise_error=raise_error, **kwargs)
-            yield {"base": bseq, "err": err}
+            yield {"base": bseq, "err": err, "reqid": kwargs["reqid"]}

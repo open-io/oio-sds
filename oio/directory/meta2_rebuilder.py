@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -134,7 +134,7 @@ class Meta2Rebuilder(Tool):
 
 class ContentRepairerWorker(ToolWorker):
     def __init__(self, tool, queue_workers, queue_reply):
-        super(ContentRepairerWorker, self).__init__(tool, queue_workers, queue_reply)
+        super().__init__(tool, queue_workers, queue_reply)
 
         self.admin_client = AdminClient(self.conf, logger=self.logger)
         self.meta2_database = Meta2Database(self.conf, logger=self.logger)
@@ -143,17 +143,19 @@ class ContentRepairerWorker(ToolWorker):
         namespace, container_id = item
         if namespace != self.tool.namespace:
             raise ValueError(
-                "Invalid namespace (actual=%s, expected=%s)"
-                % (namespace, self.tool.namespace)
+                "Invalid namespace "
+                f"(actual={namespace}, expected={self.tool.namespace})"
             )
 
         self.logger.debug("Rebuilding %s", self.tool.string_from_item(item))
-        errors = list()
+        errors = []
         for res in self.meta2_database.rebuild(container_id):
             if res["err"]:
-                errors.append("%s: %s" % (res["base"], res["err"]))
+                errors.append(f"{res['base']}: {res['err']}")
         if errors:
             raise Exception(errors)
 
-        data = self.admin_client.election_sync(service_type="meta2", cid=container_id)
+        data = self.admin_client.election_sync(
+            service_type="meta2", cid=container_id, reqid=res["reqid"]
+        )
         from_multi_responses(data, excepted_status=(200, 301))
