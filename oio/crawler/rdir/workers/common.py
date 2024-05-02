@@ -87,6 +87,7 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
         self.total_scanned = 0
         self.service_unavailable = 0
         self.last_report_time = 0
+        self.last_stats_report_time = 0
         self.scanned_since_last_report = 0
         self.repaired = 0
 
@@ -103,6 +104,12 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
         )
         self.current_marker = None
         self.use_marker = boolean_value(self.conf.get("use_marker"), False)
+
+    def _can_send_report(self, now):
+        return now > self.last_report_time + self.report_interval
+
+    def _can_send_stats(self, now):
+        return now > self.last_stats_report_time + 30.0
 
     def run(self, *args, **kwargs):
         """

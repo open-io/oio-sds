@@ -74,47 +74,54 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
         :param tag: One of three: starting, running, ended.
         """
         now = time.time()
-        if not force and now - self.last_report_time < self.report_interval:
+        if not force and not self._can_send_stats(now):
             return
         since_last_rprt = (now - self.last_report_time) or 0.00001
-
-        self.logger.info(
-            "%s volume_id=%s total_scanned=%d pass=%d repaired=%d "
-            "errors=%d service_unavailable=%d "
-            "unrecoverable=%d orphans=%d orphans_check_errors=%d "
-            "deleted_orphans=%d chunks=%d "
-            "rate_since_last_report=%.2f/s",
-            tag,
-            self.volume_id,
-            self.total_scanned,
-            self.passes,
-            self.repaired,
-            self.errors,
-            self.service_unavailable,
-            self.unrecoverable_content,
-            self.orphans,
-            self.orphans_check_errors,
-            self.deleted_orphans,
-            self.scanned_since_last_report,
-            self.scanned_since_last_report / since_last_rprt,
-        )
-        stats = {
-            k: getattr(self, k)
-            for k in (
-                "deleted_orphans",
-                "errors",
-                "total_scanned",
-                "orphans",
-                "orphans_check_errors",
-                "repaired",
-                "scanned_since_last_report",
-                "service_unavailable",
-                "unrecoverable_content",
+        scan_rate = self.scanned_since_last_report / since_last_rprt
+        if self._can_send_report(now):
+            self.logger.info(
+                "%s volume_id=%s total_scanned=%d pass=%d repaired=%d "
+                "errors=%d service_unavailable=%d "
+                "unrecoverable=%d orphans=%d orphans_check_errors=%d "
+                "deleted_orphans=%d chunks=%d "
+                "rate_since_last_report=%.2f/s",
+                tag,
+                self.volume_id,
+                self.total_scanned,
+                self.passes,
+                self.repaired,
+                self.errors,
+                self.service_unavailable,
+                self.unrecoverable_content,
+                self.orphans,
+                self.orphans_check_errors,
+                self.deleted_orphans,
+                self.scanned_since_last_report,
+                scan_rate,
             )
-        }
-        self.report_stats(stats)
-        self.last_report_time = now
-        self.scanned_since_last_report = 0
+            self.last_report_time = now
+            self.scanned_since_last_report = 0
+
+        if not tag.startswith("start"):
+            stats = {
+                k: getattr(self, k)
+                for k in (
+                    "deleted_orphans",
+                    "errors",
+                    "total_scanned",
+                    "orphans",
+                    "orphans_check_errors",
+                    "repaired",
+                    "scanned_since_last_report",
+                    "service_unavailable",
+                    "unrecoverable_content",
+                )
+            }
+            if tag.startswith("ended"):
+                scan_rate = 0.0
+            stats["scan_rate"] = scan_rate
+            self.report_stats(stats)
+            self.last_stats_report_time = now
 
     def error(self, container_id, chunk_id, msg, reqid=None, level=logging.ERROR):
         self.logger.log(

@@ -69,42 +69,49 @@ class RdirWorkerForMeta2(RdirWorker):
         :param tag: One of three: starting, running, ended.
         """
         now = time.time()
-        if not force and now - self.last_report_time < self.report_interval:
+        if not force and not self._can_send_stats(now):
             return
         since_last_rprt = (now - self.last_report_time) or 0.00001
-
-        self.logger.info(
-            "%s volume_id=%s total_scanned=%d pass=%d "
-            "containers_not_referenced=%d repaired=%s deindexed_containers=%d "
-            "errors=%d service_unavailable=%d containers=%d "
-            "rate_since_last_report=%.2f/s",
-            tag,
-            self.volume_id,
-            self.total_scanned,
-            self.passes,
-            self.containers_not_referenced,
-            self.repaired,
-            self.deindexed_containers,
-            self.errors,
-            self.service_unavailable,
-            self.scanned_since_last_report,
-            self.scanned_since_last_report / since_last_rprt,
-        )
-        stats = {
-            k: getattr(self, k)
-            for k in (
-                "containers_not_referenced",
-                "deindexed_containers",
-                "repaired",
-                "errors",
-                "total_scanned",
-                "scanned_since_last_report",
-                "service_unavailable",
+        scan_rate = self.scanned_since_last_report / since_last_rprt
+        if self._can_send_report(now):
+            self.logger.info(
+                "%s volume_id=%s total_scanned=%d pass=%d "
+                "containers_not_referenced=%d repaired=%s deindexed_containers=%d "
+                "errors=%d service_unavailable=%d containers=%d "
+                "rate_since_last_report=%.2f/s",
+                tag,
+                self.volume_id,
+                self.total_scanned,
+                self.passes,
+                self.containers_not_referenced,
+                self.repaired,
+                self.deindexed_containers,
+                self.errors,
+                self.service_unavailable,
+                self.scanned_since_last_report,
+                scan_rate,
             )
-        }
-        self.report_stats(stats)
-        self.last_report_time = now
-        self.scanned_since_last_report = 0
+            self.last_report_time = now
+            self.scanned_since_last_report = 0
+
+        if not tag.startswith("start"):
+            stats = {
+                k: getattr(self, k)
+                for k in (
+                    "containers_not_referenced",
+                    "deindexed_containers",
+                    "repaired",
+                    "errors",
+                    "total_scanned",
+                    "scanned_since_last_report",
+                    "service_unavailable",
+                )
+            }
+            if tag.startswith("ended"):
+                scan_rate = 0.0
+            stats["scan_rate"] = scan_rate
+            self.report_stats(stats)
+            self.last_stats_report_time = now
 
     def error(self, container, msg, reqid=None, level=logging.ERROR):
         self.logger.log(

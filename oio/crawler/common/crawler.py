@@ -114,6 +114,13 @@ class CrawlerWorkerMarkerMixin(object):
 class CrawlerStatsdMixin:
     """Crawler worker mixin to add statsd-related functions"""
 
+    excluded_stats = {
+        "elapsed",  # not relevant
+        "pass",  # not relevant
+        "scanned_since_last_report",  # not relevant
+        "successes",  # = total_scanned - errors
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         statsd_conf = {k: v for k, v in self.conf.items() if k.startswith("statsd_")}
@@ -129,24 +136,20 @@ class CrawlerStatsdMixin:
         statsd_conf["statsd_prefix"] = statsd_prefix.replace("-", "_")
         self.statsd_client = get_statsd(conf=statsd_conf)
 
+        exclude = self.conf.get("excluded_stats", "").split(",")
+        self.excluded_stats.update({x.strip() for x in exclude if x.strip()})
+
     def report_stats(self, stats, filter_name="main"):
-        exclude = (
-            "elapsed",  # not relevant
-            "pass",  # already sent
-            "scanned_since_last_report",  # not relevant
-            "successes",  # = total_scanned - errors
-        )
         # statsd pipelines allow to send several metrics in the same UDP packet
         with self.statsd_client.pipeline() as spipe:
             for key, val in stats.items():
-                if key in exclude or not isinstance(val, (int, float)):
+                if key in self.excluded_stats or not isinstance(val, (int, float)):
                     continue
                 skey = f"{filter_name}.{key}.count"
                 spipe.gauge(skey, val)
 
     def report_duration(self, duration):
         with self.statsd_client.pipeline() as spipe:
-            spipe.gauge("main.pass.count", self.passes)
             spipe.timing("main.pass.timing", duration * 1000)
         if duration > self.scans_interval:
             self.logger.warning(
@@ -175,6 +178,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     DEFAULT_SCAN_INTERVAL = 1800
     DEFAULT_REPORT_INTERVAL = 300
     DEFAULT_SCANNED_PER_SECOND = 30
+    DEFAULT_STAT_INTERVAL = 10.0
 
     def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
         """
@@ -222,6 +226,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.invalid_paths = 0
         self.start_time = time.time()
         self.last_report_time = 0
+        self.last_stats_report_time = 0
         self.scanned_since_last_report = 0
 
         super().__init__()
@@ -271,12 +276,15 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         :param tag: One of three: starting, running, ended.
         """
         now = time.time()
-        if not force and now - self.last_report_time < self.report_interval:
+        if not (
+            force or now > self.last_stats_report_time + self.DEFAULT_STAT_INTERVAL
+        ):
             return
 
         elapsed = (now - self.start_time) or 0.00001
         total = self.successes + self.errors
         since_last_rprt = (now - self.last_report_time) or 0.00001
+        scan_rate = self.scanned_since_last_report / since_last_rprt
 
         logger = self.logger.debug if tag in TAGS_TO_DEBUG else self.logger.info
         stats_dict = {
@@ -288,38 +296,51 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
             "invalid_paths": self.invalid_paths,
             "errors": self.errors,
             "total_scanned": total,
-            "scan_rate": self.scanned_since_last_report / since_last_rprt,
+            "scan_rate": scan_rate,
             "scanned_since_last_report": self.scanned_since_last_report,
             "successes": self.successes,
         }
-        logger(
-            "%(tag)s "
-            "volume_id=%(volume_id)s "
-            "elapsed=%(elapsed).02f "
-            "pass=%(pass)d "
-            "ignored_paths=%(ignored_paths)d "
-            "invalid_paths=%(invalid_paths)d "
-            "errors=%(errors)d "
-            "total_scanned=%(total_scanned)d "
-            "rate=%(scan_rate).2f/s",
-            stats_dict,
-        )
-        self.report_stats(stats_dict)
+        # Check if we must send a classic report (syslog or stderr)
+        must_report = force or now > self.last_report_time + self.report_interval
+        if must_report:
+            logger(
+                "%(tag)s "
+                "volume_id=%(volume_id)s "
+                "elapsed=%(elapsed).02f "
+                "pass=%(pass)d "
+                "ignored_paths=%(ignored_paths)d "
+                "invalid_paths=%(invalid_paths)d "
+                "errors=%(errors)d "
+                "total_scanned=%(total_scanned)d "
+                "rate=%(scan_rate).2f/s",
+                stats_dict,
+            )
+            self.last_report_time = now
+            self.scanned_since_last_report = 0
+
+        # Send statsd reports more often than classic reports
+        if not tag.startswith("start"):
+            if tag.startswith("ended"):
+                stats_dict["scan_rate"] = 0.0
+            self.report_stats(stats_dict)
 
         for filter_name, stats in self.pipeline.get_stats().items():
-            logger(
-                "%(tag)s volume_id=%(volume_id)s filter=%(filter)s %(stats)s",
-                {
-                    "tag": tag,
-                    "volume_id": self.volume_id,
-                    "filter": filter_name,
-                    "stats": " ".join(f"{key}={value}" for key, value in stats.items()),
-                },
-            )
-            self.report_stats(stats, filter_name)
+            if must_report:
+                logger(
+                    "%(tag)s volume_id=%(volume_id)s filter=%(filter)s %(stats)s",
+                    {
+                        "tag": tag,
+                        "volume_id": self.volume_id,
+                        "filter": filter_name,
+                        "stats": " ".join(
+                            f"{key}={value}" for key, value in stats.items()
+                        ),
+                    },
+                )
+            if not tag.startswith("start"):
+                self.report_stats(stats, filter_name)
 
-        self.last_report_time = now
-        self.scanned_since_last_report = 0
+        self.last_stats_report_time = now
 
     def process_path(self, path):
         raise NotImplementedError("run not implemented")
