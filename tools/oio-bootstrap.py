@@ -1254,26 +1254,6 @@ Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 """
 
-template_systemd_service_placement_improver_crawler = """
-[Unit]
-Description=[OpenIO] Service placement improver crawler
-After=network.target
-PartOf=${PARENT}
-OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_systemd_service_rdir_crawler = """
 [Unit]
 Description=[OpenIO] Service rdir crawler
@@ -1296,25 +1276,6 @@ WantedBy=${PARENT}
 template_systemd_service_rawx_crawler = """
 [Unit]
 Description=[OpenIO] Service rawx crawler
-PartOf=${PARENT}
-OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
-template_systemd_service_checksum_checker_crawler = """
-[Unit]
-Description=[OpenIO] Service checksum checker crawler
 PartOf=${PARENT}
 OioGroup=${NS},crawler,rawx-crawler,${SRVTYPE}
 
@@ -2561,6 +2522,8 @@ def generate(options):
         template_systemd_service_meta2_indexer,
         indexer_target,
         add_service_to_conf=False,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context meta2-crawler --concurrency=eventlet -p ",
     )
 
     # oio-meta2-crawler
@@ -2637,6 +2600,8 @@ def generate(options):
         template_systemd_service_rdir_crawler,
         crawler_target,
         add_service_to_conf=False,
+        # coverage_wrapper=shutil.which("coverage")
+        # + " run --context rdir-crawler --concurrency=multiprocessing -p ",
     )
 
     # RAWX
@@ -2720,6 +2685,8 @@ def generate(options):
             template_systemd_service_rdir_crawler,
             crawler_target,
             add_service_to_conf=False,
+            # coverage_wrapper=shutil.which("coverage")
+            # + " run --context rdir-crawler --concurrency=multiprocessing -p ",
         )
 
         # oio-rawx-crawler
@@ -2743,6 +2710,8 @@ def generate(options):
             template_systemd_service_rawx_crawler,
             crawler_target,
             add_service_to_conf=False,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context rawx-crawler --concurrency=eventlet -p ",
         )
 
         # oio-checksum-checker-crawler
@@ -2762,12 +2731,13 @@ def generate(options):
         path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
         with open(path, "w+") as f:
             f.write(to_write)
-        tpl = Template(template_systemd_service_checksum_checker_crawler)
         register_service(
             env,
-            template_systemd_service_checksum_checker_crawler,
+            template_systemd_service_rawx_crawler,
             crawler_target,
             add_service_to_conf=False,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context rawx-crawler --concurrency=eventlet -p ",
         )
 
         # oio-placement-improver-crawler
@@ -2785,12 +2755,13 @@ def generate(options):
         path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
         with open(path, "w+") as f:
             f.write(to_write)
-        tpl = Template(template_systemd_service_placement_improver_crawler)
         register_service(
             env,
-            template_systemd_service_placement_improver_crawler,
+            template_systemd_service_rawx_crawler,
             crawler_target,
             add_service_to_conf=False,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context rawx-crawler --concurrency=eventlet -p ",
         )
 
         # oio-cleanup-orphaned-crawler
@@ -2808,12 +2779,13 @@ def generate(options):
         path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
         with open(path, "w+") as f:
             f.write(to_write)
-        tpl = Template(template_systemd_service_cleanup_orphaned_crawler)
         register_service(
             env,
             template_systemd_service_cleanup_orphaned_crawler,
             crawler_target,
             add_service_to_conf=False,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context rawx-crawler --concurrency=eventlet -p ",
         )
     # redis
     if options.get(ALLOW_REDIS):
@@ -2931,7 +2903,13 @@ def generate(options):
     if options.get(ALLOW_FDB):
         cluster_file = cluster(env)
         env.update({"CLUSTERFILE": cluster_file})
-    register_service(env, template_systemd_service_account, root_target)
+    register_service(
+        env,
+        template_systemd_service_account,
+        root_target,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context account --concurrency=gevent -p ",
+    )
     with open(config(env), "w+") as f:
         tpl = Template(template_account)
         f.write(tpl.safe_substitute(env))
