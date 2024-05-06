@@ -141,8 +141,10 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "--buffer-size",
             type=int,
             help=(
-                "Chunk reader buffer size (default=%d)."
-                % self.JOB_CLASS.DEFAULT_BUFFER_SIZE
+                "Chunk reader buffer size "
+                + f"(default={self.JOB_CLASS.DEFAULT_BUFFER_SIZE}). "
+                + "If the value is negative or zero, the readings will start "
+                + "small and increase over time."
             ),
         )
         parser.add_argument(
@@ -155,14 +157,13 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             ),
         )
         parser.add_argument(
-            "--enable-host-topic",
+            "--process-locally",
             metavar="yes/no",
             type=boolean_value,
             help=(
-                "If True job tasks will be sent to a dedicated topic"
-                + " on the service host. Topic name will be"
-                + " {xcute-job-topic}-{host-ip-address} (default=%f)"
-                % self.JOB_CLASS.ENABLE_HOST_TOPIC
+                "If true, all sent tasks will be processed only by the source server "
+                + "using a dedicated topic ({xcute-job-topic}-{host-ip-address}) "
+                + f"(default={self.JOB_CLASS.PROCESS_LOCALLY})."
             ),
         )
         parser.add_argument(
@@ -201,7 +202,7 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             "max_chunk_size": parsed_args.max_chunk_size,
             "buffer_size": parsed_args.buffer_size,
             "excluded_rawx": parsed_args.excluded_rawx,
-            "enable_host_topic": parsed_args.enable_host_topic,
+            "process_locally": parsed_args.process_locally,
             "rebuild_on_read_failure": parsed_args.rebuild_on_read_failure,
             "usage_target": parsed_args.usage_target,
             "usage_check_interval": parsed_args.usage_check_interval,

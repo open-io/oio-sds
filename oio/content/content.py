@@ -285,7 +285,7 @@ class Content(object):
         force_fair_constraints=True,
         adjacent_mode=False,
         copy_from_duplica=True,
-        buf_size=None,
+        buffer_size=None,
         async_delete=False,
         **kwargs
     ):
@@ -376,7 +376,7 @@ class Content(object):
                         path=self.path,
                         version=self.version,
                         content_id=self.content_id,
-                        buf_size=buf_size,
+                        buffer_size=buffer_size,
                         **kwargs
                     )
                     break

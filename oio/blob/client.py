@@ -214,7 +214,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
     @ensure_headers
     @ensure_request_id
     def chunk_get(
-        self, url, check_headers=True, verify_checksum=False, buf_size=None, **kwargs
+        self, url, check_headers=True, verify_checksum=False, buffer_size=None, **kwargs
     ):
         """
         :keyword check_headers: when True (the default), raise FaultyChunk
@@ -223,14 +223,14 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             and compare to the value saved in the chunk's extended attributes.
             If any string, compute the checksum and compare to this string.
             The checksum algorithm is read from the response headers.
-        :keyword buf_size: used to custom chunk reader buffer size
+        :keyword buffer_size: used to custom chunk reader buffer size
         :returns: a tuple with a dictionary of chunk metadata and a stream
             to the chunk's data.
         """
         url = self.resolve_url(url)
         reader = ChunkReader(
             [{"url": url}],
-            buf_size=buf_size,
+            buf_size=buffer_size,
             verify_checksum=verify_checksum,
             watchdog=self.watchdog,
             **kwargs
@@ -288,7 +288,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         version=None,
         content_id=None,
         headers=None,
-        buf_size=None,
+        buffer_size=None,
         **kwargs
     ):
         stream = None
@@ -296,7 +296,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         kwargs["check_headers"] = not bool(fullpath)
         try:
             meta, stream = self.chunk_get(
-                from_url, verify_checksum=True, buf_size=buf_size, **kwargs
+                from_url, verify_checksum=True, buffer_size=buffer_size, **kwargs
             )
             meta["chunk_id"] = chunk_id or to_url.split("/")[-1]
             meta["full_path"] = fullpath or meta["full_path"]

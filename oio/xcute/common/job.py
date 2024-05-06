@@ -162,4 +162,4 @@ class XcuteJob(object):
         :return: topic suffix
         :rtype: str
         """
-        return None
+        pass

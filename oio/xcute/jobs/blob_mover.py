@@ -47,6 +47,8 @@ class RawxDecommissionTask(XcuteTask):
         self.min_chunk_size = job_params["min_chunk_size"]
         self.max_chunk_size = job_params["max_chunk_size"]
         self.excluded_rawx = job_params["excluded_rawx"]
+        self.buffer_size = job_params["buffer_size"]
+        self.rebuild_on_read_failure = job_params["rebuild_on_read_failure"]
 
         self.blob_client = BlobClient(
             self.conf, logger=self.logger, watchdog=self.watchdog
@@ -81,8 +83,6 @@ class RawxDecommissionTask(XcuteTask):
         path = task_payload["path"]
         version = task_payload["version"]
         chunk_id = task_payload["chunk_id"]
-        buf_size = task_payload["buf_size"]
-        rebuild_on_read_failure = boolean_value(task_payload["rebuild_on_read_failure"])
 
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:
@@ -127,13 +127,13 @@ class RawxDecommissionTask(XcuteTask):
                 service_id=self.service_id,
                 reqid=reqid,
                 copy_from_duplica=False,
-                buf_size=buf_size,
+                buffer_size=self.buffer_size,
                 async_delete=True,
             )
         except (ContentDrained, ContentNotFound, OrphanChunk):
             return {"orphan_chunks": 1}
         except (CorruptedChunk, IOError):
-            if rebuild_on_read_failure:
+            if self.rebuild_on_read_failure:
                 data = json.dumps(
                     {
                         "when": time.time(),
@@ -145,14 +145,16 @@ class RawxDecommissionTask(XcuteTask):
                             "path": path,
                             "version": version,
                         },
+                        "request_id": reqid,
                         "data": {"missing_chunks": [chunk_id]},
                     }
                 )
                 # emit rebuild event
-                is_sent = self.blob_client.send(topic=DEFAULT_REBUILD_TOPIC, data=data)
-                if is_sent:
+                if self.blob_client.send(topic=DEFAULT_REBUILD_TOPIC, data=data):
                     return {"rebuilt_chunks": 1}
-                return {"read_chunk_errors": 1}
+                # Copy failed and sending event also failed,
+                # consider the task an error
+            raise
 
         return {"moved_chunks": 1, "moved_bytes": chunk_size}
 
@@ -166,8 +168,8 @@ class RawxDecommissionJob(XcuteRdirJob):
     DEFAULT_MAX_CHUNK_SIZE = 0
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
     DEFAULT_BUFFER_SIZE = 262144
-    ENABLE_HOST_TOPIC = True
-    REBUILD_ON_READ_FAILURE = True
+    PROCESS_LOCALLY = True
+    REBUILD_ON_READ_FAILURE = False
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -210,9 +212,11 @@ class RawxDecommissionJob(XcuteRdirJob):
         sanitized_job_params["usage_check_interval"] = float_value(
             job_params.get("usage_check_interval"), cls.DEFAULT_USAGE_CHECK_INTERVAL
         )
-        sanitized_job_params["enable_host_topic"] = boolean_value(
-            job_params.get("enable_host_topic"), cls.ENABLE_HOST_TOPIC
+
+        sanitized_job_params["process_locally"] = boolean_value(
+            job_params.get("process_locally"), cls.PROCESS_LOCALLY
         )
+
         sanitized_job_params["rebuild_on_read_failure"] = boolean_value(
             job_params.get("rebuild_on_read_failure"), cls.REBUILD_ON_READ_FAILURE
         )
@@ -300,8 +304,6 @@ class RawxDecommissionJob(XcuteRdirJob):
                 "path": descr["path"],
                 "version": descr["version"],
                 "chunk_id": chunk_id,
-                "buf_size": job_params["buffer_size"],
-                "rebuild_on_read_failure": job_params["rebuild_on_read_failure"],
             }
 
             now = time.time()
@@ -355,6 +357,7 @@ class RawxDecommissionJob(XcuteRdirJob):
         :return: topic suffix
         :rtype: str
         """
-        self.topic_suffix = self.conscience_client.resolve_service_id(
-            "rawx", job_params["service_id"]
-        ).split(":")[0]
+        if job_params["process_locally"]:
+            self.topic_suffix = self.conscience_client.resolve_service_id(
+                "rawx", job_params["service_id"]
+            ).split(":")[0]

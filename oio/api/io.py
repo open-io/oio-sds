@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -338,9 +338,10 @@ class ChunkReader(object):
         self.status = None
         # buf size indicates the amount we data we yield
         self.buf_size = buf_size
-        if self.buf_size:
+        if self.buf_size and self.buf_size > 0:
             self.read_size = itertools.repeat(self.buf_size)
         else:
+            self.buf_size = None
             self.read_size = exp_ramp_gen(8192, 1048576)
         self.discard_bytes = 0
         self.align = align
