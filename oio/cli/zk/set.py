@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,12 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from __future__ import print_function
-
-import six
-
 from logging import getLogger
-from six import iteritems
 from cliff import lister
 from oio.cli import Command
 
@@ -57,25 +52,25 @@ class ElectionCmdMixin(object):
             for child in children:
                 yield child
         except Exception as e:
-            self.log.warn("ERROR list %s: %s", path, e)
+            self.log.warning("ERROR list %s: %s", path, e)
 
     def _list_elections(self, zh, path):
         children = list(self._list_nodes(zh, path))
         if len(children) <= 0:
             return
-        seen = dict()
+        seen = {}
         for child in children:
             key, num = child.split("-", 1)
             if key not in seen:
                 seen[key] = []
             seen[key].append(num)
-        for k, nums in iteritems(seen):
+        for k, nums in seen.items():
             nums = sorted(nums)
             yield k, nums[0], nums[-1]
 
 
 class ElectionReset(ElectionCmdMixin, lister.Lister):
-    """Mass-reset elections."""
+    """Crawl elections and reset them when they seem broken."""
 
     log = getLogger(__name__ + ".ElectionReset")
 
@@ -103,7 +98,7 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
             action="store",
             dest="MIN",
             default=4,
-            help="Do not delete election if less the NUM",
+            help="Do not reset election if less than MIN (default: 4)",
         )
         parser.add_argument(
             "--alone",
@@ -133,25 +128,41 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
             children = list(self._list_nodes(zh, group))
             if len(children) <= 0:
                 continue
-            if parsed_args.ALONE and 1 == len(children):
+            if parsed_args.ALONE and len(children) == 1:
                 yield action(group, children[0])
-            elif parsed_args.MIN > len(children):
+            elif len(children) < parsed_args.MIN:
                 for node in children:
-                    yield group, node, "Too few nodes"
+                    yield group, node, "Nothing to do"
             elif parsed_args.SMART:
                 children.sort()
                 # check for services registered several times
-                group = {}
+                node_for_svc = {}
                 for child in children:
                     n = group + "/" + child
-                    addr, node_stat = zh.get(n)
-                    if addr is not None:
-                        addr = addr.decode("utf-8")
-                    print(repr(addr), repr(node_stat))
-                    if addr in group:
+                    svc, node_stat = zh.get(n)
+                    if svc is not None:
+                        svc = svc.decode("utf-8")
+                    print(repr(svc), repr(node_stat))
+                    if svc in node_for_svc:
                         # Mark the oldest nodes for removal
-                        yield action(group, group[addr])
-                    group[addr] = child
+                        yield action(group, node_for_svc[svc])
+                    node_for_svc[svc] = child
+                if len(node_for_svc) >= parsed_args.MIN:
+                    self.log.warning(
+                        "More than %d nodes in group %s", parsed_args.MIN - 1, group
+                    )
+                for node in node_for_svc.values():
+                    parts = node.split("-", 1)
+                    if len(parts) < 2:
+                        self.log.warning("Node %s has no sequence number", node)
+                        yield action(group, node)
+                    elif len(parts[1]) > 10:
+                        self.log.warning(
+                            "Node %s has unexpectedly long sequence number", node
+                        )
+                        yield action(group, node)
+                    else:
+                        yield group, node, "Nothing to do"
             else:
                 # systematical removal
                 for child in children:
@@ -212,9 +223,7 @@ class ElectionSmudge(ElectionCmdMixin, lister.Lister):
                 tail = str(1 + int(last)).rjust(10, "0")
                 suffix = key + "-" + tail
                 path = group + "/" + suffix
-                value = parsed_args.value
-                if isinstance(value, six.text_type):
-                    value = value.encode("utf-8")
+                value = parsed_args.value.encode("utf-8")
                 try:
                     zh.create(path, value=value, acl=_acl_openbar)
                     yield group, suffix, "OK"
