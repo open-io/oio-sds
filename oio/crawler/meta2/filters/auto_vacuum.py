@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ import sqlite3
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.green import time
+from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
@@ -106,6 +107,7 @@ class AutomaticVacuum(Filter):
         (and the base has not been changed recently).
         """
         meta2db = Meta2DB(self.app_env, env)
+        reqid = request_id(prefix="autovacuum-")
 
         try:
             skip = True
@@ -143,14 +145,16 @@ class AutomaticVacuum(Filter):
                 meta2db.cid,
                 unused_pages_ratio * 100,
             )
-            self.admin.vacuum_base("meta2", cid=meta2db.cid)
+            self.admin.vacuum_base("meta2", cid=meta2db.cid, reqid=reqid)
             self.successes += 1
 
             # The meta2 database size has changed, delete the cache
             meta2db.file_status = None
             return self.app(env, cb)
         except (FileNotFoundError, NotFound):
-            self.logger.info("Container %s no longer exists", meta2db.cid)
+            self.logger.info(
+                "Container %s no longer exists (reqid=%s)", meta2db.cid, reqid
+            )
             # The meta2 database no longer exists, delete the cache
             meta2db.file_status = None
             meta2db.system = None
@@ -160,7 +164,10 @@ class AutomaticVacuum(Filter):
             return resp(env, cb)
         except Exception as exc:
             self.logger.exception(
-                "Failed to process %s for the container %s", self.NAME, meta2db.cid
+                "Failed to process %s for the container %s (reqid=%s)",
+                self.NAME,
+                meta2db.cid,
+                reqid,
             )
             self.errors += 1
             resp = Meta2DBError(
