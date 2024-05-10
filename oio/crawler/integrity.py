@@ -19,7 +19,6 @@ Recursively check account, container, content and chunk integrity.
 """
 
 
-from __future__ import print_function
 from oio.common.green import (
     Event,
     GreenPool,
@@ -32,7 +31,6 @@ from oio.common.green import (
 import csv
 import sys
 from time import time
-from six import iteritems
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common import exceptions as exc
@@ -562,8 +560,8 @@ class Checker(object):
         :returns: the list of errors
         """
         required = stg_met.expected_chunks
-        errors = list()
-        chunk_results = list()
+        errors = []
+        chunk_results = []
 
         if len(chunks) < required:
             missing_chunks = required - len(chunks)
@@ -572,15 +570,15 @@ class Checker(object):
                 for sub in range(required):
                     if sub not in subs:
                         chkt = target.copy()
-                        chkt.chunk = "%d.%d" % (pos, sub)
-                        err = "Missing chunk at position %s" % chkt.chunk
+                        chkt.chunk = f"{pos}.{sub}"
+                        err = f"Missing chunk at position {chkt.chunk}"
                         chunk_results.append((chkt, [err], False))
                         errors.append(err)
             else:
                 for _ in range(missing_chunks):
                     chkt = target.copy()
-                    chkt.chunk = "%d.%d" % (pos, sub)
-                    err = "Missing chunk at position %d" % pos
+                    chkt.chunk = str(pos)
+                    err = f"Missing chunk at position {pos}"
                     chunk_results.append((chkt, [err], False))
                     errors.append(err)
 
@@ -592,8 +590,7 @@ class Checker(object):
                 chunk_results.append((tcopy, chunk_errors, from_cache))
                 if chunk_errors:
                     errors.append(
-                        "Unusable chunk %s at position %s"
-                        % (chunk["url"], chunk["pos"])
+                        f"Unusable chunk {chunk['url']} at position {chunk['pos']}"
                     )
 
         irreparable = required - len(errors) < stg_met.min_chunks_to_read
@@ -627,8 +624,8 @@ class Checker(object):
         """
         stg_met = STORAGE_METHODS.load(obj_meta["chunk_method"])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
-        tasks = list()
-        for pos, pchunks in iteritems(chunks_by_pos):
+        tasks = []
+        for pos, pchunks in chunks_by_pos.items():
             tasks.append(
                 (
                     pos,
@@ -642,15 +639,15 @@ class Checker(object):
                     ),
                 )
             )
-        errors = list()
+        errors = []
         for pos, task in tasks:
             if not task and not self.running:
-                errors.append("Pos %d skipped: checker is exiting" % pos)
+                errors.append(f"Pos {pos} skipped: checker is exiting")
                 continue
             try:
                 errors.extend(task.wait())
             except Exception as err:
-                errors.append("Check failed: pos %d: %s" % (pos, err))
+                errors.append(f"Check failed: pos {pos}: {err}")
         return errors
 
     def check_obj_versions(self, target, versions, recurse=0):
