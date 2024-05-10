@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -658,7 +658,9 @@ m2v2_shorten_chunk_id(struct bean_CHUNKS_s *bean)
 	GString *url = CHUNKS_get_id(bean);
 	gchar *netloc = NULL;
 	oio_parse_chunk_url(url->str, NULL, &netloc, NULL);
-	CHUNKS_set2_id(bean, netloc);
+	if (oio_str_is_set(netloc)) {
+		CHUNKS_set2_id(bean, netloc);
+	}
 	g_free(netloc);
 }
 
