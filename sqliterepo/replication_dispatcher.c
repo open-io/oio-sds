@@ -360,7 +360,7 @@ replicate_body_manage(struct sqlx_sqlite3_s *sq3, TableSequence_t *seq)
 	sqlx_exec(sq3->db, "BEGIN");
 	err = _replicate_now(sq3, seq);
 
-	if (NULL != err) {
+	if (err) {
 		if (err->code == SQLITE_ERROR || err->code == SQLITE_SCHEMA) {
 			g_prefix_error(&err, "Schema error: ");
 			/* XXX This is the error returned to the peer, so we tell it
@@ -379,11 +379,20 @@ label_rollback:
 		postvers = version_extract_from_admin(sq3);
 		version_debug(oldvers, expected_version, postvers);
 
+		/* Expected is local version before repli + the number of changes.
+		 * Postvers is the local version after applying the changes (i.e.
+		 * the version the master service has in its own database).
+		 * We pass postvers as the "expected" parameter of
+		 * version_validate_diff, because that's what the master expects. We
+		 * must do it that way if we want the error messages to be relevant. */
 		gint64 worst = 0;
-		err = version_validate_diff(postvers, expected_version, &worst);
+		err = version_validate_diff(expected_version, postvers, &worst);
 		if (err == NULL) {
-			if (worst != 0) /* Diff missed */
-				err = NEWERROR(CODE_CONCURRENT, "Concurrent change detected");
+			if (worst != 0) { /* Diff missed */
+				err = NEWERROR(CODE_CONCURRENT,
+						"Concurrent change detected: local is 1 version %s",
+						worst < 0? "behind":"ahead");
+			}
 		}
 		if (err != NULL)
 			goto label_rollback;

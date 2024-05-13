@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -274,14 +275,20 @@ version_validate_diff(GTree *current, GTree *expected, gint64 *worst)
 	if (delta_min < 0) {
 		if (worst)
 			*worst = delta_min;
-		if (schema_change || delta_min < -1)
-			return NEWERROR(CODE_PIPEFROM, "Local diff missed");
+		if (schema_change || delta_min < -1) {
+			return NEWERROR(CODE_PIPEFROM,
+					"Local diff missed (local is %"G_GINT64_FORMAT" versions behind)",
+					-delta_min);
+		}
 	}
 	else if (delta_max > 0) {
 		if (worst)
 			*worst = delta_max;
-		if (schema_change || delta_max > 1)
-			return NEWERROR(CODE_PIPETO, "Remote diff missed");
+		if (schema_change || delta_max > 1) {
+			return NEWERROR(CODE_PIPETO,
+					"Remote diff missed (local is %"G_GINT64_FORMAT" versions ahead)",
+					delta_max);
+		}
 	}
 
 	return NULL;
