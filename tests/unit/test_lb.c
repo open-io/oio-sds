@@ -1,7 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -581,7 +581,8 @@ test_lb_item_loc_user(void)
 			\"tag.loc\": \"abcd.hem.oio.vol8\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
-			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\",\
+			\"tag.internal_port\": 6016\
 		}\
 	}";
 	return _test_service_info_to_lb_item(source0, 0xEE4F7ABF990CAA8Eu);
@@ -600,7 +601,8 @@ test_lb_item_loc_user_long(void)
 			\"tag.loc\": \"hem.dc2.room1.rack2.server3.vol8\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
-			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\",\
+			\"tag.internal_port\": 6016\
 		}\
 	}";
 	// "rack2.server3.vol8" is considered as one block
@@ -620,7 +622,8 @@ test_lb_item_loc_hex(void)
 			\"tag.loc\": \"0xEE4F7ABF990CAA8E\",\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
-			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\",\
+			\"tag.internal_port\": 6016\
 		}\
 	}";
 	return _test_service_info_to_lb_item(source1, 0xEE4F7ABF990CAA8Eu);
@@ -638,7 +641,8 @@ test_lb_item_loc_ipv4(void)
 		\"tags\": {\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
-			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\",\
+			\"tag.internal_port\": 6016\
 		}\
 	}";
 	return _test_service_info_to_lb_item(source2, 0x00007F000001177Fu);
@@ -656,7 +660,8 @@ test_lb_item_loc_ipv6(void)
 		\"tags\": {\
 			\"tag.slots\": \"rawx,rawx-even\",\
 			\"tag.up\": true,\
-			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\"\
+			\"tag.vol\": \"/home/fvennetier/.oio/sds/data/NS-rawx-8\",\
+			\"tag.internal_port\": 6016\
 		}\
 	}";
 	return _test_service_info_to_lb_item(source3, 0xBABEBAADC0DECAFEu);

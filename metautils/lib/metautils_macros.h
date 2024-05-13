@@ -40,6 +40,9 @@ License along with this library.
 # define NAME_TAGNAME_PUT_LOCK "tag.putlock"
 # define NAME_TAGNAME_GET_LOCK "tag.getlock"
 # define NAME_TAGNAME_SLOTS "tag.slots"
+# define NAME_TAGNAME_TLS "tag.tls"
+# define NAME_TAGNAME_LOC "tag.loc"
+# define NAME_TAGNAME_INTERNAL_PORT "tag.internal_port"
 
 #define NAME_MSGNAME_METAREPLY         "RP"
 

@@ -42,6 +42,7 @@ struct oio_lb_item_s
 	oio_weight_t put_weight;
 	oio_weight_t get_weight;
 	gchar addr[STRLEN_ADDRINFO];
+	gchar internal_addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
 	gchar tls[STRLEN_ADDRINFO];
 };
@@ -102,6 +103,14 @@ struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
  * The result must be freed if found or NULL. */
 gchar* oio_lb_resolve_service_id(const gchar* service_id, gboolean upgrade_to_tls);
 
+
+/* -------------------------------------------------------------------------- */
+
+/* Resolve service_id to internal service address.
+ * The result must be freed if found or NULL. */
+
+gchar* oio_lb_resolve_internal_service_id(const gchar* service_id);
+
 /* -------------------------------------------------------------------------- */
 
 /* A world is something you feed with services and that will arrange them for
@@ -122,7 +131,7 @@ void oio_lb_world__flush(struct oio_lb_world_s *self);
 
 /* Call a function on all items of all slots. */
 void oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
-		void (*on_item)(const char *id, const char *addr, void *udata));
+		void (*on_item)(const char *id, const char *addr, const char *internal_addr, void *udata));
 
 /* Use this carefully, it GRID_DEBUG() all the items in the given world */
 void oio_lb_world__debug (struct oio_lb_world_s *self);

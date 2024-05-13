@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -88,12 +88,19 @@ class ServiceWatcher(object):
             self.service_definition["tags"]["tag.slots"] = ",".join(
                 self.service["slots"]
             )
-        for name, tag in (
+        tags = (
             ("location", "tag.loc"),
             ("service_id", "tag.service_id"),
             ("tls", "tag.tls"),
-        ):
-            if self.service.get(name):
+        )
+        # Add `internal_port` tag used by internal rawx service.
+        # The internal rawx service will be in charge of all internal requests
+        # (deletion, internal tools request, etc.). We will therefore have 2 rawx
+        # services one for customer requests and one for internal requests.
+        if self.service["type"] == "rawx":
+            tags += (("internal_port", "tag.internal_port"),)
+        for name, tag in tags:
+            if self.service.get(name) is not None:
                 self.service_definition["tags"][tag] = self.service[name]
 
         self.service_checks = []

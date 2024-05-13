@@ -412,8 +412,8 @@ service_info_to_lb_item(const struct service_info_s *si,
 	 * - tag.loc as a hexadecimal number or
 	 * - tag.log as a dot-separated string or
 	 * - IP address and port */
-	const gchar *loc_str = service_info_get_tag_value(si, "tag.loc", NULL);
-	const gchar *tls_str = service_info_get_tag_value(si, "tag.tls", NULL);
+	const gchar *loc_str = service_info_get_tag_value(si, NAME_TAGNAME_LOC, NULL);
+	const gchar *tls_str = service_info_get_tag_value(si, NAME_TAGNAME_TLS, NULL);
 	if (!loc_str) {
 		item->location = location_from_addr_info(&(si->addr));
 	} else if (!g_str_has_prefix(loc_str, "0x") ||
@@ -430,6 +430,15 @@ service_info_to_lb_item(const struct service_info_s *si,
 	}
 
 	grid_addrinfo_to_string(&(si->addr), item->addr, sizeof(item->addr));
+	struct service_tag_s *pSrv = service_info_get_tag(si->tags, NAME_TAGNAME_INTERNAL_PORT);
+	// if the internal port is set to 0, do not define the internal adress
+	if (pSrv && pSrv->value.i > 0){
+		struct addr_info_s internal_addr={0};
+		memcpy(&internal_addr, &(si->addr), sizeof(si->addr));
+		// Changing the port for the IP internal address
+		internal_addr.port = g_htons(pSrv->value.i);
+		grid_addrinfo_to_string(&internal_addr, item->internal_addr, sizeof(item->internal_addr));
+	}
 }
 
 //------------------------------------------------------------------------------

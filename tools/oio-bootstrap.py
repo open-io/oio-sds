@@ -785,6 +785,7 @@ stats:
 template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
+internal_port: ${INTERNAL_PORT}
 type: rawx
 location: ${LOC}
 ${USE_TLS}tls: ${IP}:${TLS_PORT}
@@ -2652,6 +2653,7 @@ def generate(options):
                     "SRVNUM": i + 1,
                     "EXE": "oio-rawx",
                     "PORT": next(ports),
+                    "INTERNAL_PORT": next(ports),
                     "COMPRESSION": ENV["COMPRESSION"] if i % 2 else "off",
                     "EXTRASLOT": f"rawx-{slot}",
                     "FSYNC": ("enabled" if options[FSYNC_RAWX] else "disabled"),

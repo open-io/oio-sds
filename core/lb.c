@@ -123,6 +123,7 @@ static GTree *service_id_to_addr = NULL;  /* <gchar*> -> <gchar*> */
 
 struct addr_and_tls_s {
 	gchar addr[STRLEN_ADDRINFO];
+	gchar internal_addr[STRLEN_ADDRINFO];
 	gchar tls[STRLEN_ADDRINFO];
 };
 
@@ -155,7 +156,7 @@ _oio_service_id_parse(const gchar* service_id)
 }
 
 static void
-_oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr, const gchar *tls)
+_oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr, const gchar *tls, const gchar *internal_addr)
 {
 	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
@@ -165,7 +166,9 @@ _oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr, const
 		if (tls) {
 			g_strlcpy(srvid_tls->tls, tls, sizeof(srvid_tls->addr));
 		}
-
+		if (internal_addr) {
+			g_strlcpy(srvid_tls->internal_addr, internal_addr, sizeof(srvid_tls->addr));
+		}
 		g_tree_replace(service_id_to_addr, g_strdup(id), srvid_tls);
 		g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 	}
@@ -233,6 +236,23 @@ oio_lb_resolve_service_id(const gchar* service_id, gboolean upgrade_to_tls)
 	return str;
 }
 
+
+gchar*
+oio_lb_resolve_internal_service_id(const gchar* service_id)
+{
+	EXTRA_ASSERT(service_id != NULL);
+
+	struct addr_and_tls_s *res;
+	gchar *str = NULL;
+	g_rw_lock_reader_lock(&service_id_to_addr_lock);
+	if (service_id_to_addr &&
+			(res = g_tree_lookup(service_id_to_addr, service_id))) {
+		str = g_strdup(res->internal_addr);
+	}
+	g_rw_lock_reader_unlock(&service_id_to_addr_lock);
+	return str;
+}
+
 /* -------------------------------------------------------------------------- */
 
 // TODO(FVE): reorganize fields, but keep compatibility with the other struct.
@@ -244,6 +264,7 @@ struct _lb_item_s
 	oio_weight_t put_weight;
 	oio_weight_t get_weight;
 	gchar addr[STRLEN_ADDRINFO];
+	gchar internal_addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
 	gchar tls[STRLEN_ADDRINFO];
 	oio_refcount_t refcount;
@@ -429,13 +450,14 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 };
 
 static struct _lb_item_s *
-_item_make (oio_location_t location, const char *id, const char *addr, const char *tls)
+_item_make (oio_location_t location, const char *id, const char *addr, const char *tls, const char *internal_addr)
 {
 	struct _lb_item_s *out = g_malloc0(sizeof(struct _lb_item_s));
 	out->location = location;
 	g_strlcpy(out->addr, addr, sizeof(out->addr));
 	g_strlcpy(out->id, id, sizeof(out->id));
 	g_strlcpy(out->tls, tls, sizeof(out->tls));
+	g_strlcpy(out->internal_addr, internal_addr, sizeof(out->internal_addr));
 	return out;
 }
 
@@ -468,6 +490,7 @@ _item_select(const struct _lb_item_s *src)
 	if (src != NULL) {
 		res->item = g_malloc0(sizeof(struct oio_lb_item_s));
 		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
+		g_strlcpy(res->item->internal_addr, src->internal_addr, sizeof(res->item->internal_addr));
 		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
 		res->item->location = src->location;
 		res->item->put_weight = src->put_weight;
@@ -1728,6 +1751,7 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 		item->put_weight = item0->put_weight;
 		item->get_weight = item0->get_weight;
 		memcpy(item->addr, item0->addr, sizeof(item->addr));
+		memcpy(item->internal_addr, item0->internal_addr, sizeof(item->internal_addr));
 		g_strlcpy(item->id, id, sizeof(item->id));
 	}
 	g_rw_lock_reader_unlock(&self->lock);
@@ -1892,11 +1916,11 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	if (!item0) {
 
 		/* Item unknown in the world, so we add it */
-		item0 = _item_make (item->location, item->id, item->addr, item->tls);
+		item0 = _item_make (item->location, item->id, item->addr, item->tls, item->internal_addr);
 		item0->put_weight = item->put_weight;
 		item0->get_weight = item->get_weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
-		_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
+		_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls, item0->internal_addr);
 
 	} else {
 
@@ -1907,10 +1931,11 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			slot->flag_dirty_weights = 1;
 		}
 
-		/* Address may have changed. If so, update the cache. */
-		if (g_strcmp0(item0->addr, item->addr)) {
+		/* Address (internal or external) may have changed. If so, update the cache. */
+		if (g_strcmp0(item0->addr, item->addr) || g_strcmp0(item0->internal_addr, item->internal_addr)) {
 			g_strlcpy(item0->addr, item->addr, sizeof(item0->addr));
-			_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
+			g_strlcpy(item0->internal_addr, item->internal_addr, sizeof(item0->internal_addr));
+			_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls, item0->internal_addr);
 		}
 
 		/* look for the slice of items AT THE OLD LOCATION (maybe it changed) */
@@ -2005,11 +2030,11 @@ oio_lb_world__feed_slot_with_list(struct oio_lb_world_s *self,
 
 void
 oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
-		void (*on_item)(const char *id, const char *addr, void *user_data))
+		void (*on_item)(const char *id, const char *addr, const char *internal_addr, void *user_data))
 {
 	gboolean _on_id(gpointer _key UNUSED, gpointer _item, gpointer data) {
 		struct _lb_item_s *item = _item;
-		(*on_item)(item->id, item->addr, data);
+		(*on_item)(item->id, item->addr, item->internal_addr, data);
 		return FALSE;
 	}
 	g_rw_lock_writer_lock(&self->lock);

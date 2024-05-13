@@ -375,7 +375,7 @@ GError* conscience_remote_remove_services(struct req_args_s *args, gchar **cs,
 		gint64 deadline);
 
 /* retrieve addr of a Service Id service, use cache only */
-GError * conscience_resolve_service_id(gchar **cs, const char *type, const char *service_id, gchar **out);
+GError * conscience_resolve_service_id(gchar **cs, const char *type, const char *service_id, gchar **out, gchar **internal_addr);
 
 static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());

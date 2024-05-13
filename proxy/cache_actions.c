@@ -115,12 +115,15 @@ action_cache_show (struct req_args_s *args)
 
 	GString *gstr = g_string_sized_new (256);
 
-	void _on_item(const char *id, const char *addr, void *user UNUSED) {
+	void _on_item(const char *id, const char *addr,  const char *internal_addr, void *user UNUSED) {
 		if (gstr->len > 1) {
 			g_string_append_c (gstr, ',');
 		}
 		g_string_append_c (gstr, '{');
 		g_string_append_printf(gstr, " \"addr\": \"%s\",", addr);
+		if (oio_str_is_set(internal_addr)) {
+			g_string_append_printf(gstr, " \"internal_addr\": \"%s\",", internal_addr);
+		}
 		g_string_append_printf(gstr, " \"id\": \"%s\"", id);
 		g_string_append_c (gstr, '}');
 	}
