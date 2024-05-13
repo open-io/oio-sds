@@ -155,6 +155,10 @@ void network_server_configure_statsd(struct network_server_s *srv,
 /** Increment a (statsd) statistic */
 void network_server_incr_stat(struct network_server_s *srv, gchar *metric_name);
 
+/** Send a (statsd) gauge value. Integer expected. */
+void network_server_send_gauge(struct network_server_s *srv, gchar *metric_name,
+		guint64 value);
+
 /** Send a (statsd) timing statistic. Microseconds expected. */
 void network_server_send_timing(struct network_server_s *srv, gchar *metric_name,
 		gint64 micros);

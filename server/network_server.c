@@ -304,6 +304,15 @@ network_server_incr_stat(struct network_server_s *srv, gchar *metric_name)
 }
 
 void
+network_server_send_gauge(struct network_server_s *srv, gchar *metric_name,
+		guint64 value)
+{
+	if (!srv->statsd_client)
+		return;
+	statsd_gauge(srv->statsd_client, metric_name, (size_t) value);
+}
+
+void
 network_server_send_timing(struct network_server_s *srv, gchar *metric_name,
 		gint64 micros)
 {

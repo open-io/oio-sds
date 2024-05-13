@@ -1096,11 +1096,16 @@ _task_probe_repository(gpointer p)
 static void
 _task_read_memory_usage(gpointer p)
 {
-	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
-	if (!cache)
-		return;
 	gint64 usage = network_server_get_memory_usage(SRV.server);
-	sqlx_cache_set_last_memory_usage(cache, usage);
+	gchar gauge_name[128] = {0};
+	g_snprintf(gauge_name, sizeof(gauge_name),
+			"%s.internal.ram_usage_bytes", oio_server_service_id);
+	network_server_send_gauge(SRV.server, gauge_name, (guint64) usage);
+
+	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
+	if (cache) {
+		sqlx_cache_set_last_memory_usage(cache, usage);
+	}
 }
 
 static void
