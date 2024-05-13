@@ -157,9 +157,10 @@ conscience_remote_remove_services(struct req_args_s *args, gchar **allcs,
 
 GError *
 conscience_resolve_service_id(gchar **cs UNUSED, const char *type UNUSED,
-		const char *service_id, gchar **out)
+		const char *service_id, gchar **out, gchar **internal_addr)
 {
 	*out = oio_lb_resolve_service_id(service_id, FALSE);
+	*internal_addr = oio_lb_resolve_internal_service_id(service_id);
 	if (*out)
 		return NULL;
 
@@ -855,18 +856,22 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 
 	CSURL(cs);
 	gchar *addr = NULL;
-	err = conscience_resolve_service_id(cs, type, service_id, &addr);
+	gchar *internal_addr = NULL;
+	err = conscience_resolve_service_id(cs, type, service_id, &addr, &internal_addr);
 	if (NULL != err) {
 		g_prefix_error (&err, "Conscience error: ");
 		return _reply_common_error (args, err);
 	}
-
 	GString *gstr = g_string_sized_new (256);
 	g_string_append_c (gstr, '{');
 	g_string_append_printf(gstr," \"addr\": \"%s\"", addr);
+	if (*internal_addr) {
+		g_string_append_printf(gstr,", \"internal_addr\": \"%s\"", internal_addr);
+	}
 	g_string_append_c (gstr, '}');
 
 	g_free(addr);
+	g_free(internal_addr);
 
 	return _reply_success_json (args, gstr);
 }
