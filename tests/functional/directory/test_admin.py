@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,8 +17,10 @@
 import random
 import os
 from oio.common.utils import cid_from_name
+from oio.common.exceptions import NotFound
 
 from tests.utils import BaseTestCase, random_str
+from testtools.testcase import ExpectedException
 
 
 class TestAdmin(BaseTestCase):
@@ -158,19 +160,8 @@ class TestAdmin(BaseTestCase):
             "service_id": self.peer_to_use,
             "suffix": "badsuffix",
         }
-        status = self.admin.remove_base(**bad_params)
-        expected = {
-            self.peer_to_use: {
-                "body": "",
-                "status": {
-                    "message": "sqlite3_open error: (errno=2 No "
-                    "such file or directory) (rc=14) "
-                    "SQLITE_CANTOPEN",
-                    "status": 431,
-                },
-            }
-        }
-        self.assertEqual(status, expected)
+        with ExpectedException(NotFound):
+            status = self.admin.remove_base(**bad_params)
 
         # Check copy doesn't exist neither on master nor on other slave
         # This applies only when several peers are present
@@ -187,19 +178,8 @@ class TestAdmin(BaseTestCase):
                     "service_id": peer,
                     "suffix": "suffix1",
                 }
-                status = self.admin.remove_base(**params)
-                expected = {
-                    peer: {
-                        "body": "",
-                        "status": {
-                            "message": "sqlite3_open error: (errno=2 No "
-                            "such file or directory) (rc=14) "
-                            "SQLITE_CANTOPEN",
-                            "status": 431,
-                        },
-                    }
-                }
-                self.assertEqual(status, expected)
+                with ExpectedException(NotFound):
+                    status = self.admin.remove_base(**params)
 
         # Check local copy exists at last step by removing it successfully
         params = {
