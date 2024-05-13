@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -493,8 +493,7 @@ label_retry:
 				 * will also be overloaded. */
 				service_invalidate(url);
 				stop = TRUE;
-			} else if (ctx->which == CLIENT_RUN_ALL
-					|| ctx->which == CLIENT_SPECIFIED) {
+			} else if (ctx->which == CLIENT_RUN_ALL) {
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
 				g_clear_error (&err);

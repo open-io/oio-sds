@@ -2026,7 +2026,7 @@ class PeersCheckTest(CliTestCase):
                 f"peers check meta2 {self.container} "
                 f"{self.get_format_opts(format_='json')}",
             )
-            self.assertEqual(1, self.rc)
+            self.assertIn(self.rc, (1, 2))
             output = json.loads(self.stdout)
 
             expected_output = {
