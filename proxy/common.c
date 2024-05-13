@@ -548,8 +548,7 @@ label_retry:
 				 * will also be overloaded. */
 				service_invalidate(url);
 				stop = TRUE;
-			} else if (ctx->which == CLIENT_RUN_ALL
-					|| ctx->which == CLIENT_SPECIFIED) {
+			} else if (ctx->which == CLIENT_RUN_ALL) {
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
 				g_clear_error(&err);
