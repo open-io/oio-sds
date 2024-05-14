@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -59,6 +60,7 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 	NSI_COPY_TABLE_REF(src->storage_policy, dst->storage_policy);
 	NSI_COPY_TABLE_REF(src->data_security, dst->data_security);
 	NSI_COPY_TABLE_REF(src->service_pools, dst->service_pools);
+	NSI_COPY_TABLE_REF(src->storage_classes, dst->storage_classes);
 
 #undef NSI_COPY_TABLE_REF
 }
@@ -72,6 +74,8 @@ namespace_info_dup(namespace_info_t* src)
 	dst->storage_policy = _copy_hash(src->storage_policy);
 	dst->data_security = _copy_hash(src->data_security);
 	dst->service_pools = _copy_hash(src->service_pools);
+	dst->storage_classes = _copy_hash(src->storage_classes);
+
 	return dst;
 }
 
@@ -86,6 +90,8 @@ namespace_info_clear(namespace_info_t* ns_info)
 		g_hash_table_unref(ns_info->data_security);
 	if (ns_info->service_pools != NULL)
 		g_hash_table_unref(ns_info->service_pools);
+	if (ns_info->storage_classes != NULL)
+		g_hash_table_unref(ns_info->storage_classes);
 
 	memset(ns_info, 0, sizeof(namespace_info_t));
 }
@@ -99,6 +105,8 @@ namespace_info_init(namespace_info_t *ni)
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
 	ni->service_pools = _copy_hash(NULL);
+	ni->storage_classes = _copy_hash(NULL);
+
 }
 
 void
@@ -171,7 +179,8 @@ namespace_info_init_json_object(struct json_object *obj,
 
 	if (NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
 			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))
-			|| NULL != (err = _load_hash(obj, "service_pools", ni->service_pools)))
+			|| NULL != (err = _load_hash(obj, "service_pools", ni->service_pools))
+			||  NULL != (err = _load_hash(obj, "storage_classes", ni->storage_classes)))
 		return err;
 
 	return NULL;
@@ -260,5 +269,7 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	_encode_json_properties(out, ni->service_pools, "service_pools");
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->data_security, "data_security");
+	g_string_append_c(out, ',');
+	_encode_json_properties(out, ni->storage_classes, "storage_classes");
 	g_string_append_c(out, '}');
 }

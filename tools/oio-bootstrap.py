@@ -954,6 +954,7 @@ synchronize_at_startup=true
 # Storage policies definitions
 param_storage_conf=${CFGDIR}/${NS}-policies.conf
 
+
 # Service scoring and pools definitions
 param_service_conf=${CFGDIR}/${NS}-service-{pool,type}*.conf
 """
@@ -1001,6 +1002,10 @@ EX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 # "isa_l_rs_vand"          EC_BACKEND_ISA_L_RS_VAND
 # "shss"                   EC_BACKEND_SHSS
 # "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
+
+[STORAGE_CLASSES]
+STANDARD=EC21,TWOCOPIES,EC,ECX21,THREECOPIES,SINGLE,ANY-E93,2
+STANDARD_IA=n/a,1
 """
 
 template_service_pools = """

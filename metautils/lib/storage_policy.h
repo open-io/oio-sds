@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,7 @@ License along with this library.
 
 #define STORAGE_POLICY_NONE "NONE"
 #define DATA_SECURITY_NONE "NONE"
+#define STORAGE_CLASSES_NONE "NONE"
 
 #define STGPOL_DSPREFIX_PLAIN "plain"
 #define STGPOL_DSPREFIX_EC "ec"
@@ -50,6 +51,7 @@ struct namespace_info_s;
 /** Hidden types */
 struct data_security_s;
 struct storage_policy_s;
+struct storage_class_s;
 
 struct storage_policy_s * storage_policy_init(struct namespace_info_s *ni,
 		const char *name);
@@ -116,5 +118,13 @@ data_security_decode_param_int64 (const char *encoded, const char *k, gint64 def
 	g_free(prefix);
 	return rc;
 }
+
+struct storage_class_s * get_storage_classe_from_policy(struct namespace_info_s *ni, const char *policy);
+
+struct storage_class_s * storage_class_get(struct namespace_info_s *ni, const char *name);
+
+gboolean compare_storage_classes(struct storage_class_s *src, struct storage_class_s *dst);
+
+void storage_class_clean(struct storage_class_s *sp);
 
 #endif /*OIO_SDS__metautils__lib__storage_policy_h*/

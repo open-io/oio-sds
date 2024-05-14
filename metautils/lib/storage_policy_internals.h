@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2016 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -36,6 +37,13 @@ struct storage_policy_s
 	gchar *name;
 	gchar *service_pool;
 	struct data_security_s *datasec;
+};
+
+struct storage_class_s
+{
+	gchar *name;
+	int order;
+	GHashTable *params;
 };
 
 #endif /*OIO_SDS__metautils__lib__storage_policy_internals_h*/
