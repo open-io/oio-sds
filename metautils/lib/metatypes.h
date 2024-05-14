@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -122,6 +122,7 @@ typedef struct namespace_info_s
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
 	GHashTable* service_pools;   /**< Service policies definitions name = GSList<char*> */
+	GHashTable* storage_classes;   /**< Storage classe definitions name = GSList<char*> */
 } namespace_info_t;
 
 /**
