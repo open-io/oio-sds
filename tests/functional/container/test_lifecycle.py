@@ -267,7 +267,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         action_type,
         view_queries,
         newer_non_current_versions,
-        policy,
+        storage_class,
         prefix,
         last_rule_action,
         rule_id,
@@ -309,7 +309,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     data["is_markers"] = 1
                 data["query"] = sql_query
                 data["query_set_tag"] = val_query
-                data["policy"] = policy
+                data["storage_class"] = storage_class
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
 
@@ -436,7 +436,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                     non_current = False
                     newer_non_current_versions = 0
                     non_current_days = 0
-                    policy = ""
+                    storage_class = ""
                     queries = {}
                     view_queries = {}
                     action = ""
@@ -455,13 +455,13 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                             "NewerNoncurrentVersions", 0
                         )
                         non_current_days = act["NoncurrentDays"]
-                        policy = act["StorageClass"]
+                        storage_class = act["StorageClass"]
                         non_current = True
                         action = "NoncurrentVersionTransition"
                     elif act_type == "Expiration":
                         action = "Expiration"
                     elif act_type == "Transitions":
-                        policy = act["StorageClass"]
+                        storage_class = act["StorageClass"]
                         action = "Transition"
                     else:
                         print("Unsupported action type", act_type)
@@ -534,7 +534,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         act_type,
                         view_queries,
                         newer_non_current_versions,
-                        policy,
+                        storage_class,
                         prefix,
                         last_rule_action,
                         rule_id,
