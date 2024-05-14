@@ -35,6 +35,7 @@ License along with this library.
 
 # define NAME_GROUPNAME_STORAGE_POLICY "STORAGE_POLICY"
 # define NAME_GROUPNAME_DATA_SECURITY "DATA_SECURITY"
+# define NAME_GROUPNAME_STORAGE_CLASSES "STORAGE_CLASSES"
 
 # define KEY_ALERT_LIMIT "alert_frequency_limit"
 # define KEY_SCORE_TIMEOUT "score_timeout"
@@ -2305,6 +2306,18 @@ _init_storage_policies(const gchar *filepath)
 		g_hash_table_foreach(nsinfo->data_security, (GHFunc)_check_for_keyword,
 				(gchar*[2]){DATA_SECURITY_NONE, "data security"});
 		GRID_NOTICE("Securities%s", names->str);
+	}
+	/* STORAGE CLASSES*/
+	e = fill_hashtable_with_group(nsinfo->storage_classes,
+			stg_conf_file, NAME_GROUPNAME_STORAGE_CLASSES);
+	if (NULL != e) {
+		g_prefix_error(&e, "Storage classes [%s]: ", filepath);
+		goto label_exit;
+	} else {
+		g_string_truncate(names, 0);
+		g_hash_table_foreach(nsinfo->storage_classes, (GHFunc)_check_for_keyword,
+				(gchar*[2]){STORAGE_CLASSES_NONE, "storage classes"});
+		GRID_NOTICE("storage classes%s", names->str);
 	}
 
 label_exit:
