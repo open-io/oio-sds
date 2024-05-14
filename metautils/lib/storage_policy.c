@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -64,6 +64,22 @@ storage_policy_clean(struct storage_policy_s *sp)
 	g_free(sp);
 }
 
+
+
+void
+storage_class_clean(struct storage_class_s *sp)
+{
+	if (!sp)
+		return;
+
+	oio_str_clean(&sp->name);
+	if (sp->params) {
+		g_hash_table_destroy(sp->params);
+	}
+
+	g_free(sp);
+}
+
 /* Dummy implementations --------------------------------------------------- */
 
 static struct data_security_s *
@@ -83,6 +99,16 @@ _dummy_stgpol(void)
 	result->name = g_strdup(STORAGE_POLICY_NONE);
 	result->datasec = _dummy_datasec();
 	result->service_pool = g_strdup(NAME_SRVTYPE_RAWX);
+	return result;
+}
+
+static struct storage_class_s*
+_dummy_stgclass(void)
+{
+	struct storage_class_s *result = g_malloc0(sizeof(struct storage_class_s));
+	result->name = g_strdup(STORAGE_CLASSES_NONE);
+	result->order = 0;
+	result->params = NULL;
 	return result;
 }
 
@@ -203,6 +229,102 @@ storage_policy_init(namespace_info_t *ni, const char *name)
 	}
 
 	return sp;
+}
+
+
+struct storage_class_s *
+get_storage_classe_from_policy(struct namespace_info_s *ni, const char *policy) {
+	if (_is_none(policy))
+		return _dummy_stgclass();
+	if (!ni)
+		return NULL;
+
+	gchar *storage_key = NULL;
+	gint order = 0;
+
+	gboolean finder(gpointer key, gpointer value, gpointer user_data) {
+		gboolean found = FALSE;
+		GByteArray *gba = (GByteArray *) value;
+		//gchar *str = (gchar*) value;
+		gchar *str = g_strndup((gchar *)gba->data, gba->len);
+		gchar **tok = g_strsplit(str, ",", -1);
+		//g_free(str);
+		for (gchar **p = tok;  *p; p++) {
+			if (g_ascii_strcasecmp((gchar *) user_data, *p) == 0) {
+				found = TRUE;
+				storage_key = key;
+				break;
+			}
+		}
+		if (found) {
+			for (gchar **p = tok;  *p; p++) {
+				if (*p && ! *(p+1)) {
+					order = atoi(*p);
+				}
+			}
+		}
+		g_free(tok);
+		g_free(str);
+		return found;
+	}
+
+	GList *glist = NULL;
+	struct storage_class_s *sp = g_malloc0(sizeof(struct storage_class_s));
+
+	gpointer  out = g_hash_table_find(ni->storage_classes, (GHRFunc )finder, policy);
+	if (out == NULL) {
+		/* set dirty flag, don't allow any getter */
+		storage_class_clean(sp);
+		return NULL;
+	}
+
+	sp->name = g_strdup(storage_key);
+	sp->order = order;
+	//sp->params = _params();
+
+	return sp;
+}
+
+struct storage_class_s *
+storage_class_get(struct namespace_info_s *ni, const char *name) {
+	if (_is_none(name))
+		return _dummy_stgclass();
+	if (!ni)
+		return NULL;
+
+	GByteArray *gba = NULL;
+	struct storage_class_s *sp = g_malloc0(sizeof(struct storage_class_s));
+	sp->name = g_strdup(name);
+
+	gba = g_hash_table_lookup(ni->storage_classes, name);
+	if (gba == NULL) {
+		/* set dirty flag, don't allow any getter */
+		storage_class_clean(sp);
+		return NULL;
+	}
+
+	gchar *str = g_strndup((gchar *)gba->data, gba->len);
+	gchar **tok = g_strsplit(str, ",", -1);
+	gint order = 0;
+	for (gchar **p = tok;  *p; p++) {
+		if (*p && ! *(p+1)) {
+			order = atoi(*p);
+		}
+	}
+	sp->name = g_strdup(name);
+	sp->order = order;
+
+	g_free(tok);
+	g_free(str);
+
+	return sp;
+}
+
+gboolean compare_storage_classes(struct storage_class_s *src, struct storage_class_s *dst){
+	if ( src && dst ) {
+		return ((src->order) > (dst->order));
+	}
+	return FALSE;
 }
 
 /* Various getters --------------------------------------------------------- */

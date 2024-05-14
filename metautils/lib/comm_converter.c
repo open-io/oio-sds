@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -644,6 +644,8 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	api->storage_policy = list_conversion(&(asn->storagePolicy));
 	api->data_security = list_conversion(&(asn->dataSecurity));
 	api->service_pools = list_conversion(&(asn->servicePools));
+	api->storage_classes = list_conversion(&(asn->storageClasses));
+
 	return TRUE;
 }
 
@@ -704,6 +706,9 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 							  key_value_pairs_convert_from_map))
 		return FALSE;
 
+	if (!hashtable_conversion(api->storage_classes, &(asn->storageClasses),
+							  key_value_pairs_convert_from_map))
+		return FALSE;
 	return TRUE;
 }
 
@@ -718,6 +723,8 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 
 	asn->storagePolicy.list.free = free_Parameter;
 	asn->dataSecurity.list.free = free_Parameter;
+	asn->storageClasses.list.free = free_Parameter;
+
 	if (only_content)
 		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NamespaceInfo, asn);
 	else

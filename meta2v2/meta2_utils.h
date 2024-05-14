@@ -37,6 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define LAST_UNICODE_CHAR "\xf4\x8f\xbf\xbd"
 
+struct storage_class_s;
 struct storage_policy_s;
 struct oio_url_s;
 struct sqlx_sqlite3_s;
