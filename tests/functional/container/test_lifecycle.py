@@ -3980,8 +3980,8 @@ class TestLifecycleTransitionConflict(TestLifecycleConform):
     def test_conflict_current(self):
         # ["prefix", "greater"]
         # match only 2 non current versions per object
-        # As the rules conflit:check that  Expiration sends events but
-        # Transitions doesn't
+        # As the rules conflit:check that  first transition sends events but
+        # second transition doesn't
         prefix = self.conditions["prefix"]
         greater = self.conditions["greater"]
         source = (
