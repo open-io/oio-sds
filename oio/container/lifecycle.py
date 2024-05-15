@@ -215,11 +215,10 @@ class ContainerLifecycle(object):
         rule_filter = RuleFilter(rule)
         # Create forced on meta2 side
         _query = (
-            "VIEW noncurrent_view AS SELECT *, "
+            "VIEW noncurrent_view AS SELECT *, m_ct.policy, "
             "ROW_NUMBER() OVER (PARTITION BY al.alias) AS row_id FROM aliases"
-            " AS al"
+            " AS al INNER JOIN contents m_ct ON  al.content = m_ct.id "
         )
-
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
             " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
@@ -345,7 +344,7 @@ class ContainerLifecycle(object):
             noncurrent_versions = 0
         # SELECT is forced on meta2 side
         query = (
-            f" , (cv.nb_versions - 1 - {noncurrent_versions}) AS"
+            f" , policy , (cv.nb_versions - 1 - {noncurrent_versions}) AS"
             " noncurrent_nb_candidates,"
             " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
             " AS count, row_id FROM noncurrent_view AS al"
