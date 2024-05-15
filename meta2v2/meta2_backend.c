@@ -4061,6 +4061,22 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 	return err;
 }
 
+static gboolean _check_allowed_transition(struct meta2_backend_s *m2b, const gchar *storage_class, gchar *current_policy) {
+
+	if (!storage_class || !*storage_class) {
+		return FALSE;
+	}
+	if (!current_policy || !*current_policy) {
+		return FALSE;
+	}
+	struct storage_class_s *src = get_storage_classe_from_policy(m2b->nsinfo, current_policy);
+	struct storage_class_s *dst = storage_class_get(m2b->nsinfo, storage_class);
+	gboolean status =  compare_storage_classes(src, dst);
+	storage_class_clean(src);
+	storage_class_clean(dst);
+	return status;
+}
+
 static GError* _create_view(struct sqlx_sqlite3_s *sq3, const char *view_query,
 		const char *view_name) {
 	GError* err = NULL;
@@ -4315,9 +4331,11 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
+	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, m_ct.policy FROM aliases AS al "
+				"INNER JOIN contents m_ct on al.content = m_ct.id";
 	const gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
-			"nb_versions FROM versioned_view AS al";
+				"m_ct.policy, nb_versions FROM versioned_view AS al "
+				"LEFT JOIN contents m_ct on al.content = m_ct.id";
 
 	const gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
 			"nb_versions FROM marker_view AS al";
@@ -4419,6 +4437,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 			== 0 || g_strcmp0(action, "Transition") == 0);
 
 	gboolean abort_incomplete_mpu = (g_strcmp0(action, "AbortIncompleteMultipartUpload") == 0);
+	gboolean is_transition = (g_strcmp0(action, "Transition") == 0);
 
 	if (!current_action && !abort_incomplete_mpu) {
 		g_prefix_error(&err, "Bad action: %s", action);
@@ -4459,15 +4478,25 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 
 	gint64 deleted = 0, nb_version = 0;
+	gboolean allow_transition = FALSE;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
 				sqlite3_column_bytes(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
+
+		if(is_transition) {
+			gchar *old_policy  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			allow_transition = _check_allowed_transition(m2b, storage_class, old_policy);
+			g_free(old_policy);
+			if (!allow_transition) {
+				continue;
+			}
+		}
 		// Expiration and Transition
 		// Manage current version and delete markers
 		if (VERSIONS_ENABLED(versioning)) {
 			deleted = sqlite3_column_int64(stmt, 3);
-			nb_version = sqlite3_column_int64(stmt, 5);
+			nb_version = sqlite3_column_int64(stmt, 6);
 
 			if (deleted == 1) {
 				if (nb_version > 1) {
@@ -4649,6 +4678,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gboolean non_current_action = (g_strcmp0(action, "NoncurrentVersionExpiration") \
 			== 0 || g_strcmp0(action, "NoncurrentVersionTransition") == 0);
 
+	gboolean is_transition = (g_strcmp0(action, "NoncurrentVersionTransition") == 0);
+
 	if (!VERSIONS_ENABLED(versioning)  && non_current_action) {
 		g_prefix_error(&err, "Unsupported configuration action: %s for non versioned container", action);
 		goto end;
@@ -4678,9 +4709,20 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	guint32 count_versions = 0;
 	gint32 count_objects = 0;
 	gchar object_name_to_process[1025] = {0};
+	gboolean allow_transition = FALSE;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		found_match = TRUE;
+
+		if(is_transition) {
+			gchar *old_policy  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			allow_transition = _check_allowed_transition(m2b, storage_class, old_policy);
+			g_free(old_policy);
+			if (!allow_transition) {
+				continue;
+			}
+		}
+
 		gint64 version = sqlite3_column_int64(stmt, 1);
 		gint64 mtime = sqlite3_column_int64(stmt, 4);
 
