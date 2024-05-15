@@ -2076,6 +2076,8 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
         self.expected_to_cycle[self.rule_id] = {}
         self.expected_to_cycle[self.rule_id][self.action] = 1
 
+        self.skip_transitions = 0
+
     def tearDown(self):
         super(TestLifecycleConformExpiration, self).tearDown()
 
@@ -2084,7 +2086,8 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
 
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/")
-            self.to_match[self.rule_id][self.action].append(obj_meta)
+            if not self.skip_transitions:
+                self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(prefix="b/")
@@ -2107,8 +2110,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_long, random_length=6
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
     def test_combine1(self):
         # ["prefix", "greater"]
@@ -2146,8 +2150,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_middle, random_length=4
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2155,8 +2160,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_short, random_length=5
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "2" + random_str(5)
@@ -2199,8 +2205,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2254,8 +2261,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2316,8 +2324,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "j" + random_str(5)
@@ -2370,8 +2379,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = self.prefix + str(j) + "1" + random_str(5)
@@ -2549,8 +2559,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2591,8 +2602,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                 obj_meta = self._upload_something(
                     name=name, data=self.data_middle, random_length=4
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2657,8 +2669,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -2720,8 +2733,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -2781,8 +2795,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -2849,8 +2864,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -2909,8 +2925,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=6,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         self._check_and_apply(source)
 
@@ -2944,8 +2961,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -2956,8 +2974,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3019,8 +3038,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3031,8 +3051,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "2" + random_str(5)
@@ -3101,8 +3122,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3113,8 +3135,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3173,8 +3196,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=4,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for j in range(self.number_not_match):
             name = str(j) + "1" + random_str(5)
@@ -3185,8 +3209,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3241,8 +3266,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3297,8 +3323,9 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
                     random_length=5,
                     properties={TAGGING_KEY: tag_set},
                 )
-                if i == self.number_of_versions - 1:
-                    self.to_match[self.rule_id][self.action].append(obj_meta)
+                if not self.skip_transitions:
+                    if i == self.number_of_versions - 1:
+                        self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):
             obj_meta = self._upload_something(
@@ -3353,9 +3380,50 @@ class TestLifecycleConformTransition(TestLifecycleConformExpiration):
         self.expected_to_cycle = {}
         self.expected_to_cycle[self.rule_id] = {}
         self.expected_to_cycle[self.rule_id][self.action] = 1
+        self.skip_transitions = 0
 
     def tearDown(self):
         super(TestLifecycleConformTransition, self).tearDown()
+
+
+class TestLifecycleConformTransitionNotAllowed(TestLifecycleConformTransition):
+    def setUp(self):
+        super(TestLifecycleConformTransitionNotAllowed, self).setUp()
+        self.end_source = """</And>
+                        </Filter>
+                        <Status>Enabled</Status>
+                        <Transition>
+                            <Days>10</Days>
+                            <StorageClass>STANDARD</StorageClass>
+                        </Transition>
+                    </Rule>
+                </LifecycleConfiguration>"""
+
+        self.source_prefix = (
+            """
+            <LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <Prefix>a/</Prefix>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <Transition>
+                        <Days>10</Days>
+                        <StorageClass>STANDARD</StorageClass>
+                    </Transition>
+                </Rule>
+            </LifecycleConfiguration>
+            """
+        )
+
+        self.expected_to_cycle[self.rule_id][self.action] = 0
+        self.skip_transitions = 1
+
+    def tearDown(self):
+        super(TestLifecycleConformTransitionNotAllowed, self).tearDown()
 
 
 class TestLifecycleConformExpirationDate(TestLifecycleConformExpiration):
@@ -4252,18 +4320,28 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         # Total versions per object is 4: one current and 0 newer non currnet
         # So 3 versions to match
         self.newer_non_current_versions = 0
-        self.action = "NoncurrentVersionExpiration"
-        self.end_source = """</And>
+
+        self.end_source = (
+            """</And>
                         </Filter>
                     <Status>Enabled</Status>
-                    <NoncurrentVersionExpiration>
-                        <NoncurrentDays>1</NoncurrentDays>
-                        <NewerNoncurrentVersions>"""
+                    <"""
+            f"{self.action}"
+            """><NoncurrentDays>1</NoncurrentDays>"""
+        )
+        if self.action == "NoncurrentVersionTransition":
+            self.end_source = (
+                f"{self.end_source}" """<StorageClass>STANDARD_IA</StorageClass>"""
+            )
+
         self.end_source = (
-            f"{self.end_source}\
-            {self.newer_non_current_versions}"
+            f"{self.end_source}"
+            """<NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
             """</NewerNoncurrentVersions>
-            </NoncurrentVersionExpiration></Rule></LifecycleConfiguration>"""
+            </"""
+            f"{self.action}"
+            """></Rule></LifecycleConfiguration>"""
         )
 
         self.not_to_match_versions = []
@@ -4289,18 +4367,27 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         # Total versions per object is 4: one current and 3 newer
         # So no version to cycle
         self.newer_non_current_versions = 3
-        self.action = "NoncurrentVersionExpiration"
-        self.end_source = """</And>
+        self.end_source = (
+            """</And>
                         </Filter>
                     <Status>Enabled</Status>
-                    <NoncurrentVersionExpiration>
-                        <NoncurrentDays>1</NoncurrentDays>
-                        <NewerNoncurrentVersions>"""
+                    <"""
+            f"{self.action}"
+            """><NoncurrentDays>1</NoncurrentDays>"""
+        )
+        if self.action == "NoncurrentVersionTransition":
+            self.end_source = (
+                f"{self.end_source}" """<StorageClass>STANDARD_IA</StorageClass>"""
+            )
+
         self.end_source = (
-            f"{self.end_source}\
-            {self.newer_non_current_versions}"
+            f"{self.end_source}"
+            """<NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
             """</NewerNoncurrentVersions>
-            </NoncurrentVersionExpiration></Rule></LifecycleConfiguration>"""
+            </"""
+            f"{self.action}"
+            """></Rule></LifecycleConfiguration>"""
         )
 
         self.not_to_match_versions = []
@@ -4326,18 +4413,27 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         # Total versions per object is 4: one current and 4 newer
         # So no version to cycle
         self.newer_non_current_versions = 4
-        self.action = "NoncurrentVersionExpiration"
-        self.end_source = """</And>
+        self.end_source = (
+            """</And>
                         </Filter>
                     <Status>Enabled</Status>
-                    <NoncurrentVersionExpiration>
-                        <NoncurrentDays>1</NoncurrentDays>
-                        <NewerNoncurrentVersions>"""
+                    <"""
+            f"{self.action}"
+            """><NoncurrentDays>1</NoncurrentDays>"""
+        )
+        if self.action == "NoncurrentVersionTransition":
+            self.end_source = (
+                f"{self.end_source}" """<StorageClass>STANDARD_IA</StorageClass>"""
+            )
+
         self.end_source = (
-            f"{self.end_source}\
-        {self.newer_non_current_versions}"
+            f"{self.end_source}"
+            """<NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
             """</NewerNoncurrentVersions>
-        </NoncurrentVersionExpiration></Rule></LifecycleConfiguration>"""
+            </"""
+            f"{self.action}"
+            """></Rule></LifecycleConfiguration>"""
         )
 
         self.not_to_match_versions = []
@@ -4361,6 +4457,55 @@ class TestLifecycleNonCurrentVersionExpiration(TestLifecycleConform):
         self._create_container_versioning(self.source)
         self._upload_expected_combine1()
         self._check_and_apply(self.source, nothing_to_match=True)
+
+
+class TestLifecycleNonCurrentVersionTransition(
+    TestLifecycleNonCurrentVersionExpiration
+):
+    def setUp(self):
+        super(TestLifecycleNonCurrentVersionTransition, self).setUp()
+        self.versioning_enabled = True
+        self.number_of_versions = 4
+        self.newer_non_current_versions = 1
+        self.rule_id = "rule1"
+        self.action = "NoncurrentVersionTransition"
+
+        self.begin_source = (
+            """<LifecycleConfiguration>
+                <Rule>
+                    <ID>"""
+            f"{self.rule_id}"
+            """</ID>
+                    <Filter>
+                        <And>"""
+        )
+        self.source = ""
+        self.end_source = (
+            """</And>
+                    </Filter>
+                    <Status>Enabled</Status>
+                    <NoncurrentVersionTransition>
+                        <StorageClass>STANDARD_IA</StorageClass>
+                        <NoncurrentDays>1</NoncurrentDays>
+                        <NewerNoncurrentVersions>"""
+            f"{self.newer_non_current_versions}"
+            """</NewerNoncurrentVersions>
+                            </NoncurrentVersionTransition>
+                </Rule>
+            </LifecycleConfiguration>"""
+        )
+
+        self.not_to_match_versions = []
+        self.expected_to_cycle = {}
+        self.expected_to_cycle[self.rule_id] = {}
+        self.expected_to_cycle[self.rule_id][self.action] = (
+            self.number_of_versions - self.newer_non_current_versions - 1
+        )
+
+        self.rules[self.rule_id] = {}
+        self.rules[self.rule_id][self.action] = []
+
+        self._init_match_rules()
 
 
 class TestLifecycleConformExpiredDelete(TestLifecycleConform):
@@ -4746,7 +4891,7 @@ class TestLifecycleTransitionConflict(TestLifecycleConform):
                     <Status>Enabled</Status>
                     <Transition>
                         <Days>1</Days>
-                        <StorageClass>ARCHIVE</StorageClass>
+                        <StorageClass>STANDARD</StorageClass>
                     </Transition>
                 </Rule>
             """
