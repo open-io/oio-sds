@@ -466,7 +466,7 @@ class Meta2Database(object):
     def _safe_rebuild(self, bseq, raise_error=False, **kwargs):
         err = None
         try:
-            self.logger.debug("Rebuilding base (base=%s)")
+            self.logger.debug("Rebuilding base (base=%s)", bseq)
 
             try:
                 self.logger.debug("Step 1: check available bases.")

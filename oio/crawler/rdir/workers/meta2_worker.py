@@ -81,10 +81,10 @@ class RdirWorkerForMeta2(RdirWorker):
             tag,
             self.volume_id,
             self.total_scanned,
+            self.passes,
             self.containers_not_referenced,
             self.repaired,
             self.deindexed_containers,
-            self.passes,
             self.errors,
             self.service_unavailable,
             self.scanned_since_last_report,
@@ -165,7 +165,7 @@ class RdirWorkerForMeta2(RdirWorker):
                 )
                 meta2_ids = [prop["host"] for prop in properties["srv"]]
                 if self.volume_id in meta2_ids:
-                    self.logger.debug(
+                    self.logger.warning(
                         "Rebuild meta2 db volume=%s referencing container=%s, "
                         "account=%s",
                         self.volume_id,
