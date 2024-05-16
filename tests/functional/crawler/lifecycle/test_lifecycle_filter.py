@@ -288,17 +288,17 @@ class TestLifecycleFilter(BaseTestCase):
         self.assertEqual(self.expected_errors, lifecycle.errors)
 
         self.assertEqual(self.count_disabled_rules, lifecycle.count_disabled_rules)
-        if self.wait_events:
-            for object_ in resp["objects"]:
-                event = self.wait_for_kafka_event(
-                    types=(EventTypes.LIFECYCLE_ACTION,),
-                )
-                self.assertIsNotNone(event)
+        i = 0
+        while i < expected_events:
+            event = self.wait_for_kafka_event(
+                types=(EventTypes.LIFECYCLE_ACTION,),
+            )
+            self.assertIsNotNone(event)
+            i += 1
 
     def test_basic(self):
         nb_obj_to_add = 4
         self.expected_successes = 1
-        self.wait_events = 1
         self.expected_errors = 0
         self.count_disabled_rules = 1
         self._set_lifecycle_prop(lifecycle_conf)
@@ -313,7 +313,6 @@ class TestLifecycleFilter(BaseTestCase):
     def test_disabled_rules(self):
         nb_obj_to_add = 4
         self.expected_successes = 1
-        self.wait_events = 0
         self.expected_errors = 0
         self.count_disabled_rules = 2
         self._set_lifecycle_prop(lifecycle_conf_disabled)
@@ -327,7 +326,6 @@ class TestLifecycleFilter(BaseTestCase):
         nb_obj_to_add = 5
         self.expected_successes = 1
         self.expected_errors = 0
-        self.wait_events = 1
         self.count_disabled_rules = 1
         self._set_lifecycle_prop(lifecycle_conf)
         self._add_objects(self.cname, nb_obj_to_add)
