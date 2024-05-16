@@ -26,6 +26,7 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import int_value
 from oio.common.exceptions import NotFound
+from oio.common.utils import request_id
 
 from oio.container.client import ContainerClient
 
@@ -194,6 +195,10 @@ class Lifecycle(Filter):
         self.is_mpu_container = False
         self.is_shard_container = False
 
+        reqid = request_id("lc-crawler-")
+        kwargs = {}
+        kwargs["reqid"] = reqid
+
         self.nb_match_per_container = 0
         try:
             account, container = self.api.resolve_cid(meta2db.cid)
@@ -226,7 +231,7 @@ class Lifecycle(Filter):
             lc_instance.load_xml(lifecycle_config)
 
             if self.is_shard_container:
-                self.lower, self.upper = self._get_shard_range(meta2db.cid)
+                self.lower, self.upper = self._get_shard_range(meta2db.cid, **kwargs)
 
                 # Trim < and > from lower and upper
                 self.lower = self.lower[1:]
@@ -252,6 +257,7 @@ class Lifecycle(Filter):
                         container,
                         rules,
                         versioning,
+                        **kwargs,
                     )
                 else:
                     self._exec_rules_non_versioned(
@@ -260,6 +266,7 @@ class Lifecycle(Filter):
                         container,
                         rules,
                         versioning,
+                        **kwargs,
                     )
             else:  # Apply rules/actions as defined in configuration
                 self._exec_rules_user_defined_order(
@@ -268,6 +275,7 @@ class Lifecycle(Filter):
                     container,
                     lc_instance,
                     versioning,
+                    **kwargs,
                 )
 
             self.successes += 1
@@ -293,7 +301,7 @@ class Lifecycle(Filter):
                     "service_id": self.peer_to_use,
                     "suffix": self.suffix,
                 }
-                res = self.admin_client.remove_base(**params)
+                res = self.admin_client.remove_base(**params, reqid=reqid)
                 res_master = res.get(self.peer_to_use, {})
                 if res_master["status"]["status"] != 200:
                     self.logger.warning(
@@ -341,7 +349,7 @@ class Lifecycle(Filter):
         upper = props.get("system").get(M2_PROP_SHARDING_UPPER)
         return (lower, upper)
 
-    def _gen_views_non_current_action(self, rule, non_current_days_in_sec):
+    def _gen_views_non_current_action(self, rule, non_current_days_in_sec, **kwargs):
         """Generate views for NoncurrentExpiration/NoncurrentTransition.
 
         noncurrent_view depends on current_view.
@@ -432,7 +440,7 @@ class Lifecycle(Filter):
         return False
 
     def _exec_rules_non_versioned(
-        self, cid, account, container, rules, versioning_enabled
+        self, cid, account, container, rules, versioning_enabled, **kwargs
     ):
         """Order to execute action for non versioned contaienr:
 
@@ -456,7 +464,7 @@ class Lifecycle(Filter):
                 continue
 
             self._process_action(
-                cid, account, container, rule, action, versioning_enabled
+                cid, account, container, rule, action, versioning_enabled, **kwargs
             )
             self.finished_actions += 1
 
@@ -473,11 +481,13 @@ class Lifecycle(Filter):
                 continue
 
             self._process_action(
-                cid, account, container, rule, action, versioning_enabled
+                cid, account, container, rule, action, versioning_enabled, **kwargs
             )
             self.finished_actions += 1
 
-    def _exec_rules_versioned(self, cid, account, container, rules, versioning_enabled):
+    def _exec_rules_versioned(
+        self, cid, account, container, rules, versioning_enabled, **kwargs
+    ):
         """Order to execute actions for versioned container:
 
         - Expired delete marker, this is a particular case of expiration
@@ -505,7 +515,7 @@ class Lifecycle(Filter):
                 continue
 
             self._process_current_action(
-                cid, account, container, rule, action, versioning_enabled
+                cid, account, container, rule, action, versioning_enabled, **kwargs
             )
             self.finished_actions += 1
 
@@ -521,7 +531,7 @@ class Lifecycle(Filter):
                 continue
 
             self._process_action(
-                cid, account, container, rule, action, versioning_enabled
+                cid, account, container, rule, action, versioning_enabled, **kwargs
             )
             self.finished_actions += 1
 
@@ -553,12 +563,12 @@ class Lifecycle(Filter):
                 continue
 
             self._process_current_action(
-                cid, account, container, rule, action, versioning_enabled
+                cid, account, container, rule, action, versioning_enabled, **kwargs
             )
             self.finished_actions += 1
 
     def _process_current_action(
-        self, cid, account, container, rule, act, versioning_enabled
+        self, cid, account, container, rule, act, versioning_enabled, **kwargs
     ):
         rule_id = rule.id
         days_in_sec = None
@@ -614,16 +624,11 @@ class Lifecycle(Filter):
             queries["base"] = base_sql_query
 
         self._send_query_events(
-            cid,
-            queries,
-            act,
-            view_queries,
-            policy,
-            rule_id,
+            cid, queries, act, view_queries, policy, rule_id, **kwargs
         )
 
     def _process_noncurrent_action(
-        self, cid, account, container, rule, act, versioning_enabled
+        self, cid, account, container, rule, act, versioning_enabled, **kwargs
     ):
         self.logger.info("rule %s, action %s", rule, act)
 
@@ -664,9 +669,12 @@ class Lifecycle(Filter):
             view_queries,
             policy,
             rule_id,
+            **kwargs,
         )
 
-    def _process_action(self, cid, account, container, rule, act, versioning_enabled):
+    def _process_action(
+        self, cid, account, container, rule, act, versioning_enabled, **kwargs
+    ):
         """Process one action by batches.
         Handle different types of actions and versioned/not versioned container
         """
@@ -710,6 +718,7 @@ class Lifecycle(Filter):
                 view_queries,
                 policy,
                 rule_id,
+                **kwargs,
             )
             return
 
@@ -769,10 +778,11 @@ class Lifecycle(Filter):
             view_queries,
             policy,
             rule_id,
+            **kwargs,
         )
 
     def _exec_rules_user_defined_order(
-        self, cid, account, container, lc, versioning_enabled
+        self, cid, account, container, lc, versioning_enabled, **kwargs
     ):
         for rule in lc.rules:
             if not rule.enabled:
@@ -791,7 +801,7 @@ class Lifecycle(Filter):
                     if isinstance(act, AbortIncompleteMultipartUpload):
                         continue
                 self._process_action(
-                    cid, account, container, rule, act, versioning_enabled
+                    cid, account, container, rule, act, versioning_enabled, **kwargs
                 )
                 self.finished_actions += 1
         self.finished_rules += 1
@@ -818,13 +828,14 @@ class Lifecycle(Filter):
         )
         return resp
 
-    def _get_offest(self, cid, action, rule):
+    def _get_offest(self, cid, action, rule, **kwargs):
         key = "-".join(["offsets", action, rule])
         params = {"cid": cid, "service_id": self.peer_to_use, "suffix": self.suffix}
         resp, body = self.proxy_client._request(
             "POST",
             "/container/get_properties",
             params=params,
+            **kwargs,
         )
         offset = body.get("properties", {}).get(key)
         if offset is None:
@@ -844,7 +855,7 @@ class Lifecycle(Filter):
     ):
         action_type = self._get_action(action)
         for key_query, val_query in queries.items():
-            offset = self._get_offest(cid, action_type, rule_id)
+            offset = self._get_offest(cid, action_type, rule_id, **kwargs)
             while True:
                 # Check budget first
                 if self._is_budget_reached():
