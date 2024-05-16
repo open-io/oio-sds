@@ -140,9 +140,6 @@ class RdirWorkerForMeta2(RdirWorker):
                 errors.append("%s: %s" % (res["base"], res["err"]))
         if errors:
             raise Exception(errors)
-
-        data = self.admin_client.election_sync(service_type="meta2", cid=cid)
-        exc.from_multi_responses(data, excepted_status=(200, 301))
         self.repaired += 1
 
     def check_meta2(self, cid, account, container, container_url, reqid):
