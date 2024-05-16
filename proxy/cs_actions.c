@@ -865,7 +865,7 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 	GString *gstr = g_string_sized_new (256);
 	g_string_append_c (gstr, '{');
 	g_string_append_printf(gstr," \"addr\": \"%s\"", addr);
-	if (*internal_addr) {
+	if (oio_str_is_set(internal_addr)) {
 		g_string_append_printf(gstr,", \"internal_addr\": \"%s\"", internal_addr);
 	}
 	g_string_append_c (gstr, '}');

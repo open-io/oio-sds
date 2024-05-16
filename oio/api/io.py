@@ -419,6 +419,9 @@ class ChunkReader(object):
                 self.watchdog, self.connection_timeout, green.ConnectionTimeout
             ):
                 raw_url = chunk.get("real_url", chunk["url"])
+                if "internal_url" in chunk:
+                    # If there is an internal url the request is from internal tool
+                    raw_url = chunk.get("internal_url")
                 parsed = urlparse(raw_url)
                 perfdata_rawx = (
                     self.perfdata.setdefault("rawx", dict())

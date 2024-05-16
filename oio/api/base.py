@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@ from oio.common.constants import (
     REQID_HEADER,
     STRLEN_REQID,
     HTTP_CONTENT_TYPE_JSON,
+    ENDUSERREQUEST_HEADER,
 )
 from oio.common.easy_value import true_value
 from oio.common.exceptions import OioException, from_response
@@ -80,6 +81,7 @@ class HttpApi(object):
 
         self.admin_mode = true_value(kwargs.get("admin_mode", False))
         self.force_master = true_value(kwargs.get("force_master", False))
+        self.end_user_request = true_value(kwargs.get("end_user_request", False))
         self.connection = connection
         self.service_type = service_type
         self.service_name = service_name or service_type
@@ -101,6 +103,7 @@ class HttpApi(object):
         admin_mode=False,
         pool_manager=None,
         force_master=False,
+        end_user_request=False,
         **kwargs
     ):
         """
@@ -148,6 +151,8 @@ class HttpApi(object):
             out_headers[ADMIN_HEADER] = "1"
         if self.force_master or force_master:
             out_headers[FORCEMASTER_HEADER] = "1"
+        if self.end_user_request or end_user_request:
+            out_headers[ENDUSERREQUEST_HEADER] = "1"
 
         # Look for a request deadline, deduce the timeout from it.
         if kwargs.get("deadline", None) is not None:
