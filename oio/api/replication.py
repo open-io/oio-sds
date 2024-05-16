@@ -177,6 +177,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         :returns: a tuple with the connection object and `chunk`
         """
         raw_url = chunk.get("real_url", chunk["url"])
+        if "internal_url" in chunk:
+            # If there is an internal url the request is from internal tool
+            raw_url = chunk.get("internal_url")
         parsed = urlparse(raw_url)
         try:
             chunk_path = parsed.path.split("/")[-1]

@@ -51,6 +51,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	 * ensure the admin-mode and force-master flags are clean. */
 	oio_ext_set_admin(FALSE);
 	oio_ext_set_force_master(FALSE);
+	oio_ext_set_end_user_request(FALSE);
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);

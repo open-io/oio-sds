@@ -2001,7 +2001,9 @@ def config(env):
     return "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf".format(**env)
 
 
-def httpd_config(env):
+def httpd_config(env, internal=False):
+    if internal:
+        return "{CFGDIR}/{NS}-internal-{SRVTYPE}-{SRVNUM}.httpd.conf".format(**env)
     return "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.httpd.conf".format(**env)
 
 
@@ -2692,6 +2694,27 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             with open(watch(env), "w+") as f:
                 f.write(to_write)
+            # Internal rawx service
+            env["PORT"] = env["INTERNAL_PORT"]
+            env["SRVTYPE"] = "internal-" + srvtype
+            if options.get("use_tls", False):
+                # Don't use tls in case of internal rawx
+                env["USE_TLS"] = "#"
+            register_service(
+                env,
+                template_systemd_service_rawx % template_systemd_rawx_command_options,
+                rawx_target,
+            )
+            # The service type is used to name the volume linked to the rawx.
+            # Considering that the internal rawx is set to use the same volume
+            # as a regular rawx service, here we change the service type of
+            # the internal rawx to match the one used by the regular rawx.
+            env["SRVTYPE"] = srvtype
+            tpl = Template(template_rawx_service)
+            to_write = tpl.safe_substitute(env)
+            with open(httpd_config(env, True), "w+") as f:
+                f.write(to_write)
+            # No need to add a watcher for an internal rawx
 
         # oio-rdir-crawler-rawx
         env.update(
@@ -3328,17 +3351,19 @@ def generate(options):
             if "path" in rec:
                 mkdir_noerror(rec["path"])
             if "path" in rec and "addr" in rec:
-                cmd = (
-                    "oio-tool",
-                    "init",
-                    rec["path"],
-                    ENV["NS"],
-                    srvtype,
-                    rec.get("service_id", rec["addr"]),
-                )
-                import subprocess
+                if "internal" not in srvtype:
+                    # No need to initialize volume of internal rawx
+                    cmd = (
+                        "oio-tool",
+                        "init",
+                        rec["path"],
+                        ENV["NS"],
+                        srvtype,
+                        rec.get("service_id", rec["addr"]),
+                    )
+                    import subprocess
 
-                subprocess.check_call(cmd)
+                    subprocess.check_call(cmd)
 
     final_conf["services"] = final_services
     final_conf["namespace"] = ns

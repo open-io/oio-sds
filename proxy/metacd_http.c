@@ -256,6 +256,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	const char *user_agent = g_tree_lookup(rq->tree_headers, USER_AGENT_HEADER);
 	oio_ext_set_user_agent(user_agent);
 
+	/* Load the end-user-request flag to specify the origin of the request (external or internal)*/
+	const char* end_user_request = g_tree_lookup(rq->tree_headers,
+		PROXYD_HEADER_END_USER_REQUEST);
+	oio_ext_set_end_user_request(oio_str_parse_bool(end_user_request, FALSE));
+
 	/* Load the optional 'simulate_versioning' flag */
 	const char *simulate_versioning = g_tree_lookup(
 			rq->tree_headers, PROXYD_HEADER_SIMULATE_VERSIONING);

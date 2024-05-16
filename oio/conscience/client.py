@@ -269,7 +269,14 @@ class ConscienceClient(ProxyClient):
                 "failed to resolve service id %s: %s" % (service_id, resp.text)
             )
 
-    def resolve_service_id(self, service_type, service_id, check_format=True, **kwargs):
+    def resolve_service_id(
+        self,
+        service_type,
+        service_id,
+        check_format=True,
+        end_user_request=False,
+        **kwargs
+    ):
         """
         :returns: Service address corresponding to the service ID
         """
@@ -283,10 +290,27 @@ class ConscienceClient(ProxyClient):
         if cached_service_id and (
             time.time() - cached_service_id["mtime"] < self._service_id_max_age
         ):
-            return cached_service_id["addr"]
-        result = self.resolve(srv_type=service_type, service_id=service_id, **kwargs)
+            if end_user_request or service_type != "rawx":
+                return cached_service_id["addr"]
+            if "internal_addr" in cached_service_id:
+                return cached_service_id["internal_addr"]
+
+        kwargs["end_user_request"] = end_user_request
+        result = self.resolve(
+            srv_type=service_type,
+            service_id=service_id,
+            **kwargs,
+        )
         service_addr = result["addr"]
         self._service_ids[service_id] = {"addr": service_addr, "mtime": time.time()}
+        # If there is an internal address (in case of rawx)
+        if "internal_addr" in result:
+            # Cache also the internal service address
+            self._service_ids[service_id].update(
+                {"internal_addr": result["internal_addr"]}
+            )
+            if not end_user_request:
+                service_addr = result["internal_addr"]
         return service_addr
 
     def resolve_url(self, service_type, url, **kwargs):

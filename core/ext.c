@@ -177,6 +177,12 @@ struct oio_ext_local_s {
 	/** Request wants to talk only to the master service
 	 * (in case of master/slave replication). */
 	guint8 force_master;
+
+	/** Request identified from swift.
+	 * Used to redirect rawx request to internal
+	 * rawx service if the request is not from swift.
+	*/
+	guint8 end_user_request;
 	/** Request ask for TLS usage (RAWX only at this time. */
 	guint8 upgrade_to_tls;
 	gchar *user_agent;
@@ -345,6 +351,16 @@ gboolean oio_ext_has_force_master(void) {
 void oio_ext_set_force_master(const gboolean force_master) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->force_master = BOOL(force_master);
+}
+
+gboolean oio_ext_is_end_user_request(void) {
+	const struct oio_ext_local_s *l = _local_ensure();
+	return BOOL(l->end_user_request);
+}
+
+void oio_ext_set_end_user_request(const gboolean end_user_request) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->end_user_request = BOOL(end_user_request);
 }
 
 gboolean oio_ext_has_upgrade_to_tls() {

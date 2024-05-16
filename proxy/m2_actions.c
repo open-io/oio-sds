@@ -353,34 +353,47 @@ _score_from_chunk_id (const char *id)
 	return res;
 }
 
-static gchar*
+/** @private */
+struct oio_chunk_urls {
+	gchar *real_url;
+	gchar *internal_url;
+};
+
+static struct oio_chunk_urls*
 _real_url_from_chunk_id (const char *id)
 {
-	gchar *out = NULL;
-	gchar *addr = NULL, *type = NULL, *netloc = NULL;
+	struct oio_chunk_urls *res = g_malloc0(sizeof(struct oio_chunk_urls));
+	gchar *real_addr = NULL, *internal_addr = NULL, *type = NULL, *netloc = NULL;
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
 
 
 	if (oio_ext_has_upgrade_to_tls()) {
-		addr = oio_lb_resolve_service_id(netloc, TRUE);
+		real_addr = oio_lb_resolve_service_id(netloc, TRUE);
 
-		if (addr) {
-			out = g_strdup_printf("https://%s/%s",
-					addr, id + strlen("http://") + strlen(netloc) + 1);
+		if (real_addr) {
+			res->real_url = g_strdup_printf("https://%s/%s",
+					real_addr, id + strlen("http://") + strlen(netloc) + 1);
 		}
 	}
-
-	/* allow fallback */
-	if (!addr) {
-		addr = _resolve_service_id(netloc);
-		out = g_strdup_printf("http://%s/%s",
-				addr, id + strlen("http://") + strlen(netloc) + 1);
+	if (!real_addr) {
+		real_addr = _resolve_service_id(netloc);
+		res->real_url = g_strdup_printf("http://%s/%s",
+				real_addr, id + strlen("http://") + strlen(netloc) + 1);
 	}
-
-	g_free(addr);
+	// If the request is coming from internal tools
+	if (!oio_ext_is_end_user_request()) {
+		// Get address of internal rawx service
+		internal_addr = oio_lb_resolve_internal_service_id(netloc);
+		if (oio_str_is_set(internal_addr)){
+			res->internal_url = g_strdup_printf("http://%s/%s",
+						internal_addr, id + strlen("http://") + strlen(netloc) + 1);
+		}
+	}
+	g_free(real_addr);
+	g_free(internal_addr);
 	g_free(netloc);
 	g_free(type);
-	return out;
+	return res;
 }
 
 #define _remap(score,lo,hi) (lo + ((score * (hi - lo)) / 100))
@@ -430,11 +443,16 @@ _serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr,
 
 	g_string_append_printf(gstr, "{\"url\":\"%s\"", chunk_id);
 
-	gchar *real_url = _real_url_from_chunk_id(chunk_id);
-	if (real_url) {
-		g_string_append_printf(gstr, ",\"real_url\":\"%s\"", real_url);
-		g_free(real_url);
+	struct oio_chunk_urls *urls = _real_url_from_chunk_id(chunk_id);
+	if (urls->real_url) {
+		g_string_append_printf(gstr, ",\"real_url\":\"%s\"", urls->real_url);
 	}
+	if (urls->internal_url) {
+		g_string_append_printf(gstr, ",\"internal_url\":\"%s\"", urls->internal_url);
+	}
+	g_free(urls->internal_url);
+	g_free(urls->real_url);
+	g_free(urls);
 
 	g_string_append_printf(gstr, ",\"pos\":\"%s\"", CHUNKS_get_position(chunk)->str);
 	g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size(chunk));

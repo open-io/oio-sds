@@ -716,7 +716,10 @@ class EcChunkWriter(object):
     ):
         if not watchdog:
             raise ValueError("watchdog is None")
-        raw_url = chunk.get("real_url", chunk["url"])
+        # If there is an internal url, the request is from an internal tool
+        raw_url = chunk.get("internal_url")
+        if not raw_url:
+            raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split("/")[-1]
         hdrs = headers_from_object_metadata(sysmeta, chunk["url"])
@@ -1313,7 +1316,11 @@ class ECRebuildHandler(object):
         :returns: the response object (ready to read data)
         """
         resp = None
-        parsed = urlparse(chunk.get("real_url", chunk["url"]))
+        # If there is an internal url, the request is from an internal tool
+        raw_url = chunk.get("internal_url")
+        if not raw_url:
+            raw_url = chunk.get("real_url", chunk["url"])
+        parsed = urlparse(raw_url)
         try:
             with WatchdogTimeout(
                 self.watchdog, self.connection_timeout, ConnectionTimeout

@@ -135,15 +135,32 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             logger=logger,
         )
 
-    def resolve_url(self, url):
-        return self.conscience_client.resolve_url("rawx", url)
+    def resolve_url(self, url, end_user_request=False, **kwargs):
+        """Returns real url if end_user_request and internal url if not"""
+        return self.conscience_client.resolve_url(
+            "rawx", url, end_user_request=end_user_request, **kwargs
+        )
+
+    def _get_url_to_use(self, url, kwargs):
+        """Returns the url to use depending on wheither or not it
+        is enduser request.
+
+        :param url: url to resolve
+        :type url: str
+        :return: internal url or external url
+        :rtype: str
+        """
+        end_user_request = kwargs.pop("end_user_request", False)
+        url = self.resolve_url(url, end_user_request=end_user_request, **kwargs)
+        return url
 
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, "read"):
             data = utils.GeneratorIO(data, sub_generator=False)
-        chunk = {"url": self.resolve_url(url), "pos": meta["chunk_pos"]}
+        chunk_url = self._get_url_to_use(url, kwargs)
+        chunk = {"url": chunk_url, "pos": meta["chunk_pos"]}
         # FIXME: ugly
         chunk_method = meta.get("chunk_method", meta.get("content_chunkmethod"))
         storage_method = STORAGE_METHODS.load(chunk_method)
@@ -231,7 +248,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         :returns: a tuple with a dictionary of chunk metadata and a stream
             to the chunk's data.
         """
-        url = self.resolve_url(url)
+        url = self._get_url_to_use(url, kwargs)
         reader = ChunkReader(
             [{"url": url}],
             buf_size=buffer_size,
@@ -390,7 +407,8 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             kwargs["timeout"] = urllib3.Timeout(
                 connect=connection_timeout, read=read_timeout
             )
-        return self.http_pool.request(method, self.resolve_url(url), **kwargs)
+        chunk_url = self._get_url_to_use(url, kwargs)
+        return self.http_pool.request(method, chunk_url, **kwargs)
 
     def tag_misplaced_chunk(self, urls, logger=None):
         """

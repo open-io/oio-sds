@@ -117,6 +117,10 @@ gboolean oio_ext_has_force_master(void);
 
 void oio_ext_set_force_master(const gboolean force_master);
 
+gboolean oio_ext_is_end_user_request(void);
+
+void oio_ext_set_end_user_request(const gboolean end_user_request);
+
 void oio_ext_set_upgrade_to_tls(const gboolean upgrade_to_tls);
 
 gboolean oio_ext_has_upgrade_to_tls(void);
