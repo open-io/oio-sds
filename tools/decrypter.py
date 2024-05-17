@@ -19,8 +19,14 @@ import argparse
 import json
 import sys
 from encryption_tool.encryption import Decrypter
+from memcached import MemcacheRing
+
+from oio.common.cache import _get_object_metadata_cache_key
+
 
 ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"
+MEMCACHE_SERVERS = ["127.0.0.1:11211"]
+
 
 parser = argparse.ArgumentParser(description="decryption tool")
 parser.add_argument("--rootkey", type=str, default=ROOT_KEY, help="root key")
@@ -56,6 +62,17 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+cache = MemcacheRing(MEMCACHE_SERVERS)
+
+# clean cache
+ckey = _get_object_metadata_cache_key(
+    account=args.account,
+    reference=args.container,
+    path=args.obj,
+)
+if cache is not None:
+    cache.delete(ckey)
+
 # Read metadata
 with open(args.metadata, "r") as infile:
     metadata = json.load(infile)
@@ -86,3 +103,6 @@ ivs = decrypter.get_ivs()
 with open(args.iv, "w") as outfile:
     json.dump(ivs, outfile)
     outfile.close()
+
+if cache is not None:
+    cache.delete(ckey)
