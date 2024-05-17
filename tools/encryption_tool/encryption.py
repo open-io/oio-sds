@@ -757,9 +757,12 @@ class Encrypter:
 
         # Create bucket secret in kms
         secret_id = 0
+        cont = self.container
+        if self.container.endswith("+segments"):
+            cont = self.container.split("+segments")[0]
         secret = create_bucket_secret(
             self.api.kms,
-            self.container,
+            cont,
             account=self.account,
             secret_id=secret_id,
         )
