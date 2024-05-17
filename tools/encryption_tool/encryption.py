@@ -633,8 +633,11 @@ class Decrypter:
         else:
             # The object is encrypted with sses3
             secret_id = 0  # TODO I am not sure about that
+            cont = self.container
+            if self.container.endswith("+segments"):
+                cont = self.container.split("+segments")[0]
             object_key = fetch_bucket_secret(
-                self.api.kms, self.account, self.container, secret_id=secret_id
+                self.api.kms, self.account, cont, secret_id=secret_id
             )
             put_keys["id"]["sses3"] = True
 
