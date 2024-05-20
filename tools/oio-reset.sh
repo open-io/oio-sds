@@ -2,6 +2,7 @@
 
 # oio-reset.sh
 # Copyright (C) 2015-2019 OpenIO SAS, original work as part of OpenIO SDS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -147,6 +148,31 @@ $SYSTEMCTL start oio-cluster.target
 
 COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t meta0 -t meta1 -t rdir)
 $cmd_openio cluster wait -vvv --debug -d 60 -u -n "$COUNT" rawx meta2 meta0 meta1 rdir
+# We cannot use cluster wait command for internal rawx as the conscience does not know them
+# To check that the internal rawx are up we send requests to internal rawx to see if we get responses
+# Expected addresses for two internal rawx services running on port 6033 and 6035
+# INTERNAl_RAWX_ADDRS = ["http://127.0.0.1:6033", "http://127.0.0.1:6335"]
+INTERNAl_RAWX_ADDRS=$($cmd_openio cluster list rawx --tags | awk '{split($4, a, ":"); split($(NF-1), b, "=") ; print "http://"a[1] ":" b[2]}' | tail -n +4 | head -n -1)
+MAX_WAITING="60"
+for i in $(seq 1 "$MAX_WAITING"); do
+    ALL_INTERNAL_RAWX_UP=true
+    for internal_addr in $INTERNAl_RAWX_ADDRS;
+    do 
+        RESP_CODE=$(curl --write-out %{http_code} --silent --output /dev/null -X GET "$internal_addr/info")
+        if [[ $RESP_CODE -eq 000 ]]; then
+            ALL_INTERNAL_RAWX_UP=false
+            echo -e "\nInternal rawx $internal_addr not up"
+        fi
+    done
+    if [[ "$ALL_INTERNAL_RAWX_UP" = true ]]; then
+        break
+    fi
+    if [ "$i" -eq "$MAX_WAITING" ]; then
+        echo -e "\nSome internal rawx are not running"
+        exit 1
+    fi
+    sleep 1
+done
 
 echo -e "\n### Init the meta0/meta1 directory"
 $cmd_openio directory bootstrap --check \
