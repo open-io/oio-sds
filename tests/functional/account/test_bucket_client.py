@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,30 +16,21 @@
 import time
 
 from oio.common.exceptions import Forbidden, NotFound
-from tests.utils import BaseTestCase
+from tests.functional.account.helpers import AccountBaseTestCase
 
 
-class TestBucketClient(BaseTestCase):
+class TestBucketClient(AccountBaseTestCase):
     def setUp(self):
         super(TestBucketClient, self).setUp()
         self.account_id1 = f"account-{time.time()}"
         self.account_id2 = f"account-{time.time()}"
         self.bucket_name = f"bucket-{time.time()}"
 
-    def tearDown(self):
-        for account in (self.account_id1, self.account_id2):
-            try:
-                self.bucket_client.bucket_release(self.bucket_name, account)
-            except Exception:
-                pass
-            try:
-                self.bucket_client.bucket_delete(self.bucket_name, account)
-            except Exception:
-                pass
-        self.assertRaises(
-            NotFound, self.bucket_client.bucket_get_owner, self.bucket_name
-        )
-        super(TestBucketClient, self).tearDown()
+        # For cleanup
+        self.accounts.add(self.account_id1)
+        self.accounts.add(self.account_id2)
+        self.buckets.add((self.account_id1, self.bucket_name, self.region))
+        self.buckets.add((self.account_id2, self.bucket_name, self.region))
 
     def test_reserve_and_create_and_delete(self):
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
@@ -196,3 +187,74 @@ class TestBucketClient(BaseTestCase):
         )
         owner = self.bucket_client.bucket_get_owner(self.bucket_name)
         self.assertEqual(self.account_id2, owner)
+
+    def test_bucket_feature(self):
+        feature = "foobar"
+        limit = 8
+        expected_list = []
+        for i in range(3):
+            account = f"account-{i}"
+            self._create_account(account)
+            for j in range(10):
+                bucket = f"bucket-feature-{i}-{j}"
+                self._create_bucket(account, bucket)
+                expected_list.append((account, bucket))
+                # Multiple activation
+                for _ in range(11):
+                    self.bucket_client.bucket_feature_activate(
+                        bucket,
+                        account,
+                        feature,
+                    )
+        marker = None
+        for i in range(len(expected_list) // limit + 1):
+            resp = self.bucket_client.buckets_list_by_feature(
+                feature, limit=limit, marker=marker
+            )
+            self.assertIn("truncated", resp)
+            self.assertIn("buckets", resp)
+            truncated = resp["truncated"]
+            buckets = [(e["account"], e["bucket"]) for e in resp["buckets"]]
+            self.assertListEqual(buckets, expected_list[i * limit : (i + 1) * limit])
+            marker = resp.get("next_marker")
+            if marker is None:
+                self.assertFalse(truncated)
+                self.assertEqual(i, len(expected_list) // limit)
+                break
+            account, bucket = expected_list[(i + 1) * limit - 1]
+            self.assertEqual(marker, f"{account}|{bucket}")
+            self.assertTrue(truncated)
+        else:
+            self.fail("Listing too long")
+
+    def test_feature_activation_deactivation(self):
+        account = "account-1"
+        bucket = "bucket-feature-activation-1"
+        feature = "feature-1"
+        self._create_account(account)
+        self._create_bucket(account, bucket)
+
+        for func in (
+            self.bucket_client.bucket_feature_activate,
+            self.bucket_client.bucket_feature_deactivate,
+        ):
+            # Existing bucket
+            func(bucket, account, feature)
+
+            # Non existing account
+            self.assertRaises(
+                Forbidden,
+                func,
+                bucket,
+                "non-existing",
+                feature,
+            )
+
+            # Non existing bucket
+            self.assertRaises(
+                Forbidden,
+                func,
+                "non-existing",
+                account,
+                feature,
+            )

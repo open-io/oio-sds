@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,7 @@ from oio.common.exceptions import (
     OioNetworkException,
     OioProtocolError,
 )
-from tests.utils import BaseTestCase
+from tests.functional.account.helpers import AccountBaseTestCase
 
 
 class AccountProtocolErrorPoolManager(object):
@@ -41,70 +41,12 @@ class AccountProtocolErrorPoolManager(object):
         return self.pool_manager.request(_method, url, *args, **kwargs)
 
 
-class TestAccountClient(BaseTestCase):
+class TestAccountClient(AccountBaseTestCase):
     def setUp(self):
         super(TestAccountClient, self).setUp()
         self.account_id = "test_account_%f" % time.time()
-        self.accounts = set()
-        self.containers = set()
-        self.buckets = set()
-
-        self.account_client = self.storage.account
-        self.region = self.bucket_client.region.upper()
-
         self._create_account(self.account_id)
         self._create_container(self.account_id, "container")
-
-    def tearDown(self):
-        for account, container in self.containers.copy():
-            self._delete_container(account, container)
-        for account, bucket, region in self.buckets.copy():
-            self._delete_bucket(account, bucket, region=region)
-        for account in self.accounts.copy():
-            self._delete_account(account)
-        super(TestAccountClient, self).tearDown()
-
-    def _create_account(self, account):
-        if account in self.accounts:
-            return
-        self.account_client.account_create(account)
-        self.accounts.add(account)
-
-    def _delete_account(self, account):
-        self.account_client.account_delete(account)
-        self.accounts.remove(account)
-
-    def _create_container(self, account, container, region=None):
-        if (account, container) in self.containers:
-            return
-        self.account_client.container_update(
-            account, container, time.time(), 0, 0, region=region or self.region
-        )
-        self.accounts.add(account)
-        self.containers.add((account, container))
-
-    def _delete_container(self, account, container):
-        self.account_client.container_delete(account, container, time.time())
-        self.containers.remove((account, container))
-
-    def _create_bucket(self, account, bucket, region=None):
-        if (account, bucket, region) in self.buckets:
-            return
-        try:
-            self.bucket_client.bucket_create(bucket, account, region=region)
-        finally:
-            if region:
-                self.bucket_client.region = self.region
-        self.accounts.add(account)
-        self.buckets.add((account, bucket, region))
-
-    def _delete_bucket(self, account, bucket, region=None):
-        try:
-            self.bucket_client.bucket_delete(bucket, account, region=region)
-        finally:
-            if region:
-                self.bucket_client.region = self.region
-        self.buckets.remove((account, bucket, region))
 
     def test_account_list(self):
         for i in range(4):
@@ -1373,6 +1315,7 @@ class TestAccountClient(BaseTestCase):
                         "buckets": 0,
                         "containers": 1,
                         "shards": 0,
+                        "features-details": {},
                         "objects-details": {"SINGLE": 12},
                         "bytes-details": {"SINGLE": 42},
                     }
@@ -1410,6 +1353,7 @@ class TestAccountClient(BaseTestCase):
                         "buckets": 0,
                         "containers": 1,
                         "shards": 0,
+                        "features-details": {},
                         "objects-details": {"SINGLE": 12},
                         "bytes-details": {"SINGLE": 42},
                     }
@@ -1462,13 +1406,13 @@ class TestAccountClient(BaseTestCase):
                     "containers": 1,
                     "shards": 0,
                     "objects-s3": 12,
+                    "features-details": {},
                     "objects-details": {"SINGLE": 12},
                     "bytes-details": {"SINGLE": 42},
                 }
             },
         }
-
-        self.bucket_client.bucket_create(bucket, self.account_id)
+        self._create_bucket(self.account_id, bucket)
         self.account_client.container_update(
             self.account_id,
             "container",

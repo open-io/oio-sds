@@ -34,6 +34,8 @@ from oio.common.wsgi import WerkzeugApp
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
+BUCKET_LISTING_DEFAULT_LIMIT = 1000
+BUCKET_LISTING_MAX_LIMIT = 10000
 KMS_SECRET_BYTES_DEFAULT = 32
 KMS_SECRET_BYTES_MIN = 8
 KMS_SECRET_BYTES_MAX = 512
@@ -157,6 +159,21 @@ class Account(WerkzeugApp):
                 Rule(
                     "/v1.0/bucket/get-owner",
                     endpoint="bucket_get_owner",
+                    methods=["GET"],
+                ),
+                Rule(
+                    "/v1.0/bucket/feature/activate",
+                    endpoint="bucket_feature_activate",
+                    methods=["POST"],
+                ),
+                Rule(
+                    "/v1.0/bucket/feature/deactivate",
+                    endpoint="bucket_feature_deactivate",
+                    methods=["POST"],
+                ),
+                Rule(
+                    "/v1.0/bucket/feature/list-buckets",
+                    endpoint="feature_list_buckets",
                     methods=["GET"],
                 ),
                 # IAM
@@ -1603,6 +1620,62 @@ class Account(WerkzeugApp):
         self.backend.refresh_bucket(bucket_name, account=account, **kwargs)
         return Response(status=204)
 
+    @force_master
+    def on_bucket_feature_activate(self, req, **kwargs):
+        """
+        Activate a feature for bucket
+        """
+        bucket = self._get_item_id(req, what="bucket")
+        feature = self._get_item_id(req, key="feature", what="feature")
+        region = self._get_item_id(req, key="region", what="region")
+        account = req.args.get("account")
+        self.backend.feature_activate(region, feature, bucket, account=account)
+        return Response(status=204)
+
+    @force_master
+    def on_bucket_feature_deactivate(self, req, **kwargs):
+        """
+        Deacticate a feature for bucket
+        """
+        bucket = self._get_item_id(req, what="bucket")
+        feature = self._get_item_id(req, key="feature", what="feature")
+        region = self._get_item_id(req, key="region", what="region")
+        account = req.args.get("account")
+        self.backend.feature_deactivate(region, feature, bucket, account=account)
+        return Response(status=204)
+
+    @force_master
+    def on_feature_list_buckets(self, req, **kwargs):
+        """
+        Retrieve list of buckets using a specific feature
+        """
+        feature_name = self._get_item_id(req, what="feature")
+        region_name = self._get_item_id(req, key="region", what="region")
+        limit = max(
+            0, min(BUCKET_LISTING_MAX_LIMIT, int_value(req.args.get("limit"), 0))
+        )
+        if limit <= 0:
+            limit = BUCKET_LISTING_DEFAULT_LIMIT
+
+        marker = req.args.get("marker")
+
+        next_marker, buckets = self.backend.feature_list_buckets(
+            region_name, feature_name, limit, marker
+        )
+
+        buckets_listing = {
+            "buckets": buckets,
+            "truncated": False,
+        }
+
+        if next_marker is not None:
+            buckets_listing["next_marker"] = next_marker
+            buckets_listing["truncated"] = True
+        return Response(
+            json.dumps(buckets_listing, separators=(",", ":")),
+            mimetype=HTTP_CONTENT_TYPE_JSON,
+        )
+
     def on_iam_delete_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key="account", what="account")
         user = self._get_item_id(req, key="user", what="user")
@@ -1694,10 +1767,12 @@ class Account(WerkzeugApp):
                         break
                     else:
                         # TODO: Add a statsd metric to monitor this silent error
-                        self.logger.error(f"Bad secret checksum: {cksum} != {checksum}")
+                        self.logger.error(
+                            "Bad secret checksum: %s != %s", cksum, checksum
+                        )
                 else:
                     self.logger.error(
-                        f"Failed to read plaintext from decrypted data: {data}"
+                        "Failed to read plaintext from decrypted data: %s", data
                     )
         return resp
 

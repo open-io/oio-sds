@@ -69,6 +69,8 @@ class AccountUpdateFilter(Filter):
             account = url.get("account")
             if account in HIDDEN_ACCOUNTS:
                 pass
+            elif event.event_type in (EventTypes.CONTAINER_UPDATE,):
+                pass
             elif event.event_type in CONTAINER_EVENTS:
                 container = url.get("user")
                 mtime = event.when / 1000000.0  # convert to seconds

@@ -15,10 +15,11 @@
 
 from collections import Counter
 from copy import deepcopy
-import fdb
+from enum import IntEnum
 from functools import wraps
 import struct
 import time
+import fdb
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
 
 from oio.account.common_fdb import CommonFdb
@@ -45,8 +46,12 @@ CONTAINERS_FIELD = "containers"
 BUCKETS_FIELD = "buckets"
 BUCKET_FIELD = "bucket"
 ACCOUNTS_FIELD = "accounts"
+ACCOUNT_FIELD = "account"
 REGION_FIELD = "region"
 REGIONS_FIELD = "regions"
+FEATURES_FIELD = "features"
+FEATURE_FIELD = "feature"
+ACTION_FIELD = "action"
 CTIME_FIELD = "ctime"
 MTIME_FIELD = "mtime"
 LAST_UPDATE_FIELD = "last-update"
@@ -58,6 +63,7 @@ COUNTERS_FIELDS = (
     BUCKETS_FIELD,
     ACCOUNTS_FIELD,
     OBJECTS_S3_FIELD,
+    FEATURES_FIELD,
 )
 TIMESTAMP_FIELDS = (CTIME_FIELD, MTIME_FIELD)
 RESERVED_BUCKET_FIELDS = (
@@ -72,6 +78,20 @@ RESERVED_BUCKET_FIELDS = (
     OBJECTS_FIELD + "-details",
     OBJECTS_S3_FIELD,
 )
+
+FEATURE_ACTIONS_HISTORY = 10
+
+
+class FeatureAction(IntEnum):
+    """
+    Action on feature stored in history
+    """
+
+    UNSET = 0
+    SET = 1
+
+    def __str__(self):
+        return f"{self.name}"
 
 
 def catch_service_errors(func):
@@ -119,6 +139,8 @@ class AccountBackendFdb(object):
     ACCOUNT_KEY_PREFIX = "account"
     BUCKET_KEY_PREFIX = "bucket"
     BUCKET_LIST_PREFIX = "buckets"
+    FEATURE_KEY_PREFIX = "feature"
+    FEATURES_LIST_PREFIX = "features"
     CONTAINERS_LIST_PREFIX = "containers"
     CONTAINER_LIST_PREFIX = "container"
     # Remaining keys for deletex containers prefix
@@ -185,6 +207,12 @@ class AccountBackendFdb(object):
             self.buckets_index_space = self.namespace.create_or_open(
                 self.db, self.buckets_list_prefix
             )
+            self.features_space = self.namespace.create_or_open(
+                self.db, self.features_prefix
+            )
+            self.features_index_space = self.namespace.create_or_open(
+                self.db, self.features_list_prefix
+            )
             self.metadata_space = self.namespace.create_or_open(
                 self.db, self.metadata_prefix
             )
@@ -217,6 +245,10 @@ class AccountBackendFdb(object):
         self.bucket_prefix = conf.get("bucket_prefix", self.BUCKET_KEY_PREFIX)
         self.buckets_list_prefix = conf.get(
             "bucket_list_prefix", self.BUCKET_LIST_PREFIX
+        )
+        self.features_prefix = conf.get("features_prefix", self.FEATURE_KEY_PREFIX)
+        self.features_list_prefix = conf.get(
+            "features_prefix", self.FEATURES_LIST_PREFIX
         )
         self.container_list_prefix = conf.get(
             "container_list_prefix", self.CONTAINER_LIST_PREFIX
@@ -279,6 +311,12 @@ class AccountBackendFdb(object):
     def _timestamp_value_to_timestamp(self, timestamp_value):
         return struct.unpack("<Q", timestamp_value)[0] / 1000000
 
+    def _action_value_to_action(self, action_value):
+        return FeatureAction(struct.unpack("<Q", action_value)[0])
+
+    def _action_to_action_value(self, action):
+        return struct.pack("<Q", int(action))
+
     def _unmarshal_field_value(self, field, value):
         if field in COUNTERS_FIELDS:
             return self._counter_value_to_counter(value)
@@ -298,6 +336,17 @@ class AccountBackendFdb(object):
                     policy = details[0]
                     dict_values = info.setdefault(f"{field}-details", {})
                     dict_values[policy] = self._unmarshal_field_value(field, value)
+                elif not has_regions and len(details) == 2 and field == FEATURE_FIELD:
+                    feature, mtime = details
+                    action = self._action_value_to_action(value)
+                    dict_values = info.setdefault(f"{FEATURES_FIELD}-details", {})
+                    history = dict_values.setdefault(feature, [])
+                    history.append(
+                        {
+                            MTIME_FIELD: mtime,
+                            ACTION_FIELD: str(action),
+                        }
+                    )
                 elif has_regions and len(details) <= 2:
                     region = details[0]
                     dict_values = info.setdefault(REGIONS_FIELD, {}).setdefault(
@@ -320,7 +369,7 @@ class AccountBackendFdb(object):
                 for region_info in info[REGIONS_FIELD].values():
                     for fields in (CONTAINERS_FIELD, BUCKETS_FIELD):
                         region_info.setdefault(fields, 0)
-                    for fields in (BYTES_FIELD, OBJECTS_FIELD):
+                    for fields in (BYTES_FIELD, OBJECTS_FIELD, FEATURES_FIELD):
                         region_info.setdefault(f"{fields}-details", {})
             else:
                 for fields in (BYTES_FIELD, OBJECTS_FIELD):
@@ -335,7 +384,12 @@ class AccountBackendFdb(object):
             start = space[prefix].range().start
             stop = space[prefix + LAST_UNICODE_CHAR].range().stop
         if marker and (not prefix or marker >= prefix):
-            start = space[marker].range().stop
+            if not isinstance(marker, list):
+                marker = [marker]
+            _space = space
+            for m in marker:
+                _space = _space[m]
+            start = _space[marker].range().stop
         if end_marker and (not prefix or end_marker <= prefix + LAST_UNICODE_CHAR):
             stop = space[end_marker].range().start
         return start, stop
@@ -416,12 +470,12 @@ class AccountBackendFdb(object):
     # Status/metrics/rankings -------------------------------------------------
 
     @catch_service_errors
-    def status(self, **kwargs):
+    def status(self, **_kwargs):
         return self._status(self.db, readonly=True)
 
     @fdb.transactional
     @use_snapshot_reads
-    def _status(self, tr):
+    def _status(self, tr, **_kwargs):
         accounts = tr[self.metrics_space.pack((ACCOUNTS_FIELD,))]
         if accounts.present():
             accounts = self._counter_value_to_counter(accounts.value)
@@ -430,7 +484,7 @@ class AccountBackendFdb(object):
         return {"account_count": accounts}
 
     @catch_service_errors
-    def info_metrics(self, output_type, **kwargs):
+    def info_metrics(self, output_type, **_kwargs):
         """
         Get all available information about global metrics.
         """
@@ -442,7 +496,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _info_metrics(self, tr):
+    def _info_metrics(self, tr, **_kwargs):
         """
         [transactional] Get all available information about global metrics.
         """
@@ -507,7 +561,7 @@ class AccountBackendFdb(object):
                 )
 
     @catch_service_errors
-    def refresh_metrics(self, **kwargs):
+    def refresh_metrics(self, **_kwargs):
         """
         Recompute the global metrics
         """
@@ -547,7 +601,7 @@ class AccountBackendFdb(object):
             if is_shard:
                 if field == CONTAINERS_FIELD:
                     field = SHARDS_FIELD
-            if details and field in (BYTES_FIELD, OBJECTS_FIELD):
+            if details and field in (BYTES_FIELD, OBJECTS_FIELD, FEATURES_FIELD):
                 field_counters = counters.setdefault(field, {})
                 region_counters = field_counters.setdefault(region, Counter())
                 region_counters[details] += value
@@ -603,7 +657,7 @@ class AccountBackendFdb(object):
         return "\n".join(prom_output)
 
     @catch_service_errors
-    def info_rankings(self, output_type, **kwargs):
+    def info_rankings(self, output_type, **_kwargs):
         """
         Get all available information about buckets rankings.
         """
@@ -615,7 +669,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _info_rankings(self, tr):
+    def _info_rankings(self, tr, **_kwargs):
         """
         [transactional] Get all available information about rankings.
         """
@@ -722,7 +776,7 @@ class AccountBackendFdb(object):
         #     Do not count sharding accounts in metrics
 
     @catch_service_errors
-    def delete_account(self, account_id, **kwargs):
+    def delete_account(self, account_id, **_kwargs):
         """
         Delete the account if it already exists.
         """
@@ -747,13 +801,23 @@ class AccountBackendFdb(object):
         if not account_ctime.present():
             raise NotFound("Account doesn't exist")
 
+        # Ensure account does not own buckets
+        buckets = tr[account_space.pack((BUCKETS_FIELD,))]
+        if buckets.present():
+            buckets = self._counter_value_to_counter(buckets.value)
+        else:
+            buckets = 0
+        if buckets > 0:
+            raise Conflict(f"Account not empty: {buckets} buckets remaining")
+
+        # Ensure account does not own containers
         containers = tr[account_space.pack((CONTAINERS_FIELD,))]
         if containers.present():
             containers = self._counter_value_to_counter(containers.value)
         else:
             containers = 0
         if containers > 0:
-            raise Conflict("Account not empty")
+            raise Conflict(f"Account not empty: {containers} containers remaining")
 
         self._real_delete_account(tr, account_id)
 
@@ -791,11 +855,9 @@ class AccountBackendFdb(object):
         # Decrease accounts counter in metrics
         if not account_id.startswith(SHARDING_ACCOUNT_PREFIX):
             self._increment(tr, self.metrics_space.pack((ACCOUNTS_FIELD,)), -1)
-        # else:
-        #     Do not count sharding accounts in metrics
 
     @catch_service_errors
-    def info_account(self, account_id, **kwargs):
+    def info_account(self, account_id, **_kwargs):
         """
         Get all available information about an account.
         """
@@ -803,7 +865,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _account_info(self, tr, account_id, full=False):
+    def _account_info(self, tr, account_id, full=False, **_kwargs):
         """
         [transactional] Get all available information about an account.
         """
@@ -901,7 +963,7 @@ class AccountBackendFdb(object):
         prefix=None,
         stats=False,
         sharding_accounts=False,
-        **kwargs,
+        **_kwargs,
     ):
         """
         Get the list of accounts (except if requested, the sharding accounts
@@ -974,7 +1036,9 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _list_accounts(self, tr, start, stop, limit, filters, unpack, format_account):
+    def _list_accounts(
+        self, tr, start, stop, limit, filters, unpack, format_account, **_kwargs
+    ):
         if limit > 0:
             accounts = self._list_items(
                 tr,
@@ -992,7 +1056,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _format_account_for_listing(self, tr, account_id, account_info):
+    def _format_account_for_listing(self, tr, account_id, _account_info):
         formatted = {}
         formatted["id"] = account_id
         return formatted
@@ -1044,7 +1108,7 @@ class AccountBackendFdb(object):
         self._update_metrics_stats(tr, region, stats_delta)
 
     @catch_service_errors
-    def update_account_metadata(self, account_id, to_update, to_delete=None, **kwargs):
+    def update_account_metadata(self, account_id, to_update, to_delete=None, **_kwargs):
         """
         Update (or delete) account metadata.
 
@@ -1090,7 +1154,7 @@ class AccountBackendFdb(object):
         return True
 
     @catch_service_errors
-    def refresh_account(self, account_id, **kwargs):
+    def refresh_account(self, account_id, **_kwargs):
         if not account_id:
             raise BadRequest("Missing account")
         self._refresh_account(self.db, account_id)
@@ -1259,7 +1323,7 @@ class AccountBackendFdb(object):
                         self._set_counter(tr, self.acct_space.pack(p_key), value)
 
     @catch_service_errors
-    def flush_account(self, account_id, **kwargs):
+    def flush_account(self, account_id, **_kwargs):
         if not account_id:
             raise BadRequest("Missing account")
 
@@ -1456,7 +1520,7 @@ class AccountBackendFdb(object):
         return stats_delta
 
     @catch_service_errors
-    def get_container_info(self, account_id, cname, **kwargs):
+    def get_container_info(self, account_id, cname, **_kwargs):
         """
         Get all available information about a container, including some
         information coming from the bucket it belongs to.
@@ -1467,7 +1531,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _container_info(self, tr, account_id, cname, full=False):
+    def _container_info(self, tr, account_id, cname, full=False, **_kwargs):
         """
         [transactional] Get all available information about a container,
         including some information coming from the bucket it belongs to.
@@ -1489,8 +1553,8 @@ class AccountBackendFdb(object):
             if bname:
                 if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
                     account_id = account_id[len(SHARDING_ACCOUNT_PREFIX) :]
-                buckat_space = self.bucket_space[account_id][bname]
-                repli_enabled = tr[buckat_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
+                bucket_space = self.bucket_space[account_id][bname]
+                repli_enabled = tr[bucket_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
                 if repli_enabled.present():
                     repli_enabled = repli_enabled.decode("utf-8")
                 else:
@@ -1509,7 +1573,7 @@ class AccountBackendFdb(object):
         end_marker=None,
         region=None,
         bucket=None,
-        **kwargs,
+        **_kwargs,
     ):
         """
         Get the list of containers of the specified account.
@@ -1567,7 +1631,16 @@ class AccountBackendFdb(object):
     @fdb.transactional
     @use_snapshot_reads
     def _list_containers(
-        self, tr, account, start, stop, limit, filters, unpack, format_container
+        self,
+        tr,
+        account,
+        start,
+        stop,
+        limit,
+        filters,
+        unpack,
+        format_container,
+        **_kwargs,
     ):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
@@ -1606,7 +1679,7 @@ class AccountBackendFdb(object):
         bytes_details=None,
         autocreate_account=None,
         autocreate_container=True,
-        **kwargs,
+        **_kwargs,
     ):
         """
         Update container info and stats.
@@ -1910,7 +1983,7 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def create_bucket(
-        self, bname, account_id, region, ctime=None, autocreate_account=None, **kwargs
+        self, bname, account_id, region, ctime=None, autocreate_account=None, **_kwargs
     ):
         """
         Create the bucket if it doesn't already exist.
@@ -1990,7 +2063,7 @@ class AccountBackendFdb(object):
         self._increment(tr, self.metrics_space.pack((BUCKETS_FIELD, region)))
 
     @catch_service_errors
-    def delete_bucket(self, bname, account, region, force=False, **kwargs):
+    def delete_bucket(self, bname, account, region, force=False, **_kwargs):
         """
         Delete the account if it already exists.
         """
@@ -2056,6 +2129,26 @@ class AccountBackendFdb(object):
 
         objects = tr[bucket_space.pack((OBJECTS_FIELD,))]
         objects = self._counter_value_to_counter(objects.value)
+        # Features
+        features_space = bucket_space[FEATURE_FIELD]
+
+        features = {}
+        for k, v in tr[features_space.range()]:
+            feature, *_ = features_space.unpack(k)
+            features[feature] = v
+
+        if features:
+            features_space = self.features_space[region]
+            metrics_space = self.metrics_space[FEATURES_FIELD][region]
+            account_space = self.acct_space[account][FEATURES_FIELD][region]
+            for feature, action in features.items():
+                # Delete feature in index
+                del tr[features_space.pack((feature, account, bucket))]
+                if self._action_value_to_action(action) == FeatureAction.SET:
+                    # Decrease feature metric
+                    self._increment(tr, metrics_space.pack((feature,)), -1)
+                    self._increment(tr, account_space.pack((feature,)), -1)
+
         # Delete bucket info
         bucket_range = bucket_space.range()
         tr.clear_range(bucket_range.start, bucket_range.stop)
@@ -2135,7 +2228,7 @@ class AccountBackendFdb(object):
         end_marker=None,
         prefix=None,
         region=None,
-        **kwargs,
+        **_kwargs,
     ):
         """
         Get the list of buckets of the specified account.
@@ -2189,7 +2282,7 @@ class AccountBackendFdb(object):
     @fdb.transactional
     @use_snapshot_reads
     def _list_buckets(
-        self, tr, account, start, stop, limit, filters, unpack, format_bucket
+        self, tr, account, start, stop, limit, filters, unpack, format_bucket, **_kwargs
     ):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
@@ -2584,7 +2677,7 @@ class AccountBackendFdb(object):
         return new_marker if count > batch_size else None
 
     @catch_service_errors
-    def reserve_bucket(self, bucket, account_id, **kwargs):
+    def reserve_bucket(self, bucket, account_id, **_kwargs):
         self._reserve_bucket(self.db, bucket, account_id)
 
     @fdb.transactional
@@ -2609,7 +2702,7 @@ class AccountBackendFdb(object):
         tr[reserved_bucket_space.pack(("account",))] = account.encode("utf-8")
 
     @catch_service_errors
-    def release_bucket(self, bucket, account_id, **kwargs):
+    def release_bucket(self, bucket, account_id, **_kwargs):
         self._release_bucket(self.db, bucket, account_id)
 
     @fdb.transactional
@@ -2666,12 +2759,12 @@ class AccountBackendFdb(object):
         tr.clear(reserved_bucket_space.pack(("rtime",)))
 
     @catch_service_errors
-    def get_bucket_owner(self, bucket, **kwargs):
+    def get_bucket_owner(self, bucket, **_kwargs):
         return self._get_bucket_owner(self.db, bucket, readonly=True)
 
     @fdb.transactional
     @use_snapshot_reads
-    def _get_bucket_owner(self, tr, bucket):
+    def _get_bucket_owner(self, tr, bucket, **_kwargs):
         reserved_bucket_space = self.bucket_db_space[bucket]
 
         rtime = tr[reserved_bucket_space.pack(("rtime",))]
@@ -2686,7 +2779,7 @@ class AccountBackendFdb(object):
     @fdb.transactional
     @use_snapshot_reads
     def _get_bucket_account(
-        self, tr, bucket, account=None, check_owner=False, **kwargs
+        self, tr, bucket, account=None, check_owner=False, **_kwargs
     ):
         if not check_owner and account:
             return account
@@ -2706,6 +2799,152 @@ class AccountBackendFdb(object):
     @fdb.transactional
     def _is_element(self, tr, space, key):
         return tr[space.pack((key,))].present()
+
+    # Features ----------------------------------------------------------------
+    # {features_space}/feature/{feature}/{bucket}
+    #   => mtime: feature activation time
+    # {features_space}/metrics/{feature}
+    #   => count: number of bucket using this feature
+
+    @catch_service_errors
+    def feature_activate(
+        self, region, feature, bucket, mtime=None, account=None, **kwargs
+    ):
+        self._register_feature_action(
+            self.db,
+            region,
+            feature,
+            bucket,
+            FeatureAction.SET,
+            mtime=mtime,
+            account=account,
+            **kwargs,
+        )
+
+    @catch_service_errors
+    def feature_deactivate(
+        self, region, feature, bucket, mtime=None, account=None, **kwargs
+    ):
+        self._register_feature_action(
+            self.db,
+            region,
+            feature,
+            bucket,
+            FeatureAction.UNSET,
+            mtime=mtime,
+            account=account,
+            **kwargs,
+        )
+
+    @fdb.transactional
+    def _register_feature_action(
+        self,
+        tr,
+        region,
+        feature,
+        bucket,
+        action,
+        account=None,
+        mtime=None,
+    ):
+        # Retrieve account
+        account = self._get_bucket_account(
+            tr, bucket, account=account, check_owner=True
+        )
+
+        if mtime is None:
+            mtime = self._get_timestamp()
+
+        if region:
+            region = region.upper()
+
+        # Register action on bucket
+        feature_space = self.bucket_space[account][bucket][FEATURE_FIELD][feature]
+        actions = tr[feature_space.range()]
+        tr[feature_space.pack((mtime,))] = struct.pack("<Q", int(action))
+        actions = [(feature_space.unpack(k)[0], v) for k, v in actions]
+
+        # Determine last action and trim extra actions from history
+        last_action = FeatureAction.UNSET
+        if actions:
+            actions.sort(key=lambda x: x[0], reverse=True)
+
+            # Truncate history
+            outdated_entries = actions[FEATURE_ACTIONS_HISTORY - 1 :]
+            for oldest, _ in outdated_entries:
+                del tr[feature_space.pack((oldest,))]
+
+            _, last_action = actions[0]
+            last_action = self._action_value_to_action(last_action)
+
+        if last_action != action:
+            delta = 0
+            # Propagate action to other space
+            feature_space = self.features_space[region][feature]
+            if action == FeatureAction.SET:
+                # Add bucket to features index
+                tr[feature_space.pack((account, bucket))] = b""
+                delta = 1
+            elif action == FeatureAction.UNSET:
+                # Remove bucket from features index
+                del tr[feature_space.pack((account, bucket))]
+                delta = -1
+            # Update account stats
+            account_space = self.acct_space[account]
+            self._increment(
+                tr, account_space.pack((FEATURES_FIELD, region, feature)), delta
+            )
+            # Update metrics
+            self._increment(
+                tr, self.metrics_space.pack((FEATURES_FIELD, region, feature)), delta
+            )
+
+    @catch_service_errors
+    def feature_list_buckets(self, region, feature, limit=1000, marker=None, **_kwargs):
+
+        region = region.upper()
+        features_space = self.features_space[region][feature]
+
+        if marker is not None:
+            marker = marker.split("|")
+            if len(marker) != 2:
+                raise BadRequest(
+                    f"Marker is not valid. Expected: <account>|<bucket> got: {marker}"
+                )
+
+        start, stop = self._get_start_and_stop(features_space, marker=marker)
+        buckets = self._feature_list_buckets(
+            self.db,
+            start,
+            stop,
+            limit,
+            features_space.unpack,
+            read_only=True,
+        )
+        next_marker = None
+        if len(buckets) >= limit:
+            next_marker = buckets[-1]
+            next_marker = f"{next_marker[ACCOUNT_FIELD]}|{next_marker[BUCKET_FIELD]}"
+        return next_marker, buckets
+
+    @fdb.transactional
+    @use_snapshot_reads
+    def _feature_list_buckets(self, tr, start, stop, limit, unpack, **_kwargs):
+        buckets = []
+        if limit > 0:
+            iterator = tr.get_range(start, stop)
+
+            for key, _ in iterator:
+                account, bucket, *key = unpack(key)
+                buckets.append(
+                    {
+                        ACCOUNT_FIELD: account,
+                        BUCKET_FIELD: bucket,
+                    }
+                )
+                if len(buckets) >= limit:
+                    break
+        return buckets
 
     # KMS ---------------------------------------------------------------------
     # {kms_space}/{account}/{bucket}/secret/{secret_id}
@@ -2729,7 +2968,7 @@ class AccountBackendFdb(object):
         )
 
     @fdb.transactional
-    def _delete_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
+    def _delete_bucket_secret(self, tr, account, bucket, secret_id, **_kwargs):
         bucket_space = self.kms_space[account][bucket]
         tr.clear(bucket_space.pack(("secret", secret_id)))
         secret_range = bucket_space["secret"][secret_id].range()
@@ -2746,7 +2985,7 @@ class AccountBackendFdb(object):
         )
 
     @fdb.transactional
-    def _get_bucket_secret(self, tr, account, bucket, secret_id, **kwargs):
+    def _get_bucket_secret(self, tr, account, bucket, secret_id, **_kwargs):
         bucket_space = self.kms_space[account][bucket]["secret"]
         secret = tr[bucket_space.pack((secret_id,))]
         if not secret.present():
@@ -2768,7 +3007,7 @@ class AccountBackendFdb(object):
         return self._list_bucket_secrets(self.db, account, bucket, **kwargs)
 
     @fdb.transactional
-    def _list_bucket_secrets(self, tr, account, bucket, **kwargs):
+    def _list_bucket_secrets(self, tr, account, bucket, **_kwargs):
         secrets_space = self.kms_space[account][bucket]["secret"]
         secrets_range = secrets_space.range()
         iterator = tr.get_range(secrets_range.start, secrets_range.stop)
@@ -2817,7 +3056,7 @@ class AccountBackendFdb(object):
         secret_id,
         kms_secrets,
         incomplete,
-        **kwargs,
+        **_kwargs,
     ):
         secret_space = self.kms_space[account][bucket]["secret"]
         if tr[secret_space.pack((secret_id,))].present():

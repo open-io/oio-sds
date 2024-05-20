@@ -30,7 +30,11 @@ from time import sleep, time
 from werkzeug.exceptions import BadRequest, Conflict
 
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
-from oio.account.backend_fdb import AccountBackendFdb
+from oio.account.backend_fdb import (
+    AccountBackendFdb,
+    FeatureAction,
+    FEATURE_ACTIONS_HISTORY,
+)
 from oio.account.common_fdb import CommonFdb
 from oio.common.timestamp import Timestamp
 
@@ -69,6 +73,8 @@ class TestAccountBackend(BaseTestCase):
             "buckets",
             "accounts",
             "objects-s3",
+            "features",
+            "feature",
         ):
             value = struct.pack("<q", int(value))
         else:
@@ -87,6 +93,21 @@ class TestAccountBackend(BaseTestCase):
             expected_info_info[item] = expected_info
         return expected_info_info
 
+    def _check_metrics(self, metrics_info):
+        metrics_info = self._items_info_expected_items_info(metrics_info)
+
+        metrics_range = self.backend.metrics_space.range()
+        iterator = self.backend.db.get_range(
+            metrics_range.start,
+            metrics_range.stop,
+            streaming_mode=fdb.StreamingMode.want_all,
+        )
+        current_metrics_info = {}
+        for key, value in iterator:
+            key = self.backend.metrics_space.unpack(key)
+            current_metrics_info[key] = value
+        self.assertDictEqual(metrics_info, current_metrics_info)
+
     def _check_backend(
         self,
         metrics_info,
@@ -95,7 +116,7 @@ class TestAccountBackend(BaseTestCase):
         containers_info,
         deleted_containers_info,
     ):
-        metrics_info = self._items_info_expected_items_info(metrics_info)
+
         accounts_info = self._items_info_expected_items_info(accounts_info)
         buckets_info = self._items_info_expected_items_info(buckets_info)
         containers_info = self._items_info_expected_items_info(containers_info)
@@ -259,7 +280,9 @@ class TestAccountBackend(BaseTestCase):
             else:
                 current_mtime = struct.unpack("<q", current_mtime)[0]
                 self.assertGreater(current_mtime, 0)
-        self.assertDictEqual(accounts_info, current_accounts_info)
+        self.assertDictEqual(
+            accounts_info, current_accounts_info, "Account info mismatch"
+        )
 
         # Check accounts listing
         accounts_range = self.backend.accts_space.range()
@@ -276,17 +299,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertSetEqual(set(accounts_info), current_accounts)
 
         # Check metrics info
-        metrics_range = self.backend.metrics_space.range()
-        iterator = self.backend.db.get_range(
-            metrics_range.start,
-            metrics_range.stop,
-            streaming_mode=fdb.StreamingMode.want_all,
-        )
-        current_metrics_info = {}
-        for key, value in iterator:
-            key = self.backend.metrics_space.unpack(key)
-            current_metrics_info[key] = value
-        self.assertDictEqual(metrics_info, current_metrics_info)
+        self._check_metrics(metrics_info)
 
     def _create_scenario(self, scenario):
         mtime = Timestamp().timestamp
@@ -372,10 +385,7 @@ class TestAccountBackend(BaseTestCase):
                         ("region",): region,
                         ("mtime",): mtime,
                     }
-                    details = {
-                        "bytes": None,
-                        "objects": None,
-                    }
+                    details = {}
                     for field in ("bytes", "objects"):
                         if isinstance(container[field], dict):
                             policies = container[field]
@@ -388,10 +398,8 @@ class TestAccountBackend(BaseTestCase):
                             _increment_info(account_info, field, None, None, value)
                             if not policy:
                                 continue
-                            if field in details:
-                                if not details[field]:
-                                    details[field] = {}
-                                details[field][policy] = value
+                            details_field = details.setdefault(field, {})
+                            details_field[policy] = value
                             _increment_info(container_info, field, None, policy, value)
                             _increment_info(bucket_info, field, None, policy, value)
                             _increment_info(account_info, field, region, policy, value)
@@ -415,8 +423,8 @@ class TestAccountBackend(BaseTestCase):
                         container_info[("objects",)],
                         container_info[("bytes",)],
                         region=region,
-                        objects_details=details["objects"],
-                        bytes_details=details["bytes"],
+                        objects_details=details.get("objects"),
+                        bytes_details=details.get("bytes"),
                         bucket_name=bucket["name"],
                     )
 
@@ -545,6 +553,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 1},
                         "bytes-details": {"SINGLE": 1},
+                        "features-details": {},
                     }
                 },
             },
@@ -577,6 +586,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 1},
                         "bytes-details": {"SINGLE": 1},
+                        "features-details": {},
                     }
                 },
             },
@@ -616,6 +626,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 2},
                         "bytes-details": {"SINGLE": 2},
+                        "features-details": {},
                     }
                 },
             },
@@ -646,6 +657,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 1},
                         "bytes-details": {"SINGLE": 1},
+                        "features-details": {},
                     }
                 },
             },
@@ -676,6 +688,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 0},
                         "bytes-details": {"SINGLE": 0},
+                        "features-details": {},
                     }
                 },
             },
@@ -724,6 +737,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 3},
                         "bytes-details": {"SINGLE": 30},
+                        "features-details": {},
                     }
                 },
             },
@@ -771,6 +785,7 @@ class TestAccountBackend(BaseTestCase):
                         "shards": 0,
                         "objects-details": {"SINGLE": 0},
                         "bytes-details": {"SINGLE": 0},
+                        "features-details": {},
                     }
                 },
             },
@@ -3916,3 +3931,245 @@ class TestAccountBackend(BaseTestCase):
             bytes_details={"THREECOPIES": 20, "EC": 21},
         )
         self._check_backend(*backend_info)
+
+    def test_feature_history(self):
+        account_id = "test"
+        region = "LOCALHOST"
+        bucket = "feature-history-bck-" + random_str(16)
+        feature = "foobar"
+        ctime = Timestamp().timestamp
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        self.assertTrue(
+            self.backend.create_bucket(bucket, account_id, region, ctime=ctime)
+        )
+        mtime = 1
+        actions = {}
+        for i in range(FEATURE_ACTIONS_HISTORY + 1):
+            self.backend.feature_activate(region, feature, bucket, mtime=mtime)
+            if i >= 1:
+                actions[("feature", feature, mtime)] = FeatureAction.SET
+            mtime += 1
+
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("features", region, feature): 1,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                    ("features", region, feature): 1,
+                }
+            },
+            {
+                (account_id, bucket): {
+                    ("account",): account_id,
+                    ("bytes",): 0,
+                    ("containers",): 0,
+                    ("ctime",): ctime,
+                    ("objects",): 0,
+                    ("region",): region,
+                    **actions,
+                }
+            },
+            {},
+            {},
+        )
+
+        self._check_backend(*backend_info)
+
+    def test_feature_activate_deactivate(self):
+        account_id = "test"
+        region = "LOCALHOST"
+        bucket = "feature-activate-bck-" + random_str(16)
+        feature = "foo"
+        ctime = Timestamp().timestamp
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        self.assertTrue(
+            self.backend.create_bucket(bucket, account_id, region, ctime=ctime)
+        )
+        # Activate
+        self.backend.feature_activate(region, feature, bucket, mtime=1)
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("features", region, feature): 1,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                    ("features", region, feature): 1,
+                }
+            },
+            {
+                (account_id, bucket): {
+                    ("account",): account_id,
+                    ("bytes",): 0,
+                    ("containers",): 0,
+                    ("ctime",): ctime,
+                    ("objects",): 0,
+                    ("region",): region,
+                    ("feature", feature, 1): FeatureAction.SET,
+                }
+            },
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+        # Deactivate again
+        self.backend.feature_deactivate(region, feature, bucket, mtime=2)
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("features", region, feature): 0,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                    ("features", region, feature): 0,
+                }
+            },
+            {
+                (account_id, bucket): {
+                    ("account",): account_id,
+                    ("bytes",): 0,
+                    ("containers",): 0,
+                    ("ctime",): ctime,
+                    ("objects",): 0,
+                    ("region",): region,
+                    ("feature", feature, 1): FeatureAction.SET,
+                    ("feature", feature, 2): FeatureAction.UNSET,
+                }
+            },
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+        # Deactivate
+        self.backend.feature_deactivate(region, feature, bucket, mtime=3)
+        backend_info = (
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("features", region, feature): 0,
+                ("objects-s3", region): 0,
+            },
+            {
+                (account_id,): {
+                    ("id",): account_id,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 1,
+                    ("buckets", region): 1,
+                    ("objects-s3", region): 0,
+                    ("features", region, feature): 0,
+                }
+            },
+            {
+                (account_id, bucket): {
+                    ("account",): account_id,
+                    ("bytes",): 0,
+                    ("containers",): 0,
+                    ("ctime",): ctime,
+                    ("objects",): 0,
+                    ("region",): region,
+                    ("feature", feature, 1): FeatureAction.SET,
+                    ("feature", feature, 2): FeatureAction.UNSET,
+                    ("feature", feature, 3): FeatureAction.UNSET,
+                }
+            },
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+
+    def test_list_buckets_per_feature(self):
+        region = "LOCALHOST"
+        account = "test"
+        bucket_prefix = "bucket-"
+        feature_prefix = "feature-"
+        ctime = Timestamp().timestamp
+        expected_list = {}
+        for i in range(20):
+            bucket = f"{bucket_prefix}{i:02d}"
+            feature = f"{feature_prefix}{i//10}"
+            self.backend.create_bucket(bucket, account, region, ctime=ctime)
+            self.backend.feature_activate(region, feature, bucket, mtime=1)
+            expected = expected_list.setdefault(feature, [])
+            expected.append((account, bucket))
+
+        for feature, expected_buckets in expected_list.items():
+            marker = None
+            for i in range(4):
+
+                marker, buckets = self.backend.feature_list_buckets(
+                    region, feature, limit=3, marker=marker
+                )
+                buckets = [(v["account"], v["bucket"]) for v in buckets]
+                self.assertListEqual(buckets, expected_buckets[i * 3 : i * 3 + 3])
+                if marker is None:
+                    self.assertEqual(i, 3)
+                    break
+            else:
+                self.fail(f"Listing for feature {feature} is too long")
+
+    def test_feature_cleanup(self):
+        region = "LOCALHOST"
+        account = "test"
+        bucket = "bucket"
+        feature = "foobar"
+
+        self.assertEqual(self.backend.create_account(account), account)
+        self.backend.create_bucket(bucket, account, region)
+        self.backend.feature_activate(region, feature, bucket, mtime=1, account=account)
+
+        _, buckets = self.backend.feature_list_buckets(region, feature, limit=3)
+        self.assertListEqual(buckets, [{"account": account, "bucket": bucket}])
+
+        self._check_metrics(
+            {
+                ("accounts",): 1,
+                ("buckets", region): 1,
+                ("features", region, feature): 1,
+                ("objects-s3", region): 0,
+            },
+        )
+
+        self.assertTrue(self.backend.delete_bucket(bucket, account, region))
+
+        _, buckets = self.backend.feature_list_buckets(region, feature, limit=3)
+        self.assertListEqual(buckets, [])
+        self._check_metrics(
+            {
+                ("accounts",): 1,
+                ("buckets", region): 0,
+                ("features", region, feature): 0,
+                ("objects-s3", region): 0,
+            },
+        )

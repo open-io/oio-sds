@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -142,4 +142,45 @@ class BucketClient(ServiceClient):
         Get the bucket owner.
         """
         _resp, body = self.bucket_request(bucket, "GET", "get-owner", **kwargs)
+        return body
+
+    def bucket_feature_activate(self, bucket, account, feature, **kwargs):
+        """
+        Activate feature for bucket.
+        """
+        params = {
+            "account": account,
+            "feature": feature,
+        }
+        _resp, _body = self.bucket_request(
+            bucket, "POST", "feature/activate", params=params, **kwargs
+        )
+
+    def bucket_feature_deactivate(self, bucket, account, feature, **kwargs):
+        """
+        Deactivate feature for bucket.
+        """
+        params = {
+            "account": account,
+            "feature": feature,
+        }
+        _resp, _body = self.bucket_request(
+            bucket, "POST", "feature/deactivate", params=params, **kwargs
+        )
+
+    def buckets_list_by_feature(
+        self, feature, limit=None, region=None, marker=None, **kwargs
+    ):
+        """
+        Get the list of buckets for which the feature is active
+        """
+        params = {
+            "limit": limit,
+            "marker": marker,
+            "region": region,
+        }
+
+        _resp, body = self.bucket_request(
+            feature, "GET", "feature/list-buckets", params=params, **kwargs
+        )
         return body

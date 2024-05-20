@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -369,6 +369,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 0,
@@ -401,6 +402,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 0, "TWOCOPIES": 0},
                     "bytes-details": {"SINGLE": 0, "TWOCOPIES": 0},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 0,
                     "buckets": 0,
@@ -408,6 +410,7 @@ class TestAccountServer(TestAccountServerBase):
                 "TEST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 0,
@@ -436,6 +439,7 @@ class TestAccountServer(TestAccountServerBase):
             "mtime": Timestamp().timestamp,
             "objects": 12,
             "bytes": 42,
+            "features-details": {},
             "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
             "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
             "bucket": "foo",
@@ -467,6 +471,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
@@ -519,6 +524,7 @@ class TestAccountServer(TestAccountServerBase):
             "mtime": Timestamp().timestamp,
             "objects": 12,
             "bytes": 42,
+            "features-details": {},
             "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
             "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
             "bucket": "foo",
@@ -547,6 +553,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
@@ -582,6 +589,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 0,
@@ -590,6 +598,7 @@ class TestAccountServer(TestAccountServerBase):
                 "TEST": {
                     "objects-details": {},
                     "bytes-details": {},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 0,
                     "buckets": 1,
@@ -626,6 +635,7 @@ class TestAccountServer(TestAccountServerBase):
                 "LOCALHOST": {
                     "objects-details": {"SINGLE": 0, "TWOCOPIES": 0},
                     "bytes-details": {"SINGLE": 0, "TWOCOPIES": 0},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 0,
                     "buckets": 0,
@@ -634,6 +644,7 @@ class TestAccountServer(TestAccountServerBase):
                 "TEST": {
                     "objects-details": {"SINGLE": 5, "TWOCOPIES": 7},
                     "bytes-details": {"SINGLE": 30, "TWOCOPIES": 12},
+                    "features-details": {},
                     "shards": 0,
                     "containers": 1,
                     "buckets": 1,
@@ -1730,6 +1741,7 @@ class TestAccountMetrics(TestAccountServerBase):
                         "containers": 1,
                         "shards": 0,
                         "buckets": 0,
+                        "features-details": {},
                         "bytes-details": {"SINGLE": 20},
                         "objects-details": {"SINGLE": 1},
                     }
@@ -1755,6 +1767,7 @@ class TestAccountMetrics(TestAccountServerBase):
                         "containers": 0,
                         "shards": 0,
                         "buckets": 0,
+                        "features-details": {},
                         "bytes-details": {"SINGLE": 0},
                         "objects-details": {"SINGLE": 0},
                     }
@@ -1791,6 +1804,7 @@ class TestAccountMetrics(TestAccountServerBase):
                         "containers": 1,
                         "shards": 0,
                         "buckets": 0,
+                        "features-details": {},
                         "objects-details": {"class1": 1, "class2": 2},
                         "bytes-details": {"class1": 30, "class2": 10},
                     }
@@ -1819,6 +1833,7 @@ class TestAccountMetrics(TestAccountServerBase):
                         "containers": 2,
                         "shards": 0,
                         "buckets": 0,
+                        "features-details": {},
                         "objects-details": {"class1": 1, "class2": 3, "class3": 5},
                         "bytes-details": {"class1": 30, "class2": 20, "class3": 11},
                     }
@@ -1862,6 +1877,7 @@ class TestAccountMetrics(TestAccountServerBase):
                         "containers": 1,
                         "shards": 0,
                         "buckets": 0,
+                        "features-details": {},
                         "objects-details": {"class2": 1, "class3": 5},
                         "bytes-details": {"class2": 10, "class3": 11},
                     }
