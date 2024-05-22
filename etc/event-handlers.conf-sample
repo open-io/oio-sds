@@ -31,7 +31,7 @@ pipeline = account_update
 
 [handler:storage.container.update]
 # pipeline = replication
-pipeline =
+pipeline = account_update
 
 [handler:storage.container.deleted]
 # pipeline = account_update replication
@@ -75,6 +75,8 @@ use = egg:oio#account_update
 # Timeouts to the account service, in seconds
 #connection_timeout=2.0
 #read_timeout=30.0
+# Features to track, comma separated list
+#features_whitelist = lifecycle,website
 
 # -----------------------------------------------------------------
 # Index meta2 or rawx content into rdir services

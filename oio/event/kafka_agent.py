@@ -15,6 +15,7 @@
 import time
 
 from oio.account.client import AccountClient
+from oio.account.bucket_client import BucketClient
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.conscience.client import ConscienceClient
@@ -55,6 +56,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
         acct_refresh_interval = float_value(
             self.conf.get("acct_refresh_interval"), 3600.0
         )
+        bucket_refresh_interval = float_value(
+            self.conf.get("bucket_refresh_interval"), 3600.0
+        )
         rdir_refresh_interval = float_value(
             self.conf.get("rdir_refresh_interval"), 3600.0
         )
@@ -66,6 +70,11 @@ class KafkaEventWorker(KafkaConsumerWorker):
             logger=self.logger,
             refresh_delay=acct_refresh_interval,
             pool_connections=3,  # 1 account, 1 proxy, 1 extra
+        )
+        self.app_env["bucket_client"] = BucketClient(
+            self.conf,
+            refresh_delay=bucket_refresh_interval,
+            pool_manager=self.app_env["account_client"].pool_manager,
         )
         rdir_kwargs = {k: v for k, v in self.conf.items() if k.startswith("rdir_")}
         self.app_env["rdir_client"] = RdirClient(

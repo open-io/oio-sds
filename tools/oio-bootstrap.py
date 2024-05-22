@@ -1466,7 +1466,7 @@ pipeline = notify_deleted
 pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.update]
-pipeline = ${PRESERVE}
+pipeline = account_update ${PRESERVE}
 
 [handler:storage.container.deleted]
 pipeline = account_update ${PRESERVE}
@@ -1499,6 +1499,7 @@ topic = oio-rebuild
 use = egg:oio#account_update
 connection_timeout=1.0
 read_timeout=15.0
+features_whitelist=lifecycle,website,replication,cors
 
 [filter:volume_index]
 use = egg:oio#volume_index

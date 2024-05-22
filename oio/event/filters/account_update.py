@@ -34,11 +34,7 @@ from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
 
-CONTAINER_EVENTS = [
-    EventTypes.CONTAINER_STATE,
-    EventTypes.CONTAINER_NEW,
-    EventTypes.CONTAINER_DELETED,
-]
+SYSMETA_S3API_PREFIX = "X-Container-Sysmeta-S3Api-"
 
 
 class AccountUpdateFilter(Filter):
@@ -50,6 +46,7 @@ class AccountUpdateFilter(Filter):
 
     def init(self):
         self.account = self.app_env["account_client"]
+        self.bucket = self.app_env["bucket_client"]
         self.connection_timeout = float_value(
             self.conf.get("connection_timeout"), CONNECTION_TIMEOUT
         )
@@ -59,6 +56,9 @@ class AccountUpdateFilter(Filter):
             raise OioException("Missing region key in namespace conf")
 
         self.retry_delay = get_retry_delay(self.conf)
+        self.features_whitelist = (
+            self.conf.get("features_whitelist", "").lower().split(",")
+        )
 
     def process(self, env, cb):
         event = Event(env)
@@ -69,9 +69,7 @@ class AccountUpdateFilter(Filter):
             account = url.get("account")
             if account in HIDDEN_ACCOUNTS:
                 pass
-            elif event.event_type in (EventTypes.CONTAINER_UPDATE,):
-                pass
-            elif event.event_type in CONTAINER_EVENTS:
+            elif event.event_type in EventTypes.CONTAINER_EVENTS:
                 container = url.get("user")
                 mtime = event.when / 1000000.0  # convert to seconds
                 if event.event_type in (
@@ -109,6 +107,37 @@ class AccountUpdateFilter(Filter):
                         read_timeout=self.read_timeout,
                         headers=headers,
                     )
+                elif event.event_type == EventTypes.CONTAINER_UPDATE:
+                    data = event.data
+                    properties = data.get("properties")
+                    for prop_key, prop_value in properties.items():
+                        if not prop_key.startswith(SYSMETA_S3API_PREFIX):
+                            continue
+                        feature = prop_key[len(SYSMETA_S3API_PREFIX) :].lower()
+                        if not feature:
+                            continue
+                        if feature not in self.features_whitelist:
+                            continue
+                        account = event.url.get("account")
+                        bucket = event.url.get("user")
+                        if prop_value:
+                            self.logger.info(
+                                "Activate feature (account=%s, bucket=%s, feature=%s)",
+                                account,
+                                bucket,
+                                feature,
+                            )
+                            func = self.bucket.bucket_feature_activate
+                        else:
+                            self.logger.info(
+                                "Deactivate feature (account=%s, bucket=%s, "
+                                + "feature=%s)",
+                                account,
+                                bucket,
+                                feature,
+                            )
+                            func = self.bucket.bucket_feature_deactivate
+                        func(bucket, account, feature, mtime=event.when)
             elif event.event_type == EventTypes.ACCOUNT_SERVICES:
                 if isinstance(event.data, list):
                     # Legacy format: list of services
@@ -139,6 +168,7 @@ class AccountUpdateFilter(Filter):
                             headers[REQID_HEADER],
                             exc,
                         )
+
         except OioTimeout as exc:
             msg = f"account update failure: {exc}"
             resp = RetryableEventError(
