@@ -69,7 +69,7 @@ class BlobMoverWorker(object):
         self.limit = int_value(conf.get("limit"), 0)
         self.allow_links = true_value(conf.get("allow_links", True))
         self.adjacent_mode = true_value(conf.get("adjacent_mode", True))
-        self.blob_client = BlobClient(conf, watchdog=watchdog)
+        self.blob_client = BlobClient(conf, logger=logger, watchdog=watchdog)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(
             conf, container_client=self.container_client, blob_client=self.blob_client

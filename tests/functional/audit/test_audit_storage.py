@@ -78,7 +78,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.auditor = BlobAuditorWorker(self.conf, get_logger(None), None)
         self.container_client = ContainerClient(self.conf)
-        self.blob_client = BlobClient(conf=self.conf, watchdog=self.watchdog)
+        self.blob_client = BlobClient(
+            conf=self.conf, logger=self.logger, watchdog=self.watchdog
+        )
 
         self.container_client.container_create(self.account, self.ref)
         self.content = TestContent(self.account, self.ref)
