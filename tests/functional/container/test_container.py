@@ -34,6 +34,7 @@ from tests.utils import (
 from oio.common import exceptions as exc
 from oio.common.constants import (
     DELETEMARKER_HEADER,
+    ENDUSERREQUEST_HEADER,
     OIO_DB_STATUS_NAME,
     OIO_DB_ENABLED,
     OIO_DB_FROZEN,
@@ -1284,32 +1285,47 @@ class TestMeta2Contents(BaseTestCase):
         except Exception:
             pass
 
-    def valid_chunks(self, tab):
+    def valid_chunks(self, tab, end_user_request):
         self.assertIsInstance(tab, list)
         for chunk in tab:
             self.assertIsInstance(chunk, dict)
+            expected_keys = ["url", "pos", "hash", "size", "score", "real_url"]
+            if not end_user_request:
+                expected_keys.append("internal_url")
             self.assertListEqual(
                 sorted(chunk.keys()),
-                sorted(["url", "pos", "hash", "size", "score", "real_url"]),
+                sorted(expected_keys),
             )
             self.assertIsInstance(chunk["size"], int)
         return True
 
-    def test_prepare(self):
+    def _test_prepare(self, end_user_request=False):
         params = self.param_content(self.ref, random_content())
+        headers = {}
+        if end_user_request:
+            headers[ENDUSERREQUEST_HEADER] = True
 
-        resp = self.request("POST", self.url_content("prepare"), params=params)
+        resp = self.request(
+            "POST", self.url_content("prepare"), params=params, headers=headers
+        )
         self.assertError(resp, 400, 400)
         # A content/prepare now works despite the container is not created
         resp = self.request(
             "POST",
             self.url_content("prepare"),
             params=params,
+            headers=headers,
             data=json.dumps({"size": 1024}),
         )
-        self.assertTrue(self.valid_chunks(self.json_loads(resp.data)))
+        self.assertTrue(self.valid_chunks(self.json_loads(resp.data), end_user_request))
         # TODO test /content/prepare with additional useless parameters
         # TODO test /content/prepare with invalid sizes
+
+    def test_prepare(self):
+        self._test_prepare()
+
+    def test_prepare_client_request(self):
+        self._test_prepare(True)
 
     def test_create_without_content_id(self):
         headers = {"X-oio-action-mode": "autocreate"}
