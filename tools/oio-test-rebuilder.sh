@@ -347,7 +347,7 @@ resolve_chunk()
   NETLOC="${ID_TO_NETLOC[$ID]}"
   if [ -z "$NETLOC" ]
   then
-    NETLOC=$($CLI cluster resolve -f value rawx "$ID")
+    NETLOC=$($CLI cluster resolve -f value rawx "$ID" | head -n "1")
     ID_TO_NETLOC[$ID]="$NETLOC"
   fi
   echo "${1/$ID/$NETLOC}"
@@ -374,6 +374,9 @@ remove_rawx()
   SERVICE="${RAWX_LOC_TO_REBUILD##*/}"
   echo >&2 "Stop the rawx ${RAWX_ID_TO_REBUILD}"
   ${OPENIOCTL} stop "@${RAWX_IP_TO_REBUILD}" > /dev/null
+  INTERNAl_RAWX_IP=$($CLI cluster resolve -f value rawx $RAWX_ID_TO_REBUILD | tail -n "1")
+  echo >&2 "Stop the internal rawx ${RAWX_ID_TO_REBUILD}"
+  ${OPENIOCTL} stop "@${INTERNAl_RAWX_IP}" > /dev/null
 
   # Extract the prefix of all rawx paths
   # /home/<user>/.oio/sds/data/OPENIO-rawx-9 -> /home/<user>/.oio/sds/data/OPENIO-rawx-
@@ -390,7 +393,17 @@ remove_rawx()
 
   echo >&2 "Restart the rawx ${RAWX_ID_TO_REBUILD}"
   ${OPENIOCTL} restart "@${RAWX_IP_TO_REBUILD}" > /dev/null
+  echo >&2 "Restart the internal rawx ${RAWX_ID_TO_REBUILD}"
+  ${OPENIOCTL} restart "@${INTERNAl_RAWX_IP}" > /dev/null
   ${CLI} cluster wait -s 30 rawx > /dev/null
+  MAX_WAITING="30"
+  for i in $(seq 1 "$MAX_WAITING"); do
+    RESP_CODE=$(curl --write-out %{http_code} --silent --output /dev/null -X GET "http://${INTERNAl_RAWX_IP}/info")
+    if [[ $RESP_CODE -eq 200 ]]; then
+      break
+    fi
+    sleep 1
+  done
 
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"
 }
