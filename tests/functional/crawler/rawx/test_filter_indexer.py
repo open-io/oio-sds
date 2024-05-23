@@ -53,7 +53,9 @@ class TestBlobIndexer(BaseTestCase):
     def setUp(self):
         super(TestBlobIndexer, self).setUp()
         self.rdir_client = self.rdir
-        self.blob_client = BlobClient(self.conf, watchdog=self.watchdog)
+        self.blob_client = BlobClient(
+            self.conf, logger=self.logger, watchdog=self.watchdog
+        )
         _, self.rawx_path, rawx_addr, _ = self.get_service_url("rawx")
         services = self.conscience.all_services("rawx")
         self.rawx_id = None

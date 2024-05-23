@@ -41,7 +41,9 @@ class ServiceDecommissionTest(CliTestCase):
     def setUp(self):
         super().setUp()
         self._containers = []
-        self.blob_client = BlobClient(conf=self.conf, watchdog=self.watchdog)
+        self.blob_client = BlobClient(
+            conf=self.conf, logger=self.logger, watchdog=self.watchdog
+        )
 
     def create_objects(self, cname, n_obj=10, reqid=None):
         self.clean_later(cname)

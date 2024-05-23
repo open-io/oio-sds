@@ -123,7 +123,9 @@ class ContentRepairerWorker(ToolWorker):
         self.chunk_operator = ChunkOperator(
             self.conf, logger=self.logger, watchdog=self.tool.watchdog
         )
-        self.blob_client = BlobClient(self.conf, watchdog=self.tool.watchdog)
+        self.blob_client = BlobClient(
+            self.conf, logger=self.logger, watchdog=self.tool.watchdog
+        )
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
         self.read_all_available_sources = self.conf.get(

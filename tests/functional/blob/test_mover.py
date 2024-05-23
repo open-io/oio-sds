@@ -94,7 +94,10 @@ class TestBlobMover(BaseTestCase):
         chunk_id = orig_chunk["url"].split("/")[3]
 
         mover = BlobMoverWorker(
-            self.conf, None, self.rawx_volumes[chunk_volume], watchdog=self.watchdog
+            self.conf,
+            self.logger,
+            self.rawx_volumes[chunk_volume],
+            watchdog=self.watchdog,
         )
         meta, stream = mover.blob_client.chunk_get(orig_chunk["url"])
         data = b"".join(stream)
@@ -247,7 +250,9 @@ class TestBlobMover(BaseTestCase):
                     locked_svc.append(rawx)
             self._lock_services("rawx", locked_svc, wait=2.0)
             self._reload_proxy()
-        mover = BlobMoverWorker(self.conf, None, volume_path, watchdog=self.watchdog)
+        mover = BlobMoverWorker(
+            self.conf, self.logger, volume_path, watchdog=self.watchdog
+        )
         mover.process()
         if no_adjacent_services:
             # Unlock rawx services
