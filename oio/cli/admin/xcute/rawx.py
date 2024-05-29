@@ -62,7 +62,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         parser.add_argument(
             "--allow-frozen-container",
             action="store_true",
-            help="Allow rebuilding a chunk in a frozen container.",
+            help="Deprecated",
         )
         parser.add_argument(
             "--set-incident-date",
@@ -93,7 +93,6 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "rawx_timeout": parsed_args.rawx_timeout,
             "dry_run": parsed_args.dry_run,
             "try_chunk_delete": parsed_args.delete_faulty_chunks,
-            "allow_frozen_container": parsed_args.allow_frozen_container,
             "set_incident_date": parsed_args.set_incident_date,
             "set_specific_incident_date": parsed_args.set_specific_incident_date,
         }

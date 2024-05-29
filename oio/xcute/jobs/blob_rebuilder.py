@@ -108,11 +108,6 @@ class RawxRebuildJob(XcuteRdirJob):
             job_params.get("try_chunk_delete"), cls.DEFAULT_TRY_CHUNK_DELETE
         )
 
-        # TODO(FVE): remove this once every xcute worker is up-to-date
-        sanitized_job_params["allow_frozen_container"] = boolean_value(
-            job_params.get("allow_frozen_container"), cls.DEFAULT_ALLOW_FROZEN_CT
-        )
-
         set_specific_incident_date = int_value(
             job_params.get("set_specific_incident_date"), None
         )
