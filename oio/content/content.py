@@ -51,6 +51,7 @@ class Content(object):
         self.conf = conf
         self.container_id = container_id
         self.metadata = metadata
+        self.extra_properties = metadata.get("extra_properties")
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
         self.logger = logger or get_logger(self.conf)
@@ -233,6 +234,8 @@ class Content(object):
         sysmeta["full_path"] = self.full_path
         sysmeta["content_path"] = self.path
         sysmeta["container_id"] = self.container_id
+        if self.extra_properties:
+            sysmeta["extra_properties"] = self.extra_properties
         return sysmeta
 
     def _create_object(self, **kwargs):

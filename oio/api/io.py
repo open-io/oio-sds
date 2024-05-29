@@ -25,7 +25,7 @@ from six import PY2, text_type
 from six.moves.urllib_parse import urlparse
 
 from oio.common import exceptions as exc, green
-from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, REQID_HEADER, CHUNK_XATTR_EXTRA_PREFIX
 from oio.common.fullpath import decode_fullpath
 from oio.common.http import (
     parse_content_type,
@@ -919,6 +919,7 @@ class MetachunkWriter(_MetachunkWriter):
         chunk_buffer_min=32768,
         chunk_buffer_max=262144,
         perfdata=None,
+        headers=None,
         **_kwargs
     ):
         super(MetachunkWriter, self).__init__(
@@ -929,6 +930,11 @@ class MetachunkWriter(_MetachunkWriter):
             **_kwargs
         )
         self.sysmeta = sysmeta
+        self.headers = headers or {}
+        extra_properties = self.sysmeta.get("extra_properties")
+        if extra_properties and isinstance(extra_properties, dict):
+            for key, value in extra_properties.items():
+                self.headers[CHUNK_XATTR_EXTRA_PREFIX + key] = value
         if self.storage_method and "cca" in self.storage_method.params:
             self.chunk_checksum_algo = self.storage_method.params["cca"]
         else:

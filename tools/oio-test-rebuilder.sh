@@ -375,6 +375,13 @@ remove_rawx()
   echo >&2 "Stop the rawx ${RAWX_ID_TO_REBUILD}"
   ${OPENIOCTL} stop "@${RAWX_IP_TO_REBUILD}" > /dev/null
 
+  # Extract the prefix of all rawx pathes
+  # /home/<user>/.oio/sds/data/OPENIO-rawx-9 -> /home/<user>/.oio/sds/data/OPENIO-rawx-
+  PREFIX_ALL_RAWX=$(python -c "v='${RAWX_LOC_TO_REBUILD}'; print(v[:v.rfind('-') + 1])")
+  # Add extra metadata in extended attributes to all chunks on all rawxes
+  /usr/bin/find "${PREFIX_ALL_RAWX}"* -type f ${RAWX_FIND_OPT} -exec bash -c \
+      "setfattr -n \"user.oio.ext.foo\" -v \"bar\" {}" \;
+
   echo >&2 "Remove data from the rawx ${RAWX_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${RAWX_LOC_TO_REBUILD}" "${TMP_VOLUME}"
@@ -485,6 +492,7 @@ openioadmin_rawx_rebuild()
     FAIL=true
   fi
 
+  # For each chunk from TMP_VOLUME (the copy of the rawx before its deletion)
   for CHUNK in ${TMP_VOLUME}/*/*; do
     # Skip files in marker folders (they are not chunks and does not need to be rebuilt)
     if [[ "$CHUNK" == *"/markers/"* ]]; then
@@ -509,6 +517,7 @@ openioadmin_rawx_rebuild()
     IFS=$OLD_IFS
     CONTENT="$(urldecode ${CONTENT})"
 
+    # Get all urls of this object
     if ! CHUNK_URLS=$($CLI object locate \
         --oio-account "${ACCOUNT}" "${CONTAINER}" "${CONTENT}" \
         --object-version "${VERSION}" -f value -c Pos -c Id \
@@ -520,6 +529,8 @@ openioadmin_rawx_rebuild()
     fi
     OLD_IFS=$IFS
     IFS=$'\n'
+
+    # For each url (the reconstructed and the copies)
     for CHUNK_URL in ${CHUNK_URLS}; do
       # Cannot check if the URL is different: it may be the same since we
       # generate predictable chunk IDs.
@@ -546,6 +557,13 @@ openioadmin_rawx_rebuild()
       if ! /usr/bin/wget -O "${TMP_FILE_AFTER}" "${CURLABLE}" \
           &> /dev/null; then
         echo >&2 "${CHUNK}: failed to download the rebuilt chunk (${CURLABLE}) ${RAWX_ID_TO_REBUILD}"
+        FAIL=true
+        continue
+      fi
+      # Call the rawx to get the extended attribute
+      EXTRA_ATTR=$(curl -s -I "${CURLABLE}" | grep "X-Oio-Ext-Foo" | tr -d '\r')
+      if [ "${EXTRA_ATTR}" != "X-Oio-Ext-Foo: bar" ]; then
+        echo >&2 "${CURLABLE} extra attr invalid (${EXTRA_ATTR})"
         FAIL=true
         continue
       fi

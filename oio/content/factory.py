@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -149,6 +149,9 @@ class ContentFactory(object):
         storage_method = STORAGE_METHODS.load(meta["chunk_method"])
         storage_method.fix_missing_checksum_algo()
         meta["chunk_method"] = storage_method.to_chunk_method()
+        extra_properties = kwargs.get("extra_properties")
+        if extra_properties:
+            meta["extra_properties"] = extra_properties
         if not account or not container_name:
             container_info = self.container_client.container_get_properties(
                 cid=container_id

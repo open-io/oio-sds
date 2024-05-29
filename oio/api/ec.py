@@ -37,7 +37,12 @@ from greenlet import GreenletExit
 
 from oio.api import io
 from oio.common import exceptions
-from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
+from oio.common.constants import (
+    CHUNK_HEADERS,
+    REQID_HEADER,
+    CHUNK_XATTR_EXTRA_PREFIX,
+    CHUNK_XATTR_EXTRA_PREFIX_LEN,
+)
 from oio.common.easy_value import int_value
 from oio.common.exceptions import SourceReadError
 from oio.common.http import (
@@ -892,7 +897,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
-        headers=None,
         **kwargs,
     ):
         kwargs.setdefault("chunk_buffer_min", storage_method.ec_segment_size)
@@ -909,7 +913,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = []
-        self.headers = headers or {}
         self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):
@@ -1338,6 +1341,7 @@ class ECRebuildHandler(object):
         pile = GreenPile(len(self.meta_chunk))
 
         nb_data = self.storage_method.ec_nb_data
+        extra_properties = {}
 
         headers = {REQID_HEADER: self.reqid}
         for chunk in self.meta_chunk:
@@ -1353,6 +1357,10 @@ class ECRebuildHandler(object):
             chunk_size = int_value(
                 resp.getheader(CHUNK_HEADERS["chunk_size"], None), None
             )
+            for header, value in resp.getheaders():
+                if header.startswith(CHUNK_XATTR_EXTRA_PREFIX):
+                    key = header[CHUNK_XATTR_EXTRA_PREFIX_LEN:]
+                    extra_properties[key] = value
             if chunk_size is None:
                 self.logger.warning("Missing chunk size")
                 resps_without_chunk_size.append(resp)
@@ -1401,7 +1409,7 @@ class ECRebuildHandler(object):
             rebuild_iter = self._make_rebuild_iter(resps)
         else:
             rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
-        return assumed_chunk_size, rebuild_iter
+        return assumed_chunk_size, rebuild_iter, extra_properties
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):

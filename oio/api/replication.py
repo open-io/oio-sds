@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -43,7 +43,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
-        headers=None,
         **kwargs
     ):
         super(ReplicatedMetachunkWriter, self).__init__(
@@ -54,7 +53,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
-        self.headers = headers or {}
         self.logger = kwargs.get("logger", LOGGER)
 
     def stream(self, source, size):

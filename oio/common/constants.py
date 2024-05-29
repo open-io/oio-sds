@@ -161,6 +161,8 @@ CHUNK_XATTR_KEYS_OPTIONAL = {
     "content_path": True,
     "content_version": True,
 }
+CHUNK_XATTR_EXTRA_PREFIX = "X-Oio-Ext-"
+CHUNK_XATTR_EXTRA_PREFIX_LEN = len(CHUNK_XATTR_EXTRA_PREFIX)
 
 VOLUME_XATTR_KEYS = {"namespace": "server.ns", "type": "server.type", "id": "server.id"}
 

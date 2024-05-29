@@ -96,7 +96,7 @@ class ECContent(Content):
             reqid=reqid,
             logger=self.logger,
         )
-        expected_chunk_size, stream = handler.rebuild()
+        expected_chunk_size, stream, extra_properties = handler.rebuild()
 
         # Actually create the spare chunk
         meta = {}
@@ -125,6 +125,8 @@ class ECContent(Content):
         meta["metachunk_hash"] = current_chunk.checksum
         meta["metachunk_size"] = current_chunk.size
         meta["full_path"] = self.full_path
+        if extra_properties:
+            meta["extra_properties"] = extra_properties
         bytes_transferred, _ = self.blob_client.chunk_put(
             spare_url[0], meta, GeneratorIO(stream), reqid=reqid
         )

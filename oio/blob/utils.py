@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -85,6 +85,9 @@ def read_chunk_metadata(fd, chunk_id):
                 container_id = cid_from_name(account, container)
             else:
                 meta["links"][parsed_chunk_id] = v
+        elif k.startswith("oio.ext."):
+            mkey = k[len("oio.ext.") :]
+            meta.setdefault("extra_properties", {})[mkey] = v
     if raw_chunk_id:
         raw_meta_copy = raw_meta.copy()
         raw_meta[CHUNK_XATTR_KEYS["chunk_id"]] = raw_chunk_id

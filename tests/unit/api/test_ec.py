@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -860,7 +860,7 @@ class TestEC(unittest.TestCase):
                 self.storage_method,
                 watchdog=self.__class__.watchdog,
             )
-            expected_chunk_size, stream = handler.rebuild()
+            expected_chunk_size, stream, _ = handler.rebuild()
             if expected_chunk_size is not None:
                 self.assertEqual(expected_chunk_size, len(missing_chunk_body))
             result = b"".join(stream)
@@ -907,7 +907,7 @@ class TestEC(unittest.TestCase):
                     self.storage_method,
                     watchdog=self.__class__.watchdog,
                 )
-                expected_chunk_size, stream = handler.rebuild()
+                expected_chunk_size, stream, _ = handler.rebuild()
                 if expected_chunk_size is not None:
                     self.assertEqual(expected_chunk_size, len(missing_chunk_body))
                 result = b"".join(stream)
@@ -954,7 +954,7 @@ class TestEC(unittest.TestCase):
                     self.storage_method,
                     watchdog=self.__class__.watchdog,
                 )
-                expected_chunk_size, stream = handler.rebuild()
+                expected_chunk_size, stream, _ = handler.rebuild()
                 if expected_chunk_size is not None:
                     self.assertEqual(expected_chunk_size, len(missing_chunk_body))
                 result = b"".join(stream)
@@ -1024,7 +1024,7 @@ class TestEC(unittest.TestCase):
                 self.storage_method,
                 watchdog=self.__class__.watchdog,
             )
-            expected_chunk_size, stream = handler.rebuild()
+            expected_chunk_size, stream, _ = handler.rebuild()
             if expected_chunk_size is not None:
                 self.assertEqual(expected_chunk_size, len(missing_chunk_body))
             result = b"".join(stream)

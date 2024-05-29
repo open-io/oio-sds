@@ -149,11 +149,15 @@ class TestPlainContent(BaseTestCase):
     def test_single_create_chunksize_plus_1_bytes(self):
         self._test_create(self.stgpol, self.chunk_size + 1)
 
-    def _new_content(self, stgpol, data, broken_pos_list=None):
+    def _new_content(self, stgpol, data, broken_pos_list=None, extra_properties=None):
         if broken_pos_list is None:
             broken_pos_list = []
         old_content = self.content_factory.new(
-            self.container_id, self.content, len(data), stgpol
+            self.container_id,
+            self.content,
+            len(data),
+            stgpol,
+            extra_properties=extra_properties,
         )
 
         old_content.create(BytesIO(data))
@@ -200,7 +204,8 @@ class TestPlainContent(BaseTestCase):
 
         # find the rebuilt chunk
         for c in rebuilt_content.chunks.filter(pos=rebuild_pos):
-            if len(content.chunks.filter(id=c.id)) > 0:
+            # Ids are the same in plain copy, filter on hosts
+            if len(content.chunks.filter(host=c.host)) > 0:
                 # not the rebuilt chunk
                 # if this chunk is broken, it must not have been rebuilt
                 for b_c_i in broken_chunks_info[rebuild_pos].values():
@@ -222,14 +227,35 @@ class TestPlainContent(BaseTestCase):
             del rebuild_chunk_info["dl_meta"]["chunk_id"]
             self.assertEqual(meta, rebuild_chunk_info["dl_meta"])
 
-    def _test_rebuild(self, stgpol, data_size, broken_pos_list, full_rebuild_pos):
+    def _test_rebuild(
+        self,
+        stgpol,
+        data_size,
+        broken_pos_list,
+        full_rebuild_pos,
+        extra_properties=None,
+    ):
         data = random_data(data_size)
-        content, broken_chunks_info = self._new_content(stgpol, data, broken_pos_list)
+        content, broken_chunks_info = self._new_content(
+            stgpol,
+            data,
+            broken_pos_list,
+            extra_properties=extra_properties,
+        )
 
         self._rebuild_and_check(content, broken_chunks_info, full_rebuild_pos)
 
     def test_2copies_content_0_byte_1broken_rebuild_pos_0_idx_0(self):
         self._test_rebuild(self.stgpol_twocopies, 0, [(0, 0)], (0, 0))
+
+    def test_2copies_content_0_byte_1broken_rebuild_pos_0_idx_0_xtr_props(self):
+        self._test_rebuild(
+            self.stgpol_twocopies,
+            0,
+            [(0, 0)],
+            (0, 0),
+            extra_properties={"foo+2": "bar+2"},
+        )
 
     def test_2copies_content_1_byte_1broken_rebuild_pos_0_idx_1(self):
         self._test_rebuild(self.stgpol_twocopies, 1, [(0, 1)], (0, 1))

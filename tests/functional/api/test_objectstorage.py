@@ -854,6 +854,31 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         meta, _ = self.api.object_locate(self.account, name, name)
         self.assertEqual(meta["mime_type"], "text/custom")
 
+    def test_object_create_ext_extra_properties(self):
+        name = "obj-create-extra-props" + random_str(6)
+        self._create(name)
+
+        _, _, _, metadata = self.api.object_create_ext(
+            self.account,
+            name,
+            data=b"data",
+            obj_name=name,
+            extra_properties={"foo": "bar", "foo+2": "bar+2"},
+        )
+        self.assertEqual(metadata["ns"], self.ns)
+        self.assertIn("version", metadata)
+        self.created.append((name, name, metadata["version"]))
+
+        _, chunks = self.api.object_locate(self.account, name, name)
+
+        # Make sure each chunk has the extra property
+        for chunk in chunks:
+            meta = self.api.blob_client.chunk_head(chunk["url"])
+            self.assertIn("extra_properties", meta)
+            self.assertDictEqual(
+                meta["extra_properties"], {"Foo": "bar", "Foo+2": "bar+2"}
+            )
+
     def _upload_data(self, name):
         chunksize = int(self.conf["chunk_size"])
         size = chunksize * 12

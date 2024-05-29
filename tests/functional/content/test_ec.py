@@ -141,12 +141,16 @@ class TestECContent(BaseTestCase):
     def test_create_6294503_bytes(self):
         self._test_create(6294503)
 
-    def _test_rebuild(self, data_size, broken_pos_list):
+    def _test_rebuild(self, data_size, broken_pos_list, extra_properties=None):
         # generate test data
         data = os.urandom(data_size)
         # create initial content
         old_content = self.content_factory.new(
-            self.container_id, self.content, len(data), self.stgpol
+            self.container_id,
+            self.content,
+            len(data),
+            self.stgpol,
+            extra_properties=extra_properties,
         )
         # verify factory work as intended
         self.assertEqual(type(old_content), ECContent)
@@ -216,6 +220,11 @@ class TestECContent(BaseTestCase):
 
     def test_content_rebuild_advanced(self):
         self._test_rebuild(DAT_LEGIT_SIZE, self.random_chunks(3))
+
+    def test_content_rebuild_extra_properties(self):
+        self._test_rebuild(
+            0, self.random_chunks(1), extra_properties={"foo+2": "bar+2"}
+        )
 
     def test_content_rebuild_unrecoverable(self):
         self.assertRaises(

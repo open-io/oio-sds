@@ -128,7 +128,7 @@ class TestBlobMover(BaseTestCase):
                 locations.append(self.rawx_tags_loc[volume_id])
         return locations
 
-    def _init_objects(self, misplaced_chunk, corrupt_data):
+    def _init_objects(self, misplaced_chunk, corrupt_data, extra_properties=False):
         # Objects having chunk to to another volume
         objects = {}
         object_with_misplaced = {}
@@ -139,11 +139,15 @@ class TestBlobMover(BaseTestCase):
             volume_path = self.rawx_volumes[volume]
             for i in range(10):
                 object_name = "m_chunk-" + random_str(8)
+                create_kwargs = {}
+                if extra_properties:
+                    create_kwargs["extra_properties"] = {"foo": "bar", "foo+2": "bar+2"}
                 self.api.object_create(
                     self.account,
                     self.container,
                     obj_name=object_name,
                     data="chunk",
+                    **create_kwargs,
                 )
                 _, chunks = self.api.object_locate(
                     self.account, self.container, object_name
@@ -208,7 +212,11 @@ class TestBlobMover(BaseTestCase):
         self.assertEqual(len(new_symlinks), 1)
 
     def _test_local_mover(
-        self, misplaced_chunk=False, corrupt_data=False, no_adjacent_services=False
+        self,
+        misplaced_chunk=False,
+        corrupt_data=False,
+        no_adjacent_services=False,
+        extra_properties=False,
     ):
         if not self.chunk_method.startswith("ec"):
             self.skipTest("Only works with EC")
@@ -218,7 +226,7 @@ class TestBlobMover(BaseTestCase):
             objects,
             corrupted_objects,
             object_with_misplaced,
-        ) = self._init_objects(misplaced_chunk, corrupt_data)
+        ) = self._init_objects(misplaced_chunk, corrupt_data, extra_properties)
         initial_location = self.rawx_tags_loc[volume]
         locked_svc = []
         # Stop adjacent services, so that mover chooses distant services.
@@ -246,6 +254,13 @@ class TestBlobMover(BaseTestCase):
                 self.account, self.container, object_name
             )
             for chunk in chunks:
+                if extra_properties:
+                    meta = self.api.blob_client.chunk_head(chunk["url"])
+                    self.assertIn("extra_properties", meta)
+                    self.assertDictEqual(
+                        meta["extra_properties"],
+                        {"Foo": "bar", "Foo+2": "bar+2"},
+                    )
                 chunk_id = chunk["url"].split("/")[3]
                 chunk_volume = chunk["url"].split("/")[2]
                 new_location = self.rawx_tags_loc[chunk_volume]
@@ -316,3 +331,9 @@ class TestBlobMover(BaseTestCase):
         if adjacent services are  not available
         """
         self._test_local_mover(no_adjacent_services=True)
+
+    def test_local_mover_extra_properties(self):
+        """Test of the local mover with extra properties on object creation.
+        Those extra properties are stored in chunks' extended attributes.
+        """
+        self._test_local_mover(extra_properties=True)
