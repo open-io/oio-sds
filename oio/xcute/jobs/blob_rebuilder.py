@@ -128,7 +128,7 @@ class RawxRebuildJob(XcuteRdirJob):
         super(RawxRebuildJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
 
-    def prepare(self, job_params):
+    def prepare(self, job_params, reqid=None):
         service_id = job_params["service_id"]
         rdir_timeout = job_params["rdir_timeout"]
         set_incident_date = job_params["set_incident_date"]
@@ -138,11 +138,11 @@ class RawxRebuildJob(XcuteRdirJob):
             return
 
         self.rdir_client.admin_incident_set(
-            service_id, set_specific_incident_date, timeout=rdir_timeout
+            service_id, set_specific_incident_date, timeout=rdir_timeout, reqid=reqid
         )
 
-    def get_tasks(self, job_params, marker=None):
-        chunk_info = self.get_chunk_info(job_params, marker=marker)
+    def get_tasks(self, job_params, marker=None, reqid=None):
+        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
 
         for container_id, chunk_id, descr in chunk_info:
             task_id = "|".join((container_id, chunk_id))
@@ -154,8 +154,8 @@ class RawxRebuildJob(XcuteRdirJob):
                 "chunk_id": chunk_id,
             }
 
-    def get_total_tasks(self, job_params, marker=None):
-        chunk_info = self.get_chunk_info(job_params, marker=marker)
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
+        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
 
         i = 0
         for i, (container_id, chunk_id, descr) in enumerate(chunk_info, 1):
@@ -166,7 +166,7 @@ class RawxRebuildJob(XcuteRdirJob):
         if remaining > 0:
             yield ("|".join((container_id, chunk_id)), remaining)
 
-    def get_chunk_info(self, job_params, marker=None):
+    def get_chunk_info(self, job_params, marker=None, reqid=None):
         service_id = job_params["service_id"]
         rdir_fetch_limit = job_params["rdir_fetch_limit"]
         rdir_timeout = job_params["rdir_timeout"]
@@ -177,6 +177,7 @@ class RawxRebuildJob(XcuteRdirJob):
             timeout=rdir_timeout,
             limit=rdir_fetch_limit,
             start_after=marker,
+            reqid=reqid,
         )
 
         return chunk_info

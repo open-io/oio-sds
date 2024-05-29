@@ -73,10 +73,10 @@ class Meta2DecommissionJob(XcuteRdirJob):
         super(Meta2DecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(conf, logger=self.logger)
 
-    def get_tasks(self, job_params, marker=None):
+    def get_tasks(self, job_params, marker=None, reqid=None):
         usage_target = job_params.get("usage_target", 0)
         task_percentage = 100 - usage_target
-        containers = self._containers_from_rdir(job_params, marker)
+        containers = self._containers_from_rdir(job_params, marker, reqid=reqid)
 
         while True:
             batch = list(islice(containers, 100))
@@ -84,10 +84,10 @@ class Meta2DecommissionJob(XcuteRdirJob):
             if wanted == 0:
                 break
             for marker, container_id in sample(batch, wanted):
-                yield marker, dict(container_id=container_id)
+                yield marker, {"container_id": container_id}
 
-    def get_total_tasks(self, job_params, marker=None):
-        containers = self._containers_from_rdir(job_params, marker)
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
+        containers = self._containers_from_rdir(job_params, marker, reqid=reqid)
         usage_target = job_params.get("usage_target", 0)
         task_percentage = 100 - usage_target
 
@@ -105,13 +105,17 @@ class Meta2DecommissionJob(XcuteRdirJob):
 
         yield marker, remaining
 
-    def _containers_from_rdir(self, job_params, marker):
+    def _containers_from_rdir(self, job_params, marker, reqid=None):
         service_id = job_params["service_id"]
         rdir_fetch_limit = job_params["rdir_fetch_limit"]
         rdir_timeout = job_params["rdir_timeout"]
 
         containers = self.rdir_client.meta2_index_fetch_all(
-            service_id, marker=marker, timeout=rdir_timeout, limit=rdir_fetch_limit
+            service_id,
+            marker=marker,
+            timeout=rdir_timeout,
+            limit=rdir_fetch_limit,
+            reqid=reqid,
         )
         for container_info in containers:
             container_url = container_info["container_url"]

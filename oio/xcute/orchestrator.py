@@ -22,12 +22,13 @@ from redis import (
     TimeoutError as RedisTimeoutError,
 )
 
+from oio.common.constants import STRLEN_REQID
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden, OioTimeout
 from oio.common.logger import get_logger
 from oio.common.green import sleep, threading, time
 from oio.common.json import json
-from oio.common.utils import ratelimit
+from oio.common.utils import ratelimit, request_id
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import (
     Beanstalk,
@@ -220,6 +221,9 @@ class XcuteOrchestrator(object):
             self.logger.info("[job_id=%s] All tasks are already sent", job_id)
             return
 
+        main_reqid = job_id + request_id(f"-{job_type[:10]}-")
+        main_reqid = main_reqid[:STRLEN_REQID]
+
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, job_id=job_id, logger=self.logger)
 
@@ -229,7 +233,7 @@ class XcuteOrchestrator(object):
             and job_info["tasks"]["sent"] == 0
             and not job_info["tasks"]["all_sent"]
         ):
-            job.prepare(job_info["config"]["params"])
+            job.prepare(job_info["config"]["params"], reqid=main_reqid)
 
         if job_id in self.compute_total_tasks_threads:
             self.logger.info(
@@ -238,7 +242,7 @@ class XcuteOrchestrator(object):
         elif job_info["tasks"]["is_total_temp"]:
             compute_total_tasks_thread = threading.Thread(
                 target=self.safe_compute_total_tasks,
-                args=(job_id, job_type, job_info, job),
+                args=(job_id, job_type, job_info, job, main_reqid),
             )
             compute_total_tasks_thread.start()
             self.compute_total_tasks_threads[job_id] = compute_total_tasks_thread
@@ -251,19 +255,20 @@ class XcuteOrchestrator(object):
             self.logger.warning("[job_id=%s] Already dispatching the tasks", job_id)
         else:
             dispatch_tasks_thread = threading.Thread(
-                target=self.safe_dispatch_tasks, args=(job_id, job_type, job_info, job)
+                target=self.safe_dispatch_tasks,
+                args=(job_id, job_type, job_info, job, main_reqid),
             )
             dispatch_tasks_thread.start()
             self.dispatch_tasks_threads[job_id] = dispatch_tasks_thread
 
-    def safe_dispatch_tasks(self, job_id, job_type, job_info, job):
+    def safe_dispatch_tasks(self, job_id, job_type, job_info, job, reqid):
         """
         Dispatch all tasks across the platform
         and update the backend.
         """
         try:
             self.logger.info("[job_id=%s] Starting to dispatch tasks", job_id)
-            self.dispatch_tasks(job_id, job_type, job_info, job)
+            self.dispatch_tasks(job_id, job_type, job_info, job, reqid=reqid)
             self.logger.info("[job_id=%s] Finished dispatching tasks", job_id)
         except Exception as exc:
             self.logger.exception(
@@ -457,12 +462,12 @@ class XcuteOrchestrator(object):
                 )
             return last_check
 
-    def dispatch_tasks(self, job_id, job_type, job_info, job):
+    def dispatch_tasks(self, job_id, job_type, job_info, job, reqid=None):
         job_config = job_info["config"]
         job_params = job_config["params"]
         last_task_id = job_info["tasks"]["last_sent"]
 
-        job_tasks = job.get_tasks(job_params, marker=last_task_id)
+        job_tasks = job.get_tasks(job_params, marker=last_task_id, reqid=reqid)
         beanstalkd_workers = self.get_beanstalkd_workers()
 
         last_check = self.adapt_speed(job_id, job_config, None)
@@ -683,7 +688,7 @@ class XcuteOrchestrator(object):
             }
         )
 
-    def safe_compute_total_tasks(self, job_id, job_type, job_info, job):
+    def safe_compute_total_tasks(self, job_id, job_type, job_info, job, reqid):
         """
         Compute the total number of tasks
         and update the backend.
@@ -692,7 +697,7 @@ class XcuteOrchestrator(object):
             self.logger.info(
                 "[job_id=%s] Starting to compute the total number of tasks", job_id
             )
-            self.compute_total_tasks(job_id, job_type, job_info, job)
+            self.compute_total_tasks(job_id, job_type, job_info, job, reqid=reqid)
             self.logger.info(
                 "[job_id=%s] Finished computing the total number of tasks", job_id
             )
@@ -707,11 +712,13 @@ class XcuteOrchestrator(object):
 
         self.logger.debug("[job_id=%s] Exited thread computing total tasks", job_id)
 
-    def compute_total_tasks(self, job_id, job_type, job_info, job):
+    def compute_total_tasks(self, job_id, job_type, job_info, job, reqid=None):
         job_params = job_info["config"]["params"]
         total_marker = job_info["tasks"]["total_marker"]
 
-        tasks_counter = job.get_total_tasks(job_params, marker=total_marker)
+        tasks_counter = job.get_total_tasks(
+            job_params, marker=total_marker, reqid=reqid
+        )
         for total_marker, tasks_incr in tasks_counter:
             stop, exc = self.handle_backend_errors(
                 self.backend.incr_total_tasks, job_id, total_marker, tasks_incr
@@ -841,8 +848,9 @@ class XcuteOrchestrator(object):
         existing tubes and tube statistics.
         """
         while self.running:
+            reqid = request_id("xcute-orchestrator-")
             try:
-                beanstalkd_workers = self._find_beanstalkd_workers()
+                beanstalkd_workers = self._find_beanstalkd_workers(reqid=reqid)
             except Exception as exc:
                 self.logger.error("Failed to find beanstalkd workers: %s", exc)
                 # TODO(adu): We could keep trying to send jobs
@@ -877,12 +885,12 @@ class XcuteOrchestrator(object):
 
         self.logger.info("Exited thread refreshing beanstalkd workers")
 
-    def _find_beanstalkd_workers(self):
+    def _find_beanstalkd_workers(self, reqid=None):
         """
         Find beanstalkd workers by looking at the score,
         existing tubes and tube statistics.
         """
-        all_beanstalkd = self.conscience_client.all_services("beanstalkd")
+        all_beanstalkd = self.conscience_client.all_services("beanstalkd", reqid=reqid)
 
         beanstalkd_workers = {}
         for beanstalkd_info in all_beanstalkd:

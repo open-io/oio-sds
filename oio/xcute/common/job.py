@@ -123,7 +123,7 @@ class XcuteJob(object):
         except (TypeError, KeyError):
             raise ValueError("Wrong config format")
 
-    def prepare(self, job_params):
+    def prepare(self, job_params, reqid=None):
         """
         Allow to execute code only once when the job is run
         for the first time.
@@ -132,7 +132,7 @@ class XcuteJob(object):
         """
         pass
 
-    def get_tasks(self, job_params, marker=None):
+    def get_tasks(self, job_params, marker=None, reqid=None):
         """
         Yields the job tasks as
         (task_id, task_payload)
@@ -140,7 +140,7 @@ class XcuteJob(object):
         """
         raise NotImplementedError()
 
-    def get_total_tasks(self, job_params, marker=None):
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
         """
         Yields numbers of tasks as
         (marker, tasks_incr)

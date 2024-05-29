@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -79,7 +79,7 @@ class TesterJob(XcuteJob):
 
         return sanitized_job_params, job_params.get("lock", cls.DEFAULT_LOCK)
 
-    def get_tasks(self, job_params, marker=None):
+    def get_tasks(self, job_params, marker=None, reqid=None):
         start = job_params["start"]
         end = job_params["end"]
 
@@ -92,7 +92,7 @@ class TesterJob(XcuteJob):
 
             yield (task_id, task_payload)
 
-    def get_total_tasks(self, job_params, marker=None):
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
         start = job_params["start"]
         if marker is not None:
             start = int(marker) + 1

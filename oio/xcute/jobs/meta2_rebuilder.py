@@ -66,14 +66,14 @@ class Meta2RebuildJob(XcuteRdirJob):
         super(Meta2RebuildJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(conf, logger=logger)
 
-    def get_tasks(self, job_params, marker=None):
-        containers_it = self._containers_from_rdir(job_params, marker)
+    def get_tasks(self, job_params, marker=None, reqid=None):
+        containers_it = self._containers_from_rdir(job_params, marker, reqid=reqid)
 
         for url, container_id in containers_it:
-            yield url, dict(container_id=container_id)
+            yield url, {"container_id": container_id}
 
-    def get_total_tasks(self, job_params, marker=None):
-        containers_it = self._containers_from_rdir(job_params, marker)
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
+        containers_it = self._containers_from_rdir(job_params, marker, reqid=reqid)
 
         i = 0
         for i, (marker, _) in enumerate(containers_it, 1):
@@ -86,13 +86,17 @@ class Meta2RebuildJob(XcuteRdirJob):
 
         yield marker, remaining
 
-    def _containers_from_rdir(self, job_params, marker):
+    def _containers_from_rdir(self, job_params, marker, reqid=None):
         service_id = job_params["service_id"]
         rdir_fetch_limit = job_params["rdir_fetch_limit"]
         rdir_timeout = job_params["rdir_timeout"]
 
         containers = self.rdir_client.meta2_index_fetch_all(
-            service_id, marker=marker, timeout=rdir_timeout, limit=rdir_fetch_limit
+            service_id,
+            marker=marker,
+            timeout=rdir_timeout,
+            limit=rdir_fetch_limit,
+            reqid=reqid,
         )
         for container_info in containers:
             container_url = container_info["container_url"]

@@ -109,7 +109,7 @@ class RdirDecommissionJob(XcuteRdirJob):
         )
         for type_ in sanitized_job_params["service_types"]:
             if type_ not in cls.ALLOWED_SERVICE_TYPES:
-                raise ValueError("Unknown service type %s" % type_)
+                raise ValueError(f"Unknown service type {type_}")
 
         sanitized_job_params["dry_run"] = boolean_value(
             job_params.get("dry_run"), cls.DEFAULT_DRY_RUN
@@ -123,16 +123,18 @@ class RdirDecommissionJob(XcuteRdirJob):
             job_params.get("replicas"), cls.DEFAULT_REPLICAS
         )
 
-        return sanitized_job_params, "rdir/%s" % service_id
+        return sanitized_job_params, f"rdir/{service_id}"
 
     def __init__(self, conf, logger=None, **kwargs):
         super(RdirDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_dispatcher = RdirDispatcher(self.conf, logger=self.logger)
 
-    def get_tasks_for_type(self, job_params, service_type):
+    def get_tasks_for_type(self, job_params, service_type, reqid=None):
         job_rdir_id = job_params["service_id"]
         task_template = {"service_type": service_type}
-        assignments = self.rdir_dispatcher.get_aggregated_assignments(service_type)
+        assignments = self.rdir_dispatcher.get_aggregated_assignments(
+            service_type, reqid=reqid
+        )
 
         # Look at all the services, and yield only those that match our ID
         for svc_id in assignments.get(job_rdir_id, []):
@@ -141,14 +143,16 @@ class RdirDecommissionJob(XcuteRdirJob):
             task_id = "|".join((job_rdir_id, svc_id))
             yield task_id, next_task
 
-    def get_tasks(self, job_params, marker=None):
+    def get_tasks(self, job_params, marker=None, reqid=None):
         typed_iters = [
-            self.get_tasks_for_type(job_params, type_)
+            self.get_tasks_for_type(job_params, type_, reqid=reqid)
             for type_ in job_params["service_types"]
         ]
         return chain(*typed_iters)
 
-    def get_total_tasks(self, job_params, marker=None):
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
         # Yes, we will generate the list of tasks twice, but ¯\_(ツ)_/¯
         for type_ in job_params["service_types"]:
-            yield type_, len(list(self.get_tasks_for_type(job_params, type_)))
+            yield type_, len(
+                list(self.get_tasks_for_type(job_params, type_, reqid=reqid))
+            )

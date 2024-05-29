@@ -226,7 +226,9 @@ class RawxDecommissionJob(XcuteRdirJob):
     def __init__(self, conf, logger=None, **kwargs):
         super(RawxDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
-        self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
+        self.conscience_client = ConscienceClient(
+            self.conf, logger=self.logger, pool_manager=self.rdir_client.pool_manager
+        )
         self.must_auto_exclude_rawx = False
 
     def auto_exclude_rawx(self, job_params, services):
@@ -246,23 +248,25 @@ class RawxDecommissionJob(XcuteRdirJob):
             ",".join(job_params["excluded_rawx"].keys()),
         )
 
-    def get_usage(self, service_id, services=None):
+    def get_usage(self, service_id, services=None, reqid=None):
         if services is None:
-            services = self.conscience_client.all_services("rawx", full=True)
+            services = self.conscience_client.all_services(
+                "rawx", full=True, reqid=reqid
+            )
         for service in services:
             if service_id == service["tags"].get("tag.service_id", service["addr"]):
                 return 100 - service["tags"]["stat.space"]
         raise ValueError(f"No rawx service this ID ({service_id})")
 
-    def check_usage_and_excludes(self, job_params):
+    def check_usage_and_excludes(self, job_params, reqid=None):
         """
         Check the current space usage and update the list of excluded services.
 
         :returns: True if the decommission should continue, False if the target
                   usage is reached.
         """
-        all_rawx = self.conscience_client.all_services("rawx", full=True)
-        current_usage = self.get_usage(job_params["service_id"], all_rawx)
+        all_rawx = self.conscience_client.all_services("rawx", full=True, reqid=reqid)
+        current_usage = self.get_usage(job_params["service_id"], all_rawx, reqid=reqid)
         if current_usage <= job_params["usage_target"]:
             self.logger.info(
                 "current usage %.2f%%: target reached (%.2f%%)",
@@ -276,7 +280,7 @@ class RawxDecommissionJob(XcuteRdirJob):
 
         return True
 
-    def get_tasks(self, job_params, marker=None):
+    def get_tasks(self, job_params, marker=None, reqid=None):
         last_usage_check = 0.0
         usage_target = job_params["usage_target"]
         usage_check_interval = job_params["usage_check_interval"]
@@ -291,11 +295,11 @@ class RawxDecommissionJob(XcuteRdirJob):
             )
 
         now = time.time()
-        if not self.check_usage_and_excludes(job_params):
+        if not self.check_usage_and_excludes(job_params, reqid=reqid):
             return
         last_usage_check = now
 
-        chunk_info = self.get_chunk_info(job_params, marker=marker)
+        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
         for container_id, chunk_id, descr in chunk_info:
             task_id = "|".join((container_id, chunk_id))
             yield task_id, {
@@ -309,20 +313,20 @@ class RawxDecommissionJob(XcuteRdirJob):
             now = time.time()
             if now - last_usage_check < usage_check_interval:
                 continue
-            if not self.check_usage_and_excludes(job_params):
+            if not self.check_usage_and_excludes(job_params, reqid=reqid):
                 return
             last_usage_check = now
 
-    def get_total_tasks(self, job_params, marker=None):
+    def get_total_tasks(self, job_params, marker=None, reqid=None):
         service_id = job_params["service_id"]
         usage_target = job_params["usage_target"]
 
-        current_usage = self.get_usage(service_id)
+        current_usage = self.get_usage(service_id, reqid=reqid)
         if current_usage <= usage_target:
             return
 
         kept_chunks_ratio = 1 - (usage_target / float(current_usage))
-        chunk_info = self.get_chunk_info(job_params, marker=marker)
+        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
         i = 0
         for i, (container_id, chunk_id, _) in enumerate(chunk_info, 1):
             if i % 1000 == 0:
@@ -335,18 +339,22 @@ class RawxDecommissionJob(XcuteRdirJob):
         if remaining > 0:
             yield ("|".join((container_id, chunk_id)), remaining)
 
-    def get_chunk_info(self, job_params, marker=None):
+    def get_chunk_info(self, job_params, marker=None, reqid=None):
         service_id = job_params["service_id"]
         rdir_fetch_limit = job_params["rdir_fetch_limit"]
         rdir_timeout = job_params["rdir_timeout"]
 
         chunk_info = self.rdir_client.chunk_fetch(
-            service_id, timeout=rdir_timeout, limit=rdir_fetch_limit, start_after=marker
+            service_id,
+            timeout=rdir_timeout,
+            limit=rdir_fetch_limit,
+            start_after=marker,
+            reqid=reqid,
         )
 
         return chunk_info
 
-    def set_topic_suffix(self, job_params):
+    def set_topic_suffix(self, job_params, reqid=None):
         """
         Defines the suffix that will be used to set
         a dedicated topic to a particular host. The suffix is
@@ -359,5 +367,7 @@ class RawxDecommissionJob(XcuteRdirJob):
         """
         if job_params["process_locally"]:
             self.topic_suffix = self.conscience_client.resolve_service_id(
-                "rawx", job_params["service_id"]
+                "rawx",
+                job_params["service_id"],
+                reqid=reqid,
             ).split(":")[0]
