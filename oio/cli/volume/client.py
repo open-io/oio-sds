@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -43,8 +44,8 @@ class VolumeClientCli(object):
             self._rdir_lb = RdirDispatcher(self.conf)
         return self._rdir_lb
 
-    def volume_admin_show(self, volume):
-        return self.volume.admin_show(volume)
+    def volume_admin_show(self, volume, **kwargs):
+        return self.volume.admin_show(volume, **kwargs)
 
     def volume_admin_clear(self, volume, **kwargs):
         return self.volume.admin_clear(volume, **kwargs)
@@ -60,14 +61,14 @@ class VolumeClientCli(object):
             data["container.%s" % ct] = json.dumps(containers[ct])
         return data
 
-    def volume_admin_lock(self, volume, key):
-        return self.volume.admin_lock(volume, key)
+    def volume_admin_lock(self, volume, key, **kwargs):
+        return self.volume.admin_lock(volume, key, **kwargs)
 
-    def volume_admin_unlock(self, volume):
-        return self.volume.admin_unlock(volume)
+    def volume_admin_unlock(self, volume, **kwargs):
+        return self.volume.admin_unlock(volume, **kwargs)
 
-    def volume_admin_incident(self, volume, date):
-        return self.volume.admin_incident_set(volume, date)
+    def volume_admin_incident(self, volume, date, **kwargs):
+        return self.volume.admin_incident_set(volume, date, **kwargs)
 
 
 def make_client(instance):

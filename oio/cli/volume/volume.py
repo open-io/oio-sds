@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,10 +15,8 @@
 # License along with this library.
 
 from logging import getLogger
-from six import iteritems
 
 from oio.cli import Lister, ShowOne
-from oio.cli.rdir.rdir import _format_assignments
 from oio.common.exceptions import OioException
 
 
@@ -39,12 +38,13 @@ class ShowAdminVolume(ShowOne):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        output = list()
+        output = []
         output.append(("volume", parsed_args.volume))
         data = self.app.client_manager.volume.volume_admin_show(
-            volume=parsed_args.volume
+            volume=parsed_args.volume,
+            reqid=self.app.request_id(),
         )
-        for k, v in sorted(iteritems(data)):
+        for k, v in sorted(data.items()):
             output.append((k, v))
         return list(zip(*output))
 
@@ -90,7 +90,8 @@ class ClearAdminVolume(Lister):
 
         volumes = parsed_args.volumes
 
-        results = list()
+        results = []
+        reqid = self.app.request_id()
         for volume in volumes:
             try:
                 resp_body = self.app.client_manager.volume.volume_admin_clear(
@@ -98,6 +99,7 @@ class ClearAdminVolume(Lister):
                     clear_all=parsed_args.clear_all,
                     before_incident=parsed_args.before_incident,
                     repair=parsed_args.repair,
+                    reqid=reqid,
                 )
                 results.append((volume, True, resp_body))
             except OioException as exc:
@@ -128,7 +130,9 @@ class ShowVolume(ShowOne):
         self.log.debug("take_action(%s)", parsed_args)
 
         data = self.app.client_manager.volume.volume_show(
-            volume=parsed_args.volume, read_timeout=60.0
+            volume=parsed_args.volume,
+            read_timeout=60.0,
+            reqid=self.app.request_id(),
         )
         return list(zip(*sorted(data.items())))
 
@@ -164,10 +168,15 @@ class IncidentAdminVolume(Lister):
         volumes = parsed_args.volumes
         dates = parsed_args.date
 
-        results = list()
+        results = []
+        reqid = self.app.request_id()
         for volume in volumes:
             date = dates.pop(0) if dates else int(time())
-            self.app.client_manager.volume.volume_admin_incident(volume, date)
+            self.app.client_manager.volume.volume_admin_incident(
+                volume,
+                date,
+                reqid=reqid,
+            )
             results.append((volume, date))
         columns = ("Volume", "Date")
         return columns, results
@@ -200,9 +209,14 @@ class LockAdminVolume(Lister):
         volumes = parsed_args.volumes
         key = parsed_args.key
 
-        results = list()
+        results = []
+        reqid = self.app.request_id()
         for volume in volumes:
-            self.app.client_manager.volume.volume_admin_lock(volume, key)
+            self.app.client_manager.volume.volume_admin_lock(
+                volume,
+                key,
+                reqid=reqid,
+            )
             results.append((volume, True))
         columns = ("Volume", "Success")
         return columns, results
@@ -225,99 +239,10 @@ class UnlockAdminVolume(Lister):
 
         volumes = parsed_args.volumes
 
-        results = list()
+        results = []
+        reqid = self.app.request_id()
         for volume in volumes:
-            self.app.client_manager.volume.volume_admin_unlock(volume)
+            self.app.client_manager.volume.volume_admin_unlock(volume, reqid=reqid)
             results.append((volume, True))
         columns = ("Volume", "Success")
-        return columns, results
-
-
-class BootstrapVolume(Lister):
-    """
-    Assign an rdir service to all rawx.
-    Deprecated, prefer using 'openio rdir bootstrap rawx'.
-    """
-
-    log = getLogger(__name__ + ".BootstrapVolume")
-
-    def get_parser(self, prog_name):
-        parser = super(BootstrapVolume, self).get_parser(prog_name)
-        parser.add_argument(
-            "--max-per-rdir",
-            metavar="<N>",
-            type=int,
-            help="Maximum number of databases per rdir service",
-        )
-        return parser
-
-    def take_action(self, parsed_args):
-        self.log.debug("take_action(%s)", parsed_args)
-        self.log.warn("Deprecated, prefer using 'openio rdir bootstrap rawx'.")
-
-        try:
-            all_rawx = self.app.client_manager.volume.rdir_lb.assign_all_rawx(
-                parsed_args.max_per_rdir, connection_timeout=30.0, read_timeout=90.0
-            )
-        except OioException as exc:
-            self.success = False
-            self.log.warn("Failed to assign all rawx: %s", exc)
-            all_rawx, _ = self.app.client_manager.volume.rdir_lb.get_assignments(
-                "rawx", connection_timeout=30.0, read_timeout=90.0
-            )
-
-        columns, results = _format_assignments(all_rawx, "Rawx")
-        return columns, results
-
-
-class DisplayVolumeAssignation(Lister):
-    """
-    Display which rdir service is linked to each rawx service.
-    Deprecated, prefer using 'openio rdir assignments rawx'.
-    """
-
-    log = getLogger(__name__ + ".DisplayVolumeAssignation")
-
-    def get_parser(self, prog_name):
-        parser = super(DisplayVolumeAssignation, self).get_parser(prog_name)
-        parser.add_argument(
-            "--aggregated",
-            action="store_true",
-            help="Display an aggregation of the assignment",
-        )
-        return parser
-
-    def take_action(self, parsed_args):
-        self.log.debug("take_action(%s)", parsed_args)
-        self.log.warn("Deprecated, prefer using 'openio rdir assignments rawx'.")
-
-        all_rawx, all_rdir = self.app.client_manager.volume.rdir_lb.get_assignments(
-            "rawx", connection_timeout=30.0, read_timeout=90.0
-        )
-
-        results = list()
-        if not parsed_args.aggregated:
-            columns, results = _format_assignments(all_rawx, "Rawx")
-        else:
-            dummy_rdir = {"addr": "n/a", "tags": {}}
-            rdir_by_id = dict()
-            for rawx in all_rawx:
-                rdir = rawx.get("rdir", dummy_rdir)
-                rdir_id = rdir["tags"].get("tag.service_id") or rdir["addr"]
-                rdir_by_id[rdir_id] = rdir
-                managed_rawx = rdir.get("managed_rawx") or list()
-                rawx_id = rawx["tags"].get("tag.service_id") or rawx["addr"]
-                managed_rawx.append(rawx_id)
-                rdir["managed_rawx"] = managed_rawx
-            for rdir in all_rdir:
-                rdir_id = rdir["tags"].get("tag.service_id") or rdir["addr"]
-                if rdir_id not in rdir_by_id:
-                    rdir["managed_rawx"] = list()
-                    rdir_by_id[rdir_id] = rdir
-            for addr, rdir in iteritems(rdir_by_id):
-                results.append(
-                    (addr, len(rdir["managed_rawx"]), " ".join(rdir["managed_rawx"]))
-                )
-            results.sort()
-            columns = ("Rdir", "Number of bases", "Bases")
         return columns, results
