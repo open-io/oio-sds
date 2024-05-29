@@ -1345,6 +1345,9 @@ ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+${SET_NICE}Nice=${NICE}
+${SET_IONICE}IOSchedulingClass=${IO_SCHEDULING_CLASS}
+${SET_IONICE}IOSchedulingPriority=${IO_SCHEDULING_PRIORITY}
 
 [Install]
 WantedBy=${PARENT}
@@ -2655,6 +2658,9 @@ def generate(options):
                     "SRVNUM": i + 1,
                     "EXE": "oio-rawx",
                     "PORT": next(ports),
+                    "NICE": 0,
+                    "IO_SCHEDULING_PRIORITY": 0,
+                    "IO_SCHEDULING_CLASS": 2,
                     "INTERNAL_PORT": next(ports),
                     "COMPRESSION": ENV["COMPRESSION"] if i % 2 else "off",
                     "EXTRASLOT": f"rawx-{slot}",
@@ -2678,6 +2684,14 @@ def generate(options):
                 env["USE_TLS"] = ""
             else:
                 env["USE_TLS"] = "#"
+            if options.get("set_nice", False):
+                env["SET_NICE"] = ""
+            else:
+                env["SET_NICE"] = "#"
+            if options.get("set_ionice", False):
+                env["SET_IONICE"] = ""
+            else:
+                env["SET_IONICE"] = "#"
             register_service(
                 env,
                 template_systemd_service_rawx % template_systemd_rawx_command_options,
@@ -2700,6 +2714,10 @@ def generate(options):
             if options.get("use_tls", False):
                 # Don't use tls in case of internal rawx
                 env["USE_TLS"] = "#"
+            # No need to set these values for internal rawx
+            # for dev environment
+            # env["NICE_VALUE"] = 7
+            # env["IO_SCHEDULING_PRIORITY"] = 4
             register_service(
                 env,
                 template_systemd_service_rawx % template_systemd_rawx_command_options,
@@ -3396,6 +3414,8 @@ def generate(options):
     final_conf["webhook"] = WEBHOOK_ENDPOINT
     final_conf["lifecycle_path"] = LIFECYCLEDIR
     final_conf["use_tls"] = bool(options.get("use_tls"))
+    final_conf["set_nice"] = bool(options.get("set_nice"))
+    final_conf["set_ionice"] = bool(options.get("set_ionice"))
     with open("{CFGDIR}/test.yml".format(**ENV), "w+") as f:
         f.write(yaml.dump(final_conf))
     return final_conf
