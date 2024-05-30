@@ -944,6 +944,32 @@ class RdirClient(HttpApi):
         return entries
 
     @ensure_request_id
+    def _admin_copy_vol(
+        self,
+        volume_id,
+        src_rdir_hosts,
+        dests_rdir_hosts,
+        **kwargs,
+    ):
+        """
+        Copy admin entries (incident date, locks) of volume_id
+        from one rdir to another.
+
+        :param volume_id: ID of a service (rawx)
+        """
+        admin_status = self.admin_show(volume_id, rdir_hosts=src_rdir_hosts, **kwargs)
+        incident = admin_status.get("incident_date")
+        lock_owner = admin_status.get("lock")
+        if incident:
+            self.admin_incident_set(
+                volume_id, incident, rdir_hosts=dests_rdir_hosts, **kwargs
+            )
+        if lock_owner:
+            self.admin_lock(
+                volume_id, lock_owner, rdir_hosts=dests_rdir_hosts, **kwargs
+            )
+
+    @ensure_request_id
     def chunk_copy_vol(
         self,
         volume_id,
@@ -981,6 +1007,15 @@ class RdirClient(HttpApi):
             raise OioException("No source available")
         if not dests_rdir_hosts:
             raise OioException("No destination available")
+
+        self._admin_copy_vol(
+            volume_id,
+            src_rdir_hosts,
+            dests_rdir_hosts,
+            create=create,
+            reqid=reqid,
+            **kwargs,
+        )
 
         batch = []
         for cid, chunk, rec in self.chunk_fetch(
@@ -1275,6 +1310,9 @@ class RdirClient(HttpApi):
             raise OioException("No source available")
         if not dests_rdir_hosts:
             raise OioException("No destination available")
+
+        # Meta2 databases do not support locks or incidents,
+        # no need to call self._admin_copy_vol().
 
         batch = []
         for rec in self.meta2_index_fetch_all(

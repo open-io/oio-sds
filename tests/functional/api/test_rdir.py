@@ -510,28 +510,50 @@ class TestRdirClient(BaseTestCase):
         Test the copy of all records from the assigned rdir service
         to another one.
         """
-        all_rdir = self.conscience.all_services("rdir", False)
-        my_rdir = self.rdir._get_rdir_addr(self.rawx_id)
+        reqid = request_id("test-rdir-copy-")
+        all_rdir = self.conscience.all_services("rdir", False, reqid=reqid)
+        my_rdir = self.rdir._get_rdir_addr(self.rawx_id, reqid=reqid)
+        lock_name = f"test_rdir_copy_{random_id(3)}"
+        self.rdir.admin_lock(self.rawx_id, lock_name, reqid=reqid)
+        self.rdir.admin_incident_set(self.rawx_id, self.incident_date, reqid=reqid)
         candidates = [r["id"] for r in all_rdir if r["addr"] not in my_rdir]
 
         dest = candidates[0]
-        self.assertRaises(
-            NotFound,
-            gen_to_list,
-            self.rdir.chunk_fetch,
-            self.rawx_id,
-            limit=1,
-            max_attempts=1,
-            rdir_hosts=(dest,),
-        )
+        try:
+            self.assertRaises(
+                NotFound,
+                gen_to_list,
+                self.rdir.chunk_fetch,
+                self.rawx_id,
+                limit=1,
+                max_attempts=1,
+                rdir_hosts=(dest,),
+                reqid=(reqid + "-fail"),
+            )
 
-        self.rdir.chunk_copy_vol(self.rawx_id, dests=(dest,))
+            self.rdir.chunk_copy_vol(self.rawx_id, dests=(dest,), reqid=reqid)
 
-        all_recs = gen_to_list(
-            self.rdir.chunk_fetch, self.rawx_id, max_attempts=1, rdir_hosts=(dest,)
-        )
-        all_recs.sort()
-        self.assertListEqual(self.expected_entries, all_recs)
+            all_recs = gen_to_list(
+                self.rdir.chunk_fetch,
+                self.rawx_id,
+                max_attempts=1,
+                rdir_hosts=(dest,),
+                reqid=reqid,
+            )
+            all_recs.sort()
+            self.assertListEqual(self.expected_entries, all_recs)
+            admin_info = self.rdir.admin_show(self.rawx_id, reqid=reqid)
+            self.assertEqual(admin_info.get("incident_date"), str(self.incident_date))
+            self.assertEqual(admin_info.get("lock"), lock_name)
+        finally:
+            self.rdir.admin_unlock(self.rawx_id, reqid=reqid)
+            self.rdir.admin_unlock(self.rawx_id, rdir_hosts=(dest,), reqid=reqid)
+            self.rdir.admin_clear(
+                self.rawx_id,
+                rdir_hosts=(dest,),
+                clear_all=True,
+                reqid=reqid,
+            )
 
     def test_chunk_db_copy_to_with_same_source_and_destination(self):
         my_rdir = self.rdir._get_rdir_addr(self.rawx_id)
@@ -549,47 +571,56 @@ class TestRdirClient(BaseTestCase):
         Test the copy of all records from the assigned rdir service
         to another one.
         """
+        reqid = request_id("test-rdir-copy-")
         self._push_containers()
 
-        all_rdir = self.conscience.all_services("rdir", False)
-        my_rdir = self.rdir._get_rdir_addr(self.meta2_id)
+        all_rdir = self.conscience.all_services("rdir", False, reqid=reqid)
+        my_rdir = self.rdir._get_rdir_addr(self.meta2_id, reqid=reqid)
         candidates = [r["id"] for r in all_rdir if r["addr"] not in my_rdir]
 
         dests = candidates[0:1]
-        self.assertRaises(
-            NotFound,
-            gen_to_list,
-            self.rdir.meta2_index_fetch_all,
-            self.meta2_id,
-            limit=1,
-            max_attempts=1,
-            rdir_hosts=dests,
-        )
+        try:
+            self.assertRaises(
+                NotFound,
+                gen_to_list,
+                self.rdir.meta2_index_fetch_all,
+                self.meta2_id,
+                limit=1,
+                max_attempts=1,
+                rdir_hosts=dests,
+                reqid=reqid,
+            )
 
-        self.rdir.meta2_copy_vol(self.meta2_id, dests=dests)
+            self.rdir.meta2_copy_vol(self.meta2_id, dests=dests, reqid=reqid)
 
-        # There may be some records we have not put ourselves,
-        # do not rely on self.expected_m2_entries
-        expected_recs = gen_to_list(self.rdir.meta2_index_fetch_all, self.meta2_id)
-        all_recs = gen_to_list(
-            self.rdir.meta2_index_fetch_all, self.meta2_id, rdir_hosts=dests
-        )
-        all_recs.sort(key=lambda x: x["container_url"])
-        expected_recs.sort(key=lambda x: x["container_url"])
-        self.assertListEqual(expected_recs, all_recs)
-
-        # FIXME(FVE): also remove the database!
-        # Unfortunately there is no request to do that :-(
-        for entry in self.expected_m2_entries:
-            try:
-                self.rdir.meta2_index_delete(
-                    self.meta2_id,
-                    entry["container_url"],
-                    entry["container_id"],
-                    rdir_hosts=dests,
-                )
-            except Exception:
-                pass
+            # There may be some records we have not put ourselves,
+            # do not rely on self.expected_m2_entries
+            expected_recs = gen_to_list(
+                self.rdir.meta2_index_fetch_all, self.meta2_id, reqid=reqid
+            )
+            all_recs = gen_to_list(
+                self.rdir.meta2_index_fetch_all,
+                self.meta2_id,
+                rdir_hosts=dests,
+                reqid=reqid,
+            )
+            all_recs.sort(key=lambda x: x["container_url"])
+            expected_recs.sort(key=lambda x: x["container_url"])
+            self.assertListEqual(expected_recs, all_recs)
+        finally:
+            # FIXME(FVE): also remove the database!
+            # Unfortunately there is no request to do that :-(
+            for entry in self.expected_m2_entries:
+                try:
+                    self.rdir.meta2_index_delete(
+                        self.meta2_id,
+                        entry["container_url"],
+                        entry["container_id"],
+                        rdir_hosts=dests,
+                        reqid=reqid,
+                    )
+                except Exception:
+                    pass
 
     def test_meta2_db_copy_to_with_same_source_and_destination(self):
         my_rdir = self.rdir._get_rdir_addr(self.meta2_id)
