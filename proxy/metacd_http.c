@@ -146,8 +146,9 @@ _metacd_match (const gchar *method, const gchar *path)
 	}
 
 	// add a separator
-	if (*(pk-1) != '/')
+	if ((slash == 0) && (*(pk-1) != '/')) {
 		*(pk++) = '/';
+	}
 	*(pk++) = '#';
 
 	// copy the method without slashes

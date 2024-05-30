@@ -1,7 +1,7 @@
 /*
 OpenIO SDS oio-event-benchmark
 Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -152,8 +152,9 @@ _fake_service_match(const gchar *method, const gchar *path)
 	}
 
 	// add a separator
-	if (*(pk-1) != '/')
+	if ((slash == 0) && (*(pk-1) != '/')) {
 		*(pk++) = '/';
+	}
 	*(pk++) = '#';
 
 	// copy the method without slashes
