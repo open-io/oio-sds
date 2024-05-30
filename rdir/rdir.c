@@ -573,12 +573,12 @@ _db_admin_get_incident(const char *volid, gint64 *pincident)
 }
 
 static GError *
-_db_admin_set_incident(const char *volid, gint64 when)
+_db_admin_set_incident(const char *volid, gboolean autocreate, gint64 when)
 {
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
-	if ((err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, autocreate, &base)))
 		return err;
 
 	char *errmsg = NULL;
@@ -1071,12 +1071,12 @@ _db_admin_show(const char *volid, GString *value)
 }
 
 static GError *
-_db_admin_lock(const char *volid, const char *who)
+_db_admin_lock(const char *volid, gboolean autocreate, const char *who)
 {
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
-	if ((err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, autocreate, &base)))
 		return err;
 
 	char *errmsg = NULL, *value = NULL;
@@ -1689,9 +1689,10 @@ _route_admin_unlock(struct req_args_s *args, const char *volid)
 // }}RDIR
 static enum http_rc_e
 _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
-	const char *volid)
+	const char *volid, const char *str_autocreate)
 {
 	GError *err = NULL;
+	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
 
 	/* extraction of the parameters */
 	struct json_object *jwho;
@@ -1710,7 +1711,7 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, BADREQ("'who' not set"));
 
 	/* forward to the backend */
-	if ((err = _db_admin_lock(volid, who)))
+	if ((err = _db_admin_lock(volid, autocreate, who)))
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
 }
@@ -1752,7 +1753,7 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
 	/* forward to the backend, within a soft lock */
-	if ((err = _db_admin_lock(volid, "admin_clear")))
+	if ((err = _db_admin_lock(volid, FALSE, "admin_clear")))
 		return _reply_common_error(args->rp, err);
 
 	gint64 nb_removed = 0;
@@ -1862,9 +1863,10 @@ _route_admin_get_incident(struct req_args_s *args, const char *volid)
 // }}RDIR
 static enum http_rc_e
 _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
-		const char *volid)
+		const char *volid, const char *str_autocreate)
 {
 	GError *err = NULL;
+	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
 
 	/* extraction of the parameters */
 	struct json_object *jwhen;
@@ -1881,7 +1883,7 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
 	/* forward to the backend */
-	err = _db_admin_set_incident(volid, when);
+	err = _db_admin_set_incident(volid, autocreate, when);
 
 	/* reply to the client */
 	if (err)
@@ -2934,13 +2936,15 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 
 		case OIO_RDIR_ADMIN_LOCK:
 			CHECK_METHOD("POST");
-			return _route_admin_lock(args, jbody, OPT("vol"));
+			return _route_admin_lock(args, jbody, OPT("vol"), OPT("create"));
 
 		case OIO_RDIR_ADMIN_INCIDENT:
 			if (!strcmp(args->rq->cmd, "GET"))
 				return _route_admin_get_incident(args, OPT("vol"));
-			if (!strcmp(args->rq->cmd, "POST"))
-				return _route_admin_set_incident(args, jbody, OPT("vol"));
+			if (!strcmp(args->rq->cmd, "POST")) {
+				return _route_admin_set_incident(
+						args, jbody, OPT("vol"), OPT("create"));
+			}
 			return _reply_method_error(args->rp);
 
 		case OIO_RDIR_ADMIN_CLEAR:
