@@ -287,7 +287,7 @@ class CommonTestCase(testtools.TestCase):
 
         self._assigned_partitions = []
         self._cached_events = {}
-        self._used_events = []
+        self._used_events = set()
 
         self._wait_kafka_partition_assignment()
         self._set_kafka_offset()
@@ -847,7 +847,7 @@ class BaseTestCase(CommonTestCase):
                 logging.info("ignore event %s (filter mismatch)", event)
                 return False
             logging.info("event %s", event)
-            self._used_events.append(key)
+            self._used_events.add(key)
             return True
 
         # Check if event is already present
@@ -870,13 +870,14 @@ class BaseTestCase(CommonTestCase):
                 event_key = f"{event.topic()},{event.partition()},{event.offset()}"
                 logging.debug("Got event: %s", event_key)
                 data = event.value()
-                event = Event(jsonlib.loads(data))
+                event_obj = Event(jsonlib.loads(data))
+                event_obj.job_id = event.offset()
 
                 # Add to cache
-                self._cached_events[event_key] = event
+                self._cached_events[event_key] = event_obj
 
-                if match_event(event_key, event):
-                    return event
+                if match_event(event_key, event_obj):
+                    return event_obj
 
             logging.warning(
                 "wait_for_kafka_event(reqid=%s, types=%s, svcid=%s, fields=%s,"

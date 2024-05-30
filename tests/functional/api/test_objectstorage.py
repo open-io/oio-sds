@@ -2543,7 +2543,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
                 expected_size_by_policy.get("SINGLE", 0) + 42
             )
         data = random_data(data_size)
-        reqid = request_id()
+        reqid = request_id("chgpol-create-")
         _, _, _, obj_meta = self.api.object_create_ext(
             self.account,
             name,
@@ -2566,7 +2566,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             del expected_size_by_policy[old_policy]
         obj1, chunks1 = self.api.object_locate(self.account, name, name)
         if versioning:
-            reqid = request_id()
+            reqid = request_id("chgpol-del-")
             self.api.object_delete(self.account, name, name, reqid=reqid)
         self._check_stats(
             name,
@@ -2577,7 +2577,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             reqid=reqid,
         )
 
-        reqid = request_id()
+        reqid = request_id("chgpol-chg-")
         self.api.object_change_policy(
             self.account, name, name, new_policy, version=obj1["version"], reqid=reqid
         )
