@@ -139,6 +139,64 @@ class ContainerTest(CliTestCase):
         # Bucket not found (HTTP 404)
         self.assertRaises(CommandFailed, self.openio, "bucket show " + cname)
 
+    def test_bucket_show_with_feature(self):
+        cname = "mybucket-" + random_str(4).lower()
+        # Create bucket
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
+
+        # Activate feature
+        output = self.openio(
+            " container set --property X-Container-Sysmeta-S3Api-Website=foo " + cname
+        )
+        event = self.wait_for_kafka_event(
+            fields={"user": cname}, types=(EventTypes.CONTAINER_UPDATE,)
+        )
+        self.assertIsNotNone(event)
+
+        opts = self.get_format_opts(
+            fields=("account", "bytes", "objects", "features-details")
+        )
+        mtime = event.when
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(
+            self.account_from_env()
+            + "\n0\n{'website': [{'mtime': '"
+            + str(mtime)
+            + "', 'action': 'SET'}]}\n0\n",
+            output,
+        )
+
+        # Activate untracked feature
+        output = self.openio(
+            " container set --property X-Container-Sysmeta-S3Api-Not-tracked=foo "
+            + cname
+        )
+        event = self.wait_for_kafka_event(
+            fields={"user": cname}, types=(EventTypes.CONTAINER_UPDATE,)
+        )
+        self.assertIsNotNone(event)
+
+        opts = self.get_format_opts(
+            fields=("account", "bytes", "objects", "features-details")
+        )
+        output = self.openio("bucket show " + cname + opts)
+        self.assertEqual(
+            self.account_from_env()
+            + "\n0\n{'website': [{'mtime': '"
+            + str(mtime)
+            + "', 'action': 'SET'}]}\n0\n",
+            output,
+        )
+
+        # Delete bucket
+        opts = self.get_format_opts(fields=("Deleted",))
+        output = self.openio("bucket delete " + cname + opts)
+        self.assertEqual("True\n", output)
+        # Bucket not found (HTTP 404)
+        self.assertRaises(CommandFailed, self.openio, "bucket show " + cname)
+
     def test_bucket_show_with_account_refresh(self):
         account = "myaccount-" + random_str(4).lower()
         cname = "mybucket-" + random_str(4).lower()
@@ -162,9 +220,10 @@ class ContainerTest(CliTestCase):
                 "--oio-account %s object create %s %s --name test"
                 % (account, cname, file_.name)
             )
-        self.wait_for_kafka_event(
+        event = self.wait_for_kafka_event(
             fields={"user": cname}, types=(EventTypes.CONTAINER_STATE,)
         )
+        self.assertIsNotNone(event)
         # Show bucket
         opts = self.get_format_opts(
             fields=("account", "bytes", "containers", "objects")

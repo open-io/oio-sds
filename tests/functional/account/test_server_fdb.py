@@ -679,7 +679,9 @@ class TestAccountServer(TestAccountServerBase):
         resp = self.app.put("/v1.0/bucket/create", query_string=bucket_params)
         self.assertEqual(201, resp.status_code)
         # Fetch bucket metadata
-        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        resp = self.app.get(
+            "/v1.0/bucket/show", query_string={"details": True, **bucket_params}
+        )
         expected_metdata = self.json_loads(resp.data)
         expected_metdata.pop("mtime")
         # Add ratelimit with one group
@@ -697,7 +699,9 @@ class TestAccountServer(TestAccountServerBase):
             query_string=bucket_params,
         )
         self.assertEqual(204, resp.status_code)
-        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        resp = self.app.get(
+            "/v1.0/bucket/show", query_string={"details": True, **bucket_params}
+        )
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")
@@ -721,7 +725,9 @@ class TestAccountServer(TestAccountServerBase):
             query_string=bucket_params,
         )
         self.assertEqual(204, resp.status_code)
-        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        resp = self.app.get(
+            "/v1.0/bucket/show", query_string={"details": True, **bucket_params}
+        )
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")
@@ -737,7 +743,9 @@ class TestAccountServer(TestAccountServerBase):
             query_string=bucket_params,
         )
         self.assertEqual(204, resp.status_code)
-        resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
+        resp = self.app.get(
+            "/v1.0/bucket/show", query_string={"details": True, **bucket_params}
+        )
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")

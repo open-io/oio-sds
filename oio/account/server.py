@@ -1507,6 +1507,9 @@ class Account(WerkzeugApp):
         check_owner = boolean_value(req.args.get("check_owner"), None)
         if check_owner is not None:
             kwargs["check_owner"] = check_owner
+        details = boolean_value(req.args.get("details"), False)
+        if details:
+            kwargs["details"] = details
         info = self.backend.get_bucket_info(bname, account=account, **kwargs)
         if not info:
             return NotFound("Bucket not found")
@@ -1629,7 +1632,10 @@ class Account(WerkzeugApp):
         feature = self._get_item_id(req, key="feature", what="feature")
         region = self._get_item_id(req, key="region", what="region")
         account = req.args.get("account")
-        self.backend.feature_activate(region, feature, bucket, account=account)
+        mtime = req.args.get("mtime")
+        self.backend.feature_activate(
+            region, feature, bucket, account=account, mtime=mtime
+        )
         return Response(status=204)
 
     @force_master
@@ -1641,7 +1647,10 @@ class Account(WerkzeugApp):
         feature = self._get_item_id(req, key="feature", what="feature")
         region = self._get_item_id(req, key="region", what="region")
         account = req.args.get("account")
-        self.backend.feature_deactivate(region, feature, bucket, account=account)
+        mtime = req.args.get("mtime")
+        self.backend.feature_deactivate(
+            region, feature, bucket, account=account, mtime=mtime
+        )
         return Response(status=204)
 
     @force_master

@@ -66,7 +66,9 @@ class BucketClient(ServiceClient):
             bucket, "POST", "delete", params=params, **kwargs
         )
 
-    def bucket_show(self, bucket, account=None, check_owner=None, **kwargs):
+    def bucket_show(
+        self, bucket, account=None, check_owner=None, details=False, **kwargs
+    ):
         """
         Get information about a bucket.
         """
@@ -75,6 +77,8 @@ class BucketClient(ServiceClient):
             params["account"] = account
         if check_owner is not None:
             params["check_owner"] = check_owner
+        if details:
+            params["details"] = details
         _resp, body = self.bucket_request(
             bucket, "GET", "show", params=params, **kwargs
         )
@@ -144,25 +148,27 @@ class BucketClient(ServiceClient):
         _resp, body = self.bucket_request(bucket, "GET", "get-owner", **kwargs)
         return body
 
-    def bucket_feature_activate(self, bucket, account, feature, **kwargs):
+    def bucket_feature_activate(self, bucket, account, feature, mtime=None, **kwargs):
         """
         Activate feature for bucket.
         """
         params = {
             "account": account,
             "feature": feature,
+            "mtime": mtime,
         }
         _resp, _body = self.bucket_request(
             bucket, "POST", "feature/activate", params=params, **kwargs
         )
 
-    def bucket_feature_deactivate(self, bucket, account, feature, **kwargs):
+    def bucket_feature_deactivate(self, bucket, account, feature, mtime=None, **kwargs):
         """
         Deactivate feature for bucket.
         """
         params = {
             "account": account,
             "feature": feature,
+            "mtime": mtime,
         }
         _resp, _body = self.bucket_request(
             bucket, "POST", "feature/deactivate", params=params, **kwargs

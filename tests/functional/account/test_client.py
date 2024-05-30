@@ -1436,8 +1436,6 @@ class TestAccountClient(AccountBaseTestCase):
                 "containers": 1,
                 "objects": 12,
                 "bytes": 42,
-                "objects-details": {"SINGLE": 12},
-                "bytes-details": {"SINGLE": 42},
                 "region": self.account_client.region.upper(),
                 "replication_enabled": False,
             },

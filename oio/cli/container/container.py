@@ -697,6 +697,7 @@ class ShowBucket(ShowOne):
             parsed_args.bucket,
             account=account,
             check_owner=parsed_args.check_owner,
+            details=True,
             reqid=reqid,
         )
         if parsed_args.formatter == "table":

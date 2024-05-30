@@ -2191,7 +2191,7 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
-    def _bucket_info(self, tr, bname, raw_metadata=False, **kwargs):
+    def _bucket_info(self, tr, bname, raw_metadata=False, details=False, **kwargs):
         """
         [transactional] Get all available information about a bucket.
         """
@@ -2210,6 +2210,11 @@ class AccountBackendFdb(object):
         if not raw_metadata:
             repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
             info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
+        if not details:
+            detail_keys = [k for k in info if k.endswith("-details")]
+            for key in detail_keys:
+                _ = info.pop(key)
+
         ratelimit = info.pop(f"{BUCKET_PROP_RATELIMIT}-details", None)
         if ratelimit is not None:
             if raw_metadata:
