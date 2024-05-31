@@ -80,6 +80,13 @@ class TestKmsClient(BaseTestCase):
             secret_bytes=KMS_SECRET_BYTES_MAX + 1,
         )
 
+    def test_create_bucket_secret_twice(self):
+        _, secret_meta = self.kms.create_secret(self.account, self.bucket)
+        self.kms.delete_secret(self.account, self.bucket)
+        _, secret_meta_2 = self.kms.create_secret(self.account, self.bucket)
+        # Ensure both secrets are equal, thanks to the trash feature
+        self.assertEqual(secret_meta, secret_meta_2)
+
     def test_get_secret(self):
         _, secret_meta = self.kms.create_secret(self.account, self.bucket)
         secret_meta_2 = self.kms.get_secret(

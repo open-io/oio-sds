@@ -15,6 +15,7 @@
 
 from collections import Counter
 from copy import deepcopy
+from datetime import datetime, timedelta
 from enum import IntEnum
 from functools import wraps
 import struct
@@ -2962,6 +2963,10 @@ class AccountBackendFdb(object):
     # => KMS domain service key
     # {kms_space}/incomplete/{account}/{bucket}/secret/{secret_id}
     # => Incomplete marker
+    # {kms_space}/trash/{account}/{bucket}/secret/{secret_id}/timestamp
+    # => Trash record timestamp
+    # {kms_space}/trash/{account}/{bucket}/secret/{secret_id}/{timestamp}
+    # => Copy of the last deleted secret space
 
     @catch_service_errors
     def delete_bucket_secret(self, account, bucket, secret_id="1", **kwargs):
@@ -2974,11 +2979,33 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     def _delete_bucket_secret(self, tr, account, bucket, secret_id, **_kwargs):
-        bucket_space = self.kms_space[account][bucket]
-        tr.clear(bucket_space.pack(("secret", secret_id)))
-        secret_range = bucket_space["secret"][secret_id].range()
-        tr.clear_range(secret_range.start, secret_range.stop)
+        bucket_space = self.kms_space[account][bucket]["secret"]
         incomplete_space = self.kms_space["incomplete"][account][bucket]
+        trash_space = self.kms_space["trash"][account][bucket]["secret"]
+
+        timestamp = tr[trash_space.pack((secret_id, "timestamp"))]
+        if not timestamp.present():
+            # Save the timestamp
+            ts = datetime.now().isoformat()
+            tr[trash_space.pack((secret_id, "timestamp"))] = ts.encode("utf-8")
+            # Copy the plaintext secret
+            secret = tr[bucket_space.pack((secret_id,))]
+            tr[trash_space.pack((secret_id, ts))] = secret
+            # Copy the whole secret space
+            secret_space = bucket_space[secret_id]
+            secret_range = secret_space.range()
+            for k, v in tr.get_range(secret_range.start, secret_range.stop):
+                key = secret_space.unpack(k)
+                tr[trash_space[secret_id][ts].pack(key)] = v
+            # Copy incomplete flag if necessary
+            flag = tr[incomplete_space.pack(("secret", secret_id))]
+            if flag.present():
+                tr[trash_space.pack((secret_id, ts, "incomplete"))] = flag
+
+        # Clear the bucket space
+        tr.clear(bucket_space.pack((secret_id,)))
+        secret_range = bucket_space[secret_id].range()
+        tr.clear_range(secret_range.start, secret_range.stop)
         tr.clear(incomplete_space.pack(("secret", secret_id)))
 
     @catch_service_errors
@@ -3032,6 +3059,7 @@ class AccountBackendFdb(object):
         secret: bytes,
         checksum,
         secret_id="1",
+        clear_trash_delay=7,
         kms_secrets={},
         incomplete=False,
         **kwargs,
@@ -3045,6 +3073,7 @@ class AccountBackendFdb(object):
             secret,
             checksum,
             secret_id=secret_id,
+            clear_trash_delay=clear_trash_delay,
             kms_secrets=kms_secrets,
             incomplete=incomplete,
             **kwargs,
@@ -3059,6 +3088,7 @@ class AccountBackendFdb(object):
         secret: bytes,
         checksum,
         secret_id,
+        clear_trash_delay,
         kms_secrets,
         incomplete,
         **_kwargs,
@@ -3070,12 +3100,43 @@ class AccountBackendFdb(object):
             raise Conflict(
                 f"A secret checksum for secret_id={secret_id} already exists"
             )
-        tr[secret_space.pack((secret_id,))] = secret
-        tr[secret_space.pack((secret_id, "checksum"))] = checksum.encode("utf-8")
-        for domain, (key_id, ciphertext) in kms_secrets.items():
-            domain_space = secret_space[secret_id]["kms"][domain]
-            tr[domain_space.pack(("key_id",))] = key_id.encode("utf-8")
-            tr[domain_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
-        if incomplete:
-            incomplete_space = self.kms_space["incomplete"][account][bucket]
-            tr[incomplete_space.pack(("secret", secret_id))] = b"1"
+        incomplete_space = self.kms_space["incomplete"][account][bucket]
+        trash_space = self.kms_space["trash"][account][bucket]["secret"]
+        trash_range = trash_space.range()
+        restore = False
+
+        timestamp = tr[trash_space.pack((secret_id, "timestamp"))]
+        if timestamp.present():
+            ts = timestamp.decode("utf-8")
+            dt = datetime.fromisoformat(ts)
+            if dt + timedelta(days=clear_trash_delay) > datetime.now():
+                # Still in the grace period
+                restore = True
+
+        if restore:
+            for k, v in tr.get_range(trash_range.start, trash_range.stop):
+                t_key = trash_space.unpack(k)
+                # Remove trash timestamp from key elements
+                key = tuple(x for x in t_key if x != timestamp.decode("utf-8"))
+                if key[-1] == "timestamp":
+                    continue
+                elif key[-1] == "incomplete":
+                    tr[incomplete_space["secret"].pack(key)] = v
+                else:
+                    tr[secret_space.pack(key)] = v
+        else:
+            tr[secret_space.pack((secret_id,))] = secret
+            tr[secret_space.pack((secret_id, "checksum"))] = checksum.encode("utf-8")
+            for domain, (key_id, ciphertext) in kms_secrets.items():
+                domain_space = secret_space[secret_id]["kms"][domain]
+                tr[domain_space.pack(("key_id",))] = key_id.encode("utf-8")
+                tr[domain_space.pack(("ciphertext",))] = ciphertext.encode("utf-8")
+            if incomplete:
+                tr[incomplete_space.pack(("secret", secret_id))] = b"1"
+
+        # Any remaining trash record can now be cleared
+        if timestamp.present():
+            self.logger.info(f"Clearing {account}/{bucket} trash from {ts}")
+            tr.clear_range(trash_range.start, trash_range.stop)
+
+        return restore

@@ -1765,7 +1765,7 @@ class Account(WerkzeugApp):
                     kms_secrets[domain]["ciphertext"],
                     context,
                 )
-            except KeyError as exc:
+            except KeyError:
                 self.logger.info(
                     f"No KMS secret found on domain {domain} for bucket "
                     f"{account_id}/{bname}"
@@ -1793,7 +1793,7 @@ class Account(WerkzeugApp):
                     )
         return resp
 
-    def _get_and_decrypt_secret(self, resp):
+    def _get_and_decrypt_secret(self, resp, status=200):
         account_id = resp["account"]
         bname = resp["bucket"]
         secret_id = resp["secret_id"]
@@ -1811,7 +1811,7 @@ class Account(WerkzeugApp):
         return Response(
             json.dumps(resp, separators=(",", ":")),
             mimetype=HTTP_CONTENT_TYPE_JSON,
-            status=200,
+            status=status,
         )
 
     @send_stats
@@ -1865,7 +1865,7 @@ class Account(WerkzeugApp):
 
         # Save checksum, plaintext and ciphered secrets
         try:
-            self.backend.save_bucket_secret(
+            restored = self.backend.save_bucket_secret(
                 account_id,
                 bname,
                 secret,
@@ -1876,6 +1876,10 @@ class Account(WerkzeugApp):
             )
         except Conflict:
             return self._get_and_decrypt_secret(resp)
+
+        # We need to override resp["secret"]
+        if restored:
+            return self._get_and_decrypt_secret(resp, status=201)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),
