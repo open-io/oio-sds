@@ -137,7 +137,7 @@ class RecursiveCheckCommand(ItemCheckCommand):
         parser.add_argument(
             "--limit-listings",
             type=int,
-            default=2,
+            default=0,  # FIXME(adu): default=2
             help=(
                 "Avoid listing the whole container (resp. account) to check if an "
                 "object (resp. container) exists:\n"
