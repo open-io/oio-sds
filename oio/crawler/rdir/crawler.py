@@ -13,10 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from multiprocessing import Event
+
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
+from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
-from oio.common.logger import get_logger
 
 from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx
 from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
@@ -49,26 +51,75 @@ class RdirCrawler(Daemon):
         super(RdirCrawler, self).__init__(conf=conf)
         if not conf_file:
             raise exc.ConfigurationException("Missing configuration path")
-        conf["conf_file"] = conf_file
-        self.logger = get_logger(conf)
-        if not conf.get("volume_list"):
+        self.conf["conf_file"] = conf_file
+        if not self.conf.get("volume_list"):
             raise exc.OioException("No rawx volumes provided to index!")
-        self.volumes = [x.strip() for x in conf.get("volume_list").split(",")]
+        self._stop_requested = Event()
+        self.volumes = [x.strip() for x in self.conf.get("volume_list").split(",")]
         self.watchdog = get_watchdog(called_from_main_application=True)
-        worker_class = worker_class_for_type(conf)
-        self.volume_workers = [
-            worker_class(conf, x, logger=self.logger, watchdog=self.watchdog)
-            for x in self.volumes
-        ]
+        self.worker_class = worker_class_for_type(self.conf)
+        self._check_worker_delay = (
+            float_value(
+                self.conf.get("interval"), self.worker_class.DEFAULT_SCAN_INTERVAL
+            )
+            / 2.0  # Half interval before checking, half interval before restarting
+        )
+        self.volume_workers = {}
+        self.create_workers()
+
+    def create_workers(self):
+        """
+        Create workers for volumes which have no associated worker yet.
+        """
+        for vol in self.volumes:
+            if vol not in self.volume_workers and not self._stop_requested.is_set():
+                try:
+                    worker = self.worker_class(
+                        self.conf, vol, logger=self.logger, watchdog=self.watchdog
+                    )
+                    self.volume_workers[vol] = worker
+                except Exception as err:
+                    self.logger.warning(
+                        "Failed to create worker for volume %s: %s",
+                        vol,
+                        err,
+                    )
+
+    def start_workers(self):
+        """
+        Start workers which are not already alive,
+        join workers which have unexpectedly stopped.
+        """
+        for vol, worker in list(self.volume_workers.items()):
+            if not worker.is_alive() and not self._stop_requested.is_set():
+                if worker.exitcode is not None:
+                    self.logger.warning(
+                        "Worker process for volume %s "
+                        "unexpectedly stopped with code: %s",
+                        vol,
+                        worker.exitcode,
+                    )
+                    worker.join()
+                    # A new worker will be created at next iteration
+                    del self.volume_workers[vol]
+                else:
+                    worker.start()
 
     def run(self, *args, **kwargs):
         self.logger.info("Started rdir crawler service")
-        for worker in self.volume_workers:
-            worker.start()
-        for worker in self.volume_workers:
-            worker.join()
+        # Start the workers already initialized
+        self.start_workers()
+        # Retry from time to time to start the workers which failed previously
+        while not self._stop_requested.wait(self._check_worker_delay):
+            self.create_workers()
+            self.start_workers()
+        # Now that stop has been requested, join subprocesses
+        self.logger.info("Joining worker processes")
+        for worker in self.volume_workers.values():
+            worker.join(5.0)
 
     def stop(self):
+        self._stop_requested.set()
         self.logger.info("Stopping rdir crawler")
         for worker in self.volume_workers:
             worker.stop()

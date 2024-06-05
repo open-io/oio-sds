@@ -33,7 +33,7 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
 
     REPORT_INTERVAL = 300
     CONSCIENCE_CACHE = 30
-    SCANS_INTERVAL = 1800
+    DEFAULT_SCAN_INTERVAL = 1800
     SERVICE_TYPE = "rdir"
     WORKER_TYPE = None
 
@@ -68,7 +68,9 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
         self.delete_orphan_entries = boolean_value(
             self.conf.get("delete_orphan_entries"), False
         )
-        self.scans_interval = int_value(self.conf.get("interval"), self.SCANS_INTERVAL)
+        self.scans_interval = int_value(
+            self.conf.get("interval"), self.DEFAULT_SCAN_INTERVAL
+        )
         self.report_interval = int_value(
             self.conf.get("report_interval"), self.REPORT_INTERVAL
         )
