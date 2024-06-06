@@ -76,7 +76,6 @@ M2V2_DECLARE_FILTER(meta2_filter_check_url_cid);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_name);
 M2V2_DECLARE_FILTER(meta2_filter_check_optional_ns_name);
 M2V2_DECLARE_FILTER(meta2_filter_check_backend);
-M2V2_DECLARE_FILTER(meta2_filter_check_ns_is_master);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
 M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
 /** Check that the requested region matches the region we are in. */
@@ -92,7 +91,6 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_body_beans);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_localflag);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_urgentflag);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_flags32);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_delete_marker);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_bypass_governance);

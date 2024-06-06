@@ -159,18 +159,6 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[512];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2(NAME_MSGKEY_APPEND, "APPEND", 1);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_peers(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

@@ -393,11 +393,6 @@
 				"def": "NONE",
 				"descr": "" },
 
-			{ "type": "bool", "name": "oio_ns_master",
-				"key": "ns.master",
-				"def": true,
-				"descr": "" },
-
 			{ "type": "bool", "name": "oio_ns_mode_worm",
 				"key": "ns.worm",
 				"def": false,

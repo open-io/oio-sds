@@ -786,14 +786,6 @@ Used by `gcc`
  * cmake directive: *OIO_NS_FLAT_BITS*
  * range: 0 -> 64
 
-### ns.master
-
-> TODO: to be documented
-
- * default: **TRUE**
- * type: gboolean
- * cmake directive: *OIO_NS_MASTER*
-
 ### ns.meta1_digits
 
 > Default number of digits to aggregate meta1 databases.

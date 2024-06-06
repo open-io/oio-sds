@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -97,26 +97,6 @@ meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
 	if (meta2_backend_initiated(m2b))
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, SYSERR("Backend not ready"));
-	return FILTER_KO;
-}
-
-int
-meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	TRACE_FILTER();
-
-	const char *admin = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_ADMIN_COMMAND);
-	if (oio_str_parse_bool(admin, FALSE)) {
-		GRID_DEBUG("admin mode is on");
-		return FILTER_OK;
-	}
-
-	if (oio_ns_master)
-		return FILTER_OK;
-	GRID_TRACE("NS is slave, operation failed");
-	meta2_filter_ctx_set_error(ctx, SYSERR("NS slave!"));
 	return FILTER_KO;
 }
 
