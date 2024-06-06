@@ -12,11 +12,30 @@
                             "type": "folder"
                         },
                         {
-                            "created": {"$lt": "${date}"}
+                            "created": {"$lt": "${ddate}"}
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "aql": {
+                "items.find": {
+                    "repo": "pu-objectstorage-oio-sds-static",
+                    "$and": [
+                        {
+                            "path": {"$match": "*coverage/master"}
+                        },
+                        {
+                            "type": "folder"
+                        },
+                        {
+                            "created": {"$lt": "${mdate}"}
                         }
                     ]
                 }
             }
         }
+
     ]
 }

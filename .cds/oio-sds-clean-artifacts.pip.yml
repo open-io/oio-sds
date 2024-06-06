@@ -9,11 +9,19 @@ jobs:
     script:
     - curl -fL https://install-cli.jfrog.io | sh
   - name: Clean old coverage artifacts
-    script:
-    - set -x
-    - export KEEP_DAYS=15
-    - export KEEP_DATE=$(date -Iseconds -d @$(expr "$(date +%s)" - "$KEEP_DAYS" \* 24 \* 3600))
-    - jf rt del --user {{ .cds.proj.artifactory_user }} --access-token {{ .cds.proj.artifactory_token }} --url https://artifactory.ovhcloud.tools/artifactory --spec=.cds/old-coverage-artifacts.aql.json --spec-vars="date=$KEEP_DATE"
+    script: |+
+      #!/bin/bash
+      set -x
+      KEEP_DAYS_DEV=15
+      KEEP_DAYS_MASTER={{ .cds.proj.keep_coverage_days | default "100" }}
+      export KEEP_DATE_DEV=$(date -Iseconds -d @$(expr "$(date +%s)" - "$KEEP_DAYS_DEV" \* 24 \* 3600))
+      export KEEP_DATE_MASTER=$(date -Iseconds -d @$(expr "$(date +%s)" - "$KEEP_DAYS_MASTER" \* 24 \* 3600))
+      jf rt del \
+        --user {{ .cds.proj.artifactory_user }} \
+        --access-token {{ .cds.proj.artifactory_token }} \
+        --url https://artifactory.ovhcloud.tools/artifactory \
+        --spec=.cds/old-coverage-artifacts.aql.json \
+        --spec-vars="ddate=$KEEP_DATE_DEV;mdate=$KEEP_DATE_MASTER"
 
   requirements:
   - model: ubuntu-focal
