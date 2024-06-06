@@ -411,11 +411,16 @@ class KafkaConsumer(KafkaClient):
             log_message = f"message: {message}"
         self._logger.debug("Committing %s", log_message)
         try:
+            start = time.monotonic()
             partitions = self._client.commit(**kwargs)
+            log_message += f" ({time.monotonic() - start:.4f}s)"
             errors = [p.error for p in partitions if p.error]
             if errors:
-                self._logger.error("Failed to commit partitions: %s", errors)
+                self._logger.error(
+                    "Failed to commit %s, errors: %s", log_message, errors
+                )
                 return False
+
         except KafkaException as exc:
             self._logger.error("Failed to commit %s, reason: %s", log_message, str(exc))
             err = exc.args[0]
