@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -511,8 +511,10 @@ metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
 {
 	gsize fsize = 0;
 	void *f = metautils_message_get_field(msg, n, &fsize);
-	if (!f || !fsize || (gssize)fsize < 0 || fsize >= dst_size)
+	if (!f || !fsize || (gssize)fsize < 0 || fsize >= dst_size) {
 		return FALSE;
+	}
+
 	if (fsize)
 		memcpy(dst, f, fsize);
 	memset(dst+fsize, 0, dst_size-fsize);
@@ -520,17 +522,23 @@ metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
 }
 
 GError *
-metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
-		gsize dst_size)
+metautils_message_extract_string(MESSAGE msg, const gchar *n,
+		gboolean mandatory, gchar *dst, gsize dst_size)
 {
 	gsize fsize = 0;
 	void *f = metautils_message_get_field(msg, n, &fsize);
-	if (!f)
-		return NEWERROR(CODE_BAD_REQUEST, "missing '%s'", n);
-	if (!fsize)
-		return NEWERROR(CODE_BAD_REQUEST, "empty '%s'", n);
-	if ((gssize)fsize < 0 || fsize >= dst_size)
-		return NEWERROR(CODE_BAD_REQUEST, "too long '%s' (%"G_GSIZE_FORMAT")", n, fsize);
+	if (!f || !fsize) {
+		if (mandatory) {
+			if (!f) {
+				return NEWERROR(CODE_BAD_REQUEST, "Missing '%s'", n);
+			}
+			return NEWERROR(CODE_BAD_REQUEST, "Empty '%s'", n);
+		}
+		return NULL;
+	}
+	if ((gssize)fsize < 0 || fsize >= dst_size) {
+		return NEWERROR(CODE_BAD_REQUEST, "Too long '%s' (%"G_GSIZE_FORMAT")", n, fsize);
+	}
 
 	if (fsize)
 		memcpy(dst, f, fsize);
@@ -685,22 +693,24 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 }
 
 GError *
-metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
+metautils_message_extract_strint64(MESSAGE msg, const gchar *n,
+		gboolean mandatory, gint64 *i64)
 {
+	EXTRA_ASSERT (i64 != NULL);
+
 	/* 20 chars for the number
 	 *  1 char for the sign
 	 *  1 char for the NULL terminator
 	 *  2 chars for padding */
 	gchar *end, dst[24];
-
-	EXTRA_ASSERT (i64 != NULL);
-	*i64 = 0;
-
-	memset(dst, 0, sizeof(dst));
-	GError *err = metautils_message_extract_string(msg, n, dst, sizeof(dst));
+	dst[0] = 0;
+	GError *err = metautils_message_extract_string(msg, n, mandatory,
+			dst, sizeof(dst));
 	if (err != NULL) {
 		g_prefix_error(&err, "field: ");
 		return err;
+	} else if (!dst[0]) {  // Not mandatory and no value
+		return NULL;
 	}
 
 	end = NULL;
@@ -720,15 +730,26 @@ metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 }
 
 GError*
-metautils_message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
+metautils_message_extract_struint(MESSAGE msg, const gchar *n,
+		gboolean mandatory, guint *u)
 {
 	EXTRA_ASSERT (u != NULL);
-	*u = 0;
-	gint64 i64 = 0;
-	GError *err = metautils_message_extract_strint64(msg, n, &i64);
-	if (err) { g_prefix_error(&err, "struint: "); return err; }
-	if (i64<0) return NEWERROR(CODE_BAD_REQUEST, "[%s] is negative", n);
-	if (i64 > G_MAXUINT) return NEWERROR(CODE_BAD_REQUEST, "[%s] is too big", n);
+
+	gint64 i64 = G_MININT64;
+	GError *err = metautils_message_extract_strint64(msg, n, mandatory, &i64);
+	if (err) {
+		g_prefix_error(&err, "struint: ");
+		return err;
+	}
+	if (i64 == G_MININT64) {  // Not mandatory and no value
+		return NULL;
+	}
+	if (i64 < 0) {
+		return NEWERROR(CODE_BAD_REQUEST, "[%s] is negative", n);
+	}
+	if (i64 > G_MAXUINT) {
+		return NEWERROR(CODE_BAD_REQUEST, "[%s] is too big", n);
+	}
 	*u = i64;
 	return NULL;
 }
@@ -737,14 +758,16 @@ GError*
 metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 		gboolean mandatory, gboolean *v)
 {
+	EXTRA_ASSERT (v != NULL);
+
 	gchar tmp[16];
-	GError *err = metautils_message_extract_string(msg, n, tmp, sizeof(tmp));
+	tmp[0] = 0;
+	GError *err = metautils_message_extract_string(msg, n, mandatory, tmp, sizeof(tmp));
 	if (err) {
-		if (!mandatory)
-			g_clear_error(&err);
 		return err;
+	} else if (!tmp[0]) {  // Not mandatory and no value
+		return NULL;
 	}
-	if (v)
-		*v = oio_str_parse_bool (tmp, *v);
+	*v = oio_str_parse_bool(tmp, *v);
 	return NULL;
 }

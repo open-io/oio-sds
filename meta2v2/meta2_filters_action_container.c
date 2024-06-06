@@ -619,12 +619,17 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
 	gboolean recompute = FALSE;
-	metautils_message_extract_boolean(reply->request,
+	GError *err = metautils_message_extract_boolean(reply->request,
 			NAME_MSGKEY_RECOMPUTE, FALSE, &recompute);
-
-	GError *err = meta2_backend_notify_container_state(m2b, url, recompute);
-	if (!err)
+	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_RECOMPUTE"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
+	} else {
+		err = meta2_backend_notify_container_state(m2b, url, recompute);
+	}
+	if (!err) {
 		return FILTER_OK;
+	}
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
 }

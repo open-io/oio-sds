@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -96,8 +97,8 @@ gboolean metautils_message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 GError* metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
 
-GError* metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
-		gsize dst_size);
+GError* metautils_message_extract_string(MESSAGE msg, const gchar *n,
+		gboolean mandatory, gchar *dst, gsize dst_size);
 
 /** Returns TRUE on success, FALSE otherwise */
 gboolean metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
@@ -106,10 +107,10 @@ gboolean metautils_message_extract_string_noerror(MESSAGE msg, const gchar *n,
 gchar* metautils_message_extract_string_copy(MESSAGE msg, const gchar *n);
 
 GError* metautils_message_extract_strint64(MESSAGE msg, const gchar *n,
-		gint64 *i64);
+		gboolean mandatory, gint64 *i64);
 
 GError* metautils_message_extract_struint(MESSAGE msg, const gchar *n,
-		guint *u);
+		gboolean mandatory, guint *u);
 
 GError* metautils_message_extract_boolean(MESSAGE msg,
 		const gchar *n, gboolean mandatory, gboolean *v);

@@ -248,9 +248,10 @@ metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg)
 	EXTRA_ASSERT (status != NULL);
 	EXTRA_ASSERT (msg != NULL);
 
-	GError *err = metautils_message_extract_struint(reply, NAME_MSGKEY_STATUS, status);
+	GError *err = metautils_message_extract_struint(reply, NAME_MSGKEY_STATUS,
+			TRUE, status);
 	if (err) {
-		g_prefix_error (&err, "status: ");
+		g_prefix_error(&err, "status: ");
 		return err;
 	}
 	*msg = metautils_message_extract_string_copy(reply, NAME_MSGKEY_MESSAGE);
@@ -275,7 +276,6 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	if (CODE_IS_NETWORK_ERROR(status)) {
 		err = NEWERROR(status, "net error: %s", message);
 		metautils_pclose(&(client->fd));
-		client->step = STATUS_FAILED;
 		return err;
 	}
 
@@ -300,13 +300,16 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		}
 
 		gchar root_hexid[STRLEN_CONTAINERID];
+		root_hexid[0] = 0;
 		err = metautils_message_extract_string(reply,
-				NAME_MSGKEY_ROOT_HEXID, root_hexid, sizeof(root_hexid));
-		if (err == NULL && oio_str_is_set(root_hexid)) {
+				NAME_MSGKEY_ROOT_HEXID, FALSE, root_hexid, sizeof(root_hexid));
+		if (err) {
+			return err;
+		}
+		if (root_hexid[0]) {
 			oio_ext_set_root_hexid(root_hexid);
 		} else {
 			oio_ext_set_root_hexid(NULL);
-			g_error_free(err);
 		}
 
 		return NULL;

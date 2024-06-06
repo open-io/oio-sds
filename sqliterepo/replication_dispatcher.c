@@ -44,26 +44,19 @@ License along with this library.
 #include "internals.h"
 #include "restoration.h"
 
-#define EXTRACT_STRING(Name,Dst) do { \
-	err = metautils_message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
-	if (err != NULL) { \
+#define EXTRACT_STRING2(Name, Dst, Opt) do { \
+	Dst[0] = 0; \
+	err = metautils_message_extract_string(reply->request, Name, !Opt, \
+			Dst, sizeof(Dst)); \
+	if (err) { \
+		GRID_ERROR("Failed to extract '%s': (%d) %s (reqid=%s)", \
+				Name, err->code, err->message, oio_ext_get_reqid()); \
 		reply->send_error(0, err); \
 		return TRUE; \
 	} \
 } while (0)
 
-#define EXTRACT_STRING2(Name,Dst,Opt) do { \
-	err = metautils_message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
-	if (err != NULL) { \
-		if(!Opt) { \
-			reply->send_error(0, err); \
-			return TRUE; \
-		} else { \
-			g_clear_error(&err); \
-			Dst[0] = '\0'; \
-		} \
-	} \
-} while (0)
+#define EXTRACT_STRING(Name, Dst) EXTRACT_STRING2(Name, Dst, FALSE)
 
 #define ADMIN "admin"
 
@@ -753,22 +746,25 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	flush = local = nocheck = chunked = propagate_to_shards = FALSE;
 
 	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
-	if (NULL != err)
+			NAME_MSGKEY_NAMESPACE, TRUE, ns, sizeof(ns));
+	if (err) {
 		return err;
+	}
 	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_BASENAME, base, sizeof(base));
-	if (NULL != err)
+			NAME_MSGKEY_BASENAME, TRUE, base, sizeof(base));
+	if (err) {
 		return err;
+	}
 	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_BASETYPE, type, sizeof(type));
-	if (NULL != err)
+			NAME_MSGKEY_BASETYPE, TRUE, type, sizeof(type));
+	if (err) {
 		return err;
+	}
+	suffix[0] = 0;
 	err = metautils_message_extract_string(ctx->request,
-			NAME_MSGKEY_BASESUFFIX, suffix, sizeof(suffix));
-	if (err != NULL) {
-		g_clear_error(&err);
-		suffix[0] = '\0';
+			NAME_MSGKEY_BASESUFFIX, FALSE, suffix, sizeof(suffix));
+	if (err) {
+		return err;
 	}
 
 	local = metautils_message_extract_flag(ctx->request,
@@ -814,8 +810,12 @@ _load_sqlx_peers(struct gridd_reply_ctx_s *ctx, gchar **peers)
 	gchar pbuf[256];
 	const char *msg = metautils_message_get_NAME(ctx->request, &msglen);
 	GError *err = metautils_message_extract_string(ctx->request,
-			SQLX_ADMIN_PEERS, pbuf, sizeof(pbuf));
-	if (!err && oio_str_is_set(pbuf)) {
+			SQLX_ADMIN_PEERS, FALSE, pbuf, sizeof(pbuf));
+	if (err) {
+		GRID_ERROR("Failed to extract '"SQLX_ADMIN_PEERS"': (%d) %s (reqid=%s)",
+				err->code, err->message, oio_ext_get_reqid());
+		g_clear_error(&err);
+	} else if (oio_str_is_set(pbuf)) {
 		*peers = g_strndup(pbuf, sizeof(pbuf));
 		GRID_TRACE("%.*s request received peers: %s (reqid=%s)",
 				(int)msglen, msg, *peers, oio_ext_get_reqid());
@@ -823,7 +823,6 @@ _load_sqlx_peers(struct gridd_reply_ctx_s *ctx, gchar **peers)
 		GRID_INFO("%.*s request received no peers (reqid=%s)",
 				(int)msglen, msg, oio_ext_get_reqid());
 	}
-	g_clear_error(&err);
 }
 
 static void
@@ -831,8 +830,10 @@ _maybe_override_check_type(struct gridd_reply_ctx_s *ctx, gint *check_type)
 {
 	gint64 _check_type = -1;
 	GError *err = metautils_message_extract_strint64(ctx->request,
-			NAME_MSGKEY_CHECK_TYPE, &_check_type);
+			NAME_MSGKEY_CHECK_TYPE, FALSE, &_check_type);
 	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_CHECK_TYPE"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 	} else if (_check_type >= 0) {
 		*check_type = (gint)_check_type;
@@ -2114,12 +2115,14 @@ static gboolean
 _handler_LEANIFY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo UNUSED, gpointer ignored UNUSED)
 {
-	guint size = 0;
-	GError *err = metautils_message_extract_struint (reply->request,
-			NAME_MSGKEY_SIZE, &size);
+	guint size = sqliterepo_release_size;
+	GError *err = metautils_message_extract_struint(reply->request,
+			NAME_MSGKEY_SIZE, FALSE, &size);
 	if (err) {
-		g_clear_error (&err);
-		size = sqliterepo_release_size;
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_SIZE"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
+		reply->send_error(0, err);
+		return TRUE;
 	}
 	sqlite3_release_memory (size);
 	reply->send_reply(CODE_FINAL_OK, "OK");
@@ -2130,24 +2133,28 @@ static gboolean
 _handler_BALM(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
-	guint max = 0;
+	guint max = 100;
 	gint64 inactivity = 0;
 	gboolean rejoin = TRUE;
 	gchar rejoin_str[16] = {0};
 	GError *err = NULL;
 
-	err = metautils_message_extract_struint(
-			reply->request, NAME_MSGKEY_SIZE, &max);
+	err = metautils_message_extract_struint(reply->request, NAME_MSGKEY_SIZE,
+			FALSE, &max);
 	if (err) {
-		g_clear_error(&err);
-		max = 100;
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_SIZE"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
+		reply->send_error(0, err);
+		return TRUE;
 	}
 
 	err = metautils_message_extract_strint64(
-			reply->request, NAME_MSGKEY_TIMEOUT, &inactivity);
+			reply->request, NAME_MSGKEY_TIMEOUT, FALSE, &inactivity);
 	if (err) {
-		g_clear_error(&err);
-		inactivity = 0;
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_TIMEOUT"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
+		reply->send_error(0, err);
+		return TRUE;
 	}
 
 	/* Shall we join as slave an election we were previously master on?
@@ -2179,8 +2186,8 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	hook hk;
-	gchar admin[16];
-	gchar force_master[16];
+	gboolean admin = FALSE;
+	gboolean force_master = FALSE;
 	gchar user_agent[1024];
 	GError *err = NULL;
 	gboolean res = TRUE;
@@ -2188,26 +2195,30 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	hk = (hook)hdata;
 
 	/* Extract admin */
-	memset(admin, 0, sizeof(admin));
-	err = metautils_message_extract_string(reply->request,
-			NAME_MSGKEY_ADMIN_COMMAND, admin, sizeof(admin));
+	err = metautils_message_extract_boolean(reply->request,
+			NAME_MSGKEY_ADMIN_COMMAND, FALSE, &admin);
 	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_ADMIN_COMMAND"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 	}
-	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+	oio_ext_set_admin(admin);
 	/* Extract force master */
-	memset(force_master, 0, sizeof(force_master));
-	err = metautils_message_extract_string(reply->request,
-			NAME_MSGKEY_FORCE_MASTER, force_master, sizeof(force_master));
+	err = metautils_message_extract_boolean(reply->request,
+			NAME_MSGKEY_FORCE_MASTER, FALSE, &force_master);
 	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_FORCE_MASTER"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 	}
-	oio_ext_set_force_master(oio_str_parse_bool(force_master, FALSE));
+	oio_ext_set_force_master(force_master);
 	/* Extract user-agent */
-	memset(user_agent, 0, sizeof(user_agent));
+	user_agent[0] = 0;
 	err = metautils_message_extract_string(reply->request,
-			NAME_MSGKEY_USER_AGENT, user_agent, sizeof(user_agent));
+			NAME_MSGKEY_USER_AGENT, FALSE, user_agent, sizeof(user_agent));
 	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_USER_AGENT"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 	}
 	oio_ext_set_user_agent(user_agent);

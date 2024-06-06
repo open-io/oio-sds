@@ -416,6 +416,31 @@ class TestMeta2Containers(BaseTestCase):
         del params["prefix"]
         del params["delimiter"]
 
+    def test_list_too_long_marker(self):
+        params = self.param_ref(self.ref)
+        self._create(params, 201)
+        self._create_content("a")
+        self._create_content("z")
+
+        params["marker"] = "a" * 1024
+        resp = self.request("GET", self.url_container("list"), params=params)
+        self.assertEqual(resp.status, 200)
+        data = self.json_loads(resp.data)
+        self.check_list_output(data, 1, 0)
+
+        params["marker"] = "a" * 1087
+        resp = self.request("GET", self.url_container("list"), params=params)
+        self.assertEqual(resp.status, 200)
+        self.check_list_output(data, 1, 0)
+
+        params["marker"] = "a" * 1088
+        resp = self.request("GET", self.url_container("list"), params=params)
+        self.assertEqual(resp.status, 400)
+
+        params["marker"] = "a" * 2048
+        resp = self.request("GET", self.url_container("list"), params=params)
+        self.assertEqual(resp.status, 400)
+
     def test_touch(self):
         params = self.param_ref(self.ref)
         resp = self.request("POST", self.url_container("touch"), params=params)

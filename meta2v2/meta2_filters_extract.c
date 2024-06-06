@@ -38,31 +38,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
-#define EXTRACT_STRING2(FieldName,VarName,Opt) do { \
-	e = metautils_message_extract_string(reply->request, FieldName, buf, sizeof(buf)); \
-	if(NULL != e) { \
-		if(!Opt) { \
-			meta2_filter_ctx_set_error(ctx, e); \
-			return FILTER_KO; \
-		} else { \
-			g_clear_error(&e); \
-			return FILTER_OK; \
-		} \
-	} \
-	meta2_filter_ctx_add_param(ctx, VarName, buf); \
-} while (0)
-
-#define EXTRACT_STRING(Name, Opt) EXTRACT_STRING2(Name,Name,Opt)
-
-#define EXTRACT_OPT(Name) do { \
-	memset(buf, 0, sizeof(buf)); \
-	e = metautils_message_extract_string(reply->request, Name, buf, sizeof(buf)); \
-	if (NULL != e) { \
-		g_clear_error(&e); \
-	} else { \
+#define EXTRACT_STRING(Name, Opt) do { \
+	buf[0] = 0; \
+	e = metautils_message_extract_string(reply->request, Name, !Opt, \
+			buf, sizeof(buf)); \
+	if (e) { \
+		GRID_ERROR("Failed to extract '%s': (%d) %s (reqid=%s)", \
+				Name, e->code, e->message, oio_ext_get_reqid()); \
+		meta2_filter_ctx_set_error(ctx, e); \
+		return FILTER_KO; \
+	} else if (buf[0]) { \
 		meta2_filter_ctx_add_param(ctx, Name, buf); \
 	} \
 } while (0)
+
+#define EXTRACT_OPT(Name) EXTRACT_STRING(Name, TRUE)
 
 #define EXTRACT_HEADER_BEANS(FieldName,Variable) do {\
 	GError *err = metautils_message_extract_header_encoded(reply->request, FieldName, TRUE, &Variable, bean_sequence_decoder);\

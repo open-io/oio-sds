@@ -1445,11 +1445,14 @@ _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	GError *err = NULL;
 	gboolean cache_hit = TRUE;
 	GByteArray *serialized = NULL;
-	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {0};
+	gchar strtype[LIMIT_LENGTH_SRVTYPE];
 
-	if (!metautils_message_extract_string_noerror(
-				reply->request, NAME_MSGKEY_TYPENAME, strtype, sizeof(strtype))) {
-		reply->send_error(0, BADREQ("Missing/Invalid service type"));
+	err = metautils_message_extract_string(
+			reply->request, NAME_MSGKEY_TYPENAME, TRUE,
+			strtype, sizeof(strtype));
+	if (err) {
+		g_prefix_error(&err, "Invalid service type: ");
+		reply->send_error(0, err);
 		return TRUE;
 	}
 
@@ -1590,11 +1593,15 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 static gboolean
 _cs_dispatch_FLUSH(struct gridd_reply_ctx_s *reply)
 {
-	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {};
+	GError *err = NULL;
+	gchar strtype[LIMIT_LENGTH_SRVTYPE];
 
-	if (!metautils_message_extract_string_noerror(
-				reply->request, NAME_MSGKEY_TYPENAME, strtype, sizeof(strtype))) {
-		reply->send_error(0, BADREQ("Missing service type"));
+	err = metautils_message_extract_string(
+			reply->request, NAME_MSGKEY_TYPENAME, TRUE,
+			strtype, sizeof(strtype));
+	if (err) {
+		g_prefix_error(&err, "Invalid service type: ");
+		reply->send_error(0, err);
 	} else {
 		_on_flush ((guint8*)strtype, strlen(strtype));
 		hub_flush_srvtype (strtype);

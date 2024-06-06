@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -131,8 +131,14 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		gint64 remaining = -1;
 		(void) ctx;
 
-		err2 = metautils_message_extract_strint64(reply, "remaining", &remaining);
-		g_clear_error(&err2);
+		err2 = metautils_message_extract_strint64(reply, "remaining", FALSE,
+				&remaining);
+		if (err2 != NULL) {
+			GRID_ERROR("Failed to extract 'remaining': (%d) %s (reqid=%s)",
+					err2->code, err2->message, oio_ext_get_reqid());
+			g_clear_error(&err2);
+			return FALSE;
+		}
 
 		void *b = metautils_message_get_BODY(reply, &bsize);
 		if (b && bsize) {

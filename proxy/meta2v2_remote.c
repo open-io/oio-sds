@@ -115,8 +115,11 @@ m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply)
 		/* Extract list flags */
 		e = metautils_message_extract_boolean(reply,
 				NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
-		if (e)
+		if (e) {
+			GRID_ERROR("Failed to extract '"NAME_MSGKEY_TRUNCATED"': (%d) %s "
+					"(reqid=%s)", e->code, e->message, oio_ext_get_reqid());
 			g_clear_error(&e);
+		}
 		gchar *marker = metautils_message_extract_string_copy(reply,
 				NAME_MSGKEY_NEXTMARKER);
 		oio_str_reuse(&out->next_marker, marker);
@@ -149,8 +152,11 @@ m2v2_boolean_truncated_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 
 	GError *err = metautils_message_extract_boolean(reply,
 			NAME_MSGKEY_TRUNCATED, FALSE, truncated);
-	if (err)
+	if (err) {
+		GRID_ERROR("Failed to extract '"NAME_MSGKEY_TRUNCATED"': (%d) %s "
+				"(reqid=%s)", err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
+	}
 
 	return TRUE;
 }
