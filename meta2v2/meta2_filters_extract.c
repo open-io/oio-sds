@@ -379,7 +379,8 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
-	gchar buf[1024];
+	// The prefix, marker and marker_end can be the size of an object name
+	gchar buf[LIMIT_LENGTH_CONTENTPATH];
 	TRACE_FILTER();
 	EXTRACT_OPT(NAME_MSGKEY_PREFIX);
 	EXTRACT_OPT(NAME_MSGKEY_DELIMITER);
