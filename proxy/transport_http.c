@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -492,9 +492,17 @@ http_manage_request(struct req_ctx_s *r)
 	void access_tail (const char *fmt, ...) {
 		va_list args;
 		va_start(args, fmt);
-		gchar *s = g_strdup_vprintf (fmt, args);
+		gchar *tail = g_strdup_vprintf (fmt, args);
 		va_end(args);
-		oio_str_reuse (&access, s);
+
+		if (access) {
+			gchar *old = access;
+			access = g_strconcat(access, "\t", tail, NULL);
+			g_free(old);
+			g_free(tail);
+		} else {
+			access = tail;
+		}
 	}
 
 	void no_access (void) {

@@ -731,6 +731,11 @@ extract_optional_listing_fields(struct req_args_s *args,
 		listing_req->rebuild = oio_str_parse_bool(OPT("rebuild"), FALSE);
 	else if (jrebuild)
 		listing_req->rebuild = json_object_get_boolean(jrebuild);
+
+	args->rp->access_tail(
+			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s\trebuild:%s",
+			listing_req->marker, listing_req->max,
+			listing_req->prefix, listing_req->rebuild? "true":"false");
 	return NULL;
 }
 
@@ -2369,6 +2374,9 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 		if (err)
 			return _reply_format_error(args->rp, err);
 	}
+	args->rp->access_tail(
+			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s",
+			subset.marker, subset.limit, subset.prefix);
 
 	GString *response_list = g_string_sized_new(1024);
 	gboolean truncated = FALSE;
@@ -2450,6 +2458,9 @@ _route_meta2_count(struct req_args_s *args, struct json_object *jbody,
 		if (err)
 			return _reply_format_error(args->rp, err);
 	}
+	args->rp->access_tail(
+			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s",
+			subset.marker, subset.limit, subset.prefix);
 
 	gint64 count = 0;
 	err = _meta2_db_count(meta2_address, &subset, &count);
