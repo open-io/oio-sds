@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,10 +31,10 @@ extern "C" {
 #define OIO_CSV_SEP2_C ';'
 #define OIO_CSV_SEP2   ";"
 
-#define oio_pfree0(pp,repl) do { if (*pp) g_free(*pp); *(pp) = (repl); } while (0)
+#define oio_pfree0(pp,repl) do { g_free(*pp); *(pp) = (repl); } while (0)
 
 #define oio_pfree(pp,repl) do { \
-	if (NULL != (pp)) \
+	if ((pp)) \
 		oio_pfree0(pp,repl); \
 } while (0)
 
