@@ -2206,7 +2206,9 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 		// We have a marker.
 		leveldb_iter_seek(it, marker, marker_len);
 		// We shouldn't include the marker in the returned results.
-		leveldb_iter_next(it);
+		if (leveldb_iter_valid(it)) {
+			leveldb_iter_next(it);
+		}
 	} else if (prefix) {
 		// No marker but we still have a prefix
 		leveldb_iter_seek(it, prefix, prefix_len);
