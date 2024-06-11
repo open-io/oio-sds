@@ -34,7 +34,7 @@ LOAD_PIPELINES = {
     "Meta2Worker": meta2_loadpipeline,
 }
 
-TAGS_TO_DEBUG = ["starting"]
+TAGS_TO_DEBUG = ("starting",)
 
 
 class CrawlerWorkerMarkerMixin(object):
@@ -139,7 +139,15 @@ class CrawlerStatsdMixin:
         exclude = self.conf.get("excluded_stats", "").split(",")
         self.excluded_stats.update({x.strip() for x in exclude if x.strip()})
 
-    def report_stats(self, stats, filter_name="main"):
+    def report_stats(self, stats, filter_name="main", tag=""):
+        if tag.startswith("ended"):
+            # End reports reset all rates to zero.
+            for k in stats:
+                if k.endswith("_rate"):
+                    stats[k] = 0.0
+        else:
+            # Intermediate reports only show rates.
+            stats = {k: v for k, v in stats.items() if k.endswith("_rate")}
         # statsd pipelines allow to send several metrics in the same UDP packet
         with self.statsd_client.pipeline() as spipe:
             for key, val in stats.items():
@@ -320,9 +328,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
 
         # Send statsd reports more often than classic reports
         if not tag.startswith("start"):
-            if tag.startswith("ended"):
-                stats_dict["scan_rate"] = 0.0
-            self.report_stats(stats_dict)
+            self.report_stats(stats_dict, tag=tag)
 
         for filter_name, stats in self.pipeline.get_stats().items():
             if must_report:
@@ -338,7 +344,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
                     },
                 )
             if not tag.startswith("start"):
-                self.report_stats(stats, filter_name)
+                self.report_stats(stats, filter_name, tag=tag)
 
         self.last_stats_report_time = now
 

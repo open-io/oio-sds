@@ -21,6 +21,7 @@ from oio.common.easy_value import int_value
 from oio.common.utils import request_id, ratelimit
 from oio.content.content import ChunksHelper
 from oio.crawler.common.base import RawxService, RawxUpMixin
+from oio.crawler.common.crawler import TAGS_TO_DEBUG
 from oio.crawler.rdir.workers.common import RdirWorker
 from oio.common.logger import logging
 
@@ -78,8 +79,9 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
             return
         since_last_rprt = (now - self.last_report_time) or 0.00001
         scan_rate = self.scanned_since_last_report / since_last_rprt
-        if self._can_send_report(now):
-            self.logger.info(
+        if self._can_send_report(now) or force:
+            log_func = self.logger.debug if tag in TAGS_TO_DEBUG else self.logger.info
+            log_func(
                 "%s volume_id=%s total_scanned=%d pass=%d repaired=%d "
                 "errors=%d service_unavailable=%d "
                 "unrecoverable=%d orphans=%d orphans_check_errors=%d "
@@ -117,10 +119,8 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
                     "unrecoverable_content",
                 )
             }
-            if tag.startswith("ended"):
-                scan_rate = 0.0
             stats["scan_rate"] = scan_rate
-            self.report_stats(stats)
+            self.report_stats(stats, tag=tag)
             self.last_stats_report_time = now
 
     def error(self, container_id, chunk_id, msg, reqid=None, level=logging.ERROR):

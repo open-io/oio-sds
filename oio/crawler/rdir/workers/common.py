@@ -165,12 +165,10 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
         Log the status of the crawler
         :param tag: One of three: starting, running, ended.
         """
-        raise NotImplementedError("run not implemented")
+        raise NotImplementedError("report not implemented")
 
     def stop(self):
-        """
-        Could be needed for eventually gracefully stopping.
-        """
+        """Gracefully stop the worker"""
         self.logger.info("Stopping volume_id=%s", self.volume_id)
         self._stop_requested.set()
 

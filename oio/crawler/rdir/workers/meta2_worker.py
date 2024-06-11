@@ -19,6 +19,7 @@ from oio.common import exceptions as exc
 from oio.common.green import time
 from oio.common.easy_value import int_value
 from oio.common.utils import request_id, ratelimit
+from oio.crawler.common.crawler import TAGS_TO_DEBUG
 from oio.crawler.rdir.workers.common import RdirWorker
 from oio.directory.meta2 import Meta2Database
 
@@ -73,8 +74,9 @@ class RdirWorkerForMeta2(RdirWorker):
             return
         since_last_rprt = (now - self.last_report_time) or 0.00001
         scan_rate = self.scanned_since_last_report / since_last_rprt
-        if self._can_send_report(now):
-            self.logger.info(
+        if self._can_send_report(now) or force:
+            log_func = self.logger.debug if tag in TAGS_TO_DEBUG else self.logger.info
+            log_func(
                 "%s volume_id=%s total_scanned=%d pass=%d "
                 "containers_not_referenced=%d repaired=%s deindexed_containers=%d "
                 "errors=%d service_unavailable=%d containers=%d "
@@ -107,10 +109,8 @@ class RdirWorkerForMeta2(RdirWorker):
                     "service_unavailable",
                 )
             }
-            if tag.startswith("ended"):
-                scan_rate = 0.0
             stats["scan_rate"] = scan_rate
-            self.report_stats(stats)
+            self.report_stats(stats, tag=tag)
             self.last_stats_report_time = now
 
     def error(self, container, msg, reqid=None, level=logging.ERROR):
