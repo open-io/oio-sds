@@ -197,9 +197,20 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     def get_parser(self, prog_name):
         parser = super(ObjectRepair, self).get_parser(prog_name)
         ObjectCommandMixin.patch_parser(self, parser)
+        parser.add_argument(
+            "--rebuild-on-network-error",
+            action="store_true",
+            help="In case a chunk is not readable because of a network error "
+            "(connection issue, or rawx service down), rebuild it elsewhere. "
+            "Notice that if the service is just temporarily down, this will "
+            "generate orphan chunks.",
+        )
         return parser
 
     def _take_action(self, parsed_args):
+        self.tool_conf["rebuild_on_network_error"] = (
+            parsed_args.rebuild_on_network_error
+        )
         account, _, objects = self.resolve_objects(self.app, parsed_args)
         objects_to_repair = []
         for container, obj_name, version in objects:

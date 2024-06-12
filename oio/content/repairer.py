@@ -19,10 +19,14 @@ from datetime import datetime
 from oio.api.object_storage import _sort_chunks
 from oio.blob.operator import ChunkOperator
 from oio.blob.client import BlobClient
-from oio.common.exceptions import NotFound, ClientPreconditionFailed
+from oio.common.exceptions import (
+    NotFound,
+    ClientPreconditionFailed,
+    OioNetworkException,
+)
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.tool import Tool, ToolWorker
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.container.client import ContainerClient
 
 
@@ -40,7 +44,7 @@ class ContentRepairer(Tool):
     @staticmethod
     def string_from_item(item):
         namespace, account, container, obj_name, version = item
-        return "%s|%s|%s|%s|%s" % (namespace, account, container, obj_name, version)
+        return "|".join((namespace, account, container, obj_name, str(version)))
 
     def _fetch_items_from_objects(self):
         for obj in self.objects:
@@ -122,6 +126,8 @@ class ContentRepairerWorker(ToolWorker):
         self.blob_client = BlobClient(self.conf, watchdog=self.tool.watchdog)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
+        self.rebuild_on_network_error = self.conf.get("rebuild_on_network_error", False)
+
     def _safe_chunk_rebuild(
         self, item, content_id, chunk_id_or_pos, path, version, **kwargs
     ):
@@ -145,28 +151,32 @@ class ContentRepairerWorker(ToolWorker):
             )
             return exc
 
-    def _repair_metachunk(self, item, content_id, stg_met, pos, chunks, path, version):
+    def _repair_metachunk(
+        self, item, content_id, stg_met, pos, chunks, path, version, reqid=None
+    ):
         """
         Check that a metachunk has the right number of chunks.
 
         :returns: the list (generator) of missing chunks
         """
-        exceptions = list()
+        exceptions = []
         required = stg_met.expected_chunks
         if len(chunks) < required:
             if stg_met.ec:
                 subs = {x["num"] for x in chunks}
                 for sub in range(required):
                     if sub not in subs:
+                        pos = f"{pos}.{sub}"
                         exc = self._safe_chunk_rebuild(
                             item=item,
                             content_id=content_id,
-                            chunk_id_or_pos=f"{pos}.{sub}",
+                            chunk_id_or_pos=pos,
                             path=path,
                             version=version,
+                            reqid=reqid,
                         )
                         if exc:
-                            exceptions.append(exc)
+                            exceptions.append((pos, exc))
             else:
                 missing_chunks = required - len(chunks)
                 for _ in range(missing_chunks):
@@ -176,27 +186,37 @@ class ContentRepairerWorker(ToolWorker):
                         chunk_id_or_pos=pos,
                         path=path,
                         version=version,
+                        reqid=reqid,
                     )
                     if exc:
-                        exceptions.append(exc)
+                        exceptions.append((pos, exc))
 
         for chunk in chunks:
             try:
                 self.blob_client.chunk_head(
-                    chunk["url"], xattr=True, verify_checksum=True
+                    chunk["url"],
+                    xattr=True,
+                    verify_checksum=True,
+                    reqid=reqid,
                 )
-            except (NotFound, ClientPreconditionFailed) as e:
-                kwargs = {"try_chunk_delete": isinstance(e, ClientPreconditionFailed)}
+            except (NotFound, ClientPreconditionFailed, OioNetworkException) as exc:
+                if (
+                    isinstance(exc, OioNetworkException)
+                    and not self.rebuild_on_network_error
+                ):
+                    exceptions.append((chunk["url"], exc))
+                    continue
                 exc = self._safe_chunk_rebuild(
                     item=item,
                     content_id=content_id,
                     chunk_id_or_pos=chunk["url"],
                     path=path,
                     version=version,
-                    **kwargs,
+                    try_chunk_delete=isinstance(exc, ClientPreconditionFailed),
+                    reqid=reqid,
                 )
                 if exc:
-                    exceptions.append(exc)
+                    exceptions.append((chunk["url"], exc))
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "ERROR when checking chunk %s (%s): %s",
@@ -204,11 +224,12 @@ class ContentRepairerWorker(ToolWorker):
                     chunk["url"],
                     exc,
                 )
-                exceptions.append(exc)
+                exceptions.append((chunk["url"], exc))
 
         return exceptions
 
     def _process_item(self, item):
+        reqid = request_id("objrepair-")
         namespace, account, container, obj_name, version = item
         if namespace != self.tool.namespace:
             raise ValueError(
@@ -222,8 +243,12 @@ class ContentRepairerWorker(ToolWorker):
             path=obj_name,
             version=version,
             properties=False,
+            reqid=reqid,
         )
         content_id = obj_meta["id"]
+        if version is None:
+            version = obj_meta["version"]
+            item = (namespace, account, container, obj_name, version)
 
         exceptions = []
         stg_met = STORAGE_METHODS.load(obj_meta["chunk_method"])
@@ -238,13 +263,15 @@ class ContentRepairerWorker(ToolWorker):
                     chunks=chunks,
                     path=obj_name,
                     version=version,
+                    reqid=reqid,
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
-                    "ERROR when repair metachunk %s (%d): %s",
+                    "ERROR when repairing metachunk %s (%d): %s (reqid=%s)",
                     self.tool.string_from_item(item),
                     pos,
                     exc,
+                    reqid,
                 )
                 exceptions.append(exc)
 
@@ -252,5 +279,9 @@ class ContentRepairerWorker(ToolWorker):
             raise Exception(exceptions)
 
         self.container_client.content_touch(
-            account=account, reference=container, path=obj_name, version=version
+            account=account,
+            reference=container,
+            path=obj_name,
+            version=version,
+            reqid=reqid,
         )
