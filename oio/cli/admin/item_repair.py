@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -77,11 +77,12 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        accounts = list()
+        accounts = []
         for account_name in parsed_args.accounts:
-            account = dict()
-            account["namespace"] = self.app.options.ns
-            account["account"] = account_name
+            account = {
+                "namespace": self.app.options.ns,
+                "account": account_name,
+            }
             accounts.append(account)
 
         self.repairer = AccountRebuilder(
@@ -125,22 +126,24 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             "--no-rebuild-bases",
             action="store_false",
             dest="rebuild_bases",
-            help="Don't rebuild the missing, lost bases. (default=%s)"
-            % (not self.tool_class.DEFAULT_REBUILD_BASES),
+            help="Don't rebuild the missing, lost bases. "
+            f"(default={not self.tool_class.DEFAULT_REBUILD_BASES})",
         )
         parser.add_argument(
             "--no-sync-bases",
             action="store_false",
             dest="sync_bases",
-            help="Don't synchronize its bases. (default=%s)"
-            % (not self.tool_class.DEFAULT_SYNC_BASES),
+            help="Don't synchronize its bases. "
+            f"(default={not self.tool_class.DEFAULT_SYNC_BASES})",
         )
         parser.add_argument(
             "--no-update-account",
             action="store_false",
             dest="update_account",
-            help="Don't update the counters for the account service. (default=%s)"
-            % (not self.tool_class.DEFAULT_UPDATE_ACCOUNT),
+            help=(
+                "Don't update the counters for the account service. "
+                f"(default={not self.tool_class.DEFAULT_UPDATE_ACCOUNT})"
+            ),
         )
         return parser
 
@@ -150,12 +153,13 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
         self.tool_conf["update_account"] = parsed_args.update_account
 
         containers = self.resolve_containers(self.app, parsed_args, no_id=True)
-        containers_to_repair = list()
+        containers_to_repair = []
         for account, container_name, _ in containers:
-            container = dict()
-            container["namespace"] = self.app.options.ns
-            container["account"] = account
-            container["container"] = container_name
+            container = {
+                "namespace": self.app.options.ns,
+                "account": account,
+                "container": container_name,
+            }
             containers_to_repair.append(container)
 
         self.repairer = ContainerRepairer(
@@ -197,14 +201,15 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
 
     def _take_action(self, parsed_args):
         account, _, objects = self.resolve_objects(self.app, parsed_args)
-        objects_to_repair = list()
+        objects_to_repair = []
         for container, obj_name, version in objects:
-            obj = dict()
-            obj["namespace"] = self.app.options.ns
-            obj["account"] = account
-            obj["container"] = container
-            obj["name"] = obj_name
-            obj["version"] = version
+            obj = {
+                "namespace": self.app.options.ns,
+                "account": account,
+                "container": container,
+                "name": obj_name,
+                "version": version,
+            }
             objects_to_repair.append(obj)
 
         self.repairer = ContentRepairer(
