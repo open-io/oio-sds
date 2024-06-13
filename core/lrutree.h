@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -56,6 +56,10 @@ void lru_tree_destroy(struct lru_tree_s *lt);
 guint lru_tree_remove_older (struct lru_tree_s *lt, gint64 oldest);
 
 guint lru_tree_remove_exceeding (struct lru_tree_s *lt, guint count);
+
+/** Remove elements for which the filter returns TRUE. */
+guint lru_tree_remove_matching(struct lru_tree_s *lt,
+		GTraverseFunc filter, gpointer fdata);
 
 void lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v);
 

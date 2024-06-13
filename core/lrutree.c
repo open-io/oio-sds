@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,15 @@ License along with this library.
 #include "tree.h"
 #include "oioext.h"
 #include "internals.h"
+
+#define REMOVE_NODE(_tree, _node) \
+	do { \
+		gpointer k = NULL, v = NULL; \
+		if (_steal(_tree, &k, &v, _node)) { \
+			if (k && _tree->kfree) _tree->kfree(k); \
+			if (v && _tree->vfree) _tree->vfree(v); \
+		} \
+	} while (0);
 
 struct _node_s
 {
@@ -310,11 +319,7 @@ lru_tree_count(struct lru_tree_s *lt)
 static void
 _remove_last(struct lru_tree_s *lt)
 {
-	gpointer k = NULL, v = NULL;
-	if (_steal(lt, &k, &v, lt->last)) {
-		if (k && lt->kfree) lt->kfree (k);
-		if (v && lt->vfree) lt->vfree (v);
-	}
+	REMOVE_NODE(lt, lt->last);
 }
 
 guint
@@ -337,6 +342,25 @@ lru_tree_remove_exceeding (struct lru_tree_s *lt, guint count)
 	while (lt->last && lt->count > count) {
 		_remove_last(lt);
 		++ removed;
+	}
+	return removed;
+}
+
+guint
+lru_tree_remove_matching(struct lru_tree_s *lt,
+		GTraverseFunc filter, gpointer fdata)
+{
+	EXTRA_ASSERT(lt != NULL);
+	guint removed = 0;
+	for (struct _node_s *node = lt->first; node; ) {
+		if (filter(node->k, node->v, fdata)) {
+			struct _node_s *to_del = node;
+			node = node->next;
+			REMOVE_NODE(lt, to_del);
+			removed++;
+		} else {
+			node = node->next;
+		}
 	}
 	return removed;
 }
