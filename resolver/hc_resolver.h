@@ -2,7 +2,7 @@
 OpenIO SDS resolver
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -99,6 +99,9 @@ gboolean error_clue_for_decache(GError *err);
  * It doesn't touch the directory services belonging to the reference. */
 void hc_decache_reference_service(struct hc_resolver_s *r,
 		struct oio_url_s *url, const gchar *srvtype);
+
+/* Remove from the cache all services of the specified type. */
+void hc_decache_reference_type(struct hc_resolver_s *r, const char *srvtype);
 
 /* Removes from the cache the directory services for the given references.
  * It doesn't touche the cache entries for the directory content. */

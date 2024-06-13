@@ -2,7 +2,7 @@
 OpenIO SDS resolver
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -205,6 +205,24 @@ hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	if (lru) {
 		g_mutex_lock(&r->lock);
 		lru_tree_remove(lru, k);
+		g_mutex_unlock(&r->lock);
+	}
+}
+
+static gboolean
+_match_prefix(const struct hashstr_s *key, gpointer val UNUSED, const gchar *prefix)
+{
+	return g_str_has_prefix(hashstr_str(key), prefix);
+}
+
+static void
+hc_resolver_forget_prefix(struct hc_resolver_s *r, struct lru_tree_s *lru,
+		const gchar *prefix)
+{
+	if (lru) {
+		g_mutex_lock(&r->lock);
+		lru_tree_remove_matching(
+				lru, (GTraverseFunc)_match_prefix, (gpointer)prefix);
 		g_mutex_unlock(&r->lock);
 	}
 }
@@ -563,6 +581,21 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	struct hashstr_s *hk = _srv_key(srvtype, url);
 	hc_resolver_forget(r, r->services, hk);
 	g_free(hk);
+}
+
+void
+hc_decache_reference_type(struct hc_resolver_s *r, const char *srvtype)
+{
+	GRID_TRACE2("%s(%s)", __FUNCTION__, srvtype);
+	EXTRA_ASSERT(r != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+
+	if (!oio_resolver_cache_enabled)
+		return;
+
+	gchar prefix[LIMIT_LENGTH_SRVTYPE + 1] = {0};
+	g_snprintf(prefix, sizeof(prefix), "%s|", srvtype);
+	hc_resolver_forget_prefix(r, r->services, prefix);
 }
 
 static guint
