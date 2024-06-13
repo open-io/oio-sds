@@ -1,0 +1,197 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2024 OVH SAS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+from datetime import datetime
+from oio.cli import make_logger_args_parser, get_logger_from_args
+from oio.api.object_storage import ObjectStorageApi
+from oio.event.filters.account_update import SYSMETA_S3API_PREFIX
+from oio.common.timestamp import Timestamp
+from oio.common.utils import request_id
+
+DEFAULT_FEATURE_MTIME = Timestamp(
+    datetime.fromisoformat("2024-05-31T00:00:00").timestamp()
+)
+
+SEPARATOR = "/"
+
+
+class FeatureCrawler:
+    """
+    Crawl containers to catch up features activations
+    """
+
+    def __init__(self, namespace, logger, features):
+        self.api = ObjectStorageApi(namespace, logger=logger)
+        self.logger = logger
+        self.features = [f.lower() for f in features]
+        self._account_marker = None
+        self._container_marker = None
+        self._main_request_id = self._request_id
+
+    @property
+    def _request_id(self):
+        return request_id("features-crawler")
+
+    @property
+    def progress(self):
+        """Format the current progression marker"""
+        return f"{self._account_marker or ''}{SEPARATOR}{self._container_marker or ''}"
+
+    def _get_accounts(self, marker=None):
+        self.logger.debug("Listing accounts from marker %s", marker)
+        while True:
+            resp = self.api.account.account_list(
+                marker=marker, reqid=self._main_request_id
+            )
+            accounts = resp["listing"]
+            for account in accounts:
+                yield account["id"]
+            marker = resp.get("next_marker")
+            if not marker:
+                return
+
+    def _get_containers(self, marker=(None, None)):
+        self._account_marker, self._container_marker = marker
+        for account in self._get_accounts(self._account_marker):
+            self.logger.info(
+                "Listing containers for account %s from marker %s",
+                account,
+                self._container_marker,
+            )
+            resp = self.api.account.bucket_list(
+                account, marker=self._container_marker, reqid=self._main_request_id
+            )
+            containers = resp["listing"]
+            for container, *_ in containers:
+                yield account, container
+
+    def _get_features_history(self, account, container, reqid=None):
+        self.logger.debug("Fetch feature history for account")
+        info = self.api.bucket.bucket_show(
+            container, account=account, details=True, reqid=reqid
+        )
+        details = info.get("features-details", {})
+        return [f for f in details]
+
+    def _process_properties(self, account, container, info, reqid=None):
+        if reqid is None:
+            reqid = self._request_id
+        features_history = None
+        for prop, value in info.get("properties", {}).items():
+            if str(prop).startswith(SYSMETA_S3API_PREFIX):
+                feature_name = prop[len(SYSMETA_S3API_PREFIX) :].lower()
+                if feature_name in self.features:
+                    self.logger.debug(
+                        "Found property '%s' for container %s, %s",
+                        feature_name,
+                        account,
+                        container,
+                    )
+
+                    if features_history is None:
+                        features_history = self._get_features_history(
+                            account, container, reqid=reqid
+                        )
+                    if feature_name in features_history:
+                        self.logger.debug(
+                            "Feature '%s' has already been activated for bucket %s %s",
+                            feature_name,
+                            account,
+                            container,
+                        )
+                        continue
+                    if value:
+                        self.logger.info(
+                            "Activating feature '%s' for %s %s",
+                            feature_name,
+                            account,
+                            container,
+                        )
+                        self.api.bucket.bucket_feature_activate(
+                            container,
+                            account,
+                            feature_name,
+                            mtime=DEFAULT_FEATURE_MTIME,
+                            reqid=reqid,
+                        )
+
+    def process(self, marker=(None, None)):
+        """Crawl containers"""
+        for account, container in self._get_containers(marker=marker):
+            self.logger.debug(
+                "Fetching container info for account=%s container=%s",
+                account,
+                container,
+            )
+            reqid = self._request_id
+            info = self.api.container.container_show(
+                account=account,
+                reference=container,
+                extra_counters=True,
+                reqid=reqid,
+            )
+            self._process_properties(account, container, info)
+            self._container_marker = container
+
+
+def make_arg_parser():
+    log_parser = make_logger_args_parser()
+    descr = ""
+
+    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
+    parser.add_argument("namespace", help="Namespace")
+
+    parser.add_argument(
+        "--feature", "-f", help="Feature to track", nargs="+", default=[]
+    )
+
+    parser.add_argument("--marker", help="Marker", default="")
+
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    logger = get_logger_from_args(args)
+
+    if not args.feature:
+        return
+
+    marker = (None, None)
+    if args.marker:
+        parts = args.marker.split(":")
+        if len(parts) != 2:
+            logger.error(
+                f"Marker wrong format, expected format: account{SEPARATOR}container"
+            )
+            return
+        account_marker = parts[0] if parts[0] else None
+        container_marker = parts[1] if parts[1] else None
+        marker = (account_marker, container_marker)
+
+    crawler = FeatureCrawler(args.namespace, logger, args.feature)
+    try:
+        crawler.process(marker=marker)
+    except KeyboardInterrupt:
+        logger.info("Exiting...")
+        print(f"Next marker: {crawler.progress}")
+
+
+if __name__ == "__main__":
+    main()
