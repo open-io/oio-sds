@@ -1121,7 +1121,8 @@ configure_request_handlers (void)
 	 * and the prefix/meta1 association (content of meta0 DB). */
 	SET("/cache/flush/high/#POST", action_cache_flush_high);
 	/* Flush "low" cache, i.e the reference/service association
-	 * (content of meta1 DB). */
+	 * (content of meta1 DB). A type can be specified in the query string
+	 * to flush services of that type only. */
 	SET("/cache/flush/low/#POST", action_cache_flush_low);
 
 	// New routes

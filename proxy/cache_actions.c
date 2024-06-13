@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -71,7 +71,12 @@ action_cache_flush_local (struct req_args_s *args)
 enum http_rc_e
 action_cache_flush_low (struct req_args_s *args)
 {
-	hc_resolver_flush_services(resolver);
+	const char *srvtype = OPT("type");
+	if (oio_str_is_set(srvtype)) {
+		hc_decache_reference_type(resolver, srvtype);
+	} else {
+		hc_resolver_flush_services(resolver);
+	}
 	shard_resolver_flush(shard_resolver);
 	return _reply_success_json (args, NULL);
 }

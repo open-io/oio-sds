@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -84,6 +84,11 @@ class ProxyDecache(DecacheCommand):
                 "association (content of meta1 DB), and the shard resolver."
             ),
         )
+        parser.add_argument(
+            "--type",
+            "--service-type",
+            help="""Flush only services of this type ("low" cache only).""",
+        )
         return parser
 
     def decache_services(self, services, args):
@@ -93,7 +98,11 @@ class ProxyDecache(DecacheCommand):
         for srv in services:
             try:
                 self.admin.proxy_flush_cache(
-                    proxy_netloc=srv, reqid=reqid, high=args.high, low=args.low
+                    proxy_netloc=srv,
+                    reqid=reqid,
+                    high=args.high,
+                    low=args.low,
+                    service_type=args.type,
                 )
                 yield srv, "OK", None
             except Exception as err:

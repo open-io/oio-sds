@@ -294,17 +294,24 @@ class AdminClient(ProxyClient):
         else:
             return self.cache_client.endpoint
 
-    def proxy_flush_cache(self, high=True, low=True, proxy_netloc=None, **kwargs):
+    def proxy_flush_cache(
+        self, high=True, low=True, proxy_netloc=None, service_type=None, **kwargs
+    ):
         """
         Flush "high" and "low" proxy caches. By default, flush the cache of
         the local proxy. If `proxy_netloc` is provided, flush the cache
         of this proxy.
+
+        :param service_type: if provided, flush only services of this type
+            from the "low" cache
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
         if high:
             url = endpoint + "/flush/high"
             self.cache_client._direct_request("POST", url, **kwargs)
         if low:
+            if service_type:
+                kwargs.setdefault("params", {})["type"] = service_type
             url = endpoint + "/flush/low"
             self.cache_client._direct_request("POST", url, **kwargs)
 
