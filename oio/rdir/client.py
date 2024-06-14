@@ -287,7 +287,11 @@ class RdirDispatcher(object):
                 err, addrs = errors.popitem()
                 oio_reraise(type(err), err, str(addrs))
             else:
-                raise OioException("Several errors encountered: %s" % errors)
+                raise OioException(f"Several errors encountered: {errors}")
+        try:
+            self.rdir.admin.proxy_flush_cache(high=False, low=True, service_type="rdir")
+        except Exception as exc:
+            self.logger.warning("Failed to decache rdir services: %s", exc)
         return all_services
 
     def assign_all_meta2(self, max_per_rdir=None, **kwargs):
