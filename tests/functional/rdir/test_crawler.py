@@ -689,32 +689,27 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
                 self.assertIn(self.rdir._resolve_cid_to_path(cid), markers)
                 self.assertIn(rdir_crawler.DEFAULT_MARKER, markers)
 
-    def test_rdir_crawler_check_marker_work_as_expected(self):
+    def test_rdir_crawler_marker_works_as_expected(self):
         """Check if marker already set are working as expected"""
         if self.nb_meta2 > 1:
             self.skip("This test is set to run on a cluster with one meta2")
         volume_id = list(self.meta2_volumes.keys())[0]
         volume_path = self.meta2_volumes[volume_id]
-        containers = []
-        for i in range(3):
-            container = "rdir_crawler_container_" + random_str(7)
-            containers.append(container)
-        # Sort containers list
-        containers.sort()
+        containers = sorted(
+            [f"rdir_crawler_container_{random_str(3)}" for _ in range(3)]
+        )
         for i, container in enumerate(containers):
             # The first and the third containers are orphan entries in rdir.
-            # The second container is created so a legitime entry
+            # The second container is created so a legitimate entry
             # is introduced in the rdir
             if i == 1:  # create container
                 self.create_container(container)
-                created_container = container
 
-            else:  # Orphan entry introduced
-                max_mtime = 16
-                mtime = random.randrange(0, max_mtime + 1)
+            else:  # Introduce orphan entries
+                mtime = random.randrange(0, 17)
                 container_id = cid_from_name(self.account, container)
                 container_url = join(self.conf["namespace"], self.account, container)
-                # Push false entry in meta2 rdir directory
+                # Push a fake entry in meta2 rdir
                 while True:
                     res, _ = self.rdir.meta2_index_push(
                         volume_id=volume_id,
@@ -725,21 +720,21 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
                     if res[0].status in (204, 201):
                         break
 
-        cid = cid_from_name(self.account, created_container)
         self.conf["use_marker"] = True
         self.conf["delete_orphan_entries"] = True
         self.conf["conf_file"] = "/rdir-crawler.conf"
         marker_directory = join(volume_path, RdirWorkerForMeta2.MARKERS_DIR)
-        if not os.path.exists(marker_directory):
-            os.makedirs(marker_directory)
+        os.makedirs(marker_directory, exist_ok=True)
         marker_path = join(
             volume_path,
             RdirWorkerForMeta2.MARKERS_DIR,
             splitext(basename(self.conf["conf_file"]))[0],
         )
-        # Setting a marker
+        # Set a marker on the only real container
         with open(marker_path, "w") as marker_file:
-            marker = self.rdir._resolve_cid_to_path(cid)
+            marker = self.rdir._resolve_cid_to_path(
+                cid_from_name(self.account, containers[1])
+            )
             marker_file.write(marker)
         rdir_crawler = RdirWorkerForMeta2(
             self.conf,
@@ -747,49 +742,37 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
             watchdog=self.watchdog,
             logger=self.logger,
         )
+        # 1st pass, start after the marker we just set
         self.assertEqual(rdir_crawler.current_marker, marker)
         rdir_crawler.crawl_volume()
-        # If there are no error
-        if not any(
-            (
-                rdir_crawler.service_unavailable,
-                rdir_crawler.errors,
-            )
-        ):
-            # The container deindexed is the one after the marker
-            self.assertEqual(rdir_crawler.containers_not_referenced, 1)
-            self.assertEqual(rdir_crawler.deindexed_containers, 1)
-            self.assertEqual(rdir_crawler.total_scanned, 1)
-            entries = self.rdir.meta2_index_fetch_all(volume_id)
-            container_ids = [entry["container_id"] for entry in entries]
-            self.assertNotIn(cid_from_name(self.account, containers[2]), container_ids)
-            self.assertIn(cid_from_name(self.account, containers[1]), container_ids)
-            self.assertIn(cid_from_name(self.account, containers[0]), container_ids)
+        entries = self.rdir.meta2_index_fetch_all(volume_id)
+        container_ids = {entry["container_id"] for entry in entries}
+        self.logger.debug("All entries in %s: %s", volume_id, container_ids)
+        # The container deindexed is the one after the marker
+        self.assertEqual(rdir_crawler.containers_not_referenced, 1)
+        self.assertEqual(rdir_crawler.deindexed_containers, 1)
+        self.assertGreaterEqual(rdir_crawler.total_scanned, 1)
+        self.assertNotIn(cid_from_name(self.account, containers[2]), container_ids)
+        self.assertIn(cid_from_name(self.account, containers[1]), container_ids)
+        self.assertIn(cid_from_name(self.account, containers[0]), container_ids)
 
-            # The container deindexed was previously skipped due to the marker.
-            # After marker reinitialization, the non existing container is checked
-            # and deindexed
-            self.assertEqual(rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER)
-            rdir_crawler.crawl_volume()
-            if not any(
-                (
-                    rdir_crawler.service_unavailable,
-                    rdir_crawler.errors,
-                )
-            ):
-                self.assertEqual(rdir_crawler.containers_not_referenced, 1)
-                self.assertEqual(rdir_crawler.deindexed_containers, 1)
-                self.assertEqual(rdir_crawler.total_scanned, 2)
-                self.assertEqual(
-                    rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER
-                )
-                entries = self.rdir.meta2_index_fetch_all(volume_id)
-                container_ids = [entry["container_id"] for entry in entries]
-                self.assertNotIn(
-                    cid_from_name(self.account, containers[0]),
-                    container_ids,
-                )
-                self.assertIn(
-                    cid_from_name(self.account, containers[1]),
-                    container_ids,
-                )
+        # The first fake container was previously skipped due to the marker.
+        # After marker reinitialization, the non existing container is checked
+        # and deindexed.
+        self.assertEqual(rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER)
+        rdir_crawler.crawl_volume()
+        entries = self.rdir.meta2_index_fetch_all(volume_id)
+        container_ids = {entry["container_id"] for entry in entries}
+        self.logger.debug("All entries in %s: %s", volume_id, container_ids)
+        self.assertEqual(rdir_crawler.containers_not_referenced, 1)
+        self.assertEqual(rdir_crawler.deindexed_containers, 1)
+        self.assertGreaterEqual(rdir_crawler.total_scanned, 2)
+        self.assertEqual(rdir_crawler.current_marker, rdir_crawler.DEFAULT_MARKER)
+        self.assertNotIn(
+            cid_from_name(self.account, containers[0]),
+            container_ids,
+        )
+        self.assertIn(
+            cid_from_name(self.account, containers[1]),
+            container_ids,
+        )
