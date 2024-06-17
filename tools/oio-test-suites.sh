@@ -400,7 +400,6 @@ if is_running_test_suite "ec" ; then
 	echo -e "\n### EC tests"
 
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-4hosts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
@@ -473,7 +472,7 @@ if is_running_test_suite "rebuilder" ; then
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 
 	func_tests_rebuilder_mover \
-		-f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+		-f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml"
 
 	unset REBUILDER
 fi

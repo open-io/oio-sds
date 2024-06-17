@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -375,7 +375,7 @@ remove_rawx()
   echo >&2 "Stop the rawx ${RAWX_ID_TO_REBUILD}"
   ${OPENIOCTL} stop "@${RAWX_IP_TO_REBUILD}" > /dev/null
 
-  # Extract the prefix of all rawx pathes
+  # Extract the prefix of all rawx paths
   # /home/<user>/.oio/sds/data/OPENIO-rawx-9 -> /home/<user>/.oio/sds/data/OPENIO-rawx-
   PREFIX_ALL_RAWX=$(python -c "v='${RAWX_LOC_TO_REBUILD}'; print(v[:v.rfind('-') + 1])")
   # Add extra metadata in extended attributes to all chunks on all rawxes
@@ -495,7 +495,7 @@ openioadmin_rawx_rebuild()
   # For each chunk from TMP_VOLUME (the copy of the rawx before its deletion)
   for CHUNK in ${TMP_VOLUME}/*/*; do
     # Skip files in marker folders (they are not chunks and does not need to be rebuilt)
-    if [[ "$CHUNK" == *"/markers/"* ]]; then
+    if [[ "$CHUNK" =~ markers ||  "$CHUNK" =~ non_optimal_placement ]]; then
       continue
     fi
     CHUNK_ID=${CHUNK##*/}
