@@ -51,10 +51,9 @@ from oio.common.http import (
     ranges_from_http_header,
     headers_from_object_metadata,
 )
-from oio.common.logger import get_logger
+from oio.common.logger import get_logger, logging
 from oio.common.storage_method import ECDriverError
 from oio.common.utils import fix_ranges, get_hasher, monotonic_time, request_id
-
 
 LOGGER = get_logger({}, __name__)
 
@@ -1428,17 +1427,27 @@ class ECRebuildHandler(object):
             while True:
                 for resp in resps:
                     pile.spawn(_get_frag, resp)
-                try:
-                    with WatchdogTimeout(self.watchdog, self.read_timeout, Timeout):
-                        in_frags = list(pile)
-                except Timeout as to:
-                    self.logger.error("ERROR while rebuilding: %s", to)
-                except Exception:
-                    self.logger.exception("ERROR while rebuilding")
-                    break
-                if not all(in_frags):
+                # Doing like this instead of using a list comprehension allows
+                # to keep the list valid (yet incomplete) in case of a timeout.
+                in_frags = []
+                while True:
+                    try:
+                        with WatchdogTimeout(self.watchdog, self.read_timeout, Timeout):
+                            frag = pile.next()
+                            in_frags.append(frag)
+                    except StopIteration:
+                        break
+                    except Timeout as to:
+                        self.logger.error("Timeout (%s) while rebuilding", to)
+                    except Exception:
+                        self.logger.exception("Error while rebuilding")
+                if not any(in_frags):  # EOF
                     break
                 ok_frags = self._filter_broken_fragments(in_frags)
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug("Fragments: %s", [len(f) for f in in_frags])
+                    self.logger.debug("Filtered: %s", [len(f) for f in ok_frags])
+                # If some fragments are missing or broken, let PyECLib deal with it.
                 rebuilt_frag = self._reconstruct(ok_frags)
                 yield rebuilt_frag
 
