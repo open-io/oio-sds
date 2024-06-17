@@ -126,6 +126,9 @@ class ContentRepairerWorker(ToolWorker):
         self.blob_client = BlobClient(self.conf, watchdog=self.tool.watchdog)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
+        self.read_all_available_sources = self.conf.get(
+            "read_all_available_sources", False
+        )
         self.rebuild_on_network_error = self.conf.get("rebuild_on_network_error", False)
 
     def _safe_chunk_rebuild(
@@ -140,11 +143,12 @@ class ContentRepairerWorker(ToolWorker):
                 chunk_id_or_pos=chunk_id_or_pos,
                 path=path,
                 version=version,
+                read_all_available_sources=self.read_all_available_sources,
                 **kwargs,
             )
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
-                "ERROR when rebuilding chunk %s (%s): %s",
+                "Error when rebuilding chunk %s (%s): %s",
                 self.tool.string_from_item(item),
                 chunk_id_or_pos,
                 exc,
@@ -219,7 +223,7 @@ class ContentRepairerWorker(ToolWorker):
                     exceptions.append((chunk["url"], exc))
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
-                    "ERROR when checking chunk %s (%s): %s",
+                    "Error when checking chunk %s (%s): %s",
                     self.tool.string_from_item(item),
                     chunk["url"],
                     exc,
@@ -267,7 +271,7 @@ class ContentRepairerWorker(ToolWorker):
                 )
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
-                    "ERROR when repairing metachunk %s (%d): %s (reqid=%s)",
+                    "Error when repairing metachunk %s (%d): %s (reqid=%s)",
                     self.tool.string_from_item(item),
                     pos,
                     exc,

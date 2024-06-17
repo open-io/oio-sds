@@ -198,6 +198,13 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
         parser = super(ObjectRepair, self).get_parser(prog_name)
         ObjectCommandMixin.patch_parser(self, parser)
         parser.add_argument(
+            "--read-all-available-sources",
+            action="store_true",
+            help="For objects using erasure-coding, connect to all apparently "
+            "available chunks, to have backups in case one of them is "
+            "silently corrupt.",
+        )
+        parser.add_argument(
             "--rebuild-on-network-error",
             action="store_true",
             help="In case a chunk is not readable because of a network error "
@@ -208,6 +215,9 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
         return parser
 
     def _take_action(self, parsed_args):
+        self.tool_conf["read_all_available_sources"] = (
+            parsed_args.read_all_available_sources
+        )
         self.tool_conf["rebuild_on_network_error"] = (
             parsed_args.rebuild_on_network_error
         )
