@@ -1447,8 +1447,13 @@ class ECRebuildHandler(object):
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug("Fragments: %s", [len(f) for f in in_frags])
                     self.logger.debug("Filtered: %s", [len(f) for f in ok_frags])
-                # If some fragments are missing or broken, let PyECLib deal with it.
-                rebuilt_frag = self._reconstruct(ok_frags)
+                try:
+                    # If some fragments are missing or broken, let PyECLib deal with it.
+                    rebuilt_frag = self._reconstruct(ok_frags)
+                except ECDriverError as err:
+                    # TODO(FVE): raise this only if self.read_all_available_sources
+                    # and a "temporary" exception we did not try all sources.
+                    raise exceptions.UnrecoverableContent(str(err))
                 yield rebuilt_frag
 
         return frag_iter()

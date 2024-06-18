@@ -1034,3 +1034,87 @@ class TestEC(unittest.TestCase):
                 self.checksum(missing_chunk_body).hexdigest(),
             )
             self.assertEqual(len(conn_record), nb - 1)
+
+    def test_rebuild_not_enough_sources(self):
+        test_data = (b"1234" * self.storage_method.ec_segment_size)[:-777]
+        ec_chunks = self._make_ec_chunks(test_data)
+        meta_chunk = self.meta_chunk()
+
+        for _ in range(self.storage_method.ec_nb_parity):
+            ec_chunks.pop()
+            meta_chunk.pop()
+
+        headers = {}
+        responses = [
+            FakeResponse(200, ec_chunks[i], headers) for i in range(len(ec_chunks))
+        ]
+
+        missing_chunk = meta_chunk.pop(1)
+        missing = missing_chunk["num"]
+
+        def get_response(req):
+            return responses.pop(0) if responses else FakeResponse(404)
+
+        with set_http_requests(get_response):
+            handler = ECRebuildHandler(
+                meta_chunk,
+                missing,
+                self.storage_method,
+                watchdog=self.__class__.watchdog,
+            )
+            self.assertRaises(exc.UnrecoverableContent, handler.rebuild)
+
+    def _test_rebuild_not_enough_valid_sources(self, src_slice, err_msg):
+        """
+        Test what happens when we successfully connect to enough sources,
+        but one of them turns out to be garbage.
+        """
+        test_data = (b"1234" * self.storage_method.ec_segment_size)[:-777]
+        ec_chunks = self._make_ec_chunks(test_data)
+        meta_chunk = self.meta_chunk()
+
+        # Remove all "parity" chunks (the order does not matter)
+        for _ in range(self.storage_method.ec_nb_parity):
+            ec_chunks.pop()
+
+        # Build response objects, including an invalid one
+        headers = {}
+        responses = [
+            FakeResponse(200, ec_chunks[i], headers) for i in range(len(ec_chunks))
+        ]
+        responses[2] = FakeResponse(200, ec_chunks[2][src_slice], headers)
+
+        missing_chunk = meta_chunk.pop(1)
+        missing = missing_chunk["num"]
+
+        def get_response(req):
+            return responses.pop(0) if responses else FakeResponse(404)
+
+        with set_http_requests(get_response):
+            handler = ECRebuildHandler(
+                meta_chunk,
+                missing,
+                self.storage_method,
+                watchdog=self.__class__.watchdog,
+            )
+            _, stream, _ = handler.rebuild()
+            self.assertRaisesRegex(exc.UnrecoverableContent, err_msg, b"".join, stream)
+
+    def test_rebuild_invalid_source_bad_preamble(self):
+        """
+        Test what happens when we successfully connect to enough sources,
+        but one of them has an invalid fragment preamble. It is supposed to
+        be detected early, so the fragment is discarded.
+        """
+        return self._test_rebuild_not_enough_valid_sources(
+            slice(150, None), "Insufficient number of fragments"
+        )
+
+    def test_rebuild_invalid_source_truncated(self):
+        """
+        Test what happens when we successfully connect to enough sources,
+        but one of them is truncated.
+        """
+        return self._test_rebuild_not_enough_valid_sources(
+            slice(-300), "Invalid fragment payload"
+        )
