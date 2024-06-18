@@ -44,7 +44,7 @@ from oio.common.constants import (
     CHUNK_XATTR_EXTRA_PREFIX_LEN,
 )
 from oio.common.easy_value import int_value
-from oio.common.exceptions import SourceReadError
+from oio.common.exceptions import OioNetworkException, ServiceBusy, SourceReadError
 from oio.common.http import (
     HeadersDict,
     parse_content_range,
@@ -269,7 +269,7 @@ class ECChunkDownloadHandler(object):
             stream.start()
             return stream
         else:
-            raise exceptions.ServiceUnavailable(
+            raise exceptions.ObjectUnavailable(
                 f"Not enough valid sources to read ({len(readers)}/"
                 f"{self.storage_method.ec_nb_data}+{self.storage_method.ec_nb_parity})"
             )
@@ -1329,11 +1329,16 @@ class ECRebuildHandler(object):
                     resp.status,
                     resp.reason,
                 )
-                resp = None
+                if resp.status == 503:  # Retryable
+                    resp = ServiceBusy(resp.reason)
+                else:
+                    resp = None
         except (SocketError, Timeout) as err:
-            self.logger.error("ERROR fetching %s: %s", chunk, err)
+            self.logger.error("Error fetching %s: %s", chunk, err)
+            resp = OioNetworkException(err)  # Retryable
         except Exception:
-            self.logger.exception("ERROR fetching %s", chunk)
+            self.logger.exception("Error fetching %s", chunk)
+            resp = None
         return resp
 
     def rebuild(self):
@@ -1350,8 +1355,12 @@ class ECRebuildHandler(object):
         total_resps = 0
         resps_by_size = {}
         resps_without_chunk_size = []
+        temp_failures = []
         for resp in pile:
             if not resp:
+                continue
+            elif isinstance(resp, (OioNetworkException, ServiceBusy)):
+                temp_failures.append(resp)
                 continue
             chunk_size = int_value(
                 resp.getheader(CHUNK_HEADERS["chunk_size"], None), None
@@ -1395,22 +1404,25 @@ class ECRebuildHandler(object):
             resps = resps + resps_without_chunk_size
             if len(resps) < nb_data:
                 self.logger.error("Unable to read enough valid sources to rebuild")
-                raise exceptions.UnrecoverableContent(
+                err_msg = (
                     "Not enough valid sources to rebuild "
                     f"({len(resps)}/{nb_data}+{self.storage_method.ec_nb_parity})"
                 )
+                if len(resps) + len(temp_failures) < nb_data:
+                    raise exceptions.UnrecoverableContent(err_msg)
+                raise exceptions.ObjectUnavailable(err_msg)
             self.logger.warning(
                 "Some chunks without size information will be read (reqid=%s)",
                 self.reqid,
             )
 
         if self.read_all_available_sources:
-            rebuild_iter = self._make_rebuild_iter(resps)
+            rebuild_iter = self._make_rebuild_iter(resps, temp_failures)
         else:
-            rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
+            rebuild_iter = self._make_rebuild_iter(resps[:nb_data], temp_failures)
         return assumed_chunk_size, rebuild_iter, extra_properties
 
-    def _make_rebuild_iter(self, resps):
+    def _make_rebuild_iter(self, resps, temp_failures=None):
         def _get_frag(resp):
             buf = b""
             remaining = self.storage_method.ec_fragment_size
@@ -1451,8 +1463,14 @@ class ECRebuildHandler(object):
                     # If some fragments are missing or broken, let PyECLib deal with it.
                     rebuilt_frag = self._reconstruct(ok_frags)
                 except ECDriverError as err:
-                    # TODO(FVE): raise this only if self.read_all_available_sources
-                    # and a "temporary" exception we did not try all sources.
+                    if (
+                        temp_failures
+                        and len(temp_failures) >= self.storage_method.ec_nb_parity
+                    ):
+                        raise exceptions.ObjectUnavailable(
+                            f"Got error '{err}', but some chunks are "
+                            f"temporarily unavailable: {temp_failures}"
+                        )
                     raise exceptions.UnrecoverableContent(str(err))
                 yield rebuilt_frag
 

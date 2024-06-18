@@ -1608,7 +1608,7 @@ class ObjectStorageApi(object):
         try:
             # Verify that the first block is recoverable before responding.
             first_block = next(stream)
-        except exc.UnrecoverableContent:
+        except (exc.UnrecoverableContent, exc.ObjectUnavailable):
             # Maybe we got this error because the cached object
             # metadata was stale or maybe the metadata is from an out of sync
             # meta2 database.
@@ -1655,7 +1655,7 @@ class ObjectStorageApi(object):
             try:
                 for buggy_data in buggy_stream:
                     yield buggy_data
-            except exc.UnrecoverableContent:
+            except (exc.UnrecoverableContent, exc.ObjectUnavailable):
                 # Maybe we got this error because the cached object
                 # metadata was stale.
 

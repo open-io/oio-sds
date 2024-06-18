@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -102,6 +102,11 @@ class ContentNotFound(ContentException):
 
 
 class UnrecoverableContent(ContentException):
+    """
+    This exception is raised when an object cannot be read on-the-fly and we
+    have no hope to rebuild it (too many lost or truncated or damaged chunks).
+    """
+
     pass
 
 
@@ -109,6 +114,17 @@ class ServiceUnavailable(OioException):
     """
     Exception raised when some services are temporarily
     not available. This does not mean data is lost.
+    """
+
+    pass
+
+
+class ObjectUnavailable(ServiceUnavailable):
+    """
+    This exception is raised when an object cannot be read at the moment
+    (truncated or damaged chunks, network errors or down services)
+    but may be read later (if we retry with other non-damaged chunks,
+    or some services are up again).
     """
 
     pass

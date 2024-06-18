@@ -21,9 +21,16 @@ from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
 from oio.common.decorators import ensure_request_id2
-from oio.common.exceptions import UnrecoverableContent
+from oio.common.exceptions import (
+    ObjectUnavailable,
+    UnrecoverableContent,
+)
 from oio.common.fullpath import encode_fullpath
-from oio.common.storage_functions import _get_weighted_random_score
+from oio.common.storage_functions import (
+    _get_weighted_random_score,
+    RAWX_PERMANENT_ERRORS,
+)
+from oio.common.storage_method import STORAGE_METHODS
 from oio.content.quality import ensure_better_chunk_qualities, pop_chunk_qualities
 from oio.event.evob import EventTypes
 
@@ -53,7 +60,7 @@ class Content(object):
         self.metadata = metadata
         self.extra_properties = metadata.get("extra_properties")
         self.chunks = ChunksHelper(chunks)
-        self.storage_method = storage_method
+        self._storage_method = storage_method
         self.logger = logger or get_logger(self.conf)
         self.blob_client = blob_client or BlobClient(conf, logger=self.logger)
         self.container_client = container_client or ContainerClient(
@@ -105,6 +112,15 @@ class Content(object):
         if not isinstance(value, dict):
             raise ValueError("'value' must be a dict")
         self.metadata["properties"] = value
+
+    @property
+    def storage_method(self):
+        """
+        Get a StorageMethod object loaded from self.chunk_method
+        """
+        if not self._storage_method:
+            self._storage_method = STORAGE_METHODS.load(self.chunk_method)
+        return self._storage_method
 
     def _get_spare_chunk(
         self,
@@ -306,7 +322,7 @@ class Content(object):
             if len(candidates) > 1:
                 if service_id is None:
                     raise exc.ChunkException(
-                        "Several chunks with ID %s and no service ID" % (chunk_id,)
+                        f"Several chunks with ID {chunk_id} and no service ID"
                     )
             # Force Check host
             candidates = candidates.filter(host=service_id)
@@ -362,6 +378,8 @@ class Content(object):
                 spare_urls[0],
             )
         else:
+            perm_errors = []
+            temp_errors = []
             for src in chunks_srcs:
                 try:
                     self.logger.info(
@@ -392,10 +410,23 @@ class Content(object):
                         err,
                         kwargs.get("reqid"),
                     )
-                    if len(chunks_srcs) == 1:
+                    # When we are moving an EC chunk, we don't analyze other
+                    # chunks. Therefore, we can report the error about the one
+                    # chunk we just manipulated.
+                    if len(chunks_srcs) == 1 and self.storage_method.ec:
                         raise
+                    # In case of replication, we will try other chunks. At the
+                    # end of the loop, in case of failure, we will report the
+                    # situation of the whole object.
+                    if isinstance(err, RAWX_PERMANENT_ERRORS):
+                        perm_errors.append(err)
+                    else:
+                        temp_errors.append(err)
             else:
-                raise UnrecoverableContent("No copy available of chunk to move")
+                msg = f"No copy available of chunk to move: {perm_errors + temp_errors}"
+                if len(perm_errors) >= len(chunks_srcs):
+                    raise UnrecoverableContent(msg)
+                raise ObjectUnavailable(msg)
             self._update_spare_chunk(current_chunk, spare_urls[0], **kwargs)
 
             try:

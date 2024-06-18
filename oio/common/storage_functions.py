@@ -24,6 +24,12 @@ from oio.common.http import http_header_from_ranges
 from oio.common.decorators import ensure_headers
 
 
+RAWX_PERMANENT_ERRORS = (
+    exc.NotFound,  # Chunk does not exist
+    exc.ClientPreconditionFailed,  # Chunk has bad size or is corrupt
+)
+
+
 def obj_range_to_meta_chunk_range(obj_start, obj_end, meta_sizes):
     """
     Convert a requested object range into a list of meta_chunk ranges.
@@ -197,10 +203,10 @@ def fetch_stream(chunks, ranges, storage_method, headers=None, **kwargs):
             reader = ChunkReader(iter(chunks[pos]), None, headers=headers, **kwargs)
             try:
                 it = reader.get_iter()
-            except exc.NotFound as err:
+            except RAWX_PERMANENT_ERRORS as err:
                 raise exc.UnrecoverableContent(f"Cannot download position {pos}: {err}")
             except Exception as err:
-                raise exc.ServiceUnavailable(
+                raise exc.ObjectUnavailable(
                     f"Error while downloading position {pos}: {err}"
                 )
             for part in it:
@@ -220,10 +226,10 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
             )
             try:
                 stream = handler.get_stream()
-            except exc.NotFound as err:
+            except RAWX_PERMANENT_ERRORS as err:
                 raise exc.UnrecoverableContent(f"Cannot download position {pos}: {err}")
             except Exception as err:
-                raise exc.ServiceUnavailable(
+                raise exc.ObjectUnavailable(
                     f"Error while downloading position {pos}: {err}"
                 )
             try:

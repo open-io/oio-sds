@@ -16,26 +16,32 @@
 
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.storage_functions import _sort_chunks, fetch_stream
-from oio.common.storage_method import STORAGE_METHODS
-from oio.content.content import Content, Chunk
-from oio.common.exceptions import Conflict, OrphanChunk, UnrecoverableContent
+from oio.content.content import Content, Chunk, RAWX_PERMANENT_ERRORS
+from oio.common.exceptions import (
+    Conflict,
+    ObjectUnavailable,
+    OrphanChunk,
+    UnrecoverableContent,
+)
 from oio.common.storage_functions import _get_weighted_random_score
 from oio.common.utils import group_chunk_errors, request_id
 
 
 class PlainContent(Content):
     def fetch(self):
-        storage_method = STORAGE_METHODS.load(self.chunk_method)
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec, logger=self.logger)
+        chunks = _sort_chunks(
+            self.chunks.raw(), self.storage_method.ec, logger=self.logger
+        )
         stream = fetch_stream(
-            chunks, None, storage_method, watchdog=self.blob_client.watchdog
+            chunks, None, self.storage_method, watchdog=self.blob_client.watchdog
         )
         return stream
 
     def create(self, stream, **kwargs):
-        storage_method = STORAGE_METHODS.load(self.chunk_method)
         sysmeta = self._generate_sysmeta()
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec, logger=self.logger)
+        chunks = _sort_chunks(
+            self.chunks.raw(), self.storage_method.ec, logger=self.logger
+        )
 
         # TODO deal with headers
         headers = {}
@@ -43,7 +49,7 @@ class PlainContent(Content):
             stream,
             sysmeta,
             chunks,
-            storage_method,
+            self.storage_method,
             headers=headers,
             watchdog=self.blob_client.watchdog,
         )
@@ -134,8 +140,10 @@ class PlainContent(Content):
                     except Conflict as exc:
                         if not first:
                             raise
-                        storage_method = STORAGE_METHODS.load(self.chunk_method)
-                        if len(duplicate_chunks) > storage_method.expected_chunks - 2:
+                        if (
+                            len(duplicate_chunks)
+                            > self.storage_method.expected_chunks - 2
+                        ):
                             raise
                         # Now that chunk IDs are predictable,
                         # it is possible to have conflicts
@@ -177,10 +185,15 @@ class PlainContent(Content):
                 )
                 errors.append((src.url, err))
         else:
-            raise UnrecoverableContent(
-                "No copy available of missing chunk, or could not copy them. "
-                f"{group_chunk_errors(errors)}"
-            )
+            confirmed_loss = 0
+            error_groups = group_chunk_errors(errors)
+            for exc_obj, chunks in error_groups.items():
+                if isinstance(exc_obj, RAWX_PERMANENT_ERRORS):
+                    confirmed_loss += len(chunks)
+            msg = f"No copy available of missing chunk {error_groups}"
+            if confirmed_loss < self.storage_method.expected_chunks - 1:
+                raise ObjectUnavailable(msg)
+            raise UnrecoverableContent(msg)
 
         try:
             # Register the spare chunk in object's metadata

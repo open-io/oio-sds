@@ -19,7 +19,12 @@ from os import listdir
 from mock import MagicMock as Mock
 from os.path import join, exists
 from oio.common.utils import GeneratorIO, cid_from_name
-from oio.common.exceptions import ChunkException, Conflict, SpareChunkException
+from oio.common.exceptions import (
+    ChunkException,
+    Conflict,
+    ObjectUnavailable,
+    SpareChunkException,
+)
 from oio.blob.mover import BlobMoverWorker
 from oio.content.quality import get_distance
 from tests.utils import BaseTestCase, random_str
@@ -100,7 +105,7 @@ class TestBlobMover(BaseTestCase):
         mover.blob_client.chunk_get = Mock(return_value=(meta, wrong_stream))
 
         self.assertRaises(
-            (ChunkException, SpareChunkException),
+            (ChunkException, ObjectUnavailable, SpareChunkException),
             mover.chunk_move,
             self._chunk_path(orig_chunk),
             chunk_id,

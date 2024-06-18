@@ -17,8 +17,9 @@
 
 from oio.common.green import get_watchdog, Timeout
 
-import unittest
+import logging
 import random
+import unittest
 from io import BytesIO
 from collections import defaultdict
 import hashlib
@@ -44,6 +45,7 @@ class TestEC(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         super(TestEC, cls).setUpClass()
+        cls.logger = logging.getLogger("test")
         cls.watchdog = get_watchdog(called_from_main_application=True)
 
     def setUp(self):
@@ -276,7 +278,7 @@ class TestEC(unittest.TestCase):
     def test_write_exception_source(self):
         class TestReader(object):
             def read(self, size):
-                raise Exception("failure")
+                raise IOError("failure")
 
         checksum = self.checksum()
         source = TestReader()
@@ -291,8 +293,7 @@ class TestEC(unittest.TestCase):
                 self.storage_method,
                 watchdog=self.__class__.watchdog,
             )
-            # TODO specialize exception
-            self.assertRaises(Exception, handler.stream, source, size)
+            self.assertRaises(exc.SourceReadError, handler.stream, source, size)
 
     def test_write_transfer(self):
         checksum = self.checksum()
@@ -989,10 +990,11 @@ class TestEC(unittest.TestCase):
                 meta_chunk,
                 missing,
                 self.storage_method,
+                logger=self.logger,
                 watchdog=self.__class__.watchdog,
             )
-            # TODO use specialized exception
-            self.assertRaises(exc.OioException, handler.rebuild)
+
+            self.assertRaises(exc.UnrecoverableContent, handler.rebuild)
             self.assertEqual(len(conn_record), nb - 1)
 
     def test_rebuild_with_wrong_chunk_size(self):
@@ -1035,34 +1037,50 @@ class TestEC(unittest.TestCase):
             )
             self.assertEqual(len(conn_record), nb - 1)
 
-    def test_rebuild_not_enough_sources(self):
+    def _test_rebuild_not_enough_sources(self, resp_code, exc_type):
         test_data = (b"1234" * self.storage_method.ec_segment_size)[:-777]
         ec_chunks = self._make_ec_chunks(test_data)
         meta_chunk = self.meta_chunk()
 
-        for _ in range(self.storage_method.ec_nb_parity):
+        for _ in range(self.storage_method.ec_nb_parity + 1):
             ec_chunks.pop()
-            meta_chunk.pop()
 
-        headers = {}
-        responses = [
-            FakeResponse(200, ec_chunks[i], headers) for i in range(len(ec_chunks))
-        ]
-
-        missing_chunk = meta_chunk.pop(1)
-        missing = missing_chunk["num"]
+        # Build responses objects with one 404 (the chunk to be rebuilt),
+        # and the resp with the code from parameters.
+        responses = [FakeResponse(200, ec_chunks[i]) for i in range(len(ec_chunks))]
+        responses.insert(0, FakeResponse(404))
 
         def get_response(req):
-            return responses.pop(0) if responses else FakeResponse(404)
+            return responses.pop(0) if responses else FakeResponse(resp_code)
 
+        missing_pos = meta_chunk.pop(0)["num"]
         with set_http_requests(get_response):
             handler = ECRebuildHandler(
                 meta_chunk,
-                missing,
+                missing_pos,
                 self.storage_method,
+                logger=self.logger,
                 watchdog=self.__class__.watchdog,
             )
-            self.assertRaises(exc.UnrecoverableContent, handler.rebuild)
+            self.assertRaises(exc_type, handler.rebuild)
+
+    def test_rebuild_not_enough_sources(self):
+        """
+        Check what exception is raised when an object cannot be rebuilt
+        because too many chunks were lost.
+        """
+        return self._test_rebuild_not_enough_sources(
+            resp_code=404, exc_type=exc.UnrecoverableContent
+        )
+
+    def test_rebuild_not_enough_sources_but_hope(self):
+        """
+        Check what exception is raised when an object cannot be rebuilt
+        because too many chunks are currently unavailable.
+        """
+        return self._test_rebuild_not_enough_sources(
+            resp_code=503, exc_type=exc.ObjectUnavailable
+        )
 
     def _test_rebuild_not_enough_valid_sources(self, src_slice, err_msg):
         """
@@ -1078,23 +1096,19 @@ class TestEC(unittest.TestCase):
             ec_chunks.pop()
 
         # Build response objects, including an invalid one
-        headers = {}
-        responses = [
-            FakeResponse(200, ec_chunks[i], headers) for i in range(len(ec_chunks))
-        ]
-        responses[2] = FakeResponse(200, ec_chunks[2][src_slice], headers)
-
-        missing_chunk = meta_chunk.pop(1)
-        missing = missing_chunk["num"]
+        responses = [FakeResponse(200, ec_chunks[i]) for i in range(len(ec_chunks))]
+        responses[2] = FakeResponse(200, ec_chunks[2][src_slice])
 
         def get_response(req):
             return responses.pop(0) if responses else FakeResponse(404)
 
+        missing_pos = meta_chunk.pop(0)["num"]
         with set_http_requests(get_response):
             handler = ECRebuildHandler(
                 meta_chunk,
-                missing,
+                missing_pos,
                 self.storage_method,
+                logger=self.logger,
                 watchdog=self.__class__.watchdog,
             )
             _, stream, _ = handler.rebuild()
