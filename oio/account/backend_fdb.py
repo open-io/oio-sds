@@ -2984,12 +2984,12 @@ class AccountBackendFdb(object):
         trash_space = self.kms_space["trash"][account][bucket]["secret"]
 
         timestamp = tr[trash_space.pack((secret_id, "timestamp"))]
-        if not timestamp.present():
+        secret = tr[bucket_space.pack((secret_id,))]
+        if secret.present() and not timestamp.present():
             # Save the timestamp
             ts = datetime.now().isoformat()
             tr[trash_space.pack((secret_id, "timestamp"))] = ts.encode("utf-8")
             # Copy the plaintext secret
-            secret = tr[bucket_space.pack((secret_id,))]
             tr[trash_space.pack((secret_id, ts))] = secret
             # Copy the whole secret space
             secret_space = bucket_space[secret_id]
