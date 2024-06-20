@@ -245,6 +245,12 @@ GError* meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, json_object *jstrategy_params,
 		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
 
+/** Get the shards in range */
+GError* meta2_backend_get_shards_in_range(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, struct list_params_s *lp,
+		json_object *jbounds_params, m2_onbean_cb cb, gpointer u0,
+		gchar ***out_properties);
+
 /** Prepare container to be shard */
 GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans, gchar ***out_properties);

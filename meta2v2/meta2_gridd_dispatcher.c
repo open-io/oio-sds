@@ -558,6 +558,21 @@ static gridd_filter M2V2_FIND_SHARDS_FILTERS[] =
 	NULL
 };
 
+static gridd_filter M2V2_GET_SHARDS_IN_RANGE_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_user_agent,
+	meta2_filter_extract_sharding_info,
+	meta2_filter_extract_header_flags32,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_action_get_shards_in_range,
+	NULL
+};
+
 static gridd_filter M2V2_PREPARE_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -736,6 +751,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_CLEAN_SHARDING,   (hook) meta2_dispatch_all, M2V2_CLEAN_SHARDING_FILTERS},
 		{NAME_MSGNAME_M2V2_SHOW_SHARDING,    (hook) meta2_dispatch_all, M2V2_SHOW_SHARDING_FILTERS},
 		{NAME_MSGNAME_M2V2_ABORT_SHARDING,   (hook) meta2_dispatch_all, M2V2_ABORT_SHARDING_FILTERS},
+		{NAME_MSGNAME_M2V2_SHARDS_IN_RANGE,  (hook) meta2_dispatch_all, M2V2_GET_SHARDS_IN_RANGE_FILTERS},
 
 		/* contents */
 		{NAME_MSGNAME_M2V2_GET,     (hook) meta2_dispatch_all, M2V2_GET_FILTERS},

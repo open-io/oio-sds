@@ -2837,6 +2837,63 @@ end:
 	return err;
 }
 
+GError*
+meta2_backend_get_shards_in_range(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, struct list_params_s *lp,
+		json_object *jbounds_params, m2_onbean_cb cb, gpointer u0,
+		gchar ***out_properties)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	// Extract params
+	if (!jbounds_params) {
+		err = BADREQ("Missing bounds parameters");
+		goto end;
+	}
+	struct json_object *jlower = NULL, *jupper = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"lower", &jlower, json_type_string, 1},
+		{"upper", &jupper, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+	err = oio_ext_extract_json(jbounds_params, m);
+	if (err) {
+		err = BADREQ("Invalid bounds parameters: (%d) %s",
+				err->code, err->message);
+		goto end;
+	}
+	const gchar* lower = json_object_get_string(jlower);
+	const gchar* upper = json_object_get_string(jupper);
+
+	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
+	struct m2_open_args_s open_args = {
+			_mode_readonly(open_mode),
+			NULL,
+			0
+		};
+	err = m2b_open_with_args(m2b, url, NULL, &open_args, &sq3);
+	if (!err) {
+		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			err = BADREQ("Container is a shard");
+		}
+		if (!err) {
+			err = m2db_get_shards_in_range(sq3, lower, upper, cb, u0);
+		}
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
+		}
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+
+end:
+	return err;
+}
+
+
 static GError*
 _extract_sharding_indices(GSList *beans, GSList **indices, GString *indices_prop)
 {

@@ -1030,6 +1030,104 @@ class TestSharding(BaseTestCase):
             f"{self.cname}+segments", bucket=self.cname
         )
 
+    def test_get_range(self):
+        self._create(self.cname)
+        for i in range(4):
+            self._add_objects(self.cname, 4, prefix="dir%d/obj" % i)
+        expected_shards = []
+        params = {"partition": "50,50", "threshold": 4}
+        # Shard root container
+        shards = self.container_sharding.find_shards(
+            self.account,
+            self.cname,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True, reqid="testingisdoubting"
+        )
+        self.assertTrue(modified)
+        # Wait for the update of the root and the 2 new shards
+        for _ in range(3):
+            event = self.wait_for_kafka_event(
+                reqid="testingisdoubting",
+                types=(EventTypes.CONTAINER_STATE,),
+            )
+            self.assertIsNotNone(event)
+
+        # Split the first shard in 2
+        shards_account = f".shards_{self.account}"
+        res = self.storage.container_list(shards_account, prefix=f"{self.cname}-")
+        first = res[0][0]
+        shards = self.container_sharding.find_shards(
+            shards_account,
+            first,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        modified = self.container_sharding.replace_shard(
+            shards_account, first, shards, enable=True, reqid="fixingisfailing"
+        )
+        self.assertTrue(modified)
+
+        expected_shards = [
+            s for s in self.container_sharding.show_shards(self.account, self.cname)
+        ]
+        self.assertEqual(3, len(expected_shards))
+
+        # All range
+        shards = [
+            s
+            for s in self.container_sharding.get_shards_in_range(
+                self.account, self.cname, "", ""
+            )
+        ]
+        self.assertListEqual(expected_shards, shards)
+
+        # First shard range
+        shards = [
+            s
+            for s in self.container_sharding.get_shards_in_range(
+                self.account, self.cname, "", expected_shards[0]["upper"]
+            )
+        ]
+        self.assertListEqual([expected_shards[0]], shards)
+
+        # Last shard range
+        shards = [
+            s
+            for s in self.container_sharding.get_shards_in_range(
+                self.account,
+                self.cname,
+                expected_shards[1]["lower"],
+                expected_shards[2]["lower"] + "z",
+            )
+        ]
+        self.assertListEqual(expected_shards, shards)
+
+        shards = [
+            s
+            for s in self.container_sharding.get_shards_in_range(
+                self.account, self.cname, expected_shards[1]["lower"] + "z", ""
+            )
+        ]
+        _expected_shards = [
+            {**s, "index": i} for i, s in enumerate(expected_shards[1:])
+        ]
+        self.assertListEqual(_expected_shards, shards)
+
+        # Only last shard
+        shards = [
+            s
+            for s in self.container_sharding.get_shards_in_range(
+                self.account, self.cname, expected_shards[2]["lower"] + "z", ""
+            )
+        ]
+        _expected_shards = [
+            {**s, "index": i} for i, s in enumerate(expected_shards[2:])
+        ]
+        self.assertListEqual(_expected_shards, shards)
+
     def test_listing(self):
         self._create(self.cname)
         for i in range(4):

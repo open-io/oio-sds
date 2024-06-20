@@ -1175,6 +1175,44 @@ class ContainerSharding(ProxyClient):
         partial = kwargs.get("marker") or not kwargs.get("no_paging")
         return self._check_shards(formatted_shards, partial=partial, **kwargs)
 
+    def _get_shards_in_range(
+        self, root_account, root_container, lower, upper, root_cid=None, **kwargs
+    ):
+        params = self._make_params(
+            account=root_account, reference=root_container, cid=root_cid, **kwargs
+        )
+        bounds = {
+            "lower": lower,
+            "upper": upper,
+        }
+        resp, body = self._request(
+            "GET", "/get_range", params=params, json=bounds, **kwargs
+        )
+        if resp.status != 200:
+            raise exceptions.from_response(resp, body)
+
+        shards = body.get("shard_ranges", [])
+        for i, shard in enumerate(shards):
+            shard["index"] = i
+            shard = self._format_shard(shard, **kwargs)
+            yield shard
+
+    @ensure_request_id
+    def get_shards_in_range(self, root_account, root_container, lower, upper, **kwargs):
+        """
+        Retrieve the list of shards with content in range ]lower; upper]
+        :returns: list of shards
+        """
+        formated_shards = self._get_shards_in_range(
+            root_account,
+            root_container,
+            lower,
+            upper,
+            **kwargs,
+        )
+        partial = lower != "" or upper != ""
+        return self._check_shards(formated_shards, partial=partial, **kwargs)
+
     def _abort_sharding(self, shard, attempts=1, **kwargs):
         for i in range(attempts):
             try:

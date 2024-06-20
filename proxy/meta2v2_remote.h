@@ -283,4 +283,9 @@ GByteArray* m2v2_remote_pack_ABORT_SHARDING(
 		struct oio_url_s *url,
 		gint64 dl);
 
+GByteArray* m2v2_remote_pack_GET_SHARDS_IN_RANGE(
+	struct oio_url_s *url,
+	GByteArray *bounds_params,
+	gint64 dl);
+
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

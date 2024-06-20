@@ -3723,6 +3723,70 @@ action_container_sharding_abort(struct req_args_s *args)
 	return rest_action(args, action_m2_container_sharding_abort);
 }
 
+// SHARDING{{
+// GET /v3.0/{NS}/container/sharding/get_range?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get shards in range from a root container.
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/container/sharding/get_range?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//
+//    {
+//        "lower": "",
+//        "upper": "",
+//    }
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 637
+//
+//    {
+//      "properties": {},
+//      "system": {
+//      },
+//      "shard_ranges": [
+//        {
+//          "lower": "",
+//          "upper": "shard",
+//          "cid": "8B78B3245B74710F3ACC1BEF4978E621F5E764E01FFB5621D23C4EECA2B7BB3D",
+//          "metadata": ""
+//        },
+//        {
+//          "lower": "shard",
+//          "upper": "",
+//          "cid": "BC99330D9F1A70D2AD6CA388DF8A09AD1DCD4066B439C945A157122CEC9800EA",
+//          "metadata": ""
+//        }
+//      ]
+//    }
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_get_in_range(struct req_args_s *args)
+{
+	GError *err = NULL;
+	struct list_result_s list_out = {0};
+
+	m2v2_list_result_init(&list_out);
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_GET_SHARDS_IN_RANGE(args->url,
+				args->rq->body, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, &list_out,
+			m2v2_list_result_extract);
+
+	enum http_rc_e rc = _reply_shard_ranges_list_result(args, err, &list_out);
+	m2v2_list_result_clean(&list_out);
+	return rc;
+}
+
 /* CONTENT action resource -------------------------------------------------- */
 
 static GError*

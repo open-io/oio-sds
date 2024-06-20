@@ -1191,6 +1191,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/sharding/clean/#POST", action_container_sharding_clean);
 	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 	SET("/$NS/container/sharding/abort/#POST", action_container_sharding_abort);
+	SET("/$NS/container/sharding/get_range/#GET", action_container_sharding_get_in_range);
 
 	// Content
 	SET("/$NS/content/create/#POST", action_content_put);
