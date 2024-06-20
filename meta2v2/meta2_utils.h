@@ -361,6 +361,9 @@ GError* m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 		GError* (*get_shard_size)(gint64, guint, gint64*),
 		m2_onbean_cb cb, gpointer u0);
 
+GError* m2db_get_shards_in_range(struct sqlx_sqlite3_s *sq3, const gchar *req_lower,
+		const gchar *req_upper, m2_onbean_cb cb, gpointer u0);
+
 GError* m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_sqlite3_s *to_merge_sq3, gboolean *truncated);
 

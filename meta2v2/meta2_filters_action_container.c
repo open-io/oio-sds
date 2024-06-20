@@ -736,6 +736,63 @@ meta2_filter_action_find_shards(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+
+int meta2_filter_action_get_shards_in_range(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+	struct list_params_s lp = {0};
+	gchar **properties = NULL;
+
+	_load_list_params(&lp, ctx, reply);
+
+	gsize length = 0;
+	void *bounds_params = metautils_message_get_BODY(reply->request, &length);
+	json_object *jbounds_params = NULL;
+	if (bounds_params) {
+		err = JSON_parse_buffer(bounds_params, length, &jbounds_params);
+		if (!err && !json_object_is_type(jbounds_params, json_type_object)) {
+			err = BADREQ("Expected JSON object for bounds parameters");
+		}
+
+		if (err) {
+			_on_bean_ctx_clean(obc);
+			if (jbounds_params) {
+				json_object_put(jbounds_params);
+			}
+			meta2_filter_ctx_set_error(ctx, err);
+			return FILTER_KO;
+		}
+	}
+	err = meta2_backend_get_shards_in_range(
+		m2b, url, &lp, jbounds_params, _bean_list_cb, &(obc->l), &properties);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	obc->l = g_slist_reverse(obc->l);
+
+	if (properties) {
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			if (!g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER)
+					&& !g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_SYS))
+				continue;
+			gchar *k = g_strconcat(NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+			reply->add_header(k, metautils_gba_from_string(*(p+1)));
+			g_free(k);
+		}
+		g_strfreev(properties);
+	}
+
+	_on_bean_ctx_send_list(obc);
+	_on_bean_ctx_clean(obc);
+	return FILTER_OK;
+}
+
 int
 meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)

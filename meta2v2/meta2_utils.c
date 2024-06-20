@@ -4105,6 +4105,41 @@ end:
 	return err;
 }
 
+GError* m2db_get_shards_in_range(struct sqlx_sqlite3_s *sq3,const gchar *req_lower,
+		const gchar *req_upper, m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	/* Build query */
+	GPtrArray *params_list = g_ptr_array_new();
+	GString *clause = g_string_sized_new(128);
+
+	if (!oio_str_is_set(req_lower) && !oio_str_is_set(req_upper)) {
+		// No filter, all shards will be returned
+		g_string_append_static(clause,"1");
+	} else if (!oio_str_is_set(req_lower)) {
+		g_string_append_static(clause,"? > lower");
+		g_ptr_array_add(params_list, g_variant_new_string(req_upper));
+	} else if (!oio_str_is_set(req_upper)) {
+		g_string_append_static(clause, "? <= upper OR upper == ''");
+		g_ptr_array_add(params_list, g_variant_new_string(req_lower));
+	} else {
+		g_string_append_static(clause, "(? <= upper OR upper == '') AND (lower < ?)");
+		g_ptr_array_add(params_list, g_variant_new_string(req_lower));
+		g_ptr_array_add(params_list, g_variant_new_string(req_upper));
+	}
+	g_string_append_static(clause, " ORDER BY lower ASC");
+	// Close params
+	g_ptr_array_add(params_list, NULL);
+	GVariant **params = (GVariant**) g_ptr_array_free(params_list, FALSE);
+
+	err = SHARD_RANGE_load(sq3, clause->str, params, cb, u0);
+	metautils_gvariant_unrefv(params);
+
+	g_free(params);
+	g_string_free(clause, TRUE);
+	return err;
+}
+
 GError*
 m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_sqlite3_s *to_merge_sq3, gboolean *truncated)
