@@ -1,0 +1,18 @@
+targets:
+  - 127.0.0.1:6010
+  - 127.0.0.1:6011
+  - 127.0.0.1:6012
+probabilistic:
+  - class: standard
+    args:
+      max_workers: 8
+      duration: 3m
+  - class: ia
+    args:
+      max_workers: 8
+      duration: 3m
+      # It's possible to overwrite the configuration for a given population
+      life_expectancy: 1m
+      life_deviation: 10s
+      average_get_frequency: 2.0
+      average_creation_frequency: 1.0
