@@ -3951,7 +3951,7 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 
 GError*
 meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const gchar* prefix)
+		const gchar* prefix, const gchar* suffix)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -3981,24 +3981,37 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			goto end;
 		}
 		gint64 timestamp = oio_ext_real_time();
+
+		// Build database copy path
 		gchar *copy_path = NULL;
-		gchar *link_path = NULL;
 		copy_path = g_strdup_printf(
 				"%s.%"G_GINT64_FORMAT,
 				sq3->path_inline, timestamp);
-		// Create a database copy (ref link)
-		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
-		if (err) {
-			g_prefix_error(&err, "Failed to copy %s to %s: ",
-					sq3->path_inline, copy_path);
-			goto rollback;
+		// Build symlink path
+		gchar *link_path = NULL;
+		gchar *checkpoint_suffix = NULL;
+		if (suffix && *suffix) {
+			checkpoint_suffix = g_strdup(suffix);
+		} else {
+			checkpoint_suffix = g_strdup_printf("%"G_GINT64_FORMAT, timestamp);
 		}
-		link_path = g_strdup_printf("%s/%s.%s.meta2.%"G_GINT64_FORMAT,
-			meta2_checkpoints_directory, prefix, sq3->name.base, timestamp);
-		// Create sym link
-		if(symlink(copy_path, link_path)) {
-			err = SYSERR("Unable to create symlink: %s", g_strerror(errno));
+		link_path = g_strdup_printf("%s/%s.%s.meta2.%s",
+			meta2_checkpoints_directory, prefix, sq3->name.base, checkpoint_suffix);
+
+		if (g_access(link_path, F_OK | R_OK) != 0) {
+			// Create a database copy (ref link)
+			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			if (err) {
+				g_prefix_error(&err, "Failed to copy %s to %s: ",
+						sq3->path_inline, copy_path);
+				goto rollback;
+			}
+			// Create sym link
+			if(symlink(copy_path, link_path)) {
+				err = SYSERR("Unable to create symlink: %s", g_strerror(errno));
+			}
 		}
+
 rollback:
 		// Remove copy
 		if (err) {
@@ -4011,6 +4024,7 @@ rollback:
 		// Cleanup
 		g_free(copy_path);
 		g_free(link_path);
+		g_free(checkpoint_suffix);
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 end:

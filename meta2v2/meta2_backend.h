@@ -296,8 +296,8 @@ GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url);
 
-/** Create meta2 snapshot */
+/** Create meta2 checkpoint */
 GError* meta2_backend_checkpoint(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, const gchar* prefix);
+		struct oio_url_s *url, const gchar* prefix, const gchar* suffix);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

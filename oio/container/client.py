@@ -644,7 +644,7 @@ class ContainerClient(ProxyClient):
         return {"truncated": boolean_value(resp.getheader("x-oio-truncated"), False)}
 
     def container_checkpoint(
-        self, account=None, reference=None, cid=None, prefix=None, **kwargs
+        self, account=None, reference=None, cid=None, prefix=None, suffix=None, **kwargs
     ):
         """
         Create a checkpoint of a container. This checkpoint can be used for later
@@ -667,6 +667,8 @@ class ContainerClient(ProxyClient):
         data = {}
         if prefix:
             data["prefix"] = prefix
+        if suffix:
+            data["suffix"] = suffix
         data = json.dumps(data)
         resp, _ = self._request("POST", "/checkpoint", params=params, data=data)
 

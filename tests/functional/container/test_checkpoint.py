@@ -161,6 +161,55 @@ class TestCheckpointContainer(BaseTestCase):
         entry = entries[0]
         self.assertTrue(entry.startswith("my-prefix."))
 
+    def test_checkpoint_existing_container_with_suffix(self):
+        # Create container checkpoint
+        self.api.container.container_checkpoint(
+            account=self.account,
+            reference=self.container,
+            prefix="my-prefix",
+            suffix="my-suffix",
+        )
+
+        entries = self._list_base_in_master(self.container_base)
+        self.assertEqual(len(entries), 2)
+        # keep only base with suffix
+        entries = [e for e in entries if not e.endswith(".meta2")]
+        self.assertEqual(len(entries), 1)
+
+        entries = self._list_base_in_slaves(self.container_base)
+        self.assertEqual(len(entries), len(self._data_dirs[1]))
+        # keep only base with suffix
+        entries = [e for e in entries if not e.endswith(".meta2")]
+        self.assertEqual(len(entries), 0)
+
+        # Ensure the symlink is correctly created
+        entries = self._list_lifecycle_symlinks(self.container_base)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertTrue(entry.startswith("my-prefix."))
+        self.assertTrue(entry.endswith("my-suffix"))
+
+        # Create container with same suffix and prefix
+        self.api.container.container_checkpoint(
+            account=self.account,
+            reference=self.container,
+            prefix="my-prefix",
+            suffix="my-suffix",
+        )
+        entries = self._list_base_in_master(self.container_base)
+        self.assertEqual(len(entries), 2)
+        # keep only base with suffix
+        entries = [e for e in entries if not e.endswith(".meta2")]
+        self.assertEqual(len(entries), 1)
+        print(entries)
+
+        # Ensure the symlink is correctly created
+        entries = self._list_lifecycle_symlinks(self.container_base)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertTrue(entry.startswith("my-prefix."))
+        self.assertTrue(entry.endswith("my-suffix"))
+
     def test_checkpoint_invalid_container(self):
         self.assertRaises(
             NotFound,
