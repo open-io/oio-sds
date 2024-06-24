@@ -1704,6 +1704,7 @@ class ItemCheckTest(CliTestCase):
         self.assert_list_output(expected_items, output)
 
         # Stop treating the events
+        self.logger.debug("Stopping the event system")
         self._service("oio-event.target", "stop", wait=8)
         # Verify the event-agent is actually stopped
         self.assertRaises(
@@ -1713,6 +1714,7 @@ class ItemCheckTest(CliTestCase):
         stderr = None
         try:
             # Delete the selected chunk
+            self.logger.debug("Deleting the chunk we want to check")
             self.api.blob_client.chunk_delete(missing_chunk["url"])
 
             # Verify we know about the chunk, even if we just deleted it:
@@ -1721,8 +1723,9 @@ class ItemCheckTest(CliTestCase):
                 f"chunk chunk={missing_chunk['url']} error "
                 "Not found: n/a (HTTP 404) (STATUS Not Found)"
             )
+            self.logger.debug("Running the check command")
             output, stderr = self.openio_admin_with_stderr(
-                f"chunk check {missing_chunk['url']} {check_opts}",
+                f"chunk check {missing_chunk['url']} {check_opts} -v --debug",
                 expected_returncode=1,
             )
             self.assert_list_output(expected_items, output)

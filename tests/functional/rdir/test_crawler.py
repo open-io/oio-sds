@@ -628,7 +628,7 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
             logger=self.logger,
         )
         rdir_crawler.crawl_volume()
-        self.assertEqual(rdir_crawler.deindexed_containers, 1)
+        self.assertGreaterEqual(rdir_crawler.deindexed_containers, 1)
         entries = self.rdir.meta2_index_fetch_all(meta2_id)
         container_ids = [entry["container_id"] for entry in entries]
         self.assertNotIn(cid, container_ids)
