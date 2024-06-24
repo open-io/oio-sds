@@ -1647,6 +1647,20 @@ use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
 """
 
+template_event_agent_lifecycle_checkpoint_handlers = """
+[handler:lifecycle.checkpoint]
+pipeline = checkpoint
+
+[filter:checkpoint]
+use = egg:oio#checkpoint_creator
+topic = oio-lifecycle-checkpoint
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+checkpoint_prefix = lifecycle
+"""
+
 template_systemd_service_xcute_event_agent = """
 [Unit]
 Description=[OpenIO] Service xcute event agent ${SRVNUM}
@@ -3118,6 +3132,22 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to lifecycle checkpoint events
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-lifecycle-checkpoint",
+            url,
+            workers="1",
+            group_id="event-agent-lifecycle-checkpoint",
+            template_handler=template_event_agent_lifecycle_checkpoint_handlers,
+        )
+
+        # We need only one service
+        break
+
     # Xcute event-agent
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3258,6 +3288,7 @@ def generate(options):
         "oio-deadletter",
         "oio-delayed",
         "oio-drained",
+        "oio-lifecycle-checkpoint",
         "oio-preserved",
         "oio-rebuild",
         "oio-replication",
