@@ -2067,16 +2067,18 @@ restart_srv_from_other_consciences(void)
 					|| !oio_str_is_set(si->type)) {
 				continue;
 			}
+			gboolean is_locked = FALSE;
+			struct service_tag_s *lock_tag = NULL;
 			/* If there is no lock, we must declare the score as "unset", and
 			 * let the conscience compute it. Any other value will lock it. */
-			const gchar *is_locked_str = service_info_get_tag_value(
-					si, NAME_TAGNAME_GET_LOCK, "false");
-			if (!oio_str_parse_bool(is_locked_str, FALSE)) {
+			lock_tag = service_info_get_tag(si->tags, NAME_TAGNAME_GET_LOCK);
+			if (service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
+					&& is_locked) {
 				si->get_score.value = SCORE_UNSET;
 			}
-			is_locked_str = service_info_get_tag_value(
-					si, NAME_TAGNAME_PUT_LOCK, "false");
-			if (!oio_str_parse_bool(is_locked_str, FALSE)) {
+			lock_tag = service_info_get_tag(si->tags, NAME_TAGNAME_PUT_LOCK);
+			if (service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
+					&& is_locked) {
 				si->put_score.value = SCORE_UNSET;
 			}
 			struct service_info_dated_s *sid = push_service(si);
