@@ -175,10 +175,4 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
     def send_end_report(self):
         """Report end of worker"""
         self.report("ended", force=True)
-        if self.use_marker and self.current_marker != self.DEFAULT_MARKER:
-            # reset marker
-            self.current_marker = self.DEFAULT_MARKER
-            try:
-                self.write_marker()
-            except OSError as err:
-                self.logger.error("Failed to reset progress marker: %s", err)
+        self.write_marker(self.DEFAULT_MARKER, force=True)

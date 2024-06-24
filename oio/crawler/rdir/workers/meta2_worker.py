@@ -61,6 +61,7 @@ class RdirWorkerForMeta2(RdirWorker):
         self.containers_not_referenced = 0
         self.deindexed_containers = 0
         if self.use_marker:
+            self.nb_path_processed = 0
             # Add marker if option enabled
             self.init_current_marker(self.volume_path, self.max_containers_per_second)
 
@@ -232,7 +233,6 @@ class RdirWorkerForMeta2(RdirWorker):
         self.total_scanned = 0
         self.deindexed_containers = 0
         last_scan_time = 0
-        nb_path_processed = 0  # only used for markers if feature is used
         try:
             marker = None
             if self.use_marker and self.current_marker != self.DEFAULT_MARKER:
@@ -260,20 +260,9 @@ class RdirWorkerForMeta2(RdirWorker):
                 last_scan_time = ratelimit(
                     last_scan_time, self.max_containers_per_second
                 )
-                if self.use_marker:
-                    nb_path_processed += 1
-                    if nb_path_processed >= self.scanned_between_markers:
-                        # Update marker and reset counter
-                        nb_path_processed = 0
-                        self.current_marker = container_url
-                        try:
-                            self.write_marker()
-                        except OSError as err:
-                            self.report("ended with error", force=True)
-                            raise OSError(
-                                f"Failed to write progress marker: {err}"
-                            ) from err
+                self.write_marker(container_url)
                 self.report("running")
+
             if self.total_scanned == 0:
                 self.logger.debug("No entries found for volume: %s", self.volume_path)
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:

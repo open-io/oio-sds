@@ -96,19 +96,26 @@ class CrawlerWorkerMarkerMixin(object):
             if self.current_marker == "":
                 self.current_marker = self.DEFAULT_MARKER
 
-    def write_marker(self):
+    def write_marker(self, marker, force=False):
         """Save current marker into marker file"""
         if not self.use_marker:
-            self.logger.error(
-                f"trying to write marker={self.current_marker} while feature disabled"
-            )
-            return
-        # Create marker dir if it does not exist
-        if not isdir(self.marker_dir):
-            makedirs(self.marker_dir, exist_ok=True)
+            return False
+        self.nb_path_processed += 1
+        if self.nb_path_processed < self.scanned_between_markers and not force:
+            return False
+        self.current_marker = marker
+        try:
+            # Create marker dir if it does not exist
+            if not isdir(self.marker_dir):
+                makedirs(self.marker_dir, exist_ok=True)
 
-        with open(self.marker_path, "w") as marker_file:
-            marker_file.write(self.current_marker)
+            with open(self.marker_path, "w") as marker_file:
+                marker_file.write(self.current_marker)
+            self.nb_path_processed = 0
+        except OSError as err:
+            self.report("ended with error", force=True)
+            raise OSError(f"Failed to write progress marker: {err}") from err
+        return True
 
 
 class CrawlerStatsdMixin:
@@ -260,6 +267,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.current_marker = None
         self.use_marker = boolean_value(self.conf.get("use_marker"), False)
         if self.use_marker:
+            self.nb_path_processed = 0
             # Add marker if option enabled
             CrawlerWorkerMarkerMixin.init_current_marker(
                 self, volume_path, self.max_scanned_per_second
@@ -371,7 +379,6 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
 
         self.report("starting", force=True)
         last_scan_time = 0
-        nb_path_processed = 0  # only used for markers if feature is used
         for path in paths:
             self.logger.debug("crawl_volume current path: %s", path)
             if not self.running:
@@ -387,21 +394,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
                 max_rate=self.max_scanned_per_second,
                 increment=1,
             )
-
-            if self.use_marker:
-                nb_path_processed += 1
-                if nb_path_processed >= self.scanned_between_markers:
-                    # Update marker and reset counter
-                    nb_path_processed = 0
-                    self.current_marker = path.rsplit("/", 1)[-1]
-                    try:
-                        self.write_marker()
-                    except OSError as err:
-                        self.report("ended with error", force=True)
-                        raise OSError(
-                            f"Failed to write progress marker: {err}"
-                        ) from err
-
+            self.write_marker(path.rsplit("/", 1)[-1])
             self.report("running")
 
         self.report("ended", force=True)
@@ -412,13 +405,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.successes = 0
         self.ignored_paths = 0
         self.invalid_paths = 0
-        if self.use_marker and self.current_marker != self.DEFAULT_MARKER:
-            # reset marker
-            self.current_marker = self.DEFAULT_MARKER
-            try:
-                self.write_marker()
-            except OSError as err:
-                self.logger.error("Failed to reset progress marker: %s", err)
+        self.write_marker(self.DEFAULT_MARKER, force=True)
 
     def run(self):
         if self.wait_random_time_before_starting:
