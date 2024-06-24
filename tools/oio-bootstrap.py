@@ -622,6 +622,15 @@ service_update_interval = 3600
 use = egg:oio#logger
 """
 
+template_lifecycle_collector_service = """
+[checkpoint-collector]
+namespace = ${NS}
+user = ${USER}
+concurrency = 1
+endpoint = ${EVENT_CNXSTRING}
+topic = oio-lifecycle-checkpoint
+"""
+
 template_rawx_service = """
 listen ${IP}:${PORT}
 
@@ -2792,6 +2801,20 @@ def generate(options):
             coverage_wrapper=shutil.which("coverage")
             + " run --context rawx-crawler --concurrency=eventlet -p ",
         )
+
+    # Lifecycle collector
+    env.update(
+        {
+            "SRVTYPE": "lifecycle-collector",
+            "SRVNUM": "1",
+        }
+    )
+    tpl = Template(template_lifecycle_collector_service)
+    to_write = tpl.safe_substitute(env)
+    path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+
     # redis
     if options.get(ALLOW_REDIS):
         redis_server = shutil.which("redis-server")
