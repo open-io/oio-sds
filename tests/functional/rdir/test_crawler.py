@@ -274,13 +274,13 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
             )
         )
 
-        def write_marker(worker):
-            """Save current marker into marker file"""
-            os.makedirs(worker.marker_dir, exist_ok=True)
-            with open(worker.marker_path, "a") as marker_file:
-                marker_file.write(worker.current_marker + "\n")
+        def append_marker(marker, force=False):
+            """Append the marker to the file instead of overwriting it"""
+            os.makedirs(rdir_crawler.marker_dir, exist_ok=True)
+            with open(rdir_crawler.marker_path, "a") as marker_file:
+                marker_file.write(marker + "\n")
 
-        rdir_crawler.write_marker = lambda: write_marker(rdir_crawler)
+        rdir_crawler.write_marker = append_marker
         rdir_crawler.crawl_volume()
         # If there are no error
         if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
@@ -670,12 +670,13 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
             )
         )
 
-        def write_marker(worker):
-            """Save current marker into marker file"""
-            with open(worker.marker_path, "a") as marker_file:
-                marker_file.write(worker.current_marker + "\n")
+        def append_marker(marker, force=False):
+            """Append the marker to the file instead of overwriting it"""
+            os.makedirs(rdir_crawler.marker_dir, exist_ok=True)
+            with open(rdir_crawler.marker_path, "a") as marker_file:
+                marker_file.write(marker + "\n")
 
-        rdir_crawler.write_marker = lambda: write_marker(rdir_crawler)
+        rdir_crawler.write_marker = append_marker
         rdir_crawler.crawl_volume()
         # If there are no error
         if rdir_crawler.service_unavailable == 0 and rdir_crawler.errors == 0:
