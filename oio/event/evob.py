@@ -103,6 +103,7 @@ class EventTypes(object):
     DELAYED = "delayed"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
+    LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
 
     ALL_EVENTS = (
         ACCOUNT_SERVICES,
@@ -122,6 +123,7 @@ class EventTypes(object):
         DELAYED,
         META2_DELETED,
         XCUTE_TASKS,
+        LIFECYCLE_CHECKPOINT,
     )
     CONTAINER_EVENTS = (
         CONTAINER_DELETED,
