@@ -17,6 +17,7 @@ import time
 
 from oio.common.exceptions import Forbidden, NotFound
 from tests.functional.account.helpers import AccountBaseTestCase
+from oio.common.constants import BUCKET_PROP_RATELIMIT
 
 
 class TestBucketClient(AccountBaseTestCase):
@@ -258,3 +259,28 @@ class TestBucketClient(AccountBaseTestCase):
                 account,
                 feature,
             )
+
+    def test_bucket_show(self):
+        account = "account-1"
+        bucket = "bucket-show-1"
+        self._create_account(account)
+        self._create_bucket(account, bucket)
+
+        ratelimit = {"GET": 12}
+
+        self.bucket_client.bucket_update(
+            bucket,
+            metadata={
+                BUCKET_PROP_RATELIMIT: ratelimit,
+            },
+            to_delete=None,
+            account=account,
+        )
+
+        info = self.bucket_client.bucket_show(bucket, account=account, details=False)
+        self.assertIn(BUCKET_PROP_RATELIMIT, info)
+        self.assertDictEqual(info[BUCKET_PROP_RATELIMIT], ratelimit)
+
+        info = self.bucket_client.bucket_show(bucket, account=account, details=True)
+        self.assertIn(BUCKET_PROP_RATELIMIT, info)
+        self.assertDictEqual(info[BUCKET_PROP_RATELIMIT], ratelimit)

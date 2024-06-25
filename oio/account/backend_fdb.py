@@ -82,6 +82,8 @@ RESERVED_BUCKET_FIELDS = (
 
 FEATURE_ACTIONS_HISTORY = 10
 
+DETAILS_FIELDS_WHITELIST = (BUCKET_PROP_RATELIMIT,)
+
 
 class FeatureAction(IntEnum):
     """
@@ -2214,6 +2216,9 @@ class AccountBackendFdb(object):
         if not details:
             detail_keys = [k for k in info if k.endswith("-details")]
             for key in detail_keys:
+                _key = key[:-8]
+                if _key in DETAILS_FIELDS_WHITELIST:
+                    continue
                 _ = info.pop(key)
 
         ratelimit = info.pop(f"{BUCKET_PROP_RATELIMIT}-details", None)
