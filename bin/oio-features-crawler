@@ -22,7 +22,8 @@ from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.api.object_storage import ObjectStorageApi
 from oio.event.filters.account_update import SYSMETA_S3API_PREFIX
 from oio.common.timestamp import Timestamp
-from oio.common.utils import request_id
+from oio.common.utils import request_id, depaginate
+from oio.common.exceptions import NoSuchContainer, NoSuchAccount, NotFound
 
 DEFAULT_FEATURE_MTIME = Timestamp(
     datetime.fromisoformat("2024-05-31T00:00:00").timestamp()
@@ -53,33 +54,35 @@ class FeatureCrawler:
         """Format the current progression marker"""
         return f"{self._account_marker or ''}{SEPARATOR}{self._container_marker or ''}"
 
-    def _get_accounts(self, marker=None):
-        self.logger.debug("Listing accounts from marker %s", marker)
-        while True:
-            resp = self.api.account.account_list(
-                marker=marker, reqid=self._main_request_id
-            )
-            accounts = resp["listing"]
-            for account in accounts:
-                yield account["id"]
-            marker = resp.get("next_marker")
-            if not marker:
-                return
-
     def _get_containers(self, marker=(None, None)):
         self._account_marker, self._container_marker = marker
-        for account in self._get_accounts(self._account_marker):
+
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x["listing"],
+            item_key=lambda x: x["id"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
+            marker=self._account_marker,
+            reqid=self._main_request_id,
+        )
+        for account in accounts:
             self.logger.info(
                 "Listing containers for account %s from marker %s",
                 account,
                 self._container_marker,
             )
-            resp = self.api.account.bucket_list(
-                account, marker=self._container_marker, reqid=self._main_request_id
+            buckets = depaginate(
+                self.api.account.bucket_list,
+                listing_key=lambda x: x["listing"],
+                marker_key=lambda x: x["next_marker"],
+                truncated_key=lambda x: x["truncated"],
+                account=account,
+                marker=self._container_marker,
+                reqid=self._main_request_id
             )
-            containers = resp["listing"]
-            for container, *_ in containers:
-                yield account, container
+            for bucket in buckets:
+                yield account, bucket["name"]
 
     def _get_features_history(self, account, container, reqid=None):
         self.logger.debug("Fetch feature history for account")
@@ -140,13 +143,23 @@ class FeatureCrawler:
                 container,
             )
             reqid = self._request_id
-            info = self.api.container.container_show(
-                account=account,
-                reference=container,
-                extra_counters=True,
-                reqid=reqid,
-            )
-            self._process_properties(account, container, info)
+            try:
+                info = self.api.container.container_show(
+                    account=account,
+                    reference=container,
+                    extra_counters=True,
+                    reqid=reqid,
+                )
+                self._process_properties(account, container, info)
+            except (NoSuchAccount, NoSuchContainer, NotFound) as exc:
+                self.logger.error(
+                    "Unable to process container account=%s, container=%s, reason: %s",
+                    account,
+                    container,
+                    exc,
+                )
+                continue
+
             self._container_marker = container
 
 
@@ -191,7 +204,9 @@ def main():
     except KeyboardInterrupt:
         logger.info("Exiting...")
         print(f"Next marker: {crawler.progress}")
-
+    except Exception as exc:
+        logger.critical("Failure during process %s", exc)
+        print(f"Next marker: {crawler.progress}")
 
 if __name__ == "__main__":
     main()
