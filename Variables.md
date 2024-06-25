@@ -617,15 +617,6 @@ Used by `gcc`
  * cmake directive: *OIO_META2_MAX_VERSIONS*
  * range: -1 -> G_MAXINT64
 
-### meta2.reload.lb.period
-
-> DEPRECATED. Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.
-
- * default: **10**
- * type: gint64
- * cmake directive: *OIO_META2_RELOAD_LB_PERIOD*
- * range: 1 -> 3600
-
 ### meta2.reload.nsinfo.period
 
 > Sets the period of the periodical reloading of the namespace configuration, in the current meta2 service.
