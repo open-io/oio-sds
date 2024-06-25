@@ -830,29 +830,27 @@ class ItemCheckTest(CliTestCase):
 
         second_container = "item_check_second_container_" + random_str(4)
 
-        expected_items = list()
-        expected_items.append("account account=%s OK" % self.account)
+        expected_items = []
+        expected_items.append(f"account account={self.account} OK")
         expected_items.append(
-            "container account=%s, container=%s, cid=%s OK"
-            % (self.account, self.container, cid)
+            f"container account={self.account}, "
+            f"container={self.container}, cid={cid} OK"
         )
         expected_items.append(
-            "object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, "
-            "version=%s OK"
-            % (
-                self.account,
-                self.container,
-                cid,
-                self.obj_name,
-                obj_meta["id"],
-                obj_meta["version"],
-            )
+            f"object account={self.account}, container={self.container}, "
+            f"cid={cid}, obj={self.obj_name}, content_id={obj_meta['id']}, "
+            f"version={obj_meta['version']} OK"
         )
         for chunk in obj_chunks:
-            expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
+            expected_items.append(f"chunk chunk={chunk['url']} OK")
 
         # Create a second container
         self.api.container_create(self.account, second_container)
+        self.clean_later(second_container, account=self.account)
+        self.wait_for_kafka_event(
+            fields={"account": self.account, "user": second_container},
+            types=(EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_NEW),
+        )
 
         # Check only the first container
         output = self.openio_admin(
@@ -864,8 +862,8 @@ class ItemCheckTest(CliTestCase):
         # Check two containers
         cid = cid_from_name(self.account, second_container)
         expected_items.append(
-            "container account=%s, container=%s, cid=%s OK"
-            % (self.account, second_container, cid)
+            f"container account={self.account}, "
+            f"container={second_container}, cid={cid} OK"
         )
         output = self.openio_admin(
             "container check "
