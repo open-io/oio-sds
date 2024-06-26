@@ -38,7 +38,7 @@ class AutomaticSharding(Filter):
     NAME = "AutomaticSharding"
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
     DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
-    DEFAULT_HUGE_DB_SIZE = 8 * DEFAULT_SHARDING_DB_SIZE
+    DEFAULT_HUGE_DB_SIZE = 4 * DEFAULT_SHARDING_DB_SIZE
     DEFAULT_STEP_TIMEOUT = 960
 
     def init(self):
@@ -117,6 +117,11 @@ class AutomaticSharding(Filter):
         reqid = request_id(prefix="autoshard-")
 
         try:
+            modified = False
+            meta2db_size = meta2db.file_status["st_size"]
+            if meta2db_size > self.huge_db_size:
+                self.huge_databases += 1
+
             if self._clean(meta2db, reqid=reqid):
                 # If there was a cleaning, do nothing else
                 # and let the "auto_vacuum" pass
@@ -127,11 +132,6 @@ class AutomaticSharding(Filter):
                 self.logger.info("Sharding in progress for container %s", meta2db.cid)
                 self.sharding_in_progress += 1
                 return self.app(env, cb)
-
-            modified = False
-            meta2db_size = meta2db.file_status["st_size"]
-            if meta2db_size > self.huge_db_size:
-                self.huge_databases += 1
 
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
                 modified = self._shard(meta2db, reqid=reqid)
