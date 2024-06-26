@@ -181,8 +181,6 @@ HIDDEN_ACCOUNTS = ("_RDIR",)
 BUCKET_PROP_RATELIMIT = "ratelimit"
 GLOBAL_RATELIMIT_GROUP = "ALL"
 
-BUCKET_PROP_REPLI_ENABLED = "replication_enabled"
-
 # Account beta feature prefix
 ACCOUNT_BETA_FEATURE_PREFIX = "beta-feature-"
 

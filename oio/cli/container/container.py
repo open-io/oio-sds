@@ -32,7 +32,6 @@ from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import (
     BUCKET_PROP_RATELIMIT,
-    BUCKET_PROP_REPLI_ENABLED,
     GLOBAL_RATELIMIT_GROUP,
     OIO_DB_STATUS_NAME,
     OIO_DB_ENABLED,
@@ -318,13 +317,6 @@ class SetBucket(Command):
             help="Check if the bucket owner is the account used",
             action="store_true",
         )
-        parser.add_argument(
-            "--replicate",
-            "--replication",
-            metavar="yes/no",
-            type=boolean_value,
-            help="Enable or disable bucket replication.",
-        )
         parser.add_argument("--region", help="Change the bucket region")
         parser.add_argument(
             "--ratelimit",
@@ -350,8 +342,6 @@ class SetBucket(Command):
             account = None
         bucket_client = self.app.client_manager.storage.bucket
         metadata = {}
-        if parsed_args.replicate is not None:
-            metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
         if parsed_args.region:
             metadata["region"] = parsed_args.region
         if parsed_args.ratelimit:
@@ -1163,13 +1153,6 @@ class UnsetBucket(Command):
             action="store_true",
         )
         parser.add_argument(
-            "--replicate",
-            "--replication",
-            default=False,
-            help="Use the default value",
-            action="store_true",
-        )
-        parser.add_argument(
             "--ratelimit",
             default=False,
             help="Use the default value",
@@ -1187,8 +1170,6 @@ class UnsetBucket(Command):
             account = None
         bucket_client = self.app.client_manager.storage.bucket
         to_delete = []
-        if parsed_args.replicate is not None:
-            to_delete.append(BUCKET_PROP_REPLI_ENABLED)
         if parsed_args.ratelimit is not None:
             to_delete.append(BUCKET_PROP_RATELIMIT)
         bucket_client.bucket_update(

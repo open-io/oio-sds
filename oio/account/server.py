@@ -972,8 +972,7 @@ class Account(WerkzeugApp):
     #      "objects-details": {
     #        "SINGLE": 1
     #      },
-    #      "region": "LOCALHOST",
-    #      "replication_enabled": false
+    #      "region": "LOCALHOST"
     #    }
     #
     # }}ACCT
@@ -1491,8 +1490,7 @@ class Account(WerkzeugApp):
     #      "objects-details": {
     #        "SINGLE": 1
     #      },
-    #      "region": "LOCALHOST",
-    #      "replication_enabled": false
+    #      "region": "LOCALHOST"
     #    }
     #
     # }}ACCT
@@ -1557,8 +1555,7 @@ class Account(WerkzeugApp):
     #      "account": "myaccount",
     #      "bytes": 11300,
     #      "mtime": "1533127401.08165",
-    #      "objects": 100,
-    #      "replication_enabled": false
+    #      "objects": 100
     #    }
     #
     # }}ACCT

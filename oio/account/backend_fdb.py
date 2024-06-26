@@ -27,7 +27,6 @@ from oio.account.common_fdb import CommonFdb
 from oio.common.constants import (
     ACCOUNT_BETA_FEATURE_PREFIX,
     BUCKET_PROP_RATELIMIT,
-    BUCKET_PROP_REPLI_ENABLED,
     SHARDING_ACCOUNT_PREFIX,
 )
 from oio.common.easy_value import boolean_value, float_value, int_value
@@ -1551,18 +1550,8 @@ class AccountBackendFdb(object):
             return None
 
         if full:
-            repli_enabled = None
-            bname = info.get(BUCKET_FIELD)
-            if bname:
-                if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
-                    account_id = account_id[len(SHARDING_ACCOUNT_PREFIX) :]
-                bucket_space = self.bucket_space[account_id][bname]
-                repli_enabled = tr[bucket_space.pack((BUCKET_PROP_REPLI_ENABLED,))]
-                if repli_enabled.present():
-                    repli_enabled = repli_enabled.decode("utf-8")
-                else:
-                    repli_enabled = None
-            info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
+            # No additional information to return right now.
+            pass
 
         return info
 
@@ -2210,9 +2199,6 @@ class AccountBackendFdb(object):
         info = self._unmarshal_info(iterator, unpack=bucket_space.unpack)
         if not info:
             return None
-        if not raw_metadata:
-            repli_enabled = info.get(BUCKET_PROP_REPLI_ENABLED)
-            info[BUCKET_PROP_REPLI_ENABLED] = boolean_value(repli_enabled)
         if not details:
             detail_keys = [k for k in info if k.endswith("-details")]
             for key in detail_keys:

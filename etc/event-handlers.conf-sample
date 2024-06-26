@@ -1,15 +1,12 @@
 
 [handler:storage.content.new]
-# pipeline = replication
 pipeline =
 # pipeline = webhook
 
 [handler:storage.content.update]
-# pipeline = replication
 pipeline =
 
 [handler:storage.content.append]
-# pipeline = replication
 pipeline =
 # pipeline = webhook
 
@@ -17,24 +14,19 @@ pipeline =
 pipeline = content_rebuild
 
 [handler:storage.content.deleted]
-# pipeline = content_cleaner replication
 pipeline = content_cleaner
 
 [handler:storage.content.drained]
-# pipeline = content_cleaner replication
 pipeline = content_cleaner
 # pipeline = webhook content_cleaner
 
 [handler:storage.container.new]
-# pipeline = account_update replication
 pipeline = account_update
 
 [handler:storage.container.update]
-# pipeline = replication
 pipeline = account_update
 
 [handler:storage.container.deleted]
-# pipeline = account_update replication
 pipeline = account_update
 
 [handler:storage.container.state]
@@ -150,31 +142,6 @@ tube_EC = oio-delete-ec
 
 # Ensure fields are present in events (values are not checked)
 required_fields = destinations
-
-# -----------------------------------------------------------------
-# Redirect event to the replication queue (deprecated).
-[filter:replication]
-use = egg:oio#replicate
-tube = oio-repli
-queue_url = ${QUEUE_URL}
-
-# For each bucket, check if replication is enabled before forwarding
-# replication events. This is disabled by default, meaning that all
-# replication event will be forwarded (same behavior as before).
-#check_replication_enabled=False
-
-# Timeouts to the account service (telling if the replication
-# is enabled or not for each bucket).
-#connection_timeout=2.0
-#read_timeout=30.0
-
-# How long (seconds) and how many responses from the account service
-# to keep in cache. Notice that the cache is per worker process.
-#cache_duration=30.0
-#cache_size=10000
-
-# Ensure the master service is called for each request to the account service.
-#force_master=False
 
 # -----------------------------------------------------------------
 # Does nothing. You'd better not defining any filter.

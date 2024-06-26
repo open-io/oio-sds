@@ -1437,7 +1437,6 @@ class TestAccountClient(AccountBaseTestCase):
                 "objects": 12,
                 "bytes": 42,
                 "region": self.account_client.region.upper(),
-                "replication_enabled": False,
             },
             resp,
         )
