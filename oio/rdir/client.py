@@ -769,8 +769,7 @@ class RdirClient(HttpApi):
                         volume,
                     )
                     try:
-                        # TODO(ADU): Flush only the cache of rdir assignments
-                        self.admin.proxy_flush_cache(high=False, low=True)
+                        self.admin.proxy_flush_cache(high=False, service_type="rdir")
                     except Exception as exc:
                         self.logger.exception(
                             "Failed to flush the cache of oioproxy: %s", exc
