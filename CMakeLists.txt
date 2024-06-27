@@ -7,6 +7,7 @@ option(SOCKET_OPTIMIZED "Use Linux specific functions to save syscalls" ON)
 option(ALLOW_BACKTRACE "Attempt to compute backtraces when errors occur" OFF)
 option(FORBID_DEPRECATED "Avoid the deprecated symbols of the GLib2" OFF)
 option(ENABLE_CODECOVERAGE "Enable code coverage testing support" OFF)
+option(EXTRA_WARNINGS "Enable more compilation warnings" OFF)
 
 include(CheckFunctionExists)
 include(CheckIncludeFile)
@@ -36,7 +37,7 @@ set(PYTHON python)
 # init the others to zero.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
 
-if (CMAKE_COMPILER_IS_GNUCC)
+if (CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-variadic-macros")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsequence-point")
@@ -54,8 +55,21 @@ if (CMAKE_COMPILER_IS_GNUCC)
 
 	# gcc >= 4.6
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-prototypes")
-	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
-	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
+
+	if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 8.0)
+		if (EXTRA_WARNINGS)
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=conversion")
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=sign-conversion")
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=float-conversion")
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum -Wno-error=switch-enum")
+		endif()
+	endif()
+
+	if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 11.0)
+		# Enum conversions: alert but do not fail
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wenum-conversion -Wno-error=enum-conversion")
+	endif()
 endif()
 
 if ( ENABLE_CODECOVERAGE )
@@ -143,10 +157,16 @@ if (ALLOW_BACKTRACE)
 	add_definitions(-DHAVE_BACKTRACE)
 endif()
 
-
+# Usage of deprecated symbols: alert but do not fail
+# e.g.: g_memdup is deprecated, to replace with g_memdup2 availble in 2.68
+add_compile_options(-Wdeprecated-declarations)
 if (FORBID_DEPRECATED)
 	add_definitions(-DG_DISABLE_DEPRECATED=1)
+	add_compile_options(-Werror=deprecated-declarations)
+else ()
+	add_compile_options(-Wno-error=deprecated-declarations)
 endif ()
+
 
 ###-------------------------------------------------------------------------###
 

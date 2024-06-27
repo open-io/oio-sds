@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -258,7 +258,7 @@ enum oio_header_case_e
 	OIO_HDRCASE_RANDOM = 3,
 };
 
-enum oio_header_case_e oio_header_case;
+extern enum oio_header_case_e oio_header_case;
 
 /* http://www.cse.yorku.ca/~oz/hash.html */
 guint32 djb_hash_buf(const guint8 * b, register gsize bs);

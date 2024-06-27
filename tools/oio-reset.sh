@@ -139,7 +139,7 @@ if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
 fi
 if grep -q kafka $HOME/.oio/sds.conf ; then
     echo -e "\n### creating kafka topics"
-    $cmd_openio_admin kafka create-topics --reset $HOME/.oio/sds/conf/topics.yml
+    $cmd_openio_admin kafka create-topics --ns "${NS}" --reset $HOME/.oio/sds/conf/topics.yml
 fi
 
 $SYSTEMCTL daemon-reload
