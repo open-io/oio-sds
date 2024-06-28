@@ -437,19 +437,22 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				client->reply = g_byte_array_sized_new(256);
 
 			if (client->reply->len < 4) {
+				errno = 0;
 				/* Continue reading the size */
 				ssize_t rc = metautils_syscall_read(
 						client->fd, d, (4 - client->reply->len));
-				if (rc == 0)
+				if (rc == 0) {
 					return NEWERROR(CODE_NETWORK_ERROR,
-							"EOF while reading response size from %s",
-							gridd_client_url(client));
-				if (rc < 0)
-					return (errno == EINTR || errno == EAGAIN) ? NULL :
-						NEWERROR(CODE_NETWORK_ERROR,
+							"EOF while reading response size from %s: (%d) %s",
+							gridd_client_url(client), errno, strerror(errno));
+				}
+				if (rc < 0) {
+					return (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) ?
+						NULL : NEWERROR(CODE_NETWORK_ERROR,
 								"ERROR while reading response size from %s:"
 								" (%d) %s", gridd_client_url(client),
 								errno, strerror(errno));
+				}
 
 				EXTRA_ASSERT(rc > 0);
 				g_byte_array_append(client->reply, d, rc);
@@ -474,18 +477,22 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				gsize dmax = ds;
 				if (dmax > remaining)
 					dmax = remaining;
+				errno = 0;
 				ssize_t rc = metautils_syscall_read(client->fd, d, dmax);
-				if (rc == 0)
+				if (rc == 0) {
 					return NEWERROR(CODE_NETWORK_ERROR,
 							"EOF while reading response from %s "
-							"(got %u bytes, expected %"G_GUINT32_FORMAT")",
+							"(got %u bytes, expected %"G_GUINT32_FORMAT"): "
+							"(%d) %s",
 							gridd_client_url(client), client->reply->len,
-							client->size + 4);
-				if (rc < 0)
-					return (errno == EINTR || errno == EAGAIN) ? NULL :
-						NEWERROR(CODE_NETWORK_ERROR,
+							client->size + 4, errno, strerror(errno));
+				}
+				if (rc < 0) {
+					return (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) ?
+						NULL : NEWERROR(CODE_NETWORK_ERROR,
 								"ERROR while reading response from %s: (%d) %s",
 								gridd_client_url(client), errno, strerror(errno));
+				}
 
 				EXTRA_ASSERT(rc > 0);
 				g_byte_array_append(client->reply, d, rc);
