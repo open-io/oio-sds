@@ -863,6 +863,7 @@ host: ${IP}
 port: ${PORT}
 type: oioproxy
 location: ${LOC}
+service_id: ${SERVICE_ID}
 checks:
     - {type: tcp}
 slots:
@@ -870,6 +871,7 @@ slots:
 stats:
     - {type: oioproxy}
     - {type: system}
+    - {type: static, stats: {"pi": 3.14}, tags: {"stateless": true}}
 """
 
 template_oioswift_watch = """
@@ -2939,6 +2941,7 @@ def generate(options):
     # proxy
     env = subenv(
         {
+            "SERVICE_ID": "proxy-1",
             "SRVTYPE": "proxy",
             "SRVNUM": 1,
             "PORT": port_proxy,

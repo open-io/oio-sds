@@ -692,6 +692,21 @@ class BaseTestCase(CommonTestCase):
         if wait > 0:
             time.sleep(wait)
 
+    def load_watch_conf(self, svc):
+        watch_file = os.path.expandvars(
+            f"${{HOME}}/.oio/sds/conf/watch/{self.ns}-{svc}.yml"
+        )
+        with open(watch_file, "r", encoding="utf-8") as infile:
+            conf = yaml.load(infile, Loader=yaml.Loader)
+        return conf
+
+    def save_watch_conf(self, svc, conf):
+        watch_file = os.path.expandvars(
+            f"${{HOME}}/.oio/sds/conf/watch/{self.ns}-{svc}.yml"
+        )
+        with open(watch_file, "w", encoding="utf-8") as outfile:
+            yaml.dump(conf, outfile)
+
     def service_to_systemd_key(self, svc, type_):
         """
         Convert a service addr or ID to the systemd key for the same service.

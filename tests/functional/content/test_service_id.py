@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,6 @@ import os
 import random
 from subprocess import check_call
 import time
-import yaml
 
 import configparser
 
@@ -34,7 +33,6 @@ SYSTEMDDIR = exp("${HOME}/.config/systemd/user")
 if "OIO_SYSTEMD_SYSTEM" in os.environ:
     SYSTEMDDIR = "/etc/systemd/system"
 SYSTEMD_CONF = SYSTEMDDIR + "/%s"
-WATCH_CONF = exp("${HOME}/.oio/sds/conf/watch/%s-%s.yml")
 HTTPD_CONF = exp("${HOME}/.oio/sds/conf/%s-%s.httpd.conf")
 
 
@@ -127,15 +125,9 @@ class BaseServiceIdTest(BaseTestCase):
         self.assertGreater(timeout, 0)
 
     def _update_event_watch(self, name, port):
-        conf = None
-        path = WATCH_CONF % (self.ns, name)
-        with open(path, "r") as fp:
-            conf = yaml.load(fp, Loader=yaml.Loader)
-
+        conf = self.load_watch_conf(name)
         conf["port"] = port
-
-        with open(path, "w") as fp:
-            yaml.dump(conf, stream=fp)
+        self.save_watch_conf(name, conf)
 
     def _change_rawx_addr(self, name, port):
         service = "oio-%s.service" % name

@@ -20,7 +20,6 @@ import re
 import time
 
 from oio.common.json import json
-from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED
 
@@ -40,7 +39,6 @@ class TestConscienceFunctional(BaseTestCase):
         # There is at least one test restarting the proxy,
         # as a security we set this before each test.
         self._cls_set_proxy_config({"proxy.cache.enabled": "off"})
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
 
     @classmethod
     def tearDownClass(cls):
@@ -706,3 +704,22 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertIn("stat.rawx_volumes", my_rdir["tags"])
         self.assertIsInstance(my_rdir["tags"]["stat.meta2_volumes"], (int, float))
         self.assertIsInstance(my_rdir["tags"]["stat.rawx_volumes"], (int, float))
+
+    def test_conscience_agent_static_tags(self):
+        svc = "proxy-1"
+        watch_conf = self.load_watch_conf(svc)
+        static_conf = {"type": "static", "tags": {"aymeric_wants_tests": True}}
+        watch_conf["stats"].append(static_conf)
+        self.save_watch_conf(svc, watch_conf)
+        try:
+            self._service("oio-conscience-agent-1.service", "restart")
+            self._deregister_srv({"addr": f"{watch_conf['host']}:{watch_conf['port']}"})
+            time.sleep(1.0)
+            proxy_service = self.wait_for_service("oioproxy", svc)
+            self.assertIn("tag.aymeric_wants_tests", proxy_service["tags"])
+            self.assertTrue(proxy_service["tags"]["tag.aymeric_wants_tests"])
+        finally:
+            watch_conf["stats"].remove(static_conf)
+            self.save_watch_conf(svc, watch_conf)
+            self._service("oio-conscience-agent-1.service", "restart")
+            # TODO(FVE): check for removal, once we expire tags automatically
