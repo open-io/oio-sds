@@ -67,6 +67,9 @@ stats:
 # and decode known rawx statistics.
     - {type: rawx, path: /stat}
 
+# Report static stats and tags. Stats are floats, tags are strings or booleans.
+    - {type: static, stats: {"pi": 3.14}, tags: {"stateless": true}}
+
 # Collect system statistics like CPU usage
     - {type: system}
 
