@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +42,11 @@ class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
         SingleServiceCommandMixin.check_and_load_parsed_args(
             self, self.app, parsed_args
         )
+        svc_type, *_ = self.cmd_name.split(" ")
         self.logger.debug("take_action(%s)", parsed_args)
+        self.logger.debug("service type: %s", svc_type)
 
-        conf = self.app.client_manager.admin.service_get_info(parsed_args.service)
+        conf = self.app.client_manager.admin.service_get_info(
+            parsed_args.service, svc_type=svc_type
+        )
         return zip(*sorted(flat_dict_from_dict(parsed_args, conf).items()))

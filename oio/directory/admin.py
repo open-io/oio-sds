@@ -16,6 +16,7 @@
 
 from functools import wraps
 from oio.common.client import ProxyClient
+from oio.conscience.client import ConscienceClient
 
 
 def service_id_to_string(service_id):
@@ -43,7 +44,7 @@ def loc_params(func):
         cid=None,
         service_id=None,
         suffix=None,
-        **kwargs
+        **kwargs,
     ):
         params = kwargs.pop("params", None)
         if params is None:
@@ -82,6 +83,7 @@ class AdminClient(ProxyClient):
         self._kwargs = kwargs
         self._cache_client = None
         self._forwarder = None
+        self._conscience_client = None
 
     @property
     def cache_client(self):
@@ -94,7 +96,7 @@ class AdminClient(ProxyClient):
                 request_prefix="/cache",
                 pool_manager=self.pool_manager,
                 no_ns_in_url=True,
-                **self._kwargs
+                **self._kwargs,
             )
         return self._cache_client
 
@@ -109,9 +111,19 @@ class AdminClient(ProxyClient):
                 request_prefix="/forward",
                 pool_manager=self.pool_manager,
                 no_ns_in_url=True,
-                **self._kwargs
+                **self._kwargs,
             )
         return self._forwarder
+
+    @property
+    def conscience_client(self):
+        if self._conscience_client is None:
+            self._conscience_client = ConscienceClient(
+                self.conf,
+                pool_manager=self.pool_manager,
+                **self._kwargs,
+            )
+        return self._conscience_client
 
     @loc_params
     def election_debug(self, params, **kwargs):
@@ -353,6 +365,18 @@ class AdminClient(ProxyClient):
         )
         return body
 
+    def _service_get_info(self, svc_type, svc_id, **kwargs):
+        url = self.conscience_client.resolve_service_id(svc_type, svc_id, **kwargs)
+        _resp, body = self._direct_request("GET", f"http://{url}/info", **kwargs)
+        data = body.decode("utf-8")
+        info = {}
+        for line in data.split("\n"):
+            if not line:
+                continue
+            key, *value = line.split(" ", 1)
+            info[key] = value
+        return info
+
     # Forwarded actions ###############################################
 
     def _forward_service_action(self, svc_id, action, method="POST", **kwargs):
@@ -386,7 +410,7 @@ class AdminClient(ProxyClient):
         """
         return self._forward_service_action(svc_id, "/config", json=config, **kwargs)
 
-    def service_get_info(self, svc_id, **kwargs):
+    def service_get_info(self, svc_id, svc_type=None, **kwargs):
         """
         Get all information from the specified service.
         Works on all services using ASN.1 protocol except conscience.
@@ -395,7 +419,11 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
+        if svc_type is None or svc_type in ("meta0", "meta1", "meta2"):
+            # Use ASN1 protocol
+            return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
+
+        return self._service_get_info(svc_type, svc_id, **kwargs)
 
     def service_get_stats(self, svc_id, **kwargs):
         """
