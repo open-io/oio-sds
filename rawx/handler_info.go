@@ -42,6 +42,14 @@ func doGetInfo(rr *rawxRequest) {
 		bb.WriteRune('\n')
 	}
 
+	bb.WriteString("hash_depth ")
+	bb.WriteString(itoa(rr.rawx.repo.sub.hashDepth))
+	bb.WriteRune('\n')
+
+	bb.WriteString("hash_width ")
+	bb.WriteString(itoa(rr.rawx.repo.sub.hashWidth))
+	bb.WriteRune('\n')
+
 	rr.replyCode(http.StatusOK)
 	rr.TTFB = time.Since(rr.startTime)
 	rr.rep.Write(bb.Bytes())
