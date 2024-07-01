@@ -79,6 +79,7 @@ static GTree *srvtypes = NULL;
 
 static gboolean flag_serialize_srvinfo_stats = FALSE;
 static gboolean flag_serialize_srvinfo_tags = TRUE;
+static gboolean flush_stats_on_refresh = FALSE;
 
 static gboolean config_system = TRUE;
 static GSList *config_paths = NULL;
@@ -174,6 +175,16 @@ struct conscience_srvtype_s
 typedef gboolean (service_callback_f) (struct conscience_srv_s * srv, gpointer udata);
 
 static void
+conscience_srv_clear_tags(struct conscience_srv_s *service)
+{
+	while (service->tags->len > 0) {
+		struct service_tag_s *tag = g_ptr_array_index(service->tags, 0);
+		service_tag_destroy(tag);
+		g_ptr_array_remove_index_fast(service->tags, 0);
+	}
+}
+
+static void
 conscience_srv_destroy(struct conscience_srv_s *service)
 {
 	if (!service)
@@ -181,11 +192,7 @@ conscience_srv_destroy(struct conscience_srv_s *service)
 
 	/* free the tags */
 	if (service->tags) {
-		while (service->tags->len > 0) {
-			struct service_tag_s *tag = g_ptr_array_index(service->tags, 0);
-			service_tag_destroy(tag);
-			g_ptr_array_remove_index_fast(service->tags, 0);
-		}
+		conscience_srv_clear_tags(service);
 		g_ptr_array_free(service->tags, TRUE);
 	}
 
@@ -711,12 +718,15 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 
 	time_t now = oio_ext_real_time();
 
-	/* refresh the tags: create missing, replace existing
-	 * (but the tags are not flushed before) */
+	/* Refresh the tags: create missing, replace existing
+	 * (if the tags are not flushed before). */
 	gboolean tags_updated = FALSE;
-	if (si->tags) {
+	if (si->tags && si->tags->len) {
 		GRID_TRACE("Refreshing tags for srv [%.*s]",
 				(int)LIMIT_LENGTH_SRVDESCR, p_srv->description);
+		if (flush_stats_on_refresh) {
+			conscience_srv_clear_tags(p_srv);
+		}
 		const guint max = si->tags->len;
 		for (guint i = 0; i < max; i++) {
 			struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
@@ -2183,6 +2193,10 @@ _cs_configure_with_file(const char *path UNUSED)
 	tmp = g_key_file_get_value(gkf,
 			"Plugin.conscience", "synchronize_at_startup", NULL);
 	synchronize_at_startup = oio_str_parse_bool(tmp, FALSE);
+	g_free(tmp);
+	tmp = g_key_file_get_value(gkf,
+			"Plugin.conscience", "flush_stats_on_refresh", NULL);
+	flush_stats_on_refresh = oio_str_parse_bool(tmp, FALSE);
 	g_free(tmp);
 	hub_me = g_key_file_get_value(gkf,
 			"Plugin.conscience", "param_hub.me", NULL);
