@@ -904,6 +904,8 @@ param_hub.startup_delay=1
 # (set to 0 to disable the thread pool)
 param_hub.threads=${CS_HUB_THREADS}
 
+flush_stats_on_refresh=True
+
 service_cache.enable=${CS_CACHE_SERVICES}
 service_cache.enable_full=${CS_CACHE_SERVICES}
 service_cache.interval=0.5
