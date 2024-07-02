@@ -221,21 +221,36 @@ class KafkaRejectorMixin:
             self._producer.close()
 
     def reject_message(self, message, callback=None, delay=None):
-        try:
-            self._connect_producer()
-            if not self._producer:
-                raise SystemError("No producer available")
+        """Rejects message by calling the callback function if it is defined
+        or producing an event to deadletter/delayed topic.
 
-            if delay:
-                self._producer.send(
-                    message["topic"], message["data"], delay=delay, flush=True
-                )
-            else:
-                self._producer.send(
-                    DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
-                )
+        :param message: message to reject
+        :type message: dict
+        :param callback: callback function to call, defaults to None
+        :type callback: function, optional
+        :param delay: delay to wait before retry, defaults to None
+        :type delay: int, optional
+        :raises SystemError: raised if producer not available
+        :return: True if the message is rejected successfully and False if not
+        :rtype: bool
+        """
+        try:
             if callback:
-                callback(message)
+                callback(message, as_failure=True, delay=delay)
+            else:
+                # Used in case callback is not defined
+                # e.g: reject message by orchestrator reply listener
+                self._connect_producer()
+                if not self._producer:
+                    raise SystemError("No producer available")
+                if delay:
+                    self._producer.send(
+                        message["topic"], message["data"], delay=delay, flush=True
+                    )
+                else:
+                    self._producer.send(
+                        DEFAULT_DEADLETTER_TOPIC, message["data"], flush=True
+                    )
             return True
         except Exception:
             self.logger.exception(
@@ -247,7 +262,36 @@ class KafkaRejectorMixin:
             return False
 
 
-class KafkaConsumerWorker(Process, KafkaRejectorMixin):
+class AcknowledgeMessageMixin:
+    """Add acknowledge message method"""
+
+    def __init__(self, offsets_queue, logger) -> None:
+        self._offsets_queue = offsets_queue
+        self.logger = logger
+
+    def acknowledge_message(self, message, as_failure=False, delay=None):
+        try:
+            self._offsets_queue.put(
+                {
+                    "topic": message["topic"],
+                    "partition": message["partition"],
+                    "offset": message["offset"],
+                    "data": message["data"],
+                    "failure": as_failure,
+                    "delay": delay,
+                }
+            )
+        except Exception:
+            self.logger.exception(
+                "Failed to ack message (topic=%s, partition=%s, offset=%s)",
+                message["topic"],
+                message["partition"],
+                message["offset"],
+            )
+            return False
+
+
+class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
     """
     Base class for processes listening to messages on an Kafka topic.
     """
@@ -266,6 +310,9 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin):
     ):
         Process.__init__(self)
         KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
+        AcknowledgeMessageMixin.__init__(
+            self, offsets_queue=offsets_queue, logger=logger
+        )
         self.endpoint = endpoint
         self.app_conf = app_conf or {}
         self.logger = logger
@@ -275,7 +322,6 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin):
         self._retry_delay = get_retry_delay(self.app_conf)
 
         self._events_queue = events_queue
-        self._offsets_queue = offsets_queue
         self._events_queue_id = self._events_queue.get_queue_id(worker_id)
 
         self._rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
@@ -350,26 +396,6 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin):
         """
         self._stop_requested.set()
 
-    # --- Helper methods --------------
-
-    def acknowledge_message(self, message):
-        try:
-            self._offsets_queue.put(
-                {
-                    "topic": message["topic"],
-                    "partition": message["partition"],
-                    "offset": message["offset"],
-                }
-            )
-        except Exception:
-            self.logger.exception(
-                "Failed to ack message (topic=%s, partition=%s, offset=%s)",
-                message["topic"],
-                message["partition"],
-                message["offset"],
-            )
-            return False
-
     # --- Abstract methods ------------
 
     def pre_run(self):
@@ -400,7 +426,9 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin):
         raise NotImplementedError
 
 
-class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
+class KafkaBatchFeeder(
+    Process, KafkaRejectorMixin, KafkaOffsetHelperMixin, AcknowledgeMessageMixin
+):
     def __init__(
         self,
         endpoint,
@@ -416,6 +444,9 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
         Process.__init__(self)
         KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
         KafkaOffsetHelperMixin.__init__(self)
+        AcknowledgeMessageMixin.__init__(
+            self, offsets_queue=offsets_queue, logger=logger
+        )
         self.endpoint = endpoint
         self.topic = topic
         self.logger = logger
@@ -431,7 +462,6 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
         self._consumer = None
         self._stop_requested = Event()
         self._events_queue = events_queue
-        self._offsets_queue = offsets_queue
 
     @property
     def events_queue(self):
@@ -481,10 +511,9 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
                             "partition": partition,
                             "offset": offset,
                             "data": value,
-                        }
+                        },
+                        callback=self.acknowledge_message,
                     )
-                    self.set_offset_ready_to_commit(topic, partition, offset)
-
             elif event and event.error():
                 error = event.error()
                 self.logger.error("Failed to fetch event, reason: %s", error)
@@ -506,6 +535,22 @@ class KafkaBatchFeeder(Process, KafkaRejectorMixin, KafkaOffsetHelperMixin):
                     raise StopIteration()
                 try:
                     offset = self._offsets_queue.get(True, timeout=1.0)
+                    if offset.get("failure", False):
+                        self._connect_producer()
+                        if not self._producer:
+                            raise SystemError("No producer available")
+
+                        if offset["delay"]:  # To retry later, send to delayed
+                            self._producer.send(
+                                offset["topic"],
+                                offset["data"],
+                                delay=offset["delay"],
+                                flush=True,
+                            )
+                        else:  # No retry, send to deadletter
+                            self._producer.send(
+                                DEFAULT_DEADLETTER_TOPIC, offset["data"], flush=True
+                            )
                     self.set_offset_ready_to_commit(
                         offset["topic"], offset["partition"], offset["offset"]
                     )
