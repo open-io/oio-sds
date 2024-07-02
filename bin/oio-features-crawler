@@ -55,22 +55,20 @@ class FeatureCrawler:
         return f"{self._account_marker or ''}{SEPARATOR}{self._container_marker or ''}"
 
     def _get_containers(self, marker=(None, None)):
-        self._account_marker, self._container_marker = marker
-
+        account_marker, container_marker = marker
         accounts = depaginate(
             self.api.account.account_list,
             listing_key=lambda x: x["listing"],
             item_key=lambda x: x["id"],
             marker_key=lambda x: x["next_marker"],
             truncated_key=lambda x: x["truncated"],
-            marker=self._account_marker,
+            marker=account_marker,
             reqid=self._main_request_id,
         )
         for account in accounts:
             self.logger.info(
-                "Listing containers for account %s from marker %s",
+                "Listing containers for account %s",
                 account,
-                self._container_marker,
             )
             buckets = depaginate(
                 self.api.account.bucket_list,
@@ -78,9 +76,11 @@ class FeatureCrawler:
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
                 account=account,
-                marker=self._container_marker,
-                reqid=self._main_request_id
+                marker=container_marker,
+                reqid=self._main_request_id,
             )
+            container_marker = None
+
             for bucket in buckets:
                 yield account, bucket["name"]
 
@@ -159,8 +159,9 @@ class FeatureCrawler:
                     exc,
                 )
                 continue
-
-            self._container_marker = container
+            finally:
+                self._container_marker = container
+                self._account_marker = account
 
 
 def make_arg_parser():
@@ -188,7 +189,7 @@ def main():
 
     marker = (None, None)
     if args.marker:
-        parts = args.marker.split(":")
+        parts = args.marker.split(SEPARATOR, 1)
         if len(parts) != 2:
             logger.error(
                 f"Marker wrong format, expected format: account{SEPARATOR}container"
@@ -207,6 +208,7 @@ def main():
     except Exception as exc:
         logger.critical("Failure during process %s", exc)
         print(f"Next marker: {crawler.progress}")
+
 
 if __name__ == "__main__":
     main()
