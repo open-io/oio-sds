@@ -29,6 +29,7 @@ from oio.common.json import json
 
 
 _LEVELS = {"site": 0, "rack": 1, "host": 2, "volume": 3}
+_LEVEL_NAME = {v: k for k, v in _LEVELS.items()}
 
 
 def _loc(svc):
@@ -119,11 +120,12 @@ def _bootstrap(allsrv, allgroups, replicas, level, degradation=0):
     quorum = int(replicas / 2) + 1
     worst_load = ceil(float(replicas) / len(allslices))
     if replicas - (worst_load * degradation) < quorum:
-        fmt = (
-            "Balancing not satisfiable, {0} replicas wanted on {1}"
-            + " site(s), and an acceptable degradation of {2} site(s)."
+        msg = (
+            f"Balancing not satisfiable, {replicas} replicas wanted on "
+            f"{len(allslices)} {_LEVEL_NAME[level]}(s) and an acceptable "
+            f"degradation of {degradation} {_LEVEL_NAME[level]}(s)."
         )
-        raise PreconditionFailed(fmt.format(replicas, len(allslices), degradation))
+        raise PreconditionFailed(msg)
 
     # First affect to each slice a set of short prefixes
     for idx, group in enumerate(allgroups):
@@ -507,7 +509,7 @@ class Meta0PrefixMapping(MetaMapping):
 
     def bootstrap(self, level="volume", degradation=0):
         """
-        Spread the prefixe to balance across sites. By default the token
+        Spread the prefixes to balance across sites. By default the token
         describing the site is <0>.
         Put one short_prefix into each slice (corresponding to a location
         level) and balance well into each level. At the end, expand each

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-from __future__ import print_function
 
 from oio.common.green import Queue, GreenPile, sleep
 
@@ -39,7 +38,7 @@ class DirectoryCmd(Command):
     log = getLogger(__name__ + ".Directory")
 
     def get_parser(self, prog_name):
-        parser = super(DirectoryCmd, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument("--no-rdir", action="store_true", help="Deprecated")
         parser.add_argument(
             "--replicas",
@@ -50,15 +49,24 @@ class DirectoryCmd(Command):
             help="Set the number of replicas (3 by default)",
         )
         parser.add_argument(
-            "--min-dist", type=int, default=1, help="Minimum distance between replicas"
+            "--min-dist",
+            type=int,
+            default=1,
+            help=(
+                'Minimum distance between services hosting a database ("replicas"). '
+                "1 means different volumes, 2 means different hosts, "
+                "3 means different racks, 4 means different sites."
+            ),
         )
         parser.add_argument(
             "--meta0-timeout",
             metavar="<SECONDS>",
             type=float,
             default=M0_READ_TIMEOUT,
-            help="Timeout for meta0-related operations (%.3fs by default)"
-            % M0_READ_TIMEOUT,
+            help=(
+                "Timeout for meta0-related operations "
+                f"({M0_READ_TIMEOUT:.3f}s by default)"
+            ),
         )
         return parser
 
@@ -123,7 +131,7 @@ class DirectoryCheck(DirectoryCmd):
         if mapping.check_replicas():
             self.log.info("Everything is ok.")
         else:
-            self.log.warn("Errors found.")
+            self.log.warning("Errors found.")
             self.success = False
 
 
@@ -131,29 +139,37 @@ class DirectoryInit(DirectoryCmd):
     """
     Initialize the service directory.
 
-    Distribute database prefixes among meta1 services and fill the meta0.
+    Distribute database prefixes (first digits of container IDs) among meta1
+    services and fill the meta0.
     """
 
     def get_parser(self, prog_name):
-        parser = super(DirectoryInit, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
+            "--balanced-level",
             "--level",
-            metavar="<LEVEL>",
+            metavar="<site|rack|host|volume>",
             dest="level",
             choices=("site", "rack", "host", "volume"),
             default="volume",
-            help="Which location level should be perfectly balanced",
+            help=(
+                "Which location level should be perfectly balanced. "
+                "That means: do we want an equal(ish) number of databases on "
+                "each site, on each rack, on each host or on each volume (the default)?"
+            ),
         )
         parser.add_argument(
+            "--acceptable-degradation",
             "--degradation",
             metavar="<DEGRADATION>",
             dest="degradation",
             type=int,
             default=None,
             help=(
-                "How many location levels we accept to lose to keep the "
-                "quorums valid. Not set by default, it is then autodetected "
-                "to the replication set minus the quorum"
+                "How many sites, racks, hosts or volumes (see --level) we can lose "
+                "while keeping the cluster accepting writes (quorum valid). "
+                "Not set by default, it is then autodetected to the replication "
+                "set (see --replicas) minus the quorum."
             ),
         )
         parser.add_argument(
@@ -188,13 +204,13 @@ class DirectoryInit(DirectoryCmd):
                 level=parsed_args.level, degradation=parsed_args.degradation
             )
         except ConfigurationException:
-            self.log.warn(
+            self.log.warning(
                 "Namespace poorly configured, some meta1 services "
                 "carry no location or an invalid one."
             )
             raise
         except PreconditionFailed:
-            self.log.warn(
+            self.log.warning(
                 "Namespace too constrained, please consider a "
                 "less constrained setup, using either --level or "
                 "--degradation with different values."
@@ -204,8 +220,7 @@ class DirectoryInit(DirectoryCmd):
         if mapping.check_replicas():
             self._apply(mapping, read_timeout=parsed_args.meta0_timeout)
             return True
-        else:
-            raise Exception("Failed to initialize prefix mapping")
+        raise Exception("Failed to initialize prefix mapping")
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
@@ -214,7 +229,7 @@ class DirectoryInit(DirectoryCmd):
         if checked:
             self.log.info("Done")
         else:
-            self.log.warn("Errors encountered")
+            self.log.warning("Errors encountered")
             raise Exception("Bad meta1 prefix mapping")
 
 
@@ -251,7 +266,7 @@ class DirectoryRebalance(DirectoryCmd):
             self._apply(mapping, moved=moved, read_timeout=parsed_args.meta0_timeout)
             self.log.info("Moved %s", moved)
         else:
-            self.log.warn("Nothing done due to errors")
+            self.log.warning("Nothing done due to errors")
             self.success = False
 
 
@@ -337,8 +352,8 @@ class DirectoryDecommission(DirectoryCmd):
             self._apply(mapping, moved=moved, read_timeout=parsed_args.meta0_timeout)
             self.log.info("Moved %s", sorted(moved))
         else:
-            self.log.warn("Did nothing due to errors.")
-            self.log.warn(
+            self.log.warning("Did nothing due to errors.")
+            self.log.warning(
                 "If the errors are not related to the bases "
                 "you want to decommission, try to rebalance."
             )
@@ -378,7 +393,7 @@ class DirectoryWarmup(DirectoryCmd):
             proxy = ns_conf.get("proxy")
             conf.update({"proxyd_url": proxy})
 
-        workers = list()
+        workers = []
         with green.ContextPool(concurrency) as pool:
             pile = GreenPile(pool)
             prefix_queue = Queue(16)
@@ -414,9 +429,9 @@ class WarmupWorker(object):
 
         self.log = log
         self.pool = get_pool_manager()
-        self.url_prefix = "http://%s/v3.0/%s/admin/status?type=meta1&cid=" % (
-            conf["proxyd_url"],
-            conf["namespace"],
+        self.url_prefix = (
+            f"http://{conf['proxyd_url']}/v3.0/{conf['namespace']}"
+            "/admin/status?type=meta1&cid="
         )
 
     def run(self, prefix_queue):
