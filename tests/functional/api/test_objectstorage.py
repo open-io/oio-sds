@@ -2522,17 +2522,20 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
-    EXPECTED_CHUNKS_PER_POLICY = {
-        "EC": 9,
-        "SINGLE": 1,
-        "THREECOPIES": 3,
-        "TWOCOPIES": 2,
-    }
 
     def setUp(self):
         super(TestObjectChangePolicy, self).setUp()
         self.chunk_size = self.conf["chunk_size"]
         self.nb_rawx = len(self.conf["services"]["rawx"])
+
+    def _expected_chunks(self, policy, data_size):
+        """
+        Compute the number of chunks that will be used to store the specified
+        data size in the specified storage policy.
+        """
+        stg_met = self.storage_method_from_policy(policy)
+        mc_size = self.chunk_size * stg_met.min_chunks_to_read
+        return max((data_size - 1) // mc_size + 1, 1) * stg_met.expected_chunks
 
     def _test_change_policy(self, data_size, old_policy, new_policy, versioning=False):
         if "EC" in (old_policy, new_policy) and self.nb_rawx < 9:
@@ -2626,7 +2629,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             del expected_size_by_policy[new_policy]
 
         # Wait for old policy chunks removal
-        expected_events = self.EXPECTED_CHUNKS_PER_POLICY[old_policy]
+        expected_events = self._expected_chunks(old_policy, data_size)
         for i in range(expected_events):
             evt = self.wait_for_kafka_event(
                 types=(EventTypes.CHUNK_DELETED,),
@@ -2638,7 +2641,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             )
 
         # Wait for new policy to be created
-        expected_events = self.EXPECTED_CHUNKS_PER_POLICY[new_policy]
+        expected_events = self._expected_chunks(new_policy, data_size)
         for i in range(expected_events):
             evt = self.wait_for_kafka_event(
                 types=(EventTypes.CHUNK_NEW,),
