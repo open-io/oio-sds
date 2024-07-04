@@ -189,6 +189,8 @@ const (
 const (
 	nonOptimalPlacementFolderName = "non_optimal_placement"
 	orphansFolderName             = "orphans"
+	markersFolderName             = "markers"
+	quarantineFolderName          = "quarantine"
 )
 
 const (

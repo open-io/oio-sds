@@ -15,13 +15,14 @@
 # License along with this library.
 
 
+import json
 from oio.common.green import GreenPile
 
 import random
 from email.utils import parsedate
 from functools import wraps
 from urllib.parse import unquote
-from time import mktime
+from time import mktime, sleep
 
 from oio.common.kafka import GetTopicMixin, KafkaProducerMixin
 from oio.common.logger import get_logger
@@ -35,6 +36,7 @@ from oio.common.constants import (
     CHUNK_HEADERS,
     CHUNK_XATTR_KEYS_OPTIONAL,
     FETCHXATTR_HEADER,
+    HTTP_CONTENT_TYPE_JSON,
     REQID_HEADER,
     CHECKHASH_HEADER,
 )
@@ -395,6 +397,77 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         if resp.status != 201:
             raise exc.from_response(resp)
         return resp, link
+
+    @ensure_request_id
+    def chunk_list(
+        self,
+        volume,
+        min_to_return=1000,
+        max_attempts=3,
+        start_after=None,
+        shuffle=False,
+        full_urls=False,
+        **kwargs
+    ):
+        """Fetch the list of chunks belonging to the specified volume.
+
+        :param volume: rawx volume to list the chunks
+        :type volume: str
+        :param min_to_return: minimum items returned, defaults to 1000
+        :type min_to_return: int, optional
+        :param max_attempts: max attemps while retrieving chunks, defaults to 3
+        :type max_attempts: int, optional
+        :param start_after: list chunks after this marker, defaults to None
+        :type start_after: str, optional
+        """
+        req_body = {"min_to_return": min_to_return}
+        if start_after:
+            req_body["start_after"] = start_after
+        url = self._make_list_uri(volume, **kwargs)
+        resp_body = ""
+        while True:
+            for i in range(max_attempts):
+                try:
+                    headers = {}
+                    headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
+                    data = json.dumps(req_body, separators=(",", ":"))
+                    kwargs["body"] = data
+                    kwargs["headers"] = headers
+                    resp = self._request("GET", url, **kwargs)
+                    if resp.data:
+                        resp_body = json.loads(resp.data)
+                    break
+                except exc.OioNetworkException:
+                    # Monotonic backoff
+                    if i < max_attempts - 1:
+                        sleep(i * 1.0)
+                        continue
+                    # Too many attempts
+                    raise
+            if not resp_body:
+                break
+            truncated = resp_body["is_truncated"]
+            req_body["start_after"] = resp_body["marker"]
+            chunks = resp_body["chunks"]
+            if not chunks:
+                break
+            if shuffle:
+                random.shuffle(chunks)
+            for chunk_data in chunks:
+                chunk = chunk_data["chunk_id"]
+                if full_urls:
+                    chunk = "http://%s/%s" % (volume, chunk)
+                yield chunk
+
+            if not truncated:
+                break
+
+    def _make_list_uri(self, volume, **kwargs):
+        """Returns the rawx list chunk url"""
+        url = self.conscience_client.resolve_service_id(
+            "rawx", volume, check_format=False, **kwargs
+        )
+        return url + "/list"
 
     def _request(
         self, method, url, connection_timeout=None, read_timeout=None, **kwargs
