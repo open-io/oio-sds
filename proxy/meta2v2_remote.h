@@ -149,6 +149,7 @@ GByteArray* m2v2_remote_pack_DEL(
 		gboolean bypass_governance,
 		gboolean create_delete_marker,
 		gboolean dryrun,
+		gboolean slo_manifest,
 		const char *destinations,
 		const char *replicator_id,
 		const char *role_project_id,
