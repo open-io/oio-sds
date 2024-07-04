@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -128,6 +128,8 @@ struct sqlx_sqlite3_s
 	guint8 transaction : 1;
 	GList *transaction_update_queries;
 	GList *update_queries;
+
+	struct kafka_s *kafka;
 
 	// Sharding
 	struct beanstalkd_s *sharding_queue;

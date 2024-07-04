@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -108,9 +108,6 @@ class ProxyClient(HttpApi):
         if kwargs.get("tls"):
             headers = headers or {}
             headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
-        if kwargs.get("dry_run"):
-            headers = headers or {}
-            headers[HEADER_PREFIX + "dry-run"] = kwargs.pop("dry_run")
 
         for i in range(request_attempts):
             try:

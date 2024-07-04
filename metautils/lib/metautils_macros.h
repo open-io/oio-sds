@@ -106,6 +106,7 @@ License along with this library.
 #define NAME_MSGKEY_ROOT_HEXID         "RID"
 #define NAME_MSGKEY_SHARDING_ACTION    "SHARDING_ACTION"
 #define NAME_MSGKEY_SHARDING_STRATEGY  "SHARDING_STRATEGY"
+#define NAME_MSGKEY_SLO_MANIFEST       "SLO_MANIFEST"
 #define NAME_MSGKEY_SIM_VER            "SIM_VER"
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"
