@@ -201,13 +201,13 @@ class ServiceDecommissionTest(CliTestCase):
         # Clean up selected rawx for stability purpose
         list_reqid = request_id("xcute-decom-")
         all_chunks = list(
-            self.rdir.chunk_fetch(
-                candidate, limit=100000, reqid=list_reqid, full_urls=True
+            self.blob_client.chunk_list(
+                candidate, min_to_return=100000, reqid=list_reqid, full_urls=True
             )
         )
-        for cid, url, _ in all_chunks:
+        for url in all_chunks:
             try:
-                self.blob_client.chunk_delete(url, cid=cid)
+                self.blob_client.chunk_delete(url)
             except exceptions.NotFound:
                 pass
 
@@ -218,7 +218,9 @@ class ServiceDecommissionTest(CliTestCase):
 
         list_reqid = request_id("xcute-decom-")
         all_chunks = list(
-            self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid)
+            self.blob_client.chunk_list(
+                candidate, min_to_return=100000, reqid=list_reqid
+            )
         )
         total_chunks = len(all_chunks)
         rawx_reqid = request_id("xcute-decom-")
@@ -228,9 +230,10 @@ class ServiceDecommissionTest(CliTestCase):
             exclude=exclude,
             reqid=rawx_reqid,
         )
-
         all_chunks_after = list(
-            self.rdir.chunk_fetch(candidate, limit=100000, reqid=list_reqid)
+            self.blob_client.chunk_list(
+                candidate, min_to_return=100000, reqid=list_reqid
+            )
         )
         total_chunks_after = len(all_chunks_after)
         if usage_target == 0:

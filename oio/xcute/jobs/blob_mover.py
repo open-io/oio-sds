@@ -26,14 +26,13 @@ from oio.common.exceptions import (
     NotFound,
     OrphanChunk,
 )
-from oio.common.green import time
+from oio.common.green import get_watchdog, time
 from oio.common.kafka import DEFAULT_REBUILD_TOPIC
-from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
-from oio.xcute.jobs.common import XcuteRdirJob
+from oio.xcute.jobs.common import XcuteUsageTargetJob
 
 
 class RawxDecommissionTask(XcuteTask):
@@ -78,12 +77,7 @@ class RawxDecommissionTask(XcuteTask):
         return fake_excluded_chunks
 
     def process(self, task_id, task_payload, reqid=None):
-        container_id = task_payload["container_id"]
-        content_id = task_payload["content_id"]
-        path = task_payload["path"]
-        version = task_payload["version"]
         chunk_id = task_payload["chunk_id"]
-
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:
             meta = self.blob_client.chunk_head(
@@ -94,14 +88,19 @@ class RawxDecommissionTask(XcuteTask):
             # but the chunk no longer exists in the rawx.
             # We ignore it because there is nothing to move.
             return {"skipped_chunks_no_longer_exist": 1}
-        if container_id != meta["container_id"]:
-            raise ValueError(
-                "Mismatch container ID: %s != %s", container_id, meta["container_id"]
-            )
-        if content_id != meta["content_id"]:
-            raise ValueError(
-                "Mismatch content ID: %s != %s", content_id, meta["content_id"]
-            )
+        container_id = meta["container_id"]
+        content_id = meta["content_id"]
+        path = meta["content_path"]
+        version = meta["content_version"]
+
+        for id_type, payload_key, value in (
+            ("container", "container_id", container_id),
+            ("content", "content_id", content_id),
+        ):
+            if payload_key in task_payload and value != task_payload[payload_key]:
+                raise ValueError(
+                    f"Mismatch {id_type} ID: {task_payload[payload_key]} != {value}"
+                )
         chunk_size = int(meta["chunk_size"])
 
         # Maybe skip the chunk because it doesn't match the size constraint
@@ -159,11 +158,12 @@ class RawxDecommissionTask(XcuteTask):
         return {"moved_chunks": 1, "moved_bytes": chunk_size}
 
 
-class RawxDecommissionJob(XcuteRdirJob):
+class RawxDecommissionJob(XcuteUsageTargetJob):
     JOB_TYPE = "rawx-decommission"
     TASK_CLASS = RawxDecommissionTask
 
     DEFAULT_RAWX_TIMEOUT = 60.0
+    DEFAULT_RAWX_LIST_LIMIT = 1000
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
     DEFAULT_USAGE_CHECK_INTERVAL = 60.0
@@ -185,6 +185,10 @@ class RawxDecommissionJob(XcuteRdirJob):
 
         sanitized_job_params["rawx_timeout"] = float_value(
             job_params.get("rawx_timeout"), cls.DEFAULT_RAWX_TIMEOUT
+        )
+
+        sanitized_job_params["rawx_list_limit"] = int_value(
+            job_params.get("rawx_list_limit"), cls.DEFAULT_RAWX_LIST_LIMIT
         )
 
         sanitized_job_params["min_chunk_size"] = int_value(
@@ -226,9 +230,9 @@ class RawxDecommissionJob(XcuteRdirJob):
     def __init__(self, conf, logger=None, **kwargs):
         super(RawxDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
-        self.conscience_client = ConscienceClient(
-            self.conf, logger=self.logger, pool_manager=self.rdir_client.pool_manager
-        )
+        watchdog = kwargs.get("watchdog", get_watchdog())
+        self.blob_client = BlobClient(self.conf, logger=self.logger, watchdog=watchdog)
+        self.conscience_client = self.blob_client.conscience_client
         self.must_auto_exclude_rawx = False
 
     def auto_exclude_rawx(self, job_params, services):
@@ -299,14 +303,10 @@ class RawxDecommissionJob(XcuteRdirJob):
             return
         last_usage_check = now
 
-        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
-        for container_id, chunk_id, descr in chunk_info:
-            task_id = "|".join((container_id, chunk_id))
+        chunk_info = self.get_chunk_list(job_params, marker=marker, reqid=reqid)
+        for chunk_id in chunk_info:
+            task_id = chunk_id
             yield task_id, {
-                "container_id": container_id,
-                "content_id": descr["content_id"],
-                "path": descr["path"],
-                "version": descr["version"],
                 "chunk_id": chunk_id,
             }
 
@@ -326,32 +326,31 @@ class RawxDecommissionJob(XcuteRdirJob):
             return
 
         kept_chunks_ratio = 1 - (usage_target / float(current_usage))
-        chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)
+        chunk_info = self.get_chunk_list(job_params, marker=marker, reqid=reqid)
         i = 0
-        for i, (container_id, chunk_id, _) in enumerate(chunk_info, 1):
+        for i, chunk_id in enumerate(chunk_info, 1):
             if i % 1000 == 0:
                 yield (
-                    "|".join((container_id, chunk_id)),
+                    chunk_id,
                     int(math.ceil(1000 * kept_chunks_ratio)),
                 )
 
         remaining = int(math.ceil(i % 1000 * kept_chunks_ratio))
         if remaining > 0:
-            yield ("|".join((container_id, chunk_id)), remaining)
+            yield (chunk_id, remaining)
 
-    def get_chunk_info(self, job_params, marker=None, reqid=None):
+    def get_chunk_list(self, job_params, marker=None, reqid=None):
+        """Request rawx to gather list of chunks (chunk id)"""
         service_id = job_params["service_id"]
-        rdir_fetch_limit = job_params["rdir_fetch_limit"]
-        rdir_timeout = job_params["rdir_timeout"]
-
-        chunk_info = self.rdir_client.chunk_fetch(
+        rawx_list_limit = job_params["rawx_list_limit"]
+        rawx_timeout = job_params["rawx_timeout"]
+        chunk_info = self.blob_client.chunk_list(
             service_id,
-            timeout=rdir_timeout,
-            limit=rdir_fetch_limit,
             start_after=marker,
+            min_to_return=rawx_list_limit,
             reqid=reqid,
+            timeout=rawx_timeout,
         )
-
         return chunk_info
 
     def set_topic_suffix(self, job_params, reqid=None):

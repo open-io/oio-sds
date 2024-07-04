@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,15 +27,15 @@ class XcuteCommand(object):
         return self.app.client_manager.xcute_client
 
 
-class XcuteRdirCommand(XcuteCommand, ShowOne):
+class XcuteCommonCommand(XcuteCommand, ShowOne):
     """
-    Class holding rdir-related parameters.
+    Class holding xcute command common parameters.
     """
 
     JOB_CLASS = None
 
     def get_parser(self, prog_name):
-        parser = super(XcuteRdirCommand, self).get_parser(prog_name)
+        parser = super(XcuteCommonCommand, self).get_parser(prog_name)
 
         parser.add_argument(
             "--put-on-hold-if-locked",
@@ -46,6 +46,30 @@ class XcuteRdirCommand(XcuteCommand, ShowOne):
                 """,
             action="store_true",
         )
+        return parser
+
+    def get_job_config(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug("take_action(%s)", parsed_args)
+
+        job_config = self.get_job_config(parsed_args)
+        job_info = self.xcute.job_create(
+            self.JOB_CLASS.JOB_TYPE,
+            job_config=job_config,
+            put_on_hold_if_locked=parsed_args.put_on_hold_if_locked,
+        )
+        return zip(*sorted(flat_dict_from_dict(parsed_args, job_info).items()))
+
+
+class XcuteRdirCommand(XcuteCommonCommand):
+    """
+    Class holding rdir-related parameters.
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(XcuteRdirCommand, self).get_parser(prog_name)
 
         parser.add_argument(
             "--rdir-fetch-limit",
@@ -63,17 +87,3 @@ class XcuteRdirCommand(XcuteCommand, ShowOne):
         )
 
         return parser
-
-    def get_job_config(self, parsed_args):
-        raise NotImplementedError()
-
-    def take_action(self, parsed_args):
-        self.logger.debug("take_action(%s)", parsed_args)
-
-        job_config = self.get_job_config(parsed_args)
-        job_info = self.xcute.job_create(
-            self.JOB_CLASS.JOB_TYPE,
-            job_config=job_config,
-            put_on_hold_if_locked=parsed_args.put_on_hold_if_locked,
-        )
-        return zip(*sorted(flat_dict_from_dict(parsed_args, job_info).items()))

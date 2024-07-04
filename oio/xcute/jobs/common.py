@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,12 +18,29 @@ from oio.common.easy_value import float_value, int_value
 from oio.xcute.common.job import XcuteJob
 
 
-class XcuteRdirJob(XcuteJob):
+class XcuteUsageTargetJob(XcuteJob):
+    """Abstract parent class for rawx and meta2 jobs."""
+
+    DEFAULT_USAGE_TARGET = 0
+
+    @classmethod
+    def sanitize_params(cls, job_params):
+        sanitized_job_params, lock = super(XcuteUsageTargetJob, cls).sanitize_params(
+            job_params
+        )
+        if cls.__name__.endswith("DecommissionJob"):
+            sanitized_job_params["usage_target"] = int_value(
+                job_params.get("usage_target"), cls.DEFAULT_USAGE_TARGET
+            )
+
+        return sanitized_job_params, lock
+
+
+class XcuteRdirJob(XcuteUsageTargetJob):
     """Abstract parent class for rawx and meta2 jobs."""
 
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
-    DEFAULT_USAGE_TARGET = 0
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -38,10 +55,5 @@ class XcuteRdirJob(XcuteJob):
         sanitized_job_params["rdir_timeout"] = float_value(
             job_params.get("rdir_timeout"), cls.DEFAULT_RDIR_TIMEOUT
         )
-
-        if cls.__name__.endswith("DecommissionJob"):
-            sanitized_job_params["usage_target"] = int_value(
-                job_params.get("usage_target"), cls.DEFAULT_USAGE_TARGET
-            )
 
         return sanitized_job_params, lock

@@ -169,6 +169,8 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 			rawxreq.serveInfo()
 		case "/stat":
 			rawxreq.serveStat()
+		case "/list":
+			rawxreq.serveListOfChunks()
 		default:
 			rawxreq.serveChunk()
 		}
