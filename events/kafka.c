@@ -360,10 +360,12 @@ kafka_destroy(struct kafka_s *kafka)
 {
 	GError* err = NULL;
 
-	kafka_close(kafka);
-	rd_kafka_conf_destroy(kafka->conf);
-	g_free((gchar*)kafka->topic);
-	g_free(kafka->callback_ctx);
+	if (kafka) {
+		kafka_close(kafka);
+		rd_kafka_conf_destroy(kafka->conf);
+		g_free((gchar*)kafka->topic);
+		g_free(kafka->callback_ctx);
+	}
 
 	return err;
 }
