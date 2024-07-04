@@ -16,19 +16,22 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 import os
 import re
 import string
 from os.path import isfile
+import time
 from urllib.parse import unquote, urlparse
+from oio.blob.client import BlobClient
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
-from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, HTTP_CONTENT_TYPE_JSON, REQID_HEADER
 from oio.common.easy_value import true_value
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher, request_id
 from oio.blob.utils import read_chunk_metadata
-from tests.utils import CommonTestCase, random_id, strange_paths
+from tests.utils import BaseTestCase, CommonTestCase, random_id, strange_paths
 from tests.functional.blob import random_buffer, random_chunk_id
 
 
@@ -1016,3 +1019,112 @@ class RawxTestSuite(CommonTestCase):
             obj_name="truncated-input",
             data=data_reader(),
         )
+
+
+class BlobClientTestSuite(BaseTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(BlobClientTestSuite, cls).setUpClass()
+        # Prevent the chunks' rebuilds or moves by the crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._cls_reload_proxy()
+        time.sleep(1)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super(BlobClientTestSuite, cls).tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.blob_client = BlobClient(
+            conf=self.conf, logger=self.logger, watchdog=self.watchdog
+        )
+        self.rawx_volumes = dict()
+        services = self.conscience.all_services("rawx")
+        for rawx in services:
+            tags = rawx["tags"]
+            service_id = tags.get("tag.service_id", None)
+            if service_id is None:
+                service_id = rawx["addr"]
+            volume = tags.get("tag.vol", None)
+            self.rawx_volumes[service_id] = volume
+
+    def _create_object(self, cname, name, reqid=None):
+        self.clean_later(cname)
+        chunks, _, _ = self.storage.object_create(
+            self.account,
+            cname,
+            obj_name=name,
+            data=b"yes",
+            policy="THREECOPIES",
+            reqid=reqid,
+        )
+        return chunks
+
+    def _create_objects(self, nb_objects):
+        chunks = []
+        for i in range(nb_objects):
+            cname = f"blob-client-{time.time()}"
+            create_reqid = request_id("blob-client-")
+            name = f"blob-client-{i:0>5}"
+            chunks.extend(self._create_object(cname, name, create_reqid))
+        rawx_chunks = {}
+        for chunk in chunks:
+            url = chunk["url"]
+            parsed = urlparse(url)
+            rawx_chunks.setdefault(parsed.netloc, []).append(url)
+        # Get the rawx with the most chunk
+        rawx_id = None
+        nb_chunks = 0
+        for service_id, chunk_list in rawx_chunks.items():
+            if len(chunk_list) > nb_chunks:
+                nb_chunks = len(chunk_list)
+                rawx_id = service_id
+        return rawx_chunks, rawx_id
+
+    def test_chunk_list(self):
+        """Test if chunk are listed as expected"""
+        rawx_chunks, rawx_id = self._create_objects(5)
+        chunk_ids = list(self.blob_client.chunk_list(rawx_id))
+        for chunk_url in rawx_chunks[rawx_id]:
+            self.assertIn(chunk_url.split("/")[-1], chunk_ids)
+
+    def test_chunk_list_with_marker(self):
+        """Check list chunks returns only chunks coming after the marker"""
+        rawx_chunks, rawx_id = self._create_objects(5)
+        rawx_chunks[rawx_id].sort()
+        nb_chunks = len(rawx_chunks[rawx_id])
+        index_marker = nb_chunks // 2
+        parsed = urlparse(rawx_chunks[rawx_id][index_marker])
+        marker = os.path.join(
+            self.rawx_volumes[rawx_id], parsed.path.split("/")[-1][:3]
+        )
+        chunk_ids = list(self.blob_client.chunk_list(rawx_id, start_after=marker))
+        self.assertGreaterEqual(len(chunk_ids), nb_chunks - index_marker)
+        for chunk_url in rawx_chunks[rawx_id][:index_marker]:
+            self.assertNotIn(chunk_url.split("/")[-1], chunk_ids)
+
+    def test_chunk_list_with_limit(self):
+        """Check list chunks returns limited number of chunks by rawx call"""
+        rawx_chunks, rawx_id = self._create_objects(5)
+        rawx_chunks[rawx_id].sort()
+        nb_chunks = len(rawx_chunks[rawx_id])
+        # Check that with 1 as limit, the request returns one chunk
+        url = self.blob_client._make_list_uri(rawx_id)
+        req_body = {"min_to_return": 1}
+        headers = {}
+        headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
+        data = json.dumps(req_body, separators=(",", ":"))
+        kwargs = {}
+        kwargs["body"] = data
+        kwargs["headers"] = headers
+        res = self.blob_client._request("GET", url, **kwargs)
+        body = json.loads(res.data)
+        chunks = body["chunks"]
+        self.assertEqual(len(chunks), 1)
+        # Check that even though the limit for each request is set to 1
+        # the result will list all the chunks after many requests.
+        chunk_ids = list(self.blob_client.chunk_list(rawx_id, min_to_return=1))
+        self.assertGreaterEqual(len(chunk_ids), nb_chunks)

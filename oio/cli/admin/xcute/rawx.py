@@ -15,7 +15,7 @@
 # License along with this library.
 
 from oio.cli.admin.common import SingleServiceCommandMixin
-from oio.cli.admin.xcute import XcuteRdirCommand
+from oio.cli.admin.xcute import XcuteCommonCommand, XcuteRdirCommand
 from oio.common.easy_value import boolean_value
 from oio.xcute.jobs.blob_mover import RawxDecommissionJob
 from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
@@ -107,7 +107,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         return {"tasks_per_second": parsed_args.chunks_per_second, "params": job_params}
 
 
-class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
+class RawxDecommission(SingleServiceCommandMixin, XcuteCommonCommand):
     """
     Decommission the specified service.
     All chunks matching the size constraints
@@ -133,6 +133,14 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
             type=float,
             help="Timeout for rawx operations, in seconds. (default=%f)"
             % self.JOB_CLASS.DEFAULT_RAWX_TIMEOUT,
+        )
+        parser.add_argument(
+            "--rawx-list-limit",
+            type=int,
+            help=(
+                "Maximum number of entries returned in each rawx response. (default=%d)"
+            )
+            % self.JOB_CLASS.DEFAULT_RAWX_LIST_LIMIT,
         )
         parser.add_argument(
             "--min-chunk-size",
@@ -202,8 +210,7 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
     def get_job_config(self, parsed_args):
         job_params = {
             "service_id": parsed_args.service,
-            "rdir_fetch_limit": parsed_args.rdir_fetch_limit,
-            "rdir_timeout": parsed_args.rdir_timeout,
+            "rawx_list_limit": parsed_args.rawx_list_limit,
             "rawx_timeout": parsed_args.rawx_timeout,
             "min_chunk_size": parsed_args.min_chunk_size,
             "max_chunk_size": parsed_args.max_chunk_size,
