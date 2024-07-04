@@ -30,6 +30,7 @@ License along with this library.
 #include <sqlite3.h>
 
 #include <events/beanstalkd.h>
+#include <events/kafka.h>
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
 
@@ -234,6 +235,8 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	sq3->transaction_update_queries = NULL;
 	g_list_free_full(sq3->update_queries, g_free);
 	sq3->update_queries = NULL;
+	kafka_destroy(sq3->kafka);
+	sq3->kafka = NULL;
 	beanstalkd_destroy(sq3->sharding_queue);
 	sq3->sharding_queue = NULL;
 	g_slice_free(struct sqlx_sqlite3_s, sq3);

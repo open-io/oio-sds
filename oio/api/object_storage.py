@@ -1120,6 +1120,7 @@ class ObjectStorageApi(object):
         version=None,
         bypass_governance=None,
         dryrun=None,
+        slo_manifest=None,
         **kwargs,
     ):
         """
@@ -1133,8 +1134,10 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param obj: name of the object to delete
         :param version: version of the object to delete
-        :param dryrun: if True delete not effective (allows to test if
+        :param dryrun: if True: delete not effective (allows to test if
             triggers would deny the deletion).
+        :param slo_manifest: if True: deletion concerns a manifest and requires
+            parts processing.
         :returns:
             - True if a delete marker has been created or removed
             - and the version id which has been deleted
@@ -1147,6 +1150,7 @@ class ObjectStorageApi(object):
             version=version,
             bypass_governance=bypass_governance,
             dryrun=dryrun,
+            slo_manifest=slo_manifest,
             **kwargs,
         )
 
