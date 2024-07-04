@@ -108,9 +108,6 @@ class ProxyClient(HttpApi):
         if kwargs.get("tls"):
             headers = headers or {}
             headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
-        if kwargs.get("dry_run"):
-            headers = headers or {}
-            headers[HEADER_PREFIX + "dry-run"] = kwargs.pop("dry_run")
 
         for i in range(request_attempts):
             try:

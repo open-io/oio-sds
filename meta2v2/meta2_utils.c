@@ -1633,7 +1633,8 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		gboolean bypass_governance, gboolean create_delete_marker,
-	 struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0,
+		gboolean *delete_marker_created)
 {
 	GError *err = NULL;
 	gint64 version = 0;
@@ -1757,6 +1758,9 @@ clean:
 			ALIASES_set_ctime(new_alias, now);
 			ALIASES_set_mtime(new_alias, now);
 			err = _db_save_bean(sq3, new_alias);
+			if (!err && delete_marker_created != NULL) { 
+				*delete_marker_created = TRUE;
+			}
 			if (!err && cb) {
 				ALIASES_set2_content(new_alias, (guint8 *) "NEW", 3);
 				cb(u0, new_alias);

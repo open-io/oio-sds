@@ -546,13 +546,15 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	gboolean dryrun = BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DRYRUN));
+	gboolean slo_manifest = BOOL(meta2_filter_ctx_get_param(
+			ctx, NAME_MSGKEY_SLO_MANIFEST));
+	gboolean delete_marker_created = FALSE;
 
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url,
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
-		dryrun,
-		_bean_list_cb, &obc->l);
+		dryrun, slo_manifest, _bean_list_cb, &obc->l, &delete_marker_created);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
@@ -560,25 +562,6 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	gboolean delete_marker_created = FALSE;
-	for (GSList *l = obc->l; l; l = l->next) {
-		gpointer bean = l->data;
-		if (DESCR(bean) != &descr_struct_ALIASES) {
-			continue;
-		}
-		if (!ALIASES_get_deleted(bean)) {
-			continue;
-		}
-		GByteArray *content_id = ALIASES_get_content(bean);
-		if (!content_id) {
-			continue;
-		}
-		if (strncmp((gchar*)content_id->data, "NEW", content_id->len) != 0) {
-			continue;
-		}
-		delete_marker_created = TRUE;
-		break;
-	}
 	// do not notify if dryrun is activated
 	if (!dryrun) {
 		if (delete_marker_created) {

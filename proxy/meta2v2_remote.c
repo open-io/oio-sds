@@ -318,7 +318,7 @@ m2v2_remote_pack_content_DRAIN(struct oio_url_s *url, gint64 dl)
 
 GByteArray*
 m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, gboolean dryrun,
+		gboolean create_delete_marker, gboolean dryrun, gboolean slo_manifest,
 		const char *destinations, const char *replicator_id,
 		const char *role_project_id, gint64 dl)
 {
@@ -332,6 +332,9 @@ m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean bypass_governance,
 	}
 	if (dryrun) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_DRYRUN, "1");
+	}
+	if (slo_manifest) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_SLO_MANIFEST, "1");
 	}
 	const gchar *force_versioning = oio_ext_get_force_versioning();
 	if (force_versioning != NULL) {

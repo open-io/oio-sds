@@ -1581,11 +1581,89 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 	return err;
 }
 
+static GError *
+_meta2_send_manifest_event(struct meta2_backend_s *m2b,
+		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	gint64 manifest_version = 0;
+	const char *version_req = NULL;
+
+	gint64 max_versions = m2db_get_max_versions(sq3, 0);
+
+	// Get specified version in the request (NULL if no version specified)
+	version_req = oio_url_get(url, OIOURL_VERSION);
+
+	if (VERSIONS_ENABLED(max_versions) && !version_req) {
+		GRID_DEBUG("No manifest event to send as a delete marker will be created");
+		return err;
+	}
+
+	GString *upload_id = g_string_new("");
+	/* Extract the upload_id from the appropriate property.
+	 * Iterate on the list but the list will remains empty, only upload_id and version
+	 * variables will be updated. This avoids to manipulate a list later.
+	 * Notice that:
+	 * - if a version is specified: this object/version will be used
+	 * - if no version is specified:
+	 *   - no versioning on the container: we are sure to deal with the correct object
+	 *   - versioning on the container: a delete marker will be created, this function
+	 *     returns earlier (otherwise, we would have a bug because we could get
+	 *     properties on a delete marker).
+	 */
+	void
+	_extract_upload_id(gpointer plist UNUSED, gpointer bean)
+	{
+		EXTRA_ASSERT(plist == NULL);
+		EXTRA_ASSERT(bean != NULL);
+		
+		if (&descr_struct_PROPERTIES == DESCR(bean)) {
+			struct bean_PROPERTIES_s *prop = bean;
+			gchar *expected_prop = "x-object-sysmeta-s3api-upload-id";
+			if (strcmp(expected_prop, PROPERTIES_get_key(prop)->str) == 0) {
+				GByteArray *val = PROPERTIES_get_value(prop);
+				// Copy the upload_id
+				g_string_append_len(upload_id, (const gchar *)val->data, val->len);
+			}
+		}
+		if (&descr_struct_ALIASES == DESCR(bean)) {
+			manifest_version = ALIASES_get_version(bean);
+		}
+		/* Clean every beans. */
+		_bean_clean(bean);
+	}
+
+	err = m2db_get_properties(sq3, url, _extract_upload_id, NULL);
+
+	if (!err) {
+		if (upload_id->len <= 0) {
+			err = BADREQ("No upload_id found for the object");
+		} else {
+			// Build the event with upload_id and manifest version
+			GString *event = oio_event__create_with_id(
+					META2_EVENTS_PREFIX ".manifest.deleted", url,
+					oio_ext_get_reqid());
+			g_string_append_static(event, ",\"upload_id\":\"");
+			oio_str_gstring_append_json_blob(event, upload_id->str, upload_id->len);
+			g_string_append_printf(event, "\",\"manifest_version\":\"%ld\"}",
+					manifest_version);
+
+			if (!oio_events_queue__send(
+					m2b->notifier_manifest_deleted, g_string_free(event, FALSE))) {
+				err = BUSY("Failed to send event");
+			}
+		}
+	}
+
+	g_string_free(upload_id, TRUE);
+	return err;
+}
+
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
-		gboolean create_delete_marker, gboolean dryrun,
-		m2_onbean_cb cb, gpointer u0)
+		gboolean create_delete_marker, gboolean dryrun, gboolean slo_manifest,
+		m2_onbean_cb cb, gpointer u0, gboolean *delete_marker_created)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1593,8 +1671,16 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
-			&sq3);
+	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (err) {
+		// Error during opening, return directly.
+		return err;
+	}
+
+	if (!dryrun && slo_manifest) {
+		err = _meta2_send_manifest_event(m2b, sq3, url);
+	}
+
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
 		gint64 max_versions = _maxvers(sq3);
@@ -1607,12 +1693,14 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 			}
 
 			if (!(err = m2db_delete_alias(sq3, max_versions, bypass_governance,
-					create_delete_marker, url, cb, u0))) {
+					create_delete_marker, url, cb, u0, delete_marker_created))) {
 				m2db_increment_version(sq3);
 			}
+
+			/* The deletion must not be effective:
+			 * - in case of dryrun
+			 */
 			if (dryrun) {
-				/* In case of dryrun, let's rollback the transaction.
-				 * The deletion must not be effective */
 				err = sqlx_transaction_rollback(repctx, err);
 			} else {
 				err = sqlx_transaction_end(repctx, err);
@@ -1621,8 +1709,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		if (!err && !dryrun) {
 			m2b_add_modified_container(m2b, sq3);
 		}
-		m2b_close(m2b, sq3, url);
 	}
+	m2b_close(m2b, sq3, url);
 
 	return err;
 }
