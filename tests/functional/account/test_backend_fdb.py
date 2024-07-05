@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from typing import Generator, Tuple
 import eventlet
 import fdb
 import os
@@ -27,6 +28,7 @@ from pathlib import Path
 from tests.utils import BaseTestCase, random_str
 from testtools.testcase import ExpectedException
 from time import sleep, time
+from unittest.mock import patch
 from werkzeug.exceptions import BadRequest, Conflict
 
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
@@ -4173,3 +4175,150 @@ class TestAccountBackend(BaseTestCase):
                 ("objects-s3", region): 0,
             },
         )
+
+    def _test_list_all_buckets(self, create_transaction=None, expected_error=None):
+        expected_buckets = []
+        for i in range(32):
+            region = random.choice(("LOCALHOST", "TEST", "ALL"))
+            account = f"AUTH_0000000000000000000000000000000{i%16:x}"
+            bucket = f"list_all_buckets-{i:04d}"
+            ctime = Timestamp().timestamp
+            self.backend.create_bucket(bucket, account, region, ctime=ctime)
+            expected_buckets.append(
+                {
+                    "account": account,
+                    "bytes": 0,
+                    "containers": 0,
+                    "ctime": int(ctime * 1000000) / 1000000,
+                    "mtime": int(ctime * 1000000) / 1000000,
+                    "objects": 0,
+                    "region": region,
+                    "bytes-details": {},
+                    "objects-details": {},
+                    "name": bucket,
+                }
+            )
+        expected_buckets.sort(key=lambda x: (x["account"], x["name"]))
+
+        if create_transaction is None:
+            create_transaction = self.backend.db.create_transaction
+        with patch(
+            "fdb.impl.Database.create_transaction",
+            wraps=create_transaction,
+        ) as mock_create_transaction:
+            bucket_generator = self.backend.list_all_buckets()
+            if expected_error:
+                self.assertRaises(expected_error, list, bucket_generator)
+                self.assertGreaterEqual(mock_create_transaction.call_count, 1)
+                return mock_create_transaction
+            buckets = list(bucket_generator)
+        # To make debugging easier
+        self.assertGreaterEqual(mock_create_transaction.call_count, 1)
+        self.assertEqual(len(expected_buckets), len(buckets))
+        self.assertDictEqual(expected_buckets[0], buckets[0])
+        self.assertDictEqual(expected_buckets[-1], buckets[-1])
+        # The complete verification
+        self.assertListEqual(expected_buckets, buckets)
+        return mock_create_transaction
+
+    def test_list_all_buckets(self):
+        mock_create_transaction = self._test_list_all_buckets()
+        mock_create_transaction.assert_called_once()
+
+    def test_list_all_buckets_with_retryable_error(self):
+        create_transaction_func = self.backend.db.create_transaction
+
+        def _errors_sequence() -> Generator[Tuple[int, int], None, None]:
+            # 1007 = too_old_transaction (retryable error)
+            yield random.randrange(32, 64), 1007
+            yield 8, 1007  # An empty bucket has 8 keys
+            yield random.randrange(32, 64), 1007
+
+        errors_sequence: Generator[Tuple[int, int], None, None] = _errors_sequence()
+
+        def _create_transaction(*args, **kwargs):
+            tr: fdb.impl.Transaction = create_transaction_func(*args, **kwargs)
+            return TransactionGetRangeError(tr, errors_sequence=errors_sequence)
+
+        mock_create_transaction = self._test_list_all_buckets(
+            create_transaction=_create_transaction
+        )
+        mock_create_transaction.assert_called_once()
+        self.assertRaises(StopIteration, next, errors_sequence)
+
+    def test_list_all_buckets_with_not_retryable_error(self):
+        create_transaction_func = self.backend.db.create_transaction
+
+        def _errors_sequence() -> Generator[Tuple[int, int], None, None]:
+            # 2002 = commit_read_incomplete
+            yield random.randrange(32, 64), 2002
+
+        errors_sequence: Generator[Tuple[int, int], None, None] = _errors_sequence()
+
+        def _create_transaction(*args, **kwargs):
+            tr: fdb.impl.Transaction = create_transaction_func(*args, **kwargs)
+            return TransactionGetRangeError(tr, errors_sequence=errors_sequence)
+
+        mock_create_transaction = self._test_list_all_buckets(
+            create_transaction=_create_transaction,
+        )
+        self.assertGreaterEqual(2, mock_create_transaction.call_count)
+        self.assertRaises(StopIteration, next, errors_sequence)
+
+    def test_list_all_buckets_with_no_progression(self):
+        create_transaction_func = self.backend.db.create_transaction
+
+        def _errors_sequence() -> Generator[Tuple[int, int], None, None]:
+            # 1007 = too_old_transaction (retryable error)
+            yield random.randrange(32, 64), 1007
+            yield 2, 1007  # An empty bucket has 8 keys
+            yield 0, 0
+
+        errors_sequence: Generator[Tuple[int, int], None, None] = _errors_sequence()
+
+        def _create_transaction(*args, **kwargs):
+            tr: fdb.impl.Transaction = create_transaction_func(*args, **kwargs)
+            return TransactionGetRangeError(tr, errors_sequence=errors_sequence)
+
+        mock_create_transaction = self._test_list_all_buckets(
+            create_transaction=_create_transaction,
+            expected_error=fdb.impl.FDBError,
+        )
+        self.assertGreaterEqual(3, mock_create_transaction.call_count)
+        self.assertEqual((0, 0), next(errors_sequence))
+
+
+class TransactionGetRangeError:
+    def __init__(
+        self,
+        tr: fdb.impl.TransactionRead,
+        errors_sequence: Generator[Tuple[int, int], None, None] = 1,
+    ) -> None:
+        self.tr: fdb.impl.Transaction = tr
+        self.errors_sequence: Generator[Tuple[int, int], None, None] = errors_sequence
+
+    @property
+    def snapshot(self):
+        if isinstance(self.tr, fdb.impl.Transaction):
+            return TransactionGetRangeError(
+                self.tr.snapshot,
+                errors_sequence=self.errors_sequence,
+            )
+        return self
+
+    def get_range(self, *args, **kwargs) -> Generator:
+        try:
+            nb_readings, error_code = next(self.errors_sequence)
+        except StopIteration:
+            nb_readings, error_code = None, None
+        for i, result in enumerate(self.tr.get_range(*args, **kwargs)):
+            if i == nb_readings:
+                raise fdb.impl.FDBError(error_code)
+            yield result
+
+    def commit(self, *args, **kwargs) -> None:
+        return self.tr.commit(*args, **kwargs)
+
+    def on_error(self, *args, **kwargs) -> None:
+        self.tr.commit().wait()
+        return self.tr.on_error(*args, **kwargs)

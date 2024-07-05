@@ -2312,32 +2312,80 @@ class AccountBackendFdb(object):
 
         :returns: the list of all buckets (with metadata).
         """
-        b_space_range = self.bucket_space.range()
-        transaction = self.db.create_transaction()
-        try:
-            entries = transaction.snapshot.get_range(
-                b_space_range.start,
-                b_space_range.stop,
-                streaming_mode=fdb.StreamingMode.want_all,
-            )
-            bucket_keys_values = None, None, None
-            for key, value in entries:
-                account, bucket, *key = self.bucket_space.unpack(key)
-                if (account, bucket) != bucket_keys_values[:2]:
-                    if bucket_keys_values[2]:
-                        bucket_info = self._unmarshal_info(bucket_keys_values[2])
-                        bucket_info["account"] = bucket_keys_values[0]
-                        bucket_info["name"] = bucket_keys_values[1]
-                        yield bucket_info
-                    bucket_keys_values = account, bucket, []
-                bucket_keys_values[2].append((key, value))
-            if bucket_keys_values[2]:
-                bucket_info = self._unmarshal_info(bucket_keys_values[2])
-                bucket_info["account"] = bucket_keys_values[0]
-                bucket_info["name"] = bucket_keys_values[1]
-                yield bucket_info
-        finally:
-            transaction.commit()
+        transaction = None
+        buckets_space = self.bucket_space
+        next_marker = None
+        last_marker = None
+        bucket_keys_values = None, None, []
+        while True:
+            if transaction is None:
+                transaction = self.db.create_transaction()
+            try:
+                start, stop = self._get_start_and_stop(
+                    buckets_space, marker=next_marker
+                )
+                entries = transaction.snapshot.get_range(
+                    start,
+                    stop,
+                    streaming_mode=fdb.StreamingMode.want_all,
+                )
+                for fdb_key, value in entries:
+                    account, bucket, *key = self.bucket_space.unpack(fdb_key)
+                    if (account, bucket) != bucket_keys_values[:2]:
+                        if bucket_keys_values[2]:
+                            bucket_info = self._unmarshal_info(bucket_keys_values[2])
+                            bucket_info["account"] = bucket_keys_values[0]
+                            bucket_info["name"] = bucket_keys_values[1]
+                            yield bucket_info
+                            # If there is an error, to avoid global counters not
+                            # matching detailed counters, it is best to start again
+                            # right after the last fully processed bucket
+                            next_marker = (bucket_keys_values[0], bucket_keys_values[1])
+                        bucket_keys_values = account, bucket, []
+                    bucket_keys_values[2].append((key, value))
+                if bucket_keys_values[2]:
+                    bucket_info = self._unmarshal_info(bucket_keys_values[2])
+                    bucket_info["account"] = bucket_keys_values[0]
+                    bucket_info["name"] = bucket_keys_values[1]
+                    yield bucket_info
+                try:
+                    transaction.commit().wait()
+                except fdb.impl.FDBError as exc:
+                    # All buckets are already sent and there is only reading
+                    try:
+                        transaction.on_error(exc).wait()
+                    except fdb.impl.FDBError:
+                        pass
+                    self.logger.warning(
+                        "Failed to commit the reading of all buckets: %s", exc
+                    )
+                return
+            except fdb.impl.FDBError as exc:
+                try:
+                    transaction.on_error(exc).wait()
+                    # The error is retryable
+                except fdb.impl.FDBError:
+                    # The error is not retryable, but let's try anyway
+                    transaction = None
+                if next_marker == last_marker:
+                    # No progression
+                    self.logger.error("Failed to read all buckets: %s", exc)
+                    raise
+                log = self.logger.warning
+                if exc.code == 1007:  # transaction_too_old
+                    # When there are a lot of buckets, this inevitably happens
+                    # (but it's not a problem, it's even normal).
+                    log = self.logger.debug
+                log(
+                    "Failed to read all buckets, retrying%s: %s",
+                    " (new transaction)" if not transaction else "",
+                    exc,
+                )
+                # All keys already read for the current bucket will be read again
+                # to avoid inconsistencies between global counters and detailed
+                # counters
+                last_marker = next_marker
+                bucket_keys_values[2].clear()
 
     @fdb.transactional
     def _update_bucket_stats(
