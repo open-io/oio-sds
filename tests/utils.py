@@ -774,13 +774,13 @@ class BaseTestCase(CommonTestCase):
             "Service(s) fails to reach %d score (timeout %d)", score_threshold, timeout
         )
 
-    def wait_for_service(self, service_type, service_id, timeout=5.0):
+    def wait_for_service(self, service_type, service_id, timeout=5.0, **kwargs):
         """
         Wait for a specific service to appear in conscience.
         """
         deadline = time.time() + timeout
         while time.time() < deadline:
-            all_svcs = self.conscience.all_services(service_type)
+            all_svcs = self.conscience.all_services(service_type, **kwargs)
             for svc in all_svcs:
                 id_ = svc["tags"].get("tag.service_id", svc["addr"])
                 if id_ == service_id:

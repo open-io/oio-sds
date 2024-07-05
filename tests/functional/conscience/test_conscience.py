@@ -706,20 +706,46 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertIsInstance(my_rdir["tags"]["stat.rawx_volumes"], (int, float))
 
     def test_conscience_agent_static_tags(self):
-        svc = "proxy-1"
+        svc = self.conf["services"]["proxy"][0]["service_id"]
         watch_conf = self.load_watch_conf(svc)
         static_conf = {"type": "static", "tags": {"aymeric_wants_tests": True}}
         watch_conf["stats"].append(static_conf)
         self.save_watch_conf(svc, watch_conf)
+        must_remove = True
         try:
+            # Test the insertion of a new tag
             self._service("oio-conscience-agent-1.service", "restart")
-            self._deregister_srv({"addr": f"{watch_conf['host']}:{watch_conf['port']}"})
-            time.sleep(1.0)
-            proxy_service = self.wait_for_service("oioproxy", svc)
-            self.assertIn("tag.aymeric_wants_tests", proxy_service["tags"])
-            self.assertTrue(proxy_service["tags"]["tag.aymeric_wants_tests"])
-        finally:
+            time.sleep(1.5)
+            proxy_service = self.wait_for_service("oioproxy", svc, full=True)
+            self.assertIn(
+                "tag.aymeric_wants_tests",
+                proxy_service["tags"],
+                "New tag not found in service description",
+            )
+            self.assertTrue(
+                proxy_service["tags"]["tag.aymeric_wants_tests"],
+                "New tag does not have the expected value",
+            )
+
+            # Test the removal of the tag
             watch_conf["stats"].remove(static_conf)
             self.save_watch_conf(svc, watch_conf)
+            must_remove = False
             self._service("oio-conscience-agent-1.service", "restart")
-            # TODO(FVE): check for removal, once we expire tags automatically
+            # /!\ do not call self._deregister_srv() here: we want to check
+            # that outdated tags are automatically removed (maybe not immediately).
+            for _ in range(5):
+                time.sleep(1.0)
+                proxy_service = self.wait_for_service("oioproxy", svc, full=True)
+                if "tag.aymeric_wants_tests" not in proxy_service["tags"]:
+                    break
+            self.assertNotIn(
+                "tag.aymeric_wants_tests",
+                proxy_service["tags"],
+                "Static tag is still there whereas it should have been cleaned",
+            )
+        except Exception:
+            if must_remove:
+                watch_conf["stats"].remove(static_conf)
+                self.save_watch_conf(svc, watch_conf)
+            raise
