@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,17 +22,6 @@ from tests.functional.cli import CliTestCase
 
 
 class ServiceDecacheTest(CliTestCase):
-    def setUp(self):
-        super(ServiceDecacheTest, self).setUp()
-        self._containers = list()
-
-    def tearDown(self):
-        for acct, ct in self._containers:
-            try:
-                self.storage.container_delete(acct, ct)
-            except Exception:
-                pass
-        super(ServiceDecacheTest, self).tearDown()
 
     def test_proxy_decache(self):
         """
@@ -43,19 +32,20 @@ class ServiceDecacheTest(CliTestCase):
         # Creating a container will put something in both high and low caches.
         ct = "test-decache-" + random_str(8)
         self.storage.container_create(self.account, ct)
-        self._containers.append((self.account, ct))
+        self.clean_later(ct)
 
         status0 = self.admin.proxy_get_cache_status()
         output = self.openio_admin("oioproxy decache" + self.get_format_opts())
         # FIXME(FVE): this will fail when we will deploy several proxies
-        self.assertOutput("%s OK None\n" % self.conf["proxy"], output)
+        proxy_id = self.conscience.all_services("oioproxy")[0]["id"]
+        self.assertOutput(f"{proxy_id} OK None\n", output)
         status1 = self.admin.proxy_get_cache_status()
         self.assertLess(status1["csm0"]["count"], status0["csm0"]["count"])
         self.assertLess(status1["meta1"]["count"], status0["meta1"]["count"])
 
     def _test_service_decache_all(self, type_):
         all_svc = self.conscience.all_services(type_)
-        output = self.openio_admin("%s decache" % type_ + self.get_format_opts("json"))
+        output = self.openio_admin(f"{type_} decache {self.get_format_opts('json')}")
         decached = {s["Id"] for s in json.loads(output) if s["Status"] == "OK"}
         expected = {s["id"] for s in all_svc}
         self.assertEqual(expected, decached)

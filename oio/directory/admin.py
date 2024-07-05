@@ -82,6 +82,7 @@ class AdminClient(ProxyClient):
         kwargs["endpoint"] = self.proxy_scheme + "://" + self.proxy_netloc
         self._kwargs = kwargs
         self._cache_client = None
+        self._conscience_client = None
         self._forwarder = None
         self._conscience_client = None
 
@@ -99,6 +100,17 @@ class AdminClient(ProxyClient):
                 **self._kwargs,
             )
         return self._cache_client
+
+    @property
+    def conscience(self):
+        """Get an instance of ConscienceClient (with a shared connection pool)."""
+        if self._conscience_client is None:
+            self._conscience_client = ConscienceClient(
+                self.conf,
+                pool_manager=self.pool_manager,
+                **self._kwargs,
+            )
+        return self._conscience_client
 
     @property
     def forwarder(self):
@@ -300,9 +312,10 @@ class AdminClient(ProxyClient):
 
     def _proxy_endpoint(self, proxy_netloc=None):
         if proxy_netloc and proxy_netloc != self.cache_client.proxy_netloc:
-            return self.cache_client.endpoint.replace(
+            endpoint = self.cache_client.endpoint.replace(
                 self.cache_client.proxy_netloc, proxy_netloc
             )
+            return self.conscience.resolve_url("oioproxy", endpoint)
         else:
             return self.cache_client.endpoint
 
@@ -345,24 +358,24 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        if not proxy_netloc:
-            proxy_netloc = self.proxy_netloc
-        _resp, body = self._direct_request(
-            "GET", "http://" + proxy_netloc + "/v3.0/config", **kwargs
+        url = self.conscience.resolve_url(
+            "oioproxy",
+            f"http://{proxy_netloc or self.proxy_netloc}/v3.0/config",
         )
+        _resp, body = self._direct_request("GET", url, **kwargs)
         return body
 
     def proxy_set_live_config(self, proxy_netloc=None, config=None, **kwargs):
         """
         Set configuration parameters on the specified proxy service.
         """
-        if not proxy_netloc:
-            proxy_netloc = self.proxy_netloc
         if config is None:
             raise ValueError("Missing value for 'config'")
-        _resp, body = self._direct_request(
-            "POST", "http://" + proxy_netloc + "/v3.0/config", json=config, **kwargs
+        url = self.conscience.resolve_url(
+            "oioproxy",
+            f"http://{proxy_netloc or self.proxy_netloc}/v3.0/config",
         )
+        _resp, body = self._direct_request("POST", url, json=config, **kwargs)
         return body
 
     def _service_get_info(self, svc_type, svc_id, **kwargs):
