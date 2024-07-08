@@ -693,3 +693,16 @@ class TestConscienceFunctional(BaseTestCase):
             for cpu in (0, 5, 10, 54.3, 100):
                 for io in (0, 5, 10, 56.7, 100):
                     update_and_check(space, cpu, io)
+
+    def test_conscience_agent_rdir_stats_and_tags(self):
+        rdir_services = self.conscience.all_services("rdir", full=True)
+        my_rdir = rdir_services[0]
+        # service_id is not a "stat", if it exists, it must be a "tag"
+        self.assertNotIn("stat.service_id", my_rdir["tags"])
+        if self.conf["services"]["rdir"][0].get("service_id"):
+            self.assertIn("tag.service_id", my_rdir["tags"])
+        # A bug made these booleans, check they are now integers (or floats)
+        self.assertIn("stat.meta2_volumes", my_rdir["tags"])
+        self.assertIn("stat.rawx_volumes", my_rdir["tags"])
+        self.assertIsInstance(my_rdir["tags"]["stat.meta2_volumes"], (int, float))
+        self.assertIsInstance(my_rdir["tags"]["stat.rawx_volumes"], (int, float))

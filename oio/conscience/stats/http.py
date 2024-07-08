@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -63,13 +63,29 @@ class HttpStat(BaseStat):
         return data
 
     @staticmethod
-    def _parse_stats_json(body):
-        """Prefix each entry with 'stat.'"""
+    def _stat_or_tag(key, value):
+        """
+        Prefix each entry with 'stat.' or 'tag.' depending on the value type,
+        return the length if the value is a dict or a list.
+        """
+        if isinstance(value, (list, dict)):
+            return f"stat.{key}", len(value)
+        if isinstance(value, (int, float)):
+            return f"stat.{key}", value
+        # str, bool, NoneType
+        return f"tag.{key}", value
+
+    def _parse_stats_json(self, body):
+        """
+        Parse the response body as a JSON dictionary,
+        add 'stat.' or 'tag.' prefix to the keys,
+        convert values to the appropriate type.
+        """
         if isinstance(body, bytes):
             body = body.decode("utf-8")
         body = json.loads(body)
         uuid = body.pop("uuid", None)
-        res = {"stat." + k: body[k] for k in body.keys()}
+        res = dict((self._stat_or_tag(k, v) for k, v in body.items()))
         if uuid:
             res["tag.uuid"] = uuid
         return res
