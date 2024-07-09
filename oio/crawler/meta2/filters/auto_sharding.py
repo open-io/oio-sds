@@ -129,7 +129,13 @@ class AutomaticSharding(Filter):
                 return self.app(env, cb)
 
             if self.container_sharding.sharding_in_progress({"system": meta2db.system}):
-                self.logger.info("Sharding in progress for container %s", meta2db.cid)
+                self.logger.info(
+                    "Sharding in progress for container %s: %s",
+                    meta2db.cid,
+                    self.container_sharding.get_sharding_state_name(
+                        {"system": meta2db.system}
+                    ),
+                )
                 self.sharding_in_progress += 1
                 return self.app(env, cb)
 
@@ -292,11 +298,12 @@ class AutomaticSharding(Filter):
             root_cid, shard = self.container_sharding.meta_to_shard(
                 {"system": meta2db.system}
             )
+            # Do not shrink with neighbors who should shard
             (
                 shard,
                 neighboring_shard,
             ) = self.container_sharding.find_smaller_neighboring_shard(
-                shard, root_cid=root_cid, reqid=reqid
+                shard, root_cid=root_cid, max_db_size=self.sharding_db_size, reqid=reqid
             )
             shards = []
             shards.append(shard)

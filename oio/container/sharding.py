@@ -35,6 +35,7 @@ from oio.common.constants import (
     M2_PROP_SHARDING_UPPER,
     M2_PROP_SHARDS,
     NEW_SHARD_STATE_CLEANED_UP,
+    SHARDING_STATE_NAME,
     STRLEN_CID,
 )
 from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
@@ -426,6 +427,11 @@ class ContainerSharding(ProxyClient):
             and sharding_state != EXISTING_SHARD_STATE_ABORTED
             and sharding_state != NEW_SHARD_STATE_CLEANED_UP
         )
+
+    @staticmethod
+    def get_sharding_state_name(meta):
+        sharding_state = int_value(meta["system"].get(M2_PROP_SHARDING_STATE), 0)
+        return SHARDING_STATE_NAME.get(sharding_state)
 
     def _check_shards(self, shards, are_new=False, partial=False, **kwargs):
         previous_shard = None
@@ -1748,7 +1754,9 @@ class ContainerSharding(ProxyClient):
         return string[:-1] + new_last_char
 
     @ensure_request_id
-    def find_smaller_neighboring_shard(self, shard, root_cid=None, **kwargs):
+    def find_smaller_neighboring_shard(
+        self, shard, root_cid=None, max_db_size=None, **kwargs
+    ):
         meta = self.container.container_get_properties(
             cid=shard["cid"], params={"urgent": 1}, **kwargs
         )
@@ -1800,7 +1808,10 @@ class ContainerSharding(ProxyClient):
         smaller_shard = None
         for neighboring_shard in neighboring_shards:
             neighboring_shard_meta = self.container.container_get_properties(
-                cid=neighboring_shard["cid"], params={"urgent": 1}, **kwargs
+                cid=neighboring_shard["cid"],
+                admin_mode=True,
+                params={"urgent": 1},
+                **kwargs,
             )
             if self.sharding_in_progress(neighboring_shard_meta):
                 self.logger.info(
@@ -1819,10 +1830,29 @@ class ContainerSharding(ProxyClient):
                     root_cid,
                 )
                 continue
-            if not smaller_shard or neighboring_shard["count"] < smaller_shard["count"]:
+            neighboring_shard["db_size"] = int_value(
+                neighboring_shard_meta["system"]["stats.page_count"], 0
+            ) * int_value(neighboring_shard_meta["system"]["stats.page_size"], 0)
+            if (
+                not smaller_shard
+                or neighboring_shard["db_size"] < smaller_shard["db_size"]
+            ):
                 smaller_shard = neighboring_shard
         if not smaller_shard:
             raise OioException("No neighboring shard available")
+        if max_db_size and smaller_shard["db_size"] > max_db_size:
+            raise OioException(
+                "The smallest neighbor is too big: (%s) %d",
+                smaller_shard["cid"],
+                smaller_shard["db_size"],
+            )
+        self.logger.info(
+            "The shard %s's smallest neighbor is the shard %s (db_size: %d bytes)",
+            shard["cid"],
+            smaller_shard["cid"],
+            smaller_shard["db_size"],
+        )
+        smaller_shard.pop("db_size")
         return current_shard, smaller_shard
 
     def _shrink_shards(
