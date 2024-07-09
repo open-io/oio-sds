@@ -39,6 +39,7 @@ CONTAINER_FIELDS = [
     "sharding.state",
     "sharding.timestamp",
     "shards",
+    "stats.db_size",
     "stats.freelist_count",
     "stats.page_count",
     "stats.page_size",

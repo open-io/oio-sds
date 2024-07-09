@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ import time
 from logging import getLogger
 
 from oio.cli import Lister, ShowOne
-from oio.common.easy_value import int_value
+from oio.common.easy_value import convert_size, int_value
 from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.common.constants import (
@@ -620,7 +620,7 @@ class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
         parser.add_argument(
             "--counts",
             action="store_true",
-            help="Display the object count in each shard",
+            help="Display the object count and DB size for each shard",
         )
         return parser
 
@@ -635,9 +635,21 @@ class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
             shard_info = (shard["index"], shard["lower"], shard["upper"], shard["cid"])
             if parsed_args.counts:
                 meta = self.app.client_manager.storage.container_get_properties(
-                    None, None, cid=shard["cid"]
+                    None,
+                    None,
+                    cid=shard["cid"],
+                    force_master=True,
+                    admin_mode=True,
+                    params={"urgent": 1},
                 )
-                shard_info += (meta["system"].get(M2_PROP_OBJECTS, 0),)
+                nb_objects = int_value(meta["system"].get(M2_PROP_OBJECTS), 0)
+                db_size = int_value(meta["system"]["stats.page_count"], 0) * int_value(
+                    meta["system"]["stats.page_size"], 0
+                )
+                if parsed_args.formatter == "table":
+                    nb_objects = convert_size(int(nb_objects))
+                    db_size = convert_size(int(db_size), unit="B")
+                shard_info += (nb_objects, db_size)
             yield shard_info
 
     def take_action(self, parsed_args):
@@ -645,7 +657,7 @@ class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
 
         columns = ("Index", "Lower", "Upper", "CID")
         if parsed_args.counts:
-            columns += ("Count",)
+            columns += ("Count", "DB size")
 
         return (columns, self._take_action(parsed_args))
 

@@ -60,7 +60,7 @@ from oio.common.constants import (
     DRAINING_STATE_NAME,
     M2_PROP_DRAINING_TIMESTAMP,
 )
-from oio.common.easy_value import boolean_value, int_value, float_value
+from oio.common.easy_value import boolean_value, int_value
 
 
 class SetPropertyCommandMixin(object):
@@ -731,6 +731,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             parsed_args.container,
             cid=parsed_args.cid,
             admin_mode=True,
+            params={"urgent": 1},
             extra_counters=parsed_args.extra_counters,
         )
         sys = data["system"]
@@ -835,13 +836,13 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info["objects_drained"] = objects_drained
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):
-            info[k] = sys.get(k)
-        wasted = float_value(info["stats.freelist_count"], 0) / float_value(
-            info["stats.page_count"], 1
-        )
-        wasted_bytes = int_value(info["stats.freelist_count"], 0) * int_value(
-            info["stats.page_size"], 0
-        )
+            info[k] = int_value(sys.get(k), 0)
+        db_size = info["stats.page_count"] * info["stats.page_size"]
+        if parsed_args.formatter == "table":
+            db_size = convert_size(int(db_size), unit="B")
+        info["stats.db_size"] = db_size
+        wasted = info["stats.freelist_count"] / info["stats.page_count"]
+        wasted_bytes = info["stats.freelist_count"] * info["stats.page_size"]
         info["stats.space_wasted"] = "%5.2f%% (est. %s)" % (
             wasted * 100,
             convert_size(wasted_bytes),
