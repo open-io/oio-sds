@@ -130,7 +130,7 @@ class SavedWritesApplicator(object):
 
     def _fetch_and_dispatch_queries(self, **kwargs):
         last_check = False
-        self._fetch_start_time = time.time()
+        self._fetch_start_time = monotonic_time()
         self._total_jobs = 0
         while True:
             data = None
@@ -200,7 +200,7 @@ class SavedWritesApplicator(object):
         if not self._total_jobs:
             # No events have been processed yet
             return False, None
-        now = time.time()
+        now = monotonic_time()
         if now > relaxing_time:
             remaining_jobs = self.beanstalk.stats_tube(self.tube)["current-jobs-ready"]
             average_speed = self._total_jobs / (now - self._fetch_start_time)
@@ -214,7 +214,7 @@ class SavedWritesApplicator(object):
         :keyword timeout: Maximum waiting time.
         :type timeout: `int`
         """
-        start_time = time.time()
+        start_time = monotonic_time()
         half_time = None
         deadline_time = None
         if timeout is not None:
@@ -231,7 +231,7 @@ class SavedWritesApplicator(object):
                         continue
                     queue_size = shard_queue.qsize()
                     if queue_size > UPDATE_NEW_SHARD_BUFFER_SIZE / 2:
-                        if half_time is not None and time.time() > half_time:
+                        if half_time is not None and monotonic_time() > half_time:
                             self.logger.info(
                                 "The beanstalkd queue %s is almost empty (%d jobs) "
                                 "but the shard %s's queue is too full (%d jobs)",
@@ -245,7 +245,7 @@ class SavedWritesApplicator(object):
                     return
 
             # Check if the timeout has not expired
-            if deadline_time is not None and time.time() > deadline_time:
+            if deadline_time is not None and monotonic_time() > deadline_time:
                 raise OioTimeout(
                     f"After more than {timeout} seconds, the queues are still not "
                     f"nearly empty ({remaining_jobs} jobs in the beanstalkd tube "
@@ -271,13 +271,13 @@ class SavedWritesApplicator(object):
             shard_thread = new_shard.get("thread")
             if shard_thread is not None:
                 all_threads.append(shard_thread)
-        start_time = time.time()
+        start_time = monotonic_time()
         while True:
             if all((thread.dead for thread in all_threads)):
                 break
 
             # Check if the timeout has not expired
-            if time.time() - start_time > timeout:
+            if monotonic_time() - start_time > timeout:
                 for thread in all_threads:
                     thread.kill()
                 break
@@ -839,7 +839,7 @@ class ContainerSharding(ProxyClient):
         # the CID will be used to attempt to delete this new shard.
         shard["cid"] = cid_from_name(shard_account, shard_container)
 
-        deadline = time.time() + self.create_shard_timeout
+        deadline = monotonic_time() + self.create_shard_timeout
         params = self._make_params(
             account=shard_account, reference=shard_container, **kwargs
         )
@@ -861,7 +861,7 @@ class ContainerSharding(ProxyClient):
                 from_multi_responses(data)
                 break
             except Exception as exc:
-                if time.time() > deadline:
+                if monotonic_time() > deadline:
                     self.logger.warning(
                         "Some peers of the new shard %s do not yet have "
                         "the database, but we can try to continue: %s",
@@ -886,7 +886,7 @@ class ContainerSharding(ProxyClient):
                 from_multi_responses(election["peers"], excepted_status=(200, 303))
                 break
             except Exception as exc:
-                if time.time() > deadline:
+                if monotonic_time() > deadline:
                     self.logger.warning(
                         "Election not established for new shard %s, "
                         "but we can try to continue: %s",
