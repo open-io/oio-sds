@@ -908,7 +908,7 @@ class ContainerSharding(ProxyClient):
         if root_cid != root_cid_ or not self._shards_equal(shard, shard_):
             raise OioException("New shard is malformed")
 
-    def _merge_shards(self, smaller_shard, bigger_shard, **kwargs):
+    def _merge_shards(self, smaller_shard, bigger_shard, attempts=3, **kwargs):
         params = self._make_params(cid=bigger_shard["cid"], **kwargs)
         formatted_smaller_shard = self._format_shard(smaller_shard, **kwargs)
         metadata = formatted_smaller_shard.get("metadata")
@@ -919,11 +919,37 @@ class ContainerSharding(ProxyClient):
         formatted_smaller_shard["metadata"] = metadata
         truncated = True
         while truncated:
-            resp, body = self._request(
-                "POST", "/merge", params=params, json=formatted_smaller_shard, **kwargs
-            )
-            if resp.status != 204:
-                raise exceptions.from_response(resp, body)
+            for i in range(attempts):
+                try:
+                    resp, body = self._request(
+                        "POST",
+                        "/merge",
+                        params=params,
+                        json=formatted_smaller_shard,
+                        **kwargs,
+                    )
+                    if resp.status != 204:
+                        raise exceptions.from_response(resp, body)
+                    break
+                except (OioTimeout, ServiceBusy, DeadlineReached) as exc:
+                    if i >= attempts - 1:
+                        raise
+                    # If the request was still running in the background, the next
+                    # attempt might return a BadRequest due to the state change.
+                    # For now, we can consider this extremely unlikely and not seek
+                    # to address it at this time.
+                    self.logger.warning(
+                        "Failed to merge the containers (bigger=%s smaller=%s), "
+                        "the previous request probably failed due "
+                        "to too many (customer) requests on the bigger container, "
+                        "retrying with urgent mode...: %s",
+                        bigger_shard["cid"],
+                        smaller_shard["cid"],
+                        exc,
+                    )
+                    params["urgent"] = 1
+            # The following requests should not disturb the client requests
+            params.pop("urgent", None)
             truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
 
     def _update_new_shard(self, new_shard, queries, **kwargs):
