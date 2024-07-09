@@ -63,6 +63,9 @@ from oio.directory.admin import AdminClient
 from oio.event.beanstalk import Beanstalk, ResponseError
 
 
+UPDATE_NEW_SHARD_BUFFER_SIZE = 1000
+
+
 class SavedWritesApplicator(object):
     def __init__(
         self, sharding_client, parent_shard, new_shards, logger=None, **kwargs
@@ -93,12 +96,12 @@ class SavedWritesApplicator(object):
         self.flush_queries = False
         self.running = True
 
-    def _update_new_shard(self, new_shard, buffer_size=1000, **kwargs):
+    def _update_new_shard(self, new_shard, **kwargs):
         queue = new_shard["queue"]
         last_queries = False
         buffer = list()
         while True:
-            max_remaining = buffer_size
+            max_remaining = UPDATE_NEW_SHARD_BUFFER_SIZE
             try:
                 queries = queue.get(block=False)
                 if queries is None:
@@ -114,8 +117,8 @@ class SavedWritesApplicator(object):
                     continue
 
             while buffer and len(buffer) >= max_remaining:
-                queries_to_sent = buffer[:buffer_size]
-                buffer = buffer[buffer_size:]
+                queries_to_sent = buffer[:UPDATE_NEW_SHARD_BUFFER_SIZE]
+                buffer = buffer[UPDATE_NEW_SHARD_BUFFER_SIZE:]
                 self.sharding_client._update_new_shard(
                     new_shard, queries_to_sent, **kwargs
                 )
@@ -191,24 +194,23 @@ class SavedWritesApplicator(object):
         to be emptied very soon.
         """
         if self.queue_is_empty:
-            return True
-        if not relaxing_time:
-            return False
+            return True, 0
+        if relaxing_time is None:
+            return False, None
         if not self._total_jobs:
-            return False
+            # No events have been processed yet
+            return False, None
         now = time.time()
-        if relaxing_time is not None and now > relaxing_time:
+        if now > relaxing_time:
             remaining_jobs = self.beanstalk.stats_tube(self.tube)["current-jobs-ready"]
             average_speed = self._total_jobs / (now - self._fetch_start_time)
-            return remaining_jobs / average_speed < 0.1
-        return False
+            return remaining_jobs / average_speed < 0.1, remaining_jobs
+        return False, None
 
-    def wait_until_queue_is_almost_empty(self, limit=500, timeout=30, **kwargs):
+    def wait_until_queue_is_almost_empty(self, timeout=30, **kwargs):
         """
         Check if the receive queue is empty
         and if the send queues are almost empty.
-        :keyword limit: Limit at which send queues are almost empty.
-        :type limit: `int`
         :keyword timeout: Maximum waiting time.
         :type timeout: `int`
         """
@@ -219,10 +221,25 @@ class SavedWritesApplicator(object):
             half_time = start_time + (timeout / 2)
             deadline_time = start_time + timeout
         while True:
-            if self._beanstalk_queue_is_almost_empty(relaxing_time=half_time, **kwargs):
+            is_almost_empty, remaining_jobs = self._beanstalk_queue_is_almost_empty(
+                relaxing_time=half_time, **kwargs
+            )
+            if is_almost_empty:
                 for new_shard in self.new_shards:
                     shard_queue = new_shard.get("queue")
-                    if shard_queue is not None and shard_queue.qsize() > limit:
+                    if shard_queue is None:
+                        continue
+                    queue_size = shard_queue.qsize()
+                    if queue_size > UPDATE_NEW_SHARD_BUFFER_SIZE / 2:
+                        if half_time is not None and time.time() > half_time:
+                            self.logger.info(
+                                "The beanstalkd queue %s is almost empty (%d jobs) "
+                                "but the shard %s's queue is too full (%d jobs)",
+                                self.tube,
+                                remaining_jobs,
+                                new_shard["cid"],
+                                queue_size,
+                            )
                         break
                 else:
                     return
@@ -230,8 +247,9 @@ class SavedWritesApplicator(object):
             # Check if the timeout has not expired
             if deadline_time is not None and time.time() > deadline_time:
                 raise OioTimeout(
-                    "After more than %d seconds, the queue is still not nearly empty"
-                    % timeout
+                    f"After more than {timeout} seconds, the queues are still not "
+                    f"nearly empty ({remaining_jobs} jobs in the beanstalkd tube "
+                    f"{self.tube})"
                 )
 
             # In the meantime, let the other threads run
