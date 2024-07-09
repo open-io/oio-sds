@@ -32,6 +32,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"lukechampine.com/blake3"
@@ -409,9 +410,19 @@ func (rr *rawxRequest) checkChunk() {
 			}
 		}
 		if err != nil {
-			LogRequestDebug(rr, msgErrorAction("hash computation", err))
-			rr.replyError("", err)
-			return
+			if err == syscall.EIO {
+				// This special case is not in the main error handler, because
+				// StatusPreconditionFailed only makes sense when verifying
+				// chunk checksum, and it means "the checksum" does not match.
+				// In case of "Input/output error", we consider the chunk is
+				// corrupt, and we treat it the same way as above.
+				LogRequestError(rr, msgErrorAction("hash computation", err))
+				rr.replyCode(http.StatusPreconditionFailed)
+			} else {
+				// An error is logged if we provide an "action" (1st param)
+				rr.replyError("hash computation", err)
+				return
+			}
 		}
 	}
 
