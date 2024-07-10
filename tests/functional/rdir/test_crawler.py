@@ -17,7 +17,6 @@ import os
 import random
 from os.path import basename, exists, isdir, splitext, join, isfile
 from oio.common.utils import cid_from_name, request_id
-from oio.container.sharding import ContainerSharding
 from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
 from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx
 from oio.event.evob import EventTypes
@@ -222,8 +221,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
 
         # Shard the container before running the test. We don't really care
         # about the shard bounds since we will upload only one object.
-        container_sharding = ContainerSharding(self.conf)
-        container_sharding.replace_shard(
+        self.container_sharding.replace_shard(
             self.account,
             container,
             [
@@ -235,7 +233,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         try:
             return self._test_rdir_crawler_m_chunks(container, object_name)
         finally:
-            container_sharding.clean_container(self.account, container)
+            self.container_sharding.clean_container(self.account, container)
 
     def test_rdir_crawler_check_marker_creation(self):
         """Check if a marker is created as expected"""

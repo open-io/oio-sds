@@ -21,7 +21,6 @@ from tempfile import mkstemp
 from oio import ObjectStorageApi
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import cid_from_name
-from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase
 from tests.utils import random_str
@@ -200,19 +199,18 @@ class ItemRebuildTest(CliTestCase):
                 self.account, self.container, obj_name=f"~{i}", data="test_item_rebuild"
             )
         # Split the container into 2 shards
-        sharder = ContainerSharding(self.conf, pool_manager=self.http_pool)
         test_shards = [
             {"index": 0, "lower": "", "upper": "~1"},
             {"index": 1, "lower": "~1", "upper": ""},
         ]
-        new_shards = sharder.format_shards(test_shards, are_new=True)
-        modified = sharder.replace_shard(
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
             self.account, self.container, new_shards, enable=True
         )
         self.assertTrue(modified)
 
         # Find the name of the shard our test object is in
-        shards = list(sharder.show_shards(self.account, self.container))
+        shards = list(self.container_sharding.show_shards(self.account, self.container))
         shard_account, shard_container = self.storage.resolve_cid(shards[0]["cid"])
 
         # Delete first chunk

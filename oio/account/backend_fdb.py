@@ -29,6 +29,7 @@ from oio.common.constants import (
     BUCKET_PROP_RATELIMIT,
     MULTIUPLOAD_SUFFIX,
     SHARDING_ACCOUNT_PREFIX,
+    MULTIUPLOAD_SUFFIX,
 )
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ServiceBusy
