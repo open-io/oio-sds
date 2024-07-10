@@ -16,13 +16,14 @@
 
 from oio.common.green import GreenPool
 
-from six import iteritems
 import os
 from logging import getLogger
 from sys import stdin
 
 from oio.common.json import json
 from oio.cli import Command, Lister, ShowOne
+from oio.common.constants import HTTP_CONTENT_TYPE_DELETED
+from oio.common.easy_value import boolean_value
 from oio.common.exceptions import CommandError
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
@@ -414,7 +415,7 @@ class ShowObject(ObjectCommandMixin, ShowOne):
         cid = parsed_args.cid
         if parsed_args.auto:
             container = self.flatns_manager(obj)
-        data = self.app.client_manager.storage.object_show(
+        data = self.app.client_manager.storage.object_get_properties(
             account, container, obj, version=parsed_args.object_version, cid=cid
         )
         info = {"account": account, "container": container, "object": obj}
@@ -431,7 +432,10 @@ class ShowObject(ObjectCommandMixin, ShowOne):
         }
         for key0, key1 in conv.items():
             info[key0] = data.get(key1, "n/a")
-        for k, v in iteritems(data["properties"]):
+        if boolean_value(data.get("deleted"), False):
+            info["mime-type"] = HTTP_CONTENT_TYPE_DELETED
+            info["size"] = "deleted"
+        for k, v in data["properties"].items():
             info["meta." + k] = v
         return list(zip(*sorted(info.items())))
 

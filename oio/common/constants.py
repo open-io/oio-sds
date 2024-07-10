@@ -234,5 +234,6 @@ M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
 
 # HTTP Content-Type
 HTTP_CONTENT_TYPE_BINARY = "application/octet-stream"
+HTTP_CONTENT_TYPE_DELETED = "application/x-deleted"
 HTTP_CONTENT_TYPE_JSON = "application/json"
 HTTP_CONTENT_TYPE_TEXT = "text/plain"

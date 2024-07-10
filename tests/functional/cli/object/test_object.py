@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@
 import os
 import tempfile
 import uuid
+from oio.common.constants import HTTP_CONTENT_TYPE_DELETED, M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import true_value
 from oio.common.utils import get_hasher
 from tests.functional.cli import CliTestCase, CommandFailed
@@ -598,3 +599,30 @@ class ObjectTest(CliTestCase):
             f.write(test_content)
             f.flush()
             self._test_obj(f.name, test_content, "tls-" + random_str(6), with_tls=True)
+
+    def test_object_show_delete_marker(self):
+        account = self.account_from_env()
+        cname = f"test-show-delete-marker-{random_str(3)}"
+        sys_props = {
+            M2_PROP_VERSIONING_POLICY: "-1",
+        }
+        self.storage.container_create(account, cname, system=sys_props)
+        self.clean_later(cname, account)
+        _, _, _, _obj_meta = self.storage.object_create_ext(
+            account,
+            cname,
+            obj_name=cname,
+            data=cname.encode("utf-8"),
+        )
+        dm_created, dm_vers = self.storage.object_delete(
+            account,
+            cname,
+            cname,
+        )
+        self.assertTrue(dm_created, "No delete marker created")
+
+        output = self.openio(f"object show -f json {cname} {cname}")
+        output = self.json_loads(output)
+        self.assertEqual(output["version"], dm_vers)
+        self.assertEqual(output["size"], "deleted")
+        self.assertEqual(output["mime-type"], HTTP_CONTENT_TYPE_DELETED)
