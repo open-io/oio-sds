@@ -225,6 +225,10 @@ class OioProtocolError(OioNetworkException):
     pass
 
 
+class OioUnhealthyKafkaClusterError(OioNetworkException):
+    pass
+
+
 class OioTimeout(OioNetworkException):
     pass
 

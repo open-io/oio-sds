@@ -26,8 +26,12 @@ from confluent_kafka import (
 )
 from oio.api.base import HttpApi
 from oio.common.configuration import load_namespace_conf
-from oio.common.easy_value import int_value
-from oio.common.exceptions import OioException, ServiceBusy
+from oio.common.easy_value import int_value, float_value
+from oio.common.exceptions import (
+    OioException,
+    OioUnhealthyKafkaClusterError,
+    ServiceBusy,
+)
 from oio.common.utils import rotate_list
 from oio.event.evob import EventTypes
 
@@ -301,6 +305,53 @@ class KafkaMetricsClient(HttpApi):
             if topic.startswith(topic_prefix):
                 lags.append(lag)
         return max(lags)
+
+
+class KafkaClusterHealthCheckerMixin:
+    def __init__(self, conf, pool_manager=None):
+        self.kafka_metrics_client = KafkaMetricsClient(
+            self.conf, pool_manager=pool_manager
+        )
+        self._lag_threshold = int_value(conf.get("max_lag_threshold"), -1)
+        self._availailable_space_threshold = float_value(
+            conf.get("available_space_percent_threshold"), -1.0
+        )
+
+    def check_cluster_health(self, topics=None, topic_prefix=None):
+        # Validate cluster status
+        status = self.kafka_metrics_client.cluster_space_status
+        if status != KafkaClusterSpaceSatus.OK:
+            raise OioUnhealthyKafkaClusterError(f"Status is not OK: {status}")
+
+        if self._availailable_space_threshold >= 0.0:
+            # Validate available space
+            available_space_percent = (
+                self.kafka_metrics_client.cluster_free_space
+                / self.kafka_metrics_client.cluster_total_space
+            ) * 100.0
+            if available_space_percent < self._availailable_space_threshold:
+                raise OioUnhealthyKafkaClusterError(
+                    f"Available space too low ({available_space_percent:.2%} < "
+                    f"{self._availailable_space_threshold:.2%})"
+                )
+
+        if self._lag_threshold != -1:
+            # Validate max lag
+            if topics is not None:
+                for topic in topics:
+                    lag = self.kafka_metrics_client.get_topic_max_lag(topic)
+                    if lag > self._lag_threshold:
+                        raise OioUnhealthyKafkaClusterError(
+                            f"Topic '{topic}' lag is too high({lag:.0f} > "
+                            f"{self._lag_threshold})"
+                        )
+            if topic_prefix is not None:
+                max_lag = self.kafka_metrics_client.get_topics_max_lag(topic_prefix)
+                if max_lag > self._lag_threshold:
+                    raise OioUnhealthyKafkaClusterError(
+                        f"Topics starting with '{topic_prefix}' lag is too high "
+                        f"({max_lag:.0f} > {self._lag_threshold})"
+                    )
 
 
 class KafkaClient:
