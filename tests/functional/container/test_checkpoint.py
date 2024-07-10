@@ -25,7 +25,6 @@ from tests.utils import BaseTestCase, random_str
 
 from oio.common.exceptions import BadRequest, NotFound, NoSuchContainer, NoSuchAccount
 from oio.common.utils import cid_from_name, request_id
-from oio.container.sharding import ContainerSharding
 
 
 class TestCheckpointContainer(BaseTestCase):
@@ -44,7 +43,6 @@ class TestCheckpointContainer(BaseTestCase):
         super().setUp()
         self.api = self.storage
         self.objects = []
-        self.container_sharding = ContainerSharding(self.conf)
         self.account = f"lifecycle-acct-{random_str(4)}"
         self.container = f"lifecycle-ct-{random_str(4)}"
         self._create_container()

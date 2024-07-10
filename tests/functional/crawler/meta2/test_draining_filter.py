@@ -20,7 +20,6 @@ from unittest.mock import patch
 from tests.utils import BaseTestCase, random_str
 
 from oio.common.utils import cid_from_name, request_id
-from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.draining import Draining
 from oio.event.evob import EventTypes
 from oio.common.constants import (
@@ -72,7 +71,6 @@ class TestDrainingFilter(BaseTestCase):
         self.created = []
         self.containers = []
 
-        self.container_sharding = ContainerSharding(self.conf)
         self.app_env = dict()
         self.app_env["api"] = self.storage
         self.app = FilterApp(self.app_env)

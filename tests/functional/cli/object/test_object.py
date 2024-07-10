@@ -439,8 +439,8 @@ class ObjectTest(CliTestCase):
             env=env,
         )
         listing = self.json_loads(output)
-        to_clean = {(env.get("OIO_ACCOUNT"), x["Name"]) for x in listing}
-        self._containers_to_clean.update(to_clean)
+        to_clean = [(env.get("OIO_ACCOUNT"), x["Name"]) for x in listing]
+        self._containers_to_clean.extend(to_clean)
 
     def test_autocontainer_object_listing(self):
         env = dict(os.environ)
