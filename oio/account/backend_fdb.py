@@ -28,6 +28,7 @@ from oio.common.constants import (
     ACCOUNT_BETA_FEATURE_PREFIX,
     BUCKET_PROP_RATELIMIT,
     SHARDING_ACCOUNT_PREFIX,
+    MULTIUPLOAD_SUFFIX,
 )
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ServiceBusy
@@ -37,7 +38,6 @@ fdb.api_version(CommonFdb.FDB_VERSION)
 
 LAST_UNICODE_CHAR = "\U0010fffd"
 
-MULTIUPLOAD_SUFFIX = "+segments"
 BYTES_FIELD = "bytes"
 OBJECTS_FIELD = "objects"
 OBJECTS_S3_FIELD = OBJECTS_FIELD + "-s3"

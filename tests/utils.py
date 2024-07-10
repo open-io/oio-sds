@@ -238,7 +238,7 @@ class CommonTestCase(testtools.TestCase):
 
         group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
         cls._cls_kafka_consumer = KafkaConsumer(
-            DEFAULT_ENDPOINT,
+            os.getenv("KAFKA_ENDPOINT", DEFAULT_ENDPOINT),
             [DEFAULT_PRESERVED_TOPIC],
             group_id,
             logger=cls._cls_logger,
@@ -387,9 +387,8 @@ class CommonTestCase(testtools.TestCase):
         return self._beanstalkd0
 
     def get_kafka_consumer(self, topics=None, group_id=DEFAULT_GROUP_ID_TEST):
-        endpoint = DEFAULT_ENDPOINT
         kafka_consumer = KafkaConsumer(
-            endpoint,
+            os.getenv("KAFKA_ENDPOINT", DEFAULT_ENDPOINT),
             topics,
             group_id,
             logger=self.logger,
