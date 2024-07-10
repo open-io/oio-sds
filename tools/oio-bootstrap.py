@@ -1637,11 +1637,38 @@ pipeline = checkpoint
 use = egg:oio#checkpoint_creator
 topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
+checkpoint_prefix = lifecycle
 
 [filter:log]
 use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
-checkpoint_prefix = lifecycle
+"""
+
+template_event_agent_mpu_parts_handlers = """
+[handler:storage.manifest.deleted]
+pipeline = log mpu_cleaner ${PRESERVE}
+
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+# Note that this value should not be higher because deleting too many objects at
+# the same time is a high consumer.
+object_deletion_concurrency = 100
+retry_delay = 60
+# Delay when there is some remaining parts for this MPU.
+# 0 means the event will be emitted in the same topic again.
+retry_delay_remaining_parts = 0
+# Event will be retried if the manifest still exists until this timeout is reached.
+timeout_manifest_still_exists = 900
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_systemd_service_xcute_event_agent = """
@@ -3176,6 +3203,22 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to mpu-parts deletion
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-delete-mpu-parts",
+            url,
+            workers="1",
+            srv_type="event-agent-delete-mpu-parts",
+            group_id="event-agent-delete-mpu-parts",
+            template_handler=template_event_agent_mpu_parts_handlers,
+        )
+
+        # We need only one service
+        break
+
     # Xcute event-agents
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3314,6 +3357,7 @@ def generate(options):
         "oio",
         "oio-deadletter",
         "oio-delayed",
+        "oio-delete-mpu-parts",
         "oio-drained",
         "oio-lifecycle-checkpoint",
         "oio-preserved",

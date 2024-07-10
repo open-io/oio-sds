@@ -568,8 +568,9 @@ class KafkaBatchFeeder(
                         self._connect_producer()
                         if not self._producer:
                             raise SystemError("No producer available")
-
-                        if offset["delay"]:  # To retry later, send to delayed
+                        if offset["delay"] is not None:
+                            # To retry later, send to delayed if delay > 0.
+                            # Resend to the same topic otherwise.
                             self._producer.send(
                                 offset["topic"],
                                 offset["data"],
