@@ -1652,6 +1652,20 @@ use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
 """
 
+template_event_agent_lifecycle_checkpoint_handlers = """
+[handler:lifecycle.checkpoint]
+pipeline = checkpoint
+
+[filter:checkpoint]
+use = egg:oio#checkpoint_creator
+topic = oio-lifecycle-checkpoint
+checkpoint_prefix = lifecycle
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+"""
+
 template_event_agent_rebuilder_handlers = """
 [handler:storage.content.broken]
 pipeline = rebuild
@@ -1665,18 +1679,18 @@ use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
 """
 
-template_event_agent_lifecycle_checkpoint_handlers = """
-[handler:lifecycle.checkpoint]
-pipeline = checkpoint
+template_event_agent_mpu_parts_handlers = """
+[handler:storage.manifest.deleted]
+pipeline = log mpu_cleaner
 
-[filter:checkpoint]
-use = egg:oio#checkpoint_creator
-topic = oio-lifecycle-checkpoint
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+limit_listing = 100
+delay = 60
 
 [filter:log]
 use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
-checkpoint_prefix = lifecycle
 """
 
 template_systemd_service_xcute_event_agent = """
@@ -3224,6 +3238,22 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to mpu-parts deletion
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-delete-mpu-parts",
+            url,
+            workers="1",
+            group_id="event-agent-delete-mpu-parts",
+            template_handler=template_event_agent_mpu_parts_handlers,
+        )
+
+        # We need only one service
+        break
+
     # Xcute event-agent
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3363,6 +3393,7 @@ def generate(options):
         "oio",
         "oio-deadletter",
         "oio-delayed",
+        "oio-delete-mpu-parts",
         "oio-drained",
         "oio-lifecycle-checkpoint",
         "oio-preserved",
