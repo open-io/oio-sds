@@ -39,6 +39,7 @@ class HttpClient(object):
         key_file,
         connect_timeout,
         read_timeout,
+        pool_maxsize,
         logger,
         statsd,
         kmsapi_mock_server=False,
@@ -48,18 +49,25 @@ class HttpClient(object):
         self.endpoint = endpoint
         self.key_id = key_id
         self.statsd = statsd
-        if kmsapi_mock_server:
-            self.http = urllib3.PoolManager()
-        else:
-            self.http = urllib3.PoolManager(
-                cert_reqs="CERT_REQUIRED",
-                cert_file=cert_file,
-                key_file=key_file,
-                timeout=urllib3.Timeout(
-                    connect=connect_timeout,
-                    read=read_timeout,
-                ),
+        pool_manager_kwargs = {
+            "num_pools": 1,
+            "maxsize": pool_maxsize,
+            "retries": 0,
+            "block": True,
+        }
+        if not kmsapi_mock_server:
+            pool_manager_kwargs.update(
+                {
+                    "cert_reqs": "CERT_REQUIRED",
+                    "cert_file": cert_file,
+                    "key_file": key_file,
+                    "timeout": urllib3.Timeout(
+                        connect=connect_timeout,
+                        read=read_timeout,
+                    ),
+                }
             )
+        self.http = urllib3.PoolManager(**pool_manager_kwargs)
 
     def request(self, action, body, key_id=None):
         if key_id is None:
@@ -123,6 +131,7 @@ class KmsApiClient(object):
         key_file,
         connect_timeout,
         read_timeout,
+        pool_maxsize,
         logger,
         statsd,
         kmsapi_mock_server=False,
@@ -135,6 +144,7 @@ class KmsApiClient(object):
             key_file,
             connect_timeout,
             read_timeout,
+            pool_maxsize,
             logger,
             statsd,
             kmsapi_mock_server=kmsapi_mock_server,

@@ -270,6 +270,9 @@ class Account(WerkzeugApp):
             read_timeout = float_value(
                 self.conf.get(f"kmsapi_{domain}_read_timeout"), 1.0
             )
+            pool_maxsize = int_value(
+                self.conf.get(f"kmsapi_{domain}_pool_maxsize"), 128
+            )
             self.kms_api.add_client(
                 domain,
                 endpoint,
@@ -278,6 +281,7 @@ class Account(WerkzeugApp):
                 key_file,
                 connect_timeout,
                 read_timeout,
+                pool_maxsize,
                 self.logger,
                 self.statsd,
                 kmsapi_mock_server=kmsapi_mock_server,

@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -53,6 +53,7 @@ URLLIB3_POOLMANAGER_KWARGS = (
     "pool_maxsize",
     "max_retries",
     "backoff_factor",
+    "block",
     # passed directly to SafePoolManager's init
     "socket_options",
     "source_address",
@@ -83,6 +84,7 @@ def get_pool_manager(
     pool_maxsize=DEFAULT_POOLSIZE,
     max_retries=DEFAULT_RETRIES,
     backoff_factor=DEFAULT_BACKOFF,
+    block=False,
     **kwargs
 ):
     """
@@ -97,6 +99,11 @@ def get_pool_manager(
     :param backoff_factor: backoff factor to apply between attempts after
         second try
     :type backoff_factor: `float`
+    :param block: This means that maxsize does not determine the maximum number of
+        connections that can be open to a particular host, just the maximum number of
+        connections to keep in the pool. However, if you specify block=True then
+        there can be at most maxsize connections open to a particular host.
+    :type block: `bool`
 
     """
     if max_retries == DEFAULT_RETRIES:
@@ -105,14 +112,14 @@ def get_pool_manager(
         max_retries = urllib3.Retry(
             total=int(max_retries), backoff_factor=float(backoff_factor)
         )
-    kw = {k: v for k, v in kwargs.items() if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
+    kw = {k: v for k, v in kwargs.items() if k in URLLIB3_POOLMANAGER_KWARGS[5:]}
     pool_connections = int(pool_connections)
     pool_maxsize = int(pool_maxsize)
     return SafePoolManager(
         num_pools=pool_connections,
         maxsize=pool_maxsize,
         retries=max_retries,
-        block=False,
+        block=block,
         **kw
     )
 
