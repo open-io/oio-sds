@@ -16,6 +16,7 @@
 # License along with this library.
 
 from time import time as now
+from unittest.mock import patch
 from tests.utils import BaseTestCase, random_str
 
 from oio.common.utils import cid_from_name, request_id
@@ -30,6 +31,7 @@ from oio.common.constants import (
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
 )
+from oio.common.kafka import KafkaClusterHealthCheckerMixin
 
 
 def fake_cb(_status, _msg):
@@ -172,6 +174,7 @@ class TestDrainingFilter(BaseTestCase):
             cid = meta2db_env["cid"]
 
         conf = self.conf.copy()
+        conf["metrics_endpoints"] = "http://redpanda-metrics"
         if drain_limit:
             conf["drain_limit"] = drain_limit
         if drain_limit_per_pass:
@@ -197,9 +200,12 @@ class TestDrainingFilter(BaseTestCase):
         # Process the draining
         if not meta2db_env:
             meta2db_env = self._get_meta2db_env(cid)
-        for _ in range(nb_passes):
-            draining.process(meta2db_env, callback)
-            meta2db_env.pop("admin_table")
+        with patch.object(
+            KafkaClusterHealthCheckerMixin, "check_cluster_health", return_value=None
+        ):
+            for _ in range(nb_passes):
+                draining.process(meta2db_env, callback)
+                meta2db_env.pop("admin_table")
         self.assertEqual(self.expected_successes, draining.successes)
         self.assertEqual(self.expected_skipped, draining.skipped)
         self.assertEqual(self.expected_errors, draining.errors)

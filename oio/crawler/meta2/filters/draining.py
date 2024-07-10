@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,12 +22,14 @@ from oio.common.constants import (
     M2_PROP_SHARDS,
 )
 from oio.common.easy_value import boolean_value, int_value
+from oio.common.kafka import KafkaClusterHealthCheckerMixin, DEFAULT_DELETE_TOPIC_PREFIX
+from oio.common.exceptions import OioUnhealthyKafkaClusterError
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 
-class Draining(Filter):
+class Draining(Filter, KafkaClusterHealthCheckerMixin):
     """
     Trigger the draining for a given container.
     """
@@ -35,6 +37,15 @@ class Draining(Filter):
     NAME = "Draining"
     DEFAULT_DRAIN_LIMIT = 1000
     DEFAULT_DRAIN_LIMIT_PER_PASS = 100000
+
+    def __init__(self, app, conf, logger=None):
+        Filter.__init__(self, app, conf, logger=logger)
+        KafkaClusterHealthCheckerMixin.__init__(
+            self, conf, pool_manager=self.api.container.pool_manager
+        )
+        self.successes = 0
+        self.skipped = 0
+        self.errors = 0
 
     def init(self):
         self.api = self.app_env["api"]
@@ -50,13 +61,11 @@ class Draining(Filter):
                 "Drain limit should never be greater than the limit per pass"
             )
 
+        self.topic_prefix = self.conf.get("topic_prefix", DEFAULT_DELETE_TOPIC_PREFIX)
+
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
         )
-
-        self.successes = 0
-        self.skipped = 0
-        self.errors = 0
 
     def _process_draining(self, meta2db):
         self.logger.debug("Draining for the container (CID=%s)", meta2db.cid)
@@ -67,16 +76,24 @@ class Draining(Filter):
         nb_objects = 0
         try:
             while truncated and nb_objects + self.drain_limit <= self.limit_per_pass:
+                # Ensure cluster can absorb generated events
+                self.check_cluster_health(topic_prefix=self.topic_prefix)
                 resp = self.api.container_drain(
                     account, container, limit=self.drain_limit
                 )
                 truncated = boolean_value(resp.get("truncated"), False)
                 if truncated:
                     nb_objects = nb_objects + self.drain_limit
+        except OioUnhealthyKafkaClusterError as exc:
+            self.skipped += 1
+            resp = Meta2DBError(
+                meta2db=meta2db, body=f"Failed to drain container: {exc}"
+            )
+            return False, resp
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(
-                meta2db=meta2db, body="Failed to drain container: %s" % exc
+                meta2db=meta2db, body=f"Failed to drain container: {exc}"
             )
             return False, resp
 
@@ -99,7 +116,7 @@ class Draining(Filter):
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(
-                meta2db=meta2db, body="Failed to drain root container: %s" % exc
+                meta2db=meta2db, body=f"Failed to drain root container: {exc}"
             )
             return False, resp
 

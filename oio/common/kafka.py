@@ -335,23 +335,25 @@ class KafkaClusterHealthCheckerMixin:
                     f"{self._availailable_space_threshold:.2%})"
                 )
 
-        if self._lag_threshold != -1:
-            # Validate max lag
-            if topics is not None:
-                for topic in topics:
-                    lag = self.kafka_metrics_client.get_topic_max_lag(topic)
-                    if lag > self._lag_threshold:
-                        raise OioUnhealthyKafkaClusterError(
-                            f"Topic '{topic}' lag is too high({lag:.0f} > "
-                            f"{self._lag_threshold})"
-                        )
-            if topic_prefix is not None:
-                max_lag = self.kafka_metrics_client.get_topics_max_lag(topic_prefix)
-                if max_lag > self._lag_threshold:
+        if self._lag_threshold == -1:
+            return
+
+        # Validate max lag
+        if topics is not None:
+            for topic in topics:
+                lag = self.kafka_metrics_client.get_topic_max_lag(topic)
+                if lag > self._lag_threshold:
                     raise OioUnhealthyKafkaClusterError(
-                        f"Topics starting with '{topic_prefix}' lag is too high "
-                        f"({max_lag:.0f} > {self._lag_threshold})"
+                        f"Topic '{topic}' lag is too high({lag:.0f} > "
+                        f"{self._lag_threshold})"
                     )
+        if topic_prefix is not None:
+            max_lag = self.kafka_metrics_client.get_topics_max_lag(topic_prefix)
+            if max_lag > self._lag_threshold:
+                raise OioUnhealthyKafkaClusterError(
+                    f"Topics starting with '{topic_prefix}' lag is too high "
+                    f"({max_lag:.0f} > {self._lag_threshold})"
+                )
 
 
 class KafkaClient:

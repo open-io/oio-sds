@@ -394,6 +394,8 @@ use = egg:oio#check_integrity
 use = egg:oio#draining
 drain_limit = 1000
 drain_limit_per_pass = 100000
+metrics_endpoints = ${KAFKA_METRICS_URL}
+topic_prefix = oio-delete-
 
 [filter:logger]
 use = egg:oio#logger
@@ -1958,11 +1960,13 @@ TLS_KEY_FILE = None
 HASH_WIDTH = "hash_width"
 HASH_DEPTH = "hash_depth"
 KAFKA_ENDPOINT = "kafka_endpoint"
+KAFKA_METRICS_ENDPOINTS = "kafka_metrics_endpoints"
 
 defaults = {
     "NS": "OPENIO",
     SVC_HOSTS: ("127.0.0.1",),
     KAFKA_ENDPOINT: "127.0.0.1:19092",
+    KAFKA_METRICS_ENDPOINTS: "127.0.0.1:19644",
     "ZK": "127.0.0.1:2181",
     "NB_CS": 1,
     "NB_M0": 1,
@@ -2448,6 +2452,19 @@ def generate(options):
     kafka_cnxstring = ";".join((f"kafka://{endpoint}" for endpoint in endpoints))
     ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
     ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
+    # Kafka metrics
+    metrics_endpoints = (
+        options["kafka"]["metrics_endpoints"] or defaults[KAFKA_METRICS_ENDPOINTS]
+    )
+    if isinstance(metrics_endpoints, str):
+        metrics_endpoints = [metrics_endpoints]
+    metrics_cnxstring = ";".join(metrics_endpoints)
+    ENV.update(
+        {
+            "METRICS_CNXSTRING": metrics_cnxstring,
+            "KAFKA_METRICS_URL": metrics_cnxstring,
+        }
+    )
 
     # For testing purposes, some events must go to the main queue
     if all_beanstalkd:
@@ -3539,7 +3556,7 @@ def main():
     opts[SHALLOW_COPY] = False
     opts["beanstalkd"] = {SVC_NB: None, SVC_HOSTS: None}
     opts["billing"] = {"amqp_url": "amqp://guest:guest@localhost:5672/"}
-    opts["kafka"] = {"endpoint": None}
+    opts["kafka"] = {"endpoint": None, "metrics_endpoints": None}
     opts["event-agent"] = {SVC_NB: None}
     opts["rebuilder"] = {SVC_NB: None}
 

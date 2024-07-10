@@ -95,15 +95,25 @@ use = egg:oio#draining
 # Drain limit for each call from the crawler to the meta2. It aims to limit
 # the number of draining events generated. Default to 1000.
 drain_limit = 1000
-# Drain limit for each pass/iteration of the crawler. It aims to limit the 
+# Drain limit for each pass/iteration of the crawler. It aims to limit the
 # meta2 usage and to smooth out the calls over time. Default to 100000.
 drain_limit_per_pass = 100000
+# List of endpoints to fetch Redpanda cluster metrics, semi column separated
+metrics_endpoints =
+# Topics prefix to watch
+topic_prefix = oio-delete-
+# Maximum lag allowed on topics (<0 to disable)
+max_lag_threshold =
+# Minimal available space allowed in percent (<0 to disable)
+available_space_percent_threshold = 40.0
+# Kafka metrics cache duration in seconds. Default to 10.
+cache_duration =
 
 [filter:verify_chunk_placement]
 # Identify misplaced chunks after meta2db scan and tag them with misplaced header.
 # This filter is launched by a second instance of meta2 crawler. The second meta2
-# instance is a oneshot service that we can launch manually to execute only 
-# verify_chunk_placement filter. 
+# instance is a oneshot service that we can launch manually to execute only
+# verify_chunk_placement filter.
 use = egg:oio#verify_chunk_placement
 # Maximum object scanned per second by the filter
 max_scanned_per_second  = 10000

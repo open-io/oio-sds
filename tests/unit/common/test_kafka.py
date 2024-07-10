@@ -149,7 +149,6 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
             side_effect=(ServiceBusy(), OioTimeout(""), (200, self.DEFAULT_RESPONSE)),
         ) as mock_request:
             self.assertEqual(0, client.get_topic_max_lag("oio"))
-            print(mock_request.call_args_list)
             self.assertListEqual(
                 [
                     unittest.mock.call("GET", f"{e}/public_metrics")
