@@ -1962,6 +1962,7 @@ class TestMeta2Contents(BaseTestCase):
 
         # Create a container
         self.storage.container_create(self.account, self.ref, reqid=reqid)
+        self.clean_later(self.ref)
 
         # Enable versioning on the container
         params = self.param_content(self.ref, self.ref)
@@ -2072,3 +2073,111 @@ class TestMeta2Contents(BaseTestCase):
                 found = True
                 break
         self.assertFalse(found)
+
+    def test_no_manifest_deleted_event(self):
+        self.ref = "test_no_manifest_deleted_event_" + random_str(8)
+        reqid = request_id()
+
+        # Create a container
+        self.storage.container_create(self.account, self.ref, reqid=reqid)
+        self.clean_later(self.ref)
+
+        # Create an object
+        self.storage.object_create_ext(
+            self.account,
+            self.ref,
+            obj_name=self.ref,
+            data=self.ref,
+            reqid=reqid,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_NEW,),
+        )
+        self.assertIsNotNone(event)
+
+        # Delete without slo_manifest=True: no manifest event created
+        reqid = request_id()
+        self.storage.object_delete(
+            self.account,
+            self.ref,
+            obj=self.ref,
+            reqid=reqid,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
+        )
+        self.assertIsNone(event)
+
+    def test_manifest_deleted_event(self):
+        self.ref = "test_manifest_deleted_event_" + random_str(8)
+        reqid = request_id()
+
+        # Create a container
+        self.storage.container_create(self.account, self.ref, reqid=reqid)
+        self.clean_later(self.ref)
+
+        # Create an object
+        self.storage.object_create_ext(
+            self.account,
+            self.ref,
+            obj_name=self.ref,
+            data=self.ref,
+            reqid=reqid,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_NEW,),
+        )
+        self.assertIsNotNone(event)
+
+        # Delete without upload_id (no event generated and object not deleted)
+        reqid = request_id()
+        self.assertRaises(
+            exc.BadRequest,
+            self.storage.object_delete,
+            self.account,
+            self.ref,
+            obj=self.ref,
+            reqid=reqid,
+            slo_manifest=True,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
+        )
+        self.assertIsNone(event)
+
+        # Add upload_id to obj (to fake a manifest)
+        reqid = request_id()
+        self.storage.object_set_properties(
+            self.account,
+            self.ref,
+            obj=self.ref,
+            properties={"x-object-sysmeta-s3api-upload-id": random_str(48)},
+            reqid=reqid,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_UPDATE,),
+        )
+        self.assertIsNotNone(event)
+
+        # Event should now be generated
+        reqid = request_id()
+        self.storage.object_delete(
+            self.account,
+            self.ref,
+            obj=self.ref,
+            reqid=reqid,
+            slo_manifest=True,
+        )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
+        )
+        self.assertIsNotNone(event)

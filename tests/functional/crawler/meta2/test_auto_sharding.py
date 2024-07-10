@@ -29,7 +29,6 @@ from oio.common.constants import (
 )
 from oio.common.utils import cid_from_name
 from oio.common.statsd import get_statsd
-from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.auto_sharding import (
     SHRINKING_COEF_LAST_SHARD,
     AutomaticSharding,
@@ -68,7 +67,6 @@ class TestAutoSharding(BaseTestCase):
     def setUp(self):
         super(TestAutoSharding, self).setUp()
         self.cname = f"test_meta2_crawler_{time.time()}"
-        self.container_sharding = ContainerSharding(self.conf)
         self.app_env = dict()
         self.app_env["api"] = self.storage
         self.conf["sharding_db_size"] = 1048576  # 1MB

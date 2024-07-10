@@ -120,8 +120,7 @@ class ReplicationRecoveryTest(CliTestCase):
                 "account": account,
                 "user": container_src,
             },
-            topics=[DEFAULT_REPLICATION_TOPIC],
-            timeout=60,
+            topic=DEFAULT_REPLICATION_TOPIC,
             origin="s3-replication-recovery",
         )
         self.assertIsNotNone(event)

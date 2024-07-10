@@ -240,3 +240,5 @@ HTTP_CONTENT_TYPE_BINARY = "application/octet-stream"
 HTTP_CONTENT_TYPE_DELETED = "application/x-deleted"
 HTTP_CONTENT_TYPE_JSON = "application/json"
 HTTP_CONTENT_TYPE_TEXT = "text/plain"
+
+MULTIUPLOAD_SUFFIX = "+segments"

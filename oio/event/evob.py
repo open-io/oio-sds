@@ -102,6 +102,7 @@ class EventTypes(object):
     CONTENT_NEW = "storage.content.new"
     CONTENT_REBUILT = "storage.content.rebuilt"
     DELAYED = "delayed"
+    MANIFEST_DELETED = "storage.manifest.deleted"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"

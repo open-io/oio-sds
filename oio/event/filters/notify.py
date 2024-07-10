@@ -163,10 +163,12 @@ class NotifyFilter(Filter):
             # to exceed the maximum size of the event (default: 65535)
             payload = env.copy()
             payload.pop("queue_connector", None)
-            payload["data"] = self.strip_event(payload["data"])
-            data = json.dumps(payload, separators=(",", ":"))  # compact encoding
+            data = payload.get("data")
+            if data:
+                payload["data"] = self.strip_event(data)
+            new_event = json.dumps(payload, separators=(",", ":"))  # compact encoding
             # If there is an error, do not continue
-            err_resp = self.send_event(event, data)
+            err_resp = self.send_event(event, new_event)
             if err_resp:
                 return err_resp(env, cb)
         return self.app(env, cb)

@@ -23,7 +23,6 @@ from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.utils import cid_from_name
 from oio.common.utils import request_id
 from oio.common.green import get_watchdog
-from oio.container.sharding import ContainerSharding
 from oio.content.factory import ContentFactory
 from oio.crawler.meta2.filters.verify_chunk_placement import (
     VerifyChunkPlacement,
@@ -80,7 +79,6 @@ class TestVerifyChunkPlacement(BaseTestCase):
         self.content_factory = ContentFactory(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
         )
-        self.container_sharding = ContainerSharding(self.conf)
         self.reqid = request_id()
         self.rawx_srv_list = self.conscience_client.all_services(
             service_type="rawx",

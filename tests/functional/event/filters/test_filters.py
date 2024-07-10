@@ -49,7 +49,6 @@ class TestContentRebuildFilter(BaseTestCase):
 
     def setUp(self):
         super(TestContentRebuildFilter, self).setUp()
-        self.gridconf = {"namespace": self.ns}
         self.container = "TestContentRebuildFilter%f" % time.time()
         self.ref = self.container
         self.container_client = self.storage.container
@@ -64,7 +63,7 @@ class TestContentRebuildFilter(BaseTestCase):
             app=_App, conf=self.conf, endpoint=self.ns_conf["event-agent"]
         )
         self.wait_for_score(("rawx", "meta2"), score_threshold=10, timeout=5.0)
-        self.objects_created = list()
+        self.objects_created = []
 
     def tearDown(self):
         for obj in self.objects_created:

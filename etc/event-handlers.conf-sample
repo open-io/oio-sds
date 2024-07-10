@@ -144,6 +144,20 @@ tube_EC = oio-delete-ec
 required_fields = destinations
 
 # -----------------------------------------------------------------
+# Retry events
+[filter:mpu_cleaner]
+use = egg:oio#mpu_cleaner
+# Note that this value should not be higher because deleting too many objects at
+# the same time is a high consumer.
+object_deletion_concurrency = 100
+retry_delay = 60
+# Delay when there is some remaining parts for this MPU.
+# 0 means the event will be emitted in the same topic again.
+retry_delay_remaining_parts = 0
+# Event will be retried if the manifest still exists until this timeout is reached.
+timeout_manifest_still_exists = 900
+
+# -----------------------------------------------------------------
 # Does nothing. You'd better not defining any filter.
 [filter:noop]
 use = egg:oio#noop

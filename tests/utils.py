@@ -32,7 +32,7 @@ import testtools
 from confluent_kafka import TopicPartition, OFFSET_END
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import REQID_HEADER, M2_PROP_CONTAINER_NAME
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time, get_watchdog, eventlet
@@ -250,6 +250,7 @@ class CommonTestCase(testtools.TestCase):
                 "auto.offset.reset": "latest",
             },
         )
+        cls._cls_kafka_consumers_by_topic = {}
         cls._consumers = [cls._cls_kafka_consumer]
 
     def setUp(self):
@@ -275,6 +276,7 @@ class CommonTestCase(testtools.TestCase):
         self._logger = None
         self._rdir_client = None
         self._storage_api = None
+        self._container_sharding = None
         self._watchdog = None
         self._bucket = None
         self._preserved_offset = None
@@ -285,7 +287,7 @@ class CommonTestCase(testtools.TestCase):
         self._ns_conf_backup = None
 
         # Set of containers to flush and remove at teardown
-        self._containers_to_clean = set()
+        self._containers_to_clean = []
         self._deregister_at_teardown = []
 
         self._assigned_partitions = []
@@ -335,8 +337,13 @@ class CommonTestCase(testtools.TestCase):
                 )
                 self.storage.container_flush(acct, ct, all_versions=True)
                 self.storage.container_delete(acct, ct)
-            except Exception as exc:
-                self.logger.info("Failed to clean container %s", exc)
+            except Exception:
+                # Maybe its a root container, flush is not possible, delete it
+                # with force=True.
+                try:
+                    self.storage.container_delete(acct, ct, force=True)
+                except Exception as exc:
+                    self.logger.info("Failed to clean container %s", exc)
 
         # Reset namespace configuration as it was before we mess with it
         if self._ns_conf != self._ns_conf_backup:
@@ -437,6 +444,18 @@ class CommonTestCase(testtools.TestCase):
         return self._storage_api
 
     @property
+    def container_sharding(self):
+        if self._container_sharding is None:
+            from oio.container.sharding import ContainerSharding
+
+            self._container_sharding = ContainerSharding(
+                self.conf,
+                logger=self.logger,
+                pool_manager=self.http_pool,
+            )
+        return self._container_sharding
+
+    @property
     def logger(self):
         return self._cls_logger
 
@@ -456,9 +475,16 @@ class CommonTestCase(testtools.TestCase):
             self._ns_conf_backup = dict(self._ns_conf)
         return self._ns_conf
 
-    def clean_later(self, container, account=None):
-        """Register a container to be cleaned at tearDown."""
-        self._containers_to_clean.add((account or self.account, container))
+    def clean_later(self, container, account=None, prepend=False):
+        """
+        Register a container to be cleaned at tearDown.
+        If prepend is true, container will be added at the start of the list otherwise
+        at the end.
+        """
+        if prepend:
+            self._containers_to_clean.insert(0, (account or self.account, container))
+        else:
+            self._containers_to_clean.append((account or self.account, container))
 
     def set_ns_opts(self, opts, remove=None):
         """
@@ -816,7 +842,8 @@ class BaseTestCase(CommonTestCase):
         fields=None,
         origin=None,
         timeout=30.0,
-        topics=None,
+        topic=None,
+        assignment_timeout=60.0,
         OffsetEventCap=5,
     ):
         """
@@ -828,9 +855,16 @@ class BaseTestCase(CommonTestCase):
         :param types: list of types of events the method should look for
         """
         kafka_consumer = self._cls_kafka_consumer
-        if topics is not None:
-            kafka_consumer = self.get_kafka_consumer(topics=topics)
-            self._assign_custom_consumer(timeout, OffsetEventCap, kafka_consumer)
+        if topic is not None:
+            kafka_consumer = self._cls_kafka_consumers_by_topic.get(topic)
+            if kafka_consumer is None:
+                kafka_consumer = self.get_kafka_consumer(topics=[topic])
+                self._assign_custom_consumer(
+                    assignment_timeout,
+                    OffsetEventCap,
+                    kafka_consumer,
+                    topic,
+                )
 
         def match_event(key, event):
             if types and event.event_type not in types:
@@ -895,7 +929,7 @@ class BaseTestCase(CommonTestCase):
             logging.warning("%s", err)
         return None
 
-    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer):
+    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer, topic):
         assigned_partitions = None
         now = time.time()
         deadline = now + timeout
@@ -919,6 +953,8 @@ class BaseTestCase(CommonTestCase):
                         part.topic, part.partition, high_offset - OffsetEventCap
                     )
                 )
+        self._cls_kafka_consumers_by_topic[topic] = kafka_consumer
+        self._consumers.append(kafka_consumer)
 
     def wait_until_empty(
         self,
@@ -965,3 +1001,37 @@ class BaseTestCase(CommonTestCase):
             )
         else:
             self.logger.debug("Chunk %s found in rdir: %s", chunk_url, rdir_entries)
+
+    def shard_container(self, container, account=None):
+        """
+        Shard a container and add all shards to the list of containers to clean later
+        (done by teardown method).
+        """
+        if not account:
+            account = self.account
+
+        objs = self.storage.object_list(account=account, container=container)["objects"]
+        mid_obj_name = objs[len(objs) // 2]["name"]
+        shards = [
+            {"index": 0, "lower": "", "upper": mid_obj_name},
+            {"index": 1, "lower": mid_obj_name, "upper": ""},
+        ]
+
+        format_shards = self.container_sharding.format_shards(shards, are_new=True)
+        modified = self.container_sharding.replace_shard(
+            account, container, format_shards, enable=True
+        )
+        self.assertTrue(modified)
+
+        # Update list to clean containers during teardown
+        new_shards = self.container_sharding.show_shards(account, container)
+        for shard in new_shards:
+            props = self.storage.container_get_properties(
+                account=None, container=None, cid=shard["cid"]
+            )
+            cname = props["system"][M2_PROP_CONTAINER_NAME]
+            self.clean_later(
+                container=cname,
+                account=f".shards_{self.account}",
+                prepend=True,
+            )

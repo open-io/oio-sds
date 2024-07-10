@@ -45,7 +45,6 @@ from oio.common.exceptions import (
 )
 from oio.common.green import eventlet
 from oio.common.utils import cid_from_name, request_id
-from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
 from tests.unit.api import FakeResponse
 from tests.utils import BaseTestCase
@@ -67,7 +66,6 @@ class TestSharding(BaseTestCase):
         super(TestSharding, self).setUp()
         self.cname = f"test_sharding_{time.time()}"
         self.created = {}
-        self.container_sharding = ContainerSharding(self.conf)
 
         self.versioning_enabled = False
         self.system = {}
