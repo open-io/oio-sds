@@ -3031,7 +3031,7 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     event_agents_target = register_target("event-agent", event_target)
-    xcute_agents_target = register_target("xcute-event-agent", event_target)
+    event_agents_delete_target = register_target("event-agent-delete", event_target)
 
     event_agent_bin = "oio-event-agent"
     event_agent_count = getint(options["event-agent"].get(SVC_NB), len(all_beanstalkd))
@@ -3054,6 +3054,7 @@ def generate(options):
         srv_type="event-agent",
         template_agent=template_event_agent,
         template_systemd=template_systemd_service_event_agent,
+        target=event_agents_target,
     ):
         env = subenv(
             {
@@ -3071,7 +3072,7 @@ def generate(options):
         register_service(
             env,
             template_systemd,
-            event_agents_target,
+            target,
             coverage_wrapper=(
                 shutil.which("coverage")
                 + " run --context "
@@ -3113,6 +3114,7 @@ def generate(options):
                     queue_type="per_service",
                     queue_ids=";".join(rawx_per_host[host]).lower(),
                     template_handler=template_event_agent_delete_handlers,
+                    target=event_agents_delete_target,
                 )
 
         break
