@@ -361,12 +361,14 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
                     self.logger.error(
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
                     )
-                self.reject_message(event, self.acknowledge_message, delay=delay)
+                self.reject_message(
+                    event, callback=self.acknowledge_message, delay=delay
+                )
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
-                self.reject_message(event, self.acknowledge_message)
+                self.reject_message(event, callback=self.acknowledge_message)
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
