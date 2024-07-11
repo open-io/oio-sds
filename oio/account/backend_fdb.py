@@ -175,6 +175,7 @@ class AccountBackendFdb(object):
         try:
             if self.db is None:
                 self.db = fdb.open(self.fdb_file, event_model=event_model)
+                self.db.options.set_transaction_retry_limit(self.fdb_max_retries)
         except Exception as exc:
             self.logger.error(
                 "can't open fdb file: %s exception %s", self.fdb_file, exc
@@ -235,6 +236,7 @@ class AccountBackendFdb(object):
         self.conf = conf
         self.logger = logger
         self.fdb_file = None
+        self.fdb_max_retries = int_value(self.conf.get("fdb_max_retries"), 4)
         self.autocreate = boolean_value(conf.get("autocreate"), True)
         self.time_window_clear_deleted = float_value(
             self.conf.get("time_window_clear_deleted"), 60.0
@@ -2320,6 +2322,8 @@ class AccountBackendFdb(object):
         while True:
             if transaction is None:
                 transaction = self.db.create_transaction()
+                # This method already ensures that there is progress with each attempt
+                transaction.options.set_retry_limit(-1)
             try:
                 start, stop = self._get_start_and_stop(
                     buckets_space, marker=next_marker

@@ -1776,6 +1776,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 fdb_file = ${CLUSTERFILE}
+fdb_max_retries = 4
 
 time_window_clear_deleted = 60
 allow_empty_policy_name = False

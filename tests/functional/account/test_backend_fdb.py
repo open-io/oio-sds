@@ -4306,6 +4306,10 @@ class TransactionGetRangeError:
             )
         return self
 
+    @property
+    def options(self):
+        return self.tr.options
+
     def get_range(self, *args, **kwargs) -> Generator:
         try:
             nb_readings, error_code = next(self.errors_sequence)
