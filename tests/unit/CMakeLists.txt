@@ -4,7 +4,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 set(COMMON oiocore oiosds ${GLIB2_LIBRARIES})
 
 if (NOT SDK_ONLY)
-set(ENLARGED ${COMMON} metautils ${RABBITMQ_LIBRARIES})
+set(ENLARGED ${COMMON} metautils)
 
 include_directories(BEFORE
 		${CMAKE_BINARY_DIR}/metautils/lib

@@ -68,10 +68,6 @@ _q_destroy(struct oio_events_queue_s *self)
 	oio_str_clean(&q->username);
 	oio_str_clean(&q->password);
 	oio_str_clean(&q->queue_name);
-	oio_str_clean(&q->routing_key);
-	oio_str_clean(&q->exchange_name);
-	oio_str_clean(&q->exchange_type);
-	g_strfreev(q->extra_args);
 	oio_events_queue_buffer_clean(&(q->buffer));
 	grid_single_rrd_destroy(q->event_send_count);
 	grid_single_rrd_destroy(q->event_send_time);

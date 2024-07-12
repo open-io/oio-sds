@@ -33,8 +33,6 @@ License along with this library.
 #include "oio_events_queue_fanout.h"
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_kafka.h"
-#include "oio_events_queue_rabbitmq.h"
-#include "rabbitmq.h"
 
 #define EVTQ_CALL(self,F) VTABLE_CALL(self,struct oio_events_queue_abstract_s*,F)
 
@@ -204,9 +202,6 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 		// Choose the right queue connector
 		if ((netloc = _has_prefix(queue_uri.path, BEANSTALKD_PREFIX))) {
 			err = oio_events_queue_factory__create_beanstalkd(
-					netloc, tube, out);
-		} else if ((netloc = _has_prefix(queue_uri.path, AMQP_PREFIX))) {
-			err = oio_events_queue_factory__create_rabbitmq(
 					netloc, tube, out);
 		} else if ((netloc = _has_prefix(queue_uri.path, KAFKA_PREFIX))) {
 			err = oio_events_queue_factory__create_kafka(netloc, tube, out);

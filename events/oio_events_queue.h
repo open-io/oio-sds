@@ -74,7 +74,7 @@ GString* oio_event__create_with_id(const char *type, struct oio_url_s *url,
 /* find the appropriate implementation of event queue for the configuration
  * given in 'cfg'.
  * As of today, only configuration URL prefixed with 'beanstalk://'
- * and 'amqp://' are accepted.
+ * and 'kafka://' are accepted.
  * 'tube' can be NULL if one is specified in the URL's query string.
  */
 GError * oio_events_queue_factory__create (const char *cfg, const char *tube,

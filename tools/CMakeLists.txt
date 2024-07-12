@@ -25,7 +25,7 @@ target_link_libraries(oio-tool
 	server hcresolve oioevents
 	sqliterepo sqlitereporemote
 	meta2v2utils
-	${RABBITMQ_LIBRARIES} ${GLIB2_LIBRARIES})
+	${GLIB2_LIBRARIES})
 
 add_executable(oio-file oio-file.c)
 bin_prefix(oio-file -file-tool)
