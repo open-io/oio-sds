@@ -42,7 +42,7 @@ oio_events_queue__destroy (struct oio_events_queue_s *self)
 	EVTQ_CALL(self,destroy)(self);
 }
 
-void
+gboolean
 oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
 {
 	EXTRA_ASSERT (msg != NULL);
@@ -62,7 +62,7 @@ oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
 	}
 }
 
-void
+gboolean
 oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 		gchar *key, gchar *msg)
 {
@@ -71,8 +71,8 @@ oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 			&& key && *key) {
 		EVTQ_CALL(self,send_overwritable)(self,key,msg);
 	} else {
-		EVTQ_CALL(self,send)(self,msg);
 		g_free(key);  // safe if key is NULL
+		EVTQ_CALL(self,send)(self,msg);
 	}
 }
 
