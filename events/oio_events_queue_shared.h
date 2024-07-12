@@ -84,8 +84,10 @@ gboolean _q_is_empty(struct _queue_with_endpoint_s *q);
 gboolean _q_is_running(struct _queue_with_endpoint_s *q);
 /** Does the queue reached the maximum pending events? */
 gboolean _q_is_stalled(struct oio_events_queue_s *self);
-void _q_send(struct oio_events_queue_s *self, gchar *msg);
-void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
+/** Returns TRUE if no error occurred, FALSE otherwise. */
+gboolean _q_send(struct oio_events_queue_s *self, gchar *msg);
+/** Returns TRUE if no error occurred, FALSE otherwise. */
+gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
 		gchar *msg);
 void _q_set_buffering(struct oio_events_queue_s *self, gint64 v);
 

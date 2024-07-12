@@ -26,7 +26,7 @@ struct oio_events_queue_s;
 void oio_events_queue__destroy (struct oio_events_queue_s *self);
 
 /* msg's ownership is given to the queue. msg has to be valid JSON */
-void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
+gboolean oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
 
 /* Flush any overwritable event with the specified key, disregarding
  * the buffer delay. `key` will be freed. */
@@ -36,7 +36,7 @@ void oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
 /* Send an overwritable event, which may itself overwrite any previous event
  * sent with the same key. The actual event sending will be delayed
  * a little. */
-void oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
+gboolean oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 		gchar *key, gchar *msg);
 
 /* Should emitters stop sending events?
