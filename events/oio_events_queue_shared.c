@@ -128,18 +128,20 @@ _q_is_stalled(struct oio_events_queue_s *self)
 	return ((guint)l) >= oio_events_common_max_pending;
 }
 
-void
+gboolean
 _q_send(struct oio_events_queue_s *self, gchar *msg)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	g_async_queue_push(q->queue, msg);
+	return TRUE;
 }
 
-void
+gboolean
 _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+	return TRUE;
 }
 
 void
