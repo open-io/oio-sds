@@ -31,7 +31,7 @@ License along with this library.
 	TRY++
 
 /* Holds data necessary to connect to an external queue service
- * with a TCP endpoint (Beanstalkd, RabbitMQ, etc.). */
+ * with a TCP endpoint (Beanstalkd, Kafka, etc.). */
 struct _queue_with_endpoint_s
 {
 	struct oio_events_queue_vtable_s *vtable;
@@ -41,11 +41,7 @@ struct _queue_with_endpoint_s
 	gchar *endpoint;
 	gchar *username;
 	gchar *password;
-	gchar *queue_name;  // tube for Beanstalkd, queue for RabbitMQ, topic for Kafka
-	gchar *routing_key;  // only for RabbitMQ
-	gchar *exchange_name;  // only for RabbitMQ
-	gchar *exchange_type;  // only for RabbitMQ
-	gchar **extra_args;  // only for RabbitMQ
+	gchar *queue_name;  // tube for Beanstalkd, topic for Kafka
 
 	gint64 pending_events;
 

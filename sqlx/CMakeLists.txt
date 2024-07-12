@@ -22,5 +22,5 @@ target_link_libraries(sqlxsrv
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils gridcluster
 		oioevents
-		${GLIB2_LIBRARIES} ${RABBITMQ_LIBRARIES})
+		${GLIB2_LIBRARIES})
 
