@@ -26,7 +26,7 @@ class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
     Get all information from the specified service.
 
     Works on all services using ASN.1 protocol except conscience
-    (meta0, meta1, meta2).
+    (meta0, meta1, meta2), plus rawx and rdir.
     """
 
     @property

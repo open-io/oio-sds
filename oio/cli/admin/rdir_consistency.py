@@ -15,7 +15,7 @@
 
 from collections import Counter
 import os
-from time import time
+from time import monotonic as time
 
 from oio.common.exceptions import ClientException, ServiceBusy
 from oio.blob.utils import chunk_id_to_path
@@ -30,7 +30,9 @@ class NotLocalError(Exception):
 
 class RdirConsistency(Lister):
     """
-    Check data consistency of rdirs attached to a volume.
+    Check data consistency of rdirs attached to a rawx volume.
+    For each rdir, list all chunks. And for each chunk, check it exists in rawx
+    and in meta2 database.
     """
 
     STATUS_UPDATE_COOLDOWN = 30
@@ -43,7 +45,7 @@ class RdirConsistency(Lister):
         self.__admin_client = self.app.client_manager.admin
         self.__validate_chunk_presence_fn = self.__validate_chunk_presence_remote
         self.__volume_local_path = None
-        self.__next_status_update = 0
+        self.__next_status_update = time() + self.STATUS_UPDATE_COOLDOWN
         self.__hash_depth = 0
         self.__hash_width = 0
 
@@ -59,8 +61,15 @@ class RdirConsistency(Lister):
             help="Maximum requests per second (default=0:disable)",
             default=0,
         )
-        parser.add_argument("--since-incident", action="store_true", default=False)
-        parser.add_argument("--local", action="store_true", default=False)
+        parser.add_argument(
+            "--local",
+            action="store_true",
+            default=False,
+            help=(
+                "Verify chunk presence by calling os.stat() instead of a HEAD request "
+                "(requires the command to be run from the same host as the volume)"
+            ),
+        )
         parser.add_argument(
             "volume",
             metavar="<volume_id>",
@@ -69,9 +78,9 @@ class RdirConsistency(Lister):
         )
         return parser
 
-    def __build_key(self, rebuilt, orphan):
+    def __build_key(self, present, orphan):
         return (
-            ("rebuilt" if rebuilt else "non-rebuilt")
+            ("present" if present else "missing")
             + "."
             + ("orphan" if orphan else "non-orphan")
         )
@@ -121,7 +130,7 @@ class RdirConsistency(Lister):
             self.logger.info(msg, *args)
             self.__next_status_update = now + self.STATUS_UPDATE_COOLDOWN
 
-    def _list_chunks(self, volume, rdir_hosts, rate_limit=0, incident=False):
+    def _list_chunks(self, volume, rdir_hosts, rate_limit=0):
         rdir_counters = {}
         volume_host = self.__rdir_client.cs.resolve_service_id("rawx", volume)
         run_time = 0
@@ -130,7 +139,7 @@ class RdirConsistency(Lister):
             self.logger.info("Fetching from rdir: %s", rdir_host)
             chunk_count = 0
             for container, chunk, value in self.__rdir_client.chunk_fetch(
-                volume, rebuild=incident, rdir_hosts=(rdir_host,)
+                volume, rdir_hosts=(rdir_host,)
             ):
                 run_time = ratelimit(run_time, rate_limit)
                 self.logger.debug(
@@ -141,11 +150,14 @@ class RdirConsistency(Lister):
                     container, value.get("path"), value.get("version")
                 )
                 self.logger.debug(
-                    "Chunk: %s orphan: %s rebuilt: %s", chunk, is_orphan, is_present
+                    "Chunk: %s, orphan: %s, present: %s", chunk, is_orphan, is_present
                 )
                 chunk_count += 1
                 self.__show_status(
-                    "Processed chunks for rdir %s = %s", rdir_host, chunk_count
+                    "Processed chunks for rdir %s: %s, counters: %s",
+                    rdir_host,
+                    chunk_count,
+                    counters,
                 )
                 key = self.__build_key(is_present, is_orphan)
                 counters[key] += 1

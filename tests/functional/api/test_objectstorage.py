@@ -2032,6 +2032,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         container = "container-" + random_str(6)
         snapshot = container + ".snapshot"
         self.api.container_create(self.account, container)
+        self.clean_later(container)
         test_object = "test_object_%d"
         for i in range(10):
             self.api.object_create(
