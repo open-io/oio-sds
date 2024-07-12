@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,8 +45,9 @@ License along with this library.
 	TRY++
 
 static void _q_destroy (struct oio_events_queue_s *self);
-static void _q_send (struct oio_events_queue_s *self, gchar *msg);
-static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
+static gboolean _q_send (struct oio_events_queue_s *self, gchar *msg);
+static gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
+		gchar *msg);
 static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
@@ -270,19 +271,21 @@ _q_destroy (struct oio_events_queue_s *self)
 	g_free (q);
 }
 
-static void
+static gboolean
 _q_send (struct oio_events_queue_s *self, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_FANOUT);
 	g_async_queue_push (q->queue, msg);
+	return TRUE;
 }
 
-static void
+static gboolean
 _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
 	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+	return TRUE;
 }
 
 static void
