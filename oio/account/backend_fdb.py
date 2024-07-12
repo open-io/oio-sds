@@ -386,12 +386,14 @@ class AccountBackendFdb(object):
             start = space[prefix].range().start
             stop = space[prefix + LAST_UNICODE_CHAR].range().stop
         if marker and (not prefix or marker >= prefix):
-            if not isinstance(marker, list):
-                marker = [marker]
+            if isinstance(marker, str):
+                marker = (marker,)
+            elif not isinstance(marker, (tuple, list)):
+                raise ValueError(f"Unexpected marker type: {type(marker)}")
             _space = space
             for m in marker:
                 _space = _space[m]
-            start = _space[marker].range().stop
+            start = _space.range().stop
         if end_marker and (not prefix or end_marker <= prefix + LAST_UNICODE_CHAR):
             stop = space[end_marker].range().start
         return start, stop
