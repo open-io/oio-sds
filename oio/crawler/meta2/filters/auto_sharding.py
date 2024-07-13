@@ -30,6 +30,12 @@ from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 
 
+# Coefficient from which the last shard can be merged into the root container.
+# Otherwise it is sharded to give 2 new shards which will necessarily have a size
+# greater than the shrinking threshold.
+SHRINKING_COEF_LAST_SHARD = 2.5
+
+
 class AutomaticSharding(Filter):
     """
     Trigger the sharding for given container.
@@ -145,16 +151,21 @@ class AutomaticSharding(Filter):
                 root_cid, shard = self.container_sharding.meta_to_shard(
                     {"system": meta2db.system}
                 )
-                if root_cid:
+                if root_cid:  # It's a shard
                     if meta2db_size < self.shrinking_db_size:
                         modified = self._shrink(meta2db, reqid=reqid)
-                    elif (
-                        not shard["lower"]
-                        and not shard["upper"]
-                        and meta2db_size < self.sharding_db_size
-                    ):
-                        # Merge the one and last shard in root ASAP
-                        modified = self._shrink(meta2db, reqid=reqid)
+                    elif not shard["lower"] and not shard["upper"]:
+                        # It's the one and last shard
+                        if (
+                            meta2db_size
+                            < SHRINKING_COEF_LAST_SHARD * self.shrinking_db_size
+                        ):
+                            # Merge the one and last shard in root ASAP
+                            modified = self._shrink(meta2db, reqid=reqid)
+                        else:
+                            # This last shard is still a little big.
+                            # It can be sharded without being immediately shrunk.
+                            modified = self._shard(meta2db, reqid=reqid)
                     else:
                         self.skipped += 1
 

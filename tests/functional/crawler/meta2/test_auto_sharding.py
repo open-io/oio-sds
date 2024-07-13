@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import math
 import random
 import time
 
@@ -27,7 +28,10 @@ from oio.common.constants import (
 from oio.common.utils import cid_from_name
 from oio.common.statsd import get_statsd
 from oio.container.sharding import ContainerSharding
-from oio.crawler.meta2.filters.auto_sharding import AutomaticSharding
+from oio.crawler.meta2.filters.auto_sharding import (
+    SHRINKING_COEF_LAST_SHARD,
+    AutomaticSharding,
+)
 from oio.crawler.meta2.meta2db import Meta2DB
 from tests.utils import BaseTestCase
 
@@ -198,8 +202,9 @@ class TestAutoSharding(BaseTestCase):
                 self.account, self.cname, obj_name=f"obj-{i}", data=b"data"
             )
         shards = self._find_and_replace(self.cname)
-        shard_cid = random.choice(shards)["cid"]
 
+        # 2 shards
+        shard_cid = random.choice(shards)["cid"]
         meta2db = self._get_meta2db(None, cid=shard_cid)
         # Simulate a large size to not trigger shrinking
         meta2db.file_status["st_size"] = self.conf["shrinking_db_size"] + 1
@@ -210,11 +215,11 @@ class TestAutoSharding(BaseTestCase):
                 self.assertEqual(1, value)
             else:
                 self.assertEqual(0, value)
-
         new_shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertListEqual(shards, new_shards)
         shards = new_shards
 
+        # 2 small shards
         self.auto_sharding.reset_stats()
         meta2db = self._get_meta2db(None, cid=shard_cid)
         self.auto_sharding.process(meta2db.env, _cb)
@@ -224,16 +229,31 @@ class TestAutoSharding(BaseTestCase):
                 self.assertEqual(1, value)
             else:
                 self.assertEqual(0, value)
-
         shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertEqual(1, len(shards))
-        shard_cid = shards[0]["cid"]
 
         # Last shard
+        shard_cid = shards[0]["cid"]
         self.auto_sharding.reset_stats()
         meta2db = self._get_meta2db(None, cid=shard_cid)
-        # Simulate a large size to trigger shrinking
-        meta2db.file_status["st_size"] = self.conf["sharding_db_size"] - 1
+        # Simulate a large size to trigger sharding (last shard is too big)
+        meta2db.file_status["st_size"] = int(
+            math.ceil(self.conf["shrinking_db_size"] * SHRINKING_COEF_LAST_SHARD)
+        )
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == "sharding_successes":
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+        shards = list(self.container_sharding.show_shards(self.account, self.cname))
+        self.assertEqual(2, len(shards))
+
+        # 2 small shards (again)
+        shard_cid = random.choice(shards)["cid"]
+        self.auto_sharding.reset_stats()
+        meta2db = self._get_meta2db(None, cid=shard_cid)
         self.auto_sharding.process(meta2db.env, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
@@ -241,7 +261,25 @@ class TestAutoSharding(BaseTestCase):
                 self.assertEqual(1, value)
             else:
                 self.assertEqual(0, value)
+        shards = list(self.container_sharding.show_shards(self.account, self.cname))
+        self.assertEqual(1, len(shards))
 
+        # Last shard
+        shard_cid = shards[0]["cid"]
+        self.auto_sharding.reset_stats()
+        meta2db = self._get_meta2db(None, cid=shard_cid)
+        # Simulate a large size to trigger shrinking (last shard is "small")
+        meta2db.file_status["st_size"] = (
+            int(math.ceil(self.conf["shrinking_db_size"] * SHRINKING_COEF_LAST_SHARD))
+            - 1
+        )
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == "shrinking_successes":
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
         shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertEqual(0, len(shards))
 
