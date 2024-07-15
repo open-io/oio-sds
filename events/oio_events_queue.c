@@ -33,6 +33,7 @@ License along with this library.
 #include "oio_events_queue_fanout.h"
 #include "oio_events_queue_beanstalkd.h"
 #include "oio_events_queue_kafka.h"
+#include "oio_events_queue_kafka_sync.h"
 
 #define EVTQ_CALL(self,F) VTABLE_CALL(self,struct oio_events_queue_abstract_s*,F)
 
@@ -143,7 +144,7 @@ _has_prefix (const char *cfg, const char *prefix)
 
 static GError *
 _parse_and_create_multi(const char *cfg, const char *tube,
-		struct oio_events_queue_s **out)
+		const gboolean sync, struct oio_events_queue_s **out)
 {
 	gchar **tokens = g_strsplit(cfg, OIO_CSV_SEP2, -1);
 	if (!tokens)
@@ -154,7 +155,7 @@ _parse_and_create_multi(const char *cfg, const char *tube,
 
 	for (gchar **token = tokens; *token && !err ;++token) {
 		struct oio_events_queue_s *sub = NULL;
-		if (!(err = oio_events_queue_factory__create(*token, tube, &sub)))
+		if (!(err = oio_events_queue_factory__create(*token, tube, sync, &sub)))
 			g_ptr_array_add(sub_queuev, sub);
 	}
 
@@ -182,7 +183,7 @@ _parse_and_create_multi(const char *cfg, const char *tube,
 
 GError *
 oio_events_queue_factory__create (const char *cfg, const char *tube,
-		struct oio_events_queue_s **out)
+		const gboolean sync, struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT (cfg != NULL);
 	EXTRA_ASSERT (out != NULL);
@@ -190,7 +191,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 
 	if (NULL != strchr(cfg, OIO_CSV_SEP2_C)) {
 		// Sharding over several endpoints
-		return _parse_and_create_multi(cfg, tube, out);
+		return _parse_and_create_multi(cfg, tube, sync, out);
 	} else {
 		GError *err = NULL;
 		const char *netloc;
@@ -204,7 +205,11 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 			err = oio_events_queue_factory__create_beanstalkd(
 					netloc, tube, out);
 		} else if ((netloc = _has_prefix(queue_uri.path, KAFKA_PREFIX))) {
-			err = oio_events_queue_factory__create_kafka(netloc, tube, out);
+			if (sync) {
+				err = oio_events_queue_factory__create_kafka_sync(netloc, tube, out);
+			} else {
+				err = oio_events_queue_factory__create_kafka(netloc, tube, out);
+			}
 		} else {
 			err = BADREQ("implementation not recognized: %s", cfg);
 		}

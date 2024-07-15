@@ -76,9 +76,10 @@ GString* oio_event__create_with_id(const char *type, struct oio_url_s *url,
  * As of today, only configuration URL prefixed with 'beanstalk://'
  * and 'kafka://' are accepted.
  * 'tube' can be NULL if one is specified in the URL's query string.
+ * sync option is only available for kafka endpoint (will be ignored otherwise).
  */
 GError * oio_events_queue_factory__create (const char *cfg, const char *tube,
-		struct oio_events_queue_s **out);
+		const gboolean sync, struct oio_events_queue_s **out);
 
 /* -------------------------------------------------------------------------- */
 

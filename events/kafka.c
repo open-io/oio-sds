@@ -25,6 +25,11 @@ License along with this library.
 #include <events/oio_events_queue.h>
 #include <events/events_variables.h>
 
+/* Used for sync message, the value means nothing but should not exist in
+ * "rd_kafka_resp_err_t" enum. */
+#define MAGICAL_SYNC -12345
+
+
 GLogLevelFlags log_level_mapping[] = {
 	GRID_LOGLVL_ERROR, // 0
 	GRID_LOGLVL_ERROR, // 1
@@ -78,12 +83,25 @@ void on_kafka_delivery_report(rd_kafka_t* rk UNUSED,
 	}
 }
 
+static void msg_delivered (
+       rd_kafka_t *rk UNUSED,
+       const rd_kafka_message_t *rkmessage,
+       void *opaque UNUSED)
+{
+       /* Update the magical value polled by the emitter of the message. */
+       if (rkmessage->_private) {
+               rd_kafka_resp_err_t *magic = (rd_kafka_resp_err_t *)rkmessage->_private;
+               *magic = rkmessage->err;
+       }
+}
+
 GError*
 kafka_create(const gchar *endpoint,
 		const gchar *topic,
 		void (*requeue_fn)(gchar*),
 		void (*drop_fn)(const gchar*, const gchar*),
-		struct kafka_s **out)
+		struct kafka_s **out,
+		const gboolean sync)
 {
 	g_assert_nonnull(out);
 	g_assert_nonnull(topic);
@@ -94,9 +112,13 @@ kafka_create(const gchar *endpoint,
 	out1.conf = rd_kafka_conf_new();
 	out1.producer = NULL;
 	out1.topic = g_strdup(topic);
-	out1.callback_ctx = g_malloc(sizeof(struct kafka_callback_ctx));
-	out1.callback_ctx->drop_func = drop_fn;
-	out1.callback_ctx->requeue_func = requeue_fn;
+	if (!sync) {
+		out1.callback_ctx = g_malloc(sizeof(struct kafka_callback_ctx));
+		out1.callback_ctx->drop_func = drop_fn;
+		out1.callback_ctx->requeue_func = requeue_fn;
+	} else {
+		out1.callback_ctx = NULL;
+	}
 
 	char errstr[512];
 	rd_kafka_resp_err_t kafka_err;
@@ -147,8 +169,8 @@ kafka_create(const gchar *endpoint,
 		}
 	}
 
-	// Install callbacks
-	if (!err) {
+	// Install callbacks for async mode
+	if (!err && !sync) {
 		// Logger redirection
 		rd_kafka_conf_set_log_cb(out1.conf, kafka_log_forward);
 		// Delivery report
@@ -156,10 +178,40 @@ kafka_create(const gchar *endpoint,
 		rd_kafka_conf_set_dr_msg_cb(out1.conf, on_kafka_delivery_report);
 	}
 
+	// Install callbacks for sync mode
+	if (!err && sync) {
+		/* To be able to send synchronous messages (with the async kafka api),
+		 * a little hack is necessary. A callback is added to the kafka context
+		 * and will update a value. As long as the value is not updated, we will
+		 * have to wait (by calling the "poll" function as callback are triggered
+		 * by it).
+		 * In this very special case, some tuning is made for optimization as
+		 * messages will always be sent one by one. */
+		rd_kafka_conf_set_dr_msg_cb(out1.conf, msg_delivered);
+
+		/* Minimize wait-for-larger-batch delay (since there will be no batching) */
+		kafka_err = rd_kafka_conf_set(
+			out1.conf, "queue.buffering.max.ms", "1", errstr, sizeof(errstr));
+		if (kafka_err) {
+				err = BADREQ("Invalid option: %s", errstr);
+		}
+		if (!err) {
+				/* Minimize wait-for-socket delay (otherwise we will lose 100ms per
+				* message instead just the RTT) */
+				kafka_err = rd_kafka_conf_set(
+					out1.conf, "socket.blocking.max.ms", "1", errstr, sizeof(errstr));
+				if (kafka_err) {
+						err = BADREQ("Invalid option: %s", errstr);
+				}
+		}
+	}
+
 	if (!err) {
 		*out = g_memdup(&out1, sizeof(struct kafka_s));
 	} else {
-		g_free(out1.callback_ctx);
+		if (out1.callback_ctx) {
+			g_free(out1.callback_ctx);
+		}
 	}
 	g_strfreev(options);
 	return err;
@@ -215,15 +267,28 @@ kafka_poll(struct kafka_s *kafka)
 
 GError*
 kafka_publish_message(struct kafka_s *kafka,
-		void* msg, size_t msglen, const gchar* topic)
+		void* msg, size_t msglen, const gchar* topic, const gboolean sync)
 {
 	GError *err = NULL;
+	rd_kafka_resp_err_t magic = MAGICAL_SYNC;
+	rd_kafka_resp_err_t rc = RD_KAFKA_RESP_ERR_UNKNOWN;
+	
+	if (!sync) {
+		rc = rd_kafka_producev(kafka->producer,
+			RD_KAFKA_V_TOPIC(topic),
+			RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
+			RD_KAFKA_V_VALUE(msg, msglen),
+			RD_KAFKA_V_END);
+	} else {
+		// Add a special opaque only on sync mode.
+		rc = rd_kafka_producev(kafka->producer,
+			RD_KAFKA_V_TOPIC(topic),
+			RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
+			RD_KAFKA_V_VALUE(msg, msglen),
+			RD_KAFKA_V_OPAQUE(&magic),
+			RD_KAFKA_V_END);
+	}
 
-	rd_kafka_resp_err_t rc = rd_kafka_producev(kafka->producer,
-		RD_KAFKA_V_TOPIC(topic),
-		RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
-		RD_KAFKA_V_VALUE(msg, msglen),
-		RD_KAFKA_V_END);
 	if (rc != RD_KAFKA_RESP_ERR_NO_ERROR) {
 		if (rc == RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE) {
 			err = BADREQ("Failed to produce to topic %s: %s, dropped", topic,
@@ -235,6 +300,17 @@ kafka_publish_message(struct kafka_s *kafka,
 	} else {
 		rd_kafka_flush(kafka->producer,
 			oio_events_kafka_timeout_flush / G_TIME_SPAN_MILLISECOND);
+	}
+
+	if (!err && sync) {
+		int i = 0;
+		while (magic == MAGICAL_SYNC) {
+				rd_kafka_poll(kafka->producer, OIO_EVENTS_KAFKA_SYNC_POLL_DELAY);
+				i += 1;
+				if (i >= OIO_EVENTS_KAFKA_SYNC_MAX_POLLS) {
+						return TIMEOUT("Sync message still not received, aborting...");
+				}
+		}
 	}
 
 	return err;
