@@ -153,6 +153,12 @@
 				"descr": "Tube name (or routing key) for 'storage.content.broken' events."
 			},
 			{ "type": "string",
+				"name": "oio_meta2_tube_manifest_deleted",
+				"key": "meta2.tube.manifest_deleted",
+				"limit": 256, "def": "oio-delete-mpu-parts",
+				"descr": "Tube name (or routing key) for 'storage.manifest.deleted' events."
+			},
+			{ "type": "string",
 				"name": "oio_meta2_tube_meta2_deleted",
 				"key": "meta2.tube.meta2_deleted",
 				"limit": 256, "def": "oio",
@@ -293,13 +299,23 @@
 
 			{ "type": "monotonic", "name": "oio_events_kafka_timeouts_flush_shutdown",
 				"key": "events.kafka.timeouts.flush",
-				"descr": "Set the Kafka client flush timeout on events queue shutdown (ms)",
+				"descr": "Set the Kafka client flush timeout on events queue shutdown",
 				"def": "10s", "min": 0, "max": "1d" },
 
 			{ "type": "string", "name": "oio_events_fallback_log_token_id",
 				"key": "events.fallback.log.token_id",
-				"descr": "Set the token_id for event logging in case of cluster failure ",
-				"def": "", "limit": 256 }
+				"descr": "Set the token_id for event logging in case of cluster failure",
+				"def": "", "limit": 256 },
+
+			{ "type": "int64", "name": "oio_events_kafka_sync_max_polls",
+				"key": "events.kafka.sync_max_polls",
+				"descr": "Maximum number of polls when sending a sync event",
+				"def": "30", "min": "1", "max": "max" },
+
+			{ "type": "monotonic", "name": "oio_events_kafka_sync_poll_delay",
+				"key": "events.kafka.sync_poll_delay",
+				"descr": "Delay between each poll when sending a sync event. Total duration is this value multiplied by oio_events_kafka_sync_max_polls.",
+				"def": "100ms", "min": "0", "max": "10s" }
 		]
 	},
 	"resolver": {
