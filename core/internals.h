@@ -78,12 +78,12 @@ extern "C" {
 		|| (C)==CODE_POLICY_NOT_SUPPORTED \
 		|| (C)==CODE_NAMESPACE_NOTMANAGED)
 
-#define VTABLE_HAS(self,T,F) (((T)self)->vtable-> F != NULL)
+#define VTABLE_HAS(self,T,F) (((T)self)->vtable->F != NULL)
 
 #define VTABLE_CHECK(self,T,F) do { \
 	EXTRA_ASSERT(self != NULL); \
 	EXTRA_ASSERT(((T)self)->vtable != NULL); \
-	EXTRA_ASSERT(((T)self)->vtable-> F != NULL); \
+	EXTRA_ASSERT(((T)self)->vtable->F != NULL); \
 } while (0)
 
 #define VTABLE_CALL_NOCHECK(self,T,F) ((T)self)->vtable->F

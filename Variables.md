@@ -454,7 +454,7 @@ Used by `gcc`
 
 ### events.fallback.log.token_id
 
-> Set the token_id for event logging in case of cluster failure 
+> Set the token_id for event logging in case of cluster failure
 
  * default: ****
  * type: string
@@ -484,6 +484,24 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_EVENTS_KAFKA_OPTIONS*
 
+### events.kafka.sync_max_polls
+
+> Maximum number of polls when sending a sync event
+
+ * default: **30**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_KAFKA_SYNC_MAX_POLLS*
+ * range: 1 -> G_MAXINT64
+
+### events.kafka.sync_poll_delay
+
+> Delay between each poll when sending a sync event. Total duration is this value multiplied by oio_events_kafka_sync_max_polls.
+
+ * default: **100 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_KAFKA_SYNC_POLL_DELAY*
+ * range: 0 -> 10 * G_TIME_SPAN_SECOND
+
 ### events.kafka.timeout.flush
 
 > Set the Kafka client flush timeout
@@ -495,7 +513,7 @@ Used by `gcc`
 
 ### events.kafka.timeouts.flush
 
-> Set the Kafka client flush timeout on events queue shutdown (ms)
+> Set the Kafka client flush timeout on events queue shutdown
 
  * default: **10 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -792,6 +810,14 @@ Used by `gcc`
  * default: **oio**
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
+
+### meta2.tube.manifest_deleted
+
+> Tube name (or routing key) for 'storage.manifest.deleted' events.
+
+ * default: **oio-delete-mpu-parts**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_MANIFEST_DELETED*
 
 ### meta2.tube.meta2_deleted
 

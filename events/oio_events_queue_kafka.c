@@ -111,7 +111,7 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 	/* forward the event as a beanstalkd job */
 	const size_t msglen = strlen(msg);
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = kafka_publish_message(ctx->kafka, msg, msglen, q->queue_name);
+	GError *err = kafka_publish_message(ctx->kafka, msg, msglen, q->queue_name, FALSE);
 	gint64 end = oio_ext_monotonic_time();
 	time_t end_seconds = end / G_TIME_SPAN_SECOND;
 	/* count the operation whether it's a success or a failure */
@@ -150,7 +150,7 @@ _q_reconnect(struct _queue_with_endpoint_s *q UNUSED, struct _running_ctx_s *ctx
 {
 	EXTRA_ASSERT(ctx->kafka != NULL);
 
-	if (ctx->kafka && ctx->kafka->producer) {
+	if (ctx->kafka->producer) {
 		return TRUE;
 	}
 
@@ -226,7 +226,7 @@ _q_run(struct _queue_with_endpoint_s *q)
 	};
 
 	err = kafka_create(
-			q->endpoint, q->queue_name, __requeue_fn, _drop_event, &(ctx.kafka));
+			q->endpoint, q->queue_name, __requeue_fn, _drop_event, &(ctx.kafka), FALSE);
 
 	if (err){
 		return err;

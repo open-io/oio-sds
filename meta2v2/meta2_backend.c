@@ -178,8 +178,8 @@ meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 static GError *
 _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 {
-#define INIT(Out,Tube) if (!err) { \
-	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+#define INIT(Out,Tube,Sync) if (!err) { \
+	err = oio_events_queue_factory__create(url, (Tube), Sync, &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
 	if (!err) {\
 		err = oio_events_queue__start((Out)); \
@@ -192,19 +192,21 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	STRING_STACKIFY(url);
 
 	GError *err = NULL;
-	INIT(m2->notifier_container_created, oio_meta2_tube_container_new);
-	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted);
-	INIT(m2->notifier_container_state, oio_meta2_tube_container_state);
-	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated);
+	INIT(m2->notifier_container_created, oio_meta2_tube_container_new, FALSE);
+	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted, FALSE);
+	INIT(m2->notifier_container_state, oio_meta2_tube_container_state, FALSE);
+	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated, FALSE);
 
-	INIT(m2->notifier_content_created, oio_meta2_tube_content_created);
-	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended);
-	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted);
-	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated);
-	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken);
-	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
+	INIT(m2->notifier_content_created, oio_meta2_tube_content_created, FALSE);
+	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended, FALSE);
+	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted, FALSE);
+	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated, FALSE);
+	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken, FALSE);
+	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained, FALSE);
 
-	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted);
+	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted, FALSE);
+
+	INIT(m2->notifier_manifest_deleted, oio_meta2_tube_manifest_deleted, TRUE);
 
 	return err;
 #undef INIT
@@ -293,6 +295,8 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_drained);
 
 	CLEAN(m2->notifier_meta2_deleted);
+
+	CLEAN(m2->notifier_manifest_deleted);
 
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;

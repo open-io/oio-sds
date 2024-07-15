@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -58,6 +59,9 @@ struct meta2_backend_s
 	struct oio_events_queue_s *notifier_content_broken;
 
 	struct oio_events_queue_s *notifier_meta2_deleted;
+
+	// Sync kafka queues
+	struct oio_events_queue_s *notifier_manifest_deleted;
 
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;

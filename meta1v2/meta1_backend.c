@@ -48,7 +48,7 @@ static GError *
 _init_notifiers(struct meta1_backend_s *m1, const char *ns)
 {
 #define INIT(Out,Tube) if (!err) { \
-	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	err = oio_events_queue_factory__create(url, (Tube), FALSE, &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
 	if (!err) { \
 		err = oio_events_queue__start((Out)); \

@@ -47,15 +47,20 @@ GError* kafka_create(
 	const gchar *topic,
 	void (*requeue_fn)(gchar*),
 	void (*drop_fn)(const gchar*, const gchar*),
-	struct kafka_s **out);
+	struct kafka_s **out,
+	const gboolean sync);
 
 /** Connect the specified kafka connector.
  * Won't try to connect if the socket seems already connected. */
 GError* kafka_connect(struct kafka_s *kafka);
 
-/** Send a message to the previously configured queue. */
+/** Send a message to the previously configured queue.
+ * If sync is TRUE, then the function is blocking until the message is "acked" (or
+ * a timeout is reached). It requires to use "kafka_create" with "sync" at TRUE too.
+ * If sync is FALSE, then the message is buffered and will be sent asynchronously.
+ * The asynchronous mode is the preferred mode. */
 GError* kafka_publish_message(struct kafka_s *kafka,
-		void* msg, size_t msglen, const gchar* topic);
+		void* msg, size_t msglen, const gchar* topic, const gboolean sync);
 
 /** Check if producer encountered a fatal error.
  * If so, the producer should be restarted **/

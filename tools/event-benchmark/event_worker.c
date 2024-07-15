@@ -1,6 +1,7 @@
 /*
 OpenIO SDS oio-event-benchmark
 Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,7 +34,7 @@ event_worker_init(const char *addr)
 		return NULL;
 	}
 
-	GError *err = oio_events_queue_factory__create(addr, "oio", &q);
+	GError *err = oio_events_queue_factory__create(addr, "oio", FALSE, &q);
 	if (err) {
 		g_prefix_error(&err, "Event queue creation failed: ");
 		return err;

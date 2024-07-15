@@ -34,6 +34,7 @@ add_library(oioevents STATIC
 	oio_events_queue_fanout.c
 	oio_events_queue_beanstalkd.c
 	oio_events_queue_kafka.c
+	oio_events_queue_kafka_sync.c
 	oio_events_queue_shared.c
 	${CMAKE_CURRENT_BINARY_DIR}/events_variables.c)
 
