@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -48,7 +48,7 @@ static GError *
 _init_notifiers(struct meta1_backend_s *m1, const char *ns)
 {
 #define INIT(Out,Tube) if (!err) { \
-	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	err = oio_events_queue_factory__create(url, (Tube), FALSE, &(Out)); \
 	g_assert((err != NULL) ^ ((Out) != NULL)); \
 	if (!err) { \
 		err = oio_events_queue__start((Out)); \
