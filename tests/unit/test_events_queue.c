@@ -1,6 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,7 +29,7 @@ test_queue_stalled (void)
 {
 	struct oio_events_queue_s *q = NULL;
 	GError *err = oio_events_queue_factory__create(
-			"beanstalk://127.0.0.1:1", "fake", &q);
+			"beanstalk://127.0.0.1:1", "fake", FALSE, &q);
 	g_assert_no_error (err);
 	g_assert_nonnull (q);
 
@@ -54,7 +55,7 @@ test_queue_init (void)
 	for (guint i=0; i<16 ;i++) {
 		struct oio_events_queue_s *q = NULL;
 		GError *err = oio_events_queue_factory__create(
-				"beanstalk://127.0.0.1:1", "fake", &q);
+				"beanstalk://127.0.0.1:1", "fake", FALSE, &q);
 		g_assert_no_error (err);
 		g_assert_nonnull (q);
 		l = g_slist_prepend (l, q);
