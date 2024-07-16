@@ -771,6 +771,11 @@ sqlx_service_specific_stop(void)
 	if (SRV.server)
 		network_server_stop(SRV.server);
 
+	if (election_manager_is_operational(SRV.election_manager)) {
+		/* Ask elections to leave, but do not wait (timeout=0). */
+		election_manager_exit_all(SRV.election_manager, TRUE, 0);
+	}
+
 	if (SRV.gtq_admin)
 		grid_task_queue_stop(SRV.gtq_admin);
 	if (SRV.gtq_reload)
@@ -872,9 +877,7 @@ sqlx_service_specific_fini(void)
 	if (SRV.peering)
 		sqlx_peering__destroy(SRV.peering);
 
-	// Stop the server AFTER cleaning all elections
-	if (SRV.server)
-		network_server_stop(SRV.server);
+	EXTRA_ASSERT(!SRV.server->flag_continue);
 
 	// Cleanup
 	if (SRV.gtq_admin) {
