@@ -36,6 +36,15 @@ import shutil
 from os.path import join
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
+C_LANG_SERVICES = (
+    "oio-daemon",
+    "oio-meta0-server",
+    "oio-meta1-server",
+    "oio-meta2-server",
+    "oio-proxy",
+    "oio-rdir-server",
+)
+
 template_redis = """
 daemonize no
 pidfile ${RUNDIR}/redis.pid
@@ -102,7 +111,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${redis_server} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Environment=HOME=${HOME}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
@@ -122,7 +130,6 @@ Type=simple
 ExecStart=/usr/bin/beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
@@ -177,7 +184,7 @@ ${SERVICEGROUP}
 Type=simple
 Environment=PATH=${PATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 #ExecStartPre=/usr/sbin/service foundationdb stop
 ExecStart=${fdbmonitor} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
@@ -201,7 +208,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -221,7 +228,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -241,7 +248,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -260,7 +267,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -280,7 +287,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -319,7 +326,6 @@ ExecReload=/bin/kill -HUP $MAINPID
 ExecStart=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
@@ -1156,7 +1162,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/conscience-agent.yml
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=PYTHONPATH=${PYTHONPATH}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1177,7 +1183,7 @@ Type=simple
 ExecStart=${EXE} -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1208,7 +1214,7 @@ Type=simple
 ExecStart=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1228,7 +1234,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1248,7 +1254,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1267,7 +1273,7 @@ ${SERVICEGROUP}
 Type=oneshot
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 """
 
 template_systemd_service_rdir_crawler = """
@@ -1282,7 +1288,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1301,7 +1307,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1321,7 +1327,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1347,7 +1353,7 @@ Type=simple
 ExecStart=${EXE} %s
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 ${SET_NICE}Nice=${NICE}
 ${SET_IONICE}IOSchedulingClass=${IO_SCHEDULING_CLASS}
@@ -1373,7 +1379,7 @@ ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT}
 Environment=PATH=${PATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1429,7 +1435,7 @@ Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1684,7 +1690,7 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=PYTHONPATH=${PYTHONPATH}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1876,7 +1882,7 @@ ExecStart=${EXE} --port 9081
 Environment=PATH=${PATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -1897,7 +1903,7 @@ Type=simple
 ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=quorum
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
+${ENVIRONMENT}
 Environment=OIO_RABBITMQ_ENDPOINT=amqp://guest:guest@127.0.0.1:56666/%%2F;amqp://guest:guest@127.0.0.1:5672/%%2F
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
@@ -2171,17 +2177,18 @@ def generate(options):
         WEBHOOK=WEBHOOK,
         WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
     )
+    ENV["env.HOME"] = HOME
 
     def merge_env(add):
         env = dict(ENV)
         env.update(add)
         env["env.G_DEBUG"] = "fatal_warnings"
         orig_exe = env.get("EXE", None)
-        if orig_exe and orig_exe not in ("oio-meta0-server", "beanstalkd"):
+        if orig_exe and orig_exe in C_LANG_SERVICES:
             if options.get(PROFILE) == "valgrind":
                 new_exe = (
                     "valgrind --leak-check=full --leak-resolution=high    "
-                    " --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind "
+                    " --trace-children=yes --log-file=/tmp/%%q{ORIG_EXE}.%%p.valgrind "
                     + orig_exe
                 )
                 env["env.ORIG_EXE"] = orig_exe
@@ -2192,7 +2199,7 @@ def generate(options):
                 new_exe = (
                     "valgrind --tool=callgrind --collect-jumps=yes    "
                     " --collect-systime=yes --trace-children=yes    "
-                    " --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p "
+                    " --callgrind-out-file=/tmp/callgrind.out.%%q{ORIG_EXE}.%%p "
                     + orig_exe
                 )
                 env["env.ORIG_EXE"] = orig_exe
@@ -2288,9 +2295,9 @@ def generate(options):
         if add_service_to_conf:
             env.update({"SYSTEMD_UNIT": service_name})
             add_service(env)
-        if "EXE" in env:
-            env["EXE"] = shutil.which(env["EXE"])
-            if COVERAGE and env["EXE"]:
+        if env.get("EXE"):
+            env["EXE"] = shutil.which(env["EXE"]) or env["EXE"]
+            if COVERAGE and not PROFILE and env["EXE"]:
                 env["EXE"] = coverage_wrapper + env["EXE"]
         if target:
             target.deps.append(service_name)
