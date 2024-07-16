@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ License along with this library.
 	oio_log_lazy_init (); \
 	oio_log_init_level(LVL); \
 	g_log_set_default_handler(oio_log_stderr, NULL); \
-	oio_ext_set_random_reqid (); \
+	oio_ext_set_prefixed_random_reqid(g_get_prgname()); \
 } while (0)
 
 enum oio_main_option_type_e {
