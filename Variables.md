@@ -1674,6 +1674,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_DUMPS_TIMEOUT*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_DAY
 
+### sqliterepo.election.alert.node_watch_delay
+
+> Send an alert if the 'node watch' ZK callback takes longer than this. When it takes too long, slave services may redirect to a non-working service.
+
+ * default: **100 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_ALERT_NODE_WATCH_DELAY*
+ * range: 1 -> 60 * G_TIME_SPAN_SECOND
+
 ### sqliterepo.election.allow_master
 
 > Allow the role of MASTER in any election.

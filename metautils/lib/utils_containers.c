@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -135,7 +136,8 @@ metautils_gthreadpool_push(const char *tag, GThreadPool *pool, gpointer p)
 		const gint64 now = oio_ext_monotonic_time();
 		if (last_log <= OLDEST(now, G_TIME_SPAN_MINUTE)) {
 			last_log = now;
-			GRID_WARN("%s pool error: (%d) %s", tag, err->code, err->message);
+			GRID_WARN("%s pool error: (%d) %s (%u tasks in queue)",
+					tag, err->code, err->message, g_thread_pool_unprocessed(pool));
 		}
 		g_clear_error(&err);
 	}

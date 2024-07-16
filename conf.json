@@ -580,6 +580,11 @@
 				"descr": "Should the synchronism mechanism shuffle the set of URL in the ZK connection string? Set to yes as an attempt to a better balancing of the connections to the nodes of the ZK cluster.",
 				"def": true },
 
+			{ "type": "monotonic", "name": "oio_election_node_watch_delay",
+				"key": "sqliterepo.election.alert.node_watch_delay",
+				"descr": "Send an alert if the 'node watch' ZK callback takes longer than this. When it takes too long, slave services may redirect to a non-working service.",
+				"def": "100ms", "min": "1", "max": "60s" },
+
 			{ "type": "bool", "name": "sqliterepo_election_lazy_recover",
 				"key": "sqliterepo.election.lazy_recover",
 				"descr": "Should the election mecanism try to recreate missing DB?",

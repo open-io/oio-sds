@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1303,7 +1303,8 @@ election_manager_exit_all(struct election_manager_s *manager,
 		gboolean leave_cleanly, gint64 duration)
 {
 	if (leave_cleanly) {
-		GRID_INFO("Voluntarily exiting all the elections...");
+		GRID_INFO("Voluntarily exiting all the elections...%s",
+				duration > 0? "":" (not waiting)");
 	} else {
 		GRID_INFO("Killing all left-over elections...");
 	}
@@ -1885,6 +1886,7 @@ struct deferred_watcher_context_s
 	/* Zookeeper handle from which the callback originates. It is used
 	 * to match members when no 'path' is provided to the callback. */
 	zhandle_t *zh;
+	gint64 start;
 	char path[];
 };
 
@@ -1943,6 +1945,24 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 					_evt2str(d->evt));
 		}
 	}
+	gint64 cb_duration = oio_ext_monotonic_time() - d->start;
+	if (cb_duration > oio_election_node_watch_delay) {
+		GRID_NOTICE("ZK event handling took %"G_GINT64_FORMAT"ms "
+				"(sqliterepo.election.alert.node_watch_delay=%"G_GINT64_FORMAT
+				", reqid=%s)",
+				cb_duration / G_TIME_SPAN_MILLISECOND,
+				oio_election_node_watch_delay,
+				oio_ext_get_reqid()
+		);
+	} else if (GRID_DEBUG_ENABLED()) {
+		GRID_DEBUG("ZK event handling took %"G_GINT64_FORMAT"ms "
+				"(sqliterepo.election.alert.node_watch_delay=%"G_GINT64_FORMAT
+				", reqid=%s)",
+				cb_duration / G_TIME_SPAN_MILLISECOND,
+				oio_election_node_watch_delay,
+				oio_ext_get_reqid()
+		);
+	}
 
 	g_free(d);
 }
@@ -1972,6 +1992,7 @@ watch_COMMON(zhandle_t *h, const int type, const int state,
 	ctx->gen = GPOINTER_TO_UINT(d);
 	ctx->evt = evt;
 	ctx->zh = h;
+	ctx->start = oio_ext_monotonic_time();
 	if (slash && len)
 		memcpy(ctx->path, slash, len);
 
@@ -2008,6 +2029,7 @@ _completion_router(gpointer p, struct election_manager_s *M)
 		case DAT_WATCHING:
 			return deferred_completion_WATCHING(p);
 		case DAT_LEFT:
+			oio_ext_set_prefixed_random_reqid("zk-watch-");
 			return deferred_watch_COMMON(p, M);
 	}
 	g_assert_not_reached();
