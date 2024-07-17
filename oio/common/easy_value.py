@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,27 +14,31 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import string
+import re
+
+HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]+$")
 
 
 def int_value(value, default):
+    """
+    Cast an object to an integer.
+
+    Return the default if the object is None or the empty string.
+    """
     if value in (None, "None", ""):
         return default
-    try:
-        value = int(value)
-    except (TypeError, ValueError):
-        raise
-    return value
+    return int(value)
 
 
 def float_value(value, default):
+    """
+    Cast an object to a float.
+
+    Return the default if the object is None or the empty string.
+    """
     if value in (None, "None", ""):
         return default
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        raise
-    return value
+    return float(value)
 
 
 TRUE_VALUES = set(("true", "1", "yes", "on", "t", "y"))
@@ -46,18 +50,20 @@ def true_value(value):
 
 
 def boolean_value(value, default=False):
+    """
+    Make a boolean value from an object.
+
+    If the object is None or an empty string, return the default value.
+    If the object does not look like something "boolean", raise ValueError.
+    """
     if value in (None, "None", ""):
         return default
-    try:
-        value = str(value).lower()
-        if value in TRUE_VALUES:
-            return True
-        elif value in FALSE_VALUES:
-            return False
-        else:
-            raise ValueError("Boolean value expected")
-    except (TypeError, ValueError):
-        raise
+    value = str(value).lower()
+    if value in TRUE_VALUES:
+        return True
+    if value in FALSE_VALUES:
+        return False
+    raise ValueError("Boolean value expected")
 
 
 METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
@@ -65,12 +71,12 @@ METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
 def convert_size(size, unit=""):
     if abs(size) < 1000.0:
-        return "%.0f%s%s" % (size, METRIC_SYMBOLS[0], unit)
-    for metric_symbol in METRIC_SYMBOLS[1:-1]:
+        return f"{size:.0f}{METRIC_SYMBOLS[0]}{unit}"
+    for metric_symbol in METRIC_SYMBOLS[1:]:
         size /= 1000.0
         if abs(size) < 1000.0:
-            return "%.3f%s%s" % (size, metric_symbol, unit)
-    return "%.3f%s%s" % (size, METRIC_SYMBOLS[-1], unit)
+            return f"{size:.3f}{metric_symbol}{unit}"
+    return f"{size:.3f}{METRIC_SYMBOLS[-1]}{unit}"
 
 
 def is_hexa(hexa, size=None):
@@ -78,7 +84,7 @@ def is_hexa(hexa, size=None):
         return False
     if size and len(hexa) != size:
         return False
-    return all(c in string.hexdigits for c in hexa)
+    return HEX_PATTERN.match(hexa)
 
 
 def debinarize(something):
@@ -94,8 +100,8 @@ def debinarize(something):
     """
     if isinstance(something, bytes):
         return something.decode("utf-8")
-    elif isinstance(something, list):
+    if isinstance(something, list):
         return [debinarize(o) for o in something]
-    elif isinstance(something, dict):
+    if isinstance(something, dict):
         return {debinarize(k): debinarize(v) for k, v in something.items()}
     return something

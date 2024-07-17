@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,11 @@ from oio.common.constants import (
     CHUNK_SUFFIX_PENDING,
     MAX_STRLEN_CHUNKID,
     MIN_STRLEN_CHUNKID,
+)
+from oio.common.easy_value import (
+    boolean_value,
+    convert_size,
+    is_hexa,
 )
 from oio.common.utils import (
     is_chunk_id_valid,
@@ -78,3 +83,22 @@ class TestUtils(unittest.TestCase):
     def test_oio_versionid_to_str_versionid(self):
         self.assertEqual("null", oio_versionid_to_str_versionid(None))
         self.assertEqual("0.123456", oio_versionid_to_str_versionid(123456))
+
+    def test_boolean_value(self):
+        self.assertFalse(boolean_value("n"))
+        self.assertTrue(boolean_value("y"))
+        self.assertFalse(boolean_value(None, False))
+        self.assertTrue(boolean_value(None, True))
+        self.assertFalse(boolean_value("None", False))
+        self.assertTrue(boolean_value("None", True))
+        self.assertRaises(ValueError, boolean_value, "whatever")
+
+    def test_convert_size_overflow(self):
+        huge = 6666 * 10**24
+        self.assertEqual(convert_size(huge, "B"), "6666.000YB")
+        self.assertEqual(convert_size(-huge, "B"), "-6666.000YB")
+
+    def test_is_hexa_not_hexa(self):
+        self.assertFalse(is_hexa(12))
+        self.assertFalse(is_hexa("12", size=1))
+        self.assertFalse(is_hexa("12MB"))

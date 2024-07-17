@@ -48,22 +48,22 @@ def check_volume_for_service_type(volume_path, required_type):
         does not belong to a service from the specified type or is missing
         some attributes.
     """
-    msg_pfx = "Invalid volume path [%s]: " % volume_path
+    msg_pfx = f"Invalid volume path [{volume_path}]: "
     meta = read_user_xattr(volume_path)
     server_type = meta.get(VOLUME_XATTR_KEYS["type"])
     if server_type is None:
-        raise exc.OioException(msg_pfx + "missing %s xattr" % VOLUME_XATTR_KEYS["type"])
+        raise exc.OioException(msg_pfx + f"missing {VOLUME_XATTR_KEYS['type']} xattr")
     if server_type != required_type:
         raise exc.OioException(
-            msg_pfx + "service is a {0}, not a {1}".format(server_type, required_type)
+            msg_pfx + f"service is a {server_type}, not a {required_type}"
         )
     namespace = meta.get(VOLUME_XATTR_KEYS["namespace"])
     server_id = meta.get(VOLUME_XATTR_KEYS["id"])
     if server_id is None:
-        raise exc.OioException(msg_pfx + "missing %s xattr" % VOLUME_XATTR_KEYS["id"])
-    elif namespace is None:
+        raise exc.OioException(msg_pfx + f"missing {VOLUME_XATTR_KEYS['id']} xattr")
+    if namespace is None:
         raise exc.OioException(
-            msg_pfx + "missing %s xattr" % VOLUME_XATTR_KEYS["namespace"]
+            msg_pfx + f"missing {VOLUME_XATTR_KEYS['namespace']} xattr"
         )
     return namespace, server_id
 

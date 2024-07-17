@@ -15,14 +15,12 @@
 # License along with this library.
 
 
-from __future__ import absolute_import
 from oio.common.green import eventlet_yield, Timeout, get_watchdog, WatchdogTimeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
 from socket import error as SocketError
-from six import PY2, text_type
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
 
 from oio.common import exceptions as exc, green
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER, CHUNK_XATTR_EXTRA_PREFIX
@@ -35,7 +33,6 @@ from oio.common.http import (
 )
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import (
-    GeneratorIO,
     group_chunk_errors,
     deadline_to_timeout,
     monotonic_time,
@@ -452,13 +449,13 @@ class ChunkReader(object):
             self.logger.error(
                 "Connection failed to %s (reqid=%s): %s", chunk, self.reqid, err
             )
-            self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
+            self._resp_by_chunk[chunk["url"]] = (0, str(err))
             return False
         except Exception as err:
             self.logger.exception(
                 "Connection failed to %s (reqid=%s)", chunk, self.reqid
             )
-            self._resp_by_chunk[chunk["url"]] = (0, text_type(err))
+            self._resp_by_chunk[chunk["url"]] = (0, str(err))
             return False
 
         if source.status in (200, 206):
@@ -476,7 +473,7 @@ class ChunkReader(object):
             )
             self._resp_by_chunk[chunk["url"]] = (
                 source.status,
-                text_type(source.reason),
+                str(source.reason),
             )
             close_source(source, self.logger)
         return False
@@ -549,8 +546,6 @@ class ChunkReader(object):
                     )
             return
 
-        if PY2:
-            return GeneratorIO(_iter(), sub_generator=False)
         return _iter()
 
     def fill_ranges(self, start, end, length):
@@ -1015,7 +1010,7 @@ class MetachunkPreparer(object):
                 chunk["num"] = int(raw_pos[1])
                 chunk["pos"] = "%d.%d" % (mc_pos, chunk["num"])
             else:
-                chunk["pos"] = text_type(mc_pos)
+                chunk["pos"] = str(mc_pos)
 
     def __call__(self):
         mc_pos = self.extra_kwargs.get("meta_pos", 0)

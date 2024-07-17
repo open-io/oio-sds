@@ -14,8 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from __future__ import print_function
-
 import os
 import grp
 import hashlib
@@ -267,15 +265,14 @@ class RingBuffer(list):
             yield self[i]
 
 
-def cid_from_name(account, ref):
+def cid_from_name(account: str, ref: str) -> str:
     """
     Compute a container ID from an account and a reference name.
     """
     hash_ = hashlib.new("sha256")
-    for v in [account, "\0", ref]:
-        if isinstance(v, str):
-            v = v.encode("utf-8")
-        hash_.update(v)
+    hash_.update(account.encode("utf-8"))
+    hash_.update(b"\0")
+    hash_.update(ref.encode("utf-8"))
     return hash_.hexdigest().upper()
 
 
@@ -313,9 +310,9 @@ def request_id(prefix=""):
 
     :param prefix: optional prefix to the request id.
     """
-    pref_bits = min(112, len(prefix) * 4)
+    pref_bits = min(26, len(prefix)) * 4
     rand_bits = 112 - pref_bits
-    return "%s%04X%0*X" % (prefix, os.getpid(), rand_bits // 4, getrandbits(rand_bits))
+    return f"{prefix:.26s}{os.getpid():04X}{getrandbits(rand_bits):0{rand_bits//4}X}"
 
 
 class GeneratorIO(RawIOBase):
@@ -659,9 +656,7 @@ def is_chunk_id_valid(chunk_id):
     if len(chunk_id) < MIN_STRLEN_CHUNKID or len(chunk_id) > MAX_STRLEN_CHUNKID:
         return False
     # This (by nature) also check the suffixes
-    if not is_hexa(chunk_id):
-        return False
-    return True
+    return is_hexa(chunk_id)
 
 
 def find_mount_point(dirname):
