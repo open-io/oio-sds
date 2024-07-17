@@ -43,31 +43,6 @@ def _fetch_file_status(meta2db):
     return {k: getattr(file_status, k) for k in dir(file_status) if k.startswith("st_")}
 
 
-def _fetch_system(meta2db):
-    meta2db_conn = None
-    try:
-        meta2db_conn = sqlite3.connect(f"file:{meta2db.path}?mode=ro", uri=True)
-    except sqlite3.OperationalError:
-        # Check if the meta2 database still exists
-        try:
-            os.stat(meta2db.path)
-        except FileNotFoundError:
-            raise
-        except Exception:
-            pass
-        raise
-    try:
-        system = {}
-        meta2db_cursor = meta2db_conn.cursor()
-        for key, value in meta2db_cursor.execute(
-            'SELECT k, v FROM admin WHERE k LIKE "sys.%"'
-        ).fetchall():
-            system[key] = value
-        return debinarize(system)
-    finally:
-        meta2db_conn.close()
-
-
 def delete_meta2_db(cid, path, suffix, volume_id, admin_client, logger):
     """Delete meta2 db specified"""
     try:
@@ -111,7 +86,19 @@ class Meta2DB:
     file_status = _meta2db_env_property(
         "file_status", fetch_value_function=_fetch_file_status
     )
-    system = _meta2db_env_property("admin_table", fetch_value_function=_fetch_system)
+
+    def _fetch_system(self):
+        system = {}
+        for key, value in self.execute_sql(
+            'SELECT k, v FROM admin WHERE k LIKE "sys.%"'
+        ):
+            system[key] = value
+        return debinarize(system)
+
+    system = _meta2db_env_property(
+        "admin_table",
+        fetch_value_function=_fetch_system,
+    )
 
     def __init__(self, app_env, env, use_reflink=False):
         self.app_env = app_env
@@ -146,16 +133,27 @@ class Meta2DB:
 
         By default, the database is open in readonly mode.
         """
-        meta2db_conn = sqlite3.connect(f"file:{self.path}?mode={open_mode}", uri=True)
+        meta2db_conn = None
         try:
+            meta2db_conn = sqlite3.connect(
+                f"file:{self.path}?mode={open_mode}",
+                uri=True,
+            )
             res = meta2db_conn.execute(statement, params)
             return res.fetchall()
         except sqlite3.DatabaseError as sqerr:
             if "database disk image is malformed" in str(sqerr):
                 raise CorruptDb(str(sqerr)) from sqerr
+            try:
+                os.stat(self.path)
+            except FileNotFoundError:
+                raise
+            except Exception:
+                pass
             raise sqerr
         finally:
-            meta2db_conn.close()
+            if meta2db_conn:
+                meta2db_conn.close()
 
 
 class Response(object):

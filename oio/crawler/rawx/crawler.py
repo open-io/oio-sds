@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,17 @@ class RawxWorker(CrawlerWorker):
                 "Rawx volume_id=%s status=%d msg=%s", self.volume_id, status, msg
             )
 
+    def load_chunk_metadata(self, chunk):
+        if not is_chunk_id_valid(chunk.chunk_id):
+            self.logger.info("Skip not valid chunk path %s", chunk.chunk_path)
+            self.invalid_paths += 1
+            return False
+        with open(chunk.chunk_path, "rb") as chunk_file:
+            # A supposition is made: metadata will not change during the
+            # process of all filters
+            chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
+        return True
+
     def _is_chunk_valid(self, chunk):
         """
         Verify the chunk validity
@@ -67,14 +78,7 @@ class RawxWorker(CrawlerWorker):
             return False
 
         try:
-            if not is_chunk_id_valid(chunk.chunk_id):
-                self.logger.info("Skip not valid chunk path %s", chunk.chunk_path)
-                self.invalid_paths += 1
-                return False
-            with open(chunk.chunk_path, "rb") as chunk_file:
-                # A supposition is made: metadata will not change during the
-                # process of all filters
-                chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
+            return self.load_chunk_metadata(chunk)
         except FileNotFoundError:
             self.logger.info("chunk_id=%s no longer exists", chunk.chunk_id)
             return False
@@ -92,14 +96,7 @@ class RawxWorker(CrawlerWorker):
         :type chunk: ChunkWrapper
         """
         try:
-            if not is_chunk_id_valid(chunk.chunk_id):
-                self.logger.warning("Skip not valid chunk path %s", chunk.chunk_path)
-                self.invalid_paths += 1
-                return False
-            with open(chunk.chunk_path, "rb") as chunk_file:
-                # A supposition is made: metadata will not change during the
-                # process of all filters
-                chunk.meta, _ = read_chunk_metadata(chunk_file, chunk.chunk_id)
+            return self.load_chunk_metadata(chunk)
         except FileNotFoundError:
             # unlink the symbolic link
             os.unlink(chunk.chunk_symlink_path)
