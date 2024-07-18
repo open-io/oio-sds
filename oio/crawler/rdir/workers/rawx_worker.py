@@ -33,7 +33,7 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
     """
 
     MAX_CHUNKS_PER_SECOND = 30
-    WORKER_TYPE = "rawx"
+    SERVICE_TYPE = "rawx"
 
     def __init__(
         self, conf, volume_path, logger=None, pool_manager=None, watchdog=None

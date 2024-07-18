@@ -34,8 +34,8 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
     REPORT_INTERVAL = 300
     CONSCIENCE_CACHE = 30
     DEFAULT_SCAN_INTERVAL = 1800
-    SERVICE_TYPE = "rdir"
-    WORKER_TYPE = None
+    CRAWLER_TYPE = "rdir"
+    SERVICE_TYPE = None
 
     def __init__(
         self, conf, volume_path, logger=None, pool_manager=None, watchdog=None
@@ -51,13 +51,13 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
 
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-        if volume_path:
-            _, volume_id = check_volume_for_service_type(volume_path, self.WORKER_TYPE)
-            self.volume_path = volume_path
-            self.volume_id = volume_id
-        if not self.volume_path:
+        if not volume_path:
             raise exc.ConfigurationException("No volume specified for crawler")
-        super().__init__(name=f"rdir-crawler-{self.volume_id}")
+        _, self.volume_id = check_volume_for_service_type(
+            volume_path, self.SERVICE_TYPE
+        )
+        self.volume_path = volume_path
+        super().__init__(name=f"{self.CRAWLER_TYPE}-crawler-{self.volume_id}")
         self._stop_requested = Event()
 
         self.wait_random_time_before_starting = boolean_value(
@@ -121,6 +121,22 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
+        # TODO(FVE): call super().run(*args, **kwargs)
+
+        self._wait_before_starting()
+        while self.running:
+            start_time = time.time()
+            try:
+                self.crawl_volume()
+            except OSError as err:
+                self.logger.error("Failed to crawl volume: %s", err)
+            except Exception:
+                self.logger.exception("Failed to crawl volume")
+            crawling_duration = time.time() - start_time
+            self.report_duration(crawling_duration)
+            self._wait_next_iteration(crawling_duration)
+
+    def _wait_before_starting(self):
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
             self.logger.info(
@@ -129,20 +145,9 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
                 self.volume_id,
             )
             for _ in range(waiting_time_to_start):
-                if self._stop_requested.is_set():
+                if not self.running:
                     return
                 time.sleep(1)
-        while not self._stop_requested.is_set():
-            try:
-                start_crawl = time.time()
-                self.crawl_volume()
-            except OSError as err:
-                self.logger.error("Failed to crawl volume: %s", err)
-            except Exception:
-                self.logger.exception("Failed to crawl volume")
-            crawling_duration = time.time() - start_crawl
-            self.report_duration(crawling_duration)
-            self._wait_next_iteration(crawling_duration)
 
     def _wait_next_iteration(self, crawling_duration):
         waiting_time_to_start = self.scans_interval - crawling_duration
@@ -153,9 +158,13 @@ class RdirWorker(CrawlerStatsdMixin, Process, CrawlerWorkerMarkerMixin):
                 self.volume_id,
             )
             for _ in range(int(waiting_time_to_start)):
-                if self._stop_requested.is_set():
+                if not self.running:
                     return
                 time.sleep(1)
+
+    @property
+    def running(self):
+        return not self._stop_requested.is_set()
 
     def crawl_volume(self):
         raise NotImplementedError("run not implemented")

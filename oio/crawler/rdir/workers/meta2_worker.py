@@ -30,7 +30,7 @@ class RdirWorkerForMeta2(RdirWorker):
     """
 
     MAX_CONTAINERS_PER_SECOND = 30
-    WORKER_TYPE = "meta2"
+    SERVICE_TYPE = "meta2"
 
     def __init__(
         self, conf, volume_path, logger=None, pool_manager=None, watchdog=None

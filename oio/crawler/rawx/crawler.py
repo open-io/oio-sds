@@ -16,11 +16,11 @@ import os
 from oio.blob.utils import read_chunk_metadata
 from oio.common import exceptions as exc
 from oio.common.utils import is_chunk_id_valid
-from oio.crawler.common.crawler import Crawler, CrawlerWorker
+from oio.crawler.common.crawler import Crawler, PipelineWorker
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, is_success, is_error
 
 
-class RawxWorker(CrawlerWorker):
+class RawxWorker(PipelineWorker):
     """
     Rawx Worker responsible for a single volume.
     """
@@ -143,7 +143,7 @@ class RawxWorker(CrawlerWorker):
         chunk.chunk_path = os.path.realpath(chunk.chunk_symlink_path)
         return chunk
 
-    def process_path(self, path):
+    def process_entry(self, path, reqid=None):
         chunk = self._get_chunk_info(path)
         # Check chunk validity
         if not self._is_chunk_valid(chunk):
@@ -163,6 +163,7 @@ class RawxWorker(CrawlerWorker):
 
 
 class RawxCrawler(Crawler):
+    CRAWLER_TYPE = "rawx"
     SERVICE_TYPE = "rawx"
 
     def __init__(self, conf, conf_file=None, worker_class=RawxWorker, **kwargs):

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from multiprocessing import Event
 from os import makedirs, nice
 from os.path import join, basename, splitext, isdir, isfile
 from random import randint
@@ -37,7 +38,7 @@ LOAD_PIPELINES = {
 TAGS_TO_DEBUG = ("starting",)
 
 
-class CrawlerWorkerMarkerMixin(object):
+class CrawlerWorkerMarkerMixin:
     """Crawler worker mixin to add marker property"""
 
     MARKERS_DIR = "markers"
@@ -46,6 +47,9 @@ class CrawlerWorkerMarkerMixin(object):
     # If the max is not reached, the marker will be updated less often, it is
     # kind of a way to reduce the load/iops.
     DEFAULT_SCANNED_BETWEEN_MARKERS = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def init_current_marker(self, volume_path, items_per_second):
         """Init variables used to handle crawler markers
@@ -138,7 +142,7 @@ class CrawlerStatsdMixin:
             else:
                 # The -crawler suffix may seem redundant, but is there to mimic
                 # what we usually set for syslog_prefix.
-                statsd_prefix = f"openio.crawler.{self.SERVICE_TYPE}_crawler"
+                statsd_prefix = f"openio.crawler.{self.CRAWLER_TYPE}_crawler"
         statsd_prefix += f".{self.volume_id}"
         statsd_conf["statsd_prefix"] = statsd_prefix.replace("-", "_")
         self.statsd_client = get_statsd(conf=statsd_conf)
@@ -186,7 +190,11 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     Crawler Worker responsible for a single volume.
     """
 
+    # The kind of service we are crawling
+    CRAWLER_TYPE = None
+    # The kind of service we are accessing the volume of
     SERVICE_TYPE = None
+
     WORKING_DIR = ""
     EXCLUDED_DIRS = None
 
@@ -195,7 +203,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     DEFAULT_SCANNED_PER_SECOND = 30
     DEFAULT_STAT_INTERVAL = 10.0
 
-    def __init__(self, conf, volume_path, logger=None, api=None, watchdog=None):
+    def __init__(self, conf, volume_path, logger=None, **kwargs):
         """
         - interval: (int) in sec time between two full scans. Default: half an
                     hour.
@@ -203,9 +211,16 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         - scanned_per_second: (int) maximum number of indexed databases /s.
         """
         self.conf = conf
-        self.volume = volume_path
         self.logger = logger or get_logger(self.conf)
-        self.running = True
+        if not volume_path:
+            raise ConfigurationException("No volume specified for crawler")
+        self.namespace, self.volume_id = check_volume_for_service_type(
+            volume_path, self.SERVICE_TYPE
+        )
+        self.volume_path = volume_path
+        self._stop_requested = Event()
+        super().__init__(**kwargs)
+
         self.working_dir = self.conf.get("working_dir", self.WORKING_DIR)
         self.excluded_dirs = self.conf.get("excluded_dirs", self.EXCLUDED_DIRS)
         if self.excluded_dirs:
@@ -231,9 +246,6 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.max_scanned_per_second = int_value(
             self.conf.get("scanned_per_second"), self.DEFAULT_SCANNED_PER_SECOND
         )
-        self.namespace, self.volume_id = check_volume_for_service_type(
-            self.volume, self.SERVICE_TYPE
-        )
         self.passes = 0
         self.successes = 0
         self.errors = 0
@@ -244,26 +256,8 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.last_stats_report_time = 0
         self.scanned_since_last_report = 0
 
-        super().__init__()
-
-        # This dict is passed to all filters called in the pipeline
-        # of this worker
-        self.app_env = {}
-        self.app_env["api"] = api or ObjectStorageApi(
-            self.namespace, logger=self.logger
-        )
-        self.app_env["logger"] = self.logger
-        self.app_env["statsd_client"] = self.statsd_client
-        self.app_env["volume_path"] = self.volume
-        self.app_env["volume_id"] = self.volume_id
-        self.app_env["watchdog"] = watchdog
-        self.app_env["working_dir"] = self.working_dir
-        # Loading pipeline
-        self.pipeline = LOAD_PIPELINES[type(self).__name__](
-            self.conf.get("conf_file"), global_conf=self.conf, app=self
-        )
-        self.hash_width = 0
-        self.hash_depth = 0
+        self.hash_width = int_value(self.conf.get("hash_width"), 0)
+        self.hash_depth = int_value(self.conf.get("hash_depth"), 0)
         self.current_marker = None
         self.use_marker = boolean_value(self.conf.get("use_marker"), False)
         if self.use_marker:
@@ -272,12 +266,10 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
             CrawlerWorkerMarkerMixin.init_current_marker(
                 self, volume_path, self.max_scanned_per_second
             )
-            self.hash_width = int_value(self.conf.get("hash_width"), 0)
             if not self.hash_width:
                 raise ConfigurationException(
                     "No hash_width specified (mandatory if marker is used)"
                 )
-            self.hash_depth = int_value(self.conf.get("hash_depth"), 0)
             if not self.hash_depth:
                 raise ConfigurationException(
                     "No hash_depth specified (mandatory if marker is used)"
@@ -291,11 +283,147 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         Log the status of crawler
         :param tag: One of three: starting, running, ended.
         """
+        raise NotImplementedError("report not implemented")
+
+    def process_entry(self, path, reqid=None):
+        raise NotImplementedError("process_entry not implemented")
+
+    def crawl_volume(self):
+        """
+        Crawl volume, and apply filters on every database.
+        """
+        raise NotImplementedError("crawl_volume not implemented")
+
+    def run(self):
+        self._wait_before_starting()
+        while self.running:
+            self.start_time = time.time()
+            try:
+                self.crawl_volume()
+            except OSError as err:
+                self.logger.error("Failed to crawl volume: %s", err)
+            except Exception:
+                self.logger.exception("Failed to crawl volume")
+            crawling_duration = time.time() - self.start_time
+            self.report_duration(crawling_duration)
+            if self.one_shot:
+                # For one shot crawler, we exit after the first execution
+                return
+            self._wait_next_iteration(crawling_duration)
+
+    def _wait_before_starting(self):
+        if self.wait_random_time_before_starting:
+            waiting_time_to_start = randint(0, self.scans_interval)
+            self.logger.info(
+                "Waiting %d seconds before starting on volume_id=%s",
+                waiting_time_to_start,
+                self.volume_id,
+            )
+            for _ in range(waiting_time_to_start):
+                if not self.running:
+                    return
+                time.sleep(1)
+
+    def _wait_next_iteration(self, crawling_duration):
+        waiting_time_to_start = self.scans_interval - crawling_duration
+        if waiting_time_to_start > 0:
+            self.logger.info(
+                "Waiting %d seconds before next pass on volume_id=%s",
+                waiting_time_to_start,
+                self.volume_id,
+            )
+            for _ in range(int(waiting_time_to_start)):
+                if not self.running:
+                    return
+                time.sleep(1)
+
+    @property
+    def running(self):
+        return not self._stop_requested.is_set()
+
+    def stop(self):
+        """
+        Ask the worker to stop gracefully.
+        """
+        self.logger.info("Stopping worker volume_id=%s", self.volume_id)
+        self._stop_requested.set()
+
+
+class PipelineWorker(CrawlerWorker):
+
+    def __init__(self, *args, api=None, watchdog=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This dict is passed to all filters called in the pipeline
+        # of this worker
+        self.app_env = {}
+        self.app_env["api"] = api or ObjectStorageApi(
+            self.namespace, logger=self.logger
+        )
+        self.app_env["logger"] = self.logger
+        self.app_env["statsd_client"] = self.statsd_client
+        self.app_env["volume_path"] = self.volume_path
+        self.app_env["volume_id"] = self.volume_id
+        self.app_env["watchdog"] = watchdog
+        self.app_env["working_dir"] = self.working_dir
+        # Loading pipeline
+        self.pipeline = LOAD_PIPELINES[type(self).__name__](
+            self.conf.get("conf_file"), global_conf=self.conf, app=self
+        )
+
+    def crawl_volume(self):
+        """
+        Crawl volume, and apply filters on every database.
+        """
+        self.passes += 1
+        # EXCLUDED_DIRS can be used to avoid scanning the non optimal
+        # placement folder for rawx crawler
+        excluded_dirs = (self.MARKERS_DIR,)
+        if self.excluded_dirs:
+            excluded_dirs = excluded_dirs + self.excluded_dirs
+        paths = paths_gen(
+            volume_path=join(self.volume_path, self.working_dir),
+            excluded_dirs=excluded_dirs,
+            marker=self.current_marker,
+            hash_width=self.hash_width,
+            hash_depth=self.hash_depth,
+        )
+
+        self.report("starting", force=True)
+        last_scan_time = 0
+        for path in paths:
+            self.logger.debug("crawl_volume current path: %s", path)
+            if not self.running:
+                self.logger.info("stop asked for loop paths")
+                break
+
+            # process_entry() is supposed to be exception-safe
+            if not self.process_entry(path):
+                continue
+
+            last_scan_time = ratelimit(
+                run_time=last_scan_time,
+                max_rate=self.max_scanned_per_second,
+                increment=1,
+            )
+            self.write_marker(path.rsplit("/", 1)[-1])
+            self.report("running")
+
+        self.report("ended", force=True)
+        # reset stats for each filter
+        self.pipeline.reset_stats()
+        # reset crawler stats
+        self.errors = 0
+        self.successes = 0
+        self.ignored_paths = 0
+        self.invalid_paths = 0
+        self.write_marker(self.DEFAULT_MARKER, force=True)
+
+    def report(self, tag, force=False):
         now = time.time()
         if not (
             force or now > self.last_stats_report_time + self.DEFAULT_STAT_INTERVAL
         ):
-            return
+            return False
 
         elapsed = (now - self.start_time) or 0.00001
         total = self.successes + self.errors
@@ -356,101 +484,14 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
 
         self.last_stats_report_time = now
 
-    def process_path(self, path):
-        raise NotImplementedError("run not implemented")
-
-    def crawl_volume(self):
-        """
-        Crawl volume, and apply filters on every database.
-        """
-        self.passes += 1
-        # EXCLUDED_DIRS can be used to avoid scanning the non optimal
-        # placement folder for rawx crawler
-        excluded_dirs = (self.MARKERS_DIR,)
-        if self.excluded_dirs:
-            excluded_dirs = excluded_dirs + self.excluded_dirs
-        paths = paths_gen(
-            volume_path=join(self.volume, self.working_dir),
-            excluded_dirs=excluded_dirs,
-            marker=self.current_marker,
-            hash_width=self.hash_width,
-            hash_depth=self.hash_depth,
-        )
-
-        self.report("starting", force=True)
-        last_scan_time = 0
-        for path in paths:
-            self.logger.debug("crawl_volume current path: %s", path)
-            if not self.running:
-                self.logger.info("stop asked for loop paths")
-                break
-
-            # process_path() is supposed to be exception-safe
-            if not self.process_path(path):
-                continue
-
-            last_scan_time = ratelimit(
-                run_time=last_scan_time,
-                max_rate=self.max_scanned_per_second,
-                increment=1,
-            )
-            self.write_marker(path.rsplit("/", 1)[-1])
-            self.report("running")
-
-        self.report("ended", force=True)
-        # reset stats for each filter
-        self.pipeline.reset_stats()
-        # reset crawler stats
-        self.errors = 0
-        self.successes = 0
-        self.ignored_paths = 0
-        self.invalid_paths = 0
-        self.write_marker(self.DEFAULT_MARKER, force=True)
-
-    def run(self):
-        if self.wait_random_time_before_starting:
-            waiting_time_to_start = randint(0, self.scans_interval)
-            self.logger.debug("Wait %d seconds before starting", waiting_time_to_start)
-            for _ in range(waiting_time_to_start):
-                if not self.running:
-                    return
-                time.sleep(1)
-        while self.running:
-            self.start_time = time.time()
-            try:
-                self.crawl_volume()
-            except OSError as err:
-                self.logger.error("Failed to crawl volume: %s", err)
-            except Exception:
-                self.logger.exception("Failed to crawl volume")
-            crawling_duration = time.time() - self.start_time
-            self.report_duration(crawling_duration)
-            if self.one_shot:
-                # For one shot crawler, we exit after the first execution
-                return
-            waiting_time_to_start = self.scans_interval - crawling_duration
-            if waiting_time_to_start > 0:
-                self.logger.debug(
-                    "Wait %d seconds before next pass", waiting_time_to_start
-                )
-                for _ in range(int(waiting_time_to_start)):
-                    if not self.running:
-                        return
-                    time.sleep(1)
-
-    def stop(self):
-        """
-        Needed for gracefully stopping.
-        """
-        self.running = False
-
 
 class Crawler(Daemon):
     """
     Daemon to crawl volumes
     """
 
-    SERVICE_TYPE = None
+    # The kind of service we are crawling
+    CRAWLER_TYPE = None
     DEFAULT_NICE_VALUE = 0
 
     def __init__(self, conf, conf_file=None, worker_class=None, **kwargs):
@@ -494,14 +535,14 @@ class Crawler(Daemon):
 
     def run(self, *args, **kwargs):
         """Main loop to scan volumes and apply filters"""
-        self.logger.info("started %s crawler service", self.SERVICE_TYPE)
+        self.logger.info("started %s crawler service", self.CRAWLER_TYPE)
 
         for worker in self.volume_workers:
             self.pool.spawn(worker.run)
         self.pool.waitall()
 
     def stop(self):
-        self.logger.info("stop %s crawler asked", self.SERVICE_TYPE)
+        self.logger.info("stop %s crawler asked", self.CRAWLER_TYPE)
         for worker in self.volume_workers:
             worker.stop()
 

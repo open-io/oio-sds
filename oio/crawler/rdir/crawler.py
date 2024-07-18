@@ -27,7 +27,7 @@ from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
 def worker_class_for_type(conf):
     """Retrieves the right rdirworker according to volume to crawl"""
     volume_type = conf.get("volume_type", "rawx")
-    if volume_type == RdirWorkerForMeta2.WORKER_TYPE:
+    if volume_type == RdirWorkerForMeta2.SERVICE_TYPE:
         return RdirWorkerForMeta2
     else:
         return RdirWorkerForRawx

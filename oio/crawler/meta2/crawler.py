@@ -17,12 +17,12 @@
 import re
 import time
 from oio.common.constants import STRLEN_REFERENCEID
-from oio.crawler.common.crawler import Crawler, CrawlerWorker
+from oio.crawler.common.crawler import Crawler, PipelineWorker
 from oio.crawler.meta2.meta2db import Meta2DB, delete_meta2_db
 from oio.directory.admin import AdminClient
 
 
-class Meta2Worker(CrawlerWorker):
+class Meta2Worker(PipelineWorker):
     """
     Meta2 Worker responsible for a single volume.
     """
@@ -34,15 +34,19 @@ class Meta2Worker(CrawlerWorker):
             conf, volume_path, logger=logger, api=api, **kwargs
         )
         self.sharding_suffix_regex = re.compile(r"sharding-([\d]+)-([\d])")
-        self.admin_client = None
+        self.admin_client = AdminClient(
+            self.conf,
+            logger=self.logger,
+            pool_manager=self.app_env["api"].container.pool_manager,
+        )
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
             self.logger.warning(
-                "Meta2worker volume %s handling failure %s", self.volume, msg
+                "Meta2worker volume %s handling failure %s", self.volume_path, msg
             )
 
-    def process_path(self, path):
+    def process_entry(self, path, reqid=None):
         if path.endswith("-journal") or path.endswith("-wal"):
             self.logger.debug("Ignoring sqlite journal file: %s", path)
             self.ignored_paths += 1
@@ -58,12 +62,6 @@ class Meta2Worker(CrawlerWorker):
                 # used by placement-checker-crawler
                 timestamp = int(db_id[-1].split("-")[-1])
                 if time.time() > (timestamp + 172800):
-                    if not self.admin_client:
-                        self.admin_client = AdminClient(
-                            self.conf,
-                            logger=self.logger,
-                            pool_manager=self.app_env["api"].container.pool_manager,
-                        )
                     delete_meta2_db(
                         cid=db_id[0],
                         path=path,
@@ -119,6 +117,7 @@ class Meta2Worker(CrawlerWorker):
 
 
 class Meta2Crawler(Crawler):
+    CRAWLER_TYPE = "meta2"
     SERVICE_TYPE = "meta2"
 
     def __init__(self, conf, conf_file=None, worker_class=Meta2Worker, **kwargs):
