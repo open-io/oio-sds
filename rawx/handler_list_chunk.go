@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"net/http"
 	"openio-sds/rawx/iterator"
+	"openio-sds/rawx/utils"
 	"path/filepath"
 )
 
@@ -53,7 +54,7 @@ func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth 
 	onFile := func(file string, f fs.DirEntry, err error) error {
 		basename := filepath.Base(file)
 		// The iterator already produces the leaf directories, no subdir is expected to contain chunks.
-		if isValidChunkId(basename) {
+		if utils.IsValidChunkId(basename) {
 			// Let's just skip pending chunks
 			fileList = append(fileList, basename)
 		}

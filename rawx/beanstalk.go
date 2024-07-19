@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2018-2020 OpenIO SAS
-// Copyright (C) 2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"openio-sds/rawx/utils"
 )
 
 const (
@@ -105,11 +107,11 @@ func (bc *beanstalkClient) Put(data []byte) (uint64, error) {
 	cmd := bytes.Buffer{}
 	cmd.Grow(len(data) + 64)
 	cmd.WriteString("put ")
-	cmd.WriteString(utoa(defaultPriority))
+	cmd.WriteString(utils.Utoa(defaultPriority))
 	cmd.WriteString(" 0 ")
-	cmd.WriteString(utoa(defaultTTR))
+	cmd.WriteString(utils.Utoa(defaultTTR))
 	cmd.WriteRune(' ')
-	cmd.WriteString(itoa(len(data)))
+	cmd.WriteString(utils.Itoa(len(data)))
 	cmd.WriteString("\r\n")
 	cmd.Write(data)
 	cmd.WriteString("\r\n")

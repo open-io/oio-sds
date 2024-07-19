@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 type chunkInfo struct {
@@ -424,7 +425,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	chunk.ContentVersion = version
 
 	contentID, err := url.PathUnescape(fullpath[4])
-	if err != nil || !isHexaString(contentID, 0, 64) {
+	if err != nil || !utils.IsHexaString(contentID, 0, 64) {
 		return errInvalidHeader
 	}
 	headerContentID := headers.Get(defs.HeaderNameContentID)
@@ -457,7 +458,7 @@ func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunk
 		return chunk, os.ErrPermission
 	}
 	chunk.ChunkID = filepath.Base(filepath.Clean(dstURL.Path))
-	if !isHexaString(chunk.ChunkID, 24, 64) {
+	if !utils.IsHexaString(chunk.ChunkID, 24, 64) {
 		LogWarning("%s did not parse as hexadecimal string", chunk.ChunkID)
 		return chunk, errInvalidHeader
 	}
@@ -483,7 +484,7 @@ func (chunk *chunkInfo) loadExtHeaders(headers *http.Header) {
 		chunk.ExtMeta = make(map[string]string)
 	}
 	for key, value := range *headers {
-		if strippedKey, found := hasPrefix(key, "X-Oio-Ext-"); found {
+		if strippedKey, found := utils.HasPrefix(key, "X-Oio-Ext-"); found {
 			chunk.ExtMeta[strippedKey], _ = url.PathUnescape(value[0])
 		}
 	}
@@ -523,7 +524,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 	chunk.MetachunkHash = headers.Get(defs.HeaderNameMetachunkChecksum)
 	if chunk.MetachunkHash != "" {
-		if !isHexaString(chunk.MetachunkHash, 0, 64) {
+		if !utils.IsHexaString(chunk.MetachunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
@@ -537,7 +538,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 	chunk.ChunkHash = headers.Get(defs.HeaderNameChunkChecksum)
 	if chunk.ChunkHash != "" {
-		if !isHexaString(chunk.ChunkHash, 0, 64) {
+		if !utils.IsHexaString(chunk.ChunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
@@ -567,7 +568,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
 		if chunk.MetachunkHash != "" {
-			if !isHexaString(chunk.MetachunkHash, 0, 64) {
+			if !utils.IsHexaString(chunk.MetachunkHash, 0, 64) {
 				return errInvalidHeader
 			}
 			chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)

@@ -17,6 +17,8 @@
 
 package defs
 
+const HexaCharacters = "0123456789ABCDEF"
+
 const (
 	AttrNameFullPrefix = "user.oio.content.fullpath:"
 )

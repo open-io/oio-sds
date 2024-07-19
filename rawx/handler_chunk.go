@@ -38,6 +38,7 @@ import (
 
 	"lukechampine.com/blake3"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 var (
@@ -102,7 +103,7 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 
 type UploadFinal func(int64) error
 
-func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferPool, cb UploadFinal) error {
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.BufferPool, cb UploadFinal) error {
 	var written int64
 	var err error
 
@@ -648,7 +649,7 @@ func (rr *rawxRequest) removeChunk() {
 func (rr *rawxRequest) serveChunk() {
 	// 24 digits (96 bits) seems reasonable to avoid collisions.
 	// TODO(FVE): make the minimum and maximum configurable
-	if !isHexaString(rr.req.URL.Path[1:], 24, 64) {
+	if !utils.IsHexaString(rr.req.URL.Path[1:], 24, 64) {
 		rr.replyError("", errInvalidChunkID)
 		return
 	}
@@ -722,11 +723,11 @@ func (rr *rawxRequest) serveChunk() {
 func packRangeHeader(start, last, size int64) string {
 	sb := strings.Builder{}
 	sb.WriteString("bytes ")
-	sb.WriteString(itoa64(start))
+	sb.WriteString(utils.Itoa64(start))
 	sb.WriteRune('-')
-	sb.WriteString(itoa64(last))
+	sb.WriteString(utils.Itoa64(last))
 	sb.WriteRune('/')
-	sb.WriteString(itoa64(size))
+	sb.WriteString(utils.Itoa64(size))
 	return sb.String()
 }
 

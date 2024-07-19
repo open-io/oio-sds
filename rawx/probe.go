@@ -22,6 +22,9 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 type RawxProbe struct {
@@ -89,7 +92,7 @@ func (rp *RawxProbe) ProbeLoop(basedir string, tag string, finished chan bool) {
 
 func (rp *RawxProbe) probeOnce(basedir string, tag string, finished chan bool) {
 	/* Try a directory creation */
-	path := fmt.Sprintf("%s/probe-%s", basedir, randomString(16, hexaCharacters))
+	path := fmt.Sprintf("%s/probe-%s", basedir, utils.RandomString(16, defs.HexaCharacters))
 	LogDebug("Probing directory %s", path)
 	err := os.Mkdir(path, 0755)
 	os.Remove(path)
@@ -101,7 +104,7 @@ func (rp *RawxProbe) probeOnce(basedir string, tag string, finished chan bool) {
 	}
 
 	/* Try a file creation */
-	path = fmt.Sprintf("%s/probe-%s", basedir, randomString(16, hexaCharacters))
+	path = fmt.Sprintf("%s/probe-%s", basedir, utils.RandomString(16, defs.HexaCharacters))
 	LogDebug("Probing file %s", path)
 	file, err := os.Create(path)
 	file.Close()

@@ -29,6 +29,7 @@ import (
 
 	syscall "golang.org/x/sys/unix"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 type fileRepository struct {
@@ -220,7 +221,7 @@ func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
 	// ../../chunkId[:3]/chunkId
 	relOldPath := sb.String()
 	// symlink name := chunk_id.nb_attempt_by_placement_improver.time_stamp_of_next_pass
-	relPathWithTimeStamp := strings.Join([]string{relPath, itoa(0), itoa64(time.Now().Unix())}, ".")
+	relPathWithTimeStamp := strings.Join([]string{relPath, utils.Itoa(0), utils.Itoa64(time.Now().Unix())}, ".")
 	// Absolute destination of the chunk
 	absNewPath := strings.Join([]string{fr.nonOptimalPlacementFolderPath, relPathWithTimeStamp}, "/")
 	// Absolute path to symlink folder

@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"openio-sds/rawx/utils"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ import (
 // It, for any reason, a field would be made private (losing its capital letter),
 // it wouldn't be encoded/decoded.
 func TestNotifierCodec(t *testing.T) {
-	r := func() string { return randomString(16, hexaCharacters) }
+	r := func() string { return utils.RandomString(16, defs.HexaCharacters) }
 	original := encodableEvent{
 		EventType: defs.EventTypeDelChunk,
 		When:      time.Now().Unix(),

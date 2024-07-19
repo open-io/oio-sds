@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"openio-sds/rawx/utils"
 	"os"
 	"time"
 
@@ -39,7 +40,7 @@ type rawxService struct {
 	checksumMode int
 	compression  string
 
-	uploadBufferPool bufferPool
+	uploadBufferPool utils.BufferPool
 
 	// for IO errors
 	probe RawxProbe
@@ -161,7 +162,8 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url && req.Host != rawx.tlsUrl) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		for _dslash(req.URL.Path) {
+		dslash := func(s string) bool { return len(s) > 1 && s[0] == '/' && s[1] == '/' }
+		for dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]
 		}
 		switch req.URL.Path {

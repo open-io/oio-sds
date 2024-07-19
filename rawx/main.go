@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 type httpServer struct {
@@ -47,7 +48,7 @@ type httpServer struct {
 	socket *net.TCPListener
 }
 
-var xattrBufferPool = newBufferPool(defs.XattrBufferTotalSizeDefault, defs.XattrBufferSizeDefault)
+var xattrBufferPool = utils.NewBufferPool(defs.XattrBufferTotalSizeDefault, defs.XattrBufferSizeDefault)
 
 // variable to track if a child process has been forked
 var childPid int = 0
@@ -397,7 +398,7 @@ func main() {
 		rawx.bufferSize = defs.UploadBatchSize
 	}
 
-	rawx.uploadBufferPool = newBufferPool(defs.UploadBufferTotalSizeDefault, rawx.bufferSize)
+	rawx.uploadBufferPool = utils.NewBufferPool(defs.UploadBufferTotalSizeDefault, rawx.bufferSize)
 
 	// Patch the checksum mode
 	if v, ok := opts["checksum"]; ok {

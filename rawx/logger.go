@@ -30,6 +30,7 @@ import (
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 type OioLogger interface {
@@ -410,7 +411,7 @@ type SysLogger struct {
 	wg            sync.WaitGroup
 	running       bool
 	syslogID      string
-	alertThrottle PeriodicThrottle
+	alertThrottle utils.Throttle
 	loggerAccess  *syslog.Writer
 	loggerInfo    *syslog.Writer
 	loggerError   *syslog.Writer
@@ -418,7 +419,7 @@ type SysLogger struct {
 
 func InitSysLogger(syslogID string) {
 	l := &SysLogger{}
-	l.alertThrottle = PeriodicThrottle{period: 1000000000}
+	l.alertThrottle = utils.NewPeriodicThrottle(1000000000)
 	l.queue = make(chan string, defs.ConfigDefaultAccessLogQueueLength)
 	l.running = true
 	l.syslogID = syslogID

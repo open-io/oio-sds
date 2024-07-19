@@ -30,6 +30,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/utils"
 )
 
 // Tells if the current RAWX service may emit notifications
@@ -86,7 +87,7 @@ type kafkaBackend struct {
 var (
 	errExiting      = errors.New("RAWX exiting")
 	errClogged      = errors.New("Beanstalkd clogged")
-	alertThrottling = PeriodicThrottle{period: 1000000000}
+	alertThrottling = utils.NewPeriodicThrottle(1000000000)
 )
 
 func deadLetter(event []byte, err error) {
@@ -338,14 +339,14 @@ func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error)
 		options.getFloat("timeout_conn_event", defs.EventConnTimeout)) * time.Second
 	send_timeout := time.Duration(
 		options.getFloat("timeout_send_event", defs.EventSendTimeout)) * time.Second
-	if endpoint, ok := hasPrefix(url, "beanstalk://"); ok {
+	if endpoint, ok := utils.HasPrefix(url, "beanstalk://"); ok {
 		out := new(beanstalkdBackend)
 		out.endpoint = endpoint
 		out.tube = defs.BeanstalkTubeDefault
 		out.conn_attempts = conn_attempts
 		out.conn_timeout = conn_timeout
 		return out, nil
-	} else if _, ok := hasPrefix(url, "amqp://"); ok {
+	} else if _, ok := utils.HasPrefix(url, "amqp://"); ok {
 		out := new(amqpBackend)
 		out.urls = strings.Split(url, ";")
 		out.urlId = 0
@@ -360,7 +361,7 @@ func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error)
 		out.conn_timeout = conn_timeout
 		out.send_timeout = send_timeout
 		return out, nil
-	} else if _, ok := hasPrefix(url, "kafka://"); ok {
+	} else if _, ok := utils.HasPrefix(url, "kafka://"); ok {
 		out := new(kafkaBackend)
 		out.endpoint = url
 		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), defs.ConfigOioEventTopic))

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"openio-sds/rawx/utils"
 )
 
 type statInfo struct {
@@ -189,7 +191,7 @@ func doGetStats(rr *rawxRequest) {
 		bb.WriteString("counter ")
 		bb.WriteString(key)
 		bb.WriteRune(' ')
-		bb.WriteString(utoa(value.(uint64)))
+		bb.WriteString(utils.Utoa(value.(uint64)))
 		bb.WriteRune('\n')
 	}
 
@@ -282,7 +284,7 @@ func doGetStatsPrometheus(rr *rawxRequest) {
 			continue
 		}
 		bb.WriteRune(' ')
-		bb.WriteString(utoa(value.(uint64)))
+		bb.WriteString(utils.Utoa(value.(uint64)))
 		bb.WriteRune('\n')
 	}
 

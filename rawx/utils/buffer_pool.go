@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2020 OpenIO SAS
-// Copyright (C) 2023 OVH SAS
+// Copyright (C) 2023-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU Affero General Public
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package utils
 
-// bufferPool stores already allocated memory buffers.
+// BufferPool stores already allocated memory buffers.
 // Notice there is no limit on the number of buffer this module can allocate.
-type bufferPool interface {
+type BufferPool interface {
 	Acquire() []byte
 	Release(buf []byte)
 }
@@ -29,7 +29,7 @@ type unisizeBufferPool struct {
 	size int
 }
 
-func newBufferPool(max, size int) bufferPool {
+func NewBufferPool(max, size int) BufferPool {
 	nb := max / size
 	if nb < 1 {
 		nb = 1

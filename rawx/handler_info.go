@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"net/http"
 	"time"
+
+	"openio-sds/rawx/utils"
 )
 
 func doGetInfo(rr *rawxRequest) {
@@ -43,11 +45,11 @@ func doGetInfo(rr *rawxRequest) {
 	}
 
 	bb.WriteString("hash_depth ")
-	bb.WriteString(itoa(rr.rawx.repo.sub.hashDepth))
+	bb.WriteString(utils.Itoa(rr.rawx.repo.sub.hashDepth))
 	bb.WriteRune('\n')
 
 	bb.WriteString("hash_width ")
-	bb.WriteString(itoa(rr.rawx.repo.sub.hashWidth))
+	bb.WriteString(utils.Itoa(rr.rawx.repo.sub.hashWidth))
 	bb.WriteRune('\n')
 
 	rr.replyCode(http.StatusOK)
