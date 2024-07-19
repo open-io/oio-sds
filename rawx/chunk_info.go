@@ -223,7 +223,7 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 		prefix := "user.oio.ext."
 		res := make(map[string]string)
 		var err error
-		for i:=0; i < len(listBuffer); i++ {
+		for i := 0; i < len(listBuffer); i++ {
 			// attributes names are separated by null bytes
 			if listBuffer[i] == byte(0) {
 				attrKey := listBuffer[:i]

@@ -115,7 +115,7 @@ var deprecatedOpts = map[string]string{
 }
 
 var prefixOpts = map[string]string{
-	kafka_conf_prefix: kafka_conf_prefix,
+	ConfigPrefixKafka: ConfigPrefixKafka,
 }
 
 // readConfig -- fetch options from conf file and remap their name

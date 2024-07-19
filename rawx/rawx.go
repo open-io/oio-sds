@@ -32,7 +32,7 @@ type rawxService struct {
 	path         string
 	id           string
 	repo         chunkRepository
-	notifier     *notifier
+	notifier     *Notifier
 	bufferSize   int
 	checksumMode int
 	compression  string
@@ -110,7 +110,7 @@ func (rr *rawxRequest) replyError(action string, err error) {
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
 		} else if err == io.ErrUnexpectedEOF && rr.req.Method == "PUT" {
-			rr.replyCode(httpStatusClientClosedRequest)
+			rr.replyCode(HttpStatusClientClosedRequest)
 		} else {
 			switch err {
 			case errInvalidChunkID, errMissingHeader, errInvalidHeader:

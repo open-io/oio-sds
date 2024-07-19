@@ -71,21 +71,21 @@ func (fr *fileRepository) init(root string) error {
 		return errors.New("Filerepo path must be absolute")
 	}
 	fr.root = basedir
-	fr.hashWidth = hashWidth
-	fr.hashDepth = hashDepth
-	fr.putOpenMode = putOpenMode
-	fr.putMkdirMode = putMkdirMode
-	fr.shallowCopy = configDefaultShallowCopy
-	fr.syncFile = configDefaultSyncFile
-	fr.syncDir = configDefaultSyncDir
-	fr.fallocateFile = configDefaultFallocate
-	fr.fadviseUpload = configDefaultFadviseUpload
-	fr.fadviseDownload = configDefaultFadviseDownload
-	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, nonOptimalPlacementFolderName}, "/")
+	fr.hashWidth = HashWidthDefault
+	fr.hashDepth = HashDepthDefault
+	fr.putOpenMode = PutOpenModeDefault
+	fr.putMkdirMode = PutMkdirModeDefault
+	fr.shallowCopy = ConfigDefaultShallowCopy
+	fr.syncFile = ConfigDefaultSyncFile
+	fr.syncDir = ConfigDefaultSyncDir
+	fr.fallocateFile = ConfigDefaultFallocate
+	fr.fadviseUpload = ConfigDefaultFadviseUpload
+	fr.fadviseDownload = ConfigDefaultFadviseDownload
+	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, FolderNonOptimalPlacement}, "/")
 	if err = os.MkdirAll(fr.nonOptimalPlacementFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
-	fr.orphansFolderPath = strings.Join([]string{fr.root, orphansFolderName}, "/")
+	fr.orphansFolderPath = strings.Join([]string{fr.root, FolderOrphans}, "/")
 	if err = os.MkdirAll(fr.orphansFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
@@ -142,12 +142,12 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 	f := &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}
 
 	switch fr.fadviseDownload {
-	case configFadviseNone:
-	case configFadviseYes:
+	case ConfigFadviseNone:
+	case ConfigFadviseYes:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
-	case configFadviseNocache:
+	case ConfigFadviseNoCache:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
-	case configFadviseCache:
+	case ConfigFadviseCache:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_WILLNEED)
 	}
@@ -388,7 +388,7 @@ func (fw *realFileWriter) Write(buffer []byte) (int, error) {
 	buflen := int64(len(buffer))
 
 	if fw.written+buflen > fw.allocated {
-		fw.Extend(uploadExtensionSize)
+		fw.Extend(UploadExtensionSize)
 	}
 
 	fw.written += buflen
@@ -422,12 +422,12 @@ func (fw *realFileWriter) commit() error {
 
 	if err == nil {
 		switch fw.repo.fadviseUpload {
-		case configFadviseNone:
-		case configFadviseYes:
+		case ConfigFadviseNone:
+		case ConfigFadviseYes:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
-		case configFadviseNocache:
+		case ConfigFadviseNoCache:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_DONTNEED)
-		case configFadviseCache:
+		case ConfigFadviseCache:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_WILLNEED)
 		}

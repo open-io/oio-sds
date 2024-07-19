@@ -45,7 +45,7 @@ type httpServer struct {
 	socket *net.TCPListener
 }
 
-var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
+var xattrBufferPool = newBufferPool(XattrBufferTotalSizeDefault, XattrBufferSizeDefault)
 
 // variable to track if a child process has been forked
 var childPid int = 0
@@ -393,11 +393,11 @@ func main() {
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
-	notifAllowed = opts.getBool("events", configDefaultEvents)
+	NotifAllowed = opts.getBool("events", ConfigDefaultEvents)
 
-	accessLogPut = opts.getBool("log_access_put", configAccessLogDefaultPut)
-	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
-	accessLogDel = opts.getBool("log_access_del", configAccessLogDefaultDelete)
+	accessLogPut = opts.getBool("log_access_put", ConfigDefaultAccessLogPut)
+	accessLogGet = opts.getBool("log_access_get", ConfigDefaultAccessLogGet)
+	accessLogDel = opts.getBool("log_access_del", ConfigDefaultAccessLogDelete)
 
 	checkNS(namespace)
 	checkURL(rawxURL)
@@ -412,7 +412,7 @@ func main() {
 	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
 	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
-	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", configDefaultOpenNonblock)
+	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", ConfigDefaultOpenNonblock)
 
 	rawx := rawxService{
 		ns:            namespace,
@@ -421,8 +421,8 @@ func main() {
 		path:          chunkrepo.sub.root,
 		id:            rawxID,
 		repo:          chunkrepo,
-		bufferSize:    1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
-		checksumMode:  checksumAlways,
+		bufferSize:    1024 * opts.getInt("buffer_size", UploadBufferSizeDefault/1024),
+		checksumMode:  ChecksumAlways,
 		compression:   opts["compression"],
 		lastIOError:   time.Time{},
 		lastIOSuccess: time.Time{},
@@ -431,53 +431,53 @@ func main() {
 	}
 
 	// Clamp the buffer size to admitted values
-	if rawx.bufferSize > uploadBufferSizeMax {
-		rawx.bufferSize = uploadBufferSizeMax
+	if rawx.bufferSize > UploadBufferSizeMax {
+		rawx.bufferSize = UploadBufferSizeMax
 	}
-	if rawx.bufferSize < uploadBufferSizeMin {
-		rawx.bufferSize = uploadBufferSizeMin
+	if rawx.bufferSize < UploadBufferSizeMin {
+		rawx.bufferSize = UploadBufferSizeMin
 	}
 	// In case of a misconfiguration
-	if rawx.bufferSize < uploadBatchSize {
-		rawx.bufferSize = uploadBatchSize
+	if rawx.bufferSize < UploadBatchSize {
+		rawx.bufferSize = UploadBatchSize
 	}
 
-	rawx.uploadBufferPool = newBufferPool(uploadBufferTotalSizeDefault, rawx.bufferSize)
+	rawx.uploadBufferPool = newBufferPool(UploadBufferTotalSizeDefault, rawx.bufferSize)
 
 	// Patch the checksum mode
 	if v, ok := opts["checksum"]; ok {
 		if v == "smart" {
-			rawx.checksumMode = checksumSmart
+			rawx.checksumMode = ChecksumSmart
 		} else if GetBool(v, true) {
-			rawx.checksumMode = checksumAlways
+			rawx.checksumMode = ChecksumAlways
 		} else {
-			rawx.checksumMode = checksumNever
+			rawx.checksumMode = ChecksumNever
 		}
 	}
 
 	// Patch the fadvise() upon upload
 	if v, ok := opts["fadvise_upload"]; ok {
 		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseUpload = configFadviseCache
+			chunkrepo.sub.fadviseUpload = ConfigFadviseCache
 		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseUpload = configFadviseNocache
+			chunkrepo.sub.fadviseUpload = ConfigFadviseNoCache
 		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseUpload = configFadviseYes
+			chunkrepo.sub.fadviseUpload = ConfigFadviseYes
 		}
 	}
 
 	// Patch the fadvise() upon download
 	if v, ok := opts["fadvise_download"]; ok {
 		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseDownload = configFadviseCache
+			chunkrepo.sub.fadviseDownload = ConfigFadviseCache
 		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseDownload = configFadviseNocache
+			chunkrepo.sub.fadviseDownload = ConfigFadviseNoCache
 		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseDownload = configFadviseYes
+			chunkrepo.sub.fadviseDownload = ConfigFadviseYes
 		}
 	}
 
-	if notifAllowed {
+	if NotifAllowed {
 		eventAgent := OioGetEventAgent(namespace)
 		if eventAgent == "" {
 			LogFatal("Notifier error: no address")
@@ -489,10 +489,10 @@ func main() {
 		}
 	}
 
-	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
-	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
-	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
-	toIdle := opts.getInt("timeout_idle", timeoutIdle)
+	toReadHeader := opts.getInt("timeout_read_header", TimeoutReadHeader)
+	toReadRequest := opts.getInt("timeout_read_request", TimeoutReadRequest)
+	toWrite := opts.getInt("timeout_write_reply", TimeoutWrite)
+	toIdle := opts.getInt("timeout_idle", TimeoutIdle)
 
 	/* need to be duplicated for HTTP and HTTPS */
 	srv := httpServer{
@@ -523,8 +523,8 @@ func main() {
 		},
 	}
 
-	flagNoDelay := opts.getBool("nodelay", configDefaultNoDelay)
-	flagCork := opts.getBool("cork", configDefaultCork)
+	flagNoDelay := opts.getBool("nodelay", ConfigDefaultNoDelay)
+	flagCork := opts.getBool("cork", ConfigDefaultCork)
 	if flagNoDelay || flagCork {
 		srv.server.ConnState = func(cnx net.Conn, st http.ConnState) {
 			setOpt := func(dom, flag, val int) {
@@ -553,7 +553,7 @@ func main() {
 		}
 	}
 
-	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
+	keepalive := opts.getBool("keepalive", ConfigDefaultHttpKeepalive)
 	srv.server.SetKeepAlivesEnabled(keepalive)
 	tlsSrv.server.SetKeepAlivesEnabled(keepalive)
 	if opts["tls_rawx_url"] == "" {
@@ -623,8 +623,8 @@ func main() {
 	wg.Wait()
 
 	finished <- true
-	if notifAllowed {
-		rawx.notifier.stop()
+	if NotifAllowed {
+		rawx.notifier.Stop()
 	}
 
 	logger.close()

@@ -68,7 +68,7 @@ var RangeRegex = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
 func fillBuffer(src io.Reader, buf []byte) (written int, err error) {
-	for len(buf)-written >= uploadBatchSize {
+	for len(buf)-written >= UploadBatchSize {
 		nr, er := src.Read(buf[written:])
 		if nr > 0 {
 			written += nr
@@ -153,7 +153,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferP
 }
 
 func (rr *rawxRequest) checksumRequired() bool {
-	return rr.rawx.checksumMode == checksumAlways || (rr.rawx.checksumMode == checksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
+	return rr.rawx.checksumMode == ChecksumAlways || (rr.rawx.checksumMode == ChecksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
 }
 
 func (rr *rawxRequest) uploadChunk() {
@@ -200,19 +200,19 @@ func (rr *rawxRequest) uploadChunk() {
 	// Maybe intercept the upload with a compression filter
 	var z io.WriteCloser
 	switch rr.rawx.compression {
-	case compressionZlib:
+	case CompressionZlib:
 		z = zlib.NewWriter(out)
-	case compressionDeflate:
+	case CompressionDeflate:
 		z, err = flate.NewWriter(out, 1)
-	case compressionLzw:
+	case CompressionLzw:
 		z = lzw.NewWriter(out, lzw.MSB, 8)
-	case "", compressionOff:
+	case "", CompressionOff:
 		z = nil
 	default:
 		err = errCompressionNotManaged
 	}
 	switch rr.rawx.compression {
-	case "", compressionOff:
+	case "", CompressionOff:
 		rr.chunk.compression = ""
 	default:
 		rr.chunk.compression = rr.rawx.compression
@@ -266,7 +266,7 @@ func (rr *rawxRequest) uploadChunk() {
 	rr.req.Close = false
 	rr.chunk.fillHeadersLight(rr.rep.Header())
 	rr.replyCode(http.StatusCreated)
-	rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
+	rr.rawx.notifier.NotifyNew(rr.reqid, rr.chunk)
 }
 
 func (rr *rawxRequest) updateChunk() {
@@ -336,7 +336,7 @@ func (rr *rawxRequest) copyChunk() {
 			// The link already exists and has an xattr. Commit is a matter of sync.
 			_ = op.commit()
 			rr.replyCode(http.StatusCreated)
-			rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
+			rr.rawx.notifier.NotifyNew(rr.reqid, rr.chunk)
 		}
 	}
 }
@@ -564,13 +564,13 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
 	switch rr.chunk.compression {
-	case compressionZlib:
+	case CompressionZlib:
 		filter, err = zlib.NewReader(inChunk.File())
-	case compressionLzw:
+	case CompressionLzw:
 		filter = lzw.NewReader(inChunk.File(), lzw.MSB, 8)
-	case compressionDeflate:
+	case CompressionDeflate:
 		filter = flate.NewReader(inChunk.File())
-	case "", compressionOff:
+	case "", CompressionOff:
 		filter = nil
 	default:
 		err = errCompressionNotManaged
@@ -601,7 +601,7 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 func (rr *rawxRequest) removeChunk() {
 	var err error
 
-	if notifAllowed {
+	if NotifAllowed {
 		rr.chunk = chunkInfo{}
 		rr.chunk.ChunkID = rr.chunkID
 		rr.chunk.ContainerID = rr.req.Header.Get(HeaderNameContainerID)
@@ -634,8 +634,8 @@ func (rr *rawxRequest) removeChunk() {
 		rr.replyError("removeChunk()", err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		if notifAllowed {
-			rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
+		if NotifAllowed {
+			rr.rawx.notifier.NotifyDel(rr.reqid, rr.chunk)
 		}
 	}
 }
