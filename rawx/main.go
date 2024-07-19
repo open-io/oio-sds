@@ -38,6 +38,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"openio-sds/rawx/defs"
 )
 
 type httpServer struct {
@@ -45,7 +47,7 @@ type httpServer struct {
 	socket *net.TCPListener
 }
 
-var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
+var xattrBufferPool = newBufferPool(defs.XattrBufferTotalSizeDefault, defs.XattrBufferSizeDefault)
 
 // variable to track if a child process has been forked
 var childPid int = 0
@@ -349,11 +351,11 @@ func main() {
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
-	notifAllowed = opts.getBool("events", configDefaultEvents)
+	NotifAllowed = opts.getBool("events", defs.ConfigDefaultEvents)
 
-	accessLogPut = opts.getBool("log_access_put", configAccessLogDefaultPut)
-	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
-	accessLogDel = opts.getBool("log_access_del", configAccessLogDefaultDelete)
+	accessLogPut = opts.getBool("log_access_put", defs.ConfigDefaultAccessLogPut)
+	accessLogGet = opts.getBool("log_access_get", defs.ConfigDefaultAccessLogGet)
+	accessLogDel = opts.getBool("log_access_del", defs.ConfigDefaultAccessLogDelete)
 
 	checkNS(namespace)
 	checkURL(rawxURL)
@@ -368,7 +370,7 @@ func main() {
 	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
 	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
-	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", configDefaultOpenNonblock)
+	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", defs.ConfigDefaultOpenNonblock)
 
 	rawx := rawxService{
 		ns:           namespace,
@@ -377,60 +379,60 @@ func main() {
 		path:         chunkrepo.sub.root,
 		id:           rawxID,
 		repo:         chunkrepo,
-		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
-		checksumMode: checksumAlways,
+		bufferSize:   1024 * opts.getInt("buffer_size", defs.UploadBufferSizeDefault/1024),
+		checksumMode: defs.ChecksumAlways,
 		compression:  opts["compression"],
 		probe:        RawxProbe{latch: sync.RWMutex{}, lastIOMsg: "n/a"},
 	}
 
 	// Clamp the buffer size to admitted values
-	if rawx.bufferSize > uploadBufferSizeMax {
-		rawx.bufferSize = uploadBufferSizeMax
+	if rawx.bufferSize > defs.UploadBufferSizeMax {
+		rawx.bufferSize = defs.UploadBufferSizeMax
 	}
-	if rawx.bufferSize < uploadBufferSizeMin {
-		rawx.bufferSize = uploadBufferSizeMin
+	if rawx.bufferSize < defs.UploadBufferSizeMin {
+		rawx.bufferSize = defs.UploadBufferSizeMin
 	}
 	// In case of a misconfiguration
-	if rawx.bufferSize < uploadBatchSize {
-		rawx.bufferSize = uploadBatchSize
+	if rawx.bufferSize < defs.UploadBatchSize {
+		rawx.bufferSize = defs.UploadBatchSize
 	}
 
-	rawx.uploadBufferPool = newBufferPool(uploadBufferTotalSizeDefault, rawx.bufferSize)
+	rawx.uploadBufferPool = newBufferPool(defs.UploadBufferTotalSizeDefault, rawx.bufferSize)
 
 	// Patch the checksum mode
 	if v, ok := opts["checksum"]; ok {
 		if v == "smart" {
-			rawx.checksumMode = checksumSmart
+			rawx.checksumMode = defs.ChecksumSmart
 		} else if GetBool(v, true) {
-			rawx.checksumMode = checksumAlways
+			rawx.checksumMode = defs.ChecksumAlways
 		} else {
-			rawx.checksumMode = checksumNever
+			rawx.checksumMode = defs.ChecksumNever
 		}
 	}
 
 	// Patch the fadvise() upon upload
 	if v, ok := opts["fadvise_upload"]; ok {
 		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseUpload = configFadviseCache
+			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseCache
 		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseUpload = configFadviseNocache
+			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseNoCache
 		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseUpload = configFadviseYes
+			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseYes
 		}
 	}
 
 	// Patch the fadvise() upon download
 	if v, ok := opts["fadvise_download"]; ok {
 		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseDownload = configFadviseCache
+			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseCache
 		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseDownload = configFadviseNocache
+			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseNoCache
 		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseDownload = configFadviseYes
+			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseYes
 		}
 	}
 
-	if notifAllowed {
+	if NotifAllowed {
 		eventAgent := OioGetEventAgent(namespace)
 		if eventAgent == "" {
 			LogFatal("Notifier error: no address")
@@ -442,10 +444,10 @@ func main() {
 		}
 	}
 
-	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
-	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
-	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
-	toIdle := opts.getInt("timeout_idle", timeoutIdle)
+	toReadHeader := opts.getInt("timeout_read_header", defs.TimeoutReadHeader)
+	toReadRequest := opts.getInt("timeout_read_request", defs.TimeoutReadRequest)
+	toWrite := opts.getInt("timeout_write_reply", defs.TimeoutWrite)
+	toIdle := opts.getInt("timeout_idle", defs.TimeoutIdle)
 
 	/* need to be duplicated for HTTP and HTTPS */
 	srv := httpServer{
@@ -476,8 +478,8 @@ func main() {
 		},
 	}
 
-	flagNoDelay := opts.getBool("nodelay", configDefaultNoDelay)
-	flagCork := opts.getBool("cork", configDefaultCork)
+	flagNoDelay := opts.getBool("nodelay", defs.ConfigDefaultNoDelay)
+	flagCork := opts.getBool("cork", defs.ConfigDefaultCork)
 	if flagNoDelay || flagCork {
 		srv.server.ConnState = func(cnx net.Conn, st http.ConnState) {
 			setOpt := func(dom, flag, val int) {
@@ -506,7 +508,7 @@ func main() {
 		}
 	}
 
-	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
+	keepalive := opts.getBool("keepalive", defs.ConfigDefaultHttpKeepalive)
 	srv.server.SetKeepAlivesEnabled(keepalive)
 	tlsSrv.server.SetKeepAlivesEnabled(keepalive)
 	if opts["tls_rawx_url"] == "" {
@@ -576,8 +578,8 @@ func main() {
 	wg.Wait()
 
 	finished <- true
-	if notifAllowed {
-		rawx.notifier.stop()
+	if NotifAllowed {
+		rawx.notifier.Stop()
 	}
 
 	logger.close()

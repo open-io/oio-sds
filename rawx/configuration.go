@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2023 OVH SAS
+// Copyright (C) 2021-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -23,9 +23,10 @@ import (
 	"os/user"
 
 	"gopkg.in/ini.v1"
+	"openio-sds/rawx/defs"
 )
 
-var oioConfig map[string]map[string]string
+var OioConfig map[string]map[string]string
 
 var optsParser = ini.LoadOptions{
 	AllowPythonMultilineValues: true,
@@ -42,11 +43,11 @@ func oioLoadFile(file string) {
 	sections := cfg.Sections()
 	for _, section := range sections {
 		namespace := section.Name()
-		if _, ok := oioConfig[namespace]; !ok {
-			oioConfig[namespace] = make(map[string]string)
+		if _, ok := OioConfig[namespace]; !ok {
+			OioConfig[namespace] = make(map[string]string)
 		}
 		for k, v := range section.KeysHash() {
-			oioConfig[namespace][k] = v
+			OioConfig[namespace][k] = v
 		}
 	}
 }
@@ -66,38 +67,38 @@ func oioLoadDir(directory string) {
 }
 
 func oioLoadConfig() {
-	if fi, err := os.Stat(oioConfigFilePath); err == nil && fi.Mode().IsRegular() {
-		oioLoadFile(oioConfigFilePath)
+	if fi, err := os.Stat(defs.PathOioConfigFile); err == nil && fi.Mode().IsRegular() {
+		oioLoadFile(defs.PathOioConfigFile)
 	}
 
-	if fi, err := os.Stat(oioConfigDirPath); err == nil && fi.IsDir() {
-		oioLoadDir(oioConfigDirPath)
+	if fi, err := os.Stat(defs.PathOioConfigDir); err == nil && fi.IsDir() {
+		oioLoadDir(defs.PathOioConfigDir)
 	}
 
 	if usr, err := user.Current(); err == nil {
-		local := usr.HomeDir + "/" + oioConfigLocalPath
+		local := usr.HomeDir + "/" + defs.PathOioConfigLocal
 		if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
 			oioLoadFile(local)
 		}
 
 		// Yes, it happens...
 		if home := os.Getenv("HOME"); home != usr.HomeDir {
-			local = home + "/" + oioConfigLocalPath
+			local = home + "/" + defs.PathOioConfigLocal
 			if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
 				oioLoadFile(local)
 			}
 		}
 	}
 
-	if len(oioConfig) == 0 {
+	if len(OioConfig) == 0 {
 		LogWarning("No namespace configuration file found in %s or %s "+
-			"or user home directory", oioConfigFilePath, oioConfigDirPath)
+			"or user home directory", defs.PathOioConfigFile, defs.PathOioConfigDir)
 	}
 }
 
 func oioGetConfigValue(namespace, value string) string {
-	if len(oioConfig) == 0 {
-		oioConfig = make(map[string]map[string]string)
+	if len(OioConfig) == 0 {
+		OioConfig = make(map[string]map[string]string)
 		oioLoadConfig()
 	}
 
@@ -105,7 +106,7 @@ func oioGetConfigValue(namespace, value string) string {
 		namespace = "default"
 	}
 
-	confVal, ok := oioConfig[namespace][value]
+	confVal, ok := OioConfig[namespace][value]
 	if ok {
 		return confVal
 	}
@@ -113,9 +114,9 @@ func oioGetConfigValue(namespace, value string) string {
 }
 
 func OioGetEventAgent(namespace string) string {
-	conf := oioGetConfigValue(namespace, oioConfigEventAgentRawx)
+	conf := oioGetConfigValue(namespace, defs.ConfigOioEventAgentRawx)
 	if conf == "" {
-		conf = oioGetConfigValue(namespace, oioConfigEventAgent)
+		conf = oioGetConfigValue(namespace, defs.ConfigOioEventAgent)
 	}
 	return conf
 }

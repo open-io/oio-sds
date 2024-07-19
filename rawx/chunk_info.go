@@ -30,6 +30,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"openio-sds/rawx/defs"
 )
 
 type chunkInfo struct {
@@ -137,14 +139,14 @@ func (chunk chunkInfo) saveAttr(out decorable) error {
 	}
 
 	var detailedAttrs = []detailedAttr{
-		{AttrNameMetachunkChecksum, &chunk.MetachunkHash},
-		{AttrNameMetachunkSize, &chunk.MetachunkSize},
-		{AttrNameChunkChecksum, &chunk.ChunkHash},
-		{AttrNameChunkSize, &chunk.ChunkSize},
-		{AttrNameChunkPosition, &chunk.ChunkPosition},
-		{AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
-		{AttrNameContentStgPol, &chunk.ContentStgPol},
-		{AttrNameCompression, &chunk.compression},
+		{defs.AttrNameMetachunkChecksum, &chunk.MetachunkHash},
+		{defs.AttrNameMetachunkSize, &chunk.MetachunkSize},
+		{defs.AttrNameChunkChecksum, &chunk.ChunkHash},
+		{defs.AttrNameChunkSize, &chunk.ChunkSize},
+		{defs.AttrNameChunkPosition, &chunk.ChunkPosition},
+		{defs.AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
+		{defs.AttrNameContentStgPol, &chunk.ContentStgPol},
+		{defs.AttrNameCompression, &chunk.compression},
 	}
 	for _, hs := range detailedAttrs {
 		if err := setAttr(hs.key, *(hs.ptr)); err != nil {
@@ -183,13 +185,13 @@ func loadFullPath(getter func(string, string) (string, error), chunkID string) (
 		if err != syscall.ENODATA {
 			return chunk, err
 		}
-		chunk.ContainerID, err = getter(chunkID, AttrNameContainerID)
+		chunk.ContainerID, err = getter(chunkID, defs.AttrNameContainerID)
 		if err == nil {
-			chunk.ContentPath, err = getter(chunkID, AttrNameContentPath)
+			chunk.ContentPath, err = getter(chunkID, defs.AttrNameContentPath)
 			if err == nil {
-				chunk.ContentVersion, err = getter(chunkID, AttrNameContentVersion)
+				chunk.ContentVersion, err = getter(chunkID, defs.AttrNameContentVersion)
 				if err == nil {
-					chunk.ContentID, err = getter(chunkID, AttrNameContentID)
+					chunk.ContentID, err = getter(chunkID, defs.AttrNameContentID)
 				}
 			}
 		}
@@ -223,7 +225,7 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 		prefix := "user.oio.ext."
 		res := make(map[string]string)
 		var err error
-		for i:=0; i < len(listBuffer); i++ {
+		for i := 0; i < len(listBuffer); i++ {
 			// attributes names are separated by null bytes
 			if listBuffer[i] == byte(0) {
 				attrKey := listBuffer[:i]
@@ -243,14 +245,14 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 
 	/* keep AttrNameContentStgPol above AttrNameMetachunkChecksum and AttrNameMetachunkSize */
 	var detailedAttrs = []detailedAttr{
-		{AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
-		{AttrNameContentStgPol, &chunk.ContentStgPol},
-		{AttrNameMetachunkChecksum, &chunk.MetachunkHash},
-		{AttrNameMetachunkSize, &chunk.MetachunkSize},
-		{AttrNameChunkPosition, &chunk.ChunkPosition},
-		{AttrNameChunkChecksum, &chunk.ChunkHash},
-		{AttrNameChunkSize, &chunk.ChunkSize},
-		{AttrNameCompression, &chunk.compression},
+		{defs.AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
+		{defs.AttrNameContentStgPol, &chunk.ContentStgPol},
+		{defs.AttrNameMetachunkChecksum, &chunk.MetachunkHash},
+		{defs.AttrNameMetachunkSize, &chunk.MetachunkSize},
+		{defs.AttrNameChunkPosition, &chunk.ChunkPosition},
+		{defs.AttrNameChunkChecksum, &chunk.ChunkHash},
+		{defs.AttrNameChunkSize, &chunk.ChunkSize},
+		{defs.AttrNameCompression, &chunk.compression},
 	}
 
 	contentFullpath, err := getAttr(xattrKey(chunkID))
@@ -273,21 +275,21 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 			return chunk, err
 		}
 		// Old chunk
-		_chunkID, err := getAttr(AttrNameChunkID)
+		_chunkID, err := getAttr(defs.AttrNameChunkID)
 		if err != nil {
 			if err == syscall.ENODATA {
 				LogRequestWarning(rr,
-					msgMissingXattr(chunkID, AttrNameChunkID, err))
+					msgMissingXattr(chunkID, defs.AttrNameChunkID, err))
 			} else {
 				return chunk, err
 			}
 		}
 		if _chunkID == chunkID {
 			detailedAttrs = append(detailedAttrs,
-				detailedAttr{AttrNameContainerID, &chunk.ContainerID},
-				detailedAttr{AttrNameContentPath, &chunk.ContentPath},
-				detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
-				detailedAttr{AttrNameContentID, &chunk.ContentID})
+				detailedAttr{defs.AttrNameContainerID, &chunk.ContainerID},
+				detailedAttr{defs.AttrNameContentPath, &chunk.ContentPath},
+				detailedAttr{defs.AttrNameContentVersion, &chunk.ContentVersion},
+				detailedAttr{defs.AttrNameContentID, &chunk.ContentID})
 		}
 	}
 	chunk.ChunkID = chunkID
@@ -297,12 +299,12 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 		if err != nil {
 			if err == syscall.ENODATA {
 				/* for storage_policy other than EC, don't print error for missing MetachunkSize and MetachunkHash */
-				if !strings.HasPrefix(chunk.ContentChunkMethod, ECMethodPrefix) &&
-					(hs.key == AttrNameMetachunkChecksum || hs.key == AttrNameMetachunkSize) {
+				if !strings.HasPrefix(chunk.ContentChunkMethod, defs.ECMethodPrefix) &&
+					(hs.key == defs.AttrNameMetachunkChecksum || hs.key == defs.AttrNameMetachunkSize) {
 					continue
 				}
 				/* Compression is not mandatory, don't print error for missing Compression attr */
-				if hs.key == AttrNameCompression {
+				if hs.key == defs.AttrNameCompression {
 					continue
 				}
 				LogRequestWarning(rr, msgMissingXattr(chunkID, hs.key, err))
@@ -315,7 +317,7 @@ func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, e
 	chunk.mtime = inChunk.mtime()
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
-		err = errMissingXattr(AttrNameChunkSize, err)
+		err = errMissingXattr(defs.AttrNameChunkSize, err)
 	}
 	if chunk.ContentChunkMethod != "" {
 		chunkMethodType, params := parseChunkMethod(chunk.ContentChunkMethod)
@@ -369,7 +371,7 @@ func errMissingXattr(key string, cause error) error {
 
 // Check and load the content fullpath of the chunk.
 func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) error {
-	headerFullpath := headers.Get(HeaderNameFullpath)
+	headerFullpath := headers.Get(defs.HeaderNameFullpath)
 	if headerFullpath == "" {
 		return errMissingHeader
 	}
@@ -387,7 +389,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 		return errInvalidHeader
 	}
 	containerID := cidFromName(account, container)
-	headerContainerID := headers.Get(HeaderNameContainerID)
+	headerContainerID := headers.Get(defs.HeaderNameContainerID)
 	if headerContainerID != "" {
 		if !strings.EqualFold(containerID, headerContainerID) {
 			return errInvalidHeader
@@ -399,7 +401,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	if err != nil || path == "" {
 		return errInvalidHeader
 	}
-	headerPath := headers.Get(HeaderNameContentPath)
+	headerPath := headers.Get(defs.HeaderNameContentPath)
 	if headerPath != "" {
 		headerPath, err = url.PathUnescape(headerPath)
 		if err != nil || headerPath != path {
@@ -415,7 +417,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	if _, err := strconv.ParseInt(version, 10, 64); err != nil {
 		return errInvalidHeader
 	}
-	headerVersion := headers.Get(HeaderNameContentVersion)
+	headerVersion := headers.Get(defs.HeaderNameContentVersion)
 	if headerVersion != "" && headerVersion != version {
 		return errInvalidHeader
 	}
@@ -425,7 +427,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	if err != nil || !isHexaString(contentID, 0, 64) {
 		return errInvalidHeader
 	}
-	headerContentID := headers.Get(HeaderNameContentID)
+	headerContentID := headers.Get(defs.HeaderNameContentID)
 	if headerContentID == "" && contentID == "" {
 		return errMissingHeader
 	}
@@ -469,7 +471,7 @@ func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunk
 // Retrieve headers for specific POST calls
 func retrievePostHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo
-	if GetBool(headers.Get(HeaderNameNonOptimalPlacement), false) {
+	if GetBool(headers.Get(defs.HeaderNameNonOptimalPlacement), false) {
 		chunk.nonOptimalPlacement = true
 	}
 	chunk.loadExtHeaders(headers)
@@ -491,12 +493,12 @@ func (chunk *chunkInfo) loadExtHeaders(headers *http.Header) {
 func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo
 
-	chunk.ContentStgPol = headers.Get(HeaderNameContentStgPol)
+	chunk.ContentStgPol = headers.Get(defs.HeaderNameContentStgPol)
 	if chunk.ContentStgPol == "" {
 		return chunk, errMissingHeader
 	}
 
-	chunk.ContentChunkMethod = headers.Get(HeaderNameContentChunkMethod)
+	chunk.ContentChunkMethod = headers.Get(defs.HeaderNameContentChunkMethod)
 	if chunk.ContentChunkMethod == "" {
 		return chunk, errMissingHeader
 	}
@@ -509,44 +511,44 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		chunk.ContentChunkMethod = serializeChunkMethod(chunkMethodType, chunkParams)
 	}
 
-	chunkIDHeader := headers.Get(HeaderNameChunkID)
+	chunkIDHeader := headers.Get(defs.HeaderNameChunkID)
 	if chunkIDHeader != "" && !strings.EqualFold(chunkIDHeader, chunkID) {
 		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunkID)
-	chunk.ChunkPosition = headers.Get(HeaderNameChunkPosition)
+	chunk.ChunkPosition = headers.Get(defs.HeaderNameChunkPosition)
 	if chunk.ChunkPosition == "" {
 		return chunk, errMissingHeader
 	}
 
-	chunk.MetachunkHash = headers.Get(HeaderNameMetachunkChecksum)
+	chunk.MetachunkHash = headers.Get(defs.HeaderNameMetachunkChecksum)
 	if chunk.MetachunkHash != "" {
 		if !isHexaString(chunk.MetachunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
 	}
-	chunk.MetachunkSize = headers.Get(HeaderNameMetachunkSize)
+	chunk.MetachunkSize = headers.Get(defs.HeaderNameMetachunkSize)
 	if chunk.MetachunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.MetachunkSize, 10, 64); err != nil {
 			return chunk, errInvalidHeader
 		}
 	}
 
-	chunk.ChunkHash = headers.Get(HeaderNameChunkChecksum)
+	chunk.ChunkHash = headers.Get(defs.HeaderNameChunkChecksum)
 	if chunk.ChunkHash != "" {
 		if !isHexaString(chunk.ChunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
 	}
-	chunk.ChunkSize = headers.Get(HeaderNameChunkSize)
+	chunk.ChunkSize = headers.Get(defs.HeaderNameChunkSize)
 	if chunk.ChunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
 			return chunk, errInvalidHeader
 		}
 	}
-	if GetBool(headers.Get(HeaderNameNonOptimalPlacement), false) {
+	if GetBool(headers.Get(defs.HeaderNameNonOptimalPlacement), false) {
 		chunk.nonOptimalPlacement = true
 	}
 
@@ -561,7 +563,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 // Check and load the checksum and the size of the chunk and the metachunk
 func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) error {
-	trailerMetachunkHash := trailers.Get(HeaderNameMetachunkChecksum)
+	trailerMetachunkHash := trailers.Get(defs.HeaderNameMetachunkChecksum)
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
 		if chunk.MetachunkHash != "" {
@@ -571,7 +573,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 			chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
 		}
 	}
-	trailerMetachunkSize := trailers.Get(HeaderNameMetachunkSize)
+	trailerMetachunkSize := trailers.Get(defs.HeaderNameMetachunkSize)
 	if trailerMetachunkSize != "" {
 		chunk.MetachunkSize = trailerMetachunkSize
 		if chunk.MetachunkSize != "" {
@@ -580,7 +582,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 			}
 		}
 	}
-	if strings.HasPrefix(chunk.ContentChunkMethod, ECMethodPrefix) {
+	if strings.HasPrefix(chunk.ContentChunkMethod, defs.ECMethodPrefix) {
 		if chunk.MetachunkHash == "" {
 			return errMissingHeader
 		}
@@ -589,7 +591,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 		}
 	}
 
-	trailerChunkHash := trailers.Get(HeaderNameChunkChecksum)
+	trailerChunkHash := trailers.Get(defs.HeaderNameChunkChecksum)
 	if trailerChunkHash != "" {
 		chunk.ChunkHash = strings.ToUpper(trailerChunkHash)
 	}
@@ -600,7 +602,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 	} else {
 		chunk.ChunkHash = ul.hash
 	}
-	trailerChunkSize := trailers.Get(HeaderNameChunkSize)
+	trailerChunkSize := trailers.Get(defs.HeaderNameChunkSize)
 	if trailerChunkSize != "" {
 		chunk.ChunkSize = trailerChunkSize
 	}
@@ -626,19 +628,19 @@ func setHeader(headers http.Header, k, v string) {
 
 // Fill the headers of the reply with the attributes of the chunk
 func (chunk chunkInfo) fillHeaders(headers http.Header) {
-	setHeader(headers, HeaderNameFullpath, chunk.ContentFullpath)
-	setHeader(headers, HeaderNameContainerID, chunk.ContainerID)
-	setHeader(headers, HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
-	setHeader(headers, HeaderNameContentVersion, chunk.ContentVersion)
-	setHeader(headers, HeaderNameContentID, chunk.ContentID)
-	setHeader(headers, HeaderNameContentStgPol, chunk.ContentStgPol)
-	setHeader(headers, HeaderNameContentChunkMethod, chunk.ContentChunkMethod)
-	setHeader(headers, HeaderNameMetachunkChecksum, chunk.MetachunkHash)
-	setHeader(headers, HeaderNameChunkID, chunk.ChunkID)
-	setHeader(headers, HeaderNameMetachunkSize, chunk.MetachunkSize)
-	setHeader(headers, HeaderNameChunkPosition, chunk.ChunkPosition)
-	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
-	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
+	setHeader(headers, defs.HeaderNameFullpath, chunk.ContentFullpath)
+	setHeader(headers, defs.HeaderNameContainerID, chunk.ContainerID)
+	setHeader(headers, defs.HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
+	setHeader(headers, defs.HeaderNameContentVersion, chunk.ContentVersion)
+	setHeader(headers, defs.HeaderNameContentID, chunk.ContentID)
+	setHeader(headers, defs.HeaderNameContentStgPol, chunk.ContentStgPol)
+	setHeader(headers, defs.HeaderNameContentChunkMethod, chunk.ContentChunkMethod)
+	setHeader(headers, defs.HeaderNameMetachunkChecksum, chunk.MetachunkHash)
+	setHeader(headers, defs.HeaderNameChunkID, chunk.ChunkID)
+	setHeader(headers, defs.HeaderNameMetachunkSize, chunk.MetachunkSize)
+	setHeader(headers, defs.HeaderNameChunkPosition, chunk.ChunkPosition)
+	setHeader(headers, defs.HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, defs.HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
 	if chunk.ExtMeta != nil {
 		for key, value := range chunk.ExtMeta {
@@ -649,6 +651,6 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
 func (chunk chunkInfo) fillHeadersLight(headers http.Header) {
-	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
-	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
+	setHeader(headers, defs.HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, defs.HeaderNameChunkSize, chunk.ChunkSize)
 }

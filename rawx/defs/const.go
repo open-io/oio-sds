@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package defs
 
 const (
 	AttrNameFullPrefix = "user.oio.content.fullpath:"
@@ -38,10 +38,10 @@ const (
 )
 
 const (
-	compressionOff     = "off"
-	compressionLzw     = "lzw"
-	compressionZlib    = "zlib"
-	compressionDeflate = "deflate"
+	CompressionOff     = "off"
+	CompressionLzw     = "lzw"
+	CompressionZlib    = "zlib"
+	CompressionDeflate = "deflate"
 )
 
 const (
@@ -71,158 +71,159 @@ const (
 
 const (
 	// Use this value to disable a call to fadvise()
-	configFadviseNone = iota
+	ConfigFadviseNone = iota
 
 	// Just tell the kernel that further accesses will consume the file
 	// sequentially, using FADV_SEQUENTIAL
-	configFadviseYes = iota
+	ConfigFadviseYes = iota
 
 	// Use this value to advise the kernel to avoid caching the file
 	// using FADV_DONTNEED
-	configFadviseNocache = iota
+	ConfigFadviseNoCache = iota
 
 	// Use this value to advise the kernel to keep the fie in cache
 	// using FADV_WILLNEED + the general FADV_SEQUENTIAL
-	configFadviseCache = iota
+	ConfigFadviseCache = iota
 )
 
 const (
-	configDefaultShallowCopy = false
-	configDefaultFallocate   = false
-	configDefaultSyncFile    = false
-	configDefaultSyncDir     = false
+	ConfigDefaultShallowCopy = false
+	ConfigDefaultFallocate   = false
+	ConfigDefaultSyncFile    = false
+	ConfigDefaultSyncDir     = false
 
 	// By default, no fadvise() will be called before committing a chunk
-	configDefaultFadviseUpload = configFadviseNone
+	ConfigDefaultFadviseUpload = ConfigFadviseNone
 
 	// By default, no fadvise() will be called before download a chunk
-	configDefaultFadviseDownload = configFadviseNone
+	ConfigDefaultFadviseDownload = ConfigFadviseNone
 
 	// Is HTTP "Connection: keep-alive" allowed in replies?
 	// Set this value to false to make the RAWX server deny reusing
 	// connections.
-	configDefaultHttpKeepalive = true
+	ConfigDefaultHttpKeepalive = true
 
 	// Are events allowed
-	configDefaultEvents = true
+	ConfigDefaultEvents = true
 
 	// By default, should the Nagle algorithm be suspended when a connection
 	// is established. Only works for HTTP/1.* when a raw TCP connection is
 	// used.
-	configDefaultNoDelay = false
+	ConfigDefaultNoDelay = false
 
 	// By default, should the TCP_CORK be set (resp. removed) when a connection
 	// becomes active (resp. inactive). Only works for HTTP/1.* when a raw TCP
 	// connection is used.
-	configDefaultCork = false
+	ConfigDefaultCork = false
 
 	// By default, should the O_NONBLOCK flag be set when opening a file?
 	// It turns out that the impact on Go is not weak. The presence of the
 	// flag induces many syscalls.
-	configDefaultOpenNonblock = false
+	ConfigDefaultOpenNonblock = false
 )
 
 const (
 	// Default length of the Go channel in front of the access log goroutine.
-	configAccessLogQueueDefaultLength = 4096
+	ConfigDefaultAccessLogQueueLength = 4096
 
 	// Should successful GET requests be logged by default
-	configAccessLogDefaultGet = true
+	ConfigDefaultAccessLogGet = true
 
 	// Should successful PUT requests be logged by default
-	configAccessLogDefaultPut = true
+	ConfigDefaultAccessLogPut = true
 
 	// Should successful POST requests be logged by default
-	configAccessLogDefaultPost = true
+	ConfigDefaultAccessLogPost = true
 
 	// Should successful DELETE requests be logged by default
-	configAccessLogDefaultDelete = true
+	ConfigDefaultAccessLogDelete = true
 )
 
 const (
 	// Default size (in bytes) of each buffer allocated for xattr operations
-	xattrBufferSizeDefault = 16 * 1024
+	XattrBufferSizeDefault = 16 * 1024
 
 	// Total amount (in bytes) of buffers allocated for xattr operations
-	xattrBufferTotalSizeDefault = 4 * 1024 * 1024
+	XattrBufferTotalSizeDefault = 4 * 1024 * 1024
+)
 
+const (
 	// Default size (in bytes) of each buffer allocated for the upload
-	uploadBufferSizeDefault = 2 * 1024 * 1024
+	UploadBufferSizeDefault = 2 * 1024 * 1024
 
 	// Total amount (in bytes) of buffers allocated for uploads
-	uploadBufferTotalSizeDefault = 128 * 1024 * 1024
+	UploadBufferTotalSizeDefault = 128 * 1024 * 1024
 
 	// Size (in bytes) used as a threshold to allow read().
 	// In other words: we do not read() if the available space in the buffer is less than this value
-	uploadBatchSize int = 2048
+	UploadBatchSize int = 2048
 
 	// Maximum size (in bytes) of the upload buffer
-	uploadBufferSizeMax int = 8 * 1024 * 1024
+	UploadBufferSizeMax int = 8 * 1024 * 1024
 
 	// Minimum size (in bytes) of the upload buffer
-	uploadBufferSizeMin int = 32768
+	UploadBufferSizeMin int = 32768
 
 	// Specifies the extension size when Fallocate is called to prepare file placeholders
-	uploadExtensionSize int64 = 16 * 1024 * 1024
+	UploadExtensionSize int64 = 16 * 1024 * 1024
 )
 
 const (
-	hashWidth    = 3
-	hashDepth    = 1
-	putOpenMode  = 0644
-	putMkdirMode = 0755
+	HashWidthDefault = 3
+	HashDepthDefault = 1
+
+	PutOpenModeDefault  = 0644
+	PutMkdirModeDefault = 0755
 )
 
 const (
-	checksumAlways = iota
-	checksumNever  = iota
-	checksumSmart  = iota
+	ChecksumAlways = iota
+	ChecksumNever  = iota
+	ChecksumSmart  = iota
 )
 
 const (
-	oioEtcDir          = "/etc/oio"
-	oioConfigFilePath  = oioEtcDir + "/sds.conf"
-	oioConfigDirPath   = oioEtcDir + "/sds.conf.d"
-	oioConfigLocalPath = ".oio/sds.conf"
+	DirOioEtc          = "/etc/oio"
+	PathOioConfigFile  = DirOioEtc + "/sds.conf"
+	PathOioConfigDir   = DirOioEtc + "/sds.conf.d"
+	PathOioConfigLocal = ".oio/sds.conf"
 )
 
 const (
-	nonOptimalPlacementFolderName = "non_optimal_placement"
-	orphansFolderName             = "orphans"
+	FolderNonOptimalPlacement = "non_optimal_placement"
+	FolderOrphans             = "orphans"
 )
 
 const (
-	oioConfigEventAgent     = "event-agent"
-	oioConfigEventAgentRawx = "event-agent.rawx"
-	oioConfigEventExchange  = "events.amqp.exchange_name"
-	oioConfigEventTopic     = "events.kafka.topic_name"
+	ConfigOioEventAgent     = "event-agent"
+	ConfigOioEventAgentRawx = "event-agent.rawx"
+	ConfigOioEventExchange  = "events.amqp.exchange_name"
+	ConfigOioEventTopic     = "events.kafka.topic_name"
+)
+
+const (
+	// How long (in seconds) might a client take to send the request headers
+	TimeoutReadHeader = 60
+
+	// How long (in seconds) might a client take to send its whole request
+	TimeoutReadRequest = 900
+
+	// How long (in seconds) might it takes to emit the whole reply
+	TimeoutWrite = 900
+
+	// How long (in seconds) might a connection stay idle (between two requests)
+	TimeoutIdle = 3600
 )
 
 const (
 	// Number of connection attempts to the event broker
-	eventConnAttempts = 3
-
-	// Default maximum number of simultaneous connections the server will accept (per port)
-	// 0 to disable setting a limit
-	maxConnectionsDefault = 0
-
-	// How long (in seconds) might a client take to send the request headers
-	timeoutReadHeader = 60
-
-	// How long (in seconds) might a client take to send its whole request
-	timeoutReadRequest = 900
-
-	// How long (in seconds) might it takes to emit the whole reply
-	timeoutWrite = 900
-
-	// How long (in seconds) might a connection stay idle (between two requests)
-	timeoutIdle = 3600
+	EventConnAttempts = 3
 
 	// How long (in seconds) the connection to the event broker may take
-	timeoutConnEvent = 0.5
+	EventConnTimeout = 0.5
 
 	// How long (in seconds) the sending of an event may take
-	timeoutSendEvent = 5
+	EventSendTimeout = 5
 )
 
 const (
@@ -230,32 +231,34 @@ const (
 )
 
 const (
-	eventTypeNewChunk = "storage.chunk.new"
+	EventTypeNewChunk = "storage.chunk.new"
 
-	eventTypeDelChunk = "storage.chunk.deleted"
+	EventTypeDelChunk = "storage.chunk.deleted"
 
 	// Parallelism factor in situations of single targets
-	notifierSingleMultiplier = 4
+	NotifierSingleMultiplier = 4
 
 	// Parallelism factor in situations of multiple targets
-	notifierMultipleMultiplier = 1
+	NotifierMultipleMultiplier = 1
 
 	// Number of slots in the channel feeding the notifier backends
-	notifierDefaultPipeSize = 32768
+	NotifierPipeSizeDefault = 32768
+)
 
-	beanstalkNotifierDefaultTube = "oio"
+const (
+	BeanstalkTubeDefault = "oio"
 )
 
 const (
 	// Error code returned when the client closes the connection before
 	// sending the whole request body
-	httpStatusClientClosedRequest = 499
+	HttpStatusClientClosedRequest = 499
 )
 
 const (
-	kafka_conf_prefix = "kafka_"
+	ConfigPrefixKafka = "kafka_"
 )
 
 const (
-	statsdPrefixDefault = "openio.rawx"
+	StatsdPrefixDefault = "openio.rawx"
 )

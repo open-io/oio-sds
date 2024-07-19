@@ -29,19 +29,20 @@ import (
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
+	"openio-sds/rawx/defs"
 )
 
-type oioLogger interface {
+type OioLogger interface {
 	close()
 	writeAccess(message string)
 	writeInfo(message string)
 	writeError(message string)
 }
 
-var accessLogGet = configAccessLogDefaultGet
-var accessLogPut = configAccessLogDefaultPut
-var accessLogPost = configAccessLogDefaultPost
-var accessLogDel = configAccessLogDefaultDelete
+var accessLogGet = defs.ConfigDefaultAccessLogGet
+var accessLogPut = defs.ConfigDefaultAccessLogPut
+var accessLogPost = defs.ConfigDefaultAccessLogPost
+var accessLogDel = defs.ConfigDefaultAccessLogDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var requestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
@@ -50,7 +51,7 @@ var logTemplate *template.Template = nil
 var requestLogTemplate *template.Template = nil
 var accessLogTemplate *template.Template = nil
 
-// Activate the extreme verbosity on the RAWX. This is has to be set at the
+// Activate the extreme verbosity on the RAWX. This has to be set at the
 // startup of the service.
 var logExtremeVerbosity = false
 
@@ -65,7 +66,7 @@ var logSeverity = logDefaultSeverity
 var pid = os.Getpid()
 
 // The singleton logger that will be used by all the coroutine
-var logger oioLogger
+var logger OioLogger
 
 // The statsd client
 var statsdClient statsd.Statter
@@ -363,7 +364,7 @@ func InitStatsd(addr string, prefix string) {
 		return
 	}
 	if prefix == "" {
-		prefix = statsdPrefixDefault
+		prefix = defs.StatsdPrefixDefault
 	}
 
 	config := &statsd.ClientConfig{
@@ -418,7 +419,7 @@ type SysLogger struct {
 func InitSysLogger(syslogID string) {
 	l := &SysLogger{}
 	l.alertThrottle = PeriodicThrottle{period: 1000000000}
-	l.queue = make(chan string, configAccessLogQueueDefaultLength)
+	l.queue = make(chan string, defs.ConfigDefaultAccessLogQueueLength)
 	l.running = true
 	l.syslogID = syslogID
 	l.loggerAccess, _ = syslog.New(syslog.LOG_LOCAL1|syslog.LOG_INFO, syslogID)

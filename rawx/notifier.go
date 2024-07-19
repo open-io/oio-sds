@@ -29,10 +29,11 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"openio-sds/rawx/defs"
 )
 
 // Tells if the current RAWX service may emit notifications
-var notifAllowed = configDefaultEvents
+var NotifAllowed = defs.ConfigDefaultEvents
 
 // Represents a chunk event with a routing key.
 // routingKey will not be used when sending to Beanstalkd,
@@ -42,7 +43,7 @@ type routedEvent struct {
 	routingKey string
 }
 
-type notifier struct {
+type Notifier struct {
 	queue   chan routedEvent
 	wg      sync.WaitGroup
 	running bool
@@ -50,9 +51,9 @@ type notifier struct {
 	srvid   string
 }
 
-type notifierBackend interface {
-	push(event []byte, routingKey string)
-	close()
+type NotifierBackend interface {
+	Push(event []byte, routingKey string)
+	Close()
 }
 
 type beanstalkdBackend struct {
@@ -97,7 +98,7 @@ func deadLetter(event []byte, err error) {
 	}
 }
 
-func (backend *beanstalkdBackend) push(event []byte, routingKey string) {
+func (backend *beanstalkdBackend) Push(event []byte, routingKey string) {
 	cnxDeadline := time.Now().Add(
 		time.Duration(backend.conn_attempts) * backend.conn_timeout)
 
@@ -112,7 +113,7 @@ func (backend *beanstalkdBackend) push(event []byte, routingKey string) {
 				time.Sleep(backend.conn_timeout / 2)
 			}
 		} else {
-			err = b.Use(beanstalkNotifierDefaultTube)
+			err = b.Use(defs.BeanstalkTubeDefault)
 			if err != nil {
 				b.Close()
 			} else {
@@ -127,12 +128,12 @@ func (backend *beanstalkdBackend) push(event []byte, routingKey string) {
 
 	_, err := backend.b.Put(event)
 	if err != nil {
-		backend.close()
+		backend.Close()
 		deadLetter(event, err)
 	}
 }
 
-func (backend *beanstalkdBackend) close() {
+func (backend *beanstalkdBackend) Close() {
 	if backend.b != nil {
 		backend.b.Close()
 		backend.b = nil
@@ -185,7 +186,7 @@ func (backend *amqpBackend) connect() error {
 	return nil
 }
 
-func (backend *amqpBackend) push(event []byte, routingKey string) {
+func (backend *amqpBackend) Push(event []byte, routingKey string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), backend.send_timeout)
 	defer cancel()
@@ -206,7 +207,7 @@ loop:
 			// Disconnect in case of error
 			if err != nil {
 				LogDebug("Failed to push event: %v", err)
-				backend.close()
+				backend.Close()
 			} else {
 				sent = true
 			}
@@ -224,7 +225,7 @@ loop:
 	}
 }
 
-func (backend *amqpBackend) close() {
+func (backend *amqpBackend) Close() {
 	if backend.channel != nil {
 		backend.channel.Close()
 		backend.channel = nil
@@ -301,7 +302,7 @@ func (backend *kafkaBackend) connect() error {
 	return nil
 }
 
-func (backend *kafkaBackend) push(event []byte, routingKey string) {
+func (backend *kafkaBackend) Push(event []byte, routingKey string) {
 
 	err := backend.connect()
 
@@ -322,7 +323,7 @@ func (backend *kafkaBackend) push(event []byte, routingKey string) {
 	}
 }
 
-func (backend *kafkaBackend) close() {
+func (backend *kafkaBackend) Close() {
 	if backend.producer == nil {
 		return
 	}
@@ -331,16 +332,16 @@ func (backend *kafkaBackend) close() {
 	backend.producer.Close()
 }
 
-func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error) {
-	conn_attempts := options.getInt("event_conn_attempts", eventConnAttempts)
+func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error) {
+	conn_attempts := options.getInt("event_conn_attempts", defs.EventConnAttempts)
 	conn_timeout := time.Duration(
-		options.getFloat("timeout_conn_event", timeoutConnEvent)) * time.Second
+		options.getFloat("timeout_conn_event", defs.EventConnTimeout)) * time.Second
 	send_timeout := time.Duration(
-		options.getFloat("timeout_send_event", timeoutSendEvent)) * time.Second
+		options.getFloat("timeout_send_event", defs.EventSendTimeout)) * time.Second
 	if endpoint, ok := hasPrefix(url, "beanstalk://"); ok {
 		out := new(beanstalkdBackend)
 		out.endpoint = endpoint
-		out.tube = beanstalkNotifierDefaultTube
+		out.tube = defs.BeanstalkTubeDefault
 		out.conn_attempts = conn_attempts
 		out.conn_timeout = conn_timeout
 		return out, nil
@@ -351,7 +352,7 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 		// The namespace comes from rawx configuration, but the exchange
 		// comes from the namespace configuration file.
 		out.exchange = oioGetConfigValue(
-			options.getString("ns", "OIO"), oioConfigEventExchange)
+			options.getString("ns", "OIO"), defs.ConfigOioEventExchange)
 		if out.exchange == "" {
 			out.exchange = "oio"
 		}
@@ -362,14 +363,14 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 	} else if _, ok := hasPrefix(url, "kafka://"); ok {
 		out := new(kafkaBackend)
 		out.endpoint = url
-		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), oioConfigEventTopic))
+		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), defs.ConfigOioEventTopic))
 		if out.topic == "" {
 			out.topic = "oio"
 		}
 		out.conf = map[string]string{}
 		for k, v := range *options {
-			if strings.HasPrefix(k, kafka_conf_prefix) {
-				out.conf[strings.TrimPrefix(k, kafka_conf_prefix)] = v
+			if strings.HasPrefix(k, defs.ConfigPrefixKafka) {
+				out.conf[strings.TrimPrefix(k, defs.ConfigPrefixKafka)] = v
 			}
 		}
 		out.logsChannel = make(chan kafka.LogEvent)
@@ -379,16 +380,16 @@ func makeSingleBackend(url string, options *optionsMap) (notifierBackend, error)
 		"`kafka://` and `amqp://` are accepted")
 }
 
-func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notifier, error) {
-	n := new(notifier)
-	n.queue = make(chan routedEvent, notifierDefaultPipeSize)
+func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*Notifier, error) {
+	n := new(Notifier)
+	n.queue = make(chan routedEvent, defs.NotifierPipeSizeDefault)
 	n.running = true
 	n.url = rawx.url
 	n.srvid = rawx.id
 
-	workers := make([]notifierBackend, 0)
+	workers := make([]NotifierBackend, 0)
 	if !strings.Contains(evtUrl, ";") || strings.HasPrefix(evtUrl, "amqp://") {
-		for i := 0; i < notifierSingleMultiplier; i++ {
+		for i := 0; i < defs.NotifierSingleMultiplier; i++ {
 			backend, err := makeSingleBackend(evtUrl, options)
 			if err != nil {
 				return nil, err
@@ -398,7 +399,7 @@ func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notif
 		}
 	} else {
 		for _, singleUrl := range strings.Split(evtUrl, ";") {
-			for i := 0; i < notifierMultipleMultiplier; i++ {
+			for i := 0; i < defs.NotifierMultipleMultiplier; i++ {
 				backend, err := makeSingleBackend(singleUrl, options)
 				if err != nil {
 					return nil, err
@@ -410,16 +411,16 @@ func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notif
 	}
 
 	n.wg.Add(len(workers))
-	doWork := func(backend notifierBackend, input <-chan routedEvent) {
+	doWork := func(backend NotifierBackend, input <-chan routedEvent) {
 		defer n.wg.Done()
 		for event := range input {
 			if n.running {
-				backend.push(event.event, event.routingKey)
+				backend.Push(event.event, event.routingKey)
 			} else {
 				deadLetter(event.event, errExiting)
 			}
 		}
-		backend.close()
+		backend.Close()
 	}
 
 	for _, backend := range workers {
@@ -429,26 +430,26 @@ func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*notif
 	return n, nil
 }
 
-func (n *notifier) notifyNew(requestID string, chunk chunkInfo) {
-	if notifAllowed {
-		n.asyncNotify(eventTypeNewChunk, requestID, chunk)
+func (n *Notifier) NotifyNew(requestID string, chunk chunkInfo) {
+	if NotifAllowed {
+		n.asyncNotify(defs.EventTypeNewChunk, requestID, chunk)
 	}
 }
 
-func (n *notifier) notifyDel(requestID string, chunk chunkInfo) {
-	if notifAllowed {
-		n.asyncNotify(eventTypeDelChunk, requestID, chunk)
+func (n *Notifier) NotifyDel(requestID string, chunk chunkInfo) {
+	if NotifAllowed {
+		n.asyncNotify(defs.EventTypeDelChunk, requestID, chunk)
 	}
 }
 
-type EncodableEvent struct {
+type encodableEvent struct {
 	EventType string       `json:"event"`
 	When      int64        `json:"when"`
 	RequestId string       `json:"request_id"`
-	Data      EventPayload `json:"data"`
+	Data      eventPayload `json:"data"`
 }
 
-type EventPayload struct {
+type eventPayload struct {
 	VolumeId       string `json:"volume_id"`
 	ServiceId      string `json:"volume_service_id"`
 	FullPath       string `json:"full_path"`
@@ -466,14 +467,14 @@ type EventPayload struct {
 	ChunkSize      string `json:"chunk_size"`
 }
 
-func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
+func (n *Notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	sb := bytes.Buffer{}
 	sb.Grow(2048)
-	evt := EncodableEvent{
+	evt := encodableEvent{
 		EventType: eventType,
 		When:      time.Now().UnixNano() / 1000,
 		RequestId: requestID,
-		Data: EventPayload{
+		Data: eventPayload{
 			VolumeId:       n.url,
 			ServiceId:      n.srvid,
 			FullPath:       chunk.ContentFullpath,
@@ -508,7 +509,7 @@ func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	}
 }
 
-func (n *notifier) stop() {
+func (n *Notifier) Stop() {
 	n.running = false
 	close(n.queue)
 	n.wg.Wait()
