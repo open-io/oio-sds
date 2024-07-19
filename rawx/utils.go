@@ -58,6 +58,10 @@ func isHexaString(name string, minLen int, maxLen int) bool {
 	return i+1 >= minLen && i < maxLen
 }
 
+func isValidChunkId(basename string) bool {
+	return isHexaString(basename, 64, 64)
+}
+
 func hasPrefix(s, prefix string) (string, bool) {
 	if strings.HasPrefix(s, prefix) {
 		return s[len(prefix):], true
