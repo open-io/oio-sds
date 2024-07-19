@@ -72,6 +72,7 @@ func markerToLevels(marker string, width, depth uint) []string {
 	w := uint(0)
 	d := uint(0)
 	buf := strings.Builder{}
+
 	// Sanitize the marker, to relative paths as well as chunk_id
 	marker = strings.Replace(marker, "/", "", -1)
 	for _, c := range marker {
@@ -86,6 +87,12 @@ func markerToLevels(marker string, width, depth uint) []string {
 				break
 			}
 		}
+	}
+
+	// don't forget the tail
+	if buf.Len() > 0 {
+		levels = append(levels, buf.String())
+		buf.Reset()
 	}
 	return levels
 }
