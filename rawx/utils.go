@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2020-2021 OVH SAS
+// Copyright (C) 2020-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -56,6 +56,10 @@ func isHexaString(name string, minLen int, maxLen int) bool {
 		}
 	}
 	return i+1 >= minLen && i < maxLen
+}
+
+func isValidChunkId(basename string) bool {
+	return isHexaString(basename, 24, 64)
 }
 
 func hasPrefix(s, prefix string) (string, bool) {

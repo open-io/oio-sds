@@ -49,6 +49,8 @@ type fileRepository struct {
 	orphansFolderPath             string
 }
 
+const tokenPending = ".pending"
+
 func (fr *fileRepository) openFlagsRO() int {
 	flags := syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_RDONLY
 	if fr.openNonBlock {
@@ -575,7 +577,7 @@ func xattrKey(name string) string {
 func pendingPath(path string) string {
 	sb := strings.Builder{}
 	sb.WriteString(path)
-	sb.WriteString(".pending")
+	sb.WriteString(tokenPending)
 	return sb.String()
 }
 

@@ -18,16 +18,11 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"io/fs"
 	"net/http"
+	"openio-sds/rawx/iterator"
 	"path/filepath"
-	"strings"
-)
-
-var (
-	errStopWalk = errors.New("skip everything and stop the walk")
 )
 
 const (
@@ -36,8 +31,11 @@ const (
 )
 
 type Params struct {
-	Marker      string `json:"start_after"`
-	MinToReturn int    `json:"min_to_return"`
+	Marker string `json:"start_after"`
+	// An indication of the expected number of chunks to be returned.
+	// Not a hard maximum, because the number of returned elements will be HintMax plus the maximum number of files
+	// in a leaf directory of a RAWX hierarchy.
+	MinToReturn int `json:"min_to_return"`
 }
 
 type Chunk struct {
@@ -50,58 +48,44 @@ type ResponseData struct {
 	Marker      string  `json:"marker"`
 }
 
-func ListChunks(path string, marker string, minToReturn int, maxWidth int) ([]string, bool, string, error) {
+func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth int) ([]string, bool, string, error) {
 	var fileList []string
-	nbFiles := 0
-	nextMarker := ""
-	// Read all the chunk files
-	err := filepath.WalkDir(path, func(file string, f fs.DirEntry, err error) error {
-		if !f.IsDir() {
-			// List chunks files after the marker
-			if file > marker {
-				chunk := filepath.Base(file)
-				// Check if it is a valid chunk format
-				if isHexaString(chunk, 24, 64) {
-					fileList = append(fileList, chunk)
-					nbFiles++
-				}
-			}
-		} else {
-			// it is not the rawx service volume directory
-			if file != path {
-				if !isHexaString(filepath.Base(file), maxWidth, maxWidth) {
-					// Skip rawx special directory
-					return filepath.SkipDir
-				}
-				// it is a directory before the marker
-				// it is not a direct parent directory in case the marker is a chunk file
-				if file < marker && !strings.Contains(marker, file) {
-					// Skip, the chunks has been listed in previous call
-					return filepath.SkipDir
-				}
-				// This condition is defined here because we want the marker
-				// to be the next folder after reaching the defined minimum number of chunks.
-				// We want to take advantage of the listing already made to
-				// return all the chunks in the directory listed.
-				if nbFiles >= minToReturn {
-					// Define next folder as marker
-					nextMarker = file
-					// We have already reached the maximum chunk files to return
-					return errStopWalk
-				}
-			}
+	onFile := func(file string, f fs.DirEntry, err error) error {
+		basename := filepath.Base(file)
+		// The iterator already produces the leaf directories, no subdir is expected to contain chunks.
+		if isValidChunkId(basename) {
+			// Let's just skip pending chunks
+			fileList = append(fileList, basename)
 		}
 		return nil
-	})
-	if err != nil {
-		if err == errStopWalk {
-			// The list of chunks is truncated
-			// we have reached the maximum of chunks we can return
-			return fileList, true, nextMarker, nil
-		}
-		return nil, false, nextMarker, err
 	}
-	return fileList, false, nextMarker, nil
+
+	var nextMarker string
+	var err error
+	it := iterator.NewPathIterator(marker, uint(maxWidth), uint(maxDepth)).Run()
+	for {
+		dir, ok := <-it
+		if !ok { // Prefixes exhausted, there is no nextMarker to collect
+			break
+		}
+
+		// Just iterate over one directory at a time, skipping dirs prior to the marker.
+		e := filepath.WalkDir(filepath.Join(path, dir), onFile)
+		if e != nil {
+			err = e
+			break
+		}
+		if len(fileList) >= minToReturn {
+			if next, ok := <-it; ok {
+				// Base the paginated iteration on the ideal list of directories instead of those
+				// in place at te previous page request. It tends to avoid skipping directories created
+				// between both requests.
+				nextMarker = next
+			}
+			break
+		}
+	}
+	return fileList, (nextMarker != ""), nextMarker, err
 }
 
 func doGetListOfChunks(rr *rawxRequest) {
@@ -119,7 +103,8 @@ func doGetListOfChunks(rr *rawxRequest) {
 		marker = rr.rawx.repo.sub.nameToRelPath(marker)
 	}
 	chunks, isTruncated, marker, err := ListChunks(
-		rr.rawx.path, marker, params.MinToReturn, rr.rawx.repo.sub.hashWidth)
+		rr.rawx.path, marker, params.MinToReturn,
+		rr.rawx.repo.sub.hashWidth, rr.rawx.repo.sub.hashDepth)
 	if err != nil {
 		rr.replyCode(http.StatusInternalServerError)
 		return
