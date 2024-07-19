@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 )
 
 type optionsMap map[string]string
@@ -142,7 +143,7 @@ func readConfig(conf string) (optionsMap, error) {
 			if optionValue != "" && optionValue[0] == '"' {
 				s, err := strconv.Unquote(regexString.ReplaceAllString(line, "$1"))
 				if err != nil {
-					LogFatal("Unable to convert quoted string from line `%s`", line)
+					logger.LogFatal("Unable to convert quoted string from line `%s`", line)
 					continue
 				}
 				optionValue = s
@@ -157,7 +158,7 @@ func readConfig(conf string) (optionsMap, error) {
 				opts[v] = optionValue
 			}
 			if v, found := deprecatedOpts[optionName]; found {
-				LogWarning("DEPRECATED option used: %s", fields[0])
+				logger.LogWarning("DEPRECATED option used: %s", fields[0])
 				opts[v] = optionValue
 			}
 		}
@@ -176,7 +177,7 @@ func (m optionsMap) getFloat(k string, def float64) float64 {
 	}
 	f64, err := strconv.ParseFloat(v, 64)
 	if err != nil {
-		LogFatal("Invalid float option for %s: %s (%s)", k, v, err.Error())
+		logger.LogFatal("Invalid float option for %s: %s (%s)", k, v, err.Error())
 		return def
 	}
 	return f64
@@ -189,7 +190,7 @@ func (m optionsMap) getInt(k string, def int) int {
 	}
 	i64, err := strconv.ParseInt(v, 0, 32)
 	if err != nil {
-		LogFatal("Invalid integer option for %s: %s (%s)", k, v, err.Error())
+		logger.LogFatal("Invalid integer option for %s: %s (%s)", k, v, err.Error())
 		return def
 	}
 	return int(i64)

@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -82,7 +83,7 @@ func parseChunkMethod(chunkMethodStr string) (string, map[string]string) {
 		if len(kv) == 2 {
 			chunkMethodParams[kv[0]] = kv[1]
 		} else {
-			LogWarning("Ignoring misformatted chunk method parameter: %s", kv_str)
+			logger.LogWarning("Ignoring misformatted chunk method parameter: %s", kv_str)
 		}
 	}
 
@@ -459,7 +460,7 @@ func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunk
 	}
 	chunk.ChunkID = filepath.Base(filepath.Clean(dstURL.Path))
 	if !utils.IsHexaString(chunk.ChunkID, 24, 64) {
-		LogWarning("%s did not parse as hexadecimal string", chunk.ChunkID)
+		logger.LogWarning("%s did not parse as hexadecimal string", chunk.ChunkID)
 		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunk.ChunkID)

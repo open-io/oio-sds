@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -59,7 +60,7 @@ func updateSystemd(status string) (notify_socket string) {
 	notify_socket = os.Getenv("NOTIFY_SOCKET")
 
 	if notify_socket == "" || status == "" {
-		LogDebug("unable to send status to systemd as NOTIFY_SOCKET env variable is not set")
+		logger.LogDebug("unable to send status to systemd as NOTIFY_SOCKET env variable is not set")
 		return
 	}
 
@@ -68,17 +69,17 @@ func updateSystemd(status string) (notify_socket string) {
 		Net:  "unixgram",
 	}
 
-	LogDebug("notifying systemd with: %s", status)
+	logger.LogDebug("notifying systemd with: %s", status)
 
 	conn, err := net.DialUnix(addr.Net, nil, addr)
 	// Error connecting to NOTIFY_SOCKET
 	if err != nil {
-		LogWarning("Unable to dial NOTIFY_SOCKET(%s): %v", notify_socket, err)
+		logger.LogWarning("Unable to dial NOTIFY_SOCKET(%s): %v", notify_socket, err)
 		return
 	}
 	defer conn.Close()
 	if _, err = conn.Write([]byte(status)); err != nil {
-		LogWarning("Unable to send state %s to systemd: %v", status, err)
+		logger.LogWarning("Unable to send state %s to systemd: %v", status, err)
 		return
 	}
 
@@ -120,7 +121,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 
 		for {
 			sig := <-signalChan
-			LogInfo("Received signal %s", sig)
+			logger.LogInfo("Received signal %s", sig)
 
 			switch sig {
 
@@ -129,14 +130,14 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 				// run in a goroutine to prevent the time.Sleep to lock
 				// the current (sig handler) goroutine
 				go func() {
-					increaseVerbosity()
+					logger.IncreaseVerbosity()
 					time.Sleep(time.Minute * 15)
-					resetVerbosity()
+					logger.ResetVerbosity()
 				}()
 
 			// SIGUSR1 reset verbosity
 			case syscall.SIGUSR2:
-				resetVerbosity()
+				logger.ResetVerbosity()
 
 			// INT exits immediately (timeout = 0)
 			// TERM exits after all requests are finished or at timeout expiration
@@ -152,7 +153,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 					timeout = 0
 				} else {
 					if ongoing_stop {
-						LogWarning("A graceful stop is already on going, forcing to exit immediately")
+						logger.LogWarning("A graceful stop is already on going, forcing to exit immediately")
 						timeout = 0
 					}
 				}
@@ -166,13 +167,13 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 					go func() {
 						var ctx context.Context
 						if timeout < 0 {
-							LogInfo("Shutting down %s server once all requests are over", server.server.Addr)
+							logger.LogInfo("Shutting down %s server once all requests are over", server.server.Addr)
 							ctx = context.Background()
 						} else {
 							if timeout > 0 {
-								LogInfo("Shutting down %s server after all request are over or after %s", server.server.Addr, timeout)
+								logger.LogInfo("Shutting down %s server after all request are over or after %s", server.server.Addr, timeout)
 							} else {
-								LogInfo("Shutting down %s server immediately", server.server.Addr)
+								logger.LogInfo("Shutting down %s server immediately", server.server.Addr)
 							}
 							var cancel context.CancelFunc
 							ctx, cancel = context.WithTimeout(context.Background(), timeout)
@@ -185,7 +186,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 
 						// stops the server waiting for all requests to finish (or for timeout to expires if set)
 						if err := server.server.Shutdown(ctx); err != nil {
-							LogWarning("HTTP shutdown (%s) error: %v", server.server.Addr, err.Error())
+							logger.LogWarning("HTTP shutdown (%s) error: %v", server.server.Addr, err.Error())
 						}
 					}()
 				}
@@ -194,7 +195,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 			// only 1 at a time can be done
 			case syscall.SIGHUP:
 				if ongoing_stop {
-					LogWarning("A graceful stop is already on going, ignoring %s", sig)
+					logger.LogWarning("A graceful stop is already on going, ignoring %s", sig)
 					continue
 				}
 				// inform systemd that a reload has started
@@ -216,7 +217,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 				// retrieve file descriptor of the HTTP listen socket
 				file, err = srv.socket.File()
 				if err != nil {
-					LogWarning("Unable to retrieve file from HTTP listener, not forking: %v", err)
+					logger.LogWarning("Unable to retrieve file from HTTP listener, not forking: %v", err)
 					continue
 				}
 
@@ -235,7 +236,7 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 				if srvTls != nil {
 					fileTls, err = srvTls.socket.File()
 					if err != nil {
-						LogWarning("Unable to retrieve file from HTTPS listener, not forking: %v", err)
+						logger.LogWarning("Unable to retrieve file from HTTPS listener, not forking: %v", err)
 						continue
 					}
 					files = append(files, fileTls)
@@ -254,11 +255,11 @@ func installSigHandlers(srv *httpServer, srvTls *httpServer, timeout time.Durati
 				cmd.ExtraFiles = files
 				cmd.Env = append(os.Environ(), env[:]...)
 				if err := cmd.Start(); err != nil {
-					LogWarning("Fork did not succeed: %s", err)
+					logger.LogWarning("Fork did not succeed: %s", err)
 					continue
 				}
 				childPid = cmd.Process.Pid
-				LogInfo("Started child process %d, waiting for its ready signal", cmd.Process.Pid)
+				logger.LogInfo("Started child process %d, waiting for its ready signal", cmd.Process.Pid)
 				// notify systemd that the reloading is done (so that systemctl reload can return)
 				updateSystemd(fmt.Sprintf("READY=1\nSTATUS=waiting for new rawx process to take over ..."))
 			}
@@ -279,10 +280,10 @@ func main() {
 	// a reload would be done with a SIGKILL instead of a SIGTERM
 	defer func() {
 		if childPid > 0 {
-			LogInfo("process exit ! (process %d has taken over after reload)", childPid)
+			logger.LogInfo("process exit ! (process %d has taken over after reload)", childPid)
 			updateSystemd(fmt.Sprintf("MAINPID=%d\nSTATUS=processing request (after reload) ...", childPid))
 		} else {
-			LogInfo("process exit !")
+			logger.LogInfo("process exit !")
 			updateSystemd("EXIST_STATUS=0\nSTATUS=stopped")
 		}
 	}()
@@ -299,7 +300,7 @@ func main() {
 	}
 
 	if *verbosePtr {
-		maximizeVerbosity()
+		logger.MaximizeVerbosity()
 	}
 
 	var opts optionsMap
@@ -313,35 +314,35 @@ func main() {
 	}
 
 	if opts["log_level"] != "" {
-		initVerbosity(LogLevelToSeverity(opts["log_level"]))
+		logger.InitVerbosity(logger.LogLevelToSeverity(opts["log_level"]))
 	}
 	if opts["log_format"] != "" {
-		logFormat = opts["log_format"]
+		logger.LogFormat = opts["log_format"]
 	}
 	if opts["log_request_format"] != "" {
-		requestLogFormat = opts["log_request_format"]
+		logger.RequestLogFormat = opts["log_request_format"]
 	}
 	if opts["log_access_format"] != "" {
-		accessLogFormat = opts["log_access_format"]
+		logger.AccessLogFormat = opts["log_access_format"]
 	}
 	if opts["log_event_format"] != "" {
-		eventLogFormat = opts["log_event_format"]
+		logger.EventLogFormat = opts["log_event_format"]
 	}
-	if err := InitLogTemplates(); err != nil {
+	if err := logger.InitLogTemplates(); err != nil {
 		log.Fatalf("Unable to init log templates: %v", err.Error())
 	}
 
-	if logExtremeVerbosity {
-		InitStderrLogger()
+	if logger.LogExtremeVerbosity {
+		logger.InitStderrLogger()
 	} else if *syslogIDPtr != "" {
-		InitSysLogger(*syslogIDPtr)
+		logger.InitSysLogger(*syslogIDPtr)
 	} else if v, ok := opts["syslog_id"]; ok {
-		InitSysLogger(v)
+		logger.InitSysLogger(v)
 	} else {
-		InitNoopLogger()
+		logger.InitNoopLogger()
 	}
 
-	InitStatsd(opts["statsd_addr"], opts["statsd_prefix"])
+	logger.InitStatsd(opts["statsd_addr"], opts["statsd_prefix"])
 
 	var graceful_stop_timeout time.Duration = -1
 	if v, ok := opts["graceful_stop_timeout"]; ok {
@@ -357,16 +358,16 @@ func main() {
 	rawxID := opts["id"]
 	NotifAllowed = opts.getBool("events", defs.ConfigDefaultEvents)
 
-	accessLogPut = opts.getBool("log_access_put", defs.ConfigDefaultAccessLogPut)
-	accessLogGet = opts.getBool("log_access_get", defs.ConfigDefaultAccessLogGet)
-	accessLogDel = opts.getBool("log_access_del", defs.ConfigDefaultAccessLogDelete)
+	logger.AccessLogPut = opts.getBool("log_access_put", defs.ConfigDefaultAccessLogPut)
+	logger.AccessLogGet = opts.getBool("log_access_get", defs.ConfigDefaultAccessLogGet)
+	logger.AccessLogDel = opts.getBool("log_access_del", defs.ConfigDefaultAccessLogDelete)
 
 	checkNS(namespace)
 	checkURL(rawxURL)
 
 	// Init the actual chunk storage
 	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
-		LogFatal("Invalid directories: %v", err)
+		logger.LogFatal("Invalid directories: %v", err)
 	}
 	chunkrepo.sub.hashWidth = opts.getInt("hash_width", chunkrepo.sub.hashWidth)
 	chunkrepo.sub.hashDepth = opts.getInt("hash_depth", chunkrepo.sub.hashDepth)
@@ -439,12 +440,12 @@ func main() {
 	if NotifAllowed {
 		eventAgent := OioGetEventAgent(namespace)
 		if eventAgent == "" {
-			LogFatal("Notifier error: no address")
+			logger.LogFatal("Notifier error: no address")
 		}
 
 		rawx.notifier, err = MakeNotifier(eventAgent, &opts, &rawx)
 		if err != nil {
-			LogFatal("Notifier error: %v", err)
+			logger.LogFatal("Notifier error: %v", err)
 		}
 	}
 
@@ -527,16 +528,16 @@ func main() {
 			id = rawx.url
 		}
 		if err := chunkrepo.lock(namespace, id); err != nil {
-			LogFatal("Volume lock error: %v", err.Error())
+			logger.LogFatal("Volume lock error: %v", err.Error())
 		}
 	}
 
-	if logExtremeVerbosity {
+	if logger.LogExtremeVerbosity {
 		srv.server.ConnState = func(cnx net.Conn, state http.ConnState) {
-			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
+			logger.LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 		tlsSrv.server.ConnState = func(cnx net.Conn, state http.ConnState) {
-			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
+			logger.LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 	}
 
@@ -559,7 +560,7 @@ func main() {
 	// kill the parent process gracefuly
 	if os.Getenv("__OIO_RAWX_FORK") != "" {
 		ppid := syscall.Getppid()
-		LogInfo("child process launched with success, graceful stop the parent process (%d)", ppid)
+		logger.LogInfo("child process launched with success, graceful stop the parent process (%d)", ppid)
 		syscall.Kill(ppid, syscall.SIGTERM)
 	} else {
 		// it is a initial start
@@ -586,5 +587,5 @@ func main() {
 		rawx.notifier.Stop()
 	}
 
-	logger.close()
+	logger.Close()
 }

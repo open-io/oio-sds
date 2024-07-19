@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -77,8 +78,8 @@ func (rr *rawxRequest) serveInfo() {
 	}
 	spent, ttfb = IncrementStatReqInfo(rr)
 
-	if isVerbose() {
-		LogHttp(AccessLogEvent{
+	if logger.IsVerbose() {
+		logger.LogHttp(logger.AccessLogEvent{
 			Status:    rr.status,
 			TimeSpent: spent,
 			BytesIn:   rr.bytesIn,
