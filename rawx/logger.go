@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/cactus/go-statsd-client/v5/statsd"
+	"openio-sds/rawx/defs"
 )
 
 type OioLogger interface {
@@ -38,10 +39,10 @@ type OioLogger interface {
 	writeError(message string)
 }
 
-var accessLogGet = ConfigDefaultAccessLogGet
-var accessLogPut = ConfigDefaultAccessLogPut
-var accessLogPost = ConfigDefaultAccessLogPost
-var accessLogDel = ConfigDefaultAccessLogDelete
+var accessLogGet = defs.ConfigDefaultAccessLogGet
+var accessLogPut = defs.ConfigDefaultAccessLogPut
+var accessLogPost = defs.ConfigDefaultAccessLogPost
+var accessLogDel = defs.ConfigDefaultAccessLogDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var requestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
@@ -363,7 +364,7 @@ func InitStatsd(addr string, prefix string) {
 		return
 	}
 	if prefix == "" {
-		prefix = StatsdPrefixDefault
+		prefix = defs.StatsdPrefixDefault
 	}
 
 	config := &statsd.ClientConfig{
@@ -418,7 +419,7 @@ type SysLogger struct {
 func InitSysLogger(syslogID string) {
 	l := &SysLogger{}
 	l.alertThrottle = PeriodicThrottle{period: 1000000000}
-	l.queue = make(chan string, ConfigDefaultAccessLogQueueLength)
+	l.queue = make(chan string, defs.ConfigDefaultAccessLogQueueLength)
 	l.running = true
 	l.syslogID = syslogID
 	l.loggerAccess, _ = syslog.New(syslog.LOG_LOCAL1|syslog.LOG_INFO, syslogID)

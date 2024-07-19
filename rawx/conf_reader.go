@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"openio-sds/rawx/defs"
 )
 
 type optionsMap map[string]string
@@ -115,7 +117,7 @@ var deprecatedOpts = map[string]string{
 }
 
 var prefixOpts = map[string]string{
-	ConfigPrefixKafka: ConfigPrefixKafka,
+	defs.ConfigPrefixKafka: defs.ConfigPrefixKafka,
 }
 
 // readConfig -- fetch options from conf file and remap their name

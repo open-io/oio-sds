@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"lukechampine.com/blake3"
+	"openio-sds/rawx/defs"
 )
 
 var (
@@ -68,7 +69,7 @@ var RangeRegex = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
 func fillBuffer(src io.Reader, buf []byte) (written int, err error) {
-	for len(buf)-written >= UploadBatchSize {
+	for len(buf)-written >= defs.UploadBatchSize {
 		nr, er := src.Read(buf[written:])
 		if nr > 0 {
 			written += nr
@@ -153,7 +154,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferP
 }
 
 func (rr *rawxRequest) checksumRequired() bool {
-	return rr.rawx.checksumMode == ChecksumAlways || (rr.rawx.checksumMode == ChecksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
+	return rr.rawx.checksumMode == defs.ChecksumAlways || (rr.rawx.checksumMode == defs.ChecksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
 }
 
 func (rr *rawxRequest) uploadChunk() {
@@ -200,19 +201,19 @@ func (rr *rawxRequest) uploadChunk() {
 	// Maybe intercept the upload with a compression filter
 	var z io.WriteCloser
 	switch rr.rawx.compression {
-	case CompressionZlib:
+	case defs.CompressionZlib:
 		z = zlib.NewWriter(out)
-	case CompressionDeflate:
+	case defs.CompressionDeflate:
 		z, err = flate.NewWriter(out, 1)
-	case CompressionLzw:
+	case defs.CompressionLzw:
 		z = lzw.NewWriter(out, lzw.MSB, 8)
-	case "", CompressionOff:
+	case "", defs.CompressionOff:
 		z = nil
 	default:
 		err = errCompressionNotManaged
 	}
 	switch rr.rawx.compression {
-	case "", CompressionOff:
+	case "", defs.CompressionOff:
 		rr.chunk.compression = ""
 	default:
 		rr.chunk.compression = rr.rawx.compression
@@ -367,7 +368,7 @@ func (rr *rawxRequest) checkChunk() {
 
 	// FIXME(jfs): generalize the check of chunkInfo
 	if rr.chunk.ChunkHash == "" {
-		rr.replyError("checkChunk()", errMissingXattr(AttrNameChunkChecksum, nil))
+		rr.replyError("checkChunk()", errMissingXattr(defs.AttrNameChunkChecksum, nil))
 		return
 	}
 
@@ -377,8 +378,8 @@ func (rr *rawxRequest) checkChunk() {
 		return
 	}
 
-	if GetBool(rr.req.Header.Get(HeaderNameCheckHash), false) {
-		expected_hash := rr.req.Header.Get(HeaderNameChunkChecksum)
+	if GetBool(rr.req.Header.Get(defs.HeaderNameCheckHash), false) {
+		expected_hash := rr.req.Header.Get(defs.HeaderNameChunkChecksum)
 		if expected_hash == "" {
 			expected_hash = rr.chunk.ChunkHash
 		}
@@ -564,13 +565,13 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
 	switch rr.chunk.compression {
-	case CompressionZlib:
+	case defs.CompressionZlib:
 		filter, err = zlib.NewReader(inChunk.File())
-	case CompressionLzw:
+	case defs.CompressionLzw:
 		filter = lzw.NewReader(inChunk.File(), lzw.MSB, 8)
-	case CompressionDeflate:
+	case defs.CompressionDeflate:
 		filter = flate.NewReader(inChunk.File())
-	case "", CompressionOff:
+	case "", defs.CompressionOff:
 		filter = nil
 	default:
 		err = errCompressionNotManaged
@@ -604,8 +605,8 @@ func (rr *rawxRequest) removeChunk() {
 	if NotifAllowed {
 		rr.chunk = chunkInfo{}
 		rr.chunk.ChunkID = rr.chunkID
-		rr.chunk.ContainerID = rr.req.Header.Get(HeaderNameContainerID)
-		rr.chunk.ContentID = rr.req.Header.Get(HeaderNameContentID)
+		rr.chunk.ContainerID = rr.req.Header.Get(defs.HeaderNameContainerID)
+		rr.chunk.ContentID = rr.req.Header.Get(defs.HeaderNameContentID)
 
 		if rr.chunk.ContainerID == "" || rr.chunk.ContentID == "" {
 			tmp := xattrBufferPool.Acquire()

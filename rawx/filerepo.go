@@ -28,6 +28,7 @@ import (
 	"time"
 
 	syscall "golang.org/x/sys/unix"
+	"openio-sds/rawx/defs"
 )
 
 type fileRepository struct {
@@ -71,21 +72,21 @@ func (fr *fileRepository) init(root string) error {
 		return errors.New("Filerepo path must be absolute")
 	}
 	fr.root = basedir
-	fr.hashWidth = HashWidthDefault
-	fr.hashDepth = HashDepthDefault
-	fr.putOpenMode = PutOpenModeDefault
-	fr.putMkdirMode = PutMkdirModeDefault
-	fr.shallowCopy = ConfigDefaultShallowCopy
-	fr.syncFile = ConfigDefaultSyncFile
-	fr.syncDir = ConfigDefaultSyncDir
-	fr.fallocateFile = ConfigDefaultFallocate
-	fr.fadviseUpload = ConfigDefaultFadviseUpload
-	fr.fadviseDownload = ConfigDefaultFadviseDownload
-	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, FolderNonOptimalPlacement}, "/")
+	fr.hashWidth = defs.HashWidthDefault
+	fr.hashDepth = defs.HashDepthDefault
+	fr.putOpenMode = defs.PutOpenModeDefault
+	fr.putMkdirMode = defs.PutMkdirModeDefault
+	fr.shallowCopy = defs.ConfigDefaultShallowCopy
+	fr.syncFile = defs.ConfigDefaultSyncFile
+	fr.syncDir = defs.ConfigDefaultSyncDir
+	fr.fallocateFile = defs.ConfigDefaultFallocate
+	fr.fadviseUpload = defs.ConfigDefaultFadviseUpload
+	fr.fadviseDownload = defs.ConfigDefaultFadviseDownload
+	fr.nonOptimalPlacementFolderPath = strings.Join([]string{fr.root, defs.FolderNonOptimalPlacement}, "/")
 	if err = os.MkdirAll(fr.nonOptimalPlacementFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
-	fr.orphansFolderPath = strings.Join([]string{fr.root, FolderOrphans}, "/")
+	fr.orphansFolderPath = strings.Join([]string{fr.root, defs.FolderOrphans}, "/")
 	if err = os.MkdirAll(fr.orphansFolderPath, fr.putMkdirMode); err != nil {
 		return err
 	}
@@ -142,12 +143,12 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 	f := &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}
 
 	switch fr.fadviseDownload {
-	case ConfigFadviseNone:
-	case ConfigFadviseYes:
+	case defs.ConfigFadviseNone:
+	case defs.ConfigFadviseYes:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
-	case ConfigFadviseNoCache:
+	case defs.ConfigFadviseNoCache:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
-	case ConfigFadviseCache:
+	case defs.ConfigFadviseCache:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_WILLNEED)
 	}
@@ -388,7 +389,7 @@ func (fw *realFileWriter) Write(buffer []byte) (int, error) {
 	buflen := int64(len(buffer))
 
 	if fw.written+buflen > fw.allocated {
-		fw.Extend(UploadExtensionSize)
+		fw.Extend(defs.UploadExtensionSize)
 	}
 
 	fw.written += buflen
@@ -422,12 +423,12 @@ func (fw *realFileWriter) commit() error {
 
 	if err == nil {
 		switch fw.repo.fadviseUpload {
-		case ConfigFadviseNone:
-		case ConfigFadviseYes:
+		case defs.ConfigFadviseNone:
+		case defs.ConfigFadviseYes:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
-		case ConfigFadviseNoCache:
+		case defs.ConfigFadviseNoCache:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_DONTNEED)
-		case ConfigFadviseCache:
+		case defs.ConfigFadviseCache:
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
 			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_WILLNEED)
 		}
@@ -566,7 +567,7 @@ func setOrHasXattr(path, key, value string) error {
 
 func xattrKey(name string) string {
 	sb := strings.Builder{}
-	sb.WriteString(AttrNameFullPrefix)
+	sb.WriteString(defs.AttrNameFullPrefix)
 	sb.WriteString(name)
 	return sb.String()
 }

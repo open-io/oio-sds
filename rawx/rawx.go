@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"openio-sds/rawx/defs"
 )
 
 type rawxService struct {
@@ -103,14 +105,14 @@ func (rr *rawxRequest) replyError(action string, err error) {
 		// Also, we debug what happened in the reply headers
 		// TODO(jfs): This is a job for a distributed tracing framework
 		if logExtremeVerbosity {
-			rr.rep.Header().Set(HeaderNameError, err.Error())
+			rr.rep.Header().Set(defs.HeaderNameError, err.Error())
 		}
 
 		// Prepare the most adapted reply status.
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
 		} else if err == io.ErrUnexpectedEOF && rr.req.Method == "PUT" {
-			rr.replyCode(HttpStatusClientClosedRequest)
+			rr.replyCode(defs.HttpStatusClientClosedRequest)
 		} else {
 			switch err {
 			case errInvalidChunkID, errMissingHeader, errInvalidHeader:
@@ -169,15 +171,15 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	}
 
 	// Extract some common headers
-	rawxreq.reqid = req.Header.Get(HeaderNameOioReqId)
+	rawxreq.reqid = req.Header.Get(defs.HeaderNameOioReqId)
 	if len(rawxreq.reqid) <= 0 {
-		rawxreq.reqid = req.Header.Get(HeaderNameTransId)
+		rawxreq.reqid = req.Header.Get(defs.HeaderNameTransId)
 	}
 	if len(rawxreq.reqid) > 0 {
-		if len(rawxreq.reqid) > HeaderLenOioReqId {
-			rawxreq.reqid = rawxreq.reqid[0:HeaderLenOioReqId]
+		if len(rawxreq.reqid) > defs.HeaderLenOioReqId {
+			rawxreq.reqid = rawxreq.reqid[0:defs.HeaderLenOioReqId]
 		}
-		rep.Header().Set(HeaderNameOioReqId, rawxreq.reqid)
+		rep.Header().Set(defs.HeaderNameOioReqId, rawxreq.reqid)
 	} else {
 		// patch the reqid for pretty access log
 		rawxreq.reqid = "-"

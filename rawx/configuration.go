@@ -23,6 +23,7 @@ import (
 	"os/user"
 
 	"gopkg.in/ini.v1"
+	"openio-sds/rawx/defs"
 )
 
 var OioConfig map[string]map[string]string
@@ -66,23 +67,23 @@ func oioLoadDir(directory string) {
 }
 
 func oioLoadConfig() {
-	if fi, err := os.Stat(PathOioConfigFile); err == nil && fi.Mode().IsRegular() {
-		oioLoadFile(PathOioConfigFile)
+	if fi, err := os.Stat(defs.PathOioConfigFile); err == nil && fi.Mode().IsRegular() {
+		oioLoadFile(defs.PathOioConfigFile)
 	}
 
-	if fi, err := os.Stat(PathOioConfigDir); err == nil && fi.IsDir() {
-		oioLoadDir(PathOioConfigDir)
+	if fi, err := os.Stat(defs.PathOioConfigDir); err == nil && fi.IsDir() {
+		oioLoadDir(defs.PathOioConfigDir)
 	}
 
 	if usr, err := user.Current(); err == nil {
-		local := usr.HomeDir + "/" + PathOioConfigLocal
+		local := usr.HomeDir + "/" + defs.PathOioConfigLocal
 		if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
 			oioLoadFile(local)
 		}
 
 		// Yes, it happens...
 		if home := os.Getenv("HOME"); home != usr.HomeDir {
-			local = home + "/" + PathOioConfigLocal
+			local = home + "/" + defs.PathOioConfigLocal
 			if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
 				oioLoadFile(local)
 			}
@@ -91,7 +92,7 @@ func oioLoadConfig() {
 
 	if len(OioConfig) == 0 {
 		LogWarning("No namespace configuration file found in %s or %s "+
-			"or user home directory", PathOioConfigFile, PathOioConfigDir)
+			"or user home directory", defs.PathOioConfigFile, defs.PathOioConfigDir)
 	}
 }
 
@@ -113,9 +114,9 @@ func oioGetConfigValue(namespace, value string) string {
 }
 
 func OioGetEventAgent(namespace string) string {
-	conf := oioGetConfigValue(namespace, ConfigOioEventAgentRawx)
+	conf := oioGetConfigValue(namespace, defs.ConfigOioEventAgentRawx)
 	if conf == "" {
-		conf = oioGetConfigValue(namespace, ConfigOioEventAgent)
+		conf = oioGetConfigValue(namespace, defs.ConfigOioEventAgent)
 	}
 	return conf
 }

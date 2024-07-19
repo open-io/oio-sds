@@ -29,10 +29,11 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"openio-sds/rawx/defs"
 )
 
 // Tells if the current RAWX service may emit notifications
-var NotifAllowed = ConfigDefaultEvents
+var NotifAllowed = defs.ConfigDefaultEvents
 
 // Represents a chunk event with a routing key.
 // routingKey will not be used when sending to Beanstalkd,
@@ -112,7 +113,7 @@ func (backend *beanstalkdBackend) Push(event []byte, routingKey string) {
 				time.Sleep(backend.conn_timeout / 2)
 			}
 		} else {
-			err = b.Use(BeanstalkTubeDefault)
+			err = b.Use(defs.BeanstalkTubeDefault)
 			if err != nil {
 				b.Close()
 			} else {
@@ -332,15 +333,15 @@ func (backend *kafkaBackend) Close() {
 }
 
 func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error) {
-	conn_attempts := options.getInt("event_conn_attempts", EventConnAttempts)
+	conn_attempts := options.getInt("event_conn_attempts", defs.EventConnAttempts)
 	conn_timeout := time.Duration(
-		options.getFloat("timeout_conn_event", EventConnTimeout)) * time.Second
+		options.getFloat("timeout_conn_event", defs.EventConnTimeout)) * time.Second
 	send_timeout := time.Duration(
-		options.getFloat("timeout_send_event", EventSendTimeout)) * time.Second
+		options.getFloat("timeout_send_event", defs.EventSendTimeout)) * time.Second
 	if endpoint, ok := hasPrefix(url, "beanstalk://"); ok {
 		out := new(beanstalkdBackend)
 		out.endpoint = endpoint
-		out.tube = BeanstalkTubeDefault
+		out.tube = defs.BeanstalkTubeDefault
 		out.conn_attempts = conn_attempts
 		out.conn_timeout = conn_timeout
 		return out, nil
@@ -351,7 +352,7 @@ func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error)
 		// The namespace comes from rawx configuration, but the exchange
 		// comes from the namespace configuration file.
 		out.exchange = oioGetConfigValue(
-			options.getString("ns", "OIO"), ConfigOioEventExchange)
+			options.getString("ns", "OIO"), defs.ConfigOioEventExchange)
 		if out.exchange == "" {
 			out.exchange = "oio"
 		}
@@ -362,14 +363,14 @@ func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error)
 	} else if _, ok := hasPrefix(url, "kafka://"); ok {
 		out := new(kafkaBackend)
 		out.endpoint = url
-		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), ConfigOioEventTopic))
+		out.topic = options.getString("topic", oioGetConfigValue(options.getString("ns", "OIO"), defs.ConfigOioEventTopic))
 		if out.topic == "" {
 			out.topic = "oio"
 		}
 		out.conf = map[string]string{}
 		for k, v := range *options {
-			if strings.HasPrefix(k, ConfigPrefixKafka) {
-				out.conf[strings.TrimPrefix(k, ConfigPrefixKafka)] = v
+			if strings.HasPrefix(k, defs.ConfigPrefixKafka) {
+				out.conf[strings.TrimPrefix(k, defs.ConfigPrefixKafka)] = v
 			}
 		}
 		out.logsChannel = make(chan kafka.LogEvent)
@@ -381,14 +382,14 @@ func makeSingleBackend(url string, options *optionsMap) (NotifierBackend, error)
 
 func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*Notifier, error) {
 	n := new(Notifier)
-	n.queue = make(chan routedEvent, NotifierPipeSizeDefault)
+	n.queue = make(chan routedEvent, defs.NotifierPipeSizeDefault)
 	n.running = true
 	n.url = rawx.url
 	n.srvid = rawx.id
 
 	workers := make([]NotifierBackend, 0)
 	if !strings.Contains(evtUrl, ";") || strings.HasPrefix(evtUrl, "amqp://") {
-		for i := 0; i < NotifierSingleMultiplier; i++ {
+		for i := 0; i < defs.NotifierSingleMultiplier; i++ {
 			backend, err := makeSingleBackend(evtUrl, options)
 			if err != nil {
 				return nil, err
@@ -398,7 +399,7 @@ func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*Notif
 		}
 	} else {
 		for _, singleUrl := range strings.Split(evtUrl, ";") {
-			for i := 0; i < NotifierMultipleMultiplier; i++ {
+			for i := 0; i < defs.NotifierMultipleMultiplier; i++ {
 				backend, err := makeSingleBackend(singleUrl, options)
 				if err != nil {
 					return nil, err
@@ -431,13 +432,13 @@ func MakeNotifier(evtUrl string, options *optionsMap, rawx *rawxService) (*Notif
 
 func (n *Notifier) NotifyNew(requestID string, chunk chunkInfo) {
 	if NotifAllowed {
-		n.asyncNotify(EventTypeNewChunk, requestID, chunk)
+		n.asyncNotify(defs.EventTypeNewChunk, requestID, chunk)
 	}
 }
 
 func (n *Notifier) NotifyDel(requestID string, chunk chunkInfo) {
 	if NotifAllowed {
-		n.asyncNotify(EventTypeDelChunk, requestID, chunk)
+		n.asyncNotify(defs.EventTypeDelChunk, requestID, chunk)
 	}
 }
 
