@@ -5,11 +5,12 @@ package main
 
 import (
 	"encoding/json"
-	"openio-sds/rawx/defs"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"openio-sds/rawx/defs"
 )
 
 // Validates that the struct can be encoded.
