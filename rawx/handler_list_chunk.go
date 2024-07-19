@@ -18,16 +18,11 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"io/fs"
 	"net/http"
 	"openio-sds/rawx/iterator"
 	"path/filepath"
-)
-
-var (
-	errStopWalk = errors.New("skip everything and stop the walk")
 )
 
 const (
