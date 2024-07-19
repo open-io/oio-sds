@@ -29,6 +29,7 @@ import (
 
 	syscall "golang.org/x/sys/unix"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -131,7 +132,7 @@ func (fr *fileRepository) del(name string) error {
 		xattrName := xattrKey(name)
 		err := syscall.Removexattr(absPath, xattrName)
 		if err != nil {
-			LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
+			logger.LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
 		}
 	}
 	return syscall.Unlinkat(fr.rootFd, relPath, 0)
@@ -207,7 +208,7 @@ func (fr *fileRepository) post(name string) fileUpdater {
 }
 
 func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
-	LogInfo("chunk %s doesn't have an optimal placement", name)
+	logger.LogInfo("chunk %s doesn't have an optimal placement", name)
 
 	// Relative path of the chunk (from the rawx root) -> chunkId[:3]/
 	relPath := fr.nameToRelPath(name)
@@ -231,7 +232,7 @@ func (fr *fileRepository) createSymlinkNonOptimal(name string) error {
 		// If Symlink failed because folder does not exist,
 		// create it and execute the function again.
 		if os.IsNotExist(err) {
-			LogInfo("Create symlink dir %s", folderPath)
+			logger.LogInfo("Create symlink dir %s", folderPath)
 			// Lazy dir creation
 			err = os.MkdirAll(folderPath, fr.putMkdirMode)
 			if err == nil {

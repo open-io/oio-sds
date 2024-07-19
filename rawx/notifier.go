@@ -30,6 +30,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -93,10 +94,10 @@ var (
 
 func deadLetter(event []byte, err error) {
 	if err != nil && alertThrottling.Ok() {
-		LogError("Event broker connection error: %v", err)
+		logger.LogError("Event broker connection error: %v", err)
 	}
 	if len(event) > 0 {
-		LogWarning("event %s", string(event))
+		logger.LogWarning("event %s", string(event))
 	}
 }
 
@@ -154,7 +155,7 @@ func (backend *amqpBackend) connect() error {
 	for backend.cnx == nil {
 		// backend.urls contains credentials, must be filtered before logging,
 		// hence the logging of urlId.
-		LogDebug("Connecting to event broker #%d", backend.urlId)
+		logger.LogDebug("Connecting to event broker #%d", backend.urlId)
 		cnx, err := amqp.DialConfig(backend.urls[backend.urlId], amqp.Config{
 			Dial: func(network, addr string) (net.Conn, error) {
 				return net.DialTimeout(network, addr, backend.conn_timeout)
@@ -168,7 +169,7 @@ func (backend *amqpBackend) connect() error {
 			if time.Now().After(cnxDeadline) {
 				return err
 			} else {
-				LogDebug("Failed to connect, will retry soon: %v", err)
+				logger.LogDebug("Failed to connect, will retry soon: %v", err)
 				// When there is only one endpoint, wait a bit between attempts
 				if len(backend.urls) < 2 {
 					time.Sleep(backend.conn_timeout / 2)
@@ -177,7 +178,7 @@ func (backend *amqpBackend) connect() error {
 		} else {
 			ch, err := cnx.Channel()
 			if err != nil {
-				LogDebug("Failed to open AMQP channel: %v", err)
+				logger.LogDebug("Failed to open AMQP channel: %v", err)
 				cnx.Close()
 			} else {
 				backend.cnx = cnx
@@ -208,7 +209,7 @@ loop:
 				ctx, backend.exchange, routingKey, false, false, msg)
 			// Disconnect in case of error
 			if err != nil {
-				LogDebug("Failed to push event: %v", err)
+				logger.LogDebug("Failed to push event: %v", err)
 				backend.Close()
 			} else {
 				sent = true
@@ -245,7 +246,7 @@ func (backend *kafkaBackend) connect() error {
 		return nil
 	}
 
-	LogDebug("Connecting to event broker #%s (%v)", backend.endpoint, backend.conf)
+	logger.LogDebug("Connecting to event broker #%s (%v)", backend.endpoint, backend.conf)
 
 	conf := kafka.ConfigMap{}
 	for k, v := range backend.conf {
@@ -260,10 +261,10 @@ func (backend *kafkaBackend) connect() error {
 	producer, err := kafka.NewProducer(&conf)
 
 	if err != nil {
-		LogDebug("Failed to connect %v", err)
+		logger.LogDebug("Failed to connect %v", err)
 		return err
 	}
-	LogDebug("Connected to event broker #%s", backend.endpoint)
+	logger.LogDebug("Connected to event broker #%s", backend.endpoint)
 
 	backend.producer = producer
 
@@ -274,15 +275,15 @@ func (backend *kafkaBackend) connect() error {
 
 			switch {
 			case log.Level <= 3:
-				logFunction = LogError
+				logFunction = logger.LogError
 			case log.Level <= 4:
-				logFunction = LogWarning
+				logFunction = logger.LogWarning
 			case log.Level <= 6:
-				logFunction = LogInfo
+				logFunction = logger.LogInfo
 			case log.Level <= 7:
-				logFunction = LogDebug
+				logFunction = logger.LogDebug
 			default:
-				logFunction = LogDebug
+				logFunction = logger.LogDebug
 			}
 
 			logFunction("librdkafka(name=%s tag=%s) %s", log.Name, log.Tag, log.Message)
@@ -294,14 +295,14 @@ func (backend *kafkaBackend) connect() error {
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error == nil {
-					LogDebug("Event has been pushed to topic %s sucessfully (%s)", *ev.TopicPartition.Topic, string(ev.Value))
+					logger.LogDebug("Event has been pushed to topic %s sucessfully (%s)", *ev.TopicPartition.Topic, string(ev.Value))
 					break
 				}
-				LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
+				logger.LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
 				err := ev.TopicPartition.Error.(kafka.Error).Code()
 				purged := err == kafka.ErrPurgeQueue || err == kafka.ErrPurgeInflight
 				if purged {
-					LogEvent(EventLogEvent{
+					logger.LogEvent(logger.EventLogEvent{
 						Topic: backend.topic,
 						Event: string(ev.Value),
 					})
@@ -318,7 +319,7 @@ func (backend *kafkaBackend) Push(event []byte, routingKey string) {
 	err := backend.connect()
 
 	if err == nil {
-		LogDebug("Trying to push an event (%s)", string(event))
+		logger.LogDebug("Trying to push an event (%s)", string(event))
 		err = backend.producer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{
 				Topic:     &backend.topic,
@@ -329,8 +330,8 @@ func (backend *kafkaBackend) Push(event []byte, routingKey string) {
 
 	}
 	if err != nil {
-		LogError("Failed to push an event to the topic %s (%s): %v", backend.topic, string(event), err)
-		LogEvent(EventLogEvent{
+		logger.LogError("Failed to push an event to the topic %s (%s): %v", backend.topic, string(event), err)
+		logger.LogEvent(logger.EventLogEvent{
 			Topic: backend.topic,
 			Event: string(event),
 		})
@@ -513,7 +514,7 @@ func (n *Notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	}
 
 	if err := json.NewEncoder(&sb).Encode(&evt); err != nil {
-		LogWarning("JSON encoding error: %v", err)
+		logger.LogWarning("JSON encoding error: %v", err)
 	} else {
 		event := sb.Bytes()
 		if !n.running {

@@ -25,6 +25,7 @@ import (
 	"net"
 	"time"
 
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -70,7 +71,7 @@ type beanstalkClient struct {
 }
 
 func DialBeanstalkd(addr string, timeout time.Duration) (*beanstalkClient, error) {
-	LogDebug("Connecting to event broker %s", addr)
+	logger.LogDebug("Connecting to event broker %s", addr)
 	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func (bc *beanstalkClient) Close() {
 	if bc.cnx != nil {
 		err := bc.cnx.Close()
 		if err != nil {
-			LogWarning("Failed to close the cnx to beanstalkClient: %s", err.Error())
+			logger.LogWarning("Failed to close the cnx to beanstalkClient: %s", err.Error())
 		}
 	}
 }

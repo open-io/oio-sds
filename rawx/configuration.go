@@ -24,6 +24,7 @@ import (
 
 	"gopkg.in/ini.v1"
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 )
 
 var OioConfig map[string]map[string]string
@@ -36,7 +37,7 @@ var optsParser = ini.LoadOptions{
 func oioLoadFile(file string) {
 	cfg, err := ini.LoadSources(optsParser, file)
 	if err != nil {
-		LogWarning("Failed to load config file [%s]: %s", file, err)
+		logger.LogWarning("Failed to load config file [%s]: %s", file, err)
 		return
 	}
 
@@ -55,7 +56,7 @@ func oioLoadFile(file string) {
 func oioLoadDir(directory string) {
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
-		LogWarning("Failed to load config directory [%s]: %s", directory, err)
+		logger.LogWarning("Failed to load config directory [%s]: %s", directory, err)
 		return
 	}
 
@@ -91,7 +92,7 @@ func oioLoadConfig() {
 	}
 
 	if len(OioConfig) == 0 {
-		LogWarning("No namespace configuration file found in %s or %s "+
+		logger.LogWarning("No namespace configuration file found in %s or %s "+
 			"or user home directory", defs.PathOioConfigFile, defs.PathOioConfigDir)
 	}
 }

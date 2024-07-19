@@ -2,7 +2,7 @@ package main
 
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2023 OVH SAS
+// Copyright (C) 2023-2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -24,6 +24,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+
+	"openio-sds/rawx/logger"
 )
 
 func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file string) error {
@@ -43,14 +45,14 @@ func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file
 	if fdEnvVar != "" {
 		fd, err = strconv.ParseInt(fdEnvVar, 10, 64)
 		if err != nil {
-			LogWarning("[%s] Error while parsing __OIO_RAWX_FORK_%s_FD env variable: %v", protocol, protocol, err)
+			logger.LogWarning("[%s] Error while parsing __OIO_RAWX_FORK_%s_FD env variable: %v", protocol, protocol, err)
 			fd = -1
 		}
 	}
 	if fd > -1 {
 		addr = os.Getenv(fmt.Sprintf("__OIO_RAWX_FORK_%s_ADDR", protocol))
 		if addr == "" || addr != srv.server.Addr {
-			LogWarning("[%s] graceful restart asked but Addr changed, use a new socket (old=%s new=%s)", protocol, addr, srv.server.Addr)
+			logger.LogWarning("[%s] graceful restart asked but Addr changed, use a new socket (old=%s new=%s)", protocol, addr, srv.server.Addr)
 			file := os.NewFile(uintptr(fd), "")
 			file.Close()
 			fd = -1
@@ -58,7 +60,7 @@ func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file
 	}
 
 	if fd > -1 {
-		LogInfo("[%s] About to use fd %d to listen on %s", protocol, fd, srv.server.Addr)
+		logger.LogInfo("[%s] About to use fd %d to listen on %s", protocol, fd, srv.server.Addr)
 		file := os.NewFile(uintptr(fd), "")
 		listener, err = net.FileListener(file)
 		if err != nil {
@@ -81,7 +83,7 @@ func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file
 
 		var err error
 
-		LogInfo("[%s] About to serve on %s", protocol, srv.server.Addr)
+		logger.LogInfo("[%s] About to serve on %s", protocol, srv.server.Addr)
 		if tls_cert_file != "" && tls_key_file != "" {
 			err = srv.server.ServeTLS(listener, tls_cert_file, tls_key_file)
 		} else {
@@ -89,10 +91,10 @@ func Run(wg *sync.WaitGroup, srv *httpServer, tls_cert_file string, tls_key_file
 		}
 
 		if err != http.ErrServerClosed {
-			LogWarning("[%s] Unable to start server: %v", protocol, err.Error())
+			logger.LogWarning("[%s] Unable to start server: %v", protocol, err.Error())
 		}
 
-		LogInfo("[%s] server stopped on %s", protocol, srv.server.Addr)
+		logger.LogInfo("[%s] server stopped on %s", protocol, srv.server.Addr)
 	}()
 
 	return nil

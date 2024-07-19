@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -67,7 +68,7 @@ func (rp *RawxProbe) OK() bool {
 		// If this function is called often, only report once per minute
 		if now.After(rp.lastIOReport.Add(time.Minute)) {
 			rp.lastIOReport = now
-			LogWarning("IO error checker stalled for %d minutes",
+			logger.LogWarning("IO error checker stalled for %d minutes",
 				now.Sub(rp.lastIOSuccess)/time.Minute)
 		}
 	}
@@ -81,7 +82,7 @@ func (rp *RawxProbe) ProbeLoop(basedir string, tag string, finished chan bool) {
 			time.Sleep(time.Second)
 			select {
 			case <-finished:
-				LogInfo("Stop the probe to check the repository")
+				logger.LogInfo("Stop the probe to check the repository")
 				return
 			default:
 			}
@@ -93,25 +94,25 @@ func (rp *RawxProbe) ProbeLoop(basedir string, tag string, finished chan bool) {
 func (rp *RawxProbe) probeOnce(basedir string, tag string, finished chan bool) {
 	/* Try a directory creation */
 	path := fmt.Sprintf("%s/probe-%s", basedir, utils.RandomString(16, defs.HexaCharacters))
-	LogDebug("Probing directory %s", path)
+	logger.LogDebug("Probing directory %s", path)
 	err := os.Mkdir(path, 0755)
 	os.Remove(path)
 	if err != nil {
 		msg := fmt.Sprintf("IO error on %s %s: %v", tag, path, err)
-		LogWarning(msg)
+		logger.LogWarning(msg)
 		rp.notifyError(msg)
 		return
 	}
 
 	/* Try a file creation */
 	path = fmt.Sprintf("%s/probe-%s", basedir, utils.RandomString(16, defs.HexaCharacters))
-	LogDebug("Probing file %s", path)
+	logger.LogDebug("Probing file %s", path)
 	file, err := os.Create(path)
 	file.Close()
 	os.Remove(path)
 	if err != nil {
 		msg := fmt.Sprintf("IO error on %s %s: %v", tag, path, err)
-		LogWarning(msg)
+		logger.LogWarning(msg)
 		rp.notifyError(msg)
 		return
 	}

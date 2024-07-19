@@ -21,11 +21,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"openio-sds/rawx/utils"
 	"os"
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
+	"openio-sds/rawx/utils"
 )
 
 type rawxService struct {
@@ -102,7 +103,7 @@ func (rr *rawxRequest) replyError(action string, err error) {
 
 		// Also, we debug what happened in the reply headers
 		// TODO(jfs): This is a job for a distributed tracing framework
-		if logExtremeVerbosity {
+		if logger.LogExtremeVerbosity {
 			rr.rep.Header().Set(defs.HeaderNameError, err.Error())
 		}
 

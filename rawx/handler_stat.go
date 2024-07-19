@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 )
 
@@ -317,8 +318,8 @@ func (rr *rawxRequest) serveStat() {
 	}
 	spent, ttfb = IncrementStatReqStat(rr)
 
-	if isVerbose() {
-		LogHttp(AccessLogEvent{
+	if logger.IsVerbose() {
+		logger.LogHttp(logger.AccessLogEvent{
 			Status:    rr.status,
 			TimeSpent: spent,
 			BytesIn:   rr.bytesIn,

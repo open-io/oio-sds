@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"openio-sds/rawx/defs"
+	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
 
 	"lukechampine.com/blake3"
@@ -125,7 +126,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.B
 		if er == io.EOF {
 			err = cb(written+int64(totalr), nil)
 			if err != nil {
-				LogWarning("Upload Final Hook: %v", err)
+				logger.LogWarning("Upload Final Hook: %v", err)
 				return err
 			}
 		}
@@ -523,7 +524,7 @@ func (rr *rawxRequest) downloadChunk() {
 
 	err = rr.checkChunkSize(inChunk)
 	if err != nil {
-		LogWarning("Won't serve chunk %s: %v", rr.chunkID, err)
+		logger.LogWarning("Won't serve chunk %s: %v", rr.chunkID, err)
 		rr.replyCode(http.StatusPreconditionFailed)
 		return
 	}
@@ -710,7 +711,7 @@ func (rr *rawxRequest) serveChunk() {
 	spent, ttfb = IncrementStatReqMethod(rr)
 
 	if shouldAccessLog(rr.status, rr.req.Method) {
-		LogHttp(AccessLogEvent{
+		logger.LogHttp(logger.AccessLogEvent{
 			Status:    rr.status,
 			TimeSpent: spent,
 			BytesIn:   rr.bytesIn,
@@ -755,19 +756,19 @@ func statusOk(status int) bool {
 }
 
 func shouldAccessLog(status int, method string) bool {
-	if !statusOk(status) || isVerbose() {
+	if !statusOk(status) || logger.IsVerbose() {
 		return true
 	}
 
 	switch method {
 	case "GET", "HEAD":
-		return accessLogGet
+		return logger.AccessLogGet
 	case "PUT":
-		return accessLogPut
+		return logger.AccessLogPut
 	case "POST":
-		return accessLogPost
+		return logger.AccessLogPost
 	case "DELETE":
-		return accessLogDel
+		return logger.AccessLogDel
 	default:
 		return true
 	}
