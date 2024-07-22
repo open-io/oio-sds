@@ -30,6 +30,8 @@ type PathIterator struct {
 	started    bool
 }
 
+type LeafDirWalker func()
+
 func NewPathIterator(marker string, width, depth uint) *PathIterator {
 	return &PathIterator{
 		markerPath: markerToLeveledPath(marker, width, depth),
