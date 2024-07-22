@@ -238,7 +238,7 @@ class CommonTestCase(testtools.TestCase):
 
         group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
         cls._cls_kafka_consumer = KafkaConsumer(
-            DEFAULT_ENDPOINT,
+            cls._cls_conf["kafka_endpoints"],
             [DEFAULT_PRESERVED_TOPIC],
             group_id,
             logger=cls._cls_logger,

@@ -2468,7 +2468,6 @@ def generate(options):
     metrics_cnxstring = ";".join(metrics_endpoints)
     ENV.update(
         {
-            "METRICS_CNXSTRING": metrics_cnxstring,
             "KAFKA_METRICS_URL": metrics_cnxstring,
         }
     )
@@ -3425,6 +3424,9 @@ def generate(options):
     final_conf[M1_REPLICAS] = meta1_replicas
     final_conf[M1_DIGITS] = meta1_digits
     final_conf["compression"] = compression
+    # For kafka
+    final_conf["kafka_endpoints"] = kafka_cnxstring
+    final_conf["kafka_metrics_endpoints"] = metrics_cnxstring
     for k in (
         APPLICATION_KEY,
         BUCKET_NAME,
