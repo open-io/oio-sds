@@ -85,7 +85,7 @@ func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth 
 			break
 		}
 	}
-	return fileList, (nextMarker == ""), nextMarker, err
+	return fileList, (nextMarker != ""), nextMarker, err
 }
 
 func doGetListOfChunks(rr *rawxRequest) {
