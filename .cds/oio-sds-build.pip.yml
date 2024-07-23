@@ -36,7 +36,12 @@ jobs:
           else
             PACKAGE=${PACKAGE}-$(date +%Y%m%d%H%M).git{{ .git.hash.short }}
           fi
-          export PACKAGE=${PACKAGE}-ovh${CDS_VERSION}
+          if [ "{{ .git.branch }}" = "master" ]; then
+            export OBSTO_BUILD="ovh${CDS_VERSION}"
+          else
+            export OBSTO_BUILD="ovhdev${CDS_VERSION}"
+          fi
+          export PACKAGE=${PACKAGE}-${OBSTO_BUILD}
           export REPO_URL="https://{{ .cds.proj.drive_mirrors_objectstorage_openio_user }}:{{ .cds.proj.drive_mirrors_objectstorage_openio_password }}@{{ .cds.proj.drive_mirrors_hostname }}"
           make -f /external-packages/ubuntu/focal/Makefile.common install-apt-repo
           make -f /external-packages/ubuntu/focal/Makefile.common deb_changelog
