@@ -98,11 +98,16 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 				if (!pE->expr.acc.field)
 					return EXPR_EVAL_ERROR;
 				acc = pEnv(pE->expr.acc.base);
-				if (!acc)
-					return EXPR_EVAL_UNDEF;
+				if (!acc) {
+					if (!pE->expr.acc.fallback) return EXPR_EVAL_UNDEF;
+					*ppS = strdup(pE->expr.acc.fallback);
+					return EXPR_EVAL_DEF;
+				}
 				*ppS = acc(pE->expr.acc.field);
-				if (!(*ppS))
-					return EXPR_EVAL_UNDEF;
+				if (!(*ppS)) {
+					if (!pE->expr.acc.fallback) return EXPR_EVAL_UNDEF;
+					*ppS = strdup(pE->expr.acc.fallback);
+				}
 				return EXPR_EVAL_DEF;
 			}
 		}
@@ -185,22 +190,28 @@ expr_evaluate(double *pResult, struct expr_s *pExpr, env_f pEnv)
 					if (!pUnary->expr.acc.field)
 						return EXPR_EVAL_ERROR;
 					acc = pEnv(pUnary->expr.acc.base);
-					if (!acc)
-						return EXPR_EVAL_UNDEF;
+					if (!acc) {
+						if (!pUnary->expr.acc.fallback) return EXPR_EVAL_UNDEF;
+						ppS = strdup(pUnary->expr.acc.fallback);
+						return EXPR_EVAL_DEF;
+					}
 					ppS = acc(pUnary->expr.acc.field);
 					if (!ppS){
-						VARIABLE_PERIOD_DECLARE();
-						if (VARIABLE_PERIOD_SKIP(60)) {
-							GRID_DEBUG("%s.%s is missing",
-									pUnary->expr.acc.base,
-									pUnary->expr.acc.field);
-						} else {
-							/* once per minute */
-							GRID_WARN("%s.%s is missing",
-									pUnary->expr.acc.base,
-									pUnary->expr.acc.field);
+						if (!pUnary->expr.acc.fallback) {
+							VARIABLE_PERIOD_DECLARE();
+							if (VARIABLE_PERIOD_SKIP(60)) {
+								GRID_DEBUG("%s.%s is missing",
+										pUnary->expr.acc.base,
+										pUnary->expr.acc.field);
+							} else {
+								/* once per minute */
+								GRID_WARN("%s.%s is missing",
+										pUnary->expr.acc.base,
+										pUnary->expr.acc.field);
+							}
+							return EXPR_EVAL_UNDEF;
 						}
-						return EXPR_EVAL_UNDEF;
+						ppS = strdup(pUnary->expr.acc.fallback);
 					}
 					*pD = strtod(ppS, &pEnd);
 					if (pEnd == ppS)

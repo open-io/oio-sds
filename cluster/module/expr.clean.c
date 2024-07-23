@@ -80,6 +80,8 @@ expr_clean(struct expr_s *pE)
 			g_free(pE->expr.acc.base);
 		if (pE->expr.acc.field)
 			g_free(pE->expr.acc.field);
+		if (pE->expr.acc.fallback)
+			g_free(pE->expr.acc.fallback);
 		break;
 	case NB_ET:
 		break;

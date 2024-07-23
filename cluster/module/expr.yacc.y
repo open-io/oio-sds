@@ -7,6 +7,7 @@ static struct expr_s* makeNum (double v);
 static struct expr_s* makeStr (char *s);
 static struct expr_s* makeUnary (enum expr_type_e e, struct expr_s *pE);
 static struct expr_s* makeAccessor (char *pBase, char *pF);
+static struct expr_s* makeAccessorWithFallback (char *pBase, char *pF, char *pFallback);
 static struct expr_s* makeBinary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2);
 static struct expr_s* makeTernary (enum expr_type_e e, struct expr_s *p1, struct expr_s *p2,
 		struct expr_s *p3);
@@ -20,6 +21,7 @@ extern int yylex(void);
 static struct expr_s *pParsed = NULL;
 
 %}
+%define parse.error verbose
 %union 
 {
 	double n;
@@ -32,7 +34,7 @@ static struct expr_s *pParsed = NULL;
 %token BIN_NUMADD_TK BIN_NUMSUB_TK BIN_NUMMUL_TK BIN_NUMDIV_TK BIN_NUMMOD_TK
 %token BIN_NUMAND_TK BIN_NUMXOR_TK BIN_NUMOR_TK BIN_POW_TK BIN_ROOT_TK
 %token UN_NUMSUP_TK UN_NUMINF_TK UN_NUMNOT_TK
-%token UN_STRNUM_TK UN_STRLEN_TK
+%token UN_STRNUM_TK UN_STRLEN_TK FALLBACK_TK
 %token PAROP_TK PARCL_TK DOT_TK COMA_TK
 %token <s> ID_TK
 %token <s> VAL_STR_TK
@@ -47,6 +49,7 @@ input: expr { pParsed = $1 ; }
 expr:
 	  VAL_NUM_TK { $$ = makeNum($1); }
 	| VAL_STR_TK { $$ = makeStr($1); }
+	| ID_TK DOT_TK ID_TK FALLBACK_TK VAL_STR_TK { $$ = makeAccessorWithFallback ($1, $3, $5); }
 	| ID_TK DOT_TK ID_TK { $$ = makeAccessor ($1, $3); }
 	| PAROP_TK expr PARCL_TK { $$ = $2; }
 
@@ -113,6 +116,17 @@ static struct expr_s* makeAccessor (char *pBase, char *pF) {
 	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
 	pRet->expr.acc.field = pF;
 	pRet->expr.acc.base = pBase;
+	pRet->expr.acc.fallback = NULL;
+	pRet->type = ACC_ET;
+	return pRet;
+}
+
+static struct expr_s* makeAccessorWithFallback (char *pBase, char *pF, char *pFallback) {
+	if (!pF || !pBase | !pFallback) return NULL;
+	struct expr_s *pRet = g_malloc0(sizeof(struct expr_s));
+	pRet->expr.acc.field = pF;
+	pRet->expr.acc.base = pBase;
+	pRet->expr.acc.fallback = pFallback;
 	pRet->type = ACC_ET;
 	return pRet;
 }

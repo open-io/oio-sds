@@ -67,6 +67,7 @@ union internal_expr_u
 	{
 		char *base;
 		char *field;
+		char *fallback;
 	} acc;
 	struct
 	{

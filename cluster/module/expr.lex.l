@@ -32,6 +32,7 @@
 [)]        { return PARCL_TK ; }
 [.]        { return DOT_TK ; }
 [,]        { return COMA_TK ; }
+[:]        { return FALLBACK_TK ; }
 
 ["][^"]*["]               { yylval.s=g_strdup(yytext+1) ; yylval.s[strlen(yylval.s)-1]='\0' ; return VAL_STR_TK; }
 
