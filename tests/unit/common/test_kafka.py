@@ -20,7 +20,7 @@ import time
 
 from oio.common.exceptions import ServiceBusy, OioTimeout, NotFound
 from oio.api.base import HttpApi
-from oio.common.kafka import KafkaMetricsClient, KafkaClusterSpaceSatus
+from oio.common.kafka_http import KafkaMetricsClient, KafkaClusterSpaceSatus
 
 
 class KafkaMetricClientTest(unittest.TestCase):

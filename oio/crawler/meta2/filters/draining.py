@@ -22,7 +22,8 @@ from oio.common.constants import (
     M2_PROP_SHARDS,
 )
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.kafka import KafkaClusterHealthCheckerMixin, DEFAULT_DELETE_TOPIC_PREFIX
+from oio.common.kafka import DEFAULT_DELETE_TOPIC_PREFIX
+from oio.common.kafka_http import KafkaClusterHealthCheckerMixin
 from oio.common.exceptions import OioUnhealthyKafkaClusterError
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter

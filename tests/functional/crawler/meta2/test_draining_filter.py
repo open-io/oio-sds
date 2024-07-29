@@ -31,7 +31,7 @@ from oio.common.constants import (
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
 )
-from oio.common.kafka import KafkaClusterHealthCheckerMixin
+from oio.common.kafka_http import KafkaClusterHealthCheckerMixin
 
 
 def fake_cb(_status, _msg):
