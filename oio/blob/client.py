@@ -43,6 +43,7 @@ from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common.storage_method import parse_chunk_method, STORAGE_METHODS
 from oio.conscience.client import ConscienceClient
+from oio.common.exceptions import OioNetworkException
 
 # RAWX connection timeout
 CONNECTION_TIMEOUT = 10.0
@@ -220,7 +221,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
                 resp = self._request("DELETE", chunk_["url"], headers=headers, **kwargs)
                 resp.chunk = chunk_
                 return resp
-            except urllib3.exceptions.HTTPError as ex:
+            except (urllib3.exceptions.HTTPError, OioNetworkException) as ex:
                 ex.chunk = chunk_
                 return ex
 
