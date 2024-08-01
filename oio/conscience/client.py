@@ -290,10 +290,13 @@ class ConscienceClient(ProxyClient):
         if cached_service_id and (
             time.time() - cached_service_id["mtime"] < self._service_id_max_age
         ):
-            if end_user_request or service_type != "rawx":
+            if end_user_request:
                 return cached_service_id["addr"]
-            if "internal_addr" in cached_service_id:
-                return cached_service_id["internal_addr"]
+            # Prefer internal service and fallback to main service.
+            # The internal service won't be discovered until the cache expiration. This
+            # should prevent any extra pressure on conscience service if internal
+            # service is missing.
+            return cached_service_id.get("internal_addr", cached_service_id["addr"])
 
         kwargs["end_user_request"] = end_user_request
         result = self.resolve(
