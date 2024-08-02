@@ -40,10 +40,7 @@ type rawxService struct {
 	uploadBufferPool bufferPool
 
 	// for IO errors
-	lastIOError   time.Time
-	lastIOSuccess time.Time
-	lastIOMsg     string
-	lastIOReport  time.Time
+	probe RawxProbe
 }
 
 type rawxRequest struct {
@@ -75,7 +72,7 @@ func (rr *rawxRequest) drain() error {
 func (rr *rawxRequest) replyIoError(rawx *rawxService) {
 	rr.status = http.StatusServiceUnavailable
 	rr.rep.WriteHeader(rr.status)
-	rr.rep.Write([]byte(rawx.lastIOMsg))
+	rr.rep.Write([]byte(rawx.probe.GetLastIOMsg()))
 }
 
 func (rr *rawxRequest) replyCode(code int) {
@@ -132,31 +129,7 @@ func (rawx *rawxService) getURL() string {
 }
 
 func (rawx *rawxService) isIOok() bool {
-	// Never touched -> OK
-	if rawx.lastIOError.Equal(time.Time{}) &&
-		rawx.lastIOSuccess.Equal(time.Time{}) {
-		return true
-	}
-
-	// The most recent activity is an error -> KO
-	if rawx.lastIOError.After(rawx.lastIOSuccess) {
-		return false
-	}
-
-	// Check the probe thread was not stalled
-	now := time.Now()
-	oneMinuteBefore := now.Add(-time.Minute)
-	ok := rawx.lastIOSuccess.After(oneMinuteBefore)
-	if !ok {
-		// If this function is called often, only report once per minute
-		if now.After(rawx.lastIOReport.Add(time.Minute)) {
-			rawx.lastIOReport = now
-			LogWarning("IO error checker stalled for %d minutes",
-				now.Sub(rawx.lastIOSuccess)/time.Minute)
-		}
-	}
-
-	return ok
+	return rawx.probe.OK()
 }
 
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
