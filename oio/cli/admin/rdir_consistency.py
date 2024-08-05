@@ -39,10 +39,7 @@ class RdirConsistency(Lister):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__rdir_client = self.app.client_manager.rdir
-        self.__container_client = self.app.client_manager.storage.container
-        self.__blob_client = self.app.client_manager.storage.blob_client
-        self.__admin_client = self.app.client_manager.admin
+        self.cm = self.app.client_manager
         self.__validate_chunk_presence_fn = self.__validate_chunk_presence_remote
         self.__volume_local_path = None
         self.__next_status_update = time() + self.STATUS_UPDATE_COOLDOWN
@@ -51,7 +48,7 @@ class RdirConsistency(Lister):
 
     @property
     def logger(self):
-        return self.app.client_manager.logger
+        return self.cm.logger
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -107,7 +104,7 @@ class RdirConsistency(Lister):
         chunk_url = f"http://{volume}/{chunk}"
         for _ in range(3):
             try:
-                _ = self.__blob_client.chunk_head(chunk_url)
+                _ = self.cm.storage.blob_client.chunk_head(chunk_url)
                 return True
             except ServiceBusy:
                 continue
@@ -117,7 +114,7 @@ class RdirConsistency(Lister):
 
     def __is_orphan(self, container, path, version):
         try:
-            self.__container_client.content_locate(
+            self.cm.storage.container.content_locate(
                 cid=container, path=path, version=version
             )
         except NotFound:
@@ -132,13 +129,13 @@ class RdirConsistency(Lister):
 
     def _list_chunks(self, volume, rdir_hosts, rate_limit=0):
         rdir_counters = {}
-        volume_host = self.__rdir_client.cs.resolve_service_id("rawx", volume)
+        volume_host = self.cm.rdir.cs.resolve_service_id("rawx", volume)
         run_time = 0
         for rdir_host in rdir_hosts:
             counters = rdir_counters.setdefault(rdir_host, Counter())
             self.logger.info("Fetching from rdir: %s", rdir_host)
             chunk_count = 0
-            for container, chunk, value in self.__rdir_client.chunk_fetch(
+            for container, chunk, value in self.cm.rdir.chunk_fetch(
                 volume, rdir_hosts=(rdir_host,)
             ):
                 run_time = ratelimit(run_time, rate_limit)
@@ -171,7 +168,7 @@ class RdirConsistency(Lister):
             self.__validate_chunk_presence_fn(container, chunk)
 
     def _get_volume_local_path(self, volume):
-        services = self.__rdir_client.cs.local_services()
+        services = self.cm.rdir.cs.local_services()
         for svc in services:
             if svc["type"] != "rawx":
                 continue
@@ -182,7 +179,7 @@ class RdirConsistency(Lister):
 
     def _get_hash_properties(self, volume):
         self.logger.debug("Fetching volume '%s' configuration", volume)
-        conf = self.__admin_client.service_get_info(volume, "rawx")
+        conf = self.cm.admin.service_get_info(volume, "rawx")
         return int(conf.get("hash_depth", [1])[0]), int(conf.get("hash_width", [1])[0])
 
     def take_action(self, parsed_args):
@@ -199,7 +196,7 @@ class RdirConsistency(Lister):
 
         self.__hash_depth, self.__hash_width = self._get_hash_properties(volume)
 
-        rdir_hosts = self.__rdir_client._get_resolved_rdir_hosts(volume)
+        rdir_hosts = self.cm.rdir._get_resolved_rdir_hosts(volume)
         self.logger.info("Rdir hosts assigned to volume %s: %s", volume, rdir_hosts)
         rdir_counters = self._list_chunks(
             volume, rdir_hosts, rate_limit=parsed_args.ratelimit
@@ -210,7 +207,7 @@ class RdirConsistency(Lister):
         columns.extend(
             [self.__build_key(r, o) for r in (True, False) for o in (True, False)]
         )
-        all_services = self.app.client_manager.conscience.all_services("rdir")
+        all_services = self.cm.conscience.all_services("rdir")
         all_services = [svc for svc in all_services if svc["addr"] in rdir_hosts]
         values = []
         for rdir, counters in rdir_counters.items():
