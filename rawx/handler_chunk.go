@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -410,12 +411,15 @@ func (rr *rawxRequest) checkChunk() {
 			}
 		}
 		if err != nil {
-			if err == syscall.EIO {
-				// This special case is not in the main error handler, because
-				// StatusPreconditionFailed only makes sense when verifying
-				// chunk checksum, and it means "the checksum" does not match.
-				// In case of "Input/output error", we consider the chunk is
-				// corrupt, and we treat it the same way as above.
+			// This special case is not in the main error handler, because
+			// StatusPreconditionFailed only makes sense when verifying
+			// chunk checksum, and it means "the checksum" does not match.
+			// In case of "Input/output error", we consider the chunk is
+			// corrupt, and we treat it the same way as above.
+			if perr, ok := err.(*os.PathError); ok && perr.Err == syscall.EIO {
+				LogRequestError(rr, msgErrorAction("hash computation", err))
+				rr.replyCode(http.StatusPreconditionFailed)
+			} else if serr, ok := err.(*os.SyscallError); ok && serr.Err == syscall.EIO {
 				LogRequestError(rr, msgErrorAction("hash computation", err))
 				rr.replyCode(http.StatusPreconditionFailed)
 			} else {
