@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from multiprocessing import Event
+from time import monotonic, sleep
 
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
@@ -35,16 +35,16 @@ def worker_class_for_type(conf):
 
 class RdirCrawler(Daemon):
     """
-    According to volumes to crawl, this crawler acts as follow:
+    This crawler has a different behavior according to the type of volume.
 
-    volumes = rawx entries
-    Periodically check that chunks in rdir really exist in rawx.
+    If the volume hosts a rawx service,
+    periodically check that chunks in rdir really exist in rawx.
     In case a chunk does not exist in rawx, try to rebuild it.
-    In case a chunk is not referenced in meta2, deindex it
+    In case a chunk is not referenced in meta2, deindex it.
 
-    volumes = meta2 entries
-    Periodically check that container in rdir really exist in meta2.
-    In case a container does not exist in meta2, it is deindexed
+    If the volume hosts a meta2 service,
+    periodically check that containers in rdir really exist in meta2.
+    In case a container does not exist in meta2, deindex it.
     """
 
     def __init__(self, conf, conf_file=None, **kwargs):
@@ -54,7 +54,7 @@ class RdirCrawler(Daemon):
         self.conf["conf_file"] = conf_file
         if not self.conf.get("volume_list"):
             raise exc.OioException("No rawx volumes provided to index!")
-        self._stop_requested = Event()
+        self._stop_requested = False
         self.volumes = [x.strip() for x in self.conf.get("volume_list").split(",")]
         self.watchdog = get_watchdog(called_from_main_application=True)
         self.worker_class = worker_class_for_type(self.conf)
@@ -72,7 +72,7 @@ class RdirCrawler(Daemon):
         Create workers for volumes which have no associated worker yet.
         """
         for vol in self.volumes:
-            if vol not in self.volume_workers and not self._stop_requested.is_set():
+            if vol not in self.volume_workers and not self._stop_requested:
                 try:
                     worker = self.worker_class(
                         self.conf, vol, logger=self.logger, watchdog=self.watchdog
@@ -91,7 +91,7 @@ class RdirCrawler(Daemon):
         join workers which have unexpectedly stopped.
         """
         for vol, worker in list(self.volume_workers.items()):
-            if not worker.is_alive() and not self._stop_requested.is_set():
+            if not worker.is_alive() and not self._stop_requested:
                 if worker.exitcode is not None:
                     self.logger.warning(
                         "Worker process for volume %s "
@@ -110,16 +110,19 @@ class RdirCrawler(Daemon):
         # Start the workers already initialized
         self.start_workers()
         # Retry from time to time to start the workers which failed previously
-        while not self._stop_requested.wait(self._check_worker_delay):
+        while not self._stop_requested:
             self.create_workers()
             self.start_workers()
+            deadline = monotonic() + self._check_worker_delay
+            while not self._stop_requested and monotonic() < deadline:
+                sleep(1.0)
         # Now that stop has been requested, join subprocesses
         self.logger.info("Joining worker processes")
         for worker in self.volume_workers.values():
             worker.join(5.0)
 
     def stop(self):
-        self._stop_requested.set()
         self.logger.info("Stopping rdir crawler")
-        for worker in self.volume_workers:
+        self._stop_requested = True
+        for worker in self.volume_workers.values():
             worker.stop()
