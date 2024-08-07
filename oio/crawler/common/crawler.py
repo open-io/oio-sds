@@ -13,17 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from multiprocessing import Event
+import signal
+from multiprocessing import Event, Process
 from os import makedirs, nice
 from os.path import join, basename, splitext, isdir, isfile
 from random import randint
+from time import monotonic, sleep
 
 from oio import ObjectStorageApi
 from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
-from oio.common.easy_value import boolean_value, int_value
+from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ConfigurationException
-from oio.common.green import get_watchdog, time, ContextPool
+from oio.common.green import get_watchdog, time
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
@@ -185,7 +187,7 @@ class CrawlerStatsdMixin:
             )
 
 
-class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
+class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
     """
     Crawler Worker responsible for a single volume.
     """
@@ -219,7 +221,9 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         )
         self.volume_path = volume_path
         self._stop_requested = Event()
-        super().__init__(**kwargs)
+        super().__init__(
+            name=f"{self.CRAWLER_TYPE}-crawler-{self.SERVICE_TYPE}", **kwargs
+        )
 
         self.working_dir = self.conf.get("working_dir", self.WORKING_DIR)
         self.excluded_dirs = self.conf.get("excluded_dirs", self.EXCLUDED_DIRS)
@@ -290,11 +294,18 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
 
     def crawl_volume(self):
         """
-        Crawl volume, and apply filters on every database.
+        Crawl volume, and apply filters on every database or chunk.
         """
         raise NotImplementedError("crawl_volume not implemented")
 
     def run(self):
+        """
+        Main worker loop
+        """
+        # Ignore these signals, the main process will ask the workers to stop.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
         self._wait_before_starting()
         while self.running:
             self.start_time = time.time()
@@ -350,6 +361,9 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
 
 
 class PipelineWorker(CrawlerWorker):
+    """
+    Crawler subclass applying a list of filters on each crawled item.
+    """
 
     def __init__(self, *args, api=None, watchdog=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -357,7 +371,9 @@ class PipelineWorker(CrawlerWorker):
         # of this worker
         self.app_env = {}
         self.app_env["api"] = api or ObjectStorageApi(
-            self.namespace, logger=self.logger
+            self.namespace,
+            logger=self.logger,
+            watchdog=watchdog,
         )
         self.app_env["logger"] = self.logger
         self.app_env["statsd_client"] = self.statsd_client
@@ -372,7 +388,7 @@ class PipelineWorker(CrawlerWorker):
 
     def crawl_volume(self):
         """
-        Crawl volume, and apply filters on every database.
+        Crawl volume, and apply filters on every database or chunk.
         """
         self.passes += 1
         # EXCLUDED_DIRS can be used to avoid scanning the non optimal
@@ -391,9 +407,8 @@ class PipelineWorker(CrawlerWorker):
         self.report("starting", force=True)
         last_scan_time = 0
         for path in paths:
-            self.logger.debug("crawl_volume current path: %s", path)
             if not self.running:
-                self.logger.info("stop asked for loop paths")
+                self.logger.info("stop crawling volume %s", self.volume_path)
                 break
 
             # process_entry() is supposed to be exception-safe
@@ -495,25 +510,24 @@ class Crawler(Daemon):
     DEFAULT_NICE_VALUE = 0
 
     def __init__(self, conf, conf_file=None, worker_class=None, **kwargs):
-        super(Crawler, self).__init__(conf)
+        super().__init__(conf)
         if not conf_file:
             raise ConfigurationException("Missing configuration path")
         conf["conf_file"] = conf_file
-        self.api = ObjectStorageApi(conf["namespace"], logger=self.logger)
         if not worker_class:
             raise ConfigurationException("Missing worker class")
+        self._stop_requested = False
+        self.volumes = [x.strip() for x in self.conf.get("volume_list").split(",")]
+        self.watchdog = get_watchdog(called_from_main_application=True)
         self.worker_class = worker_class
-        self.volume_workers = list()
-        self.volumes = list()
-        for volume in conf.get("volume_list", "").split(","):
-            volume = volume.strip()
-            if volume:
-                self.volumes.append(volume)
+        self._check_worker_delay = (
+            float_value(
+                self.conf.get("interval"), self.worker_class.DEFAULT_SCAN_INTERVAL
+            )
+            / 2.0  # Half interval before checking, half interval before restarting
+        )
         if not self.volumes:
             raise ConfigurationException("No volumes provided to crawl!")
-
-        self.pool = ContextPool(len(self.volumes))
-        self.watchdog = get_watchdog(called_from_main_application=True)
 
         # Apply new nice value
         nice_value = int_value(conf.get("nice_value"), self.DEFAULT_NICE_VALUE)
@@ -522,47 +536,66 @@ class Crawler(Daemon):
         # compensate the old value to reach the targeted value.
         nice(-current_nice + nice_value)
 
-        self._init_volume_workers()
+        self.volume_workers = {}
+        self.create_workers()
 
-    def _init_volume_workers(self, **kwargs):
+    def create_workers(self):
         """
-        Initialize volume workers
+        Create workers for volumes which have no associated worker yet.
         """
-        for volume in self.volumes:
-            worker = self.create_worker(self.worker_class, volume)
-            if worker:
-                self.volume_workers.append(worker)
+        for vol in self.volumes:
+            if vol not in self.volume_workers and not self._stop_requested:
+                try:
+                    worker = self.worker_class(
+                        self.conf, vol, logger=self.logger, watchdog=self.watchdog
+                    )
+                    self.volume_workers[vol] = worker
+                except Exception as err:
+                    self.logger.warning(
+                        "Failed to create worker for volume %s: %s",
+                        vol,
+                        err,
+                    )
+
+    def start_workers(self):
+        """
+        Start workers which are not already alive,
+        join workers which have unexpectedly stopped.
+        """
+        for vol, worker in list(self.volume_workers.items()):
+            if not worker.is_alive() and not self._stop_requested:
+                if worker.exitcode is not None:
+                    self.logger.warning(
+                        "Worker process for volume %s "
+                        "unexpectedly stopped with code: %s",
+                        vol,
+                        worker.exitcode,
+                    )
+                    worker.join()
+                    # A new worker will be created at next iteration
+                    del self.volume_workers[vol]
+                else:
+                    worker.start()
 
     def run(self, *args, **kwargs):
         """Main loop to scan volumes and apply filters"""
         self.logger.info("started %s crawler service", self.CRAWLER_TYPE)
-
-        for worker in self.volume_workers:
-            self.pool.spawn(worker.run)
-        self.pool.waitall()
+        # Start the workers already initialized
+        self.start_workers()
+        # Retry from time to time to start the workers which failed previously
+        while not self._stop_requested:
+            self.create_workers()
+            self.start_workers()
+            deadline = monotonic() + self._check_worker_delay
+            while not self._stop_requested and monotonic() < deadline:
+                sleep(1.0)
+        # Now that stop has been requested, join subprocesses
+        self.logger.info("Joining worker processes")
+        for worker in self.volume_workers.values():
+            worker.join(5.0)
 
     def stop(self):
         self.logger.info("stop %s crawler asked", self.CRAWLER_TYPE)
-        for worker in self.volume_workers:
+        self._stop_requested = True
+        for worker in self.volume_workers.values():
             worker.stop()
-
-    def create_worker(self, cls, volume):
-        """
-        Create cls worker instance for the volume given in parameter
-
-        :param volume: volume path
-        :type volume: str
-        :return: worker class
-        :rtype: CrawlerWorker
-        """
-        try:
-            return cls(
-                self.conf,
-                volume,
-                logger=self.logger,
-                api=self.api,
-                watchdog=self.watchdog,
-            )
-        except Exception:
-            self.logger.exception("Worker initialization failed")
-            return None

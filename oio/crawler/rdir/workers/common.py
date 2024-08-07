@@ -13,9 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import signal
-from multiprocessing import Process
-
 from oio.common import exceptions as exc
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
@@ -25,7 +22,7 @@ from oio.crawler.common.crawler import CrawlerWorker
 from oio.rdir.client import RdirClient
 
 
-class RdirWorker(CrawlerWorker, Process):
+class RdirWorker(CrawlerWorker):
 
     CONSCIENCE_CACHE = 30
     CRAWLER_TYPE = "rdir"
@@ -37,9 +34,7 @@ class RdirWorker(CrawlerWorker, Process):
         :param pool_manager: A connection pool manager. If none is given, a
                 new one with a default size of 10 will be created.
         """
-        super().__init__(
-            name=f"{self.CRAWLER_TYPE}-crawler-{self.SERVICE_TYPE}", **kwargs
-        )
+        super().__init__(**kwargs)
 
         # If True delete entries not referenced in meta2/
         # set to False by default
@@ -76,26 +71,6 @@ class RdirWorker(CrawlerWorker, Process):
 
     def _can_send_stats(self, now):
         return now > self.last_stats_report_time + 30.0
-
-    def run(self, *args, **kwargs):
-        """
-        Main worker loop
-        """
-        # Ignore these signals, the main process will ask the workers to stop.
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
-        super().run(*args, **kwargs)
-
-    def crawl_volume(self):
-        raise NotImplementedError("run not implemented")
-
-    def report(self, tag, force=False):
-        """
-        Log the status of the crawler
-        :param tag: One of three: starting, running, ended.
-        """
-        raise NotImplementedError("report not implemented")
 
     def send_end_report(self):
         """Report end of worker"""

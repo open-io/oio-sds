@@ -20,7 +20,7 @@ from oio.common.green import eventlet_monkey_patch
 eventlet_monkey_patch()
 
 import argparse
-from oio.crawler.rdir.crawler import RdirCrawler
+from oio.crawler.rdir import RdirCrawler
 from oio.common.daemon import run_daemon
 
 

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -37,16 +37,21 @@ class Daemon(object):
         raise NotImplementedError("run not implemented")
 
     def stop(self):
-        pass
+        """
+        Default stop handler: exit the process.
+
+        We suggest to override this method, there is probably a cleanup to do
+        before actually exiting the process.
+        """
+        os.killpg(0, signal.SIGTERM)
+        sys.exit()
 
     def start(self, **kwargs):
         drop_privileges(self.conf.get("user", "openio"))
         redirect_stdio(self.logger)
 
         def kill_children():
-            os.killpg(0, signal.SIGTERM)
             self.stop()
-            sys.exit()
 
         def _on_SIGTERM(*args):
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
