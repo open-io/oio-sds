@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -485,6 +485,18 @@ label_retry:
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
 				g_clear_error(&last_err);
+			} else if (err->code == CODE_UNAVAILABLE
+					&& g_strcmp0(err->message, "service exiting") == 0) {
+				/* The service is stopping and should trigger a new
+				 * election */
+				GError *last_err = err;
+				err = NULL;
+				if (!ctx->multi_run && !next_url) {
+					err = BUSY("No service replied (last error: (%d) %s)",
+							last_err->code, last_err->message);
+					stop = TRUE;
+				}
+				g_clear_error (&last_err);
 			} else if (CODE_IS_RETRY(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
 				 * the subsequent requests. And we currently we choose to
@@ -497,7 +509,7 @@ label_retry:
 					|| ctx->which == CLIENT_SPECIFIED) {
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
-				g_clear_error (&err);
+				g_clear_error(&err);
 			} else {
 				stop = TRUE;
 			}
