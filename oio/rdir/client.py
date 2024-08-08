@@ -18,7 +18,7 @@ import random
 
 from oio.api.base import HttpApi
 from oio.common.constants import HEADER_PREFIX, REQID_HEADER, TIMEOUT_KEYS
-from oio.common.easy_value import float_value
+from oio.common.easy_value import boolean_value, float_value
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
 from oio.common.exceptions import (
@@ -26,6 +26,7 @@ from oio.common.exceptions import (
     OioException,
     reraise as oio_reraise,
 )
+from oio.common.http_urllib3 import DEFAULT_NB_POOL_CONNECTIONS, DEFAULT_POOL_MAXSIZE
 from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id, patch_kwargs
@@ -597,7 +598,15 @@ class RdirClient(HttpApi):
     def __init__(
         self, conf, directory_client=None, cache_duration=60.0, logger=None, **kwargs
     ):
-        super(RdirClient, self).__init__(service_type="rdir", **kwargs)
+        super(RdirClient, self).__init__(
+            service_type="rdir",
+            pool_connections=conf.get(
+                "rdir_pool_connections", DEFAULT_NB_POOL_CONNECTIONS
+            ),
+            pool_maxsize=conf.get("rdir_pool_maxsize", DEFAULT_POOL_MAXSIZE),
+            block=boolean_value(conf.get("rdir_block_connections", False)),
+            **kwargs,
+        )
         self.conf = conf
         self.directory = directory_client or DirectoryClient(
             self.conf, logger=logger, **kwargs

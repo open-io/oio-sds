@@ -31,7 +31,8 @@ from oio.common.exceptions import (
 urllib3 = patcher.import_patched("urllib3.__init__")
 
 
-DEFAULT_POOLSIZE = 32
+DEFAULT_NB_POOL_CONNECTIONS = 32
+DEFAULT_POOL_MAXSIZE = 32
 DEFAULT_RETRIES = 0
 DEFAULT_BACKOFF = 0
 
@@ -80,8 +81,8 @@ class SafePoolManager(urllib3.PoolManager):
 
 
 def get_pool_manager(
-    pool_connections=DEFAULT_POOLSIZE,
-    pool_maxsize=DEFAULT_POOLSIZE,
+    pool_connections=DEFAULT_NB_POOL_CONNECTIONS,
+    pool_maxsize=DEFAULT_POOL_MAXSIZE,
     max_retries=DEFAULT_RETRIES,
     backoff_factor=DEFAULT_BACKOFF,
     block=False,
