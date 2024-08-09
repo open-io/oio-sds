@@ -78,7 +78,7 @@ func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth 
 		if len(fileList) >= minToReturn {
 			if next, ok := <-it; ok {
 				// Base the paginated iteration on the ideal list of directories instead of those
-				// in place at te previous page request. It tends to avoid skipping directories created
+				// in place at the previous page request. It tends to avoid skipping directories created
 				// between both requests.
 				nextMarker = next
 			}
@@ -98,10 +98,6 @@ func doGetListOfChunks(rr *rawxRequest) {
 	params := Params{MinToReturn: 1000 /*default value*/}
 	json.Unmarshal(requestBody, &params)
 	marker := params.Marker
-	// Check if the marker is a chunkId
-	if isHexaString(marker, 24, 64) {
-		marker = rr.rawx.repo.sub.nameToRelPath(marker)
-	}
 	chunks, isTruncated, marker, err := ListChunks(
 		rr.rawx.path, marker, params.MinToReturn,
 		rr.rawx.repo.sub.hashWidth, rr.rawx.repo.sub.hashDepth)
