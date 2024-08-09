@@ -1091,20 +1091,29 @@ class BlobClientTestSuite(BaseTestCase):
         for chunk_url in rawx_chunks[rawx_id]:
             self.assertIn(chunk_url.split("/")[-1], chunk_ids)
 
-    def test_chunk_list_with_marker(self):
+    def _test_chunk_list_with_marker(self, is_marker_valid_chunk_id=False):
         """Check list chunks returns only chunks coming after the marker"""
         rawx_chunks, rawx_id = self._create_objects(5)
         rawx_chunks[rawx_id].sort()
         nb_chunks = len(rawx_chunks[rawx_id])
         index_marker = nb_chunks // 2
         parsed = urlparse(rawx_chunks[rawx_id][index_marker])
-        marker = os.path.join(
-            self.rawx_volumes[rawx_id], parsed.path.split("/")[-1][:3]
-        )
+        if is_marker_valid_chunk_id:
+            marker = parsed.path.split("/")[-1]
+        else:
+            marker = parsed.path.split("/")[-1][:3]
         chunk_ids = list(self.blob_client.chunk_list(rawx_id, start_after=marker))
         self.assertGreaterEqual(len(chunk_ids), nb_chunks - index_marker)
         for chunk_url in rawx_chunks[rawx_id][:index_marker]:
             self.assertNotIn(chunk_url.split("/")[-1], chunk_ids)
+
+    def test_chunk_list_with_marker(self):
+        """test chunk listing with a folder as a marker"""
+        self._test_chunk_list_with_marker()
+
+    def test_chunk_list_with_chunk_id_marker(self):
+        """test chunk listing with a chuink_id as a marker"""
+        self._test_chunk_list_with_marker(is_marker_valid_chunk_id=True)
 
     def test_chunk_list_with_limit(self):
         """Check list chunks returns limited number of chunks by rawx call"""
