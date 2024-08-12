@@ -15,19 +15,20 @@
 # License along with this library.
 
 
-from six.moves.urllib_parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 from oio.common.client import ProxyClient
 from oio.common.exceptions import OioException
 from oio.common.green import time
 from oio.common.json import json
+from oio.content.quality import get_distance
 
 
 class LbClient(ProxyClient):
     """Simple load balancer client"""
 
     def __init__(self, conf, **kwargs):
-        super(LbClient, self).__init__(conf, request_prefix="/lb", **kwargs)
+        super().__init__(conf, request_prefix="/lb", **kwargs)
 
     def next_instances(self, pool, size=None, **kwargs):
         """
@@ -42,8 +43,7 @@ class LbClient(ProxyClient):
         resp, body = self._request("GET", "/choose", params=params, **kwargs)
         if resp.status == 200:
             return body
-        else:
-            raise OioException("ERROR while getting next instance %s" % pool)
+        raise OioException(f"ERROR while getting next instances from pool {pool}")
 
     def next_instance(self, pool, **kwargs):
         """Get the next service instance from the specified pool"""
@@ -60,15 +60,12 @@ class LbClient(ProxyClient):
         :type known: `list`
         """
         params = {"pool": pool}
-        ibody = dict()
-        ibody.update(kwargs)
         resp, obody = self._request(
-            "POST", "/poll", params=params, data=json.dumps(ibody)
+            "POST", "/poll", params=params, data=json.dumps(kwargs)
         )
         if resp.status == 200:
             return obody
-        else:
-            raise OioException("Failed to poll %s: %s" % (pool, resp.text))
+        raise OioException(f"Failed to poll {pool}: {resp.text}")
 
     def create_pool(self, pool, targets, force=False, options=None, **kwargs):
         """
@@ -97,9 +94,7 @@ class ConscienceClient(ProxyClient):
     """Conscience client. Some calls are actually redirected to LbClient."""
 
     def __init__(self, conf, service_id_max_age=60, **kwargs):
-        super(ConscienceClient, self).__init__(
-            conf, request_prefix="/conscience", **kwargs
-        )
+        super().__init__(conf, request_prefix="/conscience", **kwargs)
         self._lb_kwargs = dict(kwargs)
         self._lb_kwargs.pop("pool_manager", None)
         self._lb = None
@@ -149,7 +144,9 @@ class ConscienceClient(ProxyClient):
         """
         return self.lb.poll(pool, **kwargs)
 
-    def all_services(self, service_type, full=False, cs=None, **kwargs):
+    def all_services(
+        self, service_type, full=False, cs=None, requester_location=None, **kwargs
+    ):
         """
         Get the list of all services of a specific type.
 
@@ -157,6 +154,8 @@ class ConscienceClient(ProxyClient):
         :type service_type: `str`
         :param full: whether to get all metrics for each service
         :param cs: conscience address to request
+        :param requester_location: location string used to compute a distance
+            to each listed service. If None, do not compute distance.
         :returns: the list of all services of the specified type.
         :rtype: `list` of `dict` objects, each containing at least
             - 'addr' (`str`),
@@ -170,25 +169,27 @@ class ConscienceClient(ProxyClient):
         if cs:
             params["cs"] = cs
         resp, body = self._request("GET", "/list", params=params, **kwargs)
-        if resp.status == 200:
-            # TODO(FVE): do that in the proxy
-            for srv in body:
-                if "id" not in srv:
-                    srv_id = srv["tags"].get("tag.service_id", srv["addr"])
-                    srv["id"] = srv_id
-            return body
-        else:
+        if resp.status != 200:
             raise OioException(
-                "failed to get list of %s services: %s" % (service_type, resp.text)
+                f"failed to get list of {service_type} services: {resp.text}"
             )
+        # TODO(FVE): do that in the proxy
+        for srv in body:
+            if "id" not in srv:
+                srv_id = srv["tags"].get("tag.service_id", srv["addr"])
+                srv["id"] = srv_id
+        if requester_location:
+            for srv in body:
+                srv_loc = srv["tags"].get("tag.loc", "nowhere.1.2.3")
+                srv["distance"] = get_distance(requester_location, srv_loc)
+        return body
 
     def local_services(self):
         url = self.endpoint.replace("conscience", "local/list")
         resp, body = self._direct_request("GET", url)
         if resp.status == 200:
             return body
-        else:
-            raise OioException("failed to get list of local services: %s" % resp.text)
+        raise OioException(f"failed to get list of local services: {resp.text}")
 
     def service_types(self, **kwargs):
         """
@@ -198,16 +199,16 @@ class ConscienceClient(ProxyClient):
         resp, body = self._request("GET", "/info", params=params, **kwargs)
         if resp.status == 200:
             return body
-        else:
-            raise OioException("ERROR while getting services types: %s" % resp.text)
+        raise OioException(f"ERROR while getting services types: {resp.text}")
 
     def get_service_definition(
         self, srv_type, srv_id, score=None, scores=None, tags=None
     ):
-        service_definition = dict()
-        service_definition["ns"] = self.ns
-        service_definition["type"] = srv_type
-        service_definition["addr"] = srv_id
+        service_definition = {
+            "ns": self.ns,
+            "type": srv_type,
+            "addr": srv_id,
+        }
         if score is not None:
             service_definition["score"] = score
         if scores is not None:
@@ -264,10 +265,7 @@ class ConscienceClient(ProxyClient):
         )
         if resp.status == 200:
             return body
-        else:
-            raise OioException(
-                "failed to resolve service id %s: %s" % (service_id, resp.text)
-            )
+        raise OioException(f"failed to resolve service id {service_id}: {resp.text}")
 
     def resolve_service_id(
         self,
@@ -275,7 +273,7 @@ class ConscienceClient(ProxyClient):
         service_id,
         check_format=True,
         end_user_request=False,
-        **kwargs
+        **kwargs,
     ):
         """
         :returns: Service address corresponding to the service ID
