@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,6 +36,7 @@ class ServiceClient(HttpApi):
         proxy_endpoint=None,
         request_prefix=None,
         refresh_delay=3600.0,
+        location=None,
         logger=None,
         **kwargs,
     ):
@@ -57,6 +58,7 @@ class ServiceClient(HttpApi):
         :type refresh_delay: `float` seconds
         :param logger:
         """
+        self.location = location
         self.netloc = None
         # Look for an endpoint in the application configuration
         if not endpoint:
@@ -106,8 +108,17 @@ class ServiceClient(HttpApi):
         Fetch IP and port of an service of specified service type
         from Conscience.
         """
-        instance = self.conscience.next_instance(self.service_type, **kwargs)
-        addr = instance.get("addr")
+        if self.location:
+            all_services = self.conscience.all_services(
+                self.service_type, requester_location=self.location, **kwargs
+            )
+            all_services.sort(
+                reverse=True, key=lambda s: s["score"] / (s.get("distance") or 0.5)
+            )
+            addr = all_services[0]["addr"]
+        else:
+            instance = self.conscience.next_instance(self.service_type, **kwargs)
+            addr = instance.get("addr")
         return addr
 
     def _refresh_endpoint(self, now=None, **kwargs):
