@@ -764,23 +764,11 @@ stats:
     - {type: system}
 """
 
-template_account_watch = """
+template_account_xcute_watch = """
 host: ${IP}
 port: ${PORT}
-type: account
-checks:
-    - {type: tcp}
-slots:
-    - ${SRVTYPE}
-stats:
-    - {type: http, path: /status, parser: json}
-    - {type: system}
-"""
-
-template_xcute_watch = """
-host: ${IP}
-port: ${PORT}
-type: xcute
+type: ${SRVTYPE}
+location: ${LOC}
 checks:
     - {type: tcp}
 slots:
@@ -3029,7 +3017,7 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
     if not options.get(REMOTE_ACCOUNT):
         with open(watch(env), "w+") as f:
-            tpl = Template(template_account_watch)
+            tpl = Template(template_account_xcute_watch)
             f.write(tpl.safe_substitute(env))
 
     # rdir
@@ -3282,7 +3270,7 @@ def generate(options):
         tpl = Template(template_xcute)
         f.write(tpl.safe_substitute(env))
     with open(watch(env), "w+", encoding="utf8") as f:
-        tpl = Template(template_xcute_watch)
+        tpl = Template(template_account_xcute_watch)
         f.write(tpl.safe_substitute(env))
 
     # billing buckets
