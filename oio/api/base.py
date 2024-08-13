@@ -30,7 +30,12 @@ from oio.common.constants import (
     ENDUSERREQUEST_HEADER,
 )
 from oio.common.easy_value import true_value
-from oio.common.exceptions import OioException, from_response
+from oio.common.exceptions import (
+    OioException,
+    OioNetworkException,
+    OioTimeout,
+    from_response,
+)
 from oio.common.http_urllib3 import (
     urllib3,
     get_pool_manager,
@@ -39,7 +44,12 @@ from oio.common.http_urllib3 import (
 )
 from oio.common.json import json as jsonlib
 from oio.common.logger import get_logger
-from oio.common.utils import deadline_to_timeout, monotonic_time
+from oio.common.utils import (
+    deadline_to_timeout,
+    group_chunk_errors,
+    monotonic_time,
+    rotate_list,
+)
 
 
 class HttpApi(object):
@@ -55,7 +65,7 @@ class HttpApi(object):
         connection="keep-alive",
         service_type="unknown",
         service_name=None,
-        **kwargs
+        **kwargs,
     ):
         """
         :param pool_manager: an optional pool manager that will be reused
@@ -72,7 +82,7 @@ class HttpApi(object):
         :keyword connection: 'keep-alive' to keep connections open (default)
             or 'close' to explicitly close them.
         """
-        self.endpoint = endpoint
+        self._endpoints = [endpoint]
 
         if not pool_manager:
             # get_pool_manager filters its args
@@ -85,6 +95,14 @@ class HttpApi(object):
         self.connection = connection
         self.service_type = service_type
         self.service_name = service_name or service_type
+
+    @property
+    def endpoint(self):
+        return self._endpoints[0]
+
+    @endpoint.setter
+    def endpoint(self, value):
+        self._endpoints[:] = [value]
 
     def __logger(self):
         """Try to get a logger from a child class, or create one."""
@@ -104,7 +122,7 @@ class HttpApi(object):
         pool_manager=None,
         force_master=False,
         end_user_request=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Make an HTTP request.
@@ -146,7 +164,7 @@ class HttpApi(object):
         if headers:
             out_headers = {k: str(v) for k, v in headers.items()}
         else:
-            out_headers = dict()
+            out_headers = {}
         if self.admin_mode or admin_mode:
             out_headers[ADMIN_HEADER] = "1"
         if self.force_master or force_master:
@@ -297,3 +315,60 @@ class HttpApi(object):
             endpoint = self.endpoint
         url = "/".join([endpoint.rstrip("/"), url.lstrip("/")])
         return self._direct_request(method, url, **kwargs)
+
+
+class MultiEndpointHttpApi(HttpApi):
+    """
+    HttpApi subclass which will retry on another endpoint
+    if the main endpoint shows connection/network issues.
+
+    The list of endpoints will be rotated, that means an endpoint showing
+    errors won't be used until the list is fully rotated (or overwritten).
+    """
+
+    def __init__(self, endpoint=None, max_attempts=None, retry_writes=True, **kwargs):
+        super().__init__(endpoint=None, **kwargs)
+        if isinstance(endpoint, str):
+            self._endpoints = endpoint.split(",")
+        elif isinstance(endpoint, list):
+            self._endpoints = endpoint
+        elif isinstance(endpoint, tuple):
+            self._endpoints = list(endpoint)
+        else:
+            # If no endpoint is provided, we expect a subclass to patch
+            # this list before doing any request.
+            pass
+        self._max_attempts = max_attempts
+        self._retry_writes = retry_writes
+
+    def _request(
+        self, method, url, endpoint=None, max_attempts=None, retry_writes=None, **kwargs
+    ):
+        read_request = method in ("GET", "HEAD")
+        if not max_attempts:
+            max_attempts = self._max_attempts
+        if not max_attempts:
+            max_attempts = len(self._endpoints)
+        if retry_writes is None:
+            retry_writes = self._retry_writes
+
+        if endpoint is not None:
+            return super()._request(method, url, endpoint=endpoint, **kwargs)
+
+        errors = []
+        for _attempt in range(max_attempts):
+            endpoint = self._endpoints[0]
+            try:
+                return super()._request(method, url, endpoint=endpoint, **kwargs)
+            except OioTimeout as exc:
+                if not (read_request or retry_writes):
+                    raise
+                errors.append((endpoint, exc))
+            except OioNetworkException as exc:
+                errors.append((endpoint, exc))
+            rotate_list(self._endpoints, inplace=True)
+        grouped = group_chunk_errors(errors)
+        if len(errors) == 1:
+            err, values = grouped.popitem()
+            raise type(err)(f"No endpoint answered: {values}")
+        raise OioNetworkException(f"No endpoint answered: {grouped}")

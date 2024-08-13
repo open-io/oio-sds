@@ -222,6 +222,8 @@ class OioNetworkException(OioException):
 
 
 class OioProtocolError(OioNetworkException):
+    """Wrapper over urllib.ProtocolError"""
+
     pass
 
 
