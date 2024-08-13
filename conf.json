@@ -335,7 +335,7 @@
 			{ "type": "uint", "name": "oio_shard_resolver_shards_default_max",
 				"key": "resolver.cache.shards.max.default",
 				"descr": "In any shard resolver instantiated, sets the maximum number of shards entries per root",
-				"def": 16, "min": 1, "max": 128 }
+				"def": 16, "min": 1, "max": 131072 }
 		]
 	},
 	"metautils": {

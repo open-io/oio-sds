@@ -1196,7 +1196,7 @@ Used by `gcc`
  * default: **16**
  * type: guint
  * cmake directive: *OIO_RESOLVER_CACHE_SHARDS_MAX_DEFAULT*
- * range: 1 -> 128
+ * range: 1 -> 131072
 
 ### resolver.cache.srv.max.default
 
