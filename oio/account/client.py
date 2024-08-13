@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@ class AccountClient(ServiceClient):
             conf,
             service_name="account-service",
             request_prefix="v1.0/account",
-            **kwargs
+            **kwargs,
         )
         # Some requests don't need the region,
         # let the requests fail if the region is needed
@@ -138,7 +138,7 @@ class AccountClient(ServiceClient):
             "PUT",
             "update",
             json={"metadata": metadata, "to_delete": to_delete},
-            **kwargs
+            **kwargs,
         )
 
     def bucket_list(

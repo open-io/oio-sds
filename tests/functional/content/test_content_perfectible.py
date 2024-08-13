@@ -348,7 +348,10 @@ class TestPerfectibleLocalContent(TestPerfectibleContent):
     @classmethod
     def setUpClass(cls):
         super(TestPerfectibleLocalContent, cls).setUpClass()
-        config = {"proxy.srv_local.prepare": 1, "proxy.location": "rack.127-0-0-4.6000"}
+        config = {
+            "proxy.srv_local.prepare": 1,
+            "proxy.location": "dc.rack.127-0-0-4.6000",
+        }
         cls._cls_set_proxy_config(config)
 
     @classmethod

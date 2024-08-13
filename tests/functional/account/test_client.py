@@ -18,6 +18,7 @@ import time
 
 from mock import MagicMock as Mock
 from urllib3 import exceptions as urllibexc
+from urllib.parse import urlparse
 
 from oio.account.backend_fdb import AccountBackendFdb
 from oio.common.exceptions import (
@@ -1248,17 +1249,19 @@ class TestAccountClient(AccountBaseTestCase):
         if self.ns_conf.get("account"):
             self.skipTest("Remote account: no refresh")
         endpoint = self.account_client.endpoint
-        get_service_addr = self.account_client._get_service_addr
+        get_service_addr = self.account_client._get_service_addresses
         try:
             self.account_client.endpoint = "126.0.0.1:6666"
-            self.account_client._get_service_addr = Mock(return_value="126.0.0.1:6667")
-            self.account_client._last_refresh = time.time()
+            self.account_client._get_service_addresses = Mock(
+                return_value=["126.0.0.1:6667"]
+            )
+            self.account_client._next_refresh = time.monotonic() + 60.0
             self.assertRaises(OioNetworkException, self.account_client.account_list)
-            self.account_client._get_service_addr.assert_called_once()
+            self.account_client._get_service_addresses.assert_called_once()
             self.assertIn("126.0.0.1:6667", self.account_client.endpoint)
         finally:
             self.account_client.endpoint = endpoint
-            self.account_client._get_service_addr = get_service_addr
+            self.account_client._get_service_addresses = get_service_addr
 
     def test_container_reset(self):
         mtime = time.time()
@@ -1454,7 +1457,7 @@ class TestAccountClient(AccountBaseTestCase):
         resp.pop("mtime")
         self.assertDictEqual(expected_account_info, resp)
 
-    def test_account_retry_on_read(self):
+    def test_account_no_retry_on_write(self):
         original_pool_manager = self.account_client.pool_manager
         try:
             fake_pool_manager = AccountProtocolErrorPoolManager(original_pool_manager)
@@ -1466,7 +1469,7 @@ class TestAccountClient(AccountBaseTestCase):
         finally:
             self.account_client.pool_manager = original_pool_manager
 
-    def test_account_no_retry_on_write(self):
+    def test_account_retry_on_read(self):
         self.account_client.account_create(self.account_id)
         self.accounts.add(self.account_id)
 
@@ -1550,3 +1553,35 @@ class TestAccountClient(AccountBaseTestCase):
             objects_details={"SINGLE": 12},
             bytes_details={"SINGLE": 44},
         )
+
+    def test_multiple_endpoints(self):
+        account_services = self.conscience.all_services("account")
+        if len(account_services) <= 1:
+            self.skipTest(
+                "This tests requires at least 2 account services "
+                f"({len(account_services)} found)"
+            )
+
+        self.account_client._refresh_endpoint()
+        self.assertGreater(len(self.account_client._endpoints), 1)
+        # svc_by_addr = {s["addr"]: s for s in account_services}
+        first_host = urlparse(self.account_client._endpoints[0])
+        sd_key = self.service_to_systemd_key(first_host.netloc, "account")
+        self.logger.warning("%f Stopping service %s", time.monotonic(), sd_key)
+        self._service(sd_key, "stop", wait=1.0)
+        self.logger.warning("%f Service %s stopped", time.monotonic(), sd_key)
+        try:
+            self.account_client.account_show(
+                self.account_id,
+                connection_timeout=1.0,
+                read_timeout=1.0,
+            )
+            second_host = urlparse(self.account_client._endpoints[0])
+            self.assertNotEqual(first_host, second_host)
+            self.assertLess(
+                self.account_client._next_refresh,
+                time.monotonic() + self.account_client._refresh_delay,
+                "The last error did not reschedule the endpoint refresh",
+            )
+        finally:
+            self._service(sd_key, "start")

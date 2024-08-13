@@ -15,12 +15,12 @@
 
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, ANY
 import time
 
 from oio.common.exceptions import ServiceBusy, OioTimeout, NotFound
 from oio.api.base import HttpApi
-from oio.common.kafka_http import KafkaMetricsClient, KafkaClusterSpaceSatus
+from oio.common.kafka_http import KafkaMetricsClient, KafkaClusterSpaceStatus
 
 
 class KafkaMetricClientTest(unittest.TestCase):
@@ -97,7 +97,7 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
             self.assertEqual(333374935040, client.cluster_free_space)
-            mock_request.assert_called_once_with("GET", "/public_metrics")
+            mock_request.assert_called_once_with("GET", "/public_metrics", endpoint=ANY)
 
         # Further call should not trigger cache refresh
         with patch.object(
@@ -109,7 +109,7 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
         with patch.object(
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
-            self.assertEqual(KafkaClusterSpaceSatus.OK, client.cluster_space_status)
+            self.assertEqual(KafkaClusterSpaceStatus.OK, client.cluster_space_status)
             mock_request.assert_not_called()
 
         # Wait for cache limit
@@ -119,14 +119,14 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
             self.assertEqual(0, client.get_topic_max_lag("oio"))
-            mock_request.assert_called_once_with("GET", "/public_metrics")
+            mock_request.assert_called_once_with("GET", "/public_metrics", endpoint=ANY)
 
         # Missing topic should trigger cache refresh
         with patch.object(
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
             self.assertEqual(0, client.get_topic_max_lag("oio-non-existing"))
-            mock_request.assert_called_once_with("GET", "/public_metrics")
+            mock_request.assert_called_once_with("GET", "/public_metrics", endpoint=ANY)
 
         with patch.object(
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
@@ -142,7 +142,10 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
             "http://localhost:4",
         )
 
-        client = KafkaMetricsClient({"metrics_endpoints": ";".join(endpoints)})
+        client = KafkaMetricsClient(
+            {"metrics_endpoints": ",".join(endpoints)},
+            retry_exceptions=(ServiceBusy, NotFound),
+        )
         with patch.object(
             HttpApi,
             "_direct_request",

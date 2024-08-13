@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,20 +23,14 @@ from tests.utils import random_str
 class ItemLocateTest(CliTestCase):
     """Functional tests for openio-admin <item> locate."""
 
-    def setUp(self):
-        super(ItemLocateTest, self).setUp()
-
-    def tearDown(self):
-        super(ItemLocateTest, self).tearDown()
-
     def test_account_locate(self):
         # This test is using a new account on purpose
-        account = random_str(10)
+        account = "item_locate_" + random_str(5)
         opts = self.get_format_opts()
-        output = self.openio("account create %s %s" % (account, opts))
-        self.assertOutput("%s True" % account, output.strip())
+        output = self.openio(f"account create {account} {opts}")
+        self.assertOutput(f"{account} True", output.strip())
         opts = self.get_format_opts("json")
-        output = self.openio_admin("account locate %s %s" % (account, opts))
+        output = self.openio_admin(f"account locate {account} {opts}")
         data = json.loads(output)[0]
         self.assertEqual("account", data["Type"])
         self.assertEqual(account, data["Item"])
@@ -59,7 +53,7 @@ class ItemLocateTest(CliTestCase):
             CommandFailed,
             self._recover_commandfailed,
             self.openio_admin,
-            "account locate {} {}".format(account, opts),
+            f"account locate {account} {opts}",
         )
         self.assertEqual(1, self.rc)
         output = self.stdout
@@ -72,27 +66,32 @@ class ItemLocateTest(CliTestCase):
     def _test_container_check_output(self, output, cid, account, container):
         meta1_digits = int(self.conf.get("meta1_digits", 1))
         # Used to patch output line numbers
+        account_replicas = len(self.conf.get("services", {}).get("account", []))
         directory_replicas = int(self.conf.get("directory_replicas", 1))
         output = output.split("\n")
         for i in range(len(output)):
             output[i] = output[i].split(" ")
 
-        self.assertEqual("account", output[0][0])
-        self.assertEqual(account, output[0][1])
-        self.assertEqual("meta0", output[1][0])
-        self.assertEqual(cid[:meta1_digits], output[1][1][:meta1_digits])
-        self.assertEqual("meta1", output[1 + directory_replicas][0])
-        self.assertEqual(cid, output[1 + directory_replicas][1])
-        self.assertEqual("meta2", output[1 + 2 * directory_replicas][0])
+        for i in range(account_replicas):
+            self.assertEqual("account", output[i][0])
+            self.assertEqual(account, output[i][1])
+        self.assertEqual("meta0", output[account_replicas][0])
+        self.assertEqual(cid[:meta1_digits], output[account_replicas][1][:meta1_digits])
+        self.assertEqual("meta1", output[account_replicas + directory_replicas][0])
+        self.assertEqual(cid, output[account_replicas + directory_replicas][1])
+        self.assertEqual("meta2", output[account_replicas + 2 * directory_replicas][0])
         self.assertEqual(
-            "%s/%s" % (account, container), output[1 + 2 * directory_replicas][1]
+            f"{account}/{container}",
+            output[account_replicas + 2 * directory_replicas][1],
         )
-        self.assertEqual("(" + cid + ")", output[1 + 2 * directory_replicas][2])
+        self.assertEqual(
+            "(" + cid + ")", output[account_replicas + 2 * directory_replicas][2]
+        )
 
     def test_container_locate(self):
-        # XXX: if we wan't to use another account, we need to wait
+        # XXX: if we want to use another account, we need to wait
         # for its actual creation (it is asynchronous).
-        container = random_str(10)
+        container = "test_container_locate_" + random_str(5)
         opts = self.get_format_opts()
         output = self.openio(
             "container create --oio-account %s %s %s" % (self.account, container, opts)
@@ -114,7 +113,7 @@ class ItemLocateTest(CliTestCase):
         )
 
     def test_container_cid_locate(self):
-        container = random_str(10)
+        container = "test_container_cid_locate_" + random_str(5)
         opts = self.get_format_opts()
         cid = cid_from_name(self.account, container)
         output = self.openio(

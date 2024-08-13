@@ -15,7 +15,7 @@
 
 import time
 
-from oio.api.base import HttpApi
+from oio.api.base import MultiEndpointHttpApi
 from oio.common.configuration import load_namespace_conf
 from oio.common.constants import TIMEOUT_KEYS
 from oio.common.decorators import ensure_headers, patch_kwargs
@@ -25,7 +25,7 @@ from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 
 
-class ServiceClient(HttpApi):
+class ServiceClient(MultiEndpointHttpApi):
     """Simple client API for the specified service type."""
 
     def __init__(
@@ -34,7 +34,7 @@ class ServiceClient(HttpApi):
         conf,
         endpoint=None,
         proxy_endpoint=None,
-        request_prefix=None,
+        request_prefix="",
         refresh_delay=3600.0,
         location=None,
         logger=None,
@@ -100,13 +100,17 @@ class ServiceClient(HttpApi):
         self.request_prefix = request_prefix.lstrip("/")
         if self.endpoint:
             self.endpoint = "/".join((self.endpoint, self.request_prefix))
-        self._refresh_delay = refresh_delay if not self.endpoint else -1.0
-        self._last_refresh = 0.0
+            refresh_delay = -1.0
+        self._refresh_delay = refresh_delay
+        self._refresh_delay_after_error = refresh_delay / 10.0
+        self._next_refresh = 0.0
 
-    def _get_service_addr(self, **kwargs):
+    def _get_service_addresses(self, **kwargs):
         """
-        Fetch IP and port of an service of specified service type
-        from Conscience.
+        Fetch IP and port of services of specified service type from Conscience.
+
+        In case this instance has a defined location, return all addresses sorted
+        by distance and score.
         """
         if self.location:
             all_services = self.conscience.all_services(
@@ -115,44 +119,92 @@ class ServiceClient(HttpApi):
             all_services.sort(
                 reverse=True, key=lambda s: s["score"] / (s.get("distance") or 0.5)
             )
-            addr = all_services[0]["addr"]
+            addresses = [s["addr"] for s in all_services if s["score"] > 0]
+            if not addresses:
+                raise OioException(
+                    f"None of the {len(all_services)} {self.service_type} "
+                    "services has a score > 0"
+                )
         else:
             instance = self.conscience.next_instance(self.service_type, **kwargs)
-            addr = instance.get("addr")
-        return addr
+            addresses = [instance.get("addr")]
+        return addresses
 
-    def _refresh_endpoint(self, now=None, **kwargs):
-        """Refresh service endpoint."""
-        addr = self._get_service_addr(**kwargs)
-        ep_parts = ["http:/", addr]
-        if self.request_prefix:
-            ep_parts.append(self.request_prefix)
-        self.endpoint = "/".join(ep_parts)
-        if not now:
-            now = time.time()
-        self._last_refresh = now
+    def _schedule_endpoint_refresh(self, now=None, quickly=False):
+        """
+        Schedule the next endpoint refresh.
+
+        :param quickly: schedule it earlier than the standard delay
+        """
+        delay = self._refresh_delay_after_error if quickly else self._refresh_delay
+        if delay >= 0.0:
+            self._next_refresh = (now or time.monotonic()) + delay
+
+    def _rotate_endpoints(self, last_error=None, now=None):
+        """
+        Rotate the internal endpoint list and schedule the next endpoint refresh.
+        """
+        super()._rotate_endpoints(last_error=last_error)
+        # The _rotate_endpoints method can be called by the parent class, this
+        # is why we do the scheduling here and not in the calling function.
+        self._schedule_endpoint_refresh(now=now, quickly=True)
+
+    def _refresh_endpoint(self, now=None, last_error=None, **kwargs):
+        """
+        Refresh service endpoint.
+        """
+        try:
+            endpoint_addresses = self._get_service_addresses(**kwargs)
+            self._endpoints[:] = [
+                "/".join(("http:/", ea, self.request_prefix))
+                for ea in endpoint_addresses
+            ]
+            self._schedule_endpoint_refresh(now=now, quickly=False)
+        except OioException as exc:
+            # No endpoint in the list: we cannot continue.
+            if len(self._endpoints) < 1:
+                raise
+
+            # If the refresh was not triggered by an error, we can continue
+            # using the current endpoint. Though, we re-schedule an endpoint refresh:
+            # quicker than the standard delay, but not immediately.
+            if not last_error:
+                self._schedule_endpoint_refresh(now=now, quickly=True)
+                raise
+
+            self.logger.warning(
+                "Failed to refresh %s addresses (%s), rotating the known list",
+                self.service_type,
+                exc,
+            )
+            self._rotate_endpoints(last_error=last_error, now=now)
 
     def _maybe_refresh_endpoint(self, **kwargs):
-        """Refresh service endpoint if delay has been reached."""
-        if self._refresh_delay >= 0.0 or not self.endpoint:
-            now = time.time()
-            if now - self._last_refresh > self._refresh_delay:
-                try:
-                    self._refresh_endpoint(now, **kwargs)
-                except OioNetworkException as exc:
-                    if not self.endpoint:
-                        # Cannot use the previous one
-                        raise
-                    self.logger.warning(
-                        "Failed to refresh %s endpoint: %s", self.service_type, exc
-                    )
-                except OioException:
-                    if not self.endpoint:
-                        # Cannot use the previous one
-                        raise
-                    self.logger.exception(
-                        "Failed to refresh %s endpoint", self.service_type
-                    )
+        """
+        Refresh service endpoint if delay has been reached or there is no endpoint.
+        """
+        if self._refresh_delay < 0.0 and self.endpoint:
+            return
+        now = time.monotonic()
+        if now < self._next_refresh and self.endpoint:
+            return
+
+        try:
+            self._refresh_endpoint(now, **kwargs)
+            return
+        except OioNetworkException as exc:
+            if not self.endpoint:
+                # Cannot use the previous one
+                raise
+            self.logger.warning(
+                "Failed to refresh %s endpoint: %s", self.service_type, exc
+            )
+        except OioException:
+            if not self.endpoint:
+                # Cannot use the previous one
+                raise
+            self.logger.exception("Failed to refresh %s endpoint", self.service_type)
+        return
 
     @patch_kwargs
     @ensure_headers
@@ -175,7 +227,7 @@ class ServiceClient(HttpApi):
                         "Refreshing %s endpoint after error %s", self.service_type, exc
                     )
                     try:
-                        self._refresh_endpoint()
+                        self._refresh_endpoint(last_error=exc)
                     except Exception as exc2:
                         self.logger.warning(
                             "Failed to refresh %s endpoint: %s",

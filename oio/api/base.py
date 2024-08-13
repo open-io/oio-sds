@@ -33,6 +33,7 @@ from oio.common.easy_value import true_value
 from oio.common.exceptions import (
     OioException,
     OioNetworkException,
+    OioProtocolError,
     OioTimeout,
     from_response,
 )
@@ -104,7 +105,7 @@ class HttpApi(object):
     def endpoint(self, value):
         self._endpoints[:] = [value]
 
-    def __logger(self):
+    def _logger(self):
         """Try to get a logger from a child class, or create one."""
         if not hasattr(self, "logger"):
             setattr(self, "logger", get_logger(None, self.__class__.__name__))
@@ -206,7 +207,7 @@ class HttpApi(object):
 
         if len(out_headers.get(REQID_HEADER, "")) > STRLEN_REQID:
             out_headers[REQID_HEADER] = out_headers[REQID_HEADER][:STRLEN_REQID]
-            self.__logger().warn("Request ID truncated to %d characters", STRLEN_REQID)
+            self._logger().warn("Request ID truncated to %d characters", STRLEN_REQID)
 
         # Convert json and add Content-Type
         if json:
@@ -259,7 +260,7 @@ class HttpApi(object):
                 try:
                     body = jsonlib.loads(body.decode("utf-8"))
                 except (UnicodeDecodeError, ValueError) as exc:
-                    self.__logger().warn("Response body isn't decodable JSON: %s", body)
+                    self._logger().warn("Response body isn't decodable JSON: %s", body)
                     raise OioException("Response body isn't decodable JSON") from exc
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
                 service_perfdata = perfdata[self.service_name]
@@ -324,9 +325,22 @@ class MultiEndpointHttpApi(HttpApi):
 
     The list of endpoints will be rotated, that means an endpoint showing
     errors won't be used until the list is fully rotated (or overwritten).
+
+    :param max_attempts: maximum number of attempts for each request. If None,
+        will be set to the number of endpoints.
+    :param retry_exceptions: tuple of exceptions that must trigger a retry
+        (in addition to standard network exceptions).
+    :param retry_writes: whether to retry write requests, or only reads.
     """
 
-    def __init__(self, endpoint=None, max_attempts=None, retry_writes=True, **kwargs):
+    def __init__(
+        self,
+        endpoint=None,
+        max_attempts=None,
+        retry_writes=False,
+        retry_exceptions=(),
+        **kwargs,
+    ):
         super().__init__(endpoint=None, **kwargs)
         if isinstance(endpoint, str):
             self._endpoints = endpoint.split(",")
@@ -339,7 +353,20 @@ class MultiEndpointHttpApi(HttpApi):
             # this list before doing any request.
             pass
         self._max_attempts = max_attempts
+        self._retry_exceptions = retry_exceptions
         self._retry_writes = retry_writes
+
+    def _rotate_endpoints(self, last_error=None):
+        """
+        Rotate the internal endpoint list.
+        """
+        if last_error:
+            self._logger().debug(
+                "Rotating %s endpoint list after error: %s",
+                self.service_type,
+                last_error,
+            )
+        rotate_list(self._endpoints, inplace=True)
 
     def _request(
         self, method, url, endpoint=None, max_attempts=None, retry_writes=None, **kwargs
@@ -360,15 +387,19 @@ class MultiEndpointHttpApi(HttpApi):
             endpoint = self._endpoints[0]
             try:
                 return super()._request(method, url, endpoint=endpoint, **kwargs)
-            except OioTimeout as exc:
+            except self._retry_exceptions as exc:
+                errors.append((endpoint, exc))
+            except (OioProtocolError, OioTimeout) as exc:
+                # In case of a write request timeout, the request may finish
+                # in the background. In some scenarios, we don't want to retry.
                 if not (read_request or retry_writes):
                     raise
                 errors.append((endpoint, exc))
             except OioNetworkException as exc:
                 errors.append((endpoint, exc))
-            rotate_list(self._endpoints, inplace=True)
+            self._rotate_endpoints(errors[-1])
         grouped = group_chunk_errors(errors)
-        if len(errors) == 1:
+        if len(grouped) == 1:
             err, values = grouped.popitem()
-            raise type(err)(f"No endpoint answered: {values}")
-        raise OioNetworkException(f"No endpoint answered: {grouped}")
+            raise type(err)(f"No endpoint answered: {err}: {values}")
+        raise OioNetworkException(f"No endpoint answered: {errors}")

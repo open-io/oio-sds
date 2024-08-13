@@ -563,23 +563,31 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunks, _ = self._get_misplaced_chunks(new_chunks)
         self.assertEqual(len(misplaced_chunks), 1)
         # Retrieve host address for misplaced chunk
-        loc_m_chunk = changelocation.rawx_srv_locations[misplaced_chunks[0][-1]][1]
+        m_chunk_loc = changelocation.rawx_srv_locations[misplaced_chunks[0][-1]][2]
         # Remove the non optimal symlink to the misplaced chunk
         # and add it to well placed chunk
         for chunk in new_chunks:
             # Well placed chunk candidate
-            c_id = chunk["url"].split("/", 3)[3]
-            v_id = chunk["url"].split("/", 3)[2]
+            _, _, v_id, c_id = chunk["url"].split("/", 3)
             # Retrieve host address for well placed chunk candidate
-            loc_1 = changelocation.rawx_srv_locations[v_id][1]
+            cur_loc = changelocation.rawx_srv_locations[v_id][2]
             # Select a chunk well placed and break if found
-            if c_id != misplaced_chunks[0][0] and loc_1 != loc_m_chunk:
+            self.logger.debug(
+                "Chunk id: %s, 1st misplaced: %s, loc: %s, misplaced loc: %s",
+                c_id,
+                misplaced_chunks[0][0],
+                cur_loc,
+                m_chunk_loc,
+            )
+            if c_id != misplaced_chunks[0][0] and cur_loc != m_chunk_loc:
                 # Create a non optimal symlink for well placed chunk
                 headers = {CHUNK_HEADERS[Changelocation.NON_OPTIMAL_DIR]: True}
                 self.api.blob_client.chunk_post(url=chunk["url"], headers=headers)
                 path_link = misplaced_chunks[0][2]
                 os.remove(path_link)
                 break
+        else:
+            self.fail("Did not find the correctly placed chunk we were looking for")
 
         corrupted_misplaced_chunks, _ = self._get_misplaced_chunks(new_chunks)
         self.assertEqual(len(corrupted_misplaced_chunks), 1)
@@ -613,10 +621,10 @@ class TestFilterChangelocation(BaseTestCase):
         final_misplaced_chunk, _ = self._get_misplaced_chunks(final_chunks)
         loc_misplaced_chunk = changelocation.rawx_srv_locations[
             misplaced_chunks[0][-1]
-        ][1]
+        ][2]
         loc_f_misplaced_chunk = changelocation.rawx_srv_locations[
             final_misplaced_chunk[0][-1]
-        ][1]
+        ][2]
         self.assertEqual(loc_misplaced_chunk, loc_f_misplaced_chunk)
 
     def test_change_location_filter_overwritten_object(self):

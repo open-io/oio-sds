@@ -14,17 +14,16 @@
 
 from enum import IntEnum
 import time
-from oio.api.base import HttpApi
+from oio.api.base import MultiEndpointHttpApi
 from oio.common.easy_value import int_value, float_value
 from oio.common.exceptions import (
     OioException,
     OioUnhealthyKafkaClusterError,
     ServiceBusy,
 )
-from oio.common.utils import rotate_list
 
 
-class KafkaClusterSpaceSatus(IntEnum):
+class KafkaClusterSpaceStatus(IntEnum):
     """
     Indicate the Redpanda cluster health
     """
@@ -35,7 +34,7 @@ class KafkaClusterSpaceSatus(IntEnum):
     DEGRADED = 2  # Out of space, writes are rejected
 
 
-class KafkaMetricsClient(HttpApi):
+class KafkaMetricsClient(MultiEndpointHttpApi):
     """
     Client to extract infos from Redpanda cluster
     """
@@ -43,7 +42,7 @@ class KafkaMetricsClient(HttpApi):
     DEFAULT_METRICS_CACHE_DURATION = 10
 
     HEADER_MAX_OFFSET = "redpanda_kafka_max_offset"
-    HEADER_COMMITED_OFFSET = "redpanda_kafka_consumer_group_committed_offset"
+    HEADER_COMMITTED_OFFSET = "redpanda_kafka_consumer_group_committed_offset"
     HEADER_FREE_SPACE = "redpanda_storage_disk_free_bytes"
     HEADER_TOTAL_SPACE = "redpanda_storage_disk_total_bytes"
     HEADER_FREE_SPACE_ALERT = "redpanda_storage_disk_free_space_alert"
@@ -52,25 +51,29 @@ class KafkaMetricsClient(HttpApi):
     KEY_TOPIC = "redpanda_topic"
     KEY_CONSUMER_GROUP = "redpanda_group"
 
-    def __init__(self, conf, pool_manager=None):
+    def __init__(self, conf, **kwargs):
         endpoints = conf.get("metrics_endpoints")
         if not endpoints:
             raise ValueError("Metric endpoints are missing, key: metrics_endpoints")
 
+        # TODO(FVE): remove when deployment is fixed
+        if ";" in endpoints:
+            endpoints = endpoints.replace(";", ",")
+
         self._cache_duration = int_value(
             conf.get("cache_duration"), self.DEFAULT_METRICS_CACHE_DURATION
         )
-        self._endpoints = endpoints.split(";")
-        super().__init__(endpoint=self._endpoints[0], pool_manager=pool_manager)
+        super().__init__(endpoint=endpoints, **kwargs)
         self.__topics_lag = {}
         self.__free_space_bytes = 0
         self.__total_space_bytes = 0
-        self.__free_space_alert = KafkaClusterSpaceSatus.UNKNOWN
+        self.__free_space_alert = KafkaClusterSpaceStatus.UNKNOWN
         self.__next_update = 0
 
-    def _rotate_endpoints(self):
-        rotate_list(self._endpoints, 1, inplace=True)
-        self.endpoint = self._endpoints[0]
+        if endpoints != conf.get("metrics_endpoints"):
+            self._logger().warning(
+                "'metrics_endpoints' should use ',' as endpoint separator, not ';'"
+            )
 
     @property
     def _cache_expired(self):
@@ -98,34 +101,29 @@ class KafkaMetricsClient(HttpApi):
             store = store.setdefault(key, {})
         store[keys[-1]] = value
 
-    def __compute_lags(self, commited, max_offsets):
+    def __compute_lags(self, committed, max_offsets):
         lags = {}
         for topic, partition_offsets in max_offsets.items():
-            commited_partitions = commited.get(topic, {})
+            committed_partitions = committed.get(topic, {})
             topic_lags = []
             for partition, offset in partition_offsets.items():
-                consumer_commits = commited_partitions.get(partition, {})
-                commited_offsets = [o for o in consumer_commits.values()]
-                lower_commited_offset = min(commited_offsets, default=0)
-                topic_lags.append(offset - lower_commited_offset)
+                consumer_commits = committed_partitions.get(partition, {})
+                committed_offsets = [o for o in consumer_commits.values()]
+                lower_committed_offset = min(committed_offsets, default=0)
+                topic_lags.append(offset - lower_committed_offset)
             lags[topic] = max(topic_lags, default=0)
         self.__topics_lag = lags
 
     def __request_metrics(self):
         data = None
-        for _ in range(len(self._endpoints)):
-            try:
-                _resp, body = self._request("GET", "/public_metrics")
-                data = body.decode("utf-8")
-                break
-            except OioException:
-                self._rotate_endpoints()
-                continue
-        else:
-            raise ServiceBusy("No endpoints replied")
+        try:
+            _resp, body = self._request("GET", "/public_metrics")
+            data = body.decode("utf-8")
+        except OioException as exc:
+            raise ServiceBusy("No endpoints replied") from exc
 
         max_offsets = {}
-        commited_offsets = {}
+        committed_offsets = {}
 
         for line in data.split("\n"):
             if not line:
@@ -141,10 +139,10 @@ class KafkaMetricsClient(HttpApi):
                     key[self.KEY_PARTITION],
                     value=value,
                 )
-            elif line.startswith(self.HEADER_COMMITED_OFFSET):
-                key, value = self.__parse_line(line, self.HEADER_COMMITED_OFFSET)
+            elif line.startswith(self.HEADER_COMMITTED_OFFSET):
+                key, value = self.__parse_line(line, self.HEADER_COMMITTED_OFFSET)
                 self.__store_topic_partition(
-                    commited_offsets,
+                    committed_offsets,
                     key[self.KEY_TOPIC],
                     key[self.KEY_PARTITION],
                     key[self.KEY_CONSUMER_GROUP],
@@ -155,12 +153,12 @@ class KafkaMetricsClient(HttpApi):
                 self.__free_space_bytes = int(value)
             elif line.startswith(self.HEADER_FREE_SPACE_ALERT):
                 _key, value = self.__parse_line(line, self.HEADER_FREE_SPACE_ALERT)
-                self.__free_space_alert = KafkaClusterSpaceSatus(int(value))
+                self.__free_space_alert = KafkaClusterSpaceStatus(int(value))
             elif line.startswith(self.HEADER_TOTAL_SPACE):
                 _key, value = self.__parse_line(line, self.HEADER_TOTAL_SPACE)
                 self.__total_space_bytes = int(value)
 
-        self.__compute_lags(commited_offsets, max_offsets)
+        self.__compute_lags(committed_offsets, max_offsets)
         self.__next_update = time.monotonic() + self._cache_duration
 
     def __update_if_needed(self, force=False):
@@ -223,7 +221,7 @@ class KafkaClusterHealthCheckerMixin:
     def check_cluster_health(self, topics=None, topic_prefix=None):
         # Validate cluster status
         status = self.kafka_metrics_client.cluster_space_status
-        if status != KafkaClusterSpaceSatus.OK:
+        if status != KafkaClusterSpaceStatus.OK:
             raise OioUnhealthyKafkaClusterError(f"Status is not OK: {status}")
 
         if self._availailable_space_threshold >= 0.0:

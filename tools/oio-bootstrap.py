@@ -1783,9 +1783,9 @@ allow_empty_policy_name = False
 kmsapi_enabled = True
 kmsapi_mock_server = True
 kmsapi_domains = domain1, domain2
-kmsapi_domain1_endpoint = http://${IP}:${PORT_KMSAPI_MOCK_SERVER}/domain1
+kmsapi_domain1_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain1
 kmsapi_domain1_key_id = abcdefgh-aaaa-bbbb-cccc-123456789abc
-kmsapi_domain2_endpoint = http://${IP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
+kmsapi_domain2_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
 kmsapi_domain2_key_id = abcdefgh-aaaa-bbbb-cccc-123456789def
 """
 
@@ -2211,7 +2211,7 @@ def generate(options):
         return env
 
     def build_location(ip, num):
-        return "rack.%s.%d" % (ip.replace(".", "-"), num)
+        return "dc.rack.%s.%d" % (ip.replace(".", "-"), num)
 
     targets = dict()
     systemd_prefix = "oio-"
@@ -2444,7 +2444,7 @@ def generate(options):
     endpoints = options["kafka"]["endpoint"] or defaults[KAFKA_ENDPOINT]
     if isinstance(endpoints, str):
         endpoints = [endpoints]
-    kafka_cnxstring = ";".join((f"kafka://{endpoint}" for endpoint in endpoints))
+    kafka_cnxstring = ",".join((f"kafka://{endpoint}" for endpoint in endpoints))
     ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
     ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
     # Kafka metrics
@@ -2453,7 +2453,7 @@ def generate(options):
     )
     if isinstance(metrics_endpoints, str):
         metrics_endpoints = [metrics_endpoints]
-    metrics_cnxstring = ";".join(metrics_endpoints)
+    metrics_cnxstring = ",".join(metrics_endpoints)
     ENV.update(
         {
             "KAFKA_METRICS_URL": metrics_cnxstring,
@@ -2979,6 +2979,7 @@ def generate(options):
     with open(config(env), "w+") as f:
         tpl = Template(template_kms)
         f.write(tpl.safe_substitute(env))
+    ENV["KMSIP"] = env["IP"]
 
     # fake statsd server
     if options.get("statsd", {}).get("host", ""):
@@ -2994,31 +2995,34 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     # account
-    env = subenv(
-        {
-            "SRVTYPE": "account",
-            "SRVNUM": 1,
-            "PORT": port_account,
-            "EXE": "oio-account-server",
-        }
-    )
-    if options.get(ALLOW_FDB):
-        cluster_file = cluster(env)
-        env.update({"CLUSTERFILE": cluster_file})
-    register_service(
-        env,
-        template_systemd_service_account,
-        root_target,
-        coverage_wrapper=shutil.which("coverage")
-        + " run --context account --concurrency=gevent -p ",
-    )
-    with open(config(env), "w+") as f:
-        tpl = Template(template_account)
-        f.write(tpl.safe_substitute(env))
-    if not options.get(REMOTE_ACCOUNT):
-        with open(watch(env), "w+") as f:
-            tpl = Template(template_account_xcute_watch)
+    nb_account = getint(options["account"].get(SVC_NB), 1)
+    for num in range(nb_account):
+        env = subenv(
+            {
+                "SRVTYPE": "account",
+                "SRVNUM": num,
+                "PORT": port_account if num == 0 else next(ports),
+                "EXE": "oio-account-server",
+            }
+        )
+        if options.get(ALLOW_FDB):
+            env.update({"CLUSTERFILE": cluster_file})
+        register_service(
+            env,
+            template_systemd_service_account,
+            root_target,
+            coverage_wrapper=shutil.which("coverage")
+            + " run --context account --concurrency=gevent -p ",
+        )
+        with open(config(env), "w+") as f:
+            tpl = Template(template_account)
             f.write(tpl.safe_substitute(env))
+        if not options.get(REMOTE_ACCOUNT):
+            with open(watch(env), "w+") as f:
+                tpl = Template(template_account_xcute_watch)
+                f.write(tpl.safe_substitute(env))
+        elif num == 0:
+            options["config"]["account"] = f"http://{env['IP']}:{port_account}"
 
     # rdir
     nb_rdir = getint(options["rdir"].get(SVC_NB), 3)
@@ -3537,6 +3541,7 @@ def main():
     )
 
     opts = {}
+    opts["account"] = {SVC_NB: None}
     opts["config"] = {}
     opts["config"]["proxy.cache.enabled"] = False
     opts["config"]["ns.chunk_size"] = 1024 * 1024

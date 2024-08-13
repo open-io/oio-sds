@@ -124,6 +124,7 @@ def get_config(defaults=None):
 
 
 class CommonTestCase(testtools.TestCase):
+    CLIENT_LOCATION = "dc.rack.127-0-0-1.0"
     TEST_HEADERS = {REQID_HEADER: "7E571D0000000000"}
 
     _cls_kafka_consumer = None
@@ -425,7 +426,11 @@ class CommonTestCase(testtools.TestCase):
             from oio.api.object_storage import ObjectStorageApi
 
             self._storage_api = ObjectStorageApi(
-                self.ns, pool_manager=self.http_pool, watchdog=self.watchdog
+                self.ns,
+                pool_manager=self.http_pool,
+                watchdog=self.watchdog,
+                location=self.CLIENT_LOCATION,
+                logger=self.logger,
             )
         return self._storage_api
 
