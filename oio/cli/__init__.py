@@ -87,7 +87,7 @@ def add_common_parser_options(parser):
         "--oio-proxy",
         "--oio-proxyd-url",
         metavar="<proxy-url>",
-        dest="proxyd_url",
+        dest="oioproxy_url",
         default=os.environ.get("OIO_PROXYD_URL", ""),
         help="URL of an oio-proxy service (Env: OIO_PROXYD_URL).",
     )

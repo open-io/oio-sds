@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,7 +66,7 @@ class ProxyClient(HttpApi):
 
         # Look for an endpoint in the application configuration
         if not endpoint:
-            endpoint = self.conf.get("proxyd_url", None)
+            endpoint = self.conf.get("oioproxy_url", None)
         # Look for an endpoint in the namespace configuration
         if not endpoint:
             ns_conf = load_namespace_conf(self.ns)

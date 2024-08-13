@@ -387,11 +387,11 @@ class DirectoryWarmup(DirectoryCmd):
 
         conf = {"namespace": self.app.client_manager.namespace}
         if parsed_args.proxy:
-            conf.update({"proxyd_url": parsed_args.proxy})
+            conf.update({"oioproxy_url": parsed_args.proxy})
         else:
             ns_conf = self.app.client_manager.sds_conf
             proxy = ns_conf.get("proxy")
-            conf.update({"proxyd_url": proxy})
+            conf.update({"oioproxy_url": proxy})
 
         workers = []
         with green.ContextPool(concurrency) as pool:
@@ -430,7 +430,7 @@ class WarmupWorker(object):
         self.log = log
         self.pool = get_pool_manager()
         self.url_prefix = (
-            f"http://{conf['proxyd_url']}/v3.0/{conf['namespace']}"
+            f"http://{conf['oioproxy_url']}/v3.0/{conf['namespace']}"
             "/admin/status?type=meta1&cid="
         )
 

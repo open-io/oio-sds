@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -62,7 +62,7 @@ class ClientManager(object):
         if not self._client_conf:
             self._client_conf = {
                 "namespace": self.namespace,
-                "proxyd_url": self.get_endpoint(),
+                "oioproxy_url": self.get_endpoint(),
                 "account_url": self.get_service_endpoint("account"),
             }
         return self._client_conf
@@ -262,18 +262,17 @@ class ClientManager(object):
         return self._account
 
     def get_endpoint(self):
-        if "proxyd_url" not in self._options:
+        if "oioproxy_url" not in self._options:
             proxy_netloc = self.sds_conf.get("proxy", None)
             if proxy_netloc:
-                self._options["proxyd_url"] = "http://%s" % proxy_netloc
+                self._options["oioproxy_url"] = "http://%s" % proxy_netloc
             else:
                 from oio.common.exceptions import CommandError
 
-                msg = """ Set a proxyd URL with --oio-proxy,
+                msg = """ Set a proxy URL with --oio-proxy,
                           OIO_PROXY_URL\n """
                 raise CommandError("Missing parameter(s): \n%s" % msg)
-        # TODO: for the moment always return the proxyd URL
-        return self._options["proxyd_url"]
+        return self._options["oioproxy_url"]
 
     def get_service_endpoint(self, service_type):
         key = f"{service_type}_url"
