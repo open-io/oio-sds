@@ -40,6 +40,10 @@ class TestConscienceFunctional(BaseTestCase):
         # as a security we set this before each test.
         self._cls_set_proxy_config({"proxy.cache.enabled": "off"})
 
+    def tearDown(self):
+        self._flush_cs("echo")
+        super().tearDown()
+
     @classmethod
     def tearDownClass(cls):
         cls._cls_set_proxy_config({"proxy.cache.enabled": cls.cache_enabled})

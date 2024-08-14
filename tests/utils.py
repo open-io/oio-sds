@@ -641,17 +641,15 @@ class CommonTestCase(testtools.TestCase):
 
 class BaseTestCase(CommonTestCase):
     def setUp(self):
-        super(BaseTestCase, self).setUp()
+        super().setUp()
         self.locked_svc = []
-        self._flush_cs("echo")
 
     def tearDown(self):
         if self.locked_svc:
             self.conscience.unlock_score(self.locked_svc)
-        super(BaseTestCase, self).tearDown()
+        super().tearDown()
         if self.locked_svc:
             self.conscience.unlock_score(self.locked_svc)
-        self._flush_cs("echo")
 
     def _lock_services(self, type_, services, wait=1.0, score=0):
         """
@@ -936,3 +934,19 @@ class BaseTestCase(CommonTestCase):
                     )
         finally:
             kafka_consumer.close()
+
+    def wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
+        _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)
+        deadline = time.monotonic() + timeout
+        rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
+        while not rdir_entries and time.monotonic() < deadline:
+            self.logger.info("Waiting for chunk %s to be indexed in rdir", chunk_url)
+            time.sleep(1.0)
+            rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
+
+        if not rdir_entries:
+            self.logger.warning(
+                "Chunk %s not found in rdir after %.3fs", chunk_url, timeout
+            )
+        else:
+            self.logger.debug("Chunk %s found in rdir: %s", chunk_url, rdir_entries)

@@ -292,7 +292,11 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
                 self.report("running")
 
             if self.total_scanned == 0:
-                self.logger.debug("No entries found for volume: %s", self.volume_path)
+                self.logger.debug(
+                    "No entries found for volume: %s (marker=%s)",
+                    self.volume_path,
+                    marker,
+                )
         except (exc.ServiceBusy, exc.VolumeException, exc.NotFound) as err:
             self.logger.debug("Service busy or not available: %s", err)
             self.service_unavailable += 1

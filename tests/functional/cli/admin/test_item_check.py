@@ -92,22 +92,6 @@ class ItemCheckTest(CliTestCase):
             )
             self.assertIsNotNone(event)
 
-    def _wait_for_chunk_indexation(self, chunk_url, timeout=10.0):
-        _, rawx_service, chunk_id = chunk_url.rsplit("/", 2)
-        deadline = time.monotonic() + timeout
-        rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
-        while not rdir_entries and time.monotonic() < deadline:
-            self.logger.info("Waiting for chunk %s to be indexed in rdir", chunk_url)
-            time.sleep(1.0)
-            rdir_entries = self.rdir.chunk_search(rawx_service, chunk_id)
-
-        if not rdir_entries:
-            self.logger.warning(
-                "Chunk %s not found in rdir after %.3fs", chunk_url, timeout
-            )
-        else:
-            self.logger.debug("Chunk %s found in rdir: %s", chunk_url, rdir_entries)
-
     def create_object(self, account, container, obj_name):
         reqid = request_id(self.__class__.__name__)
         obj_chunks, _, _, obj_meta = self.api.object_create_ext(
@@ -1639,7 +1623,7 @@ class ItemCheckTest(CliTestCase):
         )
         expected_items.append(f"chunk chunk={chunk['url']} OK")
 
-        self._wait_for_chunk_indexation(chunk["url"])
+        self.wait_for_chunk_indexation(chunk["url"])
 
         # Check with checksum
         output = self.openio_admin(
@@ -1690,7 +1674,7 @@ class ItemCheckTest(CliTestCase):
             f"version={obj_meta['version']} OK None"
         )
 
-        self._wait_for_chunk_indexation(missing_chunk["url"])
+        self.wait_for_chunk_indexation(missing_chunk["url"])
 
         # Do a check before removing the chunk
         check_opts = self.get_format_opts()

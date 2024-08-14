@@ -932,7 +932,7 @@ class RdirClient(HttpApi):
             for key, value in resp_body:
                 container, chunk = key.split("|")
                 if full_urls:
-                    chunk = "http://%s/%s" % (volume, chunk)
+                    chunk = f"http://{volume}/{chunk}"
                 if old_format:
                     yield container, value["content_id"], chunk, value
                 else:

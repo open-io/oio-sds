@@ -1612,7 +1612,7 @@ pipeline = volume_index ${PRESERVE}
 ### filters
 [filter:volume_index]
 use = egg:oio#volume_index
-retry_delay = 5
+retry_delay = 2
 write_quorum = 0
 
 [filter:preserve]

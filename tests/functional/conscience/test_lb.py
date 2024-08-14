@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,10 @@ from tests.utils import (
 
 
 class BaseLbTest(BaseTestCase):
+    def tearDown(self):
+        self._flush_cs("echo")
+        super().tearDown()
+
     def fill_slots(self, slots, count=1, lowport=7000):
         for num in range(count):
             srvin = self._srv(
