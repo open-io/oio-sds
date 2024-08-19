@@ -744,7 +744,12 @@ class RdirClient(HttpApi):
 
             def _local_request(method, uri, params, **kwargs):
                 try:
-                    return self._direct_request(method, uri, params=params, **kwargs)
+                    resp, body = self._direct_request(
+                        method, uri, params=params, **kwargs
+                    )
+                    nb_connections = len(self.pool_manager.pools)
+                    self.logger.info(f"RDIR active connections: {nb_connections}")
+                    return resp, body
                 except Exception as exc:
                     return (uri, exc)
 

@@ -14,6 +14,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import glob
+import os
+import cProfile
+import time
+import pstats
+from pyprof2calltree import convert
+
+# from yappi import profile as yappi_profile
 from oio.common.easy_value import int_value
 from oio.common.kafka import get_retry_delay
 from oio.common.exceptions import (
@@ -34,6 +42,36 @@ SERVICE_EVENTS = [
 ]
 
 
+def profile_function(func):
+
+    def inner(*args, **kwargs):
+        if not os.path.isdir("/srv/node/nvme-00-000/"):
+            return func(*args, **kwargs)
+        pr = cProfile.Profile()
+        pr.enable()
+        ret = func(*args, **kwargs)
+        pr.disable()
+        folder = "/srv/node/nvme-00-000/stats/"
+        # folder = "/home/firakoze/Documents/event-agent-cpu-usage/stats/"
+        os.makedirs(folder, exist_ok=True)
+        file = f"{folder}{time.time_ns()}.pstats"
+        pr.dump_stats(file)
+        return ret
+
+    return inner
+
+
+# def yappi_aggregate(func, stats):
+#     fname = f"callgrind.{func.__name__}.prof"
+#     file = "/srv/node/disk/event-agent-cpu-usage/yappi_stats/%s" % fname
+#     try:
+#         if isfile(file):
+#             stats.add(file, "callgrind")
+#     except Exception:
+#         pass
+#     stats.save(file, "callgrind")
+
+
 class VolumeIndexFilter(Filter):
     def __init__(self, *args, **kwargs):
         super(VolumeIndexFilter, self).__init__(*args, **kwargs)
@@ -43,6 +81,7 @@ class VolumeIndexFilter(Filter):
         self._retry_delay = get_retry_delay(self.conf)
         self._write_quorum = int_value(self.conf.get("write_quorum"), 1)
 
+    @profile_function
     def _chunk_delete(self, reqid, volume_id, container_id, content_id, chunk_id):
         try:
             return self.rdir.chunk_delete(
@@ -61,6 +100,7 @@ class VolumeIndexFilter(Filter):
             )
             raise type(exc)(msg) from exc
 
+    @profile_function
     def _chunk_push(
         self,
         reqid,
@@ -92,6 +132,7 @@ class VolumeIndexFilter(Filter):
             )
             raise type(exc)(msg) from exc
 
+    @profile_function
     def _service_push(self, reqid, type_, volume_id, url, cid, mtime):
         if type_ != "meta2":
             self.logger.debug("Indexing services of type %s is not supported", type_)
@@ -109,6 +150,7 @@ class VolumeIndexFilter(Filter):
             msg = f"Failed to index {url} from {volume_id}: {exc}"
             raise type(exc)(msg) from exc
 
+    @profile_function
     def _service_delete(self, reqid, type_, volume_id, url, cid):
         if type_ != "meta2":
             self.logger.debug("Indexing services of type %s is not supported", type_)
@@ -121,6 +163,7 @@ class VolumeIndexFilter(Filter):
             msg = f"Failed to deindex {url} from {volume_id}: {exc}"
             raise type(exc)(msg) from exc
 
+    @profile_function
     def _process_chunk_event(self, event):
         data = event.data
         volume_id = data.get("volume_service_id") or data.get("volume_id")
@@ -155,6 +198,7 @@ class VolumeIndexFilter(Filter):
                 mtime=event.when // 1000000,  # seconds
             )
 
+    @profile_function
     def _process_service_event(self, event):
         container_id = event.url["id"]
         container_url = "/".join(
@@ -184,7 +228,8 @@ class VolumeIndexFilter(Filter):
                     event.reqid, "meta2", peer, container_url, container_id
                 )
 
-    def process(self, env, cb):
+    @profile_function
+    def _process(self, env, cb):
         event = Event(env)
         try:
             if event.event_type in CHUNK_EVENTS:
@@ -204,6 +249,23 @@ class VolumeIndexFilter(Filter):
         # This is called after the try/except block because we don't want to
         # deal with other filter's uncaught exceptions.
         return self.app(env, cb)
+
+    def process(self, env, cb):
+        res = self._process(env=env, cb=cb)
+        if os.path.isdir("/srv/node/nvme-00-000/"):
+            # stats_files = "/home/firakoze/Documents/event-agent-cpu-usage/stats/*.pstats"
+            stats_files = "/srv/node/nvme-00-000/stats/*.pstats"
+            filenames = glob.glob(stats_files)
+            stats = pstats.Stats(*filenames)
+            stats.sort_stats(pstats.SortKey.CUMULATIVE)
+            # filename_kgrind = (
+            #     "/home/firakoze/Documents/event-agent-cpu-usage/cpu_usage_oio_chunks.kgrind"
+            # )
+            filename_kgrind = "/srv/node/nvme-00-000/stats/cpu_usage_oio_chunks.kgrind"
+            # if os.path.exists(filename_kgrind):
+            #     os.remove(filename_kgrind)
+            convert(stats, filename_kgrind)
+        return res
 
 
 def filter_factory(global_conf, **local_conf):

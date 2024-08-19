@@ -17,6 +17,12 @@ import json
 import os
 import signal
 import time
+import glob
+
+# import os
+import cProfile
+import pstats
+from pyprof2calltree import convert
 
 from multiprocessing import Event, Process, Queue
 from multiprocessing.queues import Empty
@@ -36,6 +42,27 @@ from oio.common.utils import monotonic_time, ratelimit
 
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_BATCH_INTERVAL = 1.0
+
+
+def profile_function(func):
+    def inner(*args, **kwargs):
+        if args[0]._group_id not in [
+            "event-agent-chunks",
+            "oio-chunks@event-agent-kafka-chunks",
+        ] or not os.path.isdir("/srv/node/nvme-00-000/"):
+            return func(*args, **kwargs)
+        # folder = "/home/firakoze/Documents/event-agent-cpu-usage/stats_event_agent/"
+        pr = cProfile.Profile()
+        pr.enable()
+        ret = func(*args, **kwargs)
+        pr.disable()
+        folder = "/srv/node/nvme-00-000/stats_event_agent/"
+        os.makedirs(folder, exist_ok=True)
+        file = f"{folder}{time.time_ns()}.pstats"
+        pr.dump_stats(file)
+        return ret
+
+    return inner
 
 
 class EventQueue:
@@ -473,6 +500,7 @@ class KafkaBatchFeeder(
     def offsets_queue(self):
         return self._offsets_queue
 
+    @profile_function
     def _fill_batch(self):
         deadline = monotonic_time() + self._commit_interval
         for event in self._consumer.fetch_events():
@@ -529,6 +557,7 @@ class KafkaBatchFeeder(
                 # Deadline reached
                 break
 
+    @profile_function
     def _wait_batch_processed(self):
         if self.has_registered_offsets():
             # Wait all events are processed
@@ -573,6 +602,18 @@ class KafkaBatchFeeder(
                     self._fill_batch()
                     self._wait_batch_processed()
                     self._commit_batch()
+                    if self._group_id in [
+                        "event-agent-chunks",
+                        "oio-chunks@event-agent-kafka-chunks",
+                    ] and os.path.isdir("/srv/node/nvme-00-000/"):
+                        # stats_files = "/home/firakoze/Documents/event-agent-cpu-usage/stats_event_agent/*.pstats"
+                        stats_files = "/srv/node/nvme-00-000/stats_event_agent/*.pstats"
+                        filenames = glob.glob(stats_files)
+                        stats = pstats.Stats(*filenames)
+                        stats.sort_stats(pstats.SortKey.CUMULATIVE)
+                        # filename_kgrind = "/home/firakoze/Documents/event-agent-cpu-usage/cpu_usage_event_agent.kgrind"
+                        filename_kgrind = "/srv/node/nvme-00-000/stats_event_agent/cpu_usage_event_agent.kgrind"
+                        convert(stats, filename_kgrind)
                 except KafkaFatalException:
                     self._close()
 
@@ -606,6 +647,7 @@ class KafkaBatchFeeder(
             self._consumer = None
         self.close_producer()
 
+    @profile_function
     def _commit_batch(self):
         _offsets = self.get_offsets_to_commit()
 
