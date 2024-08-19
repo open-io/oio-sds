@@ -147,27 +147,28 @@ def ensure_better_chunk_qualities(current_chunks, candidates, threshold=1):
 
 def format_location(location, levels=NB_LOCATION_LEVELS):
     """
-    Format location with dc.rack.server.disk format if needed
+    Format location with dc.rack.server.disk format if needed.
 
     :param location: location on dc.rack.server.disk format
     :type location: str
-    :param levels: excepected number of levels
+    :param levels: expected number of levels
     :type levels: int
     :return: location formatted as (dc, rack, server, disk)
     :rtype: tuple
     """
     length = len(location)
-    if length != levels:
+    if length < levels:
         # Complete missing position in chunk location
         levels = levels - length
         for _ in range(levels):
             # For local environments
             location = ("",) + location
-    return location
+    return location[-4:]
 
 
 def get_distance(loc_1, loc_2):
-    """Compute the distance between the two location
+    """
+    Compute the distance between the two locations.
 
     :param loc_1: first location
     :type loc_1: str
@@ -184,6 +185,19 @@ def get_distance(loc_1, loc_2):
             break
         common += 1
     return NB_LOCATION_LEVELS - common
+
+
+def count_items_per_loc(loc_list):
+    """
+    Count items per location, for each location level.
+
+    :param loc_list: a list of location tuples
+    """
+    counters = Counter()
+    for loc in loc_list:
+        for level in range(1, NB_LOCATION_LEVELS + 1):
+            counters[loc[:level]] += 1
+    return counters
 
 
 def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=None):

@@ -184,6 +184,13 @@ class ConscienceClient(ProxyClient):
                 srv["distance"] = get_distance(requester_location, srv_loc)
         return body
 
+    def all_services_by_id(self, service_type, **kwargs):
+        """
+        Same as all_services, but the output is a dictionary with service IDs as keys.
+        """
+        all_services = self.all_services(service_type=service_type, **kwargs)
+        return {s["id"]: s for s in all_services}
+
     def local_services(self):
         url = self.endpoint.replace("conscience", "local/list")
         resp, body = self._direct_request("GET", url)
