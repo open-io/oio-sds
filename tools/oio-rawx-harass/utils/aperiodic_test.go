@@ -30,7 +30,11 @@ func TestAperiodicTicker(t *testing.T) {
 	defer cancel()
 	out := make(chan bool)
 
-	go AperiodicTicker(ctx, out, func() int { return hz })
+	go func() {
+		AperiodicTicker(ctx, out, func() int { return hz })
+		close(out)
+	}()
+
 	total := 0
 	for _ = range out {
 		total++

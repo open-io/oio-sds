@@ -1,6 +1,5 @@
 // OpenIO SDS oio-rawx-harass
-// Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021-2024 OVH SAS
+// Copyright (C) 2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -15,24 +14,23 @@
 // You should have received a copy of the GNU Affero General Public
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package client
+package distribution
 
-type RawxTarget struct {
-	RawxUrl []string
-}
+import "testing"
 
-func (tgt *RawxTarget) Empty() bool {
-	return tgt == nil || len(tgt.RawxUrl) == 0
-}
-
-func NoTarget() RawxTarget {
-	return RawxTarget{RawxUrl: make([]string, 0)}
-}
-
-func MakeTargets(urls []string) RawxTarget {
-	tgt := RawxTarget{
-		RawxUrl: make([]string, len(urls)),
+func TestPoissonSpeed(t *testing.T) {
+	for i := 1; i < 300; i++ {
+		t.Logf("lambda=%d", i)
+		NewPoissonSlots(i)
 	}
-	copy(tgt.RawxUrl, urls)
-	return tgt
+}
+
+func TestPoisson(t *testing.T) {
+	p := NewPoissonSlots(10)
+	for i, slot := range p.probabilities {
+		t.Logf("slot %d: %+v", i, slot)
+	}
+	for i := 0; i < 50; i++ {
+		t.Logf("iter %v value %v", i, p.Poll())
+	}
 }

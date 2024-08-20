@@ -39,7 +39,6 @@ func AperiodicTicker(ctx context.Context, out chan bool, frequency FrequencyGett
 		case <-done:
 			ticker.Stop()
 			stepper.Stop()
-			close(out)
 			return
 		case <-stepper.C:
 			ticker.Stop()

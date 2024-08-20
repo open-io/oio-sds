@@ -21,10 +21,12 @@ import (
 	"container/list"
 	"context"
 	"errors"
-	"openio-sds/tools/oio-rawx-harass/scenario"
 
 	log "github.com/sirupsen/logrus"
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/scenario"
+	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
 type ScenarioGenerator func() Behavior
@@ -33,6 +35,8 @@ type population struct {
 	scenario.AbstractPopulation
 
 	cfg Config
+
+	targets *config.RawxTargets
 
 	// Behavioral feature flags
 	nextStepAfterPUT stepAction
@@ -44,16 +48,13 @@ type population struct {
 }
 
 // Implements scenario.Runnable
-func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Run(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
 
-	log.WithFields(log.Fields{
-		"targets":  tgt.RawxUrl,
+	utils.Log(ctx).WithFields(log.Fields{
+		"targets":  pop.targets.Debug(),
 		"afterPut": toString(pop.nextStepAfterPUT),
 		"afterGet": toString(pop.nextStepAfterGET),
 		"afterDel": toString(pop.nextStepAfterDEL),
@@ -78,7 +79,7 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 	// Prepare the workers
 	worker := func() {
 		for s := range pending {
-			s.Step(tgt, stats)
+			s.Step(ctx, pop.targets, stats)
 			done <- s
 		}
 		exited <- true
@@ -89,7 +90,7 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 	}
 
 	// Fire scenarios until a termination event occurs
-	log.WithFields(log.Fields{
+	utils.Log(ctx).WithFields(log.Fields{
 		"scenarios": len(pop.scenarios),
 		"workers":   pop.cfg.NbWorkers,
 	}).Info("stress running")
@@ -121,7 +122,7 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 	}()
 
 	// Termination sequence
-	log.WithFields(log.Fields{
+	utils.Log(ctx).WithFields(log.Fields{
 		"pending": len(pending),
 		"workers": runningWorkers,
 	}).Info("shutting down")
@@ -138,8 +139,8 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 
 	waiting.Init()
 
-	log.WithFields(log.Fields{
-		"targets":  tgt.RawxUrl,
+	utils.Log(ctx).WithFields(log.Fields{
+		"targets":  pop.targets.Debug(),
 		"afterPut": toString(pop.nextStepAfterPUT),
 		"afterGet": toString(pop.nextStepAfterGET),
 		"afterDel": toString(pop.nextStepAfterDEL),
@@ -147,20 +148,17 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 	return nil
 }
 
-func (pop *population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Cleanup(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
 
-	log.WithContext(ctx).Debug("cleanup starting")
+	utils.Log(ctx).Debug("cleanup starting")
 
 	for _, s := range pop.scenarios {
-		s.TearDown(tgt, stats)
+		s.TearDown(ctx, pop.targets, stats)
 	}
 
-	log.WithContext(ctx).WithField("targets", tgt.RawxUrl).Debug("cleanup exiting")
+	utils.Log(ctx).WithField("targets", pop.targets.Debug()).Debug("cleanup exiting")
 	return nil
 }

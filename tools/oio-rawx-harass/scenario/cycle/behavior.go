@@ -18,8 +18,11 @@
 package cycle
 
 import (
-	log "github.com/sirupsen/logrus"
+	"context"
+
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
 const BufferSize = 65536
@@ -65,37 +68,37 @@ func (rc *Behavior) SetUp(index uint) {
 }
 
 // TearDown implements Scenario
-func (rc *Behavior) TearDown(tgt *client.RawxTarget, st *client.Stats) {
+func (rc *Behavior) TearDown(ctx context.Context, tgt *config.RawxTargets, st *client.Stats) {
 	if rc.step == stepPut {
 		return
 	}
-	if err, _ := rc.Del(st); err != nil {
-		log.WithFields(rc.LogFields()).WithError(err).Info("DEL")
+	if err, _ := rc.Del(st, tgt); err != nil {
+		utils.Log(ctx).WithFields(rc.LogFields(tgt)).WithError(err).Info("DEL")
 	}
 	rc.step = stepPut
 }
 
 // Step implements Scenario
-func (rc *Behavior) Step(tgt *client.RawxTarget, st *client.Stats) {
+func (rc *Behavior) Step(ctx context.Context, tgt *config.RawxTargets, st *client.Stats) {
 	switch rc.step {
 	case stepPut:
-		rc.Refresh(tgt, rc.globalIndex)
-		if err, _, _ := rc.Put(st, BufferSize); err == nil {
+		rc.Refresh(tgt)
+		if err, _, _ := rc.Put(st, tgt, BufferSize); err == nil {
 			rc.step = rc.nextStepAfterPUT
 		} else {
-			log.WithFields(rc.LogFields()).WithError(err).Info("PUT")
+			utils.Log(ctx).WithFields(rc.LogFields(tgt)).WithError(err).Info("PUT")
 		}
 	case stepGet:
-		if err, _, _ := rc.Get(st); err == nil {
+		if err, _, _ := rc.Get(st, tgt); err == nil {
 			rc.step = rc.nextStepAfterGET
 		} else {
-			log.WithFields(rc.LogFields()).Info("GET")
+			utils.Log(ctx).WithFields(rc.LogFields(tgt)).Info("GET")
 		}
 	case stepDelete:
-		if err, _ := rc.Del(st); err == nil {
+		if err, _ := rc.Del(st, tgt); err == nil {
 			rc.step = rc.nextStepAfterDEL
 		} else {
-			log.WithFields(rc.LogFields()).WithError(err).Info("DEL")
+			utils.Log(ctx).WithFields(rc.LogFields(tgt)).WithError(err).Info("DEL")
 		}
 	}
 }

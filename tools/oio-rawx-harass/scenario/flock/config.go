@@ -18,12 +18,14 @@
 package flock
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
-	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/distribution"
 	"openio-sds/tools/oio-rawx-harass/scenario"
 	"openio-sds/tools/oio-rawx-harass/utils"
 )
@@ -36,10 +38,6 @@ type Config struct {
 	// Concurrency management: at most MaxWorkers concurrent requests will
 	// be allowed for EACH population run
 	MaxWorkers int `yaml:"max_workers"`
-
-	// Set to true to discover the existing chunks as already warmed up entities
-	// Very dangerous option that can trigger the deletion of thoose chunks during the CleanUp phase.
-	Discover bool `yaml:"discover"`
 
 	// How many chunks will be pre-created during the WarmUp phase
 	WarmupChunks int64 `yaml:"warmup"`
@@ -58,8 +56,8 @@ type Config struct {
 	// How often a chunk is created, per second
 	AverageCreationFrequency float64 `yaml:"average_creation_frequency"`
 
-	// Weight is the absolute weight for that size slot
-	Sizes []utils.SizeSlot `yaml:"sizes"`
+	// NAme of the size profile to be used for new chunks
+	Sizes string `yaml:"sizes"`
 }
 
 func NewConfig() *Config {
@@ -67,62 +65,16 @@ func NewConfig() *Config {
 		Name:                     uuid.NewString(),
 		MaxWorkers:               8,
 		WarmupChunks:             0,
-		Discover:                 false,
 		Cleanup:                  true,
 		AverageGetFrequency:      0.1,
 		AverageCreationFrequency: 1,
 		LifeExpectancy:           30 * time.Second,
 		LifeDeviation:            5 * time.Second,
+		Sizes:                    "",
 	}
 }
 
 type ScenarioGenerator func(clock time.Time) *Behavior
-
-// Not made to be standalone
-func (cfg *Config) GetTargets() client.RawxTarget { return client.NoTarget() }
-
-// Run implements the scenario.Runnable
-// It spawns a completely new and independant population run. The Run function may be used multiple times.
-func (cfg *Config) Build() (scenario.Runnable, error) {
-	if len(cfg.Sizes) <= 0 {
-		return nil, errors.New("no size histogram specified")
-	}
-
-	p := &population{
-		AbstractPopulation: scenario.AbstractPopulation{
-			Id: cfg.Name,
-		},
-		config:              *cfg,
-		scenarios:           make(utils.ScenarioHeap, 0),
-		requestedCreations:  make(chan bool, 2),
-		successfulCreations: make(chan *Behavior, cfg.MaxWorkers+1),
-		failedCreations:     make(chan *Behavior, cfg.MaxWorkers+1),
-		accumulatedSizes:    utils.NewSizeHistograms(cfg.Sizes),
-	}
-
-	index := uint(0)
-
-	p.generator = func(clock time.Time) *Behavior {
-
-		// TODO(jfs): determine a random lifetime, likely using a normal/gaussian random variable
-		lifetime := time.Duration(rand.NormFloat64()*float64(cfg.LifeExpectancy)) + cfg.LifeDeviation
-		death := clock.Add(lifetime)
-
-		s := &Behavior{
-			step:             stepIdle,
-			heapIndex:        -1,
-			globalIndex:      index,
-			deadlineGet:      clock,
-			deadlineDeletion: death,
-			size:             p.accumulatedSizes.Poll(),
-		}
-		s.refcount.Store(0)
-		index++
-
-		return s
-	}
-	return p, nil
-}
 
 // Patch overwrites the fields of the receiver whose corresponding field in the argument
 // is set.
@@ -148,7 +100,53 @@ func (cfg *Config) Patch(rhs Config) {
 	if rhs.WarmupChunks > 0 {
 		cfg.WarmupChunks = rhs.WarmupChunks
 	}
+	if rhs.Sizes != "" {
+		cfg.Sizes = rhs.Sizes
+	}
+}
 
-	cfg.Sizes = make([]utils.SizeSlot, len(rhs.Sizes))
-	copy(cfg.Sizes, rhs.Sizes)
+// Run implements the scenario.Runnable
+// It spawns a completely new and independant population run. The Run function may be used multiple times.
+func (cfg *Config) Build(ctx context.Context, sizes *config.SizesConfiguration, tgt *config.RawxTargets) (scenario.Runnable, error) {
+	localSizes := (*sizes)[cfg.Sizes]
+	if len(localSizes) <= 0 {
+		return nil, errors.New("no size histogram specified")
+	}
+
+	p := &population{
+		AbstractPopulation: scenario.AbstractPopulation{
+			Id: cfg.Name,
+		},
+		config:           *cfg,
+		targets:          tgt,
+		accumulatedSizes: distribution.NewSizeHistograms(localSizes),
+
+		scenarios:           make(utils.ScenarioHeap, 0),
+		requestedCreations:  make(chan bool, 2),
+		successfulCreations: make(chan *Behavior, cfg.MaxWorkers+1),
+		failedCreations:     make(chan *Behavior, cfg.MaxWorkers+1),
+	}
+
+	index := uint(0)
+
+	p.generator = func(clock time.Time) *Behavior {
+
+		// TODO(jfs): determine a random lifetime, likely using a normal/gaussian random variable
+		lifetime := time.Duration(rand.NormFloat64()*float64(cfg.LifeExpectancy)) + cfg.LifeDeviation
+		death := clock.Add(lifetime)
+
+		s := &Behavior{
+			step:             stepIdle,
+			heapIndex:        -1,
+			globalIndex:      index,
+			deadlineGet:      clock,
+			deadlineDeletion: death,
+			size:             p.accumulatedSizes.Poll(),
+		}
+		s.refcount.Store(0)
+		index++
+
+		return s
+	}
+	return p, nil
 }

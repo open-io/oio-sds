@@ -19,52 +19,62 @@ package scenario
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
 )
 
 type RunnableBuilder interface {
-	GetTargets() client.RawxTarget
-
-	Build() (Runnable, error)
+	Build(ctx context.Context, sizes *config.SizesConfiguration, tgt *config.RawxTargets) (Runnable, error)
 }
 
 type Runnable interface {
-	Warmup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error
+	Warmup(ctx context.Context, stats *client.Stats) error
 
-	Run(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error
+	Run(ctx context.Context, stats *client.Stats) error
 
-	Cleanup(cx context.Context, tgt *client.RawxTarget, stats *client.Stats) error
+	Cleanup(cx context.Context, stats *client.Stats) error
+}
+
+type Runner struct {
+	pop   Runnable
+	tgt   *config.RawxTargets
+	sizes *config.SizesConfiguration
 }
 
 // Run spawns a new stress for the given Runnable scenario, with a fresh stats holder, toward the given targets.
 // The targets are explicitely passed bby value to avoid the list to be altered by another stress run.
 // The dedicated stats are then returned.
-func Run(ctx context.Context, tgt client.RawxTarget, pop Runnable, duration time.Duration) (err error, statsWarmup client.Stats, statsRun client.Stats, statsCleanup client.Stats) {
-	log.Debug("Run")
-	err = pop.Warmup(ctx, &tgt, &statsWarmup)
+func (r *Runner) Run(ctx context.Context, duration time.Duration) (err error, statsWarmup client.Stats, statsRun client.Stats, statsCleanup client.Stats) {
+	err = r.pop.Warmup(ctx, &statsWarmup)
 	if err == nil {
-		ctxDeadline, cancel := context.WithTimeout(ctx, duration)
+		var ctxDeadline context.Context
+		var cancel context.CancelFunc
+		if duration > 0 {
+			ctxDeadline, cancel = context.WithTimeout(ctx, duration)
+		} else {
+			ctxDeadline, cancel = context.WithCancel(ctx)
+		}
 		defer cancel()
-		err = pop.Run(ctxDeadline, &tgt, &statsRun)
+		err = r.pop.Run(ctxDeadline, &statsRun)
 	}
-	if errCleanup := pop.Cleanup(ctx, &tgt, &statsCleanup); errCleanup != nil {
+	if errCleanup := r.pop.Cleanup(ctx, &statsCleanup); errCleanup != nil {
 		if err == nil {
 			err = errCleanup
 		} else {
-			log.Warnf("error at cleanup: %v", errCleanup)
+			log.WithContext(ctx).Warnf("error at cleanup: %v", errCleanup)
 		}
 	}
 	return err, statsWarmup, statsRun, statsCleanup
 }
 
 // RunAndPrint spawns a stress run and dumps a human-readable representation of the stats to the standard output
-func RunAndPrint(ctx context.Context, tgt client.RawxTarget, pop Runnable, duration time.Duration) error {
-	log.Debug("RunAndPrint")
-	err, statsWarmup, statsRun, statsCleanup := Run(ctx, tgt, pop, duration)
+func (r *Runner) RunAndPrint(ctx context.Context, duration time.Duration) error {
+	err, statsWarmup, statsRun, statsCleanup := r.Run(ctx, duration)
 	if err == nil {
 		err = statsWarmup.WriteHuman("warmup", os.Stdout)
 		err = statsRun.WriteHuman("stress", os.Stdout)
@@ -73,12 +83,18 @@ func RunAndPrint(ctx context.Context, tgt client.RawxTarget, pop Runnable, durat
 	return err
 }
 
-// RunAndPrint spawns a stress run and dumps a human-readable representation of the stats to the standard output
-func BuildAndRunAndPrint(ctx context.Context, tgt client.RawxTarget, builder RunnableBuilder, duration time.Duration) error {
-	log.Debug("BuildAndRunAndPrint")
-	if pop, err := builder.Build(); err != nil {
-		return err
+func NewRunner(ctx context.Context, builder RunnableBuilder, tgt *config.RawxTargets, sz *config.SizesConfiguration) (*Runner, error) {
+	if tgt.Empty() {
+		return nil, errors.New("No target configured")
+	}
+
+	if pop, err := builder.Build(ctx, sz, tgt); err != nil {
+		return nil, err
 	} else {
-		return RunAndPrint(ctx, tgt, pop, duration)
+		return &Runner{
+			pop:   pop,
+			tgt:   tgt,
+			sizes: sz,
+		}, nil
 	}
 }

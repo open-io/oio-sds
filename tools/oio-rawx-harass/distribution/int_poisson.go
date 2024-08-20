@@ -1,4 +1,20 @@
-package utils
+// OpenIO SDS oio-rawx-harass
+// Copyright (C) 2024 OVH SAS
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 3.0 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public
+// License along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+package distribution
 
 import (
 	"math"
@@ -16,7 +32,8 @@ type PoissonDistribution struct {
 	probabilities []poissonSlot
 
 	// Position in the array where probabilities begin to be strictly positive
-	start int
+	start  int
+	lambda int
 }
 
 // Computes "x / y" without the burden of pointers
@@ -66,11 +83,15 @@ func (factorials *factorialAsFloat) Ensure(n int) big.Float {
 }
 
 func NewPoissonSlots(lambda int) PoissonDistribution {
-	if lambda <= 0 {
+	if lambda < 0 {
 		panic("negative lambda")
 	}
 
-	result := PoissonDistribution{probabilities: make([]poissonSlot, 0)}
+	result := PoissonDistribution{lambda: lambda, probabilities: make([]poissonSlot, 0)}
+
+	if lambda == 0 {
+		return result
+	}
 
 	// Pre-computes values reused in each computation round
 	factorials := newFactorialAsFloat()
@@ -121,6 +142,9 @@ func NewPoissonSlots(lambda int) PoissonDistribution {
 }
 
 func (d *PoissonDistribution) Poll() int {
+	if d.lambda <= 0 {
+		return 0
+	}
 	r := rand.Float64()
 	for i := d.start; i < len(d.probabilities); i++ {
 		slot := &d.probabilities[i]
@@ -145,3 +169,5 @@ func (d *PoissonDistribution) PollAtScale(total, slice int) int {
 	}
 	return result
 }
+
+func (d *PoissonDistribution) Lambda() int { return d.lambda }

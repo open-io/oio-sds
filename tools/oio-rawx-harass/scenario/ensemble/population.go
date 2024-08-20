@@ -29,12 +29,11 @@ import (
 type Population struct {
 	scenario.AbstractPopulation
 
-	targets []client.RawxTarget
-	pops    []scenario.Runnable
+	pops []scenario.Runnable
 }
 
 // Run implements scenario.Runnable.Run
-func (b *Population) Warmup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
+func (b *Population) Warmup(ctx context.Context, stats *client.Stats) error {
 	b.Log(ctx).Debug("warmup")
 
 	if stats == nil {
@@ -47,21 +46,12 @@ func (b *Population) Warmup(ctx context.Context, tgt *client.RawxTarget, stats *
 	g, ctx := errgroup.WithContext(ctx)
 	for i, _ := range b.pops {
 		pop := &b.pops[i]
-
-		realTgt := tgt
-		if realTgt.Empty() {
-			realTgt = &b.targets[i]
-		}
-		if realTgt.Empty() {
-			return errors.New("no RAWX specified")
-		}
-
-		g.Go(func() error { return (*pop).Warmup(ctx, realTgt, stats) })
+		g.Go(func() error { return (*pop).Warmup(ctx, stats) })
 	}
 	return g.Wait()
 }
 
-func (b *Population) Run(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
+func (b *Population) Run(ctx context.Context, stats *client.Stats) error {
 	b.Log(ctx).Debug("run")
 
 	if stats == nil {
@@ -74,24 +64,14 @@ func (b *Population) Run(ctx context.Context, tgt *client.RawxTarget, stats *cli
 	g, ctx := errgroup.WithContext(ctx)
 	for i, _ := range b.pops {
 		pop := &b.pops[i]
-
-		// Override local targets if global targets have been provided
-		realTgt := tgt
-		if realTgt.Empty() {
-			realTgt = &b.targets[i]
-		}
-		if realTgt.Empty() {
-			return errors.New("no RAWX specified")
-		}
-
 		g.Go(func() error {
-			return (*pop).Run(ctx, realTgt, stats)
+			return (*pop).Run(ctx, stats)
 		})
 	}
 	return g.Wait()
 }
 
-func (b *Population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
+func (b *Population) Cleanup(ctx context.Context, stats *client.Stats) error {
 	b.Log(ctx).Debug("cleanup")
 
 	if stats == nil {
@@ -105,16 +85,7 @@ func (b *Population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stats 
 	for i, _ := range b.pops {
 		pop := &b.pops[i]
 
-		// Override local targets if global targets have been provided
-		realTgt := tgt
-		if realTgt.Empty() {
-			realTgt = &b.targets[i]
-		}
-		if realTgt.Empty() {
-			return errors.New("no RAWX specified")
-		}
-
-		g.Go(func() error { return (*pop).Cleanup(ctx, realTgt, stats) })
+		g.Go(func() error { return (*pop).Cleanup(ctx, stats) })
 	}
 	return g.Wait()
 }

@@ -18,7 +18,10 @@
 package cycle
 
 import (
+	"context"
+
 	"github.com/google/uuid"
+	"openio-sds/tools/oio-rawx-harass/config"
 	"openio-sds/tools/oio-rawx-harass/scenario"
 )
 
@@ -33,12 +36,15 @@ type Config struct {
 	NoDel bool
 }
 
-func (cfg *Config) Build() (scenario.Runnable, error) {
+func (cfg *Config) Build(ctx context.Context, sz *config.SizesConfiguration, tgt *config.RawxTargets) (scenario.Runnable, error) {
 	pop := &population{
 		AbstractPopulation: scenario.AbstractPopulation{
 			Id: uuid.NewString(),
 		},
-		cfg:              *cfg,
+
+		cfg:     *cfg,
+		targets: tgt,
+
 		nextStepAfterPUT: stepGet,
 		nextStepAfterGET: stepDelete,
 		nextStepAfterDEL: stepPut,

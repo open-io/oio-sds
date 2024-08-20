@@ -1,0 +1,52 @@
+
+batch:
+  - args:
+      name: "batch"
+      max_workers: 3
+      warmup: 32
+      discovery: false
+      cleanup: false
+      sizes: infra4000
+      load:
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 32
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 16
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 8
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 4
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 2
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 1
+        -
+          duration: 20s
+          services: 3
+          put: 32
+          get: 32
+          del: 0

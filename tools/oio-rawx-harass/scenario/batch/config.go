@@ -18,14 +18,34 @@
 package batch
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/google/uuid"
-	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/distribution"
 	"openio-sds/tools/oio-rawx-harass/scenario"
-	"openio-sds/tools/oio-rawx-harass/utils"
 )
+
+type PoissonLoad struct {
+	// The number of RAWX services the current load is based on.
+	// The actual load will be based on a ratio of the configuration here-below applied
+	// to the actual number of targets.
+	Services int `yaml:"services"`
+
+	// Lambda of the variable (Poisson law) triggering PUT on the interval of 1s.
+	LambdaPut int `yaml:"put"`
+
+	// Lambda of the variable (Poisson law) triggering GET on the interval of 1s, for 1G chunks
+	LambdaGet int `yaml:"get"`
+
+	// Lambda of the variable (Poisson law) triggering DELETE on the interval of 1s, for 1G chunks
+	LambdaDel int `yaml:"del"`
+
+	// Set to 0 for an unbound duration
+	Duration time.Duration `yaml:"duration"`
+}
 
 // Config gathers the core parameters of a swarm of probabilistic behaviors.
 type Config struct {
@@ -37,27 +57,22 @@ type Config struct {
 	MaxWorkers int `yaml:"max_workers"`
 
 	// Set to true to discover the existing chunks as already warmed up entities
-	// Very dangerous option that can trigger the deletion of thoose chunks during the CleanUp phase.
+	// Very dangerous option that can trigger the deletion of those chunks during the CleanUp phase.
 	Discover bool `yaml:"discover"`
-
-	// How many chunks will be pre-created during the WarmUp phase
-	WarmupChunks int64 `yaml:"warmup"`
 
 	// Set to true to delete the chunks of the population of the current test at the CleanUp phase of the test
 	Cleanup bool `yaml:"cleanup"`
 
-	// Lambda of the variable (Poisson law) triggering PUT on the interval of 1s.
-	// e.
-	LambdaPut int `yaml:"lambda_put"`
+	// How many chunks will be pre-created during the WarmUp phase
+	WarmupChunks int64 `yaml:"warmup"`
 
-	// Lambda of the variable (Poisson law) triggering GET on the interval of 1s, for 1M chunks
-	LambdaGet int `yaml:"lambda_get"`
+	Loads []PoissonLoad `yaml:"load"`
 
-	// Lambda of the variable (Poisson law) triggering DELETE on the interval of 1s, for 1M chunks
-	LambdaDel int `yaml:"lambda_del"`
+	// Name of the sizes profile
+	Sizes string `yaml:"sizes"`
 
-	// Weight is the absolute weight for that size slot
-	Sizes []utils.SizeSlot `yaml:"sizes"`
+	// Number
+	DeletesPerTarget uint32 `yaml:"deletes_per_target"`
 }
 
 func NewConfig() *Config {
@@ -67,21 +82,20 @@ func NewConfig() *Config {
 		WarmupChunks: 0,
 		Discover:     false,
 		Cleanup:      true,
-		LambdaPut:    130,
-		LambdaGet:    20,
-		LambdaDel:    2,
+		Loads:        make([]PoissonLoad, 0),
+		Sizes:        "default",
+
+		DeletesPerTarget: 16384,
 	}
 }
 
 type ScenarioGenerator func(clock time.Time) *Behavior
 
-// Not made to be standalone
-func (cfg *Config) GetTargets() client.RawxTarget { return client.NoTarget() }
-
 // Run implements the scenario.Runnable
 // It spawns a completely new and independant population run. The Run function may be used multiple times.
-func (cfg *Config) Build() (scenario.Runnable, error) {
-	if len(cfg.Sizes) <= 0 {
+func (cfg *Config) Build(ctx context.Context, sz *config.SizesConfiguration, tgt *config.RawxTargets) (scenario.Runnable, error) {
+	localSizes := (*sz)[cfg.Sizes]
+	if len(localSizes) <= 0 {
 		return nil, errors.New("no size histogram specified")
 	}
 
@@ -89,19 +103,20 @@ func (cfg *Config) Build() (scenario.Runnable, error) {
 		AbstractPopulation: scenario.AbstractPopulation{
 			Id: cfg.Name,
 		},
-		config:              *cfg,
-		scenarios:           make([]*Behavior, 0),
-		requestedPut:        make(chan bool, 2),
-		requestedGet:        make(chan bool, 2),
-		requestedDel:        make(chan bool, 2),
-		successfulCreations: make(chan *Behavior, cfg.MaxWorkers+1),
-		failedCreations:     make(chan *Behavior, cfg.MaxWorkers+1),
 
-		accumulatedSizes: utils.NewSizeHistograms(cfg.Sizes),
+		config:           *cfg,
+		accumulatedSizes: distribution.NewSizeHistograms(localSizes),
+		targets:          tgt,
 
-		poissonGet: utils.NewPoissonSlots(cfg.LambdaGet),
-		poissonDel: utils.NewPoissonSlots(cfg.LambdaDel),
-		poissonPut: utils.NewPoissonSlots(cfg.LambdaPut),
+		scenarios:    make([]*targetPopulation, 0),
+		requestedPut: make(chan bool, 2),
+		requestedGet: make(chan bool, 2),
+		requestedDel: make(chan bool, 2),
+		created:      make(chan opResult, cfg.MaxWorkers*2),
+		deleted:      make(chan opResult, cfg.MaxWorkers*2),
+		getted:       make(chan opResult, cfg.MaxWorkers*2),
+
+		loads: make([]*loadProfile, 0),
 	}
 
 	index := uint(0)
@@ -116,6 +131,29 @@ func (cfg *Config) Build() (scenario.Runnable, error) {
 		return s
 	}
 
+	for _, lCfg := range cfg.Loads {
+		// The provided lambda is meaningful for a given number of services.
+		// But we likely deal with another number of services. Let's ratio the lambda
+		// accordingly.
+		ratio := func(y int) int { return (y * tgt.Count()) / lCfg.Services }
+
+		l := &loadProfile{
+			duration:   lCfg.Duration,
+			poissonGet: distribution.NewPoissonSlots(ratio(lCfg.LambdaGet)),
+			poissonDel: distribution.NewPoissonSlots(ratio(lCfg.LambdaDel)),
+			poissonPut: distribution.NewPoissonSlots(ratio(lCfg.LambdaPut)),
+		}
+		p.loads = append(p.loads, l)
+	}
+
+	for _, t := range tgt.Targets {
+		p.scenarios = append(p.scenarios, &targetPopulation{
+			scenarios: make([]*Behavior, 0),
+			quotaDel:  cfg.DeletesPerTarget,
+			rawx:      t.URL(),
+		})
+	}
+
 	return p, nil
 }
 
@@ -128,16 +166,18 @@ func (cfg *Config) Patch(rhs Config) {
 	if rhs.MaxWorkers > 0 {
 		cfg.MaxWorkers = rhs.MaxWorkers
 	}
-	if rhs.LambdaGet > 0 {
-		cfg.LambdaGet = rhs.LambdaGet
-	}
-	if rhs.LambdaPut > 0 {
-		cfg.LambdaPut = rhs.LambdaPut
-	}
 	if rhs.WarmupChunks > 0 {
 		cfg.WarmupChunks = rhs.WarmupChunks
 	}
 
-	cfg.Sizes = make([]utils.SizeSlot, len(rhs.Sizes))
-	copy(cfg.Sizes, rhs.Sizes)
+	cfg.Discover = rhs.Discover
+	cfg.Cleanup = rhs.Cleanup
+	cfg.DeletesPerTarget = rhs.DeletesPerTarget
+
+	if len(rhs.Loads) > 0 {
+		cfg.Loads = append(cfg.Loads, rhs.Loads...)
+	}
+	if rhs.Sizes != "" {
+		cfg.Sizes = rhs.Sizes
+	}
 }

@@ -1,0 +1,16 @@
+infra4000:
+  - { size: 4096,     weight: 10740 }
+  - { size: 8192,     weight: 1685 }
+  - { size: 16384,    weight: 1623 }
+  - { size: 32768,    weight: 2044 }
+  - { size: 65536,    weight: 4689 }
+  - { size: 131072,   weight: 8917 }
+  - { size: 262144,   weight: 6476 }
+  - { size: 524288,   weight: 5282 }
+  - { size: 1048576,  weight: 24292 }
+  - { size: 2097152,  weight: 722 }
+  - { size: 4194304,  weight: 501 }
+  - { size: 8388608,  weight: 389 }
+  - { size: 16777216, weight: 151 }
+  - { size: 33554432, weight: 20 }
+  - { size: 67108864, weight: 4 }

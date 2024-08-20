@@ -20,13 +20,14 @@ package client
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"openio-sds/tools/oio-rawx-harass/config"
 	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
@@ -34,10 +35,12 @@ const (
 	PFX = "X-oio-chunk-meta-"
 )
 
+var DisablePersist bool = false
+
 var Config = RawxClientConfig{
 	Namespace: "OPENIO",
 	ReuseCnx:  1,
-	Prefix:    "00",
+	Prefix:    "",
 }
 
 var transport http.Transport = http.Transport{
@@ -47,7 +50,7 @@ var transport http.Transport = http.Transport{
 }
 
 type RawxClient struct {
-	url     string
+	rx      uint32
 	chunkId string
 }
 
@@ -61,14 +64,24 @@ func patchRawxRequest(req *http.Request) {
 	}
 }
 
-func (rc *RawxClient) ChunkId() string { return rc.chunkId }
-func (rc *RawxClient) Rawx() string    { return rc.url }
-
-func (rc *RawxClient) LogFields() log.Fields {
-	return log.Fields{"chunk": rc.ChunkId(), "rawx": rc.Rawx()}
+func (rc *RawxClient) Persist(tgt *config.RawxTargets) error {
+	if DisablePersist {
+		return nil
+	}
+	return tgt.Get(rc.rx).Save(rc.chunkId)
 }
 
-func (rc *RawxClient) Put(st *Stats, size int64) (error, int, int64) {
+func (rc *RawxClient) Forget(tgt *config.RawxTargets) error { return tgt.Get(rc.rx).Delete(rc.chunkId) }
+
+func (rc *RawxClient) ChunkId() string { return rc.chunkId }
+
+func (rc *RawxClient) Rawx(tgt *config.RawxTargets) string { return tgt.Get(rc.rx).URL() }
+
+func (rc *RawxClient) LogFields(tgt *config.RawxTargets) log.Fields {
+	return log.Fields{"chunk": rc.ChunkId(), "rawx": rc.Rawx(tgt)}
+}
+
+func (rc *RawxClient) Put(st *Stats, tgt *config.RawxTargets, size int64) (error, int, int64) {
 	pre := time.Now()
 
 	account := utils.RandStringHexa(8)
@@ -84,7 +97,8 @@ func (rc *RawxClient) Put(st *Stats, size int64) (error, int, int64) {
 	bin := make([]byte, 0, 32)
 	containerId := strings.ToUpper(hex.EncodeToString(h.Sum(bin)))
 
-	url := "http://" + rc.url + "/" + rc.chunkId
+	url := "http://" + tgt.Get(rc.rx).URL() + "/" + rc.ChunkId()
+
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("PUT", url, utils.NewRepeater(size))
 	patchRawxRequest(req)
@@ -118,28 +132,9 @@ func (rc *RawxClient) Put(st *Stats, size int64) (error, int, int64) {
 	}
 }
 
-func discard(in io.Reader, pre time.Time) (int64, time.Duration) {
-	var ttfb time.Duration
-	var totalSize int64
-	first := true
-	buf := make([]byte, 8*1024)
-	for {
-		sz, err := in.Read(buf)
-		if sz > 0 {
-			totalSize += int64(sz)
-		}
-		if first {
-			ttfb = time.Now().Sub(pre)
-			first = false
-		}
-		if err != nil {
-			return totalSize, ttfb
-		}
-	}
-}
+func (rc *RawxClient) Get(st *Stats, tgt *config.RawxTargets) (error, int, int64) {
+	url := "http://" + tgt.Get(rc.rx).URL() + "/" + rc.ChunkId()
 
-func (rc *RawxClient) Get(st *Stats) (error, int, int64) {
-	url := "http://" + rc.url + "/" + rc.chunkId
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("GET", url, nil)
 	patchRawxRequest(req)
@@ -170,10 +165,11 @@ func (rc *RawxClient) Get(st *Stats) (error, int, int64) {
 	}
 }
 
-func (rc *RawxClient) Del(st *Stats) (error, int) {
+func (rc *RawxClient) Del(st *Stats, tgt *config.RawxTargets) (error, int) {
 	pre := time.Now()
 
-	url := "http://" + rc.url + "/" + rc.chunkId
+	url := "http://" + tgt.Get(rc.rx).URL() + "/" + rc.ChunkId()
+
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("DELETE", url, nil)
 	patchRawxRequest(req)
@@ -199,15 +195,34 @@ func (rc *RawxClient) Del(st *Stats) (error, int) {
 
 // Refresh the random fields, thus targeting a new chunk.
 // It's up to the implementation to call this when meaningful, since it will drop the existing state
-func (rc *RawxClient) Refresh(tgt *RawxTarget, index uint) {
-	rc.url = tgt.RawxUrl[utils.RandIntRange(0, len(tgt.RawxUrl))]
-
+func (rc *RawxClient) Refresh(tgt *config.RawxTargets) {
+	rc.rx = tgt.Poll()
 	prefixLength := len(Config.Prefix)
 	rc.chunkId = Config.Prefix
 	rc.chunkId += utils.RandStringHexa(64 - prefixLength)
 }
 
-func (rc *RawxClient) Craft(index uint, url, chunkId string) {
-	rc.url = url
+func (rc *RawxClient) Craft(tgt *config.RawxTargets, rx uint32, chunkId string) {
+	rc.rx = rx
 	rc.chunkId = chunkId
+}
+
+func discard(in io.Reader, pre time.Time) (int64, time.Duration) {
+	var ttfb time.Duration
+	var totalSize int64
+	first := true
+	buf := make([]byte, 8*1024)
+	for {
+		sz, err := in.Read(buf)
+		if sz > 0 {
+			totalSize += int64(sz)
+		}
+		if first {
+			ttfb = time.Now().Sub(pre)
+			first = false
+		}
+		if err != nil {
+			return totalSize, ttfb
+		}
+	}
 }

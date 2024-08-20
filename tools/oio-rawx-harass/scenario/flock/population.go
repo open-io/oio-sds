@@ -18,20 +18,18 @@
 package flock
 
 import (
-	"bufio"
 	"container/heap"
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
-	"openio-sds/tools/oio-rawx-harass/scenario"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/distribution"
+	"openio-sds/tools/oio-rawx-harass/scenario"
 	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
@@ -39,15 +37,15 @@ import (
 type population struct {
 	scenario.AbstractPopulation
 
-	config Config
+	config  Config
+	targets *config.RawxTargets
+	// Weight is the cumulated weight for that size slot
+	accumulatedSizes distribution.Int64Histogram
 
 	scenarios           utils.ScenarioHeap
 	requestedCreations  chan bool
 	successfulCreations chan *Behavior
 	failedCreations     chan *Behavior
-
-	// Weight is the cumulated weight for that size slot
-	accumulatedSizes utils.SizeHistograms
 
 	generator ScenarioGenerator
 }
@@ -56,44 +54,7 @@ const (
 	batchSize = 32
 )
 
-func (pop *population) discover(ctx context.Context, url string) error {
-	pop.Log(ctx).WithField("rawx", url).Debug("discovery starting")
-
-	count := uint64(0)
-	urlTokens := strings.Split(url, ":")
-	ip, port := urlTokens[0], urlTokens[1]
-
-	// the discovery os achieved by a local agent on the same IP by a well-known port
-	resp, err := http.Get(fmt.Sprintf("http://%s:%d/%d", ip, utils.DiscoveryPort, port))
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-	if err != nil {
-		return fmt.Errorf("http error: %w", err)
-	} else if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("http error: unexpected code %v", resp.StatusCode)
-	} else {
-		lines := bufio.NewScanner(resp.Body)
-		lines.Split(bufio.ScanLines)
-		for lines.Scan() {
-			line := lines.Text()
-			line = strings.TrimSpace(line)
-			tokens := strings.SplitN(line, " ", 3)
-			chunkId, _ := tokens[0], tokens[1]
-
-			s := pop.generator(time.Now())
-			s.Craft(s.globalIndex, url, chunkId)
-		}
-	}
-
-	pop.Log(ctx).WithField("rawx", url).WithField("count", count).Debug("discovery exiting")
-	return nil
-}
-
-func (pop *population) Warmup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Warmup(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
@@ -108,27 +69,19 @@ func (pop *population) Warmup(ctx context.Context, tgt *client.RawxTarget, stats
 	progress := utils.NewProgress(time.Now(), pop.Id)
 
 	pop.Log(ctx).WithFields(log.Fields{
-		"targets": tgt.RawxUrl,
+		"targets": pop.targets.Debug(),
 		"count":   pop.config.WarmupChunks,
 	}).Debugf("warmup starting %+v", pop)
-
-	if pop.config.Discover {
-		for _, t := range tgt.RawxUrl {
-			if err := pop.discover(ctx, t); err != nil {
-				return fmt.Errorf("discovery failed on target %s: %w", t, err)
-			}
-		}
-	}
 
 	// Creation of chunks
 	for i := int64(0); i < pop.config.WarmupChunks; i++ {
 		clock := time.Now()
 		s := pop.generator(clock)
-		s.Refresh(tgt, s.globalIndex)
+		s.Refresh(pop.targets)
 		pop.refreshDeadline(time.Now(), s)
 		groupWarmup.Go(func() error {
-			if e, _, _ := s.Put(stats, s.size); e != nil {
-				pop.log2(ctx, clock, s).WithError(e).Debug("put")
+			if e, _, _ := s.Put(stats, pop.targets, s.size); e != nil {
+				pop.LogS(ctx, clock, s).WithError(e).Debug("put")
 			} else {
 				atomic.AddUint64(&progress.TotalPut, 1)
 			}
@@ -145,22 +98,19 @@ func (pop *population) Warmup(ctx context.Context, tgt *client.RawxTarget, stats
 	progress.Print(ctx, time.Now())
 
 	pop.Log(ctx).WithFields(log.Fields{
-		"targets": tgt.RawxUrl,
+		"targets": pop.targets.Debug(),
 		"count":   pop.config.WarmupChunks,
 	}).WithError(err).Debug("warmup exiting")
 	return err
 }
 
-func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Run(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
 
 	pop.Log(ctx).WithFields(log.Fields{
-		"targets": tgt.RawxUrl,
+		"targets": pop.targets.Debug(),
 		"put":     pop.config.AverageCreationFrequency,
 		"get":     pop.config.AverageGetFrequency,
 		"life":    pop.config.LifeExpectancy,
@@ -195,8 +145,8 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 
 	for ctx.Err() == nil {
 		clock := time.Now()
-		pop.consumeCreationEvents(ctx, tgt, clock, pop.generator)
-		roundPut, roundGet, roundDel := pop.triggerOneBatch(ctx, tgt, stats, clock, groupRun)
+		pop.consumeCreationEvents(ctx, clock, pop.generator)
+		roundPut, roundGet, roundDel := pop.triggerOneBatch(ctx, stats, clock, groupRun)
 		progress.TotalPut += roundPut
 		progress.TotalGet += roundGet
 		progress.TotalDel += roundDel
@@ -216,10 +166,7 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 	return nil
 }
 
-func (pop *population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Cleanup(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
@@ -237,7 +184,7 @@ func (pop *population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stat
 	for pop.scenarios.Len() > 0 {
 		clock := time.Now()
 
-		pop.consumeCreationEvents(ctx, tgt, clock, pop.generator)
+		pop.consumeCreationEvents(ctx, clock, pop.generator)
 
 		x := heap.Pop(&pop.scenarios)
 		if x == nil {
@@ -250,17 +197,17 @@ func (pop *population) Cleanup(ctx context.Context, tgt *client.RawxTarget, stat
 				// This should never happen since all the GET workers are now shut down
 				time.Sleep(100 * time.Millisecond)
 			}
-			s.Del(stats)
+			s.Del(stats, pop.targets)
 			return nil
 		})
-		pop.log2(ctx, clock, s).Trace("delete")
+		pop.LogS(ctx, clock, s).Trace("delete")
 	}
 
 	pop.Log(ctx).Debug("cleanup exiting")
 	return nil
 }
 
-func (pop *population) consumeCreationEvents(ctx context.Context, tgt *client.RawxTarget, clock time.Time, generator ScenarioGenerator) {
+func (pop *population) consumeCreationEvents(ctx context.Context, clock time.Time, generator ScenarioGenerator) {
 	// non-blocking polling of elements in place
 	for ctx.Err() == nil {
 		select {
@@ -268,13 +215,16 @@ func (pop *population) consumeCreationEvents(ctx context.Context, tgt *client.Ra
 			s.step = stepReady
 			pop.refreshDeadline(clock, s)
 			pop.scenarios.Push(s)
-			pop.log2(ctx, clock, s).WithField("status", "ok").Trace("created")
+			heap.Push(&pop.scenarios, s)
+			pop.LogS(ctx, clock, s).WithField("status", "ok").Trace("created")
+
 		case s := <-pop.failedCreations:
-			pop.log2(ctx, clock, s).WithField("status", "error").Info("creation failed")
+			pop.LogS(ctx, clock, s).WithField("status", "error").Info("creation failed")
+
 		case <-pop.requestedCreations:
 			s := generator(clock)
-			s.Refresh(tgt, s.globalIndex)
-			pop.log2(ctx, clock, s).Trace("creation requested")
+			s.Refresh(pop.targets)
+			pop.LogS(ctx, clock, s).Trace("creation requested")
 			pop.scenarios.Push(s)
 		default:
 			return
@@ -282,7 +232,7 @@ func (pop *population) consumeCreationEvents(ctx context.Context, tgt *client.Ra
 	}
 }
 
-func (pop *population) triggerOneBatch(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats, clock time.Time, group *errgroup.Group) (uint64, uint64, uint64) {
+func (pop *population) triggerOneBatch(ctx context.Context, stats *client.Stats, clock time.Time, group *errgroup.Group) (uint64, uint64, uint64) {
 	var started, fetched, deleted uint64
 LOOP:
 	for i := 0; pop.scenarios.Len() > 0 && ctx.Err() == nil && i < batchSize; i++ {
@@ -301,7 +251,7 @@ LOOP:
 		switch s.step {
 		case stepIdle:
 			spawned := group.TryGo(func() error {
-				if e, _, _ := s.Put(stats, s.size); e != nil {
+				if e, _, _ := s.Put(stats, pop.targets, s.size); e != nil {
 					pop.failedCreations <- s
 				} else {
 					pop.successfulCreations <- s
@@ -309,10 +259,9 @@ LOOP:
 				return nil
 			})
 			if spawned {
-				pop.log2(ctx, clock, s).Trace("create")
+				pop.LogS(ctx, clock, s).Trace("create")
 				started++
 			} else {
-				heap.Push(&pop.scenarios, s)
 				break LOOP
 			}
 
@@ -322,7 +271,7 @@ LOOP:
 					for s.refcount.Load() > 0 {
 						time.Sleep(100 * time.Millisecond)
 					}
-					s.Del(stats)
+					s.Del(stats, pop.targets)
 					return nil
 				})
 				if spawned {
@@ -335,8 +284,8 @@ LOOP:
 				group.Go(func() error {
 					s.refcount.Add(1)
 					defer s.refcount.Add(^uint32(0))
-					if e, _, _ := s.Get(stats); e != nil {
-						pop.log2(ctx, clock, s).WithError(e).Info("get failed")
+					if e, _, _ := s.Get(stats, pop.targets); e != nil {
+						pop.LogS(ctx, clock, s).WithError(e).Info("get failed")
 					}
 					return nil
 				})
@@ -357,6 +306,6 @@ func (pop *population) refreshDeadline(clock time.Time, s *Behavior) {
 }
 
 // Generate a log event for the given Behavior
-func (pop *population) log2(ctx context.Context, clock time.Time, s *Behavior) *log.Entry {
-	return pop.Log(ctx).WithField("_id", s.globalIndex).WithField("_t", clock)
+func (pop *population) LogS(ctx context.Context, clock time.Time, s *Behavior) *log.Entry {
+	return pop.LogT(ctx, clock).WithField("_id", s.globalIndex)
 }

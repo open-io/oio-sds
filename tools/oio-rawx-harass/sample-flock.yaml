@@ -1,0 +1,13 @@
+
+flock:
+  - args:
+      name: "flock"
+      max_workers: 3
+      warmup: 32
+      cleanup: false
+      life_expectancy: 1m
+      life_deviation: 10s
+      average_get_frequency: 2.0
+      average_creation_frequency: 1.0
+      sizes: infra4000
+

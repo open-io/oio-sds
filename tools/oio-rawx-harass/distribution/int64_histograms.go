@@ -1,6 +1,5 @@
 // OpenIO SDS oio-rawx-harass
-// Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021-2024 OVH SAS
+// Copyright (C) 2024 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -15,42 +14,42 @@
 // You should have received a copy of the GNU Affero General Public
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package distribution
 
 import (
 	"math/rand"
 	"sort"
 )
 
-type SizeSlot struct {
+type int64HistogramBar struct {
 	Size   int64 `yaml:"size"`
 	Weight int64 `yaml:"weight"`
 }
 
-type SizeHistograms []SizeSlot
+type Int64Histogram []int64HistogramBar
 
 // Implements sort.Interface
-func (s SizeHistograms) Len() int {
+func (s Int64Histogram) Len() int {
 	return len(s)
 }
 
 // Implements sort.Interface
-func (s SizeHistograms) Swap(i, j int) {
+func (s Int64Histogram) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
 // Implements sort.Interface
-func (s SizeHistograms) Less(i, j int) bool {
+func (s Int64Histogram) Less(i, j int) bool {
 	return s[i].Size < s[j].Size
 }
 
-func NewSizeHistograms(sizes []SizeSlot) SizeHistograms {
-	sizeHistograms := make(SizeHistograms, len(sizes))
+func NewSizeHistograms(sizes Int64Histogram) Int64Histogram {
+	sizeHistograms := make(Int64Histogram, len(sizes))
 	sizeHistograms.Init(sizes)
 	return sizeHistograms
 }
 
-func (s SizeHistograms) Init(sizes []SizeSlot) {
+func (s Int64Histogram) Init(sizes []int64HistogramBar) {
 	copy(s, sizes)
 	sort.Sort(s)
 	total := int64(0)
@@ -60,7 +59,7 @@ func (s SizeHistograms) Init(sizes []SizeSlot) {
 	}
 }
 
-func (s SizeHistograms) Poll() int64 {
+func (s Int64Histogram) Poll() int64 {
 	boundary := s[len(s)-1].Weight
 	needle := rand.Int63n(boundary)
 	for i, x := range s {

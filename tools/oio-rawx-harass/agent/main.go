@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -38,10 +37,14 @@ func main() {
 	if allPaths, err := filepath.Glob("/srv/node/*/*/rawx-*"); err != nil {
 		log.Fatal(err)
 	} else {
+		sz := 0
+		key := "user.server.id"
+		value := make([]byte, 2048)
+
 		for _, path := range allPaths {
-			value := make([]byte, 1024)
-			if sz, err := syscall.Getxattr(path, "user.server.id", value); err != nil {
-				log.Fatal(err)
+			sz, err = syscall.Getxattr(path, key, value)
+			if err != nil {
+				log.Fatalf("Fail to load attr=%s from vol=%s: err=%v", key, path, err)
 			} else {
 				id := string(value[:sz])
 				allRawx[id] = path
@@ -64,23 +67,32 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
 
+	count := 0
 	var listed, skipped uint32
 	var buf bytes.Buffer
+	buf.Reset()
 
 	log.Debugf("Listing rawx [%s]", path)
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(path, func(path string, info os.DirEntry, err error) error {
 		if !info.IsDir() {
 			if !strings.HasSuffix(path, ".pending") {
-				buf.Reset()
 				buf.WriteString(filepath.Base(path))
-				buf.WriteRune(' ')
-				buf.WriteString(strconv.FormatUint(uint64(info.Size()), 10))
 				buf.WriteRune('\n')
-				w.Write(buf.Bytes())
+				count++
+				if (count % 1024) == 0 {
+					w.Write(buf.Bytes())
+					buf.Reset()
+				}
 			}
 		}
 		return nil
 	})
+
+	b := buf.Bytes()
+	if len(b) > 0 {
+		w.Write(b)
+	}
+
 	log.WithError(err).
 		WithField("path", path).
 		WithField("listed", listed).WithField("skipped", skipped).

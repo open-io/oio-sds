@@ -20,8 +20,11 @@ package scenario
 import (
 	"context"
 	"errors"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
 type AbstractPopulation struct {
@@ -33,13 +36,14 @@ func (pop *AbstractPopulation) SetId(id string) {
 }
 
 func (pop *AbstractPopulation) Log(ctx context.Context) *log.Entry {
-	return log.WithField("_p", pop.Id).WithContext(ctx)
+	return utils.Log(ctx).WithField("_p", pop.Id)
 }
 
-func (pop *AbstractPopulation) Warmup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *AbstractPopulation) LogT(ctx context.Context, t time.Time) *log.Entry {
+	return utils.LogT(ctx, t).WithField("_p", pop.Id)
+}
+
+func (pop *AbstractPopulation) Warmup(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
@@ -47,10 +51,7 @@ func (pop *AbstractPopulation) Warmup(ctx context.Context, tgt *client.RawxTarge
 	return nil
 }
 
-func (pop *AbstractPopulation) Cleanup(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *AbstractPopulation) Cleanup(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}

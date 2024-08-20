@@ -25,33 +25,45 @@ import (
 )
 
 type Progress struct {
-	tag string
-
-	lastPrint time.Time
-	period    time.Duration
+	tag    string
+	period time.Duration
 
 	TotalPut uint64
 	TotalGet uint64
 	TotalDel uint64
+	TotalErr uint64
+
+	lastPrint   time.Time
+	previousPut uint64
+	previousGet uint64
+	previousDel uint64
+	previousErr uint64
 }
 
 func NewProgress(clock time.Time, tag string) Progress {
 	return Progress{
 		tag:       tag,
 		lastPrint: clock,
-		period:    5 * time.Second,
+		period:    time.Second,
 	}
 }
 
 func (p *Progress) Print(ctx context.Context, clock time.Time) {
-	log.WithContext(ctx).WithFields(log.Fields{
-		"_t":      clock,
-		"_p":      p.tag,
-		"started": p.TotalPut,
-		"fetched": p.TotalGet,
-		"deleted": p.TotalDel,
+	elapsed := clock.Sub(p.lastPrint)
+	LogT(ctx, clock).WithFields(log.Fields{
+		"_p": p.tag,
+		"_d": elapsed,
+		"P":  p.TotalPut - p.previousPut,
+		"G":  p.TotalGet - p.previousGet,
+		"D":  p.TotalDel - p.previousDel,
+		"E":  p.TotalErr - p.previousErr,
 	}).Info("progress")
+
 	p.lastPrint = clock
+	p.previousPut = p.TotalPut
+	p.previousGet = p.TotalGet
+	p.previousDel = p.TotalDel
+	p.previousErr = p.TotalErr
 }
 
 func (p *Progress) PrintPeriodically(ctx context.Context, clock time.Time) {

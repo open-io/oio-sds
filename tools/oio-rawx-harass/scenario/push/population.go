@@ -20,12 +20,14 @@ package push
 import (
 	"context"
 	"errors"
-	"openio-sds/tools/oio-rawx-harass/scenario"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"openio-sds/tools/oio-rawx-harass/client"
+	"openio-sds/tools/oio-rawx-harass/config"
+	"openio-sds/tools/oio-rawx-harass/distribution"
+	"openio-sds/tools/oio-rawx-harass/scenario"
 	"openio-sds/tools/oio-rawx-harass/utils"
 )
 
@@ -33,18 +35,15 @@ import (
 type population struct {
 	scenario.AbstractPopulation
 
-	config Config
-
-	accumulatedSizes utils.SizeHistograms
+	config           Config
+	targets          *config.RawxTargets
+	accumulatedSizes distribution.Int64Histogram
 }
 
 // A warmup phase has no sense in a Push scenario, that is destined to be a general warmup
 // for another scenario.
 
-func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *client.Stats) error {
-	if tgt.Empty() {
-		return errors.New("Missing target")
-	}
+func (pop *population) Run(ctx context.Context, stats *client.Stats) error {
 	if stats == nil {
 		return errors.New("Missing stats")
 	}
@@ -57,25 +56,24 @@ func (pop *population) Run(ctx context.Context, tgt *client.RawxTarget, stats *c
 
 	progress := utils.NewProgress(time.Now(), pop.Id)
 
-	globalindex := uint(0)
-
 	for ctx.Err() == nil {
-		i := globalindex
 		groupRun.Go(func() error {
 			sz := pop.accumulatedSizes.Poll()
 			rx := client.RawxClient{}
-			rx.Refresh(tgt, i)
-			e, _, _ := rx.Put(stats, sz)
+			rx.Refresh(pop.targets)
+			e, _, _ := rx.Put(stats, pop.targets, sz)
+			if e == nil {
+				e = rx.Persist(pop.targets)
+			}
 			if e != nil {
 				pop.Log(ctx).WithError(e).WithFields(log.Fields{
 					"chunk": rx.ChunkId(),
-					"rx":    rx.Rawx(),
+					"rx":    rx.Rawx(pop.targets),
 					"size":  sz,
 				}).Info("put")
 			}
 			return nil
 		})
-		globalindex++
 		progress.TotalPut++
 		progress.PrintPeriodically(ctx, time.Now())
 	}
