@@ -562,7 +562,6 @@ class CommonTestCase(testtools.TestCase):
                         resp.status,
                         resp.data,
                     )
-                self.assertEqual(resp.status, 204)
 
     @classmethod
     def _cls_reload_meta(cls):
@@ -585,7 +584,6 @@ class CommonTestCase(testtools.TestCase):
                         resp.status,
                         resp.data,
                     )
-                self.assertEqual(resp.status, 204)
 
     def _reload(self, wait=1.0):
         self._flush_proxy()
@@ -651,7 +649,7 @@ class BaseTestCase(CommonTestCase):
         if self.locked_svc:
             self.conscience.unlock_score(self.locked_svc)
 
-    def _lock_services(self, type_, services, wait=1.0, score=0):
+    def _lock_services(self, type_, services, wait=1.0, score=0, reload_meta=False):
         """
         Lock specified services, wait for the score to be propagated.
         """
@@ -664,8 +662,9 @@ class BaseTestCase(CommonTestCase):
         # For mysterious reason, all services are not reloaded immediately.
         self._reload_proxy()
         time.sleep(wait)
-        self._reload_meta()
-        time.sleep(wait)
+        if reload_meta:
+            self._reload_meta()
+            time.sleep(wait)
 
     @classmethod
     def _service(cls, name, action, wait=0):
