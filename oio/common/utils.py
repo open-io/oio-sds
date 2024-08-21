@@ -391,20 +391,19 @@ def service_pool_to_dict(service_pool):
     :param service_pool: service pool to convert
     :type service_pool: str
     """
-    res_dict = {}
-    pool = service_pool.split(";")
-    res_dict["service_distribution"] = []
-    for p in pool:
-        # 1,rawx-even,rawx
-        # 1,account
-        if "," in p:
-            res_dict["service_distribution"].append(p.split(","))
-        else:
-            # fair_location_constraint=9.9.2.1
-            # min_dist=1
-            # warn_dist=0
-            key, value = p.split("=")
+    res_dict = {"services": []}
+    pool_params = service_pool.split(";")
+    for p in pool_params:
+        # fair_location_constraint=9.9.2.1
+        # min_dist=1
+        # warn_dist=0
+        if "=" in p:
+            key, value = p.split("=", 1)
             res_dict[key] = value
+        else:
+            # Examples: "1,rawx-even,rawx", "1,account"
+            count, *fallbacks = p.split(",")
+            res_dict["services"].append((int(count), fallbacks))
 
     return res_dict
 

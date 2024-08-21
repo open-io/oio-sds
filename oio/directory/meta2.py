@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from time import monotonic
+
 from oio.common.http_urllib3 import get_pool_manager
 from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
@@ -39,6 +41,7 @@ class Meta2Database(object):
         directory_client=None,
         service_type="meta2",
         pool_manager=None,
+        refresh_delay=60.0,
     ):
         self.conf = conf
         self.service_type = service_type
@@ -50,8 +53,10 @@ class Meta2Database(object):
         self._rdir = rdir_client
         self._directory = directory_client
 
-        self.services_by_base = dict()
-        self.all_service_ids = list()
+        self.services_by_base = {}
+        self._all_service_ids = set()
+        self._next_refresh = 0.0
+        self._refresh_delay = refresh_delay
 
         self.reload_all_services()
 
@@ -60,6 +65,12 @@ class Meta2Database(object):
         if not self._admin:
             self._admin = AdminClient(self.conf, pool_manager=self.pool_manager)
         return self._admin
+
+    @property
+    def all_service_ids(self):
+        if monotonic() > self._next_refresh:
+            self.reload_all_services()
+        return self._all_service_ids
 
     @property
     def conscience(self):
@@ -93,9 +104,14 @@ class Meta2Database(object):
         """
         Load the list of all services of type `self.service_type`.
         """
-        self.all_service_ids = [
-            s["id"] for s in self.conscience.all_services(self.service_type)
-        ]
+        self._all_service_ids = self.conscience.all_services_by_id(self.service_type)
+        self._next_refresh = monotonic() + self._refresh_delay
+        self.logger.debug(
+            "[%s] Reloaded %s %s services",
+            self.__class__.__name__,
+            len(self._all_service_ids),
+            self.service_type,
+        )
 
     @staticmethod
     def get_cid_and_seq(base):
@@ -112,7 +128,7 @@ class Meta2Database(object):
             return (base.ljust(64, "0"), None)
 
     def _get_bases_seq(self, base, **kwargs):
-        base_seqs = dict()
+        base_seqs = {}
         cid, seq = self.get_cid_and_seq(base)
         linked_services = self.directory.list(cid=cid, **kwargs)
 
@@ -123,7 +139,7 @@ class Meta2Database(object):
                 continue
 
             bseq = cid + "." + str(service["seq"])
-            services = base_seqs.get(bseq, dict())
+            services = base_seqs.get(bseq, {})
             services[service.pop("host")] = service
             base_seqs[bseq] = services
 
@@ -174,7 +190,7 @@ class Meta2Database(object):
                 services_found = self.conscience.poll(
                     self.service_type, known=known, avoid=avoid, **kwargs
                 )
-                dst = services_found[0].get("tags", dict()).get("tag.service_id", None)
+                dst = services_found[0].get("tags", {}).get("tag.service_id", None)
                 if dst is None:
                     dst = services_found[0]["addr"]
             except Exception as exc:  # pylint: disable=broad-except
@@ -191,10 +207,10 @@ class Meta2Database(object):
                 raise
 
         if dst in peers:
-            raise ValueError("Destination service is already used (peers=%s)" % peers)
+            raise ValueError(f"Destination service is already used (peers={peers})")
         if dst not in self.all_service_ids:
             raise ValueError(
-                "Destination service must be a %s service" % self.service_type
+                f"Destination service must be a {self.service_type} service"
             )
         return dst
 
@@ -255,7 +271,7 @@ class Meta2Database(object):
                         cid=cid,
                         svc_from=true_src,
                         svc_to=dst,
-                        **kwargs
+                        **kwargs,
                     )
                 except ClientException as cliexc:
                     if cliexc.status != 473:
@@ -268,7 +284,7 @@ class Meta2Database(object):
                         cid=cid,
                         svc_from=true_src,
                         svc_to=dst,
-                        **kwargs
+                        **kwargs,
                     )
                 break
             except Exception as exc:  # pylint: disable=broad-except
@@ -294,7 +310,7 @@ class Meta2Database(object):
             services=dict(
                 type=self.service_type, host=",".join(sorted(peers)), args=args, seq=seq
             ),
-            **kwargs
+            **kwargs,
         )
         # FIXME(ABO): This part can be removed when, either:
         # - meta1 sends the removed services bundled with the
@@ -361,13 +377,22 @@ class Meta2Database(object):
                 exc,
             )
 
-    def _safe_move(self, bseq, src, dst, raise_error=False, **kwargs):
+    def _safe_move(self, bseq, src, dst, raise_error=False, dry_run=False, **kwargs):
         err = None
         try:
             self._check_src_service(bseq, src)
             dst = self._check_dst_service(bseq, src, dst, **kwargs)
 
-            self.logger.debug("Moving base (base=%s src=%s dst=%s)", bseq, src, dst)
+            self.logger.debug(
+                "%sMoving base (base=%s src=%s dst=%s)",
+                "[dryrun] " if dry_run else "",
+                bseq,
+                src,
+                dst,
+            )
+
+            if dry_run:
+                return dst, err
 
             try:
                 self.logger.debug("Step 1: check available bases.")

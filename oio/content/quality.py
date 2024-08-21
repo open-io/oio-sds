@@ -156,6 +156,10 @@ def format_location(location, levels=NB_LOCATION_LEVELS):
     :return: location formatted as (dc, rack, server, disk)
     :rtype: tuple
     """
+    if isinstance(location, str):
+        location = location.split(".")
+    if isinstance(location, list):
+        location = tuple(location)
     length = len(location)
     if length < levels:
         # Complete missing position in chunk location
@@ -178,8 +182,8 @@ def get_distance(loc_1, loc_2):
     :rtype: int
     """
     common = 0
-    loc_1 = format_location(tuple(loc_1.split(".")))
-    loc_2 = format_location(tuple(loc_2.split(".")))
+    loc_1 = format_location(loc_1)
+    loc_2 = format_location(loc_2)
     for i in range(NB_LOCATION_LEVELS):
         if loc_1[i] != loc_2[i]:
             break

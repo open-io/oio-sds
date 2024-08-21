@@ -59,8 +59,8 @@ if __name__ == "__main__":
 
     if server_conf is None and orchestrator_conf is None:
         print(
-            "Missing section %s or %s in config %s"
-            % (ORCHESTRATOR_SECTION, SERVER_SECTION, conf_file)
+            f"Missing section {ORCHESTRATOR_SECTION} or {SERVER_SECTION} "
+            f"in config {conf_file}"
         )
         sys.exit(1)
 
@@ -78,22 +78,27 @@ if __name__ == "__main__":
         server = Application(app, server_conf, logger_class=ServiceLogger)
 
     if orchestrator is not None and server is not None:
+        graceful_timeout = float(server_conf.get("graceful_timeout", 9.0)) + 1.0
         server_process = Process(target=server.run)
 
         def exit_gracefully(signum, frame):
             orchestrator.exit_gracefully()
             server_process.terminate()
 
+        server_process.start()
+
         signal.signal(signal.SIGINT, exit_gracefully)
         signal.signal(signal.SIGTERM, exit_gracefully)
 
-        server_process.start()
         try:
             orchestrator.safe_run_forever()
         finally:
-            server_process.join(10.0)
+            server_process.join(graceful_timeout)
             if server_process.exitcode is None:
-                orchestrator_logger.warning("Stopping server subprocess with force")
+                orchestrator_logger.warning(
+                    "Stopping server subprocess with force (pid: %s)",
+                    server_process.pid,
+                )
                 server_process.kill()
                 server_process.join(5.0)
     elif orchestrator is not None:

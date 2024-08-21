@@ -15,7 +15,7 @@
 # License along with this library.
 
 from oio.cli.admin.common import SingleServiceCommandMixin
-from oio.cli.admin.xcute import XcuteCommonCommand, XcuteRdirCommand
+from oio.cli.admin.xcute import XcuteJobStartCommand, XcuteRdirCommand
 from oio.common.easy_value import boolean_value
 from oio.xcute.jobs.blob_mover import RawxDecommissionJob
 from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
@@ -107,7 +107,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         return {"tasks_per_second": parsed_args.chunks_per_second, "params": job_params}
 
 
-class RawxDecommission(SingleServiceCommandMixin, XcuteCommonCommand):
+class RawxDecommission(SingleServiceCommandMixin, XcuteJobStartCommand):
     """
     Decommission the specified service.
     All chunks matching the size constraints
