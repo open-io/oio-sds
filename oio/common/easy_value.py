@@ -70,11 +70,15 @@ METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
 
 def convert_size(size, unit=""):
-    if abs(size) < 1000.0:
+    if unit == "iB":
+        base = 1024
+    else:
+        base = 1000
+    if abs(size) < base:
         return f"{size:.0f}{METRIC_SYMBOLS[0]}{unit}"
     for metric_symbol in METRIC_SYMBOLS[1:]:
-        size /= 1000.0
-        if abs(size) < 1000.0:
+        size /= base
+        if abs(size) < base:
             return f"{size:.3f}{metric_symbol}{unit}"
     return f"{size:.3f}{METRIC_SYMBOLS[-1]}{unit}"
 

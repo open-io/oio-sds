@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -47,5 +47,7 @@ class TestLogger(unittest.TestCase):
         self.assertEqual(size, "1.000K")
         size = convert_size(-1000)
         self.assertEqual(size, "-1.000K")
-        size = convert_size(0, unit="B")
-        self.assertEqual(size, "0B")
+        size = convert_size(0, unit="iB")
+        self.assertEqual(size, "0iB")
+        size = convert_size(1024, unit="iB")
+        self.assertEqual(size, "1.000KiB")

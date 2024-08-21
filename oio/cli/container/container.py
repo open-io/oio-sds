@@ -741,7 +741,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         shards = sys.get(M2_PROP_SHARDS, 0)
         if parsed_args.formatter == "table":
             ctime = int(ctime)
-            bytes_usage = convert_size(int(bytes_usage), unit="B")
+            bytes_usage = convert_size(int(bytes_usage), unit="iB")
             objects = convert_size(int(objects))
             shards = convert_size(int(shards))
         info = {
@@ -759,7 +759,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         for key, value in sys.items():
             if key.startswith(M2_PROP_USAGE + "."):
                 key = f'bytes_usage.{key[len(M2_PROP_USAGE + "."):]}'
-                value = convert_size(int(value), unit="B")
+                value = convert_size(int(value), unit="iB")
             elif key.startswith(M2_PROP_OBJECTS + "."):
                 key = f'objects.{key[len(M2_PROP_OBJECTS + "."):]}'
                 value = convert_size(int(value))
@@ -839,7 +839,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info[k] = int_value(sys.get(k), 0)
         db_size = info["stats.page_count"] * info["stats.page_size"]
         if parsed_args.formatter == "table":
-            db_size = convert_size(int(db_size), unit="B")
+            db_size = convert_size(int(db_size), unit="iB")
         info["stats.db_size"] = db_size
         wasted = info["stats.freelist_count"] / info["stats.page_count"]
         wasted_bytes = info["stats.freelist_count"] * info["stats.page_size"]
@@ -973,7 +973,7 @@ class ListBuckets(Lister):
 
             def humanize(listing):
                 for v in listing:
-                    v["bytes"] = "{:>10}".format(convert_size(v["bytes"], unit="B"))
+                    v["bytes"] = "{:>10}".format(convert_size(v["bytes"], unit="iB"))
                     yield v
 
             listing = humanize(listing)

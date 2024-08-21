@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -45,7 +45,7 @@ class ShowAccount(ShowOne):
             from oio.common.easy_value import convert_size
 
             data["ctime"] = int(float(data.get("ctime", 0)))
-            data["bytes"] = convert_size(int(data.get("bytes", 0)), unit="B")
+            data["bytes"] = convert_size(int(data.get("bytes", 0)), unit="iB")
             data["objects"] = convert_size(int(data.get("objects", 0)))
         return list(zip(*sorted(data.items())))
 

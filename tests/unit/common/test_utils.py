@@ -95,8 +95,8 @@ class TestUtils(unittest.TestCase):
 
     def test_convert_size_overflow(self):
         huge = 6666 * 10**24
-        self.assertEqual(convert_size(huge, "B"), "6666.000YB")
-        self.assertEqual(convert_size(-huge, "B"), "-6666.000YB")
+        self.assertEqual(convert_size(huge, "iB"), "5513.986YiB")
+        self.assertEqual(convert_size(-huge, "iB"), "-5513.986YiB")
 
     def test_is_hexa_not_hexa(self):
         self.assertFalse(is_hexa(12))

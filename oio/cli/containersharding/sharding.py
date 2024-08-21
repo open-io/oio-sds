@@ -648,7 +648,7 @@ class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
                 )
                 if parsed_args.formatter == "table":
                     nb_objects = convert_size(int(nb_objects))
-                    db_size = convert_size(int(db_size), unit="B")
+                    db_size = convert_size(int(db_size), unit="iB")
                 shard_info += (nb_objects, db_size)
             yield shard_info
 
