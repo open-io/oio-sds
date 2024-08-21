@@ -126,6 +126,12 @@ class AutomaticSharding(Filter):
             modified = False
             meta2db_size = meta2db.file_status["st_size"]
             if meta2db_size > self.huge_db_size:
+                self.logger.warning(
+                    "Meta2 database %s (%s) is too large: %s bytes",
+                    meta2db.cid,
+                    meta2db.real_path,
+                    meta2db_size,
+                )
                 self.huge_databases += 1
 
             if self._clean(meta2db, reqid=reqid):
