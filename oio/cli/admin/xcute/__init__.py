@@ -27,16 +27,15 @@ class XcuteCommand(object):
         return self.app.client_manager.xcute_client
 
 
-class XcuteCommonCommand(XcuteCommand, ShowOne):
+class XcuteJobStartCommand(XcuteCommand, ShowOne):
     """
-    Class holding xcute command common parameters.
+    Class holding common parameters for xcute commands starting jobs.
     """
 
     JOB_CLASS = None
 
     def get_parser(self, prog_name):
-        parser = super(XcuteCommonCommand, self).get_parser(prog_name)
-
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "--put-on-hold-if-locked",
             default=False,
@@ -63,27 +62,29 @@ class XcuteCommonCommand(XcuteCommand, ShowOne):
         return zip(*sorted(flat_dict_from_dict(parsed_args, job_info).items()))
 
 
-class XcuteRdirCommand(XcuteCommonCommand):
+class XcuteRdirCommand(XcuteJobStartCommand):
     """
     Class holding rdir-related parameters.
     """
 
     def get_parser(self, prog_name):
-        parser = super(XcuteRdirCommand, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
 
         parser.add_argument(
             "--rdir-fetch-limit",
             type=int,
             help=(
-                "Maximum number of entries returned in each rdir response. (default=%d)"
-            )
-            % self.JOB_CLASS.DEFAULT_RDIR_FETCH_LIMIT,
+                "Maximum number of entries returned in each rdir response. "
+                f"(default={self.JOB_CLASS.DEFAULT_RDIR_FETCH_LIMIT})"
+            ),
         )
         parser.add_argument(
             "--rdir-timeout",
             type=float,
-            help="Timeout for rdir operations, in seconds. (default=%f)"
-            % self.JOB_CLASS.DEFAULT_RDIR_TIMEOUT,
+            help=(
+                "Timeout for rdir operations, in seconds. "
+                f"(default={self.JOB_CLASS.DEFAULT_RDIR_TIMEOUT})"
+            ),
         )
 
         return parser

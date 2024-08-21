@@ -1003,6 +1003,9 @@ targets=${M1_REPLICAS},meta1
 
 [pool:meta2]
 targets=${M2_REPLICAS},meta2
+# These values have been chosen for testing purposes
+fair_location_constraint = 2.2.1.1
+strict_location_constraint = ${M2_REPLICAS}.${M2_REPLICAS}.${M2_REPLICAS}.1
 
 #[pool:rdir]
 #targets=1,rawx;1,rdir
@@ -1644,26 +1647,6 @@ log_format=topic:%(topic)s    event:%(event)s
 checkpoint_prefix = lifecycle
 """
 
-template_systemd_service_xcute_event_agent = """
-[Unit]
-Description=[OpenIO] Service xcute event agent ${SRVNUM}
-After=network.target
-PartOf=${PARENT}
-OioGroup=${NS},event
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-Environment=PYTHONPATH=${PYTHONPATH}
-${ENVIRONMENT}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_xcute_event_agent = """
 [event-agent]
 topic = ${QUEUE_NAME}
@@ -1797,6 +1780,7 @@ redis_host = ${IP}:${REDIS_PORT}
 [xcute-server]
 bind_addr = ${IP}
 bind_port = ${PORT}
+graceful_timeout = 2
 workers = 2
 
 [xcute-orchestrator]
@@ -2191,7 +2175,8 @@ def generate(options):
         return env
 
     def build_location(ip, num):
-        return "dc.rack.%s.%d" % (ip.replace(".", "-"), num)
+        dcnum = int(ip.split(".")[-1]) % 2
+        return f"dc{dcnum}.rack.{ip.replace('.', '-')}.{num}"
 
     targets = dict()
     systemd_prefix = "oio-"
@@ -3023,7 +3008,6 @@ def generate(options):
         queue_ids="",
         srv_type="event-agent",
         template_agent=template_event_agent,
-        template_systemd=template_systemd_service_event_agent,
         target=event_agents_target,
     ):
         handler_path = f"{CFGDIR}/{handler_prefix}{srv_type}-{num}.conf"
@@ -3044,7 +3028,7 @@ def generate(options):
         )
         register_service(
             env,
-            template_systemd,
+            template_systemd_service_event_agent,
             target,
             coverage_wrapper=(
                 shutil.which("coverage")
@@ -3190,7 +3174,6 @@ def generate(options):
             group_id="event-agent-xcute",
             template_handler=template_xcute_event_agent_handlers,
             template_agent=template_xcute_event_agent,
-            template_systemd=template_systemd_service_xcute_event_agent,
         )
     num = 0
     for _, url, event_agent_bin in get_event_agent_details():
@@ -3207,7 +3190,6 @@ def generate(options):
                 group_id="event-agent-xcute-per-host",
                 template_handler=template_xcute_event_agent_handlers,
                 template_agent=template_xcute_event_agent,
-                template_systemd=template_systemd_service_xcute_event_agent,
             )
 
         break

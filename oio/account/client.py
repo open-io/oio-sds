@@ -308,7 +308,7 @@ class AccountClient(ServiceClient):
 
     def container_delete(self, account, container, dtime, **kwargs):
         """
-        Delete container of an account.
+        Delete a container from an account.
 
         :param account: name of the account
         :type account: `str`

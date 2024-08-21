@@ -22,7 +22,6 @@ from shutil import copy, copystat, move
 
 from oio.common.exceptions import ConfigurationException
 from oio.common.utils import request_id
-from oio.container.sharding import ContainerSharding
 from oio.crawler.rawx.filters.cleanup_orphaned import CleanupOrphaned
 from oio.event.evob import EventTypes
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
@@ -52,7 +51,6 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         self.rawx_srv_list = self.conscience.all_services(
             service_type="rawx",
         )
-        self.container_sharding = ContainerSharding(self.conf)
         self.rawx_volumes = {}
         for rawx in self.rawx_srv_list:
             tags = rawx["tags"]
@@ -106,7 +104,9 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         """
         Call back function used only on these tests
         """
-        print("Delete orphaned chunk failed due to error %s, %s", status, msg)
+        self.logger.warning(
+            "Delete orphaned chunk failed due to error %s, %s", status, msg
+        )
 
     def _init_test_objects(self, container=None, object_name=None):
         """
@@ -143,7 +143,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         app.app_env["working_dir"] = orphan_chunk_dir
         app.app_env["api"] = self.api
         chunk_env = create_chunk_env(chunk_id, chunk_path, orphan_chunk_symlink)
-        cleanuporphaned = CleanupOrphaned(app=app, conf=self.conf)
+        cleanuporphaned = CleanupOrphaned(app=app, conf=self.conf, logger=self.logger)
         return (
             chunk,
             container,
@@ -182,7 +182,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         return chunks_info
 
     def test_get_excluded_containers(self):
-        """Check if excluded container parser workd as it should"""
+        """Check if excluded container parser works as it should"""
         containers = ""
         self.assertEqual([], CleanupOrphaned.get_excluded_containers(containers))
         containers = "c1/b1,   c2/b2"
@@ -406,7 +406,9 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             app.app_env["working_dir"] = CleanupOrphaned.ORPHANS_DIR
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, orphan_chunk_symlink)
-            cleanuporphaned = CleanupOrphaned(app=app, conf=self.conf)
+            cleanuporphaned = CleanupOrphaned(
+                app=app, conf=self.conf, logger=self.logger
+            )
             cleanuporphaned.delete_delay = 0
             # Launch filter
             cleanuporphaned.process(chunk_env, self._cb)
@@ -462,7 +464,9 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             app.app_env["working_dir"] = CleanupOrphaned.ORPHANS_DIR
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, orphan_chunk_symlink)
-            cleanuporphaned = CleanupOrphaned(app=app, conf=self.conf)
+            cleanuporphaned = CleanupOrphaned(
+                app=app, conf=self.conf, logger=self.logger
+            )
             cleanuporphaned.delete_delay = 0
             # Launch filter
             cleanuporphaned.process(chunk_env, self._cb)

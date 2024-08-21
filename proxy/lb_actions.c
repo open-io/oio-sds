@@ -162,18 +162,21 @@ _json_ids_to_locations(struct json_object *arr, oio_location_t *prev)
 
 static GError*
 _decode_lb_body(struct json_object *body,
-		oio_location_t **avoid, oio_location_t **known)
+		oio_location_t **avoid, oio_location_t **known,
+		gboolean *force_fair_constraints)
 {
 	if (body && !json_object_is_type(body, json_type_object))
 		return BADREQ("Expected: json object");
 
 	struct json_object *javoid = NULL, *javoid_locs = NULL;
 	struct json_object *jknown = NULL, *jknown_locs = NULL;
+	struct json_object *jfair = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"avoid",           &javoid,       json_type_array, 0},
 		{"avoid_locations", &javoid_locs,  json_type_array, 0},
 		{"known",           &jknown,       json_type_array, 0},
 		{"known_locations", &jknown_locs,  json_type_array, 0},
+		{"force_fair_constraints", &jfair, json_type_boolean, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = NULL;
@@ -183,6 +186,7 @@ _decode_lb_body(struct json_object *body,
 	*known = _json_to_locations(jknown_locs);
 	*avoid = _json_ids_to_locations(javoid, *avoid);
 	*known = _json_ids_to_locations(jknown, *known);
+	*force_fair_constraints = json_object_get_boolean(jfair);  // NULL-safe
 	return NULL;
 }
 
@@ -194,8 +198,9 @@ _poll(struct req_args_s *args, struct json_object *body)
 	const gchar *policy = OPT("policy");
 	const gchar *pool = OPT("pool");
 	oio_location_t *avoid = NULL, *known = NULL;
+	gboolean force_fair_constraints = FALSE;
 
-	err = _decode_lb_body(body, &avoid, &known);
+	err = _decode_lb_body(body, &avoid, &known, &force_fair_constraints);
 	if (err)
 		return _reply_common_error(args, err);
 
@@ -219,7 +224,6 @@ _poll(struct req_args_s *args, struct json_object *body)
 		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
 	gboolean flawed = FALSE;
-	gboolean force_fair_constraints = FALSE;
 	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id,
 			force_fair_constraints, FALSE, &flawed);
 	if (err) {
