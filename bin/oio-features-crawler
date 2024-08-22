@@ -41,6 +41,7 @@ class FeatureCrawler:
         self.api = ObjectStorageApi(namespace, logger=logger)
         self.logger = logger
         self.features = [f.lower() for f in features]
+        self.region = self.api.bucket.region.upper()
         self._account_marker = None
         self._container_marker = None
         self._main_request_id = self._request_id
@@ -78,6 +79,7 @@ class FeatureCrawler:
                 account=account,
                 marker=container_marker,
                 reqid=self._main_request_id,
+                region=self.region,
             )
             container_marker = None
 
