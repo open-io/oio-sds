@@ -26,11 +26,6 @@ import (
 	"path/filepath"
 )
 
-const (
-	HeaderIsTruncated = "X-oio-list-truncated"
-	HeaderListMarker  = "X-oio-list-marker"
-)
-
 type Params struct {
 	Marker string `json:"start_after"`
 	// An indication of the expected number of chunks to be returned.
