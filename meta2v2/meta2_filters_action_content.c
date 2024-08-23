@@ -637,7 +637,6 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct async_repli_s *repli = _async_repli_init(ctx);
 
 	guint32 flags = 0;
 	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
@@ -658,6 +657,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
+	struct async_repli_s *repli = _async_repli_init(ctx);
 	// Only extract properties if dests are found
 	if (repli->dests) {
 		e = _m2b_extract_repli_properties(ctx, &repli->props);
@@ -712,7 +712,6 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	GSList *deleted = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct async_repli_s *repli = _async_repli_init(ctx);
 
 	TRACE_FILTER();
 
@@ -730,6 +729,8 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
+
+	struct async_repli_s *repli = _async_repli_init(ctx);
 
 	/* Notify only if we changed something. */
 	gint prop_count = g_slist_length(deleted) - 1;  // Do not count alias
@@ -749,6 +750,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 				"content.update", FALSE, repli);
 	}
 	g_slist_free_full(deleted, _bean_clean);
+	_async_repli_clean(repli);
 
 	return FILTER_OK;
 }

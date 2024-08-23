@@ -1390,6 +1390,8 @@ meta2_backend_drain_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 				 * The sharding or shrinking will make that marker obsolete
 				 * for the resulting shards. */
 				err = BADREQ("Sharding is in progress");
+				// Rollback allows to delete the context properly.
+				err = sqlx_transaction_rollback(repctx, err);
 			} else {
 				err = m2db_drain_container(sq3, cb, u0, limit, truncated);
 				err = sqlx_transaction_end(repctx, err);
