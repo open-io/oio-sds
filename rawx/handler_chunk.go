@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
@@ -167,7 +166,7 @@ func (rr *rawxRequest) uploadChunk() {
 	if rr.chunk, err = retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
 		rr.replyError("uploadChunk()", err)
 		// Discard request body
-		io.Copy(ioutil.Discard, rr.req.Body)
+		io.Copy(io.Discard, rr.req.Body)
 		return
 	}
 
@@ -176,7 +175,7 @@ func (rr *rawxRequest) uploadChunk() {
 	if err != nil {
 		rr.replyError("uploadChunk()", err)
 		// Discard request body
-		io.Copy(ioutil.Discard, rr.req.Body)
+		io.Copy(io.Discard, rr.req.Body)
 		return
 	}
 
@@ -252,7 +251,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// Then reply
 	if err != nil {
 		// Discard request body
-		io.Copy(ioutil.Discard, rr.req.Body)
+		io.Copy(io.Discard, rr.req.Body)
 		rr.replyError("uploadChunk()", err)
 		out.abort()
 		return
@@ -262,8 +261,10 @@ func (rr *rawxRequest) uploadChunk() {
 	// If chunk placement is not optimal
 	if rr.chunk.nonOptimalPlacement {
 		// Ignore if link creation failed. This link creation should not be blocking as
-		// a crawler would detect the non optimal placement in a near future.
-		rr.rawx.repo.symlinkNonOptimal(rr.chunkID)
+		// a crawler would detect the non-optimal placement in a near future.
+		if e := rr.rawx.repo.symlinkNonOptimal(rr.chunkID); e != nil {
+			LogRequestWarning(rr, "symlinkNonOptimal failed: %v", e)
+		}
 	}
 	rr.rep.Header().Set("Connection", "keep-alive")
 	rr.req.Close = false
@@ -586,7 +587,7 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 		if filter != nil {
 			// Skip unwanted bytes to match the range
 			if !ri.isVoid() {
-				_, err = io.CopyN(ioutil.Discard, filter, ri.offset)
+				_, err = io.CopyN(io.Discard, filter, ri.offset)
 				in = &io.LimitedReader{R: filter, N: ri.size}
 			} else {
 				in = &io.LimitedReader{R: filter, N: cs}
@@ -618,18 +619,18 @@ func (rr *rawxRequest) removeChunk() {
 			defer xattrBufferPool.Release(tmp)
 
 			getter := func(name, key string) (string, error) {
-				nb, err := rr.rawx.repo.getAttr(name, key, tmp)
-				if nb <= 0 || err != nil {
-					return "", err
+				nb, e := rr.rawx.repo.getAttr(name, key, tmp)
+				if nb <= 0 || e != nil {
+					return "", e
 				} else {
-					return string(tmp[:nb]), err
+					return string(tmp[:nb]), e
 				}
 			}
 
 			// Load only the fullpath in an attempt to spare syscalls
 			rr.chunk, err = loadFullPath(getter, rr.chunkID)
 			if err != nil {
-				rr.replyError("removeChunk()", err)
+				rr.replyError("loadFullPath()", err)
 				return
 			}
 		}

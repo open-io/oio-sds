@@ -182,6 +182,19 @@ func (m optionsMap) getFloat(k string, def float64) float64 {
 	return f64
 }
 
+func (m optionsMap) getUint(k string, def uint) uint {
+	v := m[k]
+	if len(v) <= 0 {
+		return def
+	}
+	i64, err := strconv.ParseUint(v, 0, 32)
+	if err != nil {
+		LogFatal("Invalid positive integer option for %s: %s (%s)", k, v, err.Error())
+		return def
+	}
+	return uint(i64)
+}
+
 func (m optionsMap) getInt(k string, def int) int {
 	v := m[k]
 	if len(v) <= 0 {

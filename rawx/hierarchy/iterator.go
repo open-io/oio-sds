@@ -14,34 +14,61 @@
 // You should have received a copy of the GNU Affero General Public
 // License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package iterator
+package hierarchy
 
 import (
-	"fmt"
 	"strings"
 )
 
 const letters = "0123456789ABCDEF"
 
-type PathIterator struct {
+type PathIterator interface {
+	Run() chan string
+}
+
+type pathIterator struct {
 	markerPath string
 	width      uint
 	depth      uint
 	started    bool
+	leafOnly   bool
+	slashes    bool
 }
 
-type LeafDirWalker func()
+func NewPrefixIterator(width, depth uint) PathIterator {
+	return &pathIterator{
+		markerPath: "",
+		width:      width,
+		depth:      depth,
+		started:    false,
+		leafOnly:   true,
+		slashes:    false,
+	}
+}
 
-func NewPathIterator(marker string, width, depth uint) *PathIterator {
-	return &PathIterator{
+func NewRelPathIterator(marker string, width, depth uint) PathIterator {
+	return &pathIterator{
 		markerPath: markerToLeveledPath(marker, width, depth),
 		width:      width,
 		depth:      depth,
 		started:    false,
+		leafOnly:   true,
+		slashes:    true,
 	}
 }
 
-func (pi *PathIterator) lvl(pfx string, width, depth uint, out chan string) {
+func NewDFS(width, depth uint) PathIterator {
+	return &pathIterator{
+		markerPath: "",
+		width:      width,
+		depth:      depth,
+		started:    true,
+		leafOnly:   false,
+		slashes:    true,
+	}
+}
+
+func (pi *pathIterator) lvl(pfx string, width, depth uint, out chan string) {
 	if depth <= 0 {
 		if !pi.started {
 			pi.started = pfx >= pi.markerPath
@@ -55,8 +82,11 @@ func (pi *PathIterator) lvl(pfx string, width, depth uint, out chan string) {
 				pi.lvl(pfx+string(c), width-1, depth, out)
 			}
 		} else {
-			if depth > 1 { // Avoid producing
+			if pi.slashes && depth > 1 {
 				for _, c := range letters {
+					if !pi.leafOnly {
+						out <- pfx + string(c)
+					}
 					pi.lvl(pfx+string(c)+"/", pi.width, depth-1, out)
 				}
 			} else {
@@ -68,8 +98,7 @@ func (pi *PathIterator) lvl(pfx string, width, depth uint, out chan string) {
 	}
 }
 
-func (pi *PathIterator) Run() chan string {
-	fmt.Println("###", pi.markerPath, pi.width, pi.depth)
+func (pi *pathIterator) Run() chan string {
 	out := make(chan string, 64)
 	go func() {
 		pi.lvl("", pi.width, pi.depth, out)

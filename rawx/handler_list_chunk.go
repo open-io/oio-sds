@@ -21,9 +21,10 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"openio-sds/rawx/iterator"
-	"openio-sds/rawx/utils"
 	"path/filepath"
+
+	"openio-sds/rawx/hierarchy"
+	"openio-sds/rawx/utils"
 )
 
 type Params struct {
@@ -44,7 +45,7 @@ type ResponseData struct {
 	Marker      string  `json:"marker"`
 }
 
-func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth int) ([]string, bool, string, error) {
+func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth uint) ([]string, bool, string, error) {
 	var fileList []string
 	onFile := func(file string, f fs.DirEntry, err error) error {
 		basename := filepath.Base(file)
@@ -58,7 +59,7 @@ func ListChunks(path string, marker string, minToReturn int, maxWidth, maxDepth 
 
 	var nextMarker string
 	var err error
-	it := iterator.NewPathIterator(marker, uint(maxWidth), uint(maxDepth)).Run()
+	it := hierarchy.NewRelPathIterator(marker, maxWidth, maxDepth).Run()
 	for {
 		dir, ok := <-it
 		if !ok { // Prefixes exhausted, there is no nextMarker to collect

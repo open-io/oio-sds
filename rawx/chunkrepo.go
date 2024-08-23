@@ -23,11 +23,30 @@ alternative file names, etc.
 */
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 )
 
+// Barely useful to intercept errors and mangle them.
 type chunkRepository struct {
 	sub fileRepository
+}
+
+func NewChunkRepository(basedir string, configuration RepositoryConfiguration) (*chunkRepository, error) {
+	basedir = filepath.Clean(basedir)
+	if !filepath.IsAbs(basedir) {
+		return nil, errors.New("Filerepo path must be absolute")
+	}
+
+	repo := &chunkRepository{}
+	repo.sub.root = basedir
+	repo.sub.RepositoryConfiguration = configuration
+	if err := repo.sub.init(); err != nil {
+		return nil, err
+	} else {
+		return repo, nil
+	}
 }
 
 func (cr *chunkRepository) getAttr(name, key string, value []byte) (int, error) {

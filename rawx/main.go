@@ -351,7 +351,27 @@ func main() {
 		}
 	}
 
-	chunkrepo := chunkRepository{}
+	repoConfig := RepositoryConfiguration{
+		hashWidth:                     opts.getUint("hash_width", defs.HashWidthDefault),
+		hashDepth:                     opts.getUint("hash_depth", defs.HashDepthDefault),
+		shallowCopy:                   opts.getBool("shallow_copy", defs.ConfigDefaultShallowCopy),
+		syncFile:                      opts.getBool("fsync_file", defs.ConfigDefaultSyncFile),
+		syncDir:                       opts.getBool("fsync_dir", defs.ConfigDefaultSyncDir),
+		fallocateFile:                 opts.getBool("fallocate", defs.ConfigDefaultFallocate),
+		openNonBlock:                  opts.getBool("nonblock", defs.ConfigDefaultOpenNonblock),
+		putOpenMode:                   defs.PutOpenModeDefault,
+		putMkdirMode:                  defs.PutMkdirModeDefault,
+		fadviseUpload:                 defs.ConfigDefaultFadviseUpload,
+		fadviseDownload:               defs.ConfigDefaultFadviseDownload,
+		nonOptimalPlacementFolderPath: filepath.Join(opts["basedir"], defs.FolderNonOptimalPlacement),
+		orphansFolderPath:             filepath.Join(opts["basedir"], defs.FolderOrphans),
+	}
+
+	chunkrepo, err := NewChunkRepository(opts["basedir"], repoConfig)
+	if err != nil {
+		LogFatal("Invalid directories: %v", err)
+	}
+
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
@@ -363,18 +383,6 @@ func main() {
 
 	checkNS(namespace)
 	checkURL(rawxURL)
-
-	// Init the actual chunk storage
-	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
-		LogFatal("Invalid directories: %v", err)
-	}
-	chunkrepo.sub.hashWidth = opts.getInt("hash_width", chunkrepo.sub.hashWidth)
-	chunkrepo.sub.hashDepth = opts.getInt("hash_depth", chunkrepo.sub.hashDepth)
-	chunkrepo.sub.shallowCopy = opts.getBool("shallow_copy", chunkrepo.sub.shallowCopy)
-	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
-	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
-	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
-	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", defs.ConfigDefaultOpenNonblock)
 
 	rawx := rawxService{
 		ns:           namespace,

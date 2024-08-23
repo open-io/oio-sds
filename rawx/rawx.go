@@ -19,7 +19,6 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"openio-sds/rawx/utils"
 	"os"
@@ -34,7 +33,7 @@ type rawxService struct {
 	tlsUrl       string
 	path         string
 	id           string
-	repo         chunkRepository
+	repo         *chunkRepository
 	notifier     *Notifier
 	bufferSize   int
 	checksumMode int
@@ -64,7 +63,7 @@ type rawxRequest struct {
 }
 
 func (rr *rawxRequest) drain() error {
-	if _, err := io.Copy(ioutil.Discard, rr.req.Body); err != nil {
+	if _, err := io.Copy(io.Discard, rr.req.Body); err != nil {
 		rr.req.Close = true
 		return err
 	} else {
