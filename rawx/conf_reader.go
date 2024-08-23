@@ -85,6 +85,7 @@ var loadedOpts = map[string]string{
 	"log_access_delete":  "log_access_delete",
 	"log_access_format":  "log_access_format",
 	"log_request_format": "log_request_format",
+	"log_event_format":   "log_event_format",
 	"log_format":         "log_format",
 	"log_level":          "log_level",
 	// TODO(jfs): also implement a cachedir
