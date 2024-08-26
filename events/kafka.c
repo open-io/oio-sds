@@ -47,14 +47,14 @@ static void kafka_log_forward(
 	g_log(G_LOG_DOMAIN, log_level, "%s - %s: %s", fac, rd_kafka_name(rk), buf);
 }
 
-static gboolean message_should_be_dropped(rd_kafka_resp_err_t errno) {
+static gboolean message_should_be_dropped(rd_kafka_resp_err_t err) {
 	return (
-		errno == RD_KAFKA_RESP_ERR__PURGE_QUEUE
-		|| errno == RD_KAFKA_RESP_ERR__PURGE_INFLIGHT
-		|| errno == RD_KAFKA_RESP_ERR__KEY_SERIALIZATION
-		|| errno == RD_KAFKA_RESP_ERR__VALUE_SERIALIZATION
-		|| errno == RD_KAFKA_RESP_ERR_INVALID_MSG_SIZE
-		|| errno == RD_KAFKA_RESP_ERR_INVALID_MSG
+		err == RD_KAFKA_RESP_ERR__PURGE_QUEUE
+		|| err == RD_KAFKA_RESP_ERR__PURGE_INFLIGHT
+		|| err == RD_KAFKA_RESP_ERR__KEY_SERIALIZATION
+		|| err == RD_KAFKA_RESP_ERR__VALUE_SERIALIZATION
+		|| err == RD_KAFKA_RESP_ERR_INVALID_MSG_SIZE
+		|| err == RD_KAFKA_RESP_ERR_INVALID_MSG
 	);
 }
 
@@ -64,14 +64,14 @@ void on_kafka_delivery_report(rd_kafka_t* rk UNUSED,
 	// Retrieve context
 	struct kafka_callback_ctx *ctx = (struct kafka_callback_ctx*)opaque;
 
-	rd_kafka_resp_err_t errno = rkmessage->err;
-	if (errno == RD_KAFKA_RESP_ERR_NO_ERROR) {
+	rd_kafka_resp_err_t err = rkmessage->err;
+	if (err == RD_KAFKA_RESP_ERR_NO_ERROR) {
 		return;
 	}
 	const rd_kafka_topic_t* _topic = rkmessage->rkt;
 	const char* topic_name = rd_kafka_topic_name(_topic);
 	gchar* msg = (gchar*)rkmessage->payload;
-	if (message_should_be_dropped(errno)) {
+	if (message_should_be_dropped(err)) {
 		ctx->drop_func(topic_name, msg);
 	} else {
 		ctx->requeue_func(msg);
