@@ -530,11 +530,13 @@ class Crawler(Daemon):
             raise ConfigurationException("No volumes provided to crawl!")
 
         # Apply new nice value
+        # useless if nice_value == 0 and it breaks settting nice value from systemd
         nice_value = int_value(conf.get("nice_value"), self.DEFAULT_NICE_VALUE)
-        current_nice = nice(0)
-        # <nice()> increments the process’s niceness by specified value, so we need to
-        # compensate the old value to reach the targeted value.
-        nice(-current_nice + nice_value)
+        if nice_value != 0:
+            current_nice = nice(0)
+            # <nice()> increments the process’s niceness by specified value,
+            # so we need to compensate the old value to reach the targeted value.
+            nice(-current_nice + nice_value)
 
         self.volume_workers = {}
         self.create_workers()
