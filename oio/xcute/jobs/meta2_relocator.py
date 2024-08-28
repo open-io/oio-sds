@@ -25,7 +25,6 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
 class Meta2RelocationTask(XcuteTask):
-
     def __init__(self, conf, job_params, logger=None, watchdog=None):
         super().__init__(
             conf,
@@ -150,9 +149,9 @@ class Meta2RelocationTask(XcuteTask):
             # The "defect score" is the number of defects we found for this service
             # (too close to another service, or too many services selected on
             # its location), divided by the score of the service.
-            # - If two service have the same number of defects: move the one with
+            # - If two services have the same number of defects: move the one with
             #   the lowest score.
-            # - If two service have the same score: move the one with the highest
+            # - If two services have the same score: move the one with the highest
             #   number of defects.
             svc["defect_score"] = len(svc.get("defects", [])) / max(1, svc["score"])
         moveable = [svc for svc in m2_peers_info.values() if svc["defect_score"] > 0]
@@ -202,7 +201,10 @@ class Meta2RelocationTask(XcuteTask):
                 last_error,
                 reqid,
             )
-            resp["move_error"] += 1
+            # If we want the XcuteJob to end in error, we must raise an exception
+            # instead of just incrementing the error counter.
+            # resp["move_error"] += 1
+            raise last_error
 
         return resp
 

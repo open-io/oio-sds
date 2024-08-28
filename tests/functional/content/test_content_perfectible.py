@@ -19,8 +19,6 @@ import random
 import time
 from urllib.parse import urlparse
 
-from collections import defaultdict
-
 from tests.utils import BaseTestCase, random_str
 
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
@@ -48,21 +46,8 @@ class TestPerfectibleContent(BaseTestCase):
         cls._cls_reload_meta()
         time.sleep(1)
 
-    def _aggregate_services(self, type_, key):
-        """
-        Build a dictionary of lists of services indexed by `key`.
-
-        :param type_: the type if services to index
-        :param key: a function
-        """
-        all_svcs = self.conscience.all_services(type_)
-        out = defaultdict(list)
-        for svc in all_svcs:
-            out[key(svc)].append(svc)
-        return out
-
     def _aggregate_rawx_by_slot(self):
-        by_slot = self._aggregate_services(
+        by_slot = self.grouped_services(
             "rawx", lambda x: x["tags"].get("tag.slots", "rawx").rsplit(",", 2)[-1]
         )
         self.logger.debug(
@@ -73,7 +58,7 @@ class TestPerfectibleContent(BaseTestCase):
         return by_slot
 
     def _aggregate_rawx_by_place(self):
-        by_place = self._aggregate_services(
+        by_place = self.grouped_services(
             "rawx", lambda x: x["tags"]["tag.loc"].rsplit(".", 1)[0]
         )
         self.logger.debug(
