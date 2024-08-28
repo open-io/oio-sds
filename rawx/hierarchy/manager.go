@@ -31,23 +31,19 @@ import (
 )
 
 const (
-	dirOpenFlags = syscall.O_PATH | syscall.O_DIRECTORY | syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK | syscall.O_RDWR
+	DirOpenFlags = syscall.O_PATH | syscall.O_DIRECTORY | syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK | syscall.O_RDWR
 )
 
 const (
-	dirCreateMode = 0755
+	DirCreateMode = 0755
 )
 
 type FDManager interface {
 	io.Closer
 	Init() error
 
-	Access(path string, mode uint32) error
-	Open(path string, flags int, mode uint32) (int, error)
+	Locate(name string) *Location
 	Parent(path string, flags int, mode uint32) (int, error)
-	Rename(oldPath, newPath string) error
-	Unlink(path string) error
-	Link(oldPath, newPath string) error
 }
 
 func NewFDManager(h Hierarchy) FDManager {
@@ -77,7 +73,7 @@ const fdUsageReserve uint64 = 256
 
 func (c *cache) Init() error {
 	var err error
-	c.rootFd, err = syscall.Open(c.hierarchy.Basedir(), dirOpenFlags, 0)
+	c.rootFd, err = syscall.Open(c.hierarchy.Basedir(), DirOpenFlags, 0)
 	if err != nil {
 		return err
 	}
@@ -132,40 +128,22 @@ func (c *cache) Close() error {
 	return nil
 }
 
-func (c *cache) Access(filename string, mode uint32) error {
+func (c *cache) Locate(name string) *Location {
 	c.latch.RLock()
 	defer c.latch.RUnlock()
 
-	fd := c.parentFD(filename)
-	if fd >= 0 {
-		return syscall.Faccessat(fd, filename, mode, 0)
-	} else {
-		rel := c.hierarchy.PathRel(filename)
-		return syscall.Faccessat(c.rootFd, rel, mode, 0)
+	loc := &Location{
+		FdBase:        c.parentFD(name),
+		relPath:       name,
+		PathParentAbs: c.hierarchy.PathAbs(name),
 	}
-}
 
-func (c *cache) Open(filename string, flags int, mode uint32) (int, error) {
-	c.latch.RLock()
-	defer c.latch.RUnlock()
-
-	pfd := c.parentFD(filename)
-	if pfd >= 0 {
-		fd, err := syscall.Openat(pfd, filename, flags, mode)
-		if err != nil {
-			return -1, err
-		} else {
-			return fd, nil
-		}
-	} else {
-		path := c.hierarchy.PathRel(filename)
-		fd, err := syscall.Openat(c.rootFd, path, flags, mode)
-		if err != nil {
-			return -1, err
-		} else {
-			return fd, nil
-		}
+	if loc.FdBase < 0 {
+		loc.FdBase = c.rootFd
+		loc.relPath = c.hierarchy.PathRel(name)
 	}
+
+	return loc
 }
 
 func (c *cache) Parent(filename string, flags int, mode uint32) (int, error) {
@@ -187,88 +165,9 @@ func (c *cache) Parent(filename string, flags int, mode uint32) (int, error) {
 	}
 }
 
-func (c *cache) Rename(oldPath, newPath string) error {
-	c.latch.RLock()
-	defer c.latch.RUnlock()
-
-	// very-fast path : we have an open handle to both dirs
-	if oldFD := c.parentFD(oldPath); oldFD >= 0 {
-		if newFD := c.parentFD(newPath); newFD >= 0 {
-			// both parents are cached
-			return syscall.Renameat2(oldFD, oldPath, newFD, newPath, syscall.RENAME_NOREPLACE)
-		}
-	}
-
-	// fast path : both dirs exists
-	newParentRel := c.hierarchy.PathRel(newPath)
-	oldParentRel := c.hierarchy.PathRel(oldPath)
-	err := syscall.Renameat2(c.rootFd, oldParentRel, c.rootFd, newParentRel, syscall.RENAME_NOREPLACE)
-	if err == nil {
-		return nil
-	}
-
-	switch err.(syscall.Errno) {
-	case syscall.ENOENT:
-		// Slow path : need to create the target directory. If the source directory doesn't exist,
-		// no need to create it, because ENOENT is the correct answer
-		newParentAbs := c.hierarchy.PathAbs(newPath)
-		if e1 := os.MkdirAll(newParentAbs, dirCreateMode); e1 != nil {
-			return nil
-		}
-		return syscall.Renameat2(c.rootFd, oldParentRel, c.rootFd, newParentRel, syscall.RENAME_NOREPLACE)
-	default:
-		return err
-	}
-}
-
-func (c *cache) Unlink(filename string) error {
-	c.latch.RLock()
-	defer c.latch.RUnlock()
-
-	if fd := c.parentFD(filename); fd >= 0 {
-		return syscall.Unlinkat(fd, filename, 0)
-	} else {
-		path := c.hierarchy.PathRel(filename)
-		return syscall.Unlinkat(c.rootFd, path, 0)
-	}
-}
-
-func (c *cache) Link(oldPath, newPath string) error {
-	c.latch.RLock()
-	defer c.latch.RUnlock()
-
-	// very-fast path : we have an open handle to both dirs
-	if oldFD := c.parentFD(oldPath); oldFD >= 0 {
-		if newFD := c.parentFD(newPath); newFD >= 0 {
-			// both parents are cached
-			return syscall.Linkat(oldFD, oldPath, newFD, newPath, 0)
-		}
-	}
-
-	// fast path : both dirs exists
-	newParentRel := c.hierarchy.PathRel(newPath)
-	oldParentRel := c.hierarchy.PathRel(oldPath)
-	err := syscall.Linkat(c.rootFd, oldParentRel, c.rootFd, newParentRel, 0)
-	if err == nil {
-		return nil
-	}
-
-	switch err.(syscall.Errno) {
-	case syscall.ENOENT:
-		// Slow path : need to create the target directory
-		newParentAbs := c.hierarchy.PathAbs(newPath)
-		if e1 := os.MkdirAll(newParentAbs, dirCreateMode); e1 != nil {
-			return nil
-		}
-		return syscall.Linkat(c.rootFd, oldParentRel, c.rootFd, newParentRel, 0)
-	default:
-		return err
-	}
-}
-
 func (c *cache) createHierarchy() error {
 	for prefix := range c.hierarchy.DFS().Run() {
-		err := syscall.Mkdirat(c.rootFd, prefix, dirCreateMode)
+		err := syscall.Mkdirat(c.rootFd, prefix, DirCreateMode)
 		if err != nil {
 			if err == os.ErrExist || errors.Is(err, os.ErrExist) {
 				continue
@@ -286,7 +185,7 @@ func (c *cache) cacheHierarchy() error {
 	for prefix := range c.hierarchy.RelPathIterator("").Run() {
 		strippedPrefix := strings.Replace(prefix, "/", "", -1)
 		idx := c.prefixToIndex(strippedPrefix)
-		fd, err := syscall.Openat(c.rootFd, prefix, dirOpenFlags, dirCreateMode)
+		fd, err := syscall.Openat(c.rootFd, prefix, DirOpenFlags, DirCreateMode)
 		if err != nil {
 			return fmt.Errorf("Failed to preload fd=%d basedir=%s path=%s: err=%w", c.rootFd, c.hierarchy.Basedir(), prefix, err)
 		} else {

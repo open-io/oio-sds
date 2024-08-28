@@ -48,8 +48,6 @@ type httpServer struct {
 	socket *net.TCPListener
 }
 
-var xattrBufferPool = utils.NewBufferPool(defs.XattrBufferTotalSizeDefault, defs.XattrBufferSizeDefault)
-
 // variable to track if a child process has been forked
 var childPid int = 0
 
@@ -372,6 +370,28 @@ func main() {
 		LogFatal("Invalid directories: %v", err)
 	}
 
+	// Patch the fadvise() upon upload
+	if v, ok := opts["fadvise_upload"]; ok {
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.archive.fadviseUpload = defs.ConfigFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.archive.fadviseUpload = defs.ConfigFadviseNoCache
+		} else if GetBool(v, false) {
+			chunkrepo.archive.fadviseUpload = defs.ConfigFadviseYes
+		}
+	}
+
+	// Patch the fadvise() upon download
+	if v, ok := opts["fadvise_download"]; ok {
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.archive.fadviseDownload = defs.ConfigFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.archive.fadviseDownload = defs.ConfigFadviseNoCache
+		} else if GetBool(v, false) {
+			chunkrepo.archive.fadviseDownload = defs.ConfigFadviseYes
+		}
+	}
+
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
@@ -388,7 +408,7 @@ func main() {
 		ns:           namespace,
 		url:          rawxURL,
 		tlsUrl:       opts["tls_rawx_url"],
-		path:         chunkrepo.sub.root,
+		path:         chunkrepo.archive.root,
 		id:           rawxID,
 		repo:         chunkrepo,
 		bufferSize:   1024 * opts.getInt("buffer_size", defs.UploadBufferSizeDefault/1024),
@@ -419,28 +439,6 @@ func main() {
 			rawx.checksumMode = defs.ChecksumAlways
 		} else {
 			rawx.checksumMode = defs.ChecksumNever
-		}
-	}
-
-	// Patch the fadvise() upon upload
-	if v, ok := opts["fadvise_upload"]; ok {
-		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseCache
-		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseNoCache
-		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseUpload = defs.ConfigFadviseYes
-		}
-	}
-
-	// Patch the fadvise() upon download
-	if v, ok := opts["fadvise_download"]; ok {
-		if strings.ToLower(v) == "cache" {
-			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseCache
-		} else if strings.ToLower(v) == "nocache" {
-			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseNoCache
-		} else if GetBool(v, false) {
-			chunkrepo.sub.fadviseDownload = defs.ConfigFadviseYes
 		}
 	}
 

@@ -28,6 +28,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"openio-sds/rawx/global"
 	"os"
 	"regexp"
 	"strconv"
@@ -615,8 +616,8 @@ func (rr *rawxRequest) removeChunk() {
 		rr.chunk.ContentID = rr.req.Header.Get(defs.HeaderNameContentID)
 
 		if rr.chunk.ContainerID == "" || rr.chunk.ContentID == "" {
-			tmp := xattrBufferPool.Acquire()
-			defer xattrBufferPool.Release(tmp)
+			tmp := global.XattrBufferPool.Acquire()
+			defer global.XattrBufferPool.Release(tmp)
 
 			getter := func(name, key string) (string, error) {
 				nb, e := rr.rawx.repo.getAttr(name, key, tmp)

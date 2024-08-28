@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"openio-sds/rawx/global"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,31 +97,8 @@ func (fr *fileRepository) init() error {
 	return err
 }
 
-func (fr *fileRepository) rmAttr(name, key string) error {
-	fd, err := fr.manager.Open(name, fr.openFlagsWO(), 0)
-	if err != nil {
-		return err
-	}
-	defer syscall.Close(fd)
-	return syscall.Fremovexattr(fd, key)
-}
-
-func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
-	fd, err := fr.manager.Open(name, fr.openFlagsRO(), 0)
-	if err != nil {
-		return 0, err
-	}
-	defer syscall.Close(fd)
-	return syscall.Fgetxattr(fd, key, value)
-}
-
-func (fr *fileRepository) listAttr(name string, value []byte) (int, error) {
-	fd, err := fr.manager.Open(name, fr.openFlagsRO(), 0)
-	if err != nil {
-		return 0, err
-	}
-	defer syscall.Close(fd)
-	return syscall.Flistxattr(fd, value)
+func (fr *fileRepository) Locate(name string) *hierarchy.Location {
+	return fr.manager.Locate(name)
 }
 
 func (fr *fileRepository) lock(ns, id string) error {
@@ -143,18 +121,21 @@ func (fr *fileRepository) lock(ns, id string) error {
 // del removes a chunk from the repository.
 // It will also remove appropriate extended attributes if shallow copies are enabled.
 func (fr *fileRepository) del(name string) error {
+	loc := fr.manager.Locate(name)
 	if fr.shallowCopy {
 		xattrName := xattrKey(name)
-		err := fr.rmAttr(name, xattrName)
+		err := loc.Rmattr(xattrName)
 		if err != nil {
 			LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
 		}
 	}
-	return fr.manager.Unlink(name)
+	return loc.Unlink()
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
-	fd, err := fr.manager.Open(name, fr.openFlagsRO(), 0)
+	loc := fr.manager.Locate(name)
+
+	fd, err := loc.Open(fr.openFlagsRO(), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -177,19 +158,22 @@ func (fr *fileRepository) get(name string) (fileReader, error) {
 
 // Returns true if file exists, false otherwise
 func (fr *fileRepository) check(name string) bool {
-	err := fr.manager.Access(name, syscall.F_OK)
+	err := fr.manager.Locate(name).Access(syscall.F_OK)
 	return err == nil
 }
 
 func (fr *fileRepository) put(name string) (fileWriter, error) {
 	nameTemp := pendingPath(name)
-	fd, err := fr.manager.Open(nameTemp, syscall.O_CREAT|syscall.O_EXCL|fr.openFlagsWO(), fr.putOpenMode)
+
+	loc := fr.manager.Locate(name)
+	locTemp := fr.manager.Locate(nameTemp)
+
+	fd, err := locTemp.Open(syscall.O_CREAT|syscall.O_EXCL|fr.openFlagsWO(), fr.putOpenMode)
 
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Lazy dir creation
-			abs := fr.hierarchy.PathAbs(nameTemp)
-			err = os.MkdirAll(filepath.Dir(abs), fr.putMkdirMode)
+			err = os.MkdirAll(locTemp.PathParentAbs, fr.putMkdirMode)
 			if err == nil {
 				return fr.put(name)
 			}
@@ -198,9 +182,9 @@ func (fr *fileRepository) put(name string) (fileWriter, error) {
 	}
 
 	// Check that the final chunk doesn't exist yet
-	err = fr.manager.Access(name, syscall.F_OK)
+	err = loc.Access(syscall.F_OK)
 	if err == nil {
-		_ = fr.manager.Unlink(nameTemp)
+		_ = locTemp.Unlink()
 		_ = syscall.Close(fd)
 		return nil, os.ErrExist
 	}
@@ -270,12 +254,12 @@ func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
 		return nil, errNotImplemented
 	}
 	dstTemp := pendingPath(dst)
-	if err := fr.manager.Link(src, dstTemp); err != nil {
+	if err := fr.manager.Locate(src).LinkTo(fr.manager.Locate(dstTemp)); err != nil {
 		return nil, err
 	}
-	defer fr.manager.Unlink(dstTemp)
+	defer fr.manager.Locate(dstTemp).Unlink()
 
-	if err := fr.manager.Link(dstTemp, dst); err != nil {
+	if err := fr.manager.Locate(dstTemp).LinkTo(fr.manager.Locate(dst)); err != nil {
 		return nil, err
 	}
 
@@ -300,7 +284,7 @@ func (fr *fileRepository) syncRelFile(filename string) error {
 	if !fr.syncFile {
 		return nil
 	}
-	fd, err := fr.manager.Open(filename, fr.openFlagsRO(), 0)
+	fd, err := fr.manager.Locate(filename).Open(fr.openFlagsRO(), 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		_ = syscall.Close(fd)
@@ -311,11 +295,11 @@ func (fr *fileRepository) syncRelFile(filename string) error {
 type realLinkOp struct {
 	repo     *fileRepository
 	filename string
+	locDst   *hierarchy.Location
 }
 
 func (l *realLinkOp) setAttr(key string, value []byte) error {
-	path := l.repo.hierarchy.PathAbs(l.filename)
-	return syscall.Setxattr(path, key, value, 0)
+	return l.repo.Locate(l.filename).Setattr(key, value)
 }
 
 func (l *realLinkOp) commit() error {
@@ -327,7 +311,7 @@ func (l *realLinkOp) commit() error {
 }
 
 func (l *realLinkOp) rollback() error {
-	err := l.repo.manager.Unlink(l.filename)
+	err := l.repo.manager.Locate(l.filename).Unlink()
 	if err == nil {
 		err = l.repo.syncRelParent(l.filename)
 	}
@@ -378,7 +362,7 @@ func (w *realFileWriter) close() {
 func (w *realFileWriter) abort() error {
 	defer w.close()
 
-	err := w.repo.manager.Unlink(w.nameTemp)
+	err := w.repo.manager.Locate(w.nameTemp).Unlink()
 	if err == nil {
 		err = w.repo.syncRelParent(w.nameTemp)
 	}
@@ -412,7 +396,7 @@ func (w *realFileWriter) commit() error {
 	if err == nil {
 		err = w.syncFile(syncAll)
 		if err == nil {
-			err := w.repo.manager.Rename(w.nameTemp, w.nameFinal)
+			err := w.repo.manager.Locate(w.nameTemp).RenameTo(w.repo.manager.Locate(w.nameFinal))
 			if err == nil {
 				_ = w.repo.syncRelParent(w.nameFinal)
 			}
@@ -502,8 +486,8 @@ func (r *realFileReader) listAttr(value []byte) (int, error) {
 }
 
 func setOrHasXattr(path, key, value string) error {
-	buf := xattrBufferPool.Acquire()
-	defer xattrBufferPool.Release(buf)
+	buf := global.XattrBufferPool.Acquire()
+	defer global.XattrBufferPool.Release(buf)
 
 	if err := syscall.Setxattr(path, key, []byte(value), 1); err == nil {
 		return nil

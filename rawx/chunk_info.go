@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"openio-sds/rawx/global"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -207,10 +208,10 @@ func loadFullPath(getter func(string, string) (string, error), chunkID string) (
 func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo
 
-	buf := xattrBufferPool.Acquire()
-	defer xattrBufferPool.Release(buf)
-	attrListBuf := xattrBufferPool.Acquire()
-	defer xattrBufferPool.Release(attrListBuf)
+	buf := global.XattrBufferPool.Acquire()
+	defer global.XattrBufferPool.Release(buf)
+	attrListBuf := global.XattrBufferPool.Acquire()
+	defer global.XattrBufferPool.Release(attrListBuf)
 
 	getAttr := func(k string) (string, error) {
 		l, err := inChunk.getAttr(k, buf)

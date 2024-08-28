@@ -45,11 +45,11 @@ func doGetInfo(rr *rawxRequest) {
 	}
 
 	bb.WriteString("hash_depth ")
-	bb.WriteString(utils.Utoa(uint64(rr.rawx.repo.sub.hashDepth)))
+	bb.WriteString(utils.Utoa(uint64(rr.rawx.repo.archive.hashDepth)))
 	bb.WriteRune('\n')
 
 	bb.WriteString("hash_width ")
-	bb.WriteString(utils.Utoa(uint64(rr.rawx.repo.sub.hashWidth)))
+	bb.WriteString(utils.Utoa(uint64(rr.rawx.repo.archive.hashWidth)))
 	bb.WriteRune('\n')
 
 	rr.replyCode(http.StatusOK)

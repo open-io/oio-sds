@@ -26,11 +26,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
+
+	"openio-sds/rawx/hierarchy"
 )
 
 // Barely useful to intercept errors and mangle them.
 type chunkRepository struct {
-	sub fileRepository
+	recent  fileRepository
+	archive fileRepository
 }
 
 func NewChunkRepository(basedir string, configuration RepositoryConfiguration) (*chunkRepository, error) {
@@ -40,61 +44,113 @@ func NewChunkRepository(basedir string, configuration RepositoryConfiguration) (
 	}
 
 	repo := &chunkRepository{}
-	repo.sub.root = basedir
-	repo.sub.RepositoryConfiguration = configuration
-	if err := repo.sub.init(); err != nil {
+	repo.archive.root = basedir
+	repo.archive.RepositoryConfiguration = configuration
+
+	repo.recent.root = basedir + "/recent"
+	repo.recent.RepositoryConfiguration = configuration
+	repo.recent.RepositoryConfiguration.hashDepth = 1
+	repo.recent.RepositoryConfiguration.hashWidth = 1
+
+	if err := repo.archive.init(); err != nil {
 		return nil, err
+	}
+	if err := repo.recent.init(); err != nil {
+		return nil, err
+	}
+
+	return repo, nil
+}
+
+func (cr *chunkRepository) Archive(name string) error {
+	locRecent := cr.recent.Locate(name)
+	locArchive := cr.archive.Locate(name)
+
+	if err := locRecent.Access(syscall.F_OK); err != nil {
+		return err
 	} else {
-		return repo, nil
+		err = locRecent.RenameTo(locArchive)
+		if err == nil {
+			return nil
+		}
+		if enoent(err) {
+			err = os.MkdirAll(filepath.Join(locArchive.PathParentAbs, name), hierarchy.DirCreateMode)
+			if err == nil {
+				err = locRecent.RenameTo(locArchive)
+			}
+		}
+		return err
 	}
 }
 
 func (cr *chunkRepository) getAttr(name, key string, value []byte) (int, error) {
-	return cr.sub.getAttr(name, key, value)
+	return cr.archive.Locate(name).Getattr(key, value)
 }
 
 func (cr *chunkRepository) lock(ns, url string) error {
-	return cr.sub.lock(ns, url)
+	return cr.archive.lock(ns, url)
 }
 
 func (cr *chunkRepository) del(name string) error {
-	err := cr.sub.del(name)
+	err := cr.archive.del(name)
 	if err == nil {
 		return nil
-	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
+	} else if !enoent(err) {
 		return err
 	} else {
+		return cr.recent.del(name)
 		return os.ErrNotExist
 	}
 }
 
+func enoent(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err == os.ErrNotExist || os.IsNotExist(err)
+}
+
 func (cr *chunkRepository) get(name string) (fileReader, error) {
-	r, err := cr.sub.get(name)
+	// Try first in the archives
+	r, err := cr.archive.get(name)
+
 	if err == nil {
 		return r, nil
-	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
+	} else if !enoent(err) {
 		return nil, err
 	} else {
-		return nil, os.ErrNotExist
+		// Not found in the archives, then fallback in the recent pool
+		r, err = cr.recent.get(name)
+		if err == nil {
+			return r, nil
+		} else if !enoent(err) {
+			return nil, err
+		} else {
+			return nil, os.ErrNotExist
+		}
 	}
 }
 
 func (cr *chunkRepository) check(name string) bool {
-	return cr.sub.check(name)
+	return cr.archive.check(name) || cr.recent.check(name)
 }
 
 func (cr *chunkRepository) put(name string) (fileWriter, error) {
-	return cr.sub.put(name)
+	return cr.recent.put(name)
 }
 
 func (cr *chunkRepository) post(name string) fileUpdater {
-	return cr.sub.post(name)
+	return cr.archive.post(name)
 }
 
 func (cr *chunkRepository) link(fromName, toName string) (linkOperation, error) {
-	return cr.sub.link(fromName, toName)
+	op, err := cr.archive.link(fromName, toName)
+	if err == nil || !enoent(err) {
+		return op, err
+	}
+	return cr.recent.link(fromName, toName)
 }
 
 func (cr *chunkRepository) symlinkNonOptimal(name string) error {
-	return cr.sub.createSymlinkNonOptimal(name)
+	return cr.archive.createSymlinkNonOptimal(name)
 }

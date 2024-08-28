@@ -97,7 +97,7 @@ func doGetListOfChunks(rr *rawxRequest) {
 	marker := params.Marker
 	chunks, isTruncated, marker, err := ListChunks(
 		rr.rawx.path, marker, params.MinToReturn,
-		rr.rawx.repo.sub.hashWidth, rr.rawx.repo.sub.hashDepth)
+		rr.rawx.repo.archive.hashWidth, rr.rawx.repo.archive.hashDepth)
 	if err != nil {
 		rr.replyCode(http.StatusInternalServerError)
 		return
