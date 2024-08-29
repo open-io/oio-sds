@@ -21,8 +21,9 @@ import os
 import random
 import string
 
-from subprocess import check_call
+from collections import defaultdict
 from functools import wraps
+from subprocess import check_call
 
 from urllib.parse import urlencode
 
@@ -696,6 +697,19 @@ class BaseTestCase(CommonTestCase):
         if wait > 0:
             time.sleep(wait)
 
+    def grouped_services(self, type_, key, reqid=None):
+        """
+        Build a dictionary of lists of services indexed by `key`.
+
+        :param type_: the type if services to index
+        :param key: a function
+        """
+        all_svcs = self.conscience.all_services(type_, reqid=reqid)
+        out = defaultdict(list)
+        for svc in all_svcs:
+            out[key(svc)].append(svc)
+        return out
+
     def load_watch_conf(self, svc):
         watch_file = os.path.expandvars(
             f"${{HOME}}/.oio/sds/conf/watch/{self.ns}-{svc}.yml"
@@ -792,50 +806,10 @@ class BaseTestCase(CommonTestCase):
             time.sleep(1.0)
         return None
 
-    def wait_for_event(self, tube, reqid=None, types=None, fields=None, timeout=30.0):
-        """
-        Wait for an event in the specified tube.
-        If reqid, types and/or fields are specified, drain events until the
-        specified event is found.
+    def wait_for_kafka_event(self, *args, **kwargs):
+        return self.wait_for_event(*args, **kwargs)
 
-        :param fields: dict of fields to look for in the event's URL
-        :param types: list of types of events the method should look for
-        """
-        self.beanstalkd0.watch(tube)
-        now = time.time()
-        deadline = now + timeout
-        try:
-            job_id = True
-            while now < deadline:
-                to = max(0.0, deadline - now)
-                job_id, data = self.beanstalkd0.reserve(timeout=to)
-                event = Event(jsonlib.loads(data))
-                self.beanstalkd0.delete(job_id)
-                now = time.time()
-                if types and event.event_type not in types:
-                    logging.debug("ignore event %s (event mismatch)", data)
-                    continue
-                if reqid and event.reqid != reqid:
-                    logging.info("ignore event %s (request_id mismatch)", data)
-                    continue
-                if fields and any(fields[k] != event.url.get(k) for k in fields):
-                    logging.info("ignore event %s (filter mismatch)", data)
-                    continue
-                logging.info("event %s", data)
-                return event
-            logging.warning(
-                "wait_for_event(reqid=%s, types=%s, fields=%s, timeout=%s) "
-                "reached its timeout",
-                reqid,
-                types,
-                fields,
-                timeout,
-            )
-        except ResponseError as err:
-            logging.warning("%s", err)
-        return None
-
-    def wait_for_kafka_event(
+    def wait_for_event(
         self,
         reqid=None,
         svcid=None,
@@ -847,7 +821,7 @@ class BaseTestCase(CommonTestCase):
         OffsetEventCap=5,
     ):
         """
-        Wait for an event in the specified tube.
+        Wait for an event to pass through event agents.
         If reqid, types and/or fields are specified, drain events until the
         specified event is found.
 
