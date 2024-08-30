@@ -358,6 +358,8 @@ label_retry:
 		*errorv = g_ptr_array_new (), /* <GError*> */
 		*bodyv = g_ptr_array_new (); /* <GByteArray*> */
 
+	GPtrArray *urlerrorv = g_ptr_array_new_with_free_func(g_free); /* <gchar*> */
+
 	NAME2CONST(n, ctx->name);
 	const gchar *headers[4] = {SQLX_ADMIN_PEERS, peers, NULL, NULL};
 	GByteArray *packed = pack(&n, headers);
@@ -422,6 +424,7 @@ label_retry:
 		if (err) {
 			GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
 			g_ptr_array_add (errorv, g_error_copy(err));
+			g_ptr_array_add (urlerrorv, g_strdup(url));
 			if (!body)
 				body = g_byte_array_new();
 			else
@@ -527,6 +530,10 @@ label_retry:
 
 	EXTRA_ASSERT(urlv->len == bodyv->len);
 	EXTRA_ASSERT(urlv->len == errorv->len);
+
+	if (urlerrorv->len > 0) {
+		oio_ext_set_urlerrorv(urlerrorv);
+	}
 
 	g_byte_array_unref (packed);
 	g_strfreev(m1uv);

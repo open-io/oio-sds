@@ -161,6 +161,11 @@ gchar **oio_ext_get_shared_properties(void);
 
 void oio_ext_set_shared_properties(gchar **shared_properties);
 
+/** Get the list of url that reply on error */
+GPtrArray *oio_ext_get_urlerrorv(void);
+
+void oio_ext_set_urlerrorv(GPtrArray * urlerrorv);
+
 /** Enable or disable the performance data collection. */
 GHashTable *oio_ext_enable_perfdata(gboolean enabled);
 

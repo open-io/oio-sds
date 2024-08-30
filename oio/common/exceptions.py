@@ -272,10 +272,11 @@ class StatusMessageException(OioException):
     """
 
     # FIXME(FVE): make "message" the 1st parameter, subclasses are misused...
-    def __init__(self, http_status, status=None, message=None):
+    def __init__(self, http_status, status=None, message=None, **kwargs):
         self.http_status = http_status
         self.message = message or "n/a"
         self.status = status
+        self.info = kwargs.copy()
         super(StatusMessageException, self).__init__(self.message)
 
     def __str__(self):
@@ -381,8 +382,8 @@ class ServiceBusy(ClientException):
     few seconds.
     """
 
-    def __init__(self, http_status=503, status=None, message=None):
-        super(ServiceBusy, self).__init__(http_status, status, message)
+    def __init__(self, http_status=503, status=None, message=None, **kwargs):
+        super(ServiceBusy, self).__init__(http_status, status, message, **kwargs)
 
 
 _http_status_map = {
@@ -412,6 +413,7 @@ def from_response(resp, body=None):
     except AttributeError:
         http_status = resp.status_code
     cls = _http_status_map.get(http_status, ClientException)
+    args = [http_status]
     if body:
         message = "n/a"
         status = None
@@ -423,9 +425,15 @@ def from_response(resp, body=None):
                 message = body.decode("utf-8")
             else:
                 message = body
-        return cls(http_status, status, message)
+        args.append(status)
+        args.append(message)
     else:
-        return cls(http_status, resp.reason)
+        args.append(resp.reason)
+    kwargs = {}
+    if http_status >= 500:
+        service_id = resp.headers.get("x-backend-service-id")
+        kwargs["service_id"] = service_id
+    return cls(*args, **kwargs)
 
 
 def from_multi_responses(data, excepted_status=(200,)):

@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -88,15 +88,30 @@ static enum http_rc_e
 _reply_json_error(struct req_args_s *args, int code, const char *msg,
 	GString * gstr)
 {
+	GString *service_id = g_string_sized_new(256);
+	GPtrArray *urlerrorv = NULL;
+	urlerrorv = oio_ext_get_urlerrorv();
+	if (urlerrorv && urlerrorv->len > 0) {
+		for (guint i=0; i < urlerrorv->len; i++) {
+			gchar *u = g_ptr_array_index(urlerrorv, i);
+			g_string_append_printf(service_id, "%s%s", (i>0?",":""), u);
+		}
+	}
+	args->rp->add_header("x-backend-service-id", service_id->str);
+
 	if (gstr && gstr->len) {
 		if (args->url && oio_url_has(args->url, OIOURL_HEXID)) {
-			args->rp->access_tail("error:%.*s\thexid:%s\tversion_id:%s",
+			args->rp->access_tail(
+					"error:%.*s\thexid:%s\tversion_id:%s\tservice_id:%s",
 					gstr->len, gstr->str,
 					oio_url_get(args->url, OIOURL_HEXID),
-					oio_url_get(args->url, OIOURL_VERSION)  // possibly empty
+					oio_url_get(args->url, OIOURL_VERSION),  // possibly empty
+					service_id->str
 			);
 		} else {
-			args->rp->access_tail("error:%.*s", gstr->len, gstr->str);
+			args->rp->access_tail(
+				"error:%.*s\tservice_id:%s", gstr->len, gstr->str, service_id->str
+			);
 		}
 	}
 	return _reply_json(args, code, msg, gstr);

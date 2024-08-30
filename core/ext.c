@@ -199,6 +199,8 @@ struct oio_ext_local_s {
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
 	guint8 allow_long_timeout;
+
+	GPtrArray *urlerrorv;
 };
 
 static void _local_free(gpointer p) {
@@ -220,6 +222,9 @@ static void _local_free(gpointer p) {
 	if (l->perfdata) {
 		g_hash_table_destroy(l->perfdata);
 		l->perfdata = NULL;
+	}
+	if (l->urlerrorv) {
+		g_ptr_array_free(l->urlerrorv, TRUE);
 	}
 	g_free (l);
 }
@@ -458,6 +463,19 @@ void oio_ext_set_shared_properties(gchar **shared_properties) {
 		g_strfreev(l->shared_properties);
 	}
 	l->shared_properties = shared_properties;
+}
+
+GPtrArray *oio_ext_get_urlerrorv(void) {
+	struct oio_ext_local_s *l = _local_ensure();
+	return l->urlerrorv;
+}
+
+void oio_ext_set_urlerrorv(GPtrArray *urlerrorv) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->urlerrorv) {
+		g_ptr_array_free(l->urlerrorv, TRUE);
+	}
+	l->urlerrorv = urlerrorv;
 }
 
 GHashTable *oio_ext_get_perfdata(void) {
