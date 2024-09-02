@@ -25,7 +25,7 @@ from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ConfigurationException
-from oio.common.green import get_watchdog, time
+from oio.common.green import get_watchdog, GreenPool, time
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
@@ -33,8 +33,8 @@ from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
 
 LOAD_PIPELINES = {
-    "RawxWorker": rawx_loadpipeline,
-    "Meta2Worker": meta2_loadpipeline,
+    "rawx": rawx_loadpipeline,
+    "meta2": meta2_loadpipeline,
 }
 
 TAGS_TO_DEBUG = ("starting",)
@@ -51,7 +51,12 @@ class CrawlerWorkerMarkerMixin:
     DEFAULT_SCANNED_BETWEEN_MARKERS = None
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        # When the superclass is 'object', we cannot pass any argument.
+        try:
+            super().__init__(*args, **kwargs)
+        except TypeError as err:
+            if "takes exactly one argument" not in str(err):
+                raise
 
     def init_current_marker(self, volume_path, items_per_second):
         """Init variables used to handle crawler markers
@@ -187,7 +192,7 @@ class CrawlerStatsdMixin:
             )
 
 
-class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
+class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     """
     Crawler Worker responsible for a single volume.
     """
@@ -302,9 +307,10 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
         """
         Main worker loop
         """
-        # Ignore these signals, the main process will ask the workers to stop.
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        if isinstance(self, Process):
+            # Ignore these signals, the main process will ask the workers to stop.
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
         self._wait_before_starting()
         while self.running:
@@ -382,7 +388,7 @@ class PipelineWorker(CrawlerWorker):
         self.app_env["watchdog"] = watchdog
         self.app_env["working_dir"] = self.working_dir
         # Loading pipeline
-        self.pipeline = LOAD_PIPELINES[type(self).__name__](
+        self.pipeline = LOAD_PIPELINES[self.__class__.SERVICE_TYPE](
             self.conf.get("conf_file"), global_conf=self.conf, app=self
         )
 
@@ -538,6 +544,10 @@ class Crawler(Daemon):
             # so we need to compensate the old value to reach the targeted value.
             nice(-current_nice + nice_value)
 
+        if boolean_value(self.conf.get("use_eventlet")):
+            self.greenpool = GreenPool(len(self.volumes))
+        else:
+            self.greenpool = None
         self.volume_workers = {}
         self.create_workers()
 
@@ -545,10 +555,20 @@ class Crawler(Daemon):
         """
         Create workers for volumes which have no associated worker yet.
         """
+
+        if self.greenpool:
+            worker_class = self.worker_class
+        else:
+
+            class SubprocessWorker(self.worker_class, Process):
+                """Combine a worker class with a Process"""
+
+            worker_class = SubprocessWorker
+
         for vol in self.volumes:
             if vol not in self.volume_workers and not self._stop_requested:
                 try:
-                    worker = self.worker_class(
+                    worker = worker_class(
                         self.conf, vol, logger=self.logger, watchdog=self.watchdog
                     )
                     self.volume_workers[vol] = worker
@@ -559,7 +579,7 @@ class Crawler(Daemon):
                         err,
                     )
 
-    def start_workers(self):
+    def start_worker_processes(self):
         """
         Start workers which are not already alive,
         join workers which have unexpectedly stopped.
@@ -580,14 +600,26 @@ class Crawler(Daemon):
                     worker.start()
 
     def run(self, *args, **kwargs):
+        if self.greenpool:
+            self.run_eventlet(*args, **kwargs)
+        else:
+            self.run_subprocesses(*args, **kwargs)
+
+    def run_eventlet(self, *args, **kwargs):
+        self.logger.info("started %s crawler service (eventlet)", self.CRAWLER_TYPE)
+        for worker in self.volume_workers.values():
+            self.greenpool.spawn_n(worker.run)
+        self.greenpool.waitall()
+
+    def run_subprocesses(self, *args, **kwargs):
         """Main loop to scan volumes and apply filters"""
-        self.logger.info("started %s crawler service", self.CRAWLER_TYPE)
+        self.logger.info("started %s crawler service (subprocesses)", self.CRAWLER_TYPE)
         # Start the workers already initialized
-        self.start_workers()
+        self.start_worker_processes()
         # Retry from time to time to start the workers which failed previously
         while not self._stop_requested:
             self.create_workers()
-            self.start_workers()
+            self.start_worker_processes()
             deadline = monotonic() + self._check_worker_delay
             while not self._stop_requested and monotonic() < deadline:
                 sleep(1.0)

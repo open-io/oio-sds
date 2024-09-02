@@ -7,6 +7,11 @@ volume_list = /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
 # Wait random time before starting
 # to avoid all the crawlers from working at the same time.
 wait_random_time_before_starting = True
+
+# Tell the crawler to use an eventlet GreenPool instead of subprocesses.
+# (slower, but uses less RAM)
+#use_eventlet = False
+
 # The crawler stores a marker in a file to be able to resume after being
 # stopped/restarted. Default to False.
 # use_marker = False

@@ -356,6 +356,7 @@ user = ${USER}
 volume_list = ${META2_VOLUMES}
 
 wait_random_time_before_starting = True
+use_eventlet = True
 use_marker = False
 interval = 1200
 report_interval = 300
@@ -522,6 +523,7 @@ user = ${USER}
 volume_list = ${RAWX_VOLUMES}
 
 wait_random_time_before_starting = True
+use_eventlet = True
 use_marker = False
 interval = 1200
 report_interval = 300
