@@ -1277,7 +1277,7 @@
 		"header": "lb_variables.h",
 		"license": "lgpl",
 		"variables": [
-			{ "type": "uint", "name": "oio_lb_weighted_random_attempts",
+			{ "type": "uint32", "name": "oio_lb_weighted_random_attempts",
 				"key": "core.lb.weighted_random_attempts",
 				"descr": "How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.",
 				"def": "8", "min": 1, "max": "64k" },
@@ -1292,7 +1292,11 @@
 			{ "type": "bool", "name": "oio_lb_random_chunk_ids",
 				"key": "core.lb.generate_random_chunk_ids",
 				"def": false,
-				"descr": "Generate random, 64 bytes long chunk IDs. If set to false, the chunk IDs will be generated from the container and object names, object version and storage policy, and chunk position." }
+				"descr": "Generate random, 64 bytes long chunk IDs. If set to false, the chunk IDs will be generated from the container and object names, object version and storage policy, and chunk position." },
+			{ "type": "bool", "name": "oio_lb_try_fair_constraints_first",
+				"key": "core.lb.try_fair_constraints_first",
+				"def": false,
+				"descr": "First try to find an ideal solution using the 'fair_location_constraint'. This try will make up to 'core.lb.weighted_random_attempts' attempts for each element to be selected. So if no ideal solution is found, there will be a second try (with the same number of attempts) using the 'strict_location_constraint'." }
 		]
 	}
 }

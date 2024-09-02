@@ -1397,6 +1397,8 @@ conscience=${CS_ALL_PUB}
 ${NOBS}event-agent=${EVENT_CNXSTRING}
 ${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
+core.lb.try_fair_constraints_first=true
+
 ns.meta1_digits=${M1_DIGITS}
 
 # Small pagination to avoid time-consuming tests

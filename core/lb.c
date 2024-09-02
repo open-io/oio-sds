@@ -1032,7 +1032,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 
 	int i = 0;
 	struct oio_lb_selected_item_s *selected = NULL;
-	for (gint64 attempt = 0;
+	for (guint32 attempt = 0;
 			attempt < oio_lb_weighted_random_attempts;
 			attempt++) {
 		/* get the closest */
@@ -1244,7 +1244,7 @@ _debug_service_selection(struct polling_ctx_s *ctx)
 }
 
 static GError*
-_local__patch(struct oio_lb_pool_s *self,
+__local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
 		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
 		gboolean adjacent_mode, gboolean *flawed)
@@ -1329,7 +1329,8 @@ _local__patch(struct oio_lb_pool_s *self,
 				reached_dist = dist;
 		} else {
 			GString *max_items = g_string_sized_new(32);
-			_print_items_tab(max_items, lb->strict_max_items);
+			_print_items_tab(max_items,
+					force_fair_constraints ? lb->fair_max_items : lb->strict_max_items);
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(
 					CODE_POLICY_NOT_SATISFIABLE,
@@ -1338,13 +1339,14 @@ _local__patch(struct oio_lb_pool_s *self,
 					"%u known services, "
 					"%u services in slot, "
 					"min_dist=%u, "
-					"strict_location_constraint=%s",
+					"%s_location_constraint=%s",
 					*ptarget,
 					count, count_targets - count_known_targets,
 					count_known_targets,
 					oio_lb_world__count_slot_items_unlocked(
 						lb->world, *ptarget),
 					lb->min_dist,
+					force_fair_constraints ? "fair" : "strict",
 					max_items->str
 			);
 			g_string_free(max_items, TRUE);
@@ -1399,6 +1401,36 @@ _local__patch(struct oio_lb_pool_s *self,
 	}
 	g_ptr_array_free(ctx.selection, TRUE);
 	return err;
+}
+
+static GError*
+_local__patch(struct oio_lb_pool_s *self,
+		const oio_location_t *avoids, const oio_location_t *known,
+		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		gboolean adjacent_mode, gboolean *flawed)
+{
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(lb->vtable == &vtable_LOCAL);
+	EXTRA_ASSERT(lb->world != NULL);
+	EXTRA_ASSERT(lb->targets != NULL);
+	EXTRA_ASSERT(lb->min_dist >= 1);
+
+	if (oio_lb_try_fair_constraints_first && !force_fair_constraints
+			&& lb->fair_max_items[0]) {
+		// Quick attempt to find an ideal solution
+		GError *err = __local__patch(self, avoids, known, on_id, TRUE,
+				adjacent_mode, flawed);
+		if (!err) {
+			return NULL;
+		}
+		GRID_DEBUG("No ideal solution (reqid=%s), "
+				"retry to find an acceptable solution: (%d) %s",
+				oio_ext_get_reqid(), err->code, err->message);
+		g_error_free(err);
+	}
+	return __local__patch(self, avoids, known, on_id, force_fair_constraints,
+			adjacent_mode, flawed);
 }
 
 struct oio_lb_item_s *

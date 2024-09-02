@@ -188,12 +188,20 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_LB_GENERATE_RANDOM_CHUNK_IDS*
 
+### core.lb.try_fair_constraints_first
+
+> First try to find an ideal solution using the 'fair_location_constraint'. This try will make up to 'core.lb.weighted_random_attempts' attempts for each element to be selected. So if no ideal solution is found, there will be a second try (with the same number of attempts) using the 'strict_location_constraint'.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_CORE_LB_TRY_FAIR_CONSTRAINTS_FIRST*
+
 ### core.lb.weighted_random_attempts
 
 > How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.
 
  * default: **8**
- * type: guint
+ * type: guint32
  * cmake directive: *OIO_CORE_LB_WEIGHTED_RANDOM_ATTEMPTS*
  * range: 1 -> 64000
 
