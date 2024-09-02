@@ -2483,7 +2483,7 @@ end:
 GError*
 meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, m2_onbean_cb cb, gpointer cb_data)
+		gboolean append, m2_onbean_cb cb, gpointer cb_data, gboolean *flawed)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
@@ -2571,7 +2571,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
 		err = m2_generate_beans(url, size, oio_ns_chunk_size,
-				policy, m2b->lb, cb, cb_data);
+				policy, m2b->lb, cb, cb_data, flawed);
 	}
 
 end:

@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqliterepo.h>
+#include <server/network_server.h>
 #include <server/transport_gridd.h>
 
 #include "./meta1_backend.h"
@@ -112,10 +113,21 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 	                srvtype, dryrun ? "true" : "false");
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_link(m1, url, srvtype, dryrun, autocreate, &result);
+	gboolean flawed = FALSE;
+	GError *err = meta1_backend_services_link(m1, url, srvtype, dryrun,
+			autocreate, &result, &flawed);
 	if (NULL != err) {
 		reply->send_error(0, err);
 	} else {
+		if (flawed) {
+			reply->subject("flawed:true");
+			gchar metric_name[256] = {0};
+			g_snprintf(metric_name, sizeof(metric_name),
+					"lb.constraints.%s.flawed.count", srvtype);
+			network_server_incr_stat(reply->client->server, metric_name);
+		} else {
+			reply->subject("flawed:false");
+		}
 		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -138,10 +150,21 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 	                srvtype, dryrun ? "true" : "false");
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
+	gboolean flawed = FALSE;
+	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun,
+			&result, &flawed);
 	if (NULL != err) {
 		reply->send_error(0, err);
 	} else {
+		if (flawed) {
+			reply->subject("flawed:true");
+			gchar metric_name[256] = {0};
+			g_snprintf(metric_name, sizeof(metric_name),
+					"lb.constraints.%s.flawed.count", srvtype);
+			network_server_incr_stat(reply->client->server, metric_name);
+		} else {
+			reply->subject("flawed:false");
+		}
 		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
@@ -361,10 +384,25 @@ meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 	if (!url) {
 		reply->send_error(0, BADREQ("Missing field (%s)", "url"));
 	} else {
-		GError *err = meta1_backend_services_relink(m1, url, kept, replaced, dryrun, &newset);
+		gboolean flawed = FALSE;
+		GError *err = meta1_backend_services_relink(m1, url, kept, replaced, dryrun, &newset, &flawed);
 		if (NULL != err) {
 			reply->send_error(0, err);
 		} else {
+			if (flawed) {
+				reply->subject("flawed:true");
+				struct meta1_service_url_s *meta1_url = meta1_unpack_url(kept);
+				if (!meta1_url) {
+					meta1_url = meta1_unpack_url(replaced);
+				}
+				gchar metric_name[256] = {0};
+				g_snprintf(metric_name, sizeof(metric_name),
+						"lb.constraints.%s.flawed.count", meta1_url->srvtype);
+				network_server_incr_stat(reply->client->server, metric_name);
+				g_free(meta1_url);
+			} else {
+				reply->subject("flawed:false");
+			}
 			reply->add_body(STRV_encode_gba(newset));
 			reply->send_reply(CODE_FINAL_OK, "OK");
 		}

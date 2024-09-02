@@ -225,6 +225,8 @@ struct req_args_s
 	struct http_reply_ctx_s *rp;
 
 	gint64 version;
+
+	struct network_server_s *server;
 };
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);

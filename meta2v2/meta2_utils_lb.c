@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -41,7 +41,7 @@ location_from_chunk_id(const gchar *chunk_id, const gchar *ns_name,
 	g_assert_nonnull(location);
 	GError *err = NULL;
 	if (chunk_id == NULL || strlen(chunk_id) <= 0)
-		return NEWERROR(CODE_INTERNAL_ERROR, "emtpy chunk id");
+		return NEWERROR(CODE_INTERNAL_ERROR, "empty chunk id");
 
 	gchar *netloc = NULL;
 	oio_parse_chunk_url(chunk_id, NULL, &netloc, NULL);
@@ -75,7 +75,7 @@ GError*
 get_spare_chunks_focused(struct oio_url_s *url, const gchar *pos,
 		struct oio_lb_s *lb, struct storage_policy_s *policy,
 		oio_location_t pin, int mode,
-		GSList **result)
+		GSList **result, gboolean *flawed)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
@@ -92,7 +92,7 @@ get_spare_chunks_focused(struct oio_url_s *url, const gchar *pos,
 		beans = g_slist_prepend(beans, prop);
 		beans = g_slist_prepend(beans, chunk);
 	}
-	err = oio_lb__poll_pool_around(lb, pool, pin, mode, _on_id, NULL);
+	err = oio_lb__poll_pool_around(lb, pool, pin, mode, _on_id, flawed);
 	if (err) {
 		g_prefix_error(&err,
 				"found only %u services matching the criteria (pool=%s): ",
@@ -133,12 +133,18 @@ convert_chunks_to_locations(struct oio_lb_pool_s *pool, const gchar *ns_name,
 }
 
 GError*
-get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
+get_conditioned_spare_chunks(
+		struct oio_url_s *url,
+		const gchar *pos,
 		struct oio_lb_s *lb,
 		struct storage_policy_s *policy,
-		const gchar *ns_name, GSList *already, GSList *broken, gboolean force_fair_constraints,
+		const gchar *ns_name,
+		GSList *already,
+		GSList *broken,
+		gboolean force_fair_constraints,
 		gboolean adjacent_mode,
-		GSList **result)
+		GSList **result,
+		gboolean *flawed)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
@@ -164,7 +170,7 @@ get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 		beans = g_slist_prepend(beans, chunk);
 	}
 	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id,
-			force_fair_constraints, adjacent_mode, NULL);
+			force_fair_constraints, adjacent_mode, flawed);
 	guint chunks_count = g_slist_length(beans) / 2;
 	if (err) {
 		g_prefix_error(&err,
@@ -383,7 +389,7 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 static GError*
 _m2_generate_chunks(struct gen_ctx_s *ctx,
 		gint64 mcs /* actual metachunk size */,
-		gboolean subpos)
+		gboolean subpos, gboolean* flawed)
 {
 	GError *err = NULL;
 
@@ -402,7 +408,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		// FIXME(FVE): set last argument
 
 		err = oio_lb__poll_pool_around(ctx->params->lb, pool,
-				ctx->params->pin, ctx->params->mode, _on_id, NULL);
+				ctx->params->pin, ctx->params->mode, _on_id, flawed);
 
 		if (err != NULL) {
 			g_prefix_error(&err, "at position %u: did not find enough "
@@ -417,7 +423,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 GError*
 oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		GSList **out)
+		GSList **out, gboolean *flawed)
 {
 	struct oio_generate_beans_params_s params = {
 		.lb=lb,
@@ -429,7 +435,7 @@ oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		.pin=0,
 		.mode=0
 	};
-	GError *err = oio_generate_focused_beans(&params, out);
+	GError *err = oio_generate_focused_beans(&params, out, flawed);
 	oio_url_clean(params.url);
 	return err;
 }
@@ -437,7 +443,7 @@ oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 GError *
 oio_generate_focused_beans(
 		struct oio_generate_beans_params_s *params,
-		GSList **out)
+		GSList **out, gboolean *flawed)
 {
 	EXTRA_ASSERT(params->url != NULL);
 
@@ -468,17 +474,17 @@ oio_generate_focused_beans(
 
 	GError *err = NULL;
 	if (!params->pol) {
-		err = _m2_generate_chunks(&ctx, params->chunk_size, 0);
+		err = _m2_generate_chunks(&ctx, params->chunk_size, 0, flawed);
 	} else {
 		gint64 k;
 		switch (data_security_get_type(storage_policy_get_data_security(
 				params->pol))) {
 			case STGPOL_DS_PLAIN:
-				err = _m2_generate_chunks(&ctx, params->chunk_size, 0);
+				err = _m2_generate_chunks(&ctx, params->chunk_size, 0, flawed);
 				break;
 			case STGPOL_DS_EC:
 				k = storage_policy_parameter(params->pol, DS_KEY_K, 6);
-				err = _m2_generate_chunks(&ctx, k*params->chunk_size, TRUE);
+				err = _m2_generate_chunks(&ctx, k*params->chunk_size, TRUE, flawed);
 				break;
 			default:
 				err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");

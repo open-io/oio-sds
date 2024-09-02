@@ -2540,7 +2540,7 @@ oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
 		oio_lb_on_id_f on_id, gboolean *flawed)
 {
 	if (!pin || !mode)
-		return oio_lb__poll_pool(lb, name, NULL, on_id, NULL);
+		return oio_lb__poll_pool(lb, name, NULL, on_id, flawed);
 
 	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(oio_str_is_set(name));

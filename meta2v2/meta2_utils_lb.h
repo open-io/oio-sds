@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -47,13 +47,13 @@ struct oio_generate_beans_params_s {
 
 GError* oio_generate_focused_beans(
 		struct oio_generate_beans_params_s *params,
-		GSList **out);
+		GSList **out, gboolean *flawed);
 
 /* @deprecated only used in a deprecated function of meta2 */
 GError* oio_generate_beans(
 		struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		GSList **out);
+		GSList **out, gboolean *flawed);
 
 /**
  * Get as many spare chunks as required to upload one metachunk with the
@@ -65,7 +65,7 @@ GError* get_spare_chunks_focused(
 		struct oio_lb_s *lb,
 		struct storage_policy_s *policy,
 		oio_location_t pin, int mode,
-		GSList **result);
+		GSList **result, gboolean *flawed);
 
 /**
  * Get spare chunks according to a storage policy and lists of already
@@ -92,12 +92,16 @@ GError* get_spare_chunks_focused(
  * @return A GError in case of error
  */
 GError* get_conditioned_spare_chunks(
-		struct oio_url_s *url, const gchar *position,
+		struct oio_url_s *url,
+		const gchar *position,
 		struct oio_lb_s *lb,
-		struct storage_policy_s *stgpol, const gchar *ns_name,
-		GSList *notin, GSList *broken,
+		struct storage_policy_s *stgpol,
+		const gchar *ns_name,
+		GSList *notin,
+		GSList *broken,
 		gboolean force_fair_constraints,
 		gboolean adjacent_mode,
-		GSList **result);
+		GSList **result,
+		gboolean *flawed);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_lb_h*/

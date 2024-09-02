@@ -318,6 +318,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		args.rq = rq;
 		args.rp = rp;
 		args.url = url = oio_url_empty();
+		args.server = server;
 
 		if (!_metacd_load_url (&args, url)) {
 			rc = _reply_format_error(&args, BADREQ("Invalid oio url"));
@@ -1343,6 +1344,13 @@ grid_main_configure (int argc, char **argv)
 	oio_stats_set(
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
+
+	/* Load statsd conf and init statsd client*/
+	if (oio_str_is_set(server_statsd_host)) {
+		network_server_configure_statsd(
+				server, "openio.oioproxy",
+				server_statsd_host, server_statsd_port);
+	}
 
 	lb_world_rawx = oio_lb_local__create_world();
 	lb_rawx = oio_lb__create();

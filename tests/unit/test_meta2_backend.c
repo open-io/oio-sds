@@ -2,7 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -139,7 +139,7 @@ _create_alias2(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		size = (oio_ns_chunk_size * (chunks_count - 1)) + 1;
 	}
 	err = meta2_backend_generate_beans(m2b, url, size, polname, FALSE,
-			_onbean, &beans);
+			_onbean, &beans, NULL);
 	generated = g_slist_length(beans);
 	generated_props = g_slist_length(properties);
 	expected = 1 + 1 + chunks_count * chunks_per_metachunks;

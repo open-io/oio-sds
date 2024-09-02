@@ -117,7 +117,7 @@ GError* meta1_backend_services_list(struct meta1_backend_s *m1,
 GError* meta1_backend_services_link (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype,
 		gboolean dryrun, gboolean autocreate,
-		gchar ***result);
+		gchar ***result, gboolean *flawed);
 
 GError* meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype, gchar **urlv);
@@ -125,7 +125,7 @@ GError* meta1_backend_services_unlink(struct meta1_backend_s *m1,
 GError* meta1_backend_services_poll (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const gchar *srvtype,
 		gboolean dryrun, gboolean autocreate,
-		gchar ***result);
+		gchar ***result, gboolean *flawed);
 
 /* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_services_config(struct meta1_backend_s *m1,
@@ -151,7 +151,7 @@ GError* meta1_backend_services_set(struct meta1_backend_s *m1,
  * already known by the meta1 for the same sequence number. */
 GError* meta1_backend_services_relink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *kept, const char *replaced,
-		gboolean dryrun, gchar ***out);
+		gboolean dryrun, gchar ***out, gboolean *flawed);
 
 
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,

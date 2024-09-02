@@ -308,7 +308,7 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3,
 
 GError* m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		m2_onbean_cb cb, gpointer cb_data);
+		m2_onbean_cb cb, gpointer cb_data, gboolean *flawed);
 
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);

@@ -2844,10 +2844,11 @@ out:
 GError*
 m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		m2_onbean_cb cb, gpointer cb_data)
+		m2_onbean_cb cb, gpointer cb_data, gboolean *flawed)
 {
 	GSList *beans = NULL;
-	GError *err = oio_generate_beans(url, size, chunk_size, pol, lb, &beans);
+	GError *err = oio_generate_beans(url, size, chunk_size, pol, lb, &beans,
+			flawed);
 	if (err)
 		return err;
 	if (cb) {

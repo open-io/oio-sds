@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2023 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -227,11 +227,17 @@ _poll(struct req_args_s *args, struct json_object *body)
 				"found only %u services matching the criteria: ", ids->len);
 		code = _reply_common_error(args, err);
 	} else {
+		if (flawed) {
+			args->rp->access_tail("flawed:true");
+			gchar metric_name[256] = {0};
+			g_snprintf(metric_name, sizeof(metric_name),
+					"lb.constraints.%s.flawed.count", pool);
+			network_server_incr_stat(args->server, metric_name);
+		} else {
+			args->rp->access_tail("flawed:false");
+		}
 		g_ptr_array_add(ids, NULL);
 		GString *gstr = _lb_pack_srvid_tab((const char**)ids->pdata);
-		if (flawed)
-			args->rp->add_header(
-					PROXYD_HEADER_PREFIX "lb-flawed", g_strdup("1"));
 		code = _reply_json(args, CODE_FINAL_OK, "OK", gstr);
 	}
 

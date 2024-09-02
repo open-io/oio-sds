@@ -3822,55 +3822,10 @@ action_container_sharding_get_in_range(struct req_args_s *args)
 /* CONTENT action resource -------------------------------------------------- */
 
 static GError*
-_get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
-		const char *polname, GSList *notin, GSList *broken,
-		gboolean force_fair_constraints, gboolean adjacent_mode, GSList **beans)
-{
-	struct namespace_info_s ni = {};
-	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
-	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
-	namespace_info_clear(&ni);
-
-	if (!policy)
-		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-	GError *err = get_conditioned_spare_chunks(url, position,
-			lb_rawx, policy, ns_name, notin, broken, force_fair_constraints,
-			adjacent_mode, beans);
-	storage_policy_clean(policy);
-	return err;
-}
-
-static GError*
-_get_spare_chunks(struct oio_url_s *url, const gchar *position,
-		const char *polname, GSList **beans)
-{
-	struct namespace_info_s ni = {};
-	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
-	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
-	namespace_info_clear(&ni);
-
-	if (!policy)
-		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-	GError *err = get_spare_chunks_focused(url, position,
-			lb_rawx, policy,
-			location_num, oio_proxy_local_prepare,
-			beans);
-	storage_policy_clean(policy);
-	return err;
-}
-
-static GError*
 _generate_beans(struct oio_url_s *url, gint64 pos,  gint64 size,
-		const char *polname, gboolean random_ids, GSList **beans)
+		struct storage_policy_s *policy, gboolean random_ids, GSList **beans,
+		gboolean *flawed)
 {
-	struct namespace_info_s ni = {};
-	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
-	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
-	namespace_info_clear(&ni);
-
-	if (!policy)
-		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-
 	struct oio_generate_beans_params_s params = {
 		.lb=lb_rawx,
 		.url=url,
@@ -3882,10 +3837,7 @@ _generate_beans(struct oio_url_s *url, gint64 pos,  gint64 size,
 		.mode=oio_proxy_local_prepare,
 		.random_ids=random_ids
 	};
-	GError *err = oio_generate_focused_beans(&params, beans);
-
-	storage_policy_clean(policy);
-	return err;
+	return oio_generate_focused_beans(&params, beans, flawed);
 }
 
 static enum http_rc_e
@@ -3918,18 +3870,38 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 		return _reply_format_error(args,
 				BADREQ("Invalid position format (integer expected)"));
 
+	struct namespace_info_s ni = {};
+	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
+	struct storage_policy_s *policy = storage_policy_init(&ni, stgpol);
+	namespace_info_clear(&ni);
+	if (!policy) {
+		return _reply_format_error(args,
+				NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy"));
+	}
+
 	/* If we are preparing chunks in order to append data to an existing
 	 * object, we must generate random IDs, because the final position
 	 * of the chunks is not known yet. */
 	gboolean random_ids = json_object_get_boolean(jappend);
 
 	/* Local generation of beans */
+	gboolean flawed = FALSE;
 	GSList *beans = NULL;
-	GError *err = _generate_beans(args->url, pos, size, stgpol, random_ids,
-			&beans);
+	GError *err = _generate_beans(args->url, pos, size, policy, random_ids,
+			&beans, &flawed);
 
 	/* Patch the chunk size to ease putting contents with unknown size. */
 	if (!err) {
+		if (flawed) {
+			args->rp->access_tail("flawed:true");
+			gchar metric_name[256] = {0};
+			g_snprintf(metric_name, sizeof(metric_name),
+					"lb.constraints.%s.flawed.count",
+					storage_policy_get_service_pool(policy));
+			network_server_incr_stat(args->server, metric_name);
+		} else {
+			args->rp->access_tail("flawed:false");
+		}
 		const gint64 chunk_size = oio_ns_chunk_size;
 		for (GSList *l=beans; l ;l=l->next) {
 			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
@@ -3941,6 +3913,7 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 				g_strdup_printf("%"G_GINT64_FORMAT, chunk_size));
 	}
 
+	storage_policy_clean(policy);
 	return _reply_beans_func(args, err, beans);
 }
 
@@ -3967,8 +3940,16 @@ static GError *_m2_json_spare (struct req_args_s *args,
 
 	*out = NULL;
 	const char *stgpol = OPT("stgpol");
-	if (!stgpol)
+	if (!stgpol) {
 		return BADREQ("'stgpol' field not a string");
+	}
+	struct namespace_info_s ni = {};
+	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
+	struct storage_policy_s *policy = storage_policy_init(&ni, stgpol);
+	namespace_info_clear(&ni);
+	if (!policy) {
+		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
+	}
 
 	if (!json_object_is_type (jbody, json_type_object))
 		return BADREQ ("Body is not a valid JSON object");
@@ -4008,23 +3989,38 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		CHUNKS_set_size(chunk, -1);
 	}
 
+	gboolean flawed = FALSE;
 	if (!notin && !broken) {
 		/* traditional prepare but only for chunks */
-		err = _get_spare_chunks(args->url, OPT("position"), stgpol, &obeans);
+		err = get_spare_chunks_focused(args->url, OPT("position"), lb_rawx,
+				policy, location_num, oio_proxy_local_prepare,
+				&obeans, &flawed);
 	} else {
-		err = _get_conditioned_spare_chunks(args->url, OPT("position"),
-				stgpol, notin, broken, force_fair_constraints, adjacent_mode, &obeans);
+		err = get_conditioned_spare_chunks(args->url, OPT("position"),
+				lb_rawx, policy, ns_name, notin, broken, force_fair_constraints,
+				adjacent_mode, &obeans, &flawed);
 	}
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 
 	if (!err) {
+		if (flawed) {
+			args->rp->access_tail("flawed:true");
+			gchar metric_name[256] = {0};
+			g_snprintf(metric_name, sizeof(metric_name),
+					"lb.constraints.%s.flawed.count",
+					storage_policy_get_service_pool(policy));
+			network_server_incr_stat(args->server, metric_name);
+		} else {
+			args->rp->access_tail("flawed:false");
+		}
 		*out = obeans;
 		obeans = NULL;
 	}
 label_exit:
-	_bean_cleanl2 (obeans);
-	_bean_cleanl2 (broken);
-	_bean_cleanl2 (notin);
+	storage_policy_clean(policy);
+	_bean_cleanl2(obeans);
+	_bean_cleanl2(broken);
+	_bean_cleanl2(notin);
 	return err;
 }
 

@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -325,8 +325,12 @@ oio_lb_pool__poll_many(struct oio_lb_pool_s *pool, int shots,
 			g_hash_table_replace(services,
 					g_strdup(sel->item->id), GINT_TO_POINTER(icount));
 		}
-		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		gboolean flawed = FALSE;
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, &flawed);
 		g_assert_no_error(err);
+		if (flawed) {
+			GRID_DEBUG("Flawed selection");
+		}
 
 		guint32 min[4] = {G_MAXUINT32, G_MAXUINT32, G_MAXUINT32, G_MAXUINT32};
 		guint32 max[4] = {0, 0, 0, 0};

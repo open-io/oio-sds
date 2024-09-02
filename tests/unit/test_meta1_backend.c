@@ -1,7 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -262,12 +262,12 @@ test_services_cycle_nolast(void)
 		/* Subsequent LINK do noto alter the sequence returned */
 		for (guint i=0; i<MAXITER ;++i) {
 			err = meta1_backend_services_link(
-					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL);
+					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL, NULL);
 			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 			g_clear_error(&err);
 
 			err = meta1_backend_services_link(
-					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out);
+					m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out, NULL);
 			g_assert_no_error(err);
 			CHECK_ARRAY_LEN(1, out);
 
@@ -276,24 +276,24 @@ test_services_cycle_nolast(void)
 
 		/* Renew the services with no 'last' known */
 		err = meta1_backend_services_poll(
-				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL);
+				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 		g_clear_error(&err);
 
 		err = meta1_backend_services_poll(
-				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out);
+				m1, url, NAME_SRVTYPE_META2, FALSE, FALSE, &out, NULL);
 		g_assert_no_error(err);
 		CHECK_ARRAY_LEN(1, out);
 		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
 
 		err = meta1_backend_services_poll(m1, url, NAME_SRVTYPE_META2,
-				FALSE, FALSE, &out);
+				FALSE, FALSE, &out, NULL);
 		g_assert_no_error(err);
 		CHECK_ARRAY_LEN(1, out);
 		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));
 
 		err = meta1_backend_services_poll(m1, url, NAME_SRVTYPE_META2,
-				FALSE, FALSE, &out);
+				FALSE, FALSE, &out, NULL);
 		g_assert_no_error(err);
 		CHECK_ARRAY_LEN(1, out);
 		g_assert_cmpuint(1, ==, _count_services(m1, url, NAME_SRVTYPE_META2));

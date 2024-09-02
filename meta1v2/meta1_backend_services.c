@@ -474,7 +474,7 @@ __locations_from_m1srvurl(struct meta1_backend_s *m1,
 static struct meta1_service_url_s *
 __poll_services(struct meta1_backend_s *m1, guint replicas,
 		const char *srvtype, guint seq,
-		struct meta1_service_url_s **used, GError **err)
+		struct meta1_service_url_s **used, gboolean *flawed, GError **err)
 {
 	GRID_DEBUG("Polling %u [%s]", replicas, srvtype);
 
@@ -488,7 +488,8 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	}
 	gboolean force_fair_constraints = FALSE;
 	*err = oio_lb__patch_with_pool(
-			m1->lb, srvtype, avoid, NULL, _on_id, force_fair_constraints, FALSE, NULL);
+			m1->lb, srvtype, avoid, NULL, _on_id, force_fair_constraints, FALSE,
+			flawed);
 	if (*err) {
 		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
@@ -559,7 +560,7 @@ static GError *
 __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, const char *srvtype,
 		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
-		gchar ***result, gboolean *renewed)
+		gchar ***result, gboolean *renewed, gboolean *flawed)
 {
 	GError *err = NULL;
 	struct meta1_service_url_s **used = NULL;
@@ -607,7 +608,8 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	gint seq = urlv_get_max_seq(used);
 	seq = (seq<0 ? 1 : seq+1);
 
-	if (NULL != (m1_url = __poll_services(m1, replicas, srvtype, seq, used, &err))) {
+	if (NULL != (m1_url = __poll_services(m1, replicas, srvtype, seq, used,
+			flawed, &err))) {
 		if (mode != M1V2_GETSRV_DRYRUN) {
 			if (NULL == err) {
 				if (policy == SVCUPD_REPLACE)
@@ -634,12 +636,13 @@ static GError *
 __get_container_service(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, const char *srvtype,
 		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
-		gchar ***result, gboolean *renewed)
+		gchar ***result, gboolean *renewed, gboolean *flawed)
 {
 	GError *err = validate_service_type(srvtype);
 	if (NULL != err)
 		return err;
-	err = __get_container_service2(sq3, url, srvtype, m1, mode, result, renewed);
+	err = __get_container_service2(sq3, url, srvtype, m1, mode, result, renewed,
+			flawed);
 	return err;
 }
 
@@ -727,7 +730,8 @@ out:
 }
 
 static GError *
-__relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
+__relink_container_services(struct m1v2_relink_input_s *in, gchar ***out,
+		gboolean *flawed)
 {
 	GError *err = NULL;
 	struct meta1_service_url_s *packed = NULL;
@@ -771,7 +775,8 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			}
 			gboolean force_fair_constraints = FALSE;
 			err = oio_lb__patch_with_pool(in->m1->lb, in->srvtype,
-					avoids, known, _on_id, force_fair_constraints, FALSE, NULL);
+					avoids, known, _on_id, force_fair_constraints, FALSE,
+					flawed);
 			if (err) {
 				g_prefix_error(&err,
 						"found only %u services matching the criteria: ",
@@ -880,7 +885,7 @@ GError *
 meta1_backend_services_link (struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype,
 		gboolean dryrun, gboolean autocreate,
-		gchar ***result)
+		gchar ***result, gboolean *flawed)
 {
 	if (!result) return SYSERR("BUG: invalid output array");
 
@@ -896,7 +901,8 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 		gboolean renewed = FALSE;
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
 			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_REUSE;
-			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
+			err = __get_container_service(sq3, url, srvtype, m1, mode, result,
+					&renewed, flawed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -914,7 +920,7 @@ GError*
 meta1_backend_services_poll(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype,
 		gboolean dryrun, gboolean autocreate,
-		gchar ***result)
+		gchar ***result, gboolean *flawed)
 {
 	if (!result) return SYSERR("BUG: invalid output array");
 
@@ -933,7 +939,8 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
 			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_RENEW;
-			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
+			err = __get_container_service(sq3, url, srvtype, m1, mode, result,
+					&renewed, flawed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -1074,7 +1081,7 @@ meta1_backend_services_unlink(struct meta1_backend_s *m1,
 GError*
 meta1_backend_services_relink(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *kept, const char *replaced,
-		gboolean dryrun, gchar ***out)
+		gboolean dryrun, gchar ***out, gboolean *flawed)
 {
 	GError *err = __check_backend_events (m1);
 	if (err) return err;
@@ -1127,7 +1134,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 					.srvtype = ref->srvtype, .kept = ukept, .replaced = urepl,
 					.dryrun = dryrun
 				};
-				err = __relink_container_services(&in, out);
+				err = __relink_container_services(&in, out, flawed);
 			}
 			if (!(err = sqlx_transaction_end(repctx, err))) {
 				if (!dryrun)

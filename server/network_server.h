@@ -148,7 +148,7 @@ void network_server_postfork_clean(struct network_server_s *srv);
 
 void network_client_allow_input(struct network_client_s *clt, gboolean v);
 
-/** Configure a statds client which will log all incoming requests */
+/** Configure a statsd client which will log all incoming requests */
 void network_server_configure_statsd(struct network_server_s *srv,
 		const gchar *service_type, const gchar *statsd_host, gint statsd_port);
 

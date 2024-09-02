@@ -230,7 +230,7 @@ GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, m2_onbean_cb cb, gpointer cb_data);
+		gboolean append, m2_onbean_cb cb, gpointer cb_data, gboolean *flawed);
 
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 *result);
