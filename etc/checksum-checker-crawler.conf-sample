@@ -16,7 +16,7 @@ interval = 1800
 # Defaults to 300 seconds.
 report_interval = 300
 # Maximum chunks to be scanned per second. Defaults to 30.
-scanned_per_second = 5
+scanned_per_second = 2.5
 # Number of chunks to check before updating the markers
 # (not used if <use_marker> is disabled). Default to 900.
 # This value represents 60s at max rate.

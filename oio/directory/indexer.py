@@ -19,7 +19,7 @@ from oio.blob.utils import check_volume_for_service_type
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.common.daemon import Daemon
-from oio.common.easy_value import int_value, boolean_value
+from oio.common.easy_value import float_value, int_value, boolean_value
 from oio.common.green import ContextPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
@@ -42,7 +42,7 @@ class Meta2IndexingWorker(object):
         - interval: (int) in sec time between two full scans. Default: half an
                     hour.
         - report_interval: (int) in sec, time between two reports: Default: 300
-        - scanned_per_second: (int) maximum number of indexed databases /s.
+        - scanned_per_second: (float) maximum number of indexed databases per second.
         - try_removing_faulty_indexes : In the event where we encounter a
             database that's not supposed to be handled by this volume, attempt
             to remove it from this volume rdir index if it exists
@@ -68,7 +68,7 @@ class Meta2IndexingWorker(object):
         self.indexed_since_last_report = 0
         self.scans_interval = int_value(conf.get("interval"), 1800)
         self.report_interval = int_value(conf.get("report_interval"), 300)
-        self.max_indexed_per_second = int_value(conf.get("scanned_per_second"), 3000)
+        self.max_indexed_per_second = float_value(conf.get("scanned_per_second"), 3000)
         self.namespace, self.volume_id = check_volume_for_service_type(
             self.volume, "meta2"
         )

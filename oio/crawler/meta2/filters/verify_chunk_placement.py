@@ -17,7 +17,7 @@ import sqlite3
 from collections import Counter
 from urllib.parse import urlparse
 from oio.blob.operator import ChunkOperator
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import NoSuchObject, NotFound
 from oio.common.green import time
 from oio.common.utils import (
@@ -59,7 +59,7 @@ class VerifyChunkPlacement(Filter):
             self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
         )
         # Object scanned per second
-        self.max_scanned_per_second = int_value(
+        self.max_scanned_per_second = float_value(
             self.conf.get("max_scanned_per_second"), self.MAX_SCANNED_PER_SECOND
         )
         # Interval of time in sec after which the services are updated
@@ -188,7 +188,7 @@ class VerifyChunkPlacement(Filter):
         :type diff: int
         :param positions: positions occupied by object chunks
         :type positions: [str]
-        :return: list of chunks positions to rebuils
+        :return: list of chunks positions to rebuild
         :rtype: [str]
         """
         if "nb_copy" in data_security:
@@ -204,7 +204,7 @@ class VerifyChunkPlacement(Filter):
         self, data_security, expected, positions
     ):
         """
-        Return list of chunks to rebuild for an object with mutiple metachunk
+        Return list of chunks to rebuild for an object with multiple metachunk
 
         :param data_security: data security defined for the object storage policy
         :type data_security: str
@@ -212,7 +212,7 @@ class VerifyChunkPlacement(Filter):
         :type expected: int
         :param positions: positions occupied by object chunks
         :type positions: [str]
-        :return: list of chunks positions to rebuils
+        :return: list of chunks positions to rebuild
         :rtype: [str]
         """
         to_rebuild = []
@@ -288,7 +288,7 @@ class VerifyChunkPlacement(Filter):
         :param obj_data: object chunks data
             [(rawx_srv_id, position, content_id, policy, object name, version), ...]
         :type obj_data: list
-        :param account: accout name
+        :param account: account name
         :type account: str
         :param container: container name
         :type container: str
@@ -382,7 +382,7 @@ class VerifyChunkPlacement(Filter):
         :param chunks: object chunks data
             [(rawx_srv_id, position, content_id, policy, object name, version), ...]
         :type chunks: list
-        :param account: accout name
+        :param account: account name
         :type account: str
         :param container: container name
         :type container: str
@@ -607,7 +607,7 @@ class VerifyChunkPlacement(Filter):
         """
         Verify location of chunks referenced in the meta2 data base
 
-        :param env: dictionnary with environment details
+        :param env: dictionary with environment details
         :type env: dict
         :param cb: callback function
         :type cb: function

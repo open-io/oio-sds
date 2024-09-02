@@ -202,7 +202,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
 
     DEFAULT_SCAN_INTERVAL = 1800
     DEFAULT_REPORT_INTERVAL = 300
-    DEFAULT_SCANNED_PER_SECOND = 30
+    DEFAULT_SCANNED_PER_SECOND = 30.0
     DEFAULT_STAT_INTERVAL = 10.0
 
     def __init__(self, conf, volume_path, logger=None, **kwargs):
@@ -210,7 +210,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
         - interval: (int) in sec time between two full scans. Default: half an
                     hour.
         - report_interval: (int) in sec, time between two reports: Default: 300
-        - scanned_per_second: (int) maximum number of indexed databases /s.
+        - scanned_per_second: (float) maximum number of items analyzed per second.
         """
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
@@ -236,7 +236,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
             except Exception as exc:
                 raise ConfigurationException(
                     f"Error in excluded directories definition: {exc}"
-                )
+                ) from exc
         self.wait_random_time_before_starting = boolean_value(
             self.conf.get("wait_random_time_before_starting"), False
         )
@@ -247,7 +247,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin, Process):
         self.report_interval = int_value(
             self.conf.get("report_interval"), self.DEFAULT_REPORT_INTERVAL
         )
-        self.max_scanned_per_second = int_value(
+        self.max_scanned_per_second = float_value(
             self.conf.get("scanned_per_second"), self.DEFAULT_SCANNED_PER_SECOND
         )
         self.passes = 0
@@ -530,7 +530,7 @@ class Crawler(Daemon):
             raise ConfigurationException("No volumes provided to crawl!")
 
         # Apply new nice value
-        # useless if nice_value == 0 and it breaks settting nice value from systemd
+        # useless if nice_value == 0 and it breaks setting nice value from systemd
         nice_value = int_value(conf.get("nice_value"), self.DEFAULT_NICE_VALUE)
         if nice_value != 0:
             current_nice = nice(0)
