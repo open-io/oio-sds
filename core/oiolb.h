@@ -58,6 +58,7 @@ struct oio_lb_selected_item_s
 	guint8 cur_items_by_level[OIO_LB_LOC_LEVELS];
 	guint8 max_items_by_level[OIO_LB_LOC_LEVELS];
 	guint8 warn_items_by_level[OIO_LB_LOC_LEVELS];
+	gboolean flawed;
 };
 
 

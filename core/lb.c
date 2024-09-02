@@ -397,9 +397,6 @@ struct polling_ctx_s
 	 * Array<struct oio_lb_selected_item_s *> */
 	GPtrArray *selection;
 
-	/* Did we use a fallback slot while polling? */
-	gboolean fallback_used : 8;
-
 	/* are we moving data while polling? */
 	gboolean force_fair_constraints : 8;
 
@@ -477,8 +474,8 @@ _item_dup(const struct oio_lb_selected_item_s *sel)
 	res->expected_slot = g_strdup(sel->expected_slot);
 	res->final_slot = g_strdup(sel->final_slot);
 	res->item = g_memdup(sel->item, sizeof(*sel->item));
-	/* cur_items_by_level, max_items_by_level and warn_items_by_level
-	 * are embedded in the main structure and do not require an
+	/* cur_items_by_level, max_items_by_level, warn_items_by_level
+	 * and flawed are embedded in the main structure and do not require an
 	 * explicit copy. */
 	return res;
 }
@@ -968,7 +965,18 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 	memcpy(selected->warn_items_by_level, ctx->fair_max_items,
 			OIO_LB_LOC_LEVELS * sizeof(guint8));
 	// Add the service we are currently accepting
-	for (int j = 0; j < OIO_LB_LOC_LEVELS; selected->cur_items_by_level[j++] += 1);
+	for (int level = 0; level < OIO_LB_LOC_LEVELS; level++) {
+		guint8 cur = (selected->cur_items_by_level[level] += 1);
+		guint8 warn = selected->warn_items_by_level[level];
+		if (warn && cur > warn) {
+			GRID_DEBUG("Selected item %s in slot [%s] has reached "
+					"has exceeded the recommended number of items at "
+					"level %u (reqid=%s): nb=%d nb_recommended=%d",
+					selected->item->id, slot->name, level,
+					oio_ext_get_reqid(), cur, warn);
+			selected->flawed = TRUE;
+		}
+	}
 
 	/* In case we do not enforce the distance check, we still need to find
 	 * the lowest distance reached, for hypothetical future improvement. */
@@ -1090,8 +1098,11 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		}
 		fallback = TRUE;
 	}
-	if (selected && fallback)
-		ctx->fallback_used = TRUE;
+	if (selected && fallback) {
+		GRID_DEBUG("Selected item %s in pool [%s] used fallback slot "
+				"(reqid=%s)", selected->item->id, lb->name, oio_ext_get_reqid());
+		selected->flawed = TRUE;
+	}
 	return selected;
 }
 
@@ -1280,7 +1291,6 @@ __local__patch(struct oio_lb_pool_s *self,
 	 * each other. Then we reduce the distance and thus
 	 * have more chances to find services matching the other criteria. */
 	guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
-	guint16 reached_dist = max_dist;
 
 	struct polling_ctx_s ctx = {
 		.avoids = avoids,
@@ -1321,13 +1331,7 @@ __local__patch(struct oio_lb_pool_s *self,
 		for (dist = max_dist; !selected && dist >= lb->min_dist; dist -= 1) {
 			selected = _local_target__poll(lb, *ptarget, dist, &ctx);
 		}
-		if (selected) {
-			/* Do not trust the loop counter, we may have slackened
-			 * the distance constraint in the polling function. */
-			dist = selected->final_dist;
-			if (dist < reached_dist)
-				reached_dist = dist;
-		} else {
+		if (!selected) {
 			GString *max_items = g_string_sized_new(32);
 			_print_items_tab(max_items,
 					force_fair_constraints ? lb->fair_max_items : lb->strict_max_items);
@@ -1358,6 +1362,7 @@ __local__patch(struct oio_lb_pool_s *self,
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
+	gboolean _flawed = FALSE;
 	void _set_dists(gpointer element, guint cur) {
 		struct oio_lb_selected_item_s *sel = element;
 		sel->expected_dist = max_dist;
@@ -1370,6 +1375,17 @@ __local__patch(struct oio_lb_pool_s *self,
 			sel->final_dist = _find_min_dist(
 					polled, sel->item->location, ctx.max_dist);
 			polled[cur] = old;
+
+			if (sel->final_dist <= lb->warn_dist) {
+				GRID_DEBUG("Selected item %s in pool [%s] has reached "
+						"the warning distance (reqid=%s): dist=%d warn_dist=%d",
+						sel->item->id, lb->name, oio_ext_get_reqid(),
+						sel->final_dist, lb->warn_dist);
+				sel->flawed = TRUE;
+			}
+		}
+		if (sel->flawed) {
+			_flawed = TRUE;
 		}
 	}
 	for (i = 0; i < ctx.selection->len; i++)
@@ -1386,10 +1402,7 @@ __local__patch(struct oio_lb_pool_s *self,
 		GRID_WARN("%s", err->message);
 	} else {
 		if (flawed) {
-			GRID_DEBUG(
-					"reached_dist=%u, warn_dist=%u, fallbacks=%d",
-					reached_dist, lb->warn_dist, ctx.fallback_used);
-			*flawed = (reached_dist <= lb->warn_dist) || ctx.fallback_used;
+			*flawed = _flawed;
 		}
 		void _forward(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 			if (sel->item)
