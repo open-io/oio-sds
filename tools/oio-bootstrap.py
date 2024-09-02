@@ -304,7 +304,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${STATSD_PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=bash -c "nc -kuld ${IP} ${STATSD_PORT} | sed -E -e 's/(\\|c|\\|s|\\|ms)(.)/\\1\\\\n\\2/' | sed -E -e 's/(\\|c|\\|s|\\|ms)(.)/\\1\\\\n\\2/' > ${DATADIR}/statsd_${STATSD_PORT}.txt"
+ExecStart=bash -c "nc -kuld ${IP} ${STATSD_PORT} | sed -E -e 's/(\\|c|\\|s|\\|ms|\\|g)(.)/\\1\\\\n\\2/g' > ${DATADIR}/statsd_${STATSD_PORT}.txt"
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]

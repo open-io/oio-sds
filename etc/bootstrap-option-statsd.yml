@@ -1,7 +1,7 @@
 # For meta0, meta1, meta2, conscience
 config:
   server.statsd.host: "127.0.0.1"
-  server.statsd.port: 8126
+  server.statsd.port: 8125
 # For crawlers and rawx
 statsd:
   host: "127.0.0.1"
