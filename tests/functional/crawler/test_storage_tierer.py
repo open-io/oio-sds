@@ -20,8 +20,6 @@ import time
 
 import mock
 
-from oio import ObjectStorageApi
-from oio.container.client import ContainerClient
 from oio.crawler.storage_tierer import StorageTiererWorker
 from tests.functional.content.test_content import random_data
 from tests.utils import BaseTestCase
@@ -32,7 +30,7 @@ class TestStorageTierer(BaseTestCase):
         super(TestStorageTierer, self).setUp()
         self.namespace = self.conf["namespace"]
         self.test_account = "test_storage_tiering_%f" % time.time()
-        self.api = ObjectStorageApi(self.namespace)
+        self.api = self.storage
         self.gridconf = {
             "namespace": self.namespace,
             "container_fetch_limit": 2,
@@ -41,7 +39,6 @@ class TestStorageTierer(BaseTestCase):
             "outdated_threshold": 0,
             "new_policy": "EC",
         }
-        self.api.container = ContainerClient(self.gridconf)
         self._populate()
         self.wait_until_empty(topic="oio", group_id="event-agent")
 
@@ -57,7 +54,7 @@ class TestStorageTierer(BaseTestCase):
         )
 
         self.container_2_name = "container_with_2_contents"
-        self.container_2 = self._new_container(self.container_1_name)
+        self.container_2 = self._new_container(self.container_2_name)
         self.container_2_content_0_name = "container_2_content_0"
         self.container_2_content_0 = self._new_object(
             self.container_2_name, self.container_2_content_0_name, "SINGLE"
@@ -70,6 +67,7 @@ class TestStorageTierer(BaseTestCase):
     def _new_container(self, container):
         self.api.container_create(self.test_account, container)
         cnt = self.api.container_get_properties(self.test_account, container)
+        self.clean_later(container, account=self.test_account)
         return cnt
 
     def _new_object(self, container, obj_name, stgpol):
