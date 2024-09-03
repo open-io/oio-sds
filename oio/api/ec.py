@@ -1153,13 +1153,13 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     success_chunks.append(writer.chunk)
             else:
                 self.logger.warning(
-                    "Unexpected status code from %s (reqid=%s): (%s) %s)",
+                    "Unexpected status code from %s (reqid=%s): %s %s",
                     writer.chunk,
                     self.reqid,
                     resp.status,
                     resp.reason,
                 )
-                writer.chunk["error"] = f"resp: HTTP {resp.status}"
+                writer.chunk["error"] = f"HTTP {resp.status}"
                 self.failed_chunks.append(writer.chunk)
         else:
             self.failed_chunks.append(writer.chunk)

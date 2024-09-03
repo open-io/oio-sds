@@ -43,7 +43,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         connection_timeout=None,
         write_timeout=None,
         read_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         super(ReplicatedMetachunkWriter, self).__init__(
             sysmeta, storage_method=storage_method, quorum=quorum, **kwargs
@@ -309,13 +309,14 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 failures.append(conn.chunk)
             elif resp.status != 201:
                 conn.failed = True
-                conn.chunk["error"] = "HTTP %s" % resp.status
+                conn.chunk["error"] = f"HTTP {resp.status}"
                 failures.append(conn.chunk)
-                self.logger.error(
-                    "Unexpected status code from %s (reqid=%s): %s",
+                self.logger.warning(
+                    "Unexpected status code from %s (reqid=%s): %s %s",
                     conn.chunk,
                     self.reqid,
                     resp.status,
+                    resp.reason,
                 )
             else:
                 rawx_checksum = resp.getheader(CHUNK_HEADERS["chunk_hash"])
@@ -375,7 +376,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
-                **kwargs
+                **kwargs,
             )
             bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks

@@ -810,6 +810,11 @@ class _MetachunkWriter(object):
                 message="RAWX write failure, quorum not reached (%d/%d): %s"
                 % (len(successes), self.quorum, errors)
             )
+            # This one has priority: it gives clues about concurrent uploads
+            # of the same object version, and requires special treatment.
+            if any(x.get("error") == "HTTP 409" for x in failures):
+                raise exc.Conflict(message=str(new_exc))
+
             for err in [x.get("error") for x in failures]:
                 if isinstance(err, exc.SourceReadError):
                     raise exc.SourceReadError(new_exc)
@@ -819,9 +824,7 @@ class _MetachunkWriter(object):
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
                 elif isinstance(err, exc.MethodNotAllowed):
-                    raise exc.MethodNotAllowed(new_exc)
-                elif err == "HTTP 409":
-                    raise exc.Conflict(new_exc)
+                    raise exc.MethodNotAllowed(message=str(new_exc))
             raise new_exc
 
 

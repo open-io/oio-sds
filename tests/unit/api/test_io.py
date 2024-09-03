@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -190,6 +190,21 @@ class MetachunkWriterTest(unittest.TestCase):
         )
         self.assertRaises(
             exceptions.OioException, self.mcw.quorum_or_fail, successes, []
+        )
+        self._check_message(successes, failures)
+
+    def test_metachunkwriter_quorum_fail_conflict(self):
+        """
+        Check that Timeout+Conflict raises Conflict
+        """
+        successes = [self._dummy_chunk(), self._dummy_chunk()]
+        failures = [
+            self._dummy_chunk(Exception("Failed")),
+            self._dummy_chunk(exceptions.OioTimeout("Failed")),
+            self._dummy_chunk("HTTP 409"),
+        ]
+        self.assertRaises(
+            exceptions.Conflict, self.mcw.quorum_or_fail, successes, failures
         )
         self._check_message(successes, failures)
 

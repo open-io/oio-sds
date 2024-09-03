@@ -1922,6 +1922,16 @@ class ObjectStorageApi(object):
             ul_chunks, ul_bytes, obj_checksum = self._object_upload(
                 ul_handler, **kwargs
             )
+        except exc.Conflict as ex:
+            # Conflict means the chunks are already there, from a previous or
+            # concurrent upload. Do not delete them, we don't know if the
+            # concurrent upload succeeded or failed. This may leave some orphan
+            # chunks (not all chunks are in conflict).
+            self.logger.warning(
+                "Failed to upload all data (%s), but keeping chunks",
+                ex,
+            )
+            raise
         except exc.OioException as ex:
             self.logger.warning("Failed to upload all data (%s), deleting chunks", ex)
             kwargs["cid"] = obj_meta.get("container_id")

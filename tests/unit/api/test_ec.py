@@ -144,7 +144,7 @@ class TestEC(unittest.TestCase):
         for i in range(quorum_size):
             self.assertEqual(chunks[i].get("error"), None)
         for i in range(quorum_size, nb):
-            self.assertEqual(chunks[i].get("error"), "resp: HTTP 500")
+            self.assertEqual(chunks[i].get("error"), "HTTP 500")
 
         self.assertEqual(bytes_transferred, 0)
         self.assertEqual(checksum, EMPTY_BLAKE3)

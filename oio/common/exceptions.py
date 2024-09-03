@@ -271,6 +271,7 @@ class StatusMessageException(OioException):
     Error carrying an HTTP status, an OIO status and a message.
     """
 
+    # FIXME(FVE): make "message" the 1st parameter, subclasses are misused...
     def __init__(self, http_status, status=None, message=None):
         self.http_status = http_status
         self.message = message or "n/a"
