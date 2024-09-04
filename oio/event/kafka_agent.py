@@ -30,7 +30,6 @@ from oio.common.statsd import get_statsd
 class KafkaEventWorker(KafkaConsumerWorker):
     def __init__(
         self,
-        endpoint,
         topic,
         logger,
         events_queue,
@@ -41,7 +40,6 @@ class KafkaEventWorker(KafkaConsumerWorker):
         **kwargs,
     ):
         super().__init__(
-            endpoint,
             topic,
             logger,
             events_queue,

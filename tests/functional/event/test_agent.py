@@ -160,7 +160,6 @@ broker_endpoint = {endpoint}
 
             def start_worker(worker_id):
                 self.pool._workers[worker_id] = self.pool.worker_class(
-                    self.pool.endpoint,
                     self.pool.topic,
                     self.pool.logger,
                     self.pool._events_queue,

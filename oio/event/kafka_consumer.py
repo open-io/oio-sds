@@ -17,6 +17,7 @@ import json
 import os
 import signal
 import time
+import uuid
 
 from multiprocessing import Event, Process, Queue
 from multiprocessing.queues import Empty
@@ -54,6 +55,15 @@ class EventQueue:
 
     def init(self, _conf, _workers):
         pass
+
+    def reset(self):
+        """Remove all events from queues"""
+        for queue in self.queues.values():
+            while True:
+                try:
+                    queue.get_nowait()
+                except Empty:
+                    break
 
     def register_queue(self, queue_id):
         self.queues[queue_id] = Queue(self.size)
@@ -273,6 +283,7 @@ class AcknowledgeMessageMixin:
         try:
             self._offsets_queue.put(
                 {
+                    "batch_id": message["batch_id"],
                     "topic": message["topic"],
                     "partition": message["partition"],
                     "offset": message["offset"],
@@ -291,14 +302,13 @@ class AcknowledgeMessageMixin:
             return False
 
 
-class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
+class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
     """
     Base class for processes listening to messages on an Kafka topic.
     """
 
     def __init__(
         self,
-        endpoint,
         topic,
         logger,
         events_queue,
@@ -309,11 +319,9 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
         **kwargs,
     ):
         Process.__init__(self)
-        KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
         AcknowledgeMessageMixin.__init__(
             self, offsets_queue=offsets_queue, logger=logger
         )
-        self.endpoint = endpoint
         self.app_conf = app_conf or {}
         self.logger = logger
         self.topic = topic
@@ -325,6 +333,9 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
         self._events_queue_id = self._events_queue.get_queue_id(worker_id)
 
         self._rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
+
+    def _reject_message(self, message, delay=None):
+        self.acknowledge_message(message, as_failure=True, delay=delay)
 
     def _consume(self):
         """
@@ -361,14 +372,12 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
                     self.logger.error(
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
                     )
-                self.reject_message(
-                    event, callback=self.acknowledge_message, delay=delay
-                )
+                self._reject_message(event, delay=delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
-                self.reject_message(event, callback=self.acknowledge_message)
+                self._reject_message(event)
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
@@ -388,7 +397,6 @@ class KafkaConsumerWorker(Process, KafkaRejectorMixin, AcknowledgeMessageMixin):
             except Exception:
                 self.logger.exception("Error, reconnecting")
             finally:
-                self.close_producer()
                 self.close()
 
     def stop(self):
@@ -464,6 +472,7 @@ class KafkaBatchFeeder(
         self._consumer = None
         self._stop_requested = Event()
         self._events_queue = events_queue
+        self._batch_id = None
 
     @property
     def events_queue(self):
@@ -473,7 +482,14 @@ class KafkaBatchFeeder(
     def offsets_queue(self):
         return self._offsets_queue
 
+    def _cleanup_previous_batch(self):
+        # In case of bratch feeder process restart some events from previous batch may
+        # still be present in queues
+        self.events_queue.reset()
+
     def _fill_batch(self):
+        # Create a new batch
+        self._batch_id = uuid.uuid4().hex
         deadline = monotonic_time() + self._commit_interval
         for event in self._consumer.fetch_events():
             if self._stop_requested.is_set():
@@ -499,6 +515,7 @@ class KafkaBatchFeeder(
                     self._events_queue.put(
                         queue_id,
                         {
+                            "batch_id": self._batch_id,
                             "topic": topic,
                             "partition": partition,
                             "offset": offset,
@@ -509,6 +526,7 @@ class KafkaBatchFeeder(
                     self.logger.error("Unable to parse event, reason: %s", exc)
                     self.reject_message(
                         {
+                            "batch_id": self._batch_id,
                             "topic": topic,
                             "partition": partition,
                             "offset": offset,
@@ -525,7 +543,7 @@ class KafkaBatchFeeder(
             if self._registered_offsets == self._batch_size:
                 # Batch complete
                 break
-            if self._registered_offsets > 0 and monotonic_time() > deadline:
+            if self.has_registered_offsets() and monotonic_time() > deadline:
                 # Deadline reached
                 break
 
@@ -537,6 +555,15 @@ class KafkaBatchFeeder(
                     raise StopIteration()
                 try:
                     offset = self._offsets_queue.get(True, timeout=1.0)
+                    # Ensure offset belongs to current batch
+                    offset_batch_id = offset.get("batch_id")
+                    if offset_batch_id != self._batch_id:
+                        self.logger.warning(
+                            "Offset belongs to previous batch (got=%d expect=%d)",
+                            offset_batch_id,
+                            self._batch_id,
+                        )
+                        continue
                     if offset.get("failure", False):
                         self._connect_producer()
                         if not self._producer:
@@ -568,6 +595,7 @@ class KafkaBatchFeeder(
                 try:
                     # Reset batch
                     self.reset_offsets()
+                    self._cleanup_previous_batch()
                     self._connect()
                     # Retrieve events
                     self._fill_batch()
@@ -578,6 +606,8 @@ class KafkaBatchFeeder(
 
         except StopIteration:
             ...
+        except Exception as exc:
+            self.logger.error("Failed to process batch, reason: %s", exc)
         # Try to commit even a partial batch
         self._commit_batch()
 
@@ -672,7 +702,6 @@ class KafkaConsumerPool:
 
     def _start_worker(self, worker_id):
         self._workers[worker_id] = self.worker_class(
-            self.endpoint,
             self.topic,
             self.logger,
             self._events_queue,
