@@ -54,7 +54,7 @@ class TestFilterChangelocation(BaseTestCase):
         self.rawx_srv_list = self.conscience.all_services(
             service_type="rawx",
         )
-        self.container_sharding = ContainerSharding(self.conf)
+        self.container_sharding = ContainerSharding(self.conf, logger=self.logger)
         self.rawx_volumes = {}
         for rawx in self.rawx_srv_list:
             tags = rawx["tags"]
@@ -162,7 +162,7 @@ class TestFilterChangelocation(BaseTestCase):
         app.app_env["working_dir"] = misplaced_chunk_dir
         app.app_env["api"] = self.api
         chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-        changelocation = Changelocation(app=app, conf=self.conf)
+        changelocation = Changelocation(app=app, conf=self.conf, logger=self.logger)
         if not in_mtime:
             changelocation.min_delay_secs = 0
         return (
@@ -233,7 +233,7 @@ class TestFilterChangelocation(BaseTestCase):
         app.app_env["working_dir"] = misplaced_chunk_dir
         app.app_env["api"] = self.api
         chunk_env = create_chunk_env(chunk_id, chunk_path, chunk_symlink_path)
-        changelocation = Changelocation(app=app, conf=self.conf)
+        changelocation = Changelocation(app=app, conf=self.conf, logger=self.logger)
         changelocation.min_delay_secs = 0
         # Launch filter to change location of misplaced chunk
         changelocation.process(chunk_env, self._cb)
@@ -563,14 +563,14 @@ class TestFilterChangelocation(BaseTestCase):
         misplaced_chunks, _ = self._get_misplaced_chunks(new_chunks)
         self.assertEqual(len(misplaced_chunks), 1)
         # Retrieve host address for misplaced chunk
-        m_chunk_loc = changelocation.rawx_srv_locations[misplaced_chunks[0][-1]][2]
-        # Remove the non optimal symlink to the misplaced chunk
-        # and add it to well placed chunk
+        m_chunk_loc = changelocation.rawx_srv_locations[misplaced_chunks[0][-1]][0:3]
+        # Remove the non optimal symlink pointing to the misplaced chunk
+        # and point it to a well placed chunk.
         for chunk in new_chunks:
             # Well placed chunk candidate
             _, _, v_id, c_id = chunk["url"].split("/", 3)
             # Retrieve host address for well placed chunk candidate
-            cur_loc = changelocation.rawx_srv_locations[v_id][2]
+            cur_loc = changelocation.rawx_srv_locations[v_id][0:3]
             # Select a chunk well placed and break if found
             self.logger.debug(
                 "Chunk id: %s, 1st misplaced: %s, loc: %s, misplaced loc: %s",
@@ -579,8 +579,12 @@ class TestFilterChangelocation(BaseTestCase):
                 cur_loc,
                 m_chunk_loc,
             )
-            if c_id != misplaced_chunks[0][0] and cur_loc != m_chunk_loc:
+            if c_id != misplaced_chunks[0][0] and cur_loc[0:2] != m_chunk_loc[0:2]:
                 # Create a non optimal symlink for well placed chunk
+                self.logger.debug(
+                    "Placing a 'non optimal' symlink on %s",
+                    chunk["real_url"],
+                )
                 headers = {CHUNK_HEADERS[Changelocation.NON_OPTIMAL_DIR]: True}
                 self.api.blob_client.chunk_post(url=chunk["url"], headers=headers)
                 path_link = misplaced_chunks[0][2]
@@ -621,10 +625,10 @@ class TestFilterChangelocation(BaseTestCase):
         final_misplaced_chunk, _ = self._get_misplaced_chunks(final_chunks)
         loc_misplaced_chunk = changelocation.rawx_srv_locations[
             misplaced_chunks[0][-1]
-        ][2]
+        ][0:3]
         loc_f_misplaced_chunk = changelocation.rawx_srv_locations[
             final_misplaced_chunk[0][-1]
-        ][2]
+        ][0:3]
         self.assertEqual(loc_misplaced_chunk, loc_f_misplaced_chunk)
 
     def test_change_location_filter_overwritten_object(self):
