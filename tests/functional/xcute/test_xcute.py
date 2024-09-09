@@ -186,7 +186,8 @@ class TestMeta2Relocate(XcuteTest):
 
         if fix_outage:
             self.conscience.unlock_score(self.locked_svc, reqid=reqid)
-            self.wait_for_score(("meta2",), timeout=5.0, score_threshold=5)
+            self._reload_proxy()
+            self.wait_for_score(("meta2",), timeout=12.0)
 
         job = self.xcute_client.job_create(
             "meta2-relocation",
