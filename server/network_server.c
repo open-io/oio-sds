@@ -651,8 +651,6 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 			++ count;
 		}
 	}
-
-	if (count) GRID_INFO ("%u cnx closed (idle or inactive)", count);
 }
 
 static gpointer
