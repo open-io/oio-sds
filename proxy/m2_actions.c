@@ -2252,6 +2252,13 @@ static GError * _list_loop (struct req_args_s *args,
 				// appropriate marker.
 				out0->truncated = TRUE;
 				g_clear_error(&err);
+			} else if (err->code == CODE_UNAVAILABLE
+					&& g_strcmp0(out0->next_marker, in0->marker_start) > 0) {
+				// We reached request deadline without finding any visible
+				// object (main_count == 0). Still, we made some progress.
+				// Return an empty listing but with an updated next_marker.
+				out0->truncated = TRUE;
+				g_clear_error(&err);
 			}
 			m2v2_list_result_clean(&out);
 			break;
@@ -2589,6 +2596,8 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	}
 
 	if (!err) {
+		args->rp->access_tail(
+				"truncated:%s", list_out.truncated ? "true" : "false");
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
 				g_strdup(list_out.truncated ? "true" : "false"));
 		if (list_out.next_marker) {

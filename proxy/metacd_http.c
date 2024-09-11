@@ -284,6 +284,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	gint64 to = 0;
 	if (tostr && oio_str_is_number(tostr, &to) && to > 0) {
 		oio_ext_set_deadline(now + to);
+		rp->access_tail("timeout_float:%.6f", to / (float) G_TIME_SPAN_SECOND);
 	} else {
 		oio_ext_set_deadline(now + proxy_request_max_delay);
 	}

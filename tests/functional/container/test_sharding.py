@@ -34,6 +34,7 @@ from oio.common.constants import (
     M2_PROP_VERSIONING_POLICY,
     OIO_DB_ENABLED,
     OIO_DB_FROZEN,
+    TIMEOUT_HEADER,
 )
 from oio.common.exceptions import (
     DeadlineReached,
@@ -161,7 +162,7 @@ class TestSharding(BaseTestCase):
         if not cname_root:
             cname_root = cname
         for i in range(nb_objects):
-            obj_name = "%s_%d" % (prefix, i)
+            obj_name = f"{prefix}_{i}"
             reqid = request_id()
             data = obj_name
             if self.versioning_enabled:
@@ -190,7 +191,7 @@ class TestSharding(BaseTestCase):
     ):
         reqid = None
         for i in range(nb_objects):
-            obj_name = "%s_%d" % (prefix, i)
+            obj_name = f"{prefix}_{i}"
             reqid = request_id()
             if object_lock:
                 self.assertRaises(
@@ -2162,6 +2163,53 @@ class TestSharding(BaseTestCase):
                 self.assertListEqual([], requests["unexpected_errors"])
             mock_vacuum.assert_not_called()
         self.assertEqual(9, mock_request.call_count)
+
+    def tests_truncate_delete_marker_listing(self):
+        """
+        Check that a listing with a really short delay
+        gets truncated, but does not raise an exception.
+        """
+        # Fill a container with delete markers, and one visible object
+        n_objects = 100
+        n_shards = 20
+        self._create(self.cname, versioning=True)
+        self._add_objects(self.cname, n_objects, prefix="obj")
+        self._delete_objects(self.cname, n_objects - 1, prefix="obj")
+
+        # Split it in many shards
+        reqid = "splitme"
+        params = {
+            "partition": ",".join([str(100 // n_shards)] * n_shards),
+            "threshold": 1,
+        }
+        shards = self.container_sharding.find_shards(
+            self.account,
+            self.cname,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True, reqid=reqid
+        )
+        self.assertTrue(modified)
+
+        # Wait for the update of the root and the new shards
+        for _ in range(n_shards):
+            event = self.wait_for_kafka_event(
+                reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE,),
+            )
+            self.assertIsNotNone(event)
+
+        # Now check that a listing with a really short delay
+        # gets truncated, but does not raise an exception.
+        list_resp = self.storage.object_list(
+            self.account, self.cname, headers={TIMEOUT_HEADER: "15000"}
+        )
+        self.logger.debug(list_resp)
+        self.assertTrue(list_resp.get("truncated"), "Listing is not truncated")
+        self.assertTrue(list_resp.get("next_marker"), "Listing has no next_marker")
+        self.assertEqual(len(list_resp["objects"]), 0, "Listing returned objects")
 
 
 class TestShardingObjectLockRetention(TestSharding):
