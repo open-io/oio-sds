@@ -225,6 +225,9 @@ func_tests () {
 
 	wait_proxy_cache
 
+	# Test the "service list capture" tool
+	${PYTHON} $(command -v oio-lb-capture) rawx | tee $(mktemp -t rawx-services-XXXX.txt)
+
 	# The next commands often fail because the account service is slow to start
 	${PYTHON} ${CLI} cluster wait -s 20 account
 

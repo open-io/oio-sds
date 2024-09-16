@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+# Copyright (C) 2024 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import os
+
+from oio.conscience.client import ConscienceClient
+
+
+DESCR = """Capture the whole list of services of the cluster
+along with their current location, score and slots."""
+PARSER = argparse.ArgumentParser(description=DESCR)
+PARSER.add_argument(
+    "--ns", default=os.getenv("OIO_NS", "OPENIO"), help="Name of the namespace."
+)
+PARSER.add_argument(
+    "--harmonize-scores", action="store_true", help="Set all scores to 100."
+)
+PARSER.add_argument("service_type", help="Type of services to capture.")
+
+ARGS = PARSER.parse_args()
+
+CONS = ConscienceClient({"namespace": ARGS.ns})
+
+POOLS = CONS.info()["service_pools"]
+print(f"# Capture of {ARGS.service_type} services from namespace {ARGS.ns}")
+print("# Configured service pools:")
+for PNAME, PDESC in POOLS.items():
+    print(f"#  {PNAME}: {PDESC}")
+
+print(f"# {ARGS.service_type} service list:")
+
+SRVS = CONS.all_services(ARGS.service_type)
+
+for SRV in SRVS:
+    TAGS = SRV["tags"]
+    ID = TAGS.get("tag.service_id", SRV["addr"])
+    LOC = TAGS.get("tag.loc", "nowhere")
+    SLOTS = TAGS.get("tag.slots", ARGS.service_type)
+    SCORE = 100 if ARGS.harmonize_scores else SRV["score"]
+    print(f"{ID} {LOC} {SCORE} {SLOTS}")
