@@ -33,7 +33,6 @@ import sys
 import argparse
 from collections import namedtuple
 import shutil
-from os.path import join
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 C_LANG_SERVICES = (
@@ -1406,6 +1405,9 @@ meta2.flush_limit=64
 meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
 meta2.checkpoints_directory=${LIFECYCLEDIR}
+
+# Lifecycle
+lifecycle.redis_host=${IP}:${REDIS_PORT}
 
 admin=${IP}:${PORT_ADMIN}
 """
