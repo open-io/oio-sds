@@ -212,7 +212,12 @@ class Meta2ListContainers(ServiceListCommand):
         parser.add_argument(
             "--prefix",
             metavar="<prefix>",
-            help="Filter the output list using <prefix>.",
+            help=(
+                "Filter the output list using <prefix>. Notice that records "
+                "are in the form <NAMESPACE>/<ACCOUNT>/<CONTAINER>. If you "
+                "look for containers of a specific account, you must include "
+                "the namespace name before the account name."
+            ),
         )
         return parser
 
