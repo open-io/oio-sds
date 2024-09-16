@@ -442,7 +442,9 @@ func_tests_rebuilder_mover () {
 	# FIXME(ADU): I don't know why, but there are missing entries in the rdir.
 	# While waiting to find the explanation, it is necessary to force
 	# the passage of the indexers.
-	${OPENIOCTL} restart @meta2-indexer
+	sed -i "s#wait_random_time_before_starting = True#wait_random_time_before_starting = False#g" "${HOME}/.oio/sds/conf/${OIO_NS}-meta2-crawler.conf"
+	sed -i '/^pipeline =/s/.*/#&\npipeline = logger indexer/g' "${HOME}/.oio/sds/conf/${OIO_NS}-meta2-crawler.conf"
+	${OPENIOCTL} restart oio-meta2-crawler-1
 	sed -i "s#wait_random_time_before_starting = True#wait_random_time_before_starting = False#g" "${HOME}/.oio/sds/conf/${OIO_NS}-rawx-crawler.conf"
 	${OPENIOCTL} restart @rawx-crawler
 

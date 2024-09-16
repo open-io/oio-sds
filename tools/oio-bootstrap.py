@@ -332,22 +332,6 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
-template_meta2_indexer_service = """
-[meta2-indexer]
-namespace = ${NS}
-user = ${USER}
-volume_list = ${META2_VOLUMES}
-interval = 3000
-report_interval = 5
-scanned_per_second = 3
-try_removing_faulty_indexes = False
-autocreate = true
-log_level = INFO
-log_facility = LOG_LOCAL0
-log_address = /dev/log
-syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
-"""
-
 template_meta2_crawler_service = """
 [meta2-crawler]
 namespace = ${NS}
@@ -371,7 +355,12 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger check_integrity draining auto_vacuum auto_sharding
+pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer
+
+[filter:indexer]
+use = egg:oio#indexer
+check_orphan = True
+remove_orphan = False
 
 [filter:auto_sharding]
 use = egg:oio#auto_sharding
@@ -1205,26 +1194,6 @@ ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-${ENVIRONMENT}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
-template_systemd_service_meta2_indexer = """
-[Unit]
-Description=[OpenIO] Service meta2 indexer
-After=network.target
-PartOf=${PARENT}
-OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
@@ -2560,32 +2529,7 @@ def generate(options):
                 service_id=options["with_service_id"],
             )
 
-    # oio-meta2-indexer
-    _tmp_env = subenv(
-        {
-            "META2_VOLUMES": ",".join(meta2_volumes),
-            "SRVTYPE": "meta2-indexer",
-            "SRVNUM": 1,
-            "GROUPTYPE": "indexer",
-            "EXE": "oio-meta2-indexer",
-        }
-    )
-    indexer_target = register_target("indexer", root_target)
     crawler_target = register_target("crawler", root_target)
-    # first the conf
-    tpl = Template(template_meta2_indexer_service)
-    to_write = tpl.safe_substitute(_tmp_env)
-    path = "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf".format(**_tmp_env)
-    with open(path, "w+") as f:
-        f.write(to_write)
-    register_service(
-        _tmp_env,
-        template_systemd_service_meta2_indexer,
-        indexer_target,
-        add_service_to_conf=False,
-        coverage_wrapper=shutil.which("coverage")
-        + " run --context meta2-crawler --concurrency=eventlet -p ",
-    )
 
     # oio-meta2-crawler
     _tmp_env = subenv(

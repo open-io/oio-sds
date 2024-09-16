@@ -1188,6 +1188,9 @@ class RdirClient(HttpApi):
         )
         return res, body
 
+    def _name_to_path(self, account, container):
+        return f"{self.ns}/{account}/{container}"
+
     def _resolve_cid_to_path(self, cid):
         """
         Resolves a container ID into a a container path.
@@ -1196,7 +1199,7 @@ class RdirClient(HttpApi):
         :return: NS/account/container path.
         """
         resp = self.directory.list(cid=cid)
-        return "{0}/{1}/{2}".format(self.ns, resp["account"], resp["name"])
+        return self._name_to_path(resp["account"], resp["name"])
 
     def meta2_index_delete(
         self, volume_id, container_path=None, container_id=None, **kwargs
@@ -1283,6 +1286,32 @@ class RdirClient(HttpApi):
             marker_key=lambda x: x["records"][-1]["container_url"],
             **kwargs,
         )
+
+    @ensure_request_id
+    def meta2_search(self, volume, account=None, container=None, cid=None, **kwargs):
+        """
+        Search the RDIR databases for all entries matching
+        the specified container ID.
+
+        The input and output are the same as meta2_index_fetch_all except that
+        the result is a list filtered with the provided container ID.
+
+        :rtype: list
+        """
+        if account and container:
+            prefix = self._name_to_path(account, container)
+            if not cid:
+                cid = cid_from_name(account, container)
+        elif cid:
+            prefix = self._resolve_cid_to_path(cid)
+        else:
+            raise ValueError("Missing account and container, or container ID")
+        entries = [
+            x
+            for x in self.meta2_index_fetch_all(volume, prefix=prefix, **kwargs)
+            if x["container_id"] == cid
+        ]
+        return entries
 
     @ensure_request_id
     def meta2_copy_vol(

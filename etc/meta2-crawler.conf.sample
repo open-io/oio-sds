@@ -31,7 +31,21 @@ syslog_prefix = OIO,OPENIO,meta2-crawler,1
 statsd_prefix = meta2-crawler
 
 [pipeline:main]
-pipeline = logger draining auto_vacuum auto_sharding
+pipeline = logger draining auto_vacuum auto_sharding indexer
+
+[filter:indexer]
+# Index meta2 databases into the associated rdir service(s).
+use = egg:oio#indexer
+# Check if the meta2 database is in peers list.
+# If it is an orphan, the meta2 database is not reindexed.
+check_orphan = True
+# If true, in the event where an indexing worker detects that a volume it's
+# trying to index does not manage a database it stumbled  upon, the indexer
+# will attempt to remove any existing index for this database from the volume's
+# rdir index. USE AT YOUR OWN RISK.
+# Inconsistencies in the proxy cache can for example help induce this effect
+# even when unwarranted.
+remove_orphan = False
 
 [filter:auto_sharding]
 # Trigger the sharding for given container.
