@@ -36,9 +36,10 @@ import (
 	"syscall"
 	"time"
 
-	"lukechampine.com/blake3"
 	"openio-sds/rawx/defs"
 	"openio-sds/rawx/utils"
+
+	"lukechampine.com/blake3"
 )
 
 var (
@@ -101,7 +102,7 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 	return written, err
 }
 
-type UploadFinal func(int64) error
+type UploadFinal func(int64, error) error
 
 func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.BufferPool, cb UploadFinal) error {
 	var written int64
@@ -122,7 +123,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.B
 		// It will save expensive head movements on HDD if xattr are before
 		// the data when we GET
 		if er == io.EOF {
-			err = cb(written + int64(totalr))
+			err = cb(written+int64(totalr), nil)
 			if err != nil {
 				LogWarning("Upload Final Hook: %v", err)
 				return err
@@ -137,8 +138,11 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.B
 			}
 			if erw != nil {
 				// Only override the main error if no strong condition occurred
-				if er == nil || er == io.EOF {
-					return erw
+				if er == nil {
+					return cb(written, erw)
+				}
+				if er == io.EOF {
+					return erw // Callback already called
 				}
 			}
 		}
@@ -147,9 +151,9 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.B
 		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
 			if er != io.EOF {
-				return er
+				return cb(written, er)
 			} else {
-				return nil
+				return nil // Callback already called
 			}
 		}
 	}
@@ -222,8 +226,11 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	// Destined to be called before the last chunk is written;
-	final := func(written int64) error {
+	final := func(written int64, err error) error {
 		ul.length = written
+		if err != nil {
+			return err
+		}
 		if h != nil {
 			ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 		}
@@ -558,9 +565,8 @@ func (rr *rawxRequest) downloadChunk() {
 	// Now transmit the clear data to the client
 	rr.TTFB = time.Since(rr.startTime)
 	nb, err := io.Copy(rr.rep, in)
-	if err == nil {
-		rr.bytesOut = rr.bytesOut + uint64(nb)
-	} else {
+	rr.bytesOut = rr.bytesOut + uint64(nb)
+	if err != nil {
 		LogRequestError(rr, msgErrorAction("Write()", err))
 	}
 }
