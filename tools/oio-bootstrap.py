@@ -1709,6 +1709,25 @@ use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
 """
 
+template_event_agent_lifecycle_actions_handlers = """
+[handler:storage.lifecycle.action]
+pipeline = lifecycle_actions ${PRESERVE}
+
+[filter:lifecycle_actions]
+use = egg:oio#lifecycle_actions
+redis_host = ${IP}:${REDIS_PORT}
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
 template_event_agent_mpu_parts_handlers = """
 [handler:storage.manifest.deleted]
 pipeline = log mpu_cleaner ${PRESERVE}
@@ -3295,6 +3314,21 @@ def generate(options):
             srv_type="event-agent-delete-mpu-parts",
             group_id="event-agent-delete-mpu-parts",
             template_handler=template_event_agent_mpu_parts_handlers,
+        )
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to lifecycle actions events
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-lifecycle",
+            url,
+            workers="1",
+            srv_type="event-agent-lifecycle-actions",
+            group_id="event-agent-lifecycle-actions",
+            template_handler=template_event_agent_lifecycle_actions_handlers,
         )
 
         # We need only one service

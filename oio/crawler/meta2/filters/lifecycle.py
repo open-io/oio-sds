@@ -18,33 +18,28 @@ import datetime
 from oio.common.client import ProxyClient
 from oio.common.constants import (
     LOGGING_PROPERTY_KEY,
+    M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
     M2_PROP_VERSIONING_POLICY,
-    M2_PROP_LIFECYCLE_TIME_BYPASS,
     MULTIUPLOAD_SUFFIX,
     SHARDING_ACCOUNT_PREFIX,
 )
 from oio.common.easy_value import debinarize, int_value
 from oio.common.exceptions import NotFound, OioException
 from oio.common.utils import request_id
-
 from oio.container.client import ContainerClient
-
-from oio.crawler.meta2.filters.base import Meta2Filter
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 from oio.container.lifecycle import (
+    AbortMpuAction,
     ContainerLifecycle,
+    DeleteMarkerAction,
     RuleFilter,
     lifecycle_backup_path,
 )
-
+from oio.crawler.meta2.filters.base import Meta2Filter
+from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 from oio.directory.admin import AdminClient
-from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
-from oio.container.lifecycle import (
-    AbortMpuAction,
-    DeleteMarkerAction,
-)
+from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
 
 
 class LifecycleBudgetReached(Exception):
