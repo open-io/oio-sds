@@ -255,6 +255,47 @@ context_clue_for_decache(struct client_ctx_s *ctx)
 	return FALSE;
 }
 
+gboolean
+error_is_bad_redirect(GError *err)
+{
+	return err && err->code == CODE_FAILED_REDIRECT;
+}
+
+gboolean
+error_is_exiting(GError *err)
+{
+	return err && err->code == CODE_UNAVAILABLE
+			&& !g_strcmp0(err->message, "service exiting");
+}
+
+/** Evaluate the probability of success of a retry.
+ * Crawl the list of past errors and guess if they are due to a service
+ * being restarted. The classic scheme is that 2 slave services redirect
+ * to the same service, which happens to be unreachable.
+ * With a list of peers [svc1, svc2, svc3]:
+ * - svc1 redirects to svc3
+ * -   client tries to connect to svc3 but fails
+ * - svc2 redirects to svc3
+ * -   client tries to connect to svc3 but fails
+ * - client tries to connect to svc3 but fails
+ */
+static gboolean
+context_clue_for_possible_retry(struct client_ctx_s *ctx)
+{
+	if (!ctx->errorv)
+		return FALSE;
+	// Look for at least one bad redirection
+	gboolean did_bad_redirection = FALSE;
+	for (guint i = 0; i < ctx->count; ++i) {
+		did_bad_redirection |= error_is_bad_redirect(ctx->errorv[i]);
+	}
+	// Check if the last error is a network error or restart in progress
+	gboolean last_is_network = ctx->errorv[ctx->count - 1]
+			&& (CODE_IS_NETWORK_ERROR(ctx->errorv[ctx->count - 1]->code)
+				|| error_is_exiting(ctx->errorv[ctx->count - 1]));
+	return did_bad_redirection && last_is_network;
+}
+
 static void
 cache_flush_reference(struct req_args_s *args, struct client_ctx_s *ctx)
 {
@@ -488,8 +529,7 @@ label_retry:
 				/* All the services must be reached, let's just remind the
 				 * error (already done) and continue to the next service */
 				g_clear_error(&last_err);
-			} else if (err->code == CODE_UNAVAILABLE
-					&& g_strcmp0(err->message, "service exiting") == 0) {
+			} else if (error_is_exiting(err)) {
 				/* The service is stopping and should trigger a new
 				 * election */
 				GError *last_err = err;
@@ -553,24 +593,50 @@ label_retry:
 	return err;
 }
 
+void
+sleep_at_most(gint64 delay)
+{
+	const gint64 accuracy = 20 * G_TIME_SPAN_MILLISECOND;
+	gint64 deadline = oio_clamp_deadline(
+			delay / (double) G_TIME_SPAN_SECOND,
+			oio_ext_get_deadline() - accuracy);
+	while (oio_ext_monotonic_time() < deadline && grid_main_is_running()) {
+		g_usleep(accuracy);
+	}
+}
+
 GError *
 gridd_request_replicated_with_retry (struct req_args_s *args,
 		struct client_ctx_s *ctx, request_packer_f pack)
 {
 	GError *err = NULL;
-	gint attempts = 3;
+	gint attempts = proxy_request_attempts;
+	gint64 retry_delay = 0;
 retry:
 	err = gridd_request_replicated(args, ctx, pack);
 	if (error_clue_for_decache(err) || context_clue_for_decache(ctx)) {
-		if (*ctx->type == '#')
+		if (*ctx->type == '#') {
 			cache_flush_reference(args, ctx);
-		else
+		} else {
 			cache_flush_user(args, ctx);
+		}
 		if (attempts-- > 0) {
 			g_clear_error(&err);
 			client_clean(ctx);
 			goto retry;
 		}
+	} else if (err && context_clue_for_possible_retry(ctx) && (attempts-- > 0)) {
+		retry_delay += proxy_request_retry_delay;
+		GRID_WARN(
+				"Bad redirection (%s), will retry in %.3fs (reqid=%s)",
+				err->message,
+				retry_delay / (double) G_TIME_SPAN_SECOND,
+				oio_ext_get_reqid()
+		);
+		g_clear_error(&err);
+		client_clean(ctx);
+		sleep_at_most(retry_delay);
+		goto retry;
 	}
 	return err;
 }

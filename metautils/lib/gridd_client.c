@@ -339,8 +339,13 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 
 		/* Replace the URL */
 		g_strlcpy(client->url, message, URL_MAXLEN);
-		if (NULL != (err = _client_connect(client)))
-			g_prefix_error(&err, "Redirection error: Connect error: ");
+		if ((err = _client_connect(client))) {
+			g_prefix_error(&err, "Redirection error: ");
+			/* This is not necessarily a network error. */
+			if (CODE_IS_NETWORK_ERROR(err->code)) {
+				err->code = CODE_FAILED_REDIRECT;
+			}
+		}
 		return err;
 	}
 

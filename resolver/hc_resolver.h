@@ -93,6 +93,7 @@ GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
 		struct oio_url_s *url, gchar ***result,
 		gboolean m0_only, gint64 deadline);
 
+/** Returns TRUE when the error may be caused by an outdated cache. */
 gboolean error_clue_for_decache(GError *err);
 
 /* Removes from the cache the services associated to the given references.

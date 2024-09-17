@@ -1023,6 +1023,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_PROXY_QUIRK_LOCAL_SCORES*
 
+### proxy.request.attempts
+
+> How many times to attempt requests to backend services. Notice that not all requests are retryable. Only requests identified as retryable will be retried (backend service restarting, bad redirection, etc.).
+
+ * default: **3**
+ * type: gint
+ * cmake directive: *OIO_PROXY_REQUEST_ATTEMPTS*
+ * range: 1 -> 100
+
 ### proxy.request.max_delay
 
 > How long a request might take to execute, when no specific deadline has been received. Used to compute a deadline transmitted to backend services, when no timeout is present in the request.
@@ -1030,6 +1039,15 @@ Used by `gcc`
  * default: **1 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_PROXY_REQUEST_MAX_DELAY*
+ * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### proxy.request.retry_delay
+
+> How long to wait before retrying a request to a backend service. Notice that not all requests are retryable. This delay will be incremented at each attempt, and clamped to the request deadline.
+
+ * default: **250 * G_TIME_SPAN_MILLISECOND**
+ * type: gint64
+ * cmake directive: *OIO_PROXY_REQUEST_RETRY_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### proxy.srv_local.patch

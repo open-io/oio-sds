@@ -266,6 +266,11 @@ struct client_ctx_s {
 	gint64 request_duration;
 };
 
+/** Sleep for the specified delay, unless:
+ * - the program is stopping,
+ * - the thread-local deadline is reached. */
+void sleep_at_most(gint64 delay);
+
 void sort_services(struct client_ctx_s *ctx, gchar **m1uv);
 
 /**
@@ -326,6 +331,12 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
 gboolean lb_cache_reload(void);
 
 /* -------------------------------------------------------------------------- */
+
+/** Tell if the specified error is a redirection to an unreachable service */
+gboolean error_is_bad_redirect(GError *err);
+
+/** Tell if the specified error is due to the requested service being stopped */
+gboolean error_is_exiting(GError *err);
 
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
 
