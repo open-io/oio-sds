@@ -1720,6 +1720,18 @@ log_format=topic:%(topic)s    event:%(event)s
 checkpoint_prefix = lifecycle
 """
 
+template_event_agent_lifecycle_actions_handlers = """
+[handler:storage.lifecycle.action]
+pipeline = lifecycle_actions
+
+[filter:lifecycle_actions]
+use = egg:oio#lifecycle_actions
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+"""
+
 template_systemd_service_xcute_event_agent = """
 [Unit]
 Description=[OpenIO] Service xcute event agent ${SRVNUM}
@@ -3287,6 +3299,22 @@ def generate(options):
             workers="1",
             group_id="event-agent-lifecycle-checkpoint",
             template_handler=template_event_agent_lifecycle_checkpoint_handlers,
+        )
+
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to lifecycle actions events
+    # -------------------------------------------------------------------------
+    num += 1
+    for _, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-lifecycle",
+            url,
+            workers="1",
+            group_id="event-agent-lifecycle-actions",
+            template_handler=template_event_agent_lifecycle_actions_handlers,
         )
 
         # We need only one service
