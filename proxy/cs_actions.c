@@ -22,20 +22,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 static GError *
+_loop_on_one_cs_while_neterror(const gchar *cs,
+		GError* (action)(const char *cs))
+{
+	GError *err = NULL;
+	int attempt = 0;
+	gint64 retry_delay = 0;
+	do {
+		if (err) {
+			retry_delay += proxy_request_retry_delay;
+			GRID_WARN("Error toward [%s]: (%d) %s", cs, err->code, err->message);
+			g_clear_error(&err);
+			sleep_at_most(retry_delay);
+		}
+		err = action(cs);
+		if (!err)
+			break;
+	} while (++attempt < proxy_request_attempts
+			&& CODE_IS_NETWORK_ERROR(err->code));
+	return err;
+}
+
+static GError *
 _loop_on_allcs_while_neterror(struct req_args_s *args, gchar **allcs,
 		GError* (action)(const char *cs))
 {
 	EXTRA_ASSERT(allcs != NULL);
 
 	GError *err = NULL;
-	const gchar *cs = NULL;
 	if (args) {
-		cs = CONSCIENCE();
+		const gchar *cs = CONSCIENCE();
+		if (oio_str_is_set(cs)) {
+			return _loop_on_one_cs_while_neterror(cs, action);
+		}
 	}
 	for (gchar **pcs = allcs; *pcs; ++pcs) {
-		if (cs && *cs && strcmp(*pcs, cs) != 0) {
-			continue;
-		}
 		err = action(*pcs);
 		if (!err)
 			return NULL;
