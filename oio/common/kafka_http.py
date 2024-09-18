@@ -99,7 +99,9 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
         store = data_store
         for key in keys[:-1]:
             store = store.setdefault(key, {})
-        store[keys[-1]] = value
+        stored_value = store.setdefault(keys[-1], value)
+        if stored_value < value:
+            store[keys[-1]] = value
 
     def __compute_lags(self, committed, max_offsets):
         lags = {}
@@ -116,48 +118,64 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
 
     def __request_metrics(self):
         data = None
-        try:
-            _resp, body = self._request("GET", "/public_metrics")
-            data = body.decode("utf-8")
-        except OioException as exc:
-            raise ServiceBusy("No endpoints replied") from exc
-
         max_offsets = {}
         committed_offsets = {}
-
-        for line in data.split("\n"):
-            if not line:
-                continue
-            if line.startswith("#"):
-                continue
-
-            if line.startswith(self.HEADER_MAX_OFFSET):
-                key, value = self.__parse_line(line, self.HEADER_MAX_OFFSET)
-                self.__store_topic_partition(
-                    max_offsets,
-                    key[self.KEY_TOPIC],
-                    key[self.KEY_PARTITION],
-                    value=value,
+        errors = []
+        for endpoint in self._endpoints:
+            try:
+                # Here a request is made to each broker endpoint to be able to
+                # retrieve all consumers groups committed offset metrics.
+                # Committed offsets of a specific consumer group are only retrieved
+                # by requesting its group coordinator (broker in charge of the consumer
+                # group).
+                _, body = self._request("GET", "/public_metrics", endpoint)
+                data = body.decode("utf-8")
+            except OioException as exc:
+                self._logger().warning(
+                    f"Retrieve public metrics from broker {endpoint} failed: {exc}"
                 )
-            elif line.startswith(self.HEADER_COMMITTED_OFFSET):
-                key, value = self.__parse_line(line, self.HEADER_COMMITTED_OFFSET)
-                self.__store_topic_partition(
-                    committed_offsets,
-                    key[self.KEY_TOPIC],
-                    key[self.KEY_PARTITION],
-                    key[self.KEY_CONSUMER_GROUP],
-                    value=value,
-                )
-            elif line.startswith(self.HEADER_FREE_SPACE):
-                _key, value = self.__parse_line(line, self.HEADER_FREE_SPACE)
-                self.__free_space_bytes = int(value)
-            elif line.startswith(self.HEADER_FREE_SPACE_ALERT):
-                _key, value = self.__parse_line(line, self.HEADER_FREE_SPACE_ALERT)
-                self.__free_space_alert = KafkaClusterSpaceStatus(int(value))
-            elif line.startswith(self.HEADER_TOTAL_SPACE):
-                _key, value = self.__parse_line(line, self.HEADER_TOTAL_SPACE)
-                self.__total_space_bytes = int(value)
+                errors.append(exc)
 
+            else:
+                for line in data.split("\n"):
+                    if not line:
+                        continue
+                    if line.startswith("#"):
+                        continue
+
+                    if line.startswith(self.HEADER_MAX_OFFSET):
+                        key, value = self.__parse_line(line, self.HEADER_MAX_OFFSET)
+                        self.__store_topic_partition(
+                            max_offsets,
+                            key[self.KEY_TOPIC],
+                            key[self.KEY_PARTITION],
+                            value=value,
+                        )
+                    elif line.startswith(self.HEADER_COMMITTED_OFFSET):
+                        key, value = self.__parse_line(
+                            line, self.HEADER_COMMITTED_OFFSET
+                        )
+                        self.__store_topic_partition(
+                            committed_offsets,
+                            key[self.KEY_TOPIC],
+                            key[self.KEY_PARTITION],
+                            key[self.KEY_CONSUMER_GROUP],
+                            value=value,
+                        )
+                    elif line.startswith(self.HEADER_FREE_SPACE):
+                        _key, value = self.__parse_line(line, self.HEADER_FREE_SPACE)
+                        self.__free_space_bytes = int(value)
+                    elif line.startswith(self.HEADER_FREE_SPACE_ALERT):
+                        _key, value = self.__parse_line(
+                            line, self.HEADER_FREE_SPACE_ALERT
+                        )
+                        self.__free_space_alert = KafkaClusterSpaceStatus(int(value))
+                    elif line.startswith(self.HEADER_TOTAL_SPACE):
+                        _key, value = self.__parse_line(line, self.HEADER_TOTAL_SPACE)
+                        self.__total_space_bytes = int(value)
+
+        if len(errors) == len(self._endpoints):
+            raise ServiceBusy(f"No endpoints replied: {errors}")
         self.__compute_lags(committed_offsets, max_offsets)
         self.__next_update = time.monotonic() + self._cache_duration
 
