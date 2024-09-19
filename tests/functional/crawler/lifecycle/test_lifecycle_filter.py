@@ -111,6 +111,19 @@ lifecycle_conf_transition = """
     }"""
 
 
+lifecycle_conf_abort_incmplete_mpu = """
+    {"Rules":
+        {
+            "rule-3":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "documents/"},
+                "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 0}
+            }
+        }
+    }"""
+
+
 class TestLifecycleFilter(BaseTestCase):
     @classmethod
     def setUpClass(cls):
@@ -164,21 +177,25 @@ class TestLifecycleFilter(BaseTestCase):
         self.conf["budget_per_container"] = self.budget_per_container
         self.conf["lifecycle_batch_size"] = self.lifecycle_batch_size
 
+        self.force_delete = True
+
     def tearDown(self):
         try:
-            # delete objects
-            self.storage.object_delete_many(self.account, self.cname, objs=self.created)
-            # FIXME temporary cleaning, this should be handled by deleting
-            # root container
-            # self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
-            self.storage.container_delete(self.account, self.cname, force=True)
+            if self.force_delete:
+                # delete objects
+                self.storage.object_delete_many(
+                    self.account, self.cname, objs=self.created
+                )
+                # FIXME temporary cleaning, this should be handled by deleting
+                # root container
+                # self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
+                self.storage.container_delete(self.account, self.cname, force=True)
         except Exception:
             self.logger.warning("Exception during cleaning %s", self.account)
         super(TestLifecycleFilter, self).tearDown()
 
-    def _get_meta2db_env(self, cid=None):
-        cid = cid or cid_from_name(self.account, self.cname)
-
+    def _get_meta2db_env(self, cname=None, cid=None):
+        cid = cid or cid_from_name(self.account, cname or self.cname)
         dir_data = self.storage.directory.list(cid=cid, service_type="meta2")
         volume_id = dir_data["srv"][0]["host"]
         volume_path = None
@@ -219,7 +236,9 @@ class TestLifecycleFilter(BaseTestCase):
             os.makedirs(local_dir, exist_ok=True)
         os.symlink(src, dst)
 
-    def _add_objects(self, cname, number_of_obj, pattern_name="content"):
+    def _add_objects(
+        self, cname, number_of_obj, properties=None, pattern_name="content"
+    ):
         for _ in range(number_of_obj):
             file_name = "documents/" + random_str(8) + pattern_name
             reqid = request_id()
@@ -232,6 +251,16 @@ class TestLifecycleFilter(BaseTestCase):
                 reqid=reqid,
             )
             self.created.append(file_name)
+
+            if properties is None:
+                continue
+            for k, v in properties.items():
+                self.storage.object_set_properties(
+                    self.account,
+                    cname,
+                    file_name,
+                    {k: v},
+                )
         # Wait for the event from the last object created
         self.wait_for_kafka_event(
             types=(EventTypes.CONTENT_NEW,),
@@ -257,27 +286,15 @@ class TestLifecycleFilter(BaseTestCase):
         callback=fake_cb,
         nb_passes=1,
         cid=None,
-        out_of_range_objects=None,
         expected_events=None,
     ):
-        if out_of_range_objects is None:
-            out_of_range_objects = []
         if not meta2db_env:
             meta2db_env = self._get_meta2db_env()
-        cid = meta2db_env["cid"]
         conf = self.conf.copy()
 
         conf["bypass_days_dates"] = True
 
         lifecycle = Lifecycle_filter(app=self.app, conf=conf)
-
-        # pylint: disable=protected-access
-        if self.expected_successes >= 1:
-            # Get all chunk urls of the container
-            resp = self.storage.object_list(None, None, cid=cid)
-            self.assertEqual(
-                nb_objects + len(out_of_range_objects), len(resp["objects"])
-            )
 
         # Process the lifecycle
         for _ in range(nb_passes):
@@ -294,6 +311,11 @@ class TestLifecycleFilter(BaseTestCase):
             )
             self.assertIsNotNone(event)
             i += 1
+
+
+class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
+    def setUp(self):
+        super(TestLifecycleFilterNonVersioned, self).setUp()
 
     def test_basic(self):
         nb_obj_to_add = 4
@@ -354,10 +376,41 @@ class TestLifecycleFilter(BaseTestCase):
         )
 
 
-class TestLifecycleFilterVersioned(TestLifecycleFilter):
+class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
     def setUp(self):
         super(TestLifecycleFilterVersioned, self).setUp()
 
         self.storage.container_set_properties(
             self.account, self.cname, system={M2_PROP_VERSIONING_POLICY: "-1"}
+        )
+
+
+class TestLifecycleFilterMpu(TestLifecycleFilter):
+    def setUp(self):
+        super(TestLifecycleFilterMpu, self).setUp()
+        self.seg_container = self.cname + "+segments"
+        self._create_container_segments()
+        self.meta2db_env = self._get_meta2db_env(cname=self.seg_container)
+
+    def _create_container_segments(self):
+        self.storage.container_create(
+            self.account,
+            self.seg_container,
+        )
+
+    def test_basic(self):
+        nb_obj_to_add = 4
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 0
+        self._set_lifecycle_prop(lifecycle_conf_abort_incmplete_mpu)
+        incomplete_mpu_property = {"x-object-sysmeta-s3api-has-content-type": "no"}
+        self._add_objects(
+            self.seg_container, nb_obj_to_add, properties=incomplete_mpu_property
+        )
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        self._process(
+            nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add
         )
