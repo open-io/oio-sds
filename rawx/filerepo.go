@@ -395,8 +395,9 @@ func (fw *realFileWriter) Write(buffer []byte) (int, error) {
 		fw.Extend(defs.UploadExtensionSize)
 	}
 
-	fw.written += buflen
-	return fw.f.Write(buffer)
+	n, err := fw.f.Write(buffer)
+	fw.written += int64(n)
+	return n, err
 }
 
 func (fw *realFileWriter) close() {
