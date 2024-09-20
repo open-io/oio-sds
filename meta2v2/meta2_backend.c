@@ -4220,9 +4220,12 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	struct json_object *jstorage_class = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
 
+	struct json_object *jquery_target_bucket = NULL, *jquery_target_prefix = NULL;
+
 	gboolean found_match = FALSE;
 
 	gchar *query_update_properties = NULL, 	*offest_key = NULL;;
+	const gchar *target_bucket = NULL,  *target_prefix = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix",  &jsuffix,   json_type_string, 1},
@@ -4234,6 +4237,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"batch_size",   &jbatch_size,  	json_type_int, 0},
 		{"last_action",   &jlast_action,  	json_type_int, 0},
 		{"rule_id",   &jrule_id,  	json_type_string, 0},
+		{"target_bucket",   &jquery_target_bucket,    json_type_string, 0},
+		{"target_prefix",   &jquery_target_prefix,          json_type_string, 0},
 		{NULL,      NULL,     0,             0}
 	};
 
@@ -4275,6 +4280,15 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 	}
+
+	if (jquery_target_bucket) {
+		target_bucket = json_object_get_string(jquery_target_bucket);
+	}
+
+	if (jquery_target_prefix) {
+		target_prefix = json_object_get_string(jquery_target_prefix);
+	}
+
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4372,6 +4386,13 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		if (rule_id) {
 			append_str(event, "rule_id", g_strdup(rule_id));
 		}
+		if (target_bucket && *target_bucket) {
+			append_str(event, "target_bucket", g_strdup(target_bucket));
+		}
+		if (target_prefix && *target_prefix) {
+			append_str(event, "target_prefix", g_strdup(target_prefix));
+		}
+
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
@@ -4427,9 +4448,11 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		*jquery_set_tag = NULL;
 	struct json_object *jstorage_class = NULL, *jbatch_size = NULL, *jlast_action = NULL;
 
+	struct json_object *jquery_target_bucket = NULL, *jquery_target_prefix = NULL;
 	int batch_size = 0;
 	gboolean found_match = FALSE;
-	gchar *query_update_properties = NULL, 	*offest_key = NULL;;
+	gchar *query_update_properties = NULL, 	*offest_key = NULL;
+	const gchar *target_bucket = NULL,  *target_prefix = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix",  &jsuffix,   json_type_string, 1},
@@ -4439,6 +4462,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"storage_class",   &jstorage_class,          json_type_string, 0},
 		{"batch_size",   &jbatch_size,  	json_type_int, 0},
 		{"last_action",   &jlast_action,  	json_type_int, 0},
+		{"target_bucket",   &jquery_target_bucket,    json_type_string, 0},
+		{"target_prefix",   &jquery_target_prefix,          json_type_string, 0},
 		{NULL,      NULL,     0,             0}
 	};
 
@@ -4474,6 +4499,15 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 	}
+
+	if (jquery_target_bucket) {
+		target_bucket = json_object_get_string(jquery_target_bucket);
+	}
+
+	if (jquery_target_prefix) {
+		target_prefix = json_object_get_string(jquery_target_prefix);
+	}
+
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4566,6 +4600,13 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		if (rule_id) {
 			append_str(event, "rule_id", g_strdup(rule_id));
 		}
+		if (target_bucket && *target_bucket) {
+			append_str(event, "target_bucket", g_strdup(target_bucket));
+		}
+		if (target_prefix && *target_prefix) {
+			append_str(event, "target_prefix", g_strdup(target_prefix));
+		}
+
 		g_string_append(event, "}}");
 		oio_events_queue__send(
 			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
