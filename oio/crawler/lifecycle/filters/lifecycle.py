@@ -18,6 +18,7 @@ import time
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
+    LIFECYCLE_PROPERTY_KEY,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
     M2_PROP_VERSIONING_POLICY,
@@ -34,7 +35,6 @@ from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 from oio.container.lifecycle import (
     ContainerLifecycle,
-    LIFECYCLE_PROPERTY_KEY,
     RuleFilter,
 )
 

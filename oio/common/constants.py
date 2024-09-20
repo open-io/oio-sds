@@ -240,5 +240,8 @@ HTTP_CONTENT_TYPE_JSON = "application/json"
 HTTP_CONTENT_TYPE_TEXT = "text/plain"
 
 # Constants for lifecycle crawler
+LOGGING_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Logging"
+LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 MULTIUPLOAD_SUFFIX = "+segments"
+TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
 VERSIONING_PROPERTY_KEY = "X-Container-Sysmeta-Versions-Enabled"

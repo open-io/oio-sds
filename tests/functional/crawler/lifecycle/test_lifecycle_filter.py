@@ -16,14 +16,13 @@
 import os
 import time
 from tests.utils import BaseTestCase, random_str
-from oio.common.constants import M2_PROP_VERSIONING_POLICY
+from oio.common.constants import LIFECYCLE_PROPERTY_KEY, M2_PROP_VERSIONING_POLICY
 from oio.common.utils import cid_from_name, request_id
 from oio.crawler.lifecycle.filters.lifecycle import Lifecycle as Lifecycle_filter
 from oio.directory.admin import AdminClient
 from oio.event.evob import EventTypes
 
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_LIFECYCLE_TOPIC, KafkaConsumer
-from oio.container.lifecycle import LIFECYCLE_PROPERTY_KEY
 
 
 def fake_cb(_status, _msg):
@@ -188,7 +187,6 @@ class TestLifecycleFilter(BaseTestCase):
                 )
                 # FIXME temporary cleaning, this should be handled by deleting
                 # root container
-                # self.wait_for_kafka_event(types=(EventTypes.CONTAINER_STATE,))
                 self.storage.container_delete(self.account, self.cname, force=True)
         except Exception:
             self.logger.warning("Exception during cleaning %s", self.account)
@@ -253,21 +251,14 @@ class TestLifecycleFilter(BaseTestCase):
             )
             self.created.append(file_name)
 
-            if properties is None:
-                continue
-            for k, v in properties.items():
-                self.storage.object_set_properties(
-                    self.account,
-                    cname,
-                    file_name,
-                    {k: v},
-                )
-        # Wait for the event from the last object created
-        self.wait_for_kafka_event(
-            types=(EventTypes.CONTENT_NEW,),
-            fields={"path": file_name},
-            reqid=reqid,
-        )
+            if properties is not None:
+                for k, v in properties.items():
+                    self.storage.object_set_properties(
+                        self.account,
+                        cname,
+                        file_name,
+                        {k: v},
+                    )
 
     def _set_lifecycle_prop(self, lc_conf):
         props = {
