@@ -638,6 +638,7 @@ user = ${USER}
 concurrency = 1
 endpoint = ${EVENT_CNXSTRING}
 topic = oio-lifecycle-checkpoint
+redis_host = ${IP}:${REDIS_PORT}
 """
 
 template_rawx_service = """
@@ -1666,6 +1667,7 @@ pipeline = checkpoint
 [filter:checkpoint]
 use = egg:oio#checkpoint_creator
 topic = oio-lifecycle-checkpoint
+redis_host = ${IP}:${REDIS_PORT}
 
 [filter:log]
 use = egg:oio#logger
@@ -2172,6 +2174,7 @@ def generate(options):
         WANT_SERVICE_ID=want_service_id,
         WEBHOOK=WEBHOOK,
         WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
+        REDIS_PORT=6379,
     )
     ENV["env.HOME"] = HOME
 

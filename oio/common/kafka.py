@@ -282,7 +282,7 @@ class KafkaSender(KafkaClient):
 
         self._send(topic, data, flush=flush)
 
-    def flush(self, timeout=None):
+    def flush(self, timeout):
         return self._client.flush(timeout)
 
     def _close(self):
