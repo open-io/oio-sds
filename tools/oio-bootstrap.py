@@ -1441,7 +1441,7 @@ user = ${USER}
 workers = ${EVENT_WORKERS}
 concurrency = 5
 
-handlers_conf = ${CFGDIR}/event-handlers-${SRVNUM}.conf
+handlers_conf = ${HANDLER_CONF}
 
 log_facility = LOG_LOCAL0
 log_level = INFO
@@ -1696,7 +1696,7 @@ namespace = ${NS}
 user = ${USER}
 workers = ${EVENT_WORKERS}
 concurrency = 5
-handlers_conf = ${CFGDIR}/xcute-event-handlers-${SRVNUM}.conf
+handlers_conf = ${HANDLER_CONF}
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
@@ -3066,8 +3066,8 @@ def generate(options):
         workers,
         group_id,
         template_handler,
+        handler_prefix="handlers-",
         context="event-agent",
-        handler_prefix="/event-handlers-",
         queue_type="default",
         queue_ids="",
         srv_type="event-agent",
@@ -3075,6 +3075,8 @@ def generate(options):
         template_systemd=template_systemd_service_event_agent,
         target=event_agents_target,
     ):
+        handler_path = f"{CFGDIR}/{handler_prefix}{srv_type}-{num}.conf"
+
         env = subenv(
             {
                 "SRVTYPE": srv_type,
@@ -3086,6 +3088,7 @@ def generate(options):
                 "GROUP_ID": group_id,
                 "QUEUE_TYPE": queue_type,
                 "QUEUE_IDS": queue_ids,
+                "HANDLER_CONF": handler_path,
             }
         )
         register_service(
@@ -3099,10 +3102,10 @@ def generate(options):
                 + " --concurrency=eventlet -p "
             ),
         )
-        with open(config(env), "w+") as f:
+        with open(config(env), "w+", encoding="utf-8") as f:
             tpl = Template(template_agent)
             f.write(tpl.safe_substitute(env))
-        with open(CFGDIR + handler_prefix + str(num) + ".conf", "w+") as f:
+        with open(handler_path, "w+", encoding="utf-8") as f:
             tpl = Template(template_handler)
             f.write(tpl.safe_substitute(env))
 
@@ -3119,6 +3122,7 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to chunk deletions per host
     # -------------------------------------------------------------------------
+    num = 0
     for _, url, event_agent_bin in get_event_agent_details():
         for i, host in enumerate(hosts):
             for j in range(2):
@@ -3128,6 +3132,7 @@ def generate(options):
                     num,
                     f"oio-delete-{host}-{slot}",
                     url,
+                    srv_type="event-agent-delete",
                     workers=len(rawx_per_host[host]),
                     group_id="event-agent-delete",
                     queue_type="per_service",
@@ -3140,6 +3145,7 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to chunk events per host
     # -------------------------------------------------------------------------
+    num = 0
     for _, url, event_agent_bin in get_event_agent_details():
         for host in hosts:
             num += 1
@@ -3147,6 +3153,7 @@ def generate(options):
                 num,
                 f"oio-chunks-{host}",
                 url,
+                srv_type="event-agent-chunks",
                 workers=len(rawx_per_host[host]),
                 group_id="event-agent-chunks",
                 template_handler=template_event_agent_chunks_handlers,
@@ -3156,13 +3163,13 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to delayed events
     # -------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details():
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-delayed",
             url,
             workers="1",
+            srv_type="event-agent-delay",
             group_id="event-agent-delay",
             template_handler=template_event_agent_delay_handlers,
         )
@@ -3172,13 +3179,13 @@ def generate(options):
     if options.get("replication_events"):
         # Configure oio-event-agent dedicated to delayed events from replicator
         # -----------------------------------------------------------------------
-        num += 1
-        for _, url, event_agent_bin in get_event_agent_details():
+        for num, url, event_agent_bin in get_event_agent_details():
             add_event_agent_conf(
                 num,
                 "oio-replication-delayed",
                 url,
                 workers="1",
+                srv_type="event-agent-replication-delay",
                 group_id="event-agent-replication-delay",
                 template_handler=template_event_agent_replication_delay_handlers,
             )
@@ -3188,13 +3195,13 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to content broken events
     # -------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details():
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-rebuild",
             url,
             workers="1",
+            srv_type="event-agent-rebuild",
             group_id="event-agent-rebuild",
             template_handler=template_event_agent_rebuilder_handlers,
         )
@@ -3204,13 +3211,13 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to lifecycle checkpoint events
     # -------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details():
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-lifecycle-checkpoint",
             url,
             workers="1",
+            srv_type="event-agent-lifecycle-checkpoint",
             group_id="event-agent-lifecycle-checkpoint",
             template_handler=template_event_agent_lifecycle_checkpoint_handlers,
         )
@@ -3236,6 +3243,7 @@ def generate(options):
         )
     # Configure a special oio-event-agent dedicated to chunk delete per host
     # -------------------------------------------------------------------------
+    num = 0
     for _, url, event_agent_bin in get_event_agent_details():
         for host in hosts:
             num += 1
