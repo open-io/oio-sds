@@ -34,10 +34,17 @@ from oio.common.easy_value import int_value
 from oio.common.green import GreenPool, LightQueue, sleep
 from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 from oio.common.timestamp import Timestamp
 from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
+from oio.lifecycle.metrics import (
+    LifecycleMetricTracker,
+    LifecycleAction,
+    LifecycleStep,
+    statsd_key,
+)
 
 
 CHECKPOINT_TOPIC_DEFAULT = "oio-lifecycle-checkpoint"
@@ -77,8 +84,14 @@ class CheckpointCollector:
             self._conf, logger=logger, pool_manager=self._api.container.pool_manager
         )
 
+        # Metrics helper
+        self._metrics = LifecycleMetricTracker(self._conf)
+
+        # Statsd helpers
+        self._statsd = get_statsd(self._conf)
+
         # Progress tracking
-        self._run_id = run_id
+        self._run_id = str(run_id)
         self._progress = OrderedDict()
         self._last_commited_marker = None
 
@@ -128,26 +141,40 @@ class CheckpointCollector:
             }
         )
 
-    def _process_container(self, account, container):
+    def _increment_snapshot_counter(self, ctx, cid):
+        if not ctx:
+            return
+        account, bucket = ctx
+        self._statsd.incr(
+            statsd_key(
+                self._run_id, LifecycleStep.SUBMITTED, LifecycleAction.CHECKPOINT
+            )
+        )
+        self._metrics.increment_counter(
+            self._run_id,
+            account,
+            bucket,
+            cid,
+            LifecycleStep.SUBMITTED,
+            LifecycleAction.CHECKPOINT,
+        )
+
+    def _process_container(self, account, container, ctx=None):
         cid = cid_from_name(account, container)
         # Produce event for root container
         self._produce_event(account, container, cid)
-
-        # Process shards if any
-        shards = self._sharding_client.show_shards(account, container)
-        for shard in shards:
-            self._produce_event(account, container, shard)
+        self._increment_snapshot_counter(ctx, cid)
 
     def _produce_event(self, account, container, cid, shard_info=None):
         payload = self._make_payload(account, container, cid, shard_info)
         self._logger.info("Produce event %s", container)
-        self._kafka_producer.send(self._topic, payload)
+        self._kafka_producer.send(self._topic, payload, flush=True)
 
     def _process_bucket(self, account, bucket):
         error = None
         self._progress[(account, bucket)] = None
         self._logger.info("Processing %s %s", account, bucket)
-
+        ctx = (account, bucket)
         try:
             for acct_suffix in ("", MULTIUPLOAD_SUFFIX):
                 _account = f"{account}{acct_suffix}"
@@ -156,7 +183,7 @@ class CheckpointCollector:
                         "Get info on container: acct=%s, ref=%s", _account, bucket
                     )
                     _ = self._api.container_show(_account, bucket)
-                    self._process_container(account, bucket)
+                    self._process_container(account, bucket, ctx=ctx)
                 except NoSuchContainer:
                     continue
         except Exception as exc:
@@ -272,7 +299,7 @@ def make_arg_parser():
         "--verbose", "-v", action="store_true", help="More verbose output"
     )
     parser.add_argument(
-        "--run-id", help="Run identifier", default=Timestamp().timestamp
+        "--run-id", help="Run identifier", default=str(Timestamp().timestamp)
     )
     parser.add_argument("configuration", help="Path to the legacy configuration file")
     return parser
