@@ -23,9 +23,10 @@ except ImportError:
 
 from oio.common.logger import get_logger
 
+from oio.common.constants import (
+    LIFECYCLE_PROPERTY_KEY,
+)
 
-LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
-TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
 
 LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
 
