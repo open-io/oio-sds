@@ -16,7 +16,11 @@
 import os
 import time
 from tests.utils import BaseTestCase, random_str
-from oio.common.constants import LIFECYCLE_PROPERTY_KEY, M2_PROP_VERSIONING_POLICY
+from oio.common.constants import (
+    LIFECYCLE_PROPERTY_KEY,
+    LOGGING_PROPERTY_KEY,
+    M2_PROP_VERSIONING_POLICY,
+)
 from oio.common.utils import cid_from_name, request_id
 from oio.crawler.lifecycle.filters.lifecycle import Lifecycle as Lifecycle_filter
 from oio.directory.admin import AdminClient
@@ -121,6 +125,13 @@ lifecycle_conf_abort_incmplete_mpu = """
             }
         }
     }"""
+
+logging_conf = """
+    {
+        "Bucket":"bucket-1",
+        "Prefix":"string",
+        "Grant":[]}
+    """
 
 
 class TestLifecycleFilter(BaseTestCase):
@@ -359,6 +370,25 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self.count_disabled_rules = 0
 
         self._set_lifecycle_prop(lifecycle_conf_transition)
+        self._add_objects(self.cname, nb_obj_to_add)
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        self._process(
+            nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add
+        )
+
+    def test_logging(self):
+        nb_obj_to_add = 4
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 0
+
+        self._set_lifecycle_prop(lifecycle_conf_transition)
+        self.storage.container_set_properties(
+            self.account, self.cname, properties={LOGGING_PROPERTY_KEY: logging_conf}
+        )
+
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
         self._make_symbolic_link(self.meta2db_env)

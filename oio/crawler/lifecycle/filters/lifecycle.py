@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 import os
 import time
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
     LIFECYCLE_PROPERTY_KEY,
+    LOGGING_PROPERTY_KEY,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
     M2_PROP_VERSIONING_POLICY,
@@ -100,6 +102,10 @@ class Lifecycle(Filter):
         # Current container peer
         self.peer_to_use = None
 
+        # Bucket Logging destination
+        self.target_bucket = None
+        self.target_prefix = None
+
         # Current container type and info
         self.is_mpu_container = False
         self.is_shard_container = False
@@ -173,6 +179,17 @@ class Lifecycle(Filter):
             raise
         return (props, main_account, root_container)
 
+    def _get_logging_conf(self, logging_conf):
+        target_bucket = None
+        target_prefix = None
+        try:
+            logging_conf_json = json.loads(logging_conf)
+            target_bucket = logging_conf_json.get("Bucket")
+            target_prefix = logging_conf_json.get("Prefix")
+        except ValueError as err:
+            self.logger.warning("Failed to decode JSON logging config: %s", err)
+        return (target_bucket, target_prefix)
+
     def process(self, env, cb):
         """Process current container:
 
@@ -184,6 +201,9 @@ class Lifecycle(Filter):
         self.peer_to_use = env["volume_id"]
         self.is_mpu_container = False
         self.is_shard_container = False
+
+        self.target_bucket = None
+        self.target_prefix = None
 
         reqid = request_id("lc-crawler-")
         kwargs = {}
@@ -203,6 +223,12 @@ class Lifecycle(Filter):
             )
             lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
             versioning = props["system"].get(M2_PROP_VERSIONING_POLICY)
+            logging_config = props["properties"].get(LOGGING_PROPERTY_KEY)
+            if logging_config is not None:
+                (self.target_bucket, self.target_prefix) = self._get_logging_conf(
+                    logging_config
+                )
+
             if lifecycle_config is None:
                 self.logger.warning(
                     "No lifecycle configuration for given container: %s, "
@@ -1062,6 +1088,10 @@ class Lifecycle(Filter):
                 data["rule_id"] = rule_id
                 if prefix:
                     data["prefix"] = prefix
+                if self.target_bucket:
+                    data["target_bucket"] = self.target_bucket
+                if self.target_prefix:
+                    data["target_prefix"] = self.target_prefix
 
                 resp, _ = self.proxy_client._request(
                     "POST",
