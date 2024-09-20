@@ -1094,18 +1094,21 @@ class TestSharding(BaseTestCase):
         ]
         self.assertListEqual([expected_shards[0]], shards)
 
-        # Last shard range
         shards = [
             s
             for s in self.container_sharding.get_shards_in_range(
                 self.account,
                 self.cname,
                 expected_shards[1]["lower"],
-                expected_shards[2]["lower"] + "z",
+                expected_shards[1]["lower"] + "z",
             )
         ]
-        self.assertListEqual(expected_shards, shards)
+        _expected_shards = [
+            {**s, "index": i} for i, s in enumerate(expected_shards[1:2])
+        ]
+        self.assertListEqual(_expected_shards, shards)
 
+        # Last shard range
         shards = [
             s
             for s in self.container_sharding.get_shards_in_range(

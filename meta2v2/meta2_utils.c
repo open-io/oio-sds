@@ -4121,10 +4121,10 @@ GError* m2db_get_shards_in_range(struct sqlx_sqlite3_s *sq3,const gchar *req_low
 		g_string_append_static(clause,"? > lower");
 		g_ptr_array_add(params_list, g_variant_new_string(req_upper));
 	} else if (!oio_str_is_set(req_upper)) {
-		g_string_append_static(clause, "? <= upper OR upper == ''");
+		g_string_append_static(clause, "? < upper OR upper == ''");
 		g_ptr_array_add(params_list, g_variant_new_string(req_lower));
 	} else {
-		g_string_append_static(clause, "(? <= upper OR upper == '') AND (lower < ?)");
+		g_string_append_static(clause, "(? < upper OR upper == '') AND (lower < ?)");
 		g_ptr_array_add(params_list, g_variant_new_string(req_lower));
 		g_ptr_array_add(params_list, g_variant_new_string(req_upper));
 	}
