@@ -19,12 +19,10 @@ import random
 import time
 from datetime import datetime, timedelta, timezone
 
+from oio.common.constants import LIFECYCLE_PROPERTY_KEY, TAGGING_KEY
 
-from oio.container.lifecycle import (
-    ContainerLifecycle,
-    LIFECYCLE_PROPERTY_KEY,
-    TAGGING_KEY,
-)
+from oio.container.lifecycle import ContainerLifecycle
+
 from oio.common.client import ProxyClient
 from oio.common.utils import cid_from_name, request_id
 from oio.directory.admin import AdminClient
