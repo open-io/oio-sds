@@ -3225,7 +3225,7 @@ def generate(options):
         # We need only one service
         break
 
-    # Xcute event-agent
+    # Xcute event-agents
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
@@ -3235,14 +3235,12 @@ def generate(options):
             url=url,
             srv_type="xcute-event-agent",
             context="xcute",
-            handler_prefix="/xcute-event-handlers-",
+            handler_prefix="xcute-event-handlers-",
             group_id="event-agent-xcute",
             template_handler=template_xcute_event_agent_handlers,
             template_agent=template_xcute_event_agent,
             template_systemd=template_systemd_service_xcute_event_agent,
         )
-    # Configure a special oio-event-agent dedicated to chunk delete per host
-    # -------------------------------------------------------------------------
     num = 0
     for _, url, event_agent_bin in get_event_agent_details():
         for host in hosts:
@@ -3252,9 +3250,9 @@ def generate(options):
                 queue_name=f"oio-xcute-job-{host}",
                 workers="2",
                 url=url,
-                srv_type="xcute-event-agent",
+                srv_type="xcute-event-agent-local",
                 context="xcute",
-                handler_prefix="/xcute-event-handlers-",
+                handler_prefix="xcute-event-handlers-",
                 group_id="event-agent-xcute-per-host",
                 template_handler=template_xcute_event_agent_handlers,
                 template_agent=template_xcute_event_agent,
