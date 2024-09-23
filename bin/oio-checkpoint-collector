@@ -29,13 +29,14 @@ from multiprocessing.queues import Empty
 from oio.account.backend_fdb import MULTIUPLOAD_SUFFIX
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import read_conf
+from oio.common.constants import LIFECYCLE_PROPERTY_KEY
 from oio.common.exceptions import NoSuchContainer
 from oio.common.easy_value import int_value
 from oio.common.green import GreenPool, LightQueue, sleep
 from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
 from oio.common.timestamp import Timestamp
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, get_hasher
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
 
@@ -58,6 +59,10 @@ class CheckpointCollector:
         # Configuration
         self._concurrency = int_value(self._conf.get("concurrency"), 100)
         self._topic = self._conf.get("topic", CHECKPOINT_TOPIC_DEFAULT)
+
+        # Global bucket to save versions fof lifecyce configs
+        self.default_account = self._conf.get("default_lc_account", "AUTH_demo")
+        self.default_bucket = self._conf.get("default_lc_bucket", "lc-bucket")
 
         # Threading
         self._pool = GreenPool(self._concurrency)
@@ -155,7 +160,46 @@ class CheckpointCollector:
                     self._logger.info(
                         "Get info on container: acct=%s, ref=%s", account, _bucket
                     )
-                    _ = self._api.container_show(account, _bucket)
+                    props = self._api.container_show(account, _bucket)
+                    if not ct_suffix:
+                        lifecycle_config = props["properties"].get(
+                            LIFECYCLE_PROPERTY_KEY
+                        )
+                        if not lifecycle_config:
+                            self._logger.warning(
+                                "Failed to get lifecycle config for bucket %s", bucket
+                            )
+                            continue
+                        obj_name = f"{account}/{bucket}/lifecycle-config"
+                        extra_args = {}
+                        extra_args["prefix"] = obj_name
+                        objects_meta = self._api.object_list(
+                            self.default_account,
+                            self.default_bucket,
+                            **extra_args,
+                        )
+                        objects = objects_meta.get("objects", [])
+                        if len(objects):
+                            last_object = objects[0]
+                            hash_object = last_object.get("hash")
+
+                            hasher = get_hasher("md5")
+                            hasher.update(lifecycle_config.encode("utf-8"))
+                            checksum = hasher.hexdigest().upper()
+                            if checksum != hash_object:
+                                self._api.object_create(
+                                    self.default_account,
+                                    self.default_bucket,
+                                    obj_name=obj_name,
+                                    data=lifecycle_config,
+                                )
+                        else:
+                            self._api.object_create(
+                                self.default_account,
+                                self.default_bucket,
+                                obj_name=obj_name,
+                                data=lifecycle_config,
+                            )
                     self._process_container(account, _bucket)
                 except NoSuchContainer:
                     continue
