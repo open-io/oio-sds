@@ -666,6 +666,9 @@ user = ${USER}
 concurrency = 1
 endpoint = ${EVENT_CNXSTRING}
 topic = oio-lifecycle-checkpoint
+default_lc_account = AUTH_demo
+default_lc_bucket = lc-bucket
+
 """
 
 template_rawx_service = """
