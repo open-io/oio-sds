@@ -149,14 +149,14 @@ class CheckpointCollector:
         self._logger.info("Processing %s %s", account, bucket)
 
         try:
-            for acct_suffix in ("", MULTIUPLOAD_SUFFIX):
-                _account = f"{account}{acct_suffix}"
+            for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
+                _bucket = f"{bucket}{ct_suffix}"
                 try:
                     self._logger.info(
-                        "Get info on container: acct=%s, ref=%s", _account, bucket
+                        "Get info on container: acct=%s, ref=%s", account, _bucket
                     )
-                    _ = self._api.container_show(_account, bucket)
-                    self._process_container(account, bucket)
+                    _ = self._api.container_show(account, _bucket)
+                    self._process_container(account, _bucket)
                 except NoSuchContainer:
                     continue
         except Exception as exc:
