@@ -14,11 +14,11 @@
 # License along with this library.
 
 import os
-import time
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
     LIFECYCLE_PROPERTY_KEY,
+    LOGGING_PROPERTY_KEY,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
     M2_PROP_VERSIONING_POLICY,
@@ -90,8 +90,7 @@ class Lifecycle(Filter):
         # the number of versions can vary from one object to another
         self.noncurrent_limit = self.LIMIT * self.batch_size
 
-        now = time.strftime("%Y-%m-%d")
-        self.suffix = f"lifecycle-{now}"
+        self.suffix = None
 
         self.successes = 0
         self.skipped = 0
@@ -173,6 +172,14 @@ class Lifecycle(Filter):
             raise
         return (props, main_account, root_container)
 
+    def _get_suffix(self, real_path):
+        db_id = real_path.rsplit("/")[-1].rsplit(".")
+        if len(db_id) < 4:
+            return None
+        if db_id[2] != "meta2":
+            return None
+        return db_id[3]
+
     def process(self, env, cb):
         """Process current container:
 
@@ -189,6 +196,17 @@ class Lifecycle(Filter):
         kwargs = {}
         kwargs["reqid"] = reqid
 
+        # Get suffix for each entry
+        self.suffix = self._get_suffix(meta2db.real_path)
+        if self.suffix is None:
+            self.errors += 1
+            self.logger.warning(
+                "Failed to find lifecycle local copy cid=%s, real_path=%s",
+                meta2db.cid,
+                meta2db.real_path,
+            )
+            return self.app(env, cb)
+
         self.nb_match_per_container = 0
         try:
             account, container = self.api.resolve_cid(meta2db.cid)
@@ -203,6 +221,7 @@ class Lifecycle(Filter):
             )
             lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
             versioning = props["system"].get(M2_PROP_VERSIONING_POLICY)
+            logging_config = props["properties"].get(LOGGING_PROPERTY_KEY)
             if lifecycle_config is None:
                 self.logger.warning(
                     "No lifecycle configuration for given container: %s, "
@@ -213,6 +232,13 @@ class Lifecycle(Filter):
                 )
                 self.conf_not_found += 1
                 return self.app(env, cb)
+
+            if logging_config:
+                self.logger.info(
+                    "Access logging enabled for root_container %s, account: %s",
+                    root_container,
+                    account,
+                )
 
             lc_instance = ContainerLifecycle(
                 self.api, main_account, root_container, logger=self.logger

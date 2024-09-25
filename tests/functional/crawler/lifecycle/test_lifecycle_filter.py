@@ -234,6 +234,9 @@ class TestLifecycleFilter(BaseTestCase):
             os.makedirs(local_dir, exist_ok=True)
         os.symlink(src, dst)
 
+        # Force source path
+        meta2db_env["path"] = src
+
     def _add_objects(
         self, cname, number_of_obj, properties=None, pattern_name="content"
     ):
