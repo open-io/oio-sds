@@ -70,10 +70,13 @@ void on_kafka_delivery_report(rd_kafka_t* rk UNUSED,
 	}
 	const rd_kafka_topic_t* _topic = rkmessage->rkt;
 	const char* topic_name = rd_kafka_topic_name(_topic);
-	gchar* msg = (gchar*)rkmessage->payload;
+	gchar *msg = g_strndup(rkmessage->payload, rkmessage->len);
 	if (message_should_be_dropped(err)) {
+		// FIXME(FVE): drop_func should take ownership of msg!
 		ctx->drop_func(topic_name, msg);
+		g_free(msg);
 	} else {
+		// requeue_func takes ownership of msg
 		ctx->requeue_func(msg);
 	}
 }

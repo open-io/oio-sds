@@ -70,6 +70,7 @@ typedef gboolean (*_queue_BEANSTALKD_intercept_running_f) (
 extern _queue_BEANSTALKD_intercept_running_f intercept_running;
 
 void _event_dropped(const char *msg, const size_t msglen);
+/* FIXME(FVE): _drop_event should take ownership of msg */
 void _drop_event(const gchar *queue_name, const gchar *msg);
 void _q_destroy (struct oio_events_queue_s *self);
 void _q_flush_buffered(struct _queue_with_endpoint_s *q, gboolean total);
