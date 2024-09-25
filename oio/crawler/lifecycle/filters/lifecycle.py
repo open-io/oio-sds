@@ -15,7 +15,6 @@
 
 import json
 import os
-import time
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
@@ -93,8 +92,7 @@ class Lifecycle(Filter):
         # the number of versions can vary from one object to another
         self.noncurrent_limit = self.LIMIT * self.batch_size
 
-        now = time.strftime("%Y-%m-%d")
-        self.suffix = f"lifecycle-{now}"
+        self.suffix = None
 
         self.successes = 0
         self.errors = 0
@@ -190,6 +188,14 @@ class Lifecycle(Filter):
             self.logger.warning("Failed to decode JSON logging config: %s", err)
         return (target_bucket, target_prefix)
 
+    def _get_suffix(self, real_path):
+        db_id = real_path.rsplit("/")[-1].rsplit(".")
+        if len(db_id) < 4:
+            return None
+        if db_id[2] != "meta2":
+            return None
+        return db_id[3]
+
     def process(self, env, cb):
         """Process current container:
 
@@ -208,6 +214,17 @@ class Lifecycle(Filter):
         reqid = request_id("lc-crawler-")
         kwargs = {}
         kwargs["reqid"] = reqid
+
+        # Get suffix for each entry
+        self.suffix = self._get_suffix(meta2db.real_path)
+        if self.suffix is None:
+            self.errors += 1
+            self.logger.warning(
+                "Failed to find lifecycle local copy cid=%s, real_path=%s",
+                meta2db.cid,
+                meta2db.real_path,
+            )
+            return self.app(env, cb)
 
         self.nb_match_per_container = 0
         try:
