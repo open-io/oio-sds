@@ -23,6 +23,7 @@ from oio.directory.admin import AdminClient
 from oio.event.evob import EventTypes
 
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_LIFECYCLE_TOPIC, KafkaConsumer
+from oio.container.sharding import ContainerSharding
 
 
 def fake_cb(_status, _msg):
@@ -176,7 +177,7 @@ class TestLifecycleFilter(BaseTestCase):
         self.conf["budget_per_container"] = self.budget_per_container
         self.conf["lifecycle_batch_size"] = self.lifecycle_batch_size
 
-        self.force_delete = True
+        self.force_delete = False
 
     def tearDown(self):
         try:
@@ -192,8 +193,8 @@ class TestLifecycleFilter(BaseTestCase):
             self.logger.warning("Exception during cleaning %s", self.account)
         super(TestLifecycleFilter, self).tearDown()
 
-    def _get_meta2db_env(self, cname=None, cid=None):
-        cid = cid or cid_from_name(self.account, cname or self.cname)
+    def _get_meta2db_env(self, account=None, cname=None, cid=None):
+        cid = cid or cid_from_name(account or self.account, cname or self.cname)
         dir_data = self.storage.directory.list(cid=cid, service_type="meta2")
         volume_id = dir_data["srv"][0]["host"]
         volume_path = None
@@ -238,10 +239,15 @@ class TestLifecycleFilter(BaseTestCase):
         meta2db_env["path"] = src
 
     def _add_objects(
-        self, cname, number_of_obj, properties=None, pattern_name="content"
+        self,
+        cname,
+        number_of_obj,
+        properties=None,
+        prefix="documents/",
+        pattern_name="content",
     ):
         for _ in range(number_of_obj):
-            file_name = "documents/" + random_str(8) + pattern_name
+            file_name = prefix + random_str(8) + pattern_name
             reqid = request_id()
             self.storage.object_create(
                 self.account,
@@ -275,7 +281,6 @@ class TestLifecycleFilter(BaseTestCase):
 
     def _process(
         self,
-        nb_objects=0,
         meta2db_env=None,
         callback=fake_cb,
         nb_passes=1,
@@ -321,9 +326,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._make_local_copy(self.meta2db_env)
         self._make_symbolic_link(self.meta2db_env)
         time.sleep(2)
-        self._process(
-            nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add
-        )
+        self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
     def test_disabled_rules(self):
         nb_obj_to_add = 4
@@ -335,7 +338,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._make_local_copy(self.meta2db_env)
         self._make_symbolic_link(self.meta2db_env)
         time.sleep(2)
-        self._process(nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=0)
+        self._process(meta2db_env=self.meta2db_env, expected_events=0)
 
     def test_offset(self):
         nb_obj_to_add = 5
@@ -349,10 +352,10 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         time.sleep(2)
         # First pass makes 2 requests with batch_size = 2
         # Then breaks as nb of matches > self.budget_per_container
-        self._process(nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=4)
+        self._process(meta2db_env=self.meta2db_env, expected_events=4)
         time.sleep(2)
         # Next pass finds only one remainingn match
-        self._process(nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=1)
+        self._process(meta2db_env=self.meta2db_env, expected_events=1)
 
     def test_transition(self):
         nb_obj_to_add = 4
@@ -365,9 +368,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._make_local_copy(self.meta2db_env)
         self._make_symbolic_link(self.meta2db_env)
         time.sleep(2)
-        self._process(
-            nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add
-        )
+        self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
 
 class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
@@ -405,6 +406,58 @@ class TestLifecycleFilterMpu(TestLifecycleFilter):
         self._make_local_copy(self.meta2db_env)
         self._make_symbolic_link(self.meta2db_env)
         time.sleep(2)
-        self._process(
-            nb_obj_to_add, meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add
+        self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
+
+
+class TestLifecycleFilterShards(TestLifecycleFilter):
+    @classmethod
+    def setUpClass(cls):
+        super(TestLifecycleFilterShards, cls).setUpClass()
+        # Prevent the sharding/shrinking by the meta2 crawlers
+        cls._service("oio-crawler.target", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=1)
+        super(TestLifecycleFilterShards, cls).tearDownClass()
+
+    def setUp(self):
+        super(TestLifecycleFilterShards, self).setUp()
+        self.container_sharding = ContainerSharding(self.conf)
+
+    def _shard_container(self):
+        test_shards = [
+            {"index": 0, "lower": "", "upper": "end"},
+            {"index": 1, "lower": "end", "upper": ""},
+        ]
+        new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
+        self.container_sharding.replace_shard(
+            self.account, self.cname, new_shards, enable=True
         )
+        # check shards
+        show_shards = self.container_sharding.show_shards(self.account, self.cname)
+        show_shards = list(show_shards)
+        return show_shards
+
+    def test_basic(self):
+        nb_obj_to_add = 4
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 1
+        self._set_lifecycle_prop(lifecycle_conf)
+        self._add_objects(self.cname, nb_obj_to_add, prefix="doc/")
+
+        self._add_objects(self.cname, nb_obj_to_add, prefix="var/")
+        # Shard container into 2 shards
+        shards = self._shard_container()
+        for index, el in enumerate(shards):
+            cid = el.get("cid")
+            self.meta2db_env = self._get_meta2db_env(cid=cid)
+
+            self._make_local_copy(self.meta2db_env)
+            self._make_symbolic_link(self.meta2db_env)
+            time.sleep(2)
+
+            # nb_obj_to_add on first shard and zero on next and it is outside prefix
+            nb_objects = nb_obj_to_add if index == 0 else 0
+            self._process(meta2db_env=self.meta2db_env, expected_events=nb_objects)
