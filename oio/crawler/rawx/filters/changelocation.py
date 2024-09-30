@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -256,7 +256,7 @@ class Changelocation(ChunkSymlinkFilter):
             resp = PlacementImproverCrawlerError(
                 chunk=chunkwrapper,
                 body=(
-                    f"Error while moving the chunk {chunk_exc}"
+                    f"Error while moving the chunk {chunk_exc} "
                     f"reqid={reqid}, chunk_id={chunk_id}, "
                     f"content_id={content_id}, "
                     f"content_version={content_version}"
