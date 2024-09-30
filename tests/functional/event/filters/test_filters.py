@@ -16,15 +16,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from datetime import datetime, timezone
 import time
 from urllib.parse import quote
 
+from mock import patch
+
 from oio.blob.rebuilder import BlobRebuilder
+from oio.common.exceptions import ServiceBusy
+from oio.event.evob import Event
 from oio.event.filters.notify import KafkaNotifyFilter
+from oio.event.filters.lifecycle_access_logger import LifecycleAccessLoggerFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 from testtools.testcase import ExpectedException
-
-from oio.common.exceptions import ServiceBusy
 
 
 class _App(object):
@@ -427,3 +431,94 @@ class TestKafkaNotifyFilter(BaseTestCase):
         self.assertTrue(
             self.notify_filter._should_notify(random_str(16), random_str(16))
         )
+
+
+class TestLifecycleAccessLoggerFilter(BaseTestCase):
+    class EchoLogger:
+        def __init__(self):
+            self.lines = []
+
+        def info(self, msg):
+            self.lines.append(msg)
+
+    def setUp(self):
+        super().setUp()
+        self.conf["log_prefix"] = "lifecycle_access"
+        self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        self.filter = LifecycleAccessLoggerFilter(app=_App, conf=self.conf)
+
+    def test_should_log(self):
+        # Empty event
+        event = Event({})
+        self.assertFalse(self.filter._should_log(event))
+        # No "target bucket" field
+        event = Event({"data": {}})
+        self.assertFalse(self.filter._should_log(event))
+        # No value in "target bucket" field
+        event = Event({"data": {"target_bucket": None}})
+        self.assertFalse(self.filter._should_log(event))
+        # Empty value in "target bucket" field
+        event = Event({"data": {"target_bucket": ""}})
+        self.assertFalse(self.filter._should_log(event))
+        # Event with valid "target bucket" field
+        event = Event({"data": {"target_bucket": "foo"}})
+        self.assertTrue(self.filter._should_log(event))
+
+    def test_log_event(self):
+        # Missing action
+        event = Event(
+            {
+                "url": {},
+                "data": {
+                    "target_bucket": "foo",
+                },
+            }
+        )
+        self.assertRaises(ValueError, self.filter._log_event, event)
+
+        with patch("oio.event.filters.lifecycle_access_logger.datetime") as mock_fmt:
+            mock_fmt.now.return_value = datetime.fromtimestamp(
+                1727682407.0962443, tz=timezone.utc
+            )
+
+            # Invalid action
+            event = Event(
+                {
+                    "url": {},
+                    "data": {
+                        "action": "INVALID",
+                        "target_bucket": "foo",
+                    },
+                }
+            )
+            self.assertRaises(ValueError, self.filter._log_event, event)
+
+            tests = (
+                ("Expiration", False, "S3.EXPIRE.OBJECT"),
+                ("Expiration", True, "S3.CREATE.DELETEMARKER"),
+                ("NoncurrentVersionExpiration", False, "S3.EXPIRE.OBJECT"),
+                ("NoncurrentVersionExpiration", True, "S3.CREATE.DELETEMARKER"),
+                ("AbortIncompleteMultipartUpload", False, "S3.DELETE.UPLOAD"),
+                ("Transition", False, "S3.TRANSITION.OBJECT"),
+                ("NoncurrentVersionTransition", False, "S3.TRANSITION.OBJECT"),
+            )
+
+            for action, marker, s3action in tests:
+
+                # Expiration delete marker action
+                event = Event(
+                    {
+                        "url": {},
+                        "data": {
+                            "action": action,
+                            "target_bucket": "foo",
+                            "add_delete_marker": marker,
+                        },
+                    }
+                )
+                with patch("logging.Logger.info") as mock_logger:
+                    self.filter._log_event(event)
+                    mock_logger.assert_called_once_with(
+                        "lifecycle_access: - - [30/Sep/2024:07:46:47 +0000] - - - "
+                        f'{s3action} - "-" - - - - - - "-" "-" - - - - - - - -'
+                    )
