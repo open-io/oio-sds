@@ -232,7 +232,7 @@ class HttpApi(object):
             for key, value in params.items():
                 if value is not None:
                     if isinstance(value, str):
-                        value = str(value).encode("utf-8")
+                        value = value.encode("utf-8")
                     out_param.append((key, value))
             encoded_args = urlencode(out_param)
             if encoded_args:
@@ -258,7 +258,7 @@ class HttpApi(object):
             body = resp.data
             if body and resp.headers.get("Content-Type") == HTTP_CONTENT_TYPE_JSON:
                 try:
-                    body = jsonlib.loads(body.decode("utf-8"))
+                    body = jsonlib.loads(body, encoding="utf-8")
                 except (UnicodeDecodeError, ValueError) as exc:
                     self._logger().warn("Response body isn't decodable JSON: %s", body)
                     raise OioException("Response body isn't decodable JSON") from exc

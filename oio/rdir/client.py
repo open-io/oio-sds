@@ -663,7 +663,7 @@ class RdirClient(HttpApi):
             # Add the list of services to the cache
             self._addr_cache[volume_id] = (
                 cur_hosts,
-                now + self._cache_duration * random.randrange(90, 100) / 100,
+                now + self._cache_duration * random.uniform(0.9, 1.0),
             )
             return cur_hosts
         except NotFound:
