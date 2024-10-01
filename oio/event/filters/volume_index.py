@@ -127,8 +127,6 @@ class VolumeIndexFilter(Filter):
         container_id = data.get("container_id")
         content_id = data.get("content_id")
         chunk_id = data.get("chunk_id")
-        content_path = data.get("content_path")
-        content_ver = data.get("content_version")
         if event.event_type == EventTypes.CHUNK_DELETED:
             if not all((volume_id, container_id, content_id, chunk_id)):
                 self.logger.warning(
@@ -150,8 +148,8 @@ class VolumeIndexFilter(Filter):
                 container_id,
                 content_id,
                 chunk_id,
-                content_path,
-                content_ver,
+                data.get("content_path"),
+                data.get("content_version"),
                 mtime=event.when // 1000000,  # seconds
             )
 
