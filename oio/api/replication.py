@@ -262,6 +262,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 except (Exception, SocketError, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk["error"] = str(err)
+                    self.logger.error(
+                        "_send_data %s (reqid=%s): %s",
+                        conn.chunk["url"],
+                        self.reqid,
+                        conn.chunk["error"],
+                    )
 
     def _get_response(self, conn):
         """

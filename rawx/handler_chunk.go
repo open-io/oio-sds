@@ -72,9 +72,11 @@ var RangeRegex = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
 
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
-func fillBuffer(src io.Reader, buf []byte) (written int, err error) {
+func fillBuffer(src io.Reader, buf []byte, reqid string) (written int, err error) {
 	for len(buf)-written >= defs.UploadBatchSize {
+		logger.LogInfo("Reading source (reqid=%s len_buf=%d written=%d UploadBatchSize=%d)", reqid, len(buf), written, defs.UploadBatchSize)
 		nr, er := src.Read(buf[written:])
+		logger.LogInfo("Source read (reqid=%s nr=%d er=%v)", reqid, nr, er)
 		if nr > 0 {
 			written += nr
 		}
@@ -105,7 +107,7 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 
 type UploadFinal func(int64, error) error
 
-func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.BufferPool, cb UploadFinal) error {
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.BufferPool, cb UploadFinal, reqid string) error {
 	var written int64
 	var err error
 
@@ -114,7 +116,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool utils.B
 
 	for {
 		// Fill the buffer
-		totalr, er := fillBuffer(src, buf)
+		totalr, er := fillBuffer(src, buf, reqid)
 
 		if totalr > 0 {
 			h.Write(buf[:totalr])
@@ -247,13 +249,13 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// Upload, and maybe manage compression
 	if z != nil {
-		err = copyReadWriteBuffer(z, rr.req.Body, h, rr.rawx.uploadBufferPool, final)
+		err = copyReadWriteBuffer(z, rr.req.Body, h, rr.rawx.uploadBufferPool, final, rr.reqid)
 		errClose := z.Close()
 		if err == nil {
 			err = errClose
 		}
 	} else if err == nil {
-		err = copyReadWriteBuffer(out, rr.req.Body, h, rr.rawx.uploadBufferPool, final)
+		err = copyReadWriteBuffer(out, rr.req.Body, h, rr.rawx.uploadBufferPool, final, rr.reqid)
 	}
 	rr.bytesIn = uint64(ul.length)
 
