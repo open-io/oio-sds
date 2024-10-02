@@ -25,6 +25,9 @@ jobs:
           cat $0
           set -x
           set -e
+          export DEBIAN_FRONTEND=noninteractive
+          echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" > /etc/apt/sources.list.d/snapmirror-ovh-objectstorage-openio.list
+          apt update
           . .cds/versions
           # dev or prod release
           export VERSION=1.0-focal
