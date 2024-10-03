@@ -70,7 +70,11 @@ class ElectionCmdMixin(object):
 
 
 class ElectionReset(ElectionCmdMixin, lister.Lister):
-    """Crawl elections and reset them when they seem broken."""
+    """
+    Crawl elections and reset them when they seem broken.
+
+    We suggest to run this command with "-f value" to get some progress report.
+    """
 
     log = getLogger(__name__ + ".ElectionReset")
 
@@ -83,7 +87,7 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
             action="store_true",
             dest="SMART",
             default=False,
-            help="Delete duplicate nodes",
+            help="Delete duplicate nodes and nodes in excess",
         )
         parser.add_argument(
             "--dry-run",
@@ -134,24 +138,11 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                 for node in children:
                     yield group, node, "Nothing to do"
             elif parsed_args.SMART:
+                # Check for nodes with bad sequence number.
+                # Notice that a "group" can hold several elections.
                 children.sort()
-                # check for services registered several times
-                node_for_svc = {}
-                for child in children:
-                    n = group + "/" + child
-                    svc, node_stat = zh.get(n)
-                    if svc is not None:
-                        svc = svc.decode("utf-8")
-                    print(repr(svc), repr(node_stat))
-                    if svc in node_for_svc:
-                        # Mark the oldest nodes for removal
-                        yield action(group, node_for_svc[svc])
-                    node_for_svc[svc] = child
-                if len(node_for_svc) >= parsed_args.MIN:
-                    self.log.warning(
-                        "More than %d nodes in group %s", parsed_args.MIN - 1, group
-                    )
-                for node in node_for_svc.values():
+                node_by_el = {}
+                for node in children:
                     parts = node.split("-", 1)
                     if len(parts) < 2:
                         self.log.warning("Node %s has no sequence number", node)
@@ -162,6 +153,38 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                         )
                         yield action(group, node)
                     else:
+                        node_by_el.setdefault(parts[0], []).append(node)
+
+                # 1st pass, check for services registered several times.
+                for el_group, nodes in node_by_el.items():
+                    if len(nodes) < parsed_args.MIN:
+                        continue
+                    self.log.warning(
+                        "More than %d nodes in election %s",
+                        parsed_args.MIN - 1,
+                        el_group,
+                    )
+                    nodes.sort()
+                    node_for_svc = {}
+                    for node in nodes:
+                        node_path = group + "/" + node
+                        svc, node_stat = zh.get(node_path)
+                        if svc is not None:
+                            svc = svc.decode("utf-8")
+                        print(repr(svc), repr(node_stat))
+                        if svc in node_for_svc:
+                            # Mark the oldest nodes for removal
+                            yield action(group, node_for_svc[svc])
+                        node_for_svc[svc] = node
+                    # Modify the list in-place
+                    nodes[:] = sorted(node_for_svc.values())
+
+                # 2nd pass, check for too many services registered.
+                for el_group, nodes in node_by_el.items():
+                    while len(nodes) >= parsed_args.MIN:
+                        oldest = nodes.pop(0)
+                        yield action(group, oldest)
+                    for node in nodes:
                         yield group, node, "Nothing to do"
             else:
                 # systematical removal
