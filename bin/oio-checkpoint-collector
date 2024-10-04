@@ -22,7 +22,7 @@ import argparse
 import json
 import signal
 import time
-from os.path import exists
+from os.path import exists, join
 from collections import OrderedDict
 from multiprocessing.queues import Empty
 
@@ -91,7 +91,8 @@ class CheckpointCollector:
         self._statsd = get_statsd(self._conf)
 
         # Progress tracking
-        self._run_id = str(run_id)
+        self._progress_dir = self._conf.get("progress_dir", ".")
+        self._run_id = run_id
         self._progress = OrderedDict()
         self._last_commited_marker = None
 
@@ -99,6 +100,7 @@ class CheckpointCollector:
 
     def _reload_progress(self):
         # load marker
+        self._logger.info("Retrieve progress from file: '%s'", self.progress_file)
         if exists(self.progress_file):
             with open(self.progress_file, "r", encoding="utf-8") as progress_file:
                 line = progress_file.readline()
@@ -115,11 +117,11 @@ class CheckpointCollector:
 
     @property
     def progress_file(self):
-        return f"checkpoint-collector.progress.{self._run_id}"
+        return join(self._progress_dir, f"checkpoint-collector.progress.{self._run_id}")
 
     @property
     def error_file(self):
-        return f"checkpoint-collector.error.{self._run_id}"
+        return join(self._progress_dir, f"checkpoint-collector.error.{self._run_id}")
 
     def _make_payload(self, account, bucket, cid, shard_info):
         shard_info = shard_info or {}
@@ -271,12 +273,23 @@ class CheckpointCollector:
             for task in tasks:
                 task.cancel()
 
+        self._logger.info(
+            "Listing bucket with feature '%s' activated", self._feature_name
+        )
+        has_process_bucket = bool(self._marker)
         for account, bucket in self._fetch_buckets(self._marker):
             if not self._running:
                 cancel_pending_tasks()
                 break
             task = self._pool.spawn(self._process_bucket, account, bucket)
             tasks.append(task)
+            has_process_bucket = True
+        if not has_process_bucket:
+            self._logger.warning(
+                "No buckets found with feature '%s'. Ensure the feature is tracked"
+                "(features_whitelist)",
+                self._feature_name,
+            )
 
         while (self._pool.running() + self._pool.waiting()) > 0:
             if not self._running:
