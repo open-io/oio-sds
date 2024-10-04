@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 from copy import deepcopy
 
 from oio.common.exceptions import ClientException
@@ -152,16 +153,17 @@ class CheckpointCreatorFilter(Filter):
             "Create a checkpoint for container %s in lifecycle run: %s", cid, run_id
         )
         try:
+            timestamp = int(time.time())
             _ = self._container_client.container_checkpoint(
                 cid=cid,
-                suffix=f"{self._checkpoint_suffix}-{run_id}",
+                suffix=f"{self._checkpoint_suffix}-{run_id}-{timestamp}",
             )
         except ClientException as exc:
             self.logger.error(
                 f"Unable to create checkpoint for container {cid}, reason: {exc}"
             )
             self._statsd.incr(
-                statsd_key(run_id, LifecycleAction.CHECKPOINT, LifecycleStep.ERROR)
+                statsd_key(run_id, LifecycleStep.ERROR, LifecycleAction.CHECKPOINT)
             )
             return RetryableEventError(
                 f"Unable to create checkpoint for container {cid}"
@@ -176,7 +178,7 @@ class CheckpointCreatorFilter(Filter):
                 cid = self._event_context.container_to_process
 
         self._statsd.incr(
-            statsd_key(self._event_context.run_id, LifecycleAction.CHECKPOINT, step)
+            statsd_key(self._event_context.run_id, step, LifecycleAction.CHECKPOINT)
         )
         self._metrics.increment_counter(
             self._event_context.run_id,

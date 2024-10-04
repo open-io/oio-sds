@@ -1,0 +1,9 @@
+
+[checkpoint-collector]
+namespace = OPENIO
+user = OPENIO
+concurrency = 1
+endpoint = kafka://127.0.0.1:19092
+topic = oio-lifecycle-checkpoint
+lifecycle_configuration_backup_account = AUTH_demo
+lifecycle_configuration_backup_bucket = lc-bucket
