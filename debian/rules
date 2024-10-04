@@ -40,7 +40,7 @@ override_dh_auto_configure:
 	-DZK_LIBDIR=${ZOOKEEPER_PATH}/lib \
 	-DZK_INCDIR=${ZOOKEEPER_PATH}/include/zookeeper \
 	-DKAFKA_LIBDIR=${LIBRDKAFKA_PATH}/lib \
-	-DKAFKA_INCDIR=${LIBRDKAFKA_PATH}/include \
+	-DKAFKA_INCLUDEDIR=${LIBRDKAFKA_PATH}/include \
 	-DSOCKET_OPTIMIZED=1
 
 override_dh_auto_build:
