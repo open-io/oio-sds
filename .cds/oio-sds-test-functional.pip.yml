@@ -31,7 +31,7 @@ jobs:
           SYSTEMD_VERSION=$(dpkg -s libsystemd0 | sed -n -E -e 's/^Version: (\w+)/\1/p')
           apt-mark hold libsystemd0 systemd
           apt-get update
-          eval "echo \"$(cat deps-ubuntu-focal.txt.in)\"" > deps-ubuntu-focal.txt # because envsubst is not installed
+          eval "echo \"$(cat .cds/deps-ubuntu-focal.txt.in)\"" >.cds/deps-ubuntu-focal.txt # because envsubst is not installed
           apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service

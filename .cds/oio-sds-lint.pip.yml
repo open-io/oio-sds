@@ -14,7 +14,7 @@ jobs:
           - echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" > /etc/apt/sources.list.d/snapmirror-ovh-objectstorage-openio.list
           - apt update
           - . .cds/versions
-          - eval "echo \"$(cat deps-ubuntu-focal.txt.in)\"" > deps-ubuntu-focal.txt # because envsubst is not installed
+          - eval "echo \"$(cat .cds/deps-ubuntu-focal.txt.in)\"" >.cds/deps-ubuntu-focal.txt # because envsubst is not installed
           # We don't need docker compose
           - apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
           - virtualenv -p /usr/bin/python3 $HOME/venv
