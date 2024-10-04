@@ -33,7 +33,7 @@ jobs:
           apt-get update
           source .cds/versions
           envsubst <.cds/deps-ubuntu-focal.txt.in  >.cds/deps-ubuntu-focal.txt
-          apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE} ${LIBRFKAFKA_PACKAGE}
+          apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
           # Configure environment
@@ -42,8 +42,10 @@ jobs:
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh
           echo "export ZOOLIBDIR=/opt/${ZOOKEEPER_PACKAGE}/lib"  >> $HOME/oio-env.sh
           echo "export ZOOINCDIR=/opt/${ZOOKEEPER_PACKAGE}/include/zookeeper"  >> $HOME/oio-env.sh
-          echo 'export CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=${ZOOLIBDIR} -DZK_INCDIR=${ZOOINCDIR}"' >> $HOME/oio-env.sh
-          echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:/opt/${ZOOKEEPER_PACKAGE}/lib:/tmp/oio/lib" >> $HOME/oio-env.sh
+          echo "export KAFKALIBDIR=/opt/${LIBRDKAFKA_PACKAGE}/lib"  >> $HOME/oio-env.sh
+          echo "export KAFKAINCDIR=/opt/${LIBRDKAFKA_PACKAGE}/include"  >> $HOME/oio-env.sh
+          echo 'export CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=${ZOOLIBDIR} -DZK_INCDIR=${ZOOINCDIR}" -DKAFKA_LIBDIR=${KAFKALIBDIR} -DFKAFKA_INCDIR=${KAFKAINCDIR}' >> $HOME/oio-env.sh
+          echo "export LD_LIBRARY_PATH=/opt/${GO_PACKAGE}/lib:${ZOOLIBDIR}:${KAFKALIBDIR}:/tmp/oio/lib" >> $HOME/oio-env.sh
           # tox does not read the file pip.conf, it uses the environment variable PIP_INDEX_URL
           echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
           echo "export PIP_EXTRA_INDEX_URL=https://pypi.org/simple" >> $HOME/oio-env.sh

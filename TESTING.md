@@ -12,6 +12,8 @@ BUILD=$(mktemp -d)
 INSTALL=~/.oio/sds
 
 cd ${SOURCES}
+source .cds/versions
+envsubst <.cds/deps-ubuntu-focal.txt.in >.cds/deps-ubuntu-focal.txt
 sudo apt install $(cat .cds/deps-ubuntu-focal.txt)
 git clone ssh://git@github.com/open-io/oio-sds.git
 git submodule update --init
