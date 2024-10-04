@@ -11,12 +11,11 @@ jobs:
           - set -x
           - export DEBIAN_FRONTEND=noninteractive
           - eval $(worker key install --env-git proj-ssh-openio)
-          - apt update
-          # We don't need docker compose
           - echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" > /etc/apt/sources.list.d/snapmirror-ovh-objectstorage-openio.list
           - apt update
-          - source .cds/versions
+          - . .cds/versions
           - envsubst <.cds/deps-ubuntu-focal.txt.in  >.cds/deps-ubuntu-focal.txt
+          # We don't need docker compose
           - apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
           - virtualenv -p /usr/bin/python3 $HOME/venv
           - . $HOME/venv/bin/activate
