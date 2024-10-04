@@ -11,6 +11,7 @@ jobs:
           - set -x
           - export DEBIAN_FRONTEND=noninteractive
           - eval $(worker key install --env-git proj-ssh-openio)
+          - echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" > /etc/apt/sources.list.d/snapmirror-ovh-pcs-public.list
           - echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" > /etc/apt/sources.list.d/snapmirror-ovh-objectstorage-openio.list
           - apt update
           - . .cds/versions
