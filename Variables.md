@@ -389,15 +389,6 @@ Used by `gcc`
  * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_LEVEL_DENY*
  * range: 0 -> G_MAXINT64
 
-### events.beanstalkd.check_period
-
-> Set the interval between each check of the beanstalkd availability. Set to 0 to never check.
-
- * default: **0**
- * type: gint64
- * cmake directive: *OIO_EVENTS_BEANSTALKD_CHECK_PERIOD*
- * range: 0 -> 1 * G_TIME_SPAN_DAY
-
 ### events.beanstalkd.delay
 
 > Sets the delay on each notification sent to the BEANSTALK endpoint
@@ -433,6 +424,15 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_EVENTS_BEANSTALKD_TTR*
  * range: 0 -> 86400
+
+### events.common.check_period
+
+> Set the interval between each check of the beanstalkd availability. Set to 0 to never check.
+
+ * default: **30 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_EVENTS_COMMON_CHECK_PERIOD*
+ * range: 0 -> 1 * G_TIME_SPAN_DAY
 
 ### events.common.pending.delay
 

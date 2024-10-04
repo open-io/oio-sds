@@ -1,7 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -249,7 +249,7 @@ test_with_check (void)
 		oio_events_queue__send(q, g_strdup("4"));
 	}
 
-	oio_events_beanstalkd_check_period = G_TIME_SPAN_SECOND; /* != 0 */
+	oio_events_common_check_period = G_TIME_SPAN_SECOND; /* != 0 */
 	_wrap_with_beanstalkd(requests, replies, t);
 }
 
@@ -306,7 +306,7 @@ test_without_check (void)
 		oio_events_queue__send(q, g_strdup("4"));
 	}
 
-	oio_events_beanstalkd_check_period = 0;
+	oio_events_common_check_period = 0;
 	_wrap_with_beanstalkd(requests, replies, t);
 }
 

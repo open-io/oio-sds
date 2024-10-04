@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -184,8 +184,8 @@ _q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 {
 	EXTRA_ASSERT(ctx->beanstalkd != NULL && ctx->beanstalkd->fd >= 0);
 
-	if (oio_events_beanstalkd_check_period <= 0 ||
-			ctx->last_check >= OLDEST(ctx->now, oio_events_beanstalkd_check_period))
+	if (oio_events_common_check_period <= 0 ||
+			ctx->last_check >= OLDEST(ctx->now, oio_events_common_check_period))
 		return TRUE;
 
 	gchar **lines = NULL;

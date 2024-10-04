@@ -284,8 +284,8 @@ _q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 {
 	EXTRA_ASSERT(ctx->rabbitmq != NULL && ctx->rabbitmq->conn != NULL);
 
-	if (oio_events_beanstalkd_check_period <= 0 ||
-			ctx->last_check >= OLDEST(ctx->now, oio_events_beanstalkd_check_period))
+	if (oio_events_common_check_period <= 0 ||
+			ctx->last_check >= OLDEST(ctx->now, oio_events_common_check_period))
 		return TRUE;
 
 	struct rabbitmq_queue_stats_s stats;
