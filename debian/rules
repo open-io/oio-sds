@@ -11,6 +11,7 @@ PREFIX=/opt/${PACKAGE}
 PYTHON_PATH=$(shell readlink -f /opt/python-*)
 # Only one Zookeeper path is expected
 ZOOKEEPER_PATH=$(shell readlink -f /opt/obsto-zookeeper-*)
+LIBRDKAFKA_PATH=$(shell readlink -f /opt/obsto-librdkafka-*)
 # Only one Golang path is expected
 GO_PATH=$(shell readlink -f /opt/go-*)
 GO_HOME=${GO_PATH}
@@ -38,6 +39,8 @@ override_dh_auto_configure:
 	-DEXE_PREFIX=oio \
 	-DZK_LIBDIR=${ZOOKEEPER_PATH}/lib \
 	-DZK_INCDIR=${ZOOKEEPER_PATH}/include/zookeeper \
+	-DKAFKA_LIBDIR=${LIBRDKAFKA_PATH}/lib \
+	-DKAFKA_INCDIR=${LIBRDKAFKA_PATH}/include \
 	-DSOCKET_OPTIMIZED=1
 
 override_dh_auto_build:
@@ -58,8 +61,9 @@ override_dh_install:
 	# do dh_install after dh_virtualenv as it cleans everything
 	# make install, to install oio except the python part
 	dh_install
-	# copy zookeeper libraries not to depend on zookeeper package
+	# copy zookeeper and kafka libraries not to depend on zookeeper package
 	cp -a ${ZOOKEEPER_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
+	cp -a ${LIBRDKAFKA_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
 	# create env file for library directory
 	echo "LD_LIBRARY_PATH=${PREFIX}/lib:${PYTHON_PATH}/lib" > $(DESTDIR)/${PREFIX}/ld_library_path.env
 	# create ld.so.conf file

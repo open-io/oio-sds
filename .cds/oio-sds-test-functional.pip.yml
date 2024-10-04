@@ -31,7 +31,9 @@ jobs:
           SYSTEMD_VERSION=$(dpkg -s libsystemd0 | sed -n -E -e 's/^Version: (\w+)/\1/p')
           apt-mark hold libsystemd0 systemd
           apt-get update
-          apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
+          source .cds/versions
+          envsubst <.cds/deps-ubuntu-focal.txt.in  >.cds/deps-ubuntu-focal.txt
+          apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE} ${LIBRFKAFKA_PACKAGE}
           systemctl stop apache2.service redis.service
           systemctl disable apache2.service redis.service
           # Configure environment

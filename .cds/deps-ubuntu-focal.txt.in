@@ -23,7 +23,6 @@ libjson-c-dev
 libleveldb-dev
 liblzo2-dev
 librabbitmq-dev
-obsto-librdkafka-dev=2.5.3-1594.focal
 libsqlite3-dev
 libsystemd-dev
 libzmq3-dev
@@ -38,3 +37,4 @@ rsyslog
 sqlite3
 tox
 virtualenv
+${LIBRDKAFKA_PACKAGE}
