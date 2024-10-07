@@ -134,6 +134,9 @@ int network_server_first_udp (struct network_server_s *srv);
 
 void network_server_close_servers(struct network_server_s *srv);
 
+/** Tell if the server has pending connections (active or inactive). */
+gboolean network_server_has_connections(struct network_server_s *srv);
+
 GError * network_server_open_servers(struct network_server_s *srv);
 
 GError * network_server_run(struct network_server_s *srv,
