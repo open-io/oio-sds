@@ -877,15 +877,33 @@ _reconfigure_on_SIGHUP(void)
 static void
 _seamless_restart_on_SIGHUP(void)
 {
-	GRID_NOTICE("SIGHUP! Forking and executing the new binary.");
+	const gint64 stop_delay = 50 * G_TIME_SPAN_MILLISECOND;
+	GRID_NOTICE("[Seamless restart] Forking and executing the new binary");
 	gboolean success = grid_main_seamless_restart(
 			(postfork_cleanup_cb) network_server_postfork_clean, server);
 	if (success) {
-		GRID_NOTICE("Fork succeeded, stopping in 1s.");
+		GRID_NOTICE("[Seamless restart] Fork succeeded, "
+				"stopping once all connections are closed");
+		/* Continue service requests for a few milliseconds. */
+		g_usleep(stop_delay);
+		/* Stop accepting new connections. */
 		grid_main_stop();
-		sleep(1);
+		network_server_close_servers(server);
+		/* Wait for pending connections. */
+		gint64 deadline = oio_ext_monotonic_time() + proxy_request_max_delay;
+		while (network_server_has_connections(server)
+				&& oio_ext_monotonic_time() < deadline) {
+			g_usleep(stop_delay);
+		}
+		if (network_server_has_connections(server)) {
+			GRID_WARN("[Seamless restart] Some connections still open after %"
+					G_GINT64_FORMAT"s",
+					proxy_request_max_delay / G_TIME_SPAN_SECOND);
+		}
+		GRID_NOTICE("[Seamless restart] Stopping main thread");
 	} else {
-		GRID_NOTICE("Fork failed, just reload configuration the old way");
+		GRID_WARN("[Seamless restart] Fork failed, "
+				"just reload configuration the old way");
 		_reconfigure_on_SIGHUP();
 	}
 }

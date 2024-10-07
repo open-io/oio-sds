@@ -622,6 +622,12 @@ _manage_events(struct network_server_s *srv)
 	}
 }
 
+gboolean
+network_server_has_connections(struct network_server_s *srv)
+{
+	return srv->first != NULL;
+}
+
 static void
 _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
@@ -872,7 +878,7 @@ network_server_run(struct network_server_s *srv, void (*on_reload)(void))
 	}
 
 	network_server_close_servers(srv);
-	GRID_DEBUG("Server %p waiting for its threads", srv);
+	GRID_INFO("Server %p waiting for its threads", srv);
 
 	/* wait for the event threads */
 	if (srv->thread_tcp) {
@@ -888,7 +894,7 @@ network_server_run(struct network_server_s *srv, void (*on_reload)(void))
 	_stop_pools (srv); */
 	ARM_WAKER(srv, EPOLL_CTL_DEL);
 
-	GRID_DEBUG("Server %p exiting its main loop", srv);
+	GRID_INFO("Server %p exiting its main loop", srv);
 	return err;
 }
 

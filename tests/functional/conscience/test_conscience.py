@@ -597,7 +597,8 @@ class TestConscienceFunctional(BaseTestCase):
                 self.conscience.info()
             except Exception:
                 exc_count += 1
-        self.assertLess(exc_count, 5)
+        self.logger.debug("%d exceptions during oio-proxy reload", exc_count)
+        self.assertLess(exc_count, 3)
 
     def test_up_status(self):
         def check(isUp):
