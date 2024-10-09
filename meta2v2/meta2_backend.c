@@ -4196,9 +4196,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL;
 	int is_markers = 0;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
@@ -4211,6 +4211,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
 		{"query", &jquery, json_type_string, 1},
+		{"prefix", &jprefix, json_type_string, 0},
 		{"is_markers", &jis_markers, json_type_int, 0},
 		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"policy", &jpolicy, json_type_string, 0},
@@ -4249,6 +4250,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
+	}
+	if (jprefix) {
+		prefix = json_object_get_string(jprefix);
 	}
 
 	if (query_set_tag) {
@@ -4293,7 +4297,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		goto close;
 	}
 
-	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	rc = sqlite3_prepare_v2(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_ERROR("Failed to apply query %s %s", full_query, \
 				sqlite3_errmsg(sq3->db));
@@ -4301,6 +4305,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto close;
 	}
+	if (prefix) {
+		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
+	}
+
 	guint32 count_rows = 0;
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
@@ -4356,12 +4364,25 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	sqlx_admin_inc_i64(sq3, offest_key, count_rows);
 	if (query_set_tag && (!found_match)) {
 		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
-		rc = sqlx_exec(sq3->db, query_update_properties);
-		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
+		sqlite3_stmt *stmt_update = NULL;
+		rc = sqlite3_prepare_v2(sq3->db, query_update_properties, -1, &stmt_update, NULL);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			GRID_ERROR("Failed to set properties %s %s", query_update_properties, \
 					sqlite3_errmsg(sq3->db));
+			err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+					rc, sqlite3_errmsg(sq3->db));
 			goto close;
 		}
+		if (prefix) {
+			(void) sqlite3_bind_text(stmt_update, 1, prefix, -1, NULL);
+		}
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt_update))) {}
+		rc = sqlite3_finalize(stmt_update);
+		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+			GRID_WARN("Failed to finalize update properties for query %s err %s", query_update_properties,
+					sqlite3_errmsg(sq3->db));
+		}
+
 	}
 	err = sqlx_transaction_end(repctx_clean, err);
 close:
@@ -4391,9 +4412,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL;
 
 	int batch_size = 0;
@@ -4404,6 +4425,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
 		{"query", &jquery, json_type_string, 1},
+		{"prefix", &jprefix, json_type_string, 0},
 		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"policy", &jpolicy, json_type_string, 0},
 		{"batch_size", &jbatch_size, json_type_int, 0},
@@ -4444,6 +4466,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
 	}
+	if (jprefix) {
+		prefix = json_object_get_string(jprefix);
+	}
 	if (query_set_tag) {
 		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 		base_set_adapted_tags = g_strdup_printf( \
@@ -4475,13 +4500,16 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		goto close;
 	}
 
-	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	rc = sqlite3_prepare_v2(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_ERROR("Failed to apply query %s %s", full_query, \
 				sqlite3_errmsg(sq3->db));
 		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
 				rc, sqlite3_errmsg(sq3->db));
 		goto close;
+	}
+	if (prefix) {
+		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
 	}
 	guint32 count_rows = 0, count_versions = 0;
 	gint32 count_objects = 0;
@@ -4543,11 +4571,23 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	sqlx_admin_inc_i64(sq3, offest_key, count_rows);
 	if (query_set_tag && (!found_match)) {
 		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
-		rc = sqlx_exec(sq3->db, query_update_properties);
-		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
+		sqlite3_stmt *stmt_update = NULL;
+		rc = sqlite3_prepare_v2(sq3->db, query_update_properties, -1, &stmt_update, NULL);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			GRID_ERROR("Failed to set properties %s %s", query_update_properties, \
 					sqlite3_errmsg(sq3->db));
+			err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+					rc, sqlite3_errmsg(sq3->db));
 			goto close;
+		}
+		if (prefix) {
+			(void) sqlite3_bind_text(stmt_update, 1, prefix, -1, NULL);
+		}
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt_update))) {}
+		rc = sqlite3_finalize(stmt_update);
+		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+			GRID_WARN("Failed to finalize update properties for query %s err %s", query_update_properties,
+					sqlite3_errmsg(sq3->db));
 		}
 	}
 	err = sqlx_transaction_end(repctx_clean, err);
