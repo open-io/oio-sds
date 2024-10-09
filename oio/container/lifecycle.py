@@ -180,7 +180,7 @@ class ContainerLifecycle(object):
             _query = f"{_query} WHERE ("
 
         if rule_filter.prefix is not None:
-            _prefix_cond = f"( al.alias LIKE '{rule_filter.prefix}%')"
+            _prefix_cond = "( al.alias LIKE ?||'%')"
             _query = f"{_query}{_prefix_cond}"
         if expired_delete_marker is None:
             if rule_filter.prefix is not None and time_flag:
@@ -273,15 +273,9 @@ class ContainerLifecycle(object):
             if _greater:
                 _query = f"{_query}{_greater}"
 
-        if rule_filter.prefix is not None or formated_time is not None:
+        if formated_time is not None:
             _query = f"{_query} WHERE ("
 
-        if rule_filter.prefix is not None:
-            _prefix_cond = "( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
-            _query = f"{_query}{_prefix_cond}"
-
-        if rule_filter.prefix is not None and formated_time is not None:
-            _query = f"{_query}  AND "
         if formated_time is not None:
             _time_cond = (
                 f" ((al.mtime + {formated_time}) < (CAST "
@@ -289,7 +283,7 @@ class ContainerLifecycle(object):
             )
             _query = f"{_query}{_time_cond}"
         # close WHERE clause
-        if rule_filter.prefix is not None or formated_time is not None:
+        if formated_time is not None:
             _query = f"{_query} )"
         _query = f"{_query} ORDER BY al.version ASC"
         return _query
@@ -299,7 +293,6 @@ class ContainerLifecycle(object):
     ):
         if not view_name:
             raise ValueError("Lifecycle views, empty view name!")
-        rule_filter = RuleFilter(rule)
         # CREATE forced on meta2 side
         _query = (
             f"VIEW {view_name} AS SELECT *, "
@@ -313,9 +306,6 @@ class ContainerLifecycle(object):
             else:
                 _query = f"{_query} AND (al.deleted=0)"
 
-        if rule_filter.prefix is not None:
-            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
-            _query = f"{_query}{_prefix_cond}"
         if formated_time is not None:
             _time_cond = (
                 f" AND ( (al.mtime + {formated_time}) < (CAST "
@@ -340,11 +330,19 @@ class ContainerLifecycle(object):
                 )
         return _query
 
-    def noncurrent_query(self, noncurrent_versions):
+    def get_prefix(self, rule):
+        """
+        Get prefix and pass it as parameter for query
+        """
+        rule_filter = RuleFilter(rule)
+        return rule_filter.prefix
+
+    def noncurrent_query(self, rule, noncurrent_versions):
         """
         Deal with non current versions
         """
 
+        rule_filter = RuleFilter(rule)
         #
         if noncurrent_versions is None:
             noncurrent_versions = 0
@@ -356,8 +354,12 @@ class ContainerLifecycle(object):
             " AS count, row_id FROM noncurrent_view AS al"
             " INNER JOIN current_view AS cv ON "
             " al.alias=cv.alias WHERE ((row_id <= noncurrent_nb_candidates)"
-            f" AND {self._processed_sql_condition()})"
+            f" AND {self._processed_sql_condition()} "
         )
+        if rule_filter.prefix is not None:
+            _prefix_cond = " AND ( al.alias LIKE ?||'%') "
+            query = f"{query}{_prefix_cond}"
+        query = f"{query} )"
         return query
 
     def markers_query(self):
