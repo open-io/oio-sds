@@ -2185,12 +2185,6 @@ static GError * _list_loop (struct req_args_s *args,
 	struct filter_ctx_s ctx = {0};
 	while (!err && !stop) {
 
-		if (!grid_main_is_running()) {
-			err = NEWERROR(CODE_UNAVAILABLE,
-					"Proxy not running");
-			break;
-		}
-
 		iterations++;
 
 		struct list_result_s out = {0};
@@ -2303,6 +2297,11 @@ static GError * _list_loop (struct req_args_s *args,
 		} else if (!out.truncated) {
 			/* no more elements expected, the meta2 told us */
 			out0->truncated = FALSE;
+			stop = TRUE;
+		} else if (!grid_main_is_running()) {
+			GRID_INFO("Process is stopping, returning a truncated listing "
+					"(reqid=%s)", oio_ext_get_reqid());
+			out0->truncated = TRUE;
 			stop = TRUE;
 		} else if (out.truncated && !out0->next_marker) {
 			GRID_ERROR("BUG: meta2 must return a pagination marker");
