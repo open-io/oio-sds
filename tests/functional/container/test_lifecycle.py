@@ -265,6 +265,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         view_queries,
         newer_non_current_versions,
         policy,
+        prefix,
         last_rule_action,
         rule_id,
     ):
@@ -308,6 +309,9 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 data["policy"] = policy
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
+
+                if prefix:
+                    data["prefix"] = prefix
                 if last_rule_action:
                     # Don't use last_action , delete of copy will be managed by crawlers
                     # data["last_action"] = 1
@@ -418,6 +422,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
         for rule_id, rule in json_dict["Rules"].items():
             rule["ID"] = rule_id
             actions = self._get_actions(rule)
+            prefix = lc.get_prefix(rule)
             for act_type, act_list in actions.items():
                 for act in act_list:
                     days_in_sec = None
@@ -478,7 +483,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                             view_queries["noncurrent_view"] = noncurrent_view
                             view_queries["current_view"] = current_view
                             queries["base"] = lc.noncurrent_query(
-                                newer_non_current_versions
+                                rule, newer_non_current_versions
                             )
                         # versioning for Expiration/Transition
                         else:
@@ -524,6 +529,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         view_queries,
                         newer_non_current_versions,
                         policy,
+                        prefix,
                         last_rule_action,
                         rule_id,
                     )
@@ -576,6 +582,39 @@ class TestLifecycleConformExpiration(TestLifecycleConform):
             self.helper.enable_versioning()
         for _ in range(self.number_match):
             obj_meta = self._upload_something(prefix="a/")
+            self.to_match[self.rule_id][self.action].append(obj_meta)
+
+        for _ in range(self.number_not_match):
+            obj_meta = self._upload_something(prefix="b/")
+            self.not_to_match[self.rule_id][self.action].append(obj_meta)
+
+        self._check_and_apply(source)
+
+    def test_apply_prefix_inject_sql(self):
+        source = (
+            """
+            {"Rules":
+                {"""
+            f'"{self.rule_id}":'
+            """
+                    {
+                    "Status":"Enabled","""
+            f'"{self.action}":'
+            f"{json.dumps(self.action_config[self.action])},"
+            """
+                    "Filter":{"Prefix":";1=1"}
+                    }
+                }
+            }"""
+        )
+
+        self.api.container_set_properties(
+            self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: source}
+        )
+        if self.versioning_enabled:
+            self.helper.enable_versioning()
+        for _ in range(self.number_match):
+            obj_meta = self._upload_something(prefix=";1=1/")
             self.to_match[self.rule_id][self.action].append(obj_meta)
 
         for _ in range(self.number_not_match):

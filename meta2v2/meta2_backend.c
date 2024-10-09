@@ -4275,6 +4275,44 @@ end:
 	return err;
 }
 
+static GError* _tag_matched_properties(struct sqlx_sqlite3_s *sq3, const char *prefix,
+			const char *base_set_adapted_tags, const char *full_query_set_tag) {
+	GError *err = NULL;
+	struct sqlx_repctx_s *repctx_clean = NULL;
+	gchar *query_update_properties = NULL;
+
+
+	err = sqlx_transaction_begin(sq3, &repctx_clean);
+	if (err) {
+		return err;
+	}
+
+	query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
+	sqlite3_stmt *stmt_update = NULL;
+	int rc = sqlite3_prepare_v2(sq3->db, query_update_properties, -1, &stmt_update, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_ERROR("Failed to set properties %s %s", query_update_properties, \
+				sqlite3_errmsg(sq3->db));
+		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+				rc, sqlite3_errmsg(sq3->db));
+		goto rollback_query_update;
+	}
+	if (prefix) {
+		(void) sqlite3_bind_text(stmt_update, 1, prefix, -1, NULL);
+	}
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt_update))) {}
+	rc = sqlite3_finalize(stmt_update);
+	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+		GRID_WARN("Failed to finalize update properties for query %s err %s", query_update_properties,
+				sqlite3_errmsg(sq3->db));
+	}
+
+rollback_query_update:
+	err = sqlx_transaction_end(repctx_clean, err);
+	g_free(query_update_properties);
+	return err;
+}
+
 GError*
 meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, json_object *jparams, guint32 *incr_offset)
@@ -4284,7 +4322,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gchar *full_query_set_tag = NULL;
 	gchar *base_set_adapted_tags= NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL, *repctx_clean = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
 
 	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
 	const gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
@@ -4292,24 +4330,26 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	const gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
 			"nb_versions FROM marker_view AS al";
-	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
+	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL;
 	int is_markers = 0;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
 
 	gboolean found_match = FALSE;
+	guint32 count_rows = 0;
 
-	gchar *query_update_properties = NULL, *offset_key = NULL;
+	gchar *offset_key = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
 		{"query", &jquery, json_type_string, 1},
+		{"prefix", &jprefix, json_type_string, 0},
 		{"is_markers", &jis_markers, json_type_int, 0},
 		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"policy", &jpolicy, json_type_string, 0},
@@ -4349,6 +4389,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
 	}
+	if (jprefix) {
+		prefix = json_object_get_string(jprefix);
+	}
 
 	if (query_set_tag) {
 		base_set_adapted_tags = g_strdup_printf( \
@@ -4370,7 +4413,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		g_prefix_error(&err, "Bad action: %s", action);
 		goto end;
 	}
-	if (versioning == 0) {
+	if (!VERSIONS_ENABLED(versioning)) {
 		full_query = g_strdup_printf("%s %s", base_query, query);
 		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 	} else {
@@ -4392,7 +4435,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		goto close;
 	}
 
-	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	rc = sqlite3_prepare_v2(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_ERROR("Failed to apply query %s %s", full_query, \
 				sqlite3_errmsg(sq3->db));
@@ -4400,7 +4443,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 				rc, sqlite3_errmsg(sq3->db));
 		goto rollback;
 	}
-	guint32 count_rows = 0;
+	if (prefix) {
+		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
+	}
+
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		found_match = TRUE;
@@ -4409,7 +4455,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		gint64 version = sqlite3_column_int64(stmt, 1);
 		// Expiration and Transition
 		// Manage current version and delete markers
-		if (versioning != 0) {
+		if (VERSIONS_ENABLED(versioning)) {
 			deleted = sqlite3_column_int64(stmt, 3);
 			nb_version = sqlite3_column_int64(stmt, 5);
 
@@ -4430,7 +4476,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		append_int64(event, "mtime", mtime);
 		// Add delete marker when versioning and Expiration and
 		// current version is not a deleted marker
-		if (versioning != 0 && (deleted == 0) && \
+		if (VERSIONS_ENABLED(versioning) && (deleted == 0) && \
 			(g_strcmp0(action, "Expiration") == 0) ) {
 			append_int64(event, "add_delete_marker", 1);
 		}
@@ -4457,26 +4503,24 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (incr_offset) {
 		*incr_offset = count_rows;
 	}
-	sqlx_admin_inc_i64(sq3, offset_key, count_rows);
-	if (query_set_tag && (!found_match)) {
-		err = sqlx_transaction_begin(sq3, &repctx_clean);
-		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
-		rc = sqlx_exec(sq3->db, query_update_properties);
-		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
-					sqlite3_errmsg(sq3->db));
-		}
-		err = sqlx_transaction_end(repctx_clean, err);
+	if (count_rows) {
+		sqlx_admin_inc_i64(sq3, offset_key, count_rows);
 	}
 rollback:
 	err = sqlx_transaction_end(repctx, err);
+	if (err) {
+		goto close;
+	}
+	if (query_set_tag && !found_match) {
+		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
+	}
+
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
 	g_free(offset_key);
 	g_free(full_query);
 	g_free(full_query_set_tag);
-	g_free(query_update_properties);
 	g_free(base_set_adapted_tags);
 	return err;
 }
@@ -4491,25 +4535,27 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gchar *base_set_adapted_tags= NULL;
 	gchar *full_query_set_tag = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL, *repctx_clean = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
 
-	gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime ";
-	gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
+	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime ";
+	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL;
 
 	int batch_size = 0;
 	gboolean found_match = FALSE;
-	gchar *query_update_properties = NULL, *offset_key = NULL;
+	guint32 count_rows = 0;
+	gchar *offset_key = NULL;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
 		{"query", &jquery, json_type_string, 1},
+		{"prefix", &jprefix, json_type_string, 0},
 		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"policy", &jpolicy, json_type_string, 0},
 		{"batch_size", &jbatch_size, json_type_int, 0},
@@ -4550,6 +4596,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
 	}
+	if (jprefix) {
+		prefix = json_object_get_string(jprefix);
+	}
 	if (query_set_tag) {
 		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 		base_set_adapted_tags = g_strdup_printf( \
@@ -4566,7 +4615,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gboolean non_current_action = (g_strcmp0(action, "NoncurrentVersionExpiration") \
 			== 0 || g_strcmp0(action, "NoncurrentVersionTransition") == 0);
 
-	if (versioning == 0  && non_current_action) {
+	if (!VERSIONS_ENABLED(versioning)  && non_current_action) {
 		g_prefix_error(&err, "Unsupported configuration action: %s for non versioned container", action);
 		goto end;
 	}
@@ -4581,15 +4630,18 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		goto close;
 	}
 
-	rc = sqlite3_prepare(sq3->db, full_query, -1, &stmt, NULL);
+	rc = sqlite3_prepare_v2(sq3->db, full_query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		GRID_ERROR("Failed to apply query %s %s", full_query, \
 				sqlite3_errmsg(sq3->db));
 		err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
 				rc, sqlite3_errmsg(sq3->db));
-		goto close;
+		goto rollback;
 	}
-	guint32 count_rows = 0, count_versions = 0;
+	if (prefix) {
+		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
+	}
+	guint32 count_versions = 0;
 	gint32 count_objects = 0;
 	gchar object_name_to_process[1025] = {0};
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
@@ -4642,29 +4694,29 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
 		GRID_WARN("Failed to finalize lifecycle sql query %s", sqlite3_errmsg(sq3->db));
+		goto rollback;
 	}
-	*incr_offset = count_rows;
+	if (incr_offset) {
+		*incr_offset = count_rows;
+	}
+	if (count_rows) {
+		sqlx_admin_inc_i64(sq3, offset_key, count_rows);
+	}
+rollback:
 	err = sqlx_transaction_end(repctx, err);
-	err = sqlx_transaction_begin(sq3, &repctx_clean);
-	sqlx_admin_inc_i64(sq3, offset_key, count_rows);
-	if (query_set_tag && (!found_match)) {
-		query_update_properties = g_strdup_printf("%s ( %s )", base_set_adapted_tags, full_query_set_tag);
-		rc = sqlx_exec(sq3->db, query_update_properties);
-		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-			GRID_WARN("Failed to set propeties tags query %s error %s", query_update_properties,
-					sqlite3_errmsg(sq3->db));
-			goto close;
-		}
+	if (err) {
+		goto close;
 	}
-	err = sqlx_transaction_end(repctx_clean, err);
 
+	if (query_set_tag && !found_match) {
+		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
+	}
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
 	g_free(offset_key);
 	g_free(full_query);
 	g_free(full_query_set_tag);
-	g_free(query_update_properties);
 	g_free(base_set_adapted_tags);
 	return err;
 }
