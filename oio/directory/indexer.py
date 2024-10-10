@@ -92,7 +92,7 @@ class Meta2IndexingWorker(object):
         :param tag: One of three: starting, running, ended.
         """
         total = self.success_nb + self.failed_nb
-        now = time.time()
+        now = time.monotonic()
         elapsed = (now - self.start_time) or 0.00001
         since_last_rprt = (now - self.last_report_time) or 0.00001
         self.logger.info(
@@ -104,7 +104,7 @@ class Meta2IndexingWorker(object):
             {
                 "volume_id": self.volume_id,
                 "tag": tag,
-                "current_time": datetime.fromtimestamp(int(now)).isoformat(),
+                "current_time": datetime.now().isoformat(),
                 "pass": self.full_scan_nb,
                 "errors": self.failed_nb,
                 "total_indexed": total,
@@ -186,7 +186,7 @@ class Meta2IndexingWorker(object):
         self.full_scan_nb += 1
         self.success_nb = 0
         self.failed_nb = 0
-        now = time.time()
+        now = time.monotonic()
         self.last_report_time = now
 
         self.report("starting")
@@ -209,7 +209,7 @@ class Meta2IndexingWorker(object):
                 self.last_index_time, self.max_indexed_per_second
             )
 
-            now = time.time()
+            now = time.monotonic()
             if now - self.last_report_time >= self.report_interval:
                 self.report("running")
 
@@ -219,12 +219,14 @@ class Meta2IndexingWorker(object):
         """
         Main worker loop
         """
-        self.start_time = time.time()
+        self.start_time = time.monotonic()
         while not self._stop:
             try:
                 self.crawl_volume()
-                self.last_scan_time = time.time()
-                time.sleep(self.scans_interval)
+                self.last_scan_time = time.monotonic()
+                next_scan = self.last_scan_time + self.scans_interval
+                while time.monotonic() < next_scan and not self._stop:
+                    time.sleep(1.0)
             except exc.OioException as exception:
                 self.logger.exception("ERROR during indexing meta2: %s", exception)
 
