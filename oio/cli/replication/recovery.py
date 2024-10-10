@@ -13,17 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
 from collections import OrderedDict
 import json
-from logging import Logger
 import re
-import sys
 import time
 from typing import Any, Dict, Generator, List, Tuple
 import xmltodict
 
-from oio import ObjectStorageApi
+from oio.cli import Command
 from oio.common.configuration import read_conf
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
 from oio.common.logger import get_logger
@@ -173,52 +170,53 @@ def get_replication_destinations(
     return dest_buckets, role
 
 
-class ReplicationRecovery:
+class ReplicationRecovery(Command):
+    """Send new events to replicate objects not yet replicated."""
 
-    def __init__(
-        self,
-        conf: Dict[str, Any],
-        bucket: str,
-        pending: bool = False,
-        until: int = None,
-        dry_run: bool = False,
-        logger: Logger = None,
-    ) -> None:
-        self.conf = conf
-        self.namespace = conf["namespace"]
-        self.bucket = bucket
-        self.replication_conf = None
-        self.pending = pending
-        self.until = int(until) * 1000000 if until else until
-        self.dry_run = dry_run
-        self.success = True
+    log = None
+    kafka_producer = None
 
-        self.api = ObjectStorageApi(self.namespace)
-        self.logger = logger or get_logger(None)
-        self.account = self.api.bucket.bucket_get_owner(bucket)
-        self.topic = DEFAULT_REPLICATION_TOPIC
-        # Event producer
-        self.kafka_producer = None
+    def get_parser(self, prog_name):
+        parser = super(ReplicationRecovery, self).get_parser(prog_name)
+        parser.add_argument("configuration", help="Path to the configuration file")
+        parser.add_argument(
+            "bucket",
+            help="Name of bucket to scan",
+        )
+        parser.add_argument(
+            "--pending",
+            action="store_true",
+            help="Resend only events from objects pending to be replicated.",
+        )
+        parser.add_argument(
+            "--until",
+            help="Date (timestamp) until which the objects must be checked",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Display actions but do nothing.",
+        )
+        return parser
 
-        self._load_replication_configuration()
-
-    def _load_replication_configuration(self) -> None:
-        info = self.api.container_get_properties(self.account, self.bucket)
-        self.replication_conf = info.get("properties", {}).get(
+    def _load_replication_configuration(self, account, bucket) -> None:
+        info = self.app.client_manager.storage.container_get_properties(account, bucket)
+        replication_conf = info.get("properties", {}).get(
             "X-Container-Sysmeta-S3Api-Replication"
         )
+        return replication_conf
 
     def get_objects_to_replicate(
-        self,
+        self, account, bucket, pending, until, replication_conf
     ) -> Generator[Tuple[Dict[str, Any], List[str], str], None, None]:
         objects_gen = depaginate(
-            self.api.object_list,
+            self.app.client_manager.storage.object_list,
             listing_key=lambda x: x["objects"],
             marker_key=lambda x: x.get("next_marker"),
             version_marker_key=lambda x: x.get("next_version_marker"),
             truncated_key=lambda x: x["truncated"],
-            account=self.account,
-            container=self.bucket,
+            account=account,
+            container=bucket,
             properties=True,
             versions=True,
         )
@@ -233,7 +231,7 @@ class ReplicationRecovery:
                 replication_status = metadata.get(
                     "x-object-sysmeta-s3api-replication-status"
                 )
-                if self.pending:
+                if pending:
                     if replication_status != OBJECT_REPLICATION_PENDING:
                         continue
                 elif replication_status is not None:
@@ -241,19 +239,19 @@ class ReplicationRecovery:
                     # COMPLETED: replication is already done
                     # REPLICA: it's replicated object (cannot replicate)
                     continue
-            if self.until and obj["version"] > self.until:
+            if until and obj["version"] > until:
                 continue
 
             dest_buckets, role = get_replication_destinations(
-                self.replication_conf,
+                replication_conf,
                 key,
                 metadata=metadata,
                 is_deletion=is_delete_marker,
             )
             dest_buckets = [dest.lstrip("arn:aws:s3:::") for dest in dest_buckets]
             if not dest_buckets:
-                if self.pending:
-                    self.logger.error(
+                if pending:
+                    self.log.error(
                         "No destination for the pending %s %s (%d)",
                         "delete marker" if obj["deleted"] else "object",
                         key,
@@ -264,7 +262,13 @@ class ReplicationRecovery:
             yield obj, dest_buckets, role
 
     def object_to_event(
-        self, obj: Dict[str, Any], dest_buckets: List[str], role: str
+        self,
+        obj: Dict[str, Any],
+        dest_buckets: List[str],
+        role: str,
+        namespace: str,
+        account: str,
+        bucket: str,
     ) -> Dict[str, Any]:
         match = REPLICATION_ROLE_RE.fullmatch(role)
         src_project_id = match.group(1)
@@ -273,10 +277,10 @@ class ReplicationRecovery:
         event["event"] = EventTypes.CONTENT_NEW
         event["when"] = time.time()
         event["url"] = {}
-        event["url"]["ns"] = self.namespace
-        event["url"]["account"] = self.account
-        event["url"]["user"] = self.bucket
-        event["url"]["id"] = cid_from_name(self.account, self.bucket)
+        event["url"]["ns"] = namespace
+        event["url"]["account"] = account
+        event["url"]["user"] = bucket
+        event["url"]["id"] = cid_from_name(account, bucket)
         event["url"]["path"] = obj["name"]
         event["url"]["content"] = obj["content"]
         event["url"]["version"] = obj["version"]
@@ -335,86 +339,60 @@ class ReplicationRecovery:
         return json.dumps(event)
 
     def send_event(
-        self, obj: Dict[str, Any], dest_buckets: List[str], event: Dict[str, Any]
+        self,
+        conf: Dict[str, Any],
+        obj: Dict[str, Any],
+        dest_buckets: List[str],
+        event: Dict[str, Any],
+        dry_run: bool,
     ):
-        if self.kafka_producer is None:
-            self.kafka_producer = KafkaSender(
-                self.conf.get("broker_endpoint"),
-                self.logger,
-                app_conf=self.conf,
-            )
-        log = self.logger.info if self.dry_run else self.logger.info  # FIXME: debug
+        log = self.log.info if dry_run else self.log.debug
         log(
             "Sending event to replicate object %s (%d) to %s",
             obj["name"],
             obj["version"],
             dest_buckets,
         )
-        if not self.dry_run:
+        if not dry_run:
+            if self.kafka_producer is None:
+                self.kafka_producer = KafkaSender(
+                    conf.get("broker_endpoint"),
+                    self.log,
+                    app_conf=conf,
+                )
             try:
-                self.kafka_producer.send(self.topic, event)
+                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event)
             except Exception as exc:
-                self.logger.warning("Fail to send replication event %s: %s", event, exc)
+                self.log.warning("Fail to send replication event %s: %s", event, exc)
                 self.success = False
 
-    def run(self):
-        self.logger.info("Scan bucket %s in account %s", self.bucket, self.account)
-        objects_to_replicate = self.get_objects_to_replicate()
-        for obj, dest_buckets, role in objects_to_replicate:
-            object_event = self.object_to_event(obj, dest_buckets, role)
-            self.send_event(obj, dest_buckets, object_event)
-        if self.kafka_producer is not None:
-            # Close the producer
-            self.kafka_producer.close()
-
-
-def make_arg_parser():
-    descr = """
-    Send new events to replicate objects not yet replicated.
-    """
-    parser = argparse.ArgumentParser(description=descr)
-    parser.add_argument("configuration", help="Path to the configuration file")
-    parser.add_argument(
-        "bucket",
-        help="Name of bucket to scan",
-    )
-    parser.add_argument(
-        "--pending",
-        action="store_true",
-        help="Resend only events from objects pending to be replicated",
-    )
-    parser.add_argument(
-        "--until",
-        help="Date (timestamp) until which the objects must be checked",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Display actions but do nothing.",
-    )
-    return parser
-
-
-if __name__ == "__main__":
-    args = make_arg_parser().parse_args()
-    conf = read_conf(args.configuration, "replication-recovery")
-    logger = get_logger(
-        {
+    def take_action(self, parsed_args):
+        conf = read_conf(parsed_args.configuration, "replication-recovery")
+        namespace = conf["namespace"]
+        bucket = parsed_args.bucket
+        pending = parsed_args.pending
+        until = int(parsed_args.until) * 1000000 if parsed_args.until else None
+        dry_run = parsed_args.dry_run
+        self.success = True
+        log_conf = {
             "log_level": conf["log_level"],
             "log_facility": conf["log_facility"],
             "log_address": conf["log_address"],
             "syslog_prefix": conf["syslog_prefix"],
-        },
-        verbose=True,
-    )
-    replication_recovery = ReplicationRecovery(
-        conf,
-        args.bucket,
-        pending=args.pending,
-        until=args.until,
-        dry_run=args.dry_run,
-        logger=logger,
-    )
-    replication_recovery.run()
-    if not replication_recovery.success:
-        sys.exit(1)
+        }
+        self.log = get_logger(log_conf, verbose=True)
+        account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
+
+        replication_conf = self._load_replication_configuration(account, bucket)
+        self.log.info("Scan bucket %s in account %s", bucket, account)
+        objects_to_replicate = self.get_objects_to_replicate(
+            account, bucket, pending, until, replication_conf
+        )
+        for obj, dest_buckets, role in objects_to_replicate:
+            object_event = self.object_to_event(
+                obj, dest_buckets, role, namespace, account, bucket
+            )
+            self.send_event(conf, obj, dest_buckets, object_event, dry_run)
+        if self.kafka_producer is not None:
+            # Close the producer
+            self.kafka_producer.close()
