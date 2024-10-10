@@ -230,20 +230,31 @@ func (rr *rawxRequest) uploadChunk() {
 	// Destined to be called before the last chunk is written;
 	final := func(written int64, err error) error {
 		ul.length = written
-		if err != nil {
-			return err
-		}
+		// if err != nil {
+		// 	return err
+		// }
 		if h != nil {
 			ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 		}
 		// If a hash has been sent, it must match the hash computed
 		e := rr.chunk.patchWithTrailers(&rr.req.Trailer, ul)
+		LogInfo("patchWithTrailers (reqid=%s e=%v)", rr.reqid, e)
 		// If everything went well, finish with the chunks XATTR management
+		// if e != nil {
+		// 	return e
+		// } else {
+		// 	return rr.chunk.saveAttr(out)
+		// }
+		// TMP(adu): always write the xattr
+		e2 := rr.chunk.saveAttr(out)
+		LogInfo("saveAttr (reqid=%s e=%v)", rr.reqid, e)
+		if err != nil {
+			return err
+		}
 		if e != nil {
 			return e
-		} else {
-			return rr.chunk.saveAttr(out)
 		}
+		return e2
 	}
 
 	// Upload, and maybe manage compression
@@ -258,16 +269,17 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 	rr.bytesIn = uint64(ul.length)
 
+	// TMP(adu): always write the chunk
+	out.commit()
 	// Then reply
 	if err != nil {
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 		rr.replyError("uploadChunk()", err)
-		out.abort()
+		// out.abort()
 		return
 	}
 
-	out.commit()
 	// If chunk placement is not optimal
 	if rr.chunk.nonOptimalPlacement {
 		// Ignore if link creation failed. This link creation should not be blocking as
