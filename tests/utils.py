@@ -249,6 +249,7 @@ class CommonTestCase(testtools.TestCase):
                 "auto.offset.reset": "latest",
             },
         )
+        cls._consumers = [cls._cls_kafka_consumer]
 
     def setUp(self):
         super(CommonTestCase, self).setUp()
@@ -351,10 +352,11 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         super(CommonTestCase, cls).tearDownClass()
-        if cls._cls_kafka_consumer is not None:
-            # Close consumer
-            cls._cls_kafka_consumer.close()
-            cls._cls_kafka_consumer = None
+        for consumer in cls._consumers:
+            if consumer is not None:
+                # Close consumer
+                consumer.close()
+        cls._cls_kafka_consumer = None
 
     @property
     def conscience(self):
@@ -839,7 +841,10 @@ class BaseTestCase(CommonTestCase):
         svcid=None,
         types=None,
         fields=None,
+        origin=None,
         timeout=30.0,
+        topics=None,
+        OffsetEventCap=5,
     ):
         """
         Wait for an event in the specified tube.
@@ -849,6 +854,10 @@ class BaseTestCase(CommonTestCase):
         :param fields: dict of fields to look for in the event's URL
         :param types: list of types of events the method should look for
         """
+        kafka_consumer = self._cls_kafka_consumer
+        if topics is not None:
+            kafka_consumer = self.get_kafka_consumer(topics=topics)
+            self._assign_custom_consumer(timeout, OffsetEventCap, kafka_consumer)
 
         def match_event(key, event):
             if types and event.event_type not in types:
@@ -863,6 +872,10 @@ class BaseTestCase(CommonTestCase):
             if fields and any(fields[k] != event.url.get(k) for k in fields):
                 logging.info("ignore event %s (filter mismatch)", event)
                 return False
+            if origin and event.origin != origin:
+                logging.info("ignore event %s (origin mismatch)", event)
+                return False
+
             logging.info("event %s", event)
             self._used_events.add(key)
             return True
@@ -877,7 +890,7 @@ class BaseTestCase(CommonTestCase):
         now = time.time()
         deadline = now + timeout
         try:
-            for event in self._cls_kafka_consumer.fetch_events():
+            for event in kafka_consumer.fetch_events():
                 now = time.time()
                 if now > deadline:
                     # Stop fetching events
@@ -908,6 +921,31 @@ class BaseTestCase(CommonTestCase):
         except ResponseError as err:
             logging.warning("%s", err)
         return None
+
+    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer):
+        assigned_partitions = None
+        now = time.time()
+        deadline = now + timeout
+        while not assigned_partitions:
+            now = time.time()
+            if now > deadline:
+                break
+            kafka_consumer._client.poll(1.0)
+            assigned_partitions = kafka_consumer._client.assignment()
+            for part in assigned_partitions:
+                watermark = kafka_consumer._client.get_watermark_offsets(
+                    part, timeout=5
+                )
+                self.logger.warning(
+                    "Get watermark for %s = %s", str(part), str(watermark)
+                )
+                self.assertIsNotNone(watermark)
+                _, high_offset = watermark
+                kafka_consumer._client.seek(
+                    TopicPartition(
+                        part.topic, part.partition, high_offset - OffsetEventCap
+                    )
+                )
 
     def wait_until_empty(
         self,
