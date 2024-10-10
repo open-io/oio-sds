@@ -54,6 +54,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.logger = kwargs.get("logger", LOGGER)
+        self.nb_trailers = 8
+        self.trailer_size = 64
 
     def stream(self, source, size):
         bytes_transferred = 0
@@ -187,6 +189,10 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
             hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
             hdrs.update(self.headers)
+            trailers = []
+            for i in range(self.nb_trailers):
+                trailers.append(f"trailer{i}")
+            hdrs["Trailer"] = ", ".join(trailers)
             hdrs = encode(hdrs)
 
             with WatchdogTimeout(
@@ -238,9 +244,19 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     ):
                         if self.perfdata is not None and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
-                        conn.send(b"%x\r\n" % len(data))
-                        conn.send(data)
-                        conn.send(b"\r\n")
+                        if data:
+                            conn.send(b"%x\r\n" % len(data))
+                            conn.send(data)
+                            conn.send(b"\r\n")
+                        else:
+                            parts = [
+                                "0\r\n",
+                            ]
+                            for i in range(self.nb_trailers):
+                                parts.append(f"trailer{i}: {'a'*self.trailer_size}\r\n")
+                            parts.append("\r\n")
+                            to_send = "".join(parts).encode("utf-8")
+                            conn.send(to_send)
                     if not data:
                         if self.perfdata is not None:
                             fin_start = monotonic_time()
