@@ -36,6 +36,7 @@ GROUP_LIST = [
     "containersharding",
     "object",
     "reference",
+    "replication",
     "volume",
     "directory",
     "events",
