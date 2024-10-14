@@ -706,9 +706,9 @@ grid_main_seamless_restart(postfork_cleanup_cb postfork_clean, gpointer udata)
 {
 	gboolean success = FALSE;
 	gchar *args_str = NULL;
-	int exec_res = 0;
+	int exec_res = 0, sd_res = 0;
 
-	int child_pid = fork();
+	pid_t child_pid = fork();
 	switch(child_pid) {
 	case -1:
 		GRID_ERROR("Failed to fork, cannot restart seamlessly: %m");
@@ -723,13 +723,22 @@ grid_main_seamless_restart(postfork_cleanup_cb postfork_clean, gpointer udata)
 			GRID_ERROR("Failed to execute %s: %m", _argv[0]);
 		} else {
 			GRID_ERROR("BUG: we should not be there after a call to execv!");
-			g_assert_not_reached();
 		}
+		abort();
 		break;
 	default:
-		GRID_INFO("Service will continue in process %d, quitting.", child_pid);
-		sd_notifyf(0, "MAINPID=%d\nSTATUS=restarting", child_pid);
-		success = TRUE;
+		GRID_INFO("Service will continue in process %d, notifying systemd.",
+				child_pid);
+		sd_res = sd_notifyf(0, "MAINPID=%d\nSTATUS=restarting", child_pid);
+		if (sd_res <= 0) {
+			GRID_ERROR(
+					"Failed to notify systemd: (%d) %m, killing child process",
+					errno);
+			kill(child_pid, SIGTERM);
+		} else {
+			GRID_INFO("Systemd notified, quitting.");
+			success = TRUE;
+		}
 		break;
 	}
 	return success;
