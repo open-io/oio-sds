@@ -942,6 +942,7 @@ class MetachunkWriter(_MetachunkWriter):
             self.chunk_checksum_algo = chunk_checksum_algo
         self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min, chunk_buffer_max)
         self.patch_chunk_method()
+        self.use_cork = True
 
     @classmethod
     def filter_kwargs(cls, kwargs):
