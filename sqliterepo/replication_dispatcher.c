@@ -1255,7 +1255,7 @@ _handler_RESTORE(struct gridd_reply_ctx_s *reply,
 
 	err = _restore(repo, &n0, dump, dump_size);
 	if (NULL != err)
-		reply->send_error(CODE_INTERNAL_ERROR, err);
+		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
