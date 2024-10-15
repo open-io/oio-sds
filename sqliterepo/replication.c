@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -325,11 +325,15 @@ _leave_election(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	}
 
 	// Leave the election himself
-	election_exit(ctx->sq3->manager, &n);
+	GError *err = election_exit(ctx->sq3->manager, &n);
+	if (err) {
+		GRID_WARN("Failed to leave election locally: %s", err->message);
+		g_clear_error(&err);
+	}
 
 	// Ask others peers to leave the election
 	gridd_clients_start(clients);
-	GError *err = gridd_clients_loop(clients);
+	err = gridd_clients_loop(clients);
 	if (err != NULL) {
 		for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 			GError *e = gridd_client_error(*pc);
@@ -558,7 +562,7 @@ hook_update(struct sqlx_repctx_s *ctx, int op, char const *bn, char const *tn,
 			GUINT_TO_POINTER(u));
 }
 
-static void
+static GError *
 sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 {
 	GByteArray *dump;
@@ -567,12 +571,13 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	// Generate the DUMP
 	err = sqlx_repository_dump_base_gba(ctx->sq3, sqliterepo_dump_check_type,
 			&dump);
-	if (NULL != err) {
+	if (err) {
 		GRID_WARN("[%s][%s] Synchronous COMMIT not possible: (%d) %s reqid=%s",
 				ctx->sq3->name.base, ctx->sq3->name.type,
 				err->code, err->message, oio_ext_get_reqid());
+		// We did not do the operation, but we still have the quorum.
 		g_clear_error(&err);
-		return;
+		return NULL;
 	}
 
 	// Now send it to the SLAVES
@@ -580,11 +585,20 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	err = peers_restore(peers, &n, dump, oio_ext_get_deadline());
 	if (err) {
 		GRID_ERROR("%s reqid=%s", err->message, oio_ext_get_reqid());
-		g_clear_error(&err);
+		if (err->code == CODE_IS_MASTER) {
+			// There was a change of master while we were performing the
+			// operation, probably because we are exiting.
+			g_clear_error(&err);
+			err = NEWERROR(CODE_CONCURRENT,
+					"Master changed during operation. Exiting?");
+		} else {
+			g_clear_error(&err);
+		}
 	} else {
 		GRID_INFO("RESTORED on SLAVES [%s][%s] reqid=%s",
 				ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
 	}
+	return err;
 }
 
 static void
@@ -693,7 +707,18 @@ _sqlx_transaction_validate(struct sqlx_repctx_s *ctx)
 	if (ctx->resync_todo && ctx->resync_todo->len) {
 		// Detected the need of an explicit RESYNC on some SLAVES.
 		g_ptr_array_add(ctx->resync_todo, NULL);
-		sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
+		GError *err2 = sqlx_synchronous_resync(
+				ctx, (gchar**)ctx->resync_todo->pdata);
+		if (err2) {
+			GRID_WARN("Failed to synchronously resync peers: %s (reqid=%s)",
+					err2->message, oio_ext_get_reqid());
+			if (!err) {
+				err = err2;
+			} else {
+				// Error was logged already.
+				g_clear_error(&err2);
+			}
+		}
 	}
 
 	return err;

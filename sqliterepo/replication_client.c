@@ -110,8 +110,8 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 	gridd_clients_free(clients);
 
 	if (err) {
-		g_prefix_error(&err, "RESTORE failed [%s][%s]: (%d) %s",
-				name->base, name->type, err->code, err->message);
+		g_prefix_error(&err, "RESTORE failed [%s][%s]: (%d) ",
+				name->base, name->type, err->code);
 	}
 	return err;
 }
