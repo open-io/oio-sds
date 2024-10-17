@@ -25,7 +25,7 @@ from oio.common.constants import (
     MULTIUPLOAD_SUFFIX,
     SHARDING_ACCOUNT_PREFIX,
 )
-from oio.common.easy_value import int_value
+from oio.common.easy_value import debinarize, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 
@@ -253,16 +253,24 @@ class Lifecycle(Filter):
                 self.lower = self.lower[1:]
                 self.upper = self.upper[1:]
 
+            # Get ended actions, rules status from local database
+            ended_rules = self._get_finished_status(meta2db, "ended")
+            key_container = ".".join(["ended", "processing"])
+            if self._is_processed(ended_rules, key_container):
+                return self.app(env, cb)
+
             # init stats
             self._init_container_stats(lc_instance)
 
             # Apply rules/actions as defined in configuration
             self._exec_rules_user_defined_order(
                 lc_instance,
-                meta2db.cid,
+                meta2db,
                 account,
                 container,
                 versioning,
+                ended_rules,
+                **kwargs,
             )
             self.successes += 1
         except NotFound as exc:
@@ -498,14 +506,14 @@ class Lifecycle(Filter):
                 container,
                 account,
             )
-            return False
+            return True
 
         # AbortIncompleteMultiPartUpload doesn't depend on versioning
         if abort_action:
             days_in_sec = self._days_to_seconds(days)
             base_sql_query = lc_instance.abort_incomplete_query(rule, days_in_sec)
             queries["base"] = base_sql_query
-            self._send_query_events(
+            return self._send_query_events(
                 cid,
                 queries,
                 action,
@@ -515,7 +523,6 @@ class Lifecycle(Filter):
                 rule_id,
                 **kwargs,
             )
-            return
 
         # Versioning
         if versioning_enabled:
@@ -529,7 +536,7 @@ class Lifecycle(Filter):
                         rule_id,
                         container,
                     )
-                    return False
+                    return True
                 non_current_days_in_sec = self._days_to_seconds(non_current_days)
 
                 # Create views
@@ -560,7 +567,7 @@ class Lifecycle(Filter):
                         rule_id,
                         action_name,
                     )
-                    return False
+                    return True
 
         else:  # non versioned
             if days is not None:
@@ -568,7 +575,7 @@ class Lifecycle(Filter):
             base_sql_query = lc_instance.build_sql_query(rule, days_in_sec, date)
             queries["base"] = base_sql_query
 
-        self._send_query_events(
+        return self._send_query_events(
             cid,
             queries,
             action,
@@ -580,33 +587,53 @@ class Lifecycle(Filter):
         )
 
     def _exec_rules_user_defined_order(
-        self, lc, cid, account, container, versioning_enabled, **kwargs
+        self, lc, meta2db, account, container, versioning_enabled, ended_rules, **kwargs
     ):
         json_dict = lc.conf_json
 
+        cid = meta2db.cid
+
         for rule_id, rule in json_dict["Rules"].items():
             rule["ID"] = rule_id
-
+            key_rule = ".".join(["ended", "rule", rule_id])
             if rule["Status"] == "Disabled":
                 self.logger.info(
                     "Lifecycle rule with id %s is disabled ", rule.get("ID")
                 )
                 self.count_disabled_rules += 1
+                self.finished_rules += 1
+                continue
+
+            if self._is_processed(ended_rules, key_rule):
+                self.finished_rules += 1
                 continue
 
             if self._is_prefix_outside_range(rule):
+                self.finished_rules += 1
                 continue
             actions = self._get_actions(rule)
+            count_actions = 0
+            for act_type, act_list in actions.items():
+                count_actions += len(act_list)
+
             for act_type, act_list in actions.items():
                 if self.is_mpu_container:
                     if act_type != "AbortIncompleteMultipartUpload":
+                        self.finished_actions += 1
                         continue
                 else:
                     if act_type == "AbortIncompleteMultipartUpload":
+                        self.finished_actions += 1
                         continue
-                for act in act_list:
+                for i, act in enumerate(act_list):
                     current_action = {act_type: act}
-                    self._process_action(
+                    key_action = ".".join(
+                        ["ended", "action", act_type, str(i), rule_id]
+                    )
+                    if self._is_processed(ended_rules, key_action):
+                        self.finished_actions += 1
+                        continue
+                    is_finished_action = self._process_action(
                         lc,
                         cid,
                         account,
@@ -616,8 +643,16 @@ class Lifecycle(Filter):
                         versioning_enabled,
                         **kwargs,
                     )
-                    self.finished_actions += 1
-        self.finished_rules += 1
+                    if is_finished_action:
+                        self.finished_actions += 1
+                        self._set_finished_status(meta2db, key_action)
+            if self.finished_actions == count_actions:
+                self.finished_rules += 1
+                self._set_finished_status(meta2db, key_rule)
+
+        if self.finished_rules == len(json_dict["Rules"]):
+            key_container = ".".join(["ended", "processing"])
+            self._set_finished_status(meta2db, key_container)
 
     def _create_views_request(self, cid, view_queries, **kwargs):
         """Create views
@@ -656,6 +691,32 @@ class Lifecycle(Filter):
         else:
             return int(offset)
 
+    def _set_finished_status(self, meta2db, key):
+        """
+        Store {key, 1} in admin table, the key reflects a finished action,
+        finished rule or finished processing
+        """
+        statement = "INSERT OR REPLACE INTO admin(k,v) " f'VALUES ("{key}", "1");'
+        res = meta2db.execute_sql(statement, open_mode="rw")
+        return res
+
+    def _get_finished_status(self, meta2db, key):
+        """
+        Check if key exists in admin table
+        """
+        statement = f'SELECT k, v FROM admin where k LIKE "{key}.%";'
+        processed = {}
+        for key, value in meta2db.execute_sql(statement, open_mode="ro"):
+            processed[key] = value
+        return debinarize(processed)
+
+    def _is_processed(self, ended_rules, key):
+        """
+        Check if a container, rule action is done.
+        This is accomplished by setting a specific key in admin table.
+        """
+        return key in ended_rules
+
     def _send_query_events(
         self,
         cid,
@@ -667,6 +728,7 @@ class Lifecycle(Filter):
         rule_id,
         **kwargs,
     ):
+        is_finished = False
         action_name = self._get_action_name(action)
         for key_query, val_query in queries.items():
             offset = self._get_offest(cid, action_name, rule_id, **kwargs)
@@ -679,7 +741,7 @@ class Lifecycle(Filter):
                         rule_id,
                         action,
                     )
-                    return
+                    return is_finished
 
                 sql_query = val_query
                 if action_name in (
@@ -747,7 +809,9 @@ class Lifecycle(Filter):
                 self._update_container_stats(rule_id, action_name, count)
                 self.nb_match_per_container += count
                 if count == 0:
+                    is_finished = True
                     break
+        return is_finished
 
     def _is_last_action_last_rule(self, rules, actions, count_rules, count_actions):
         if (count_rules == len(rules) - 1) and (count_actions == len(actions) - 1):
