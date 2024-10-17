@@ -354,7 +354,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         # Then breaks as nb of matches > self.budget_per_container
         self._process(meta2db_env=self.meta2db_env, expected_events=4)
         time.sleep(2)
-        # Next pass finds only one remainingn match
+        # Next pass finds only one remaining match
         self._process(meta2db_env=self.meta2db_env, expected_events=1)
 
     def test_transition(self):
