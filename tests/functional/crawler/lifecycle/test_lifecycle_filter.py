@@ -123,6 +123,76 @@ lifecycle_conf_abort_incmplete_mpu = """
         }
     }"""
 
+lifecycle_conf_2_rules = """
+    {"Rules":
+        {
+            "rule-1":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "doc"},
+                "Expiration": {
+                    "Days": 0
+                }
+            },
+            "rule-2":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "documents/"},
+                "Expiration": {
+                    "Days": 0
+                }
+            }
+        }
+    }"""
+
+lifecycle_conf_non_current_exp_del_marker = """
+    {"Rules":
+        {
+            "rule-1":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "doc"},
+                "Expiration": {
+                    "Days": 0
+                }
+            },
+            "rule-2":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "documents/"},
+                "NoncurrentVersionExpiration": {
+                    "NoncurrentDays": 0,
+                    "NewerNoncurrentVersions": 1
+                }
+            }
+        }
+    }"""
+
+
+lifecycle_conf_non_current_trs_del_marker = """
+    {"Rules":
+        {
+            "rule-1":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "doc"},
+                "Expiration": {
+                    "Days": 0
+                }
+            },
+            "rule-2":
+            {
+                "Status":"Enabled",
+                "Filter":{"Prefix": "documents/"},
+                "NoncurrentVersionTransitions": [{
+                    "NoncurrentDays": 0,
+                    "NewerNoncurrentVersions": 1,
+                    "StorageClass": "STANDARD_IA"
+                }]
+            }
+        }
+    }"""
+
 
 class TestLifecycleFilter(BaseTestCase):
     @classmethod
@@ -243,30 +313,32 @@ class TestLifecycleFilter(BaseTestCase):
         cname,
         number_of_obj,
         properties=None,
+        nb_versions=1,
         prefix="documents/",
         pattern_name="content",
     ):
         for _ in range(number_of_obj):
             file_name = prefix + random_str(8) + pattern_name
             reqid = request_id()
-            self.storage.object_create(
-                self.account,
-                cname,
-                obj_name=file_name,
-                data="data",
-                chunk_checksum_algo=None,
-                reqid=reqid,
-            )
-            self.created.append(file_name)
+            for _ in range(nb_versions):
+                self.storage.object_create(
+                    self.account,
+                    cname,
+                    obj_name=file_name,
+                    data="data",
+                    chunk_checksum_algo=None,
+                    reqid=reqid,
+                )
+                self.created.append(file_name)
 
-            if properties is not None:
-                for k, v in properties.items():
-                    self.storage.object_set_properties(
-                        self.account,
-                        cname,
-                        file_name,
-                        {k: v},
-                    )
+                if properties is not None:
+                    for k, v in properties.items():
+                        self.storage.object_set_properties(
+                            self.account,
+                            cname,
+                            file_name,
+                            {k: v},
+                        )
 
     def _set_lifecycle_prop(self, lc_conf):
         props = {
@@ -370,6 +442,19 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
+    def test_several_rules(self):
+        nb_obj_to_add = 4
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 0
+        self.budget_per_container = 1000
+        self._set_lifecycle_prop(lifecycle_conf_2_rules)
+        self._add_objects(self.cname, nb_obj_to_add)
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
+
 
 class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
     def setUp(self):
@@ -378,6 +463,50 @@ class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
         self.storage.container_set_properties(
             self.account, self.cname, system={M2_PROP_VERSIONING_POLICY: "-1"}
         )
+
+    def test_delete_marker(self):
+        nb_obj_to_add = 1
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 1
+        self.budget_per_container = 1000
+        self._set_lifecycle_prop(lifecycle_conf)
+        self._add_objects(self.cname, nb_obj_to_add)
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        # run first time => insert delete mar
+        self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
+        # run second time , no delete marker
+        self.expected_successes = 0
+        self.count_disabled_rules = 0
+        self._process(meta2db_env=self.meta2db_env, expected_events=0)
+
+    def test_non_current_exp(self):
+        nb_obj_to_add = 1
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 0
+        self.budget_per_container = 1000
+        self._set_lifecycle_prop(lifecycle_conf_non_current_exp_del_marker)
+        self._add_objects(self.cname, nb_obj_to_add, nb_versions=3)
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        self._process(meta2db_env=self.meta2db_env, expected_events=2)
+
+    def test_non_current_trs(self):
+        nb_obj_to_add = 1
+        self.expected_successes = 1
+        self.expected_errors = 0
+        self.count_disabled_rules = 0
+        self.budget_per_container = 1000
+        self._set_lifecycle_prop(lifecycle_conf_non_current_trs_del_marker)
+        self._add_objects(self.cname, nb_obj_to_add, nb_versions=3)
+        self._make_local_copy(self.meta2db_env)
+        self._make_symbolic_link(self.meta2db_env)
+        time.sleep(2)
+        self._process(meta2db_env=self.meta2db_env, expected_events=2)
 
 
 class TestLifecycleFilterMpu(TestLifecycleFilter):

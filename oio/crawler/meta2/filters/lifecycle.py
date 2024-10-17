@@ -279,13 +279,6 @@ class Lifecycle(Filter):
                 meta2db.cid,
                 str(exc),
             )
-        except Exception as exc:
-            self.errors += 1
-            self.logger.warning(
-                "Failed to apply lifecycle on local copy cid=%s, msg=%s",
-                meta2db.cid,
-                str(exc),
-            )
         finally:
             # Make call to remove local copy*
             if not self.direct_remove:
@@ -544,7 +537,7 @@ class Lifecycle(Filter):
                     lc_instance, rule, non_current_days_in_sec
                 )
                 queries["base"] = lc_instance.noncurrent_query(
-                    newer_non_current_versions
+                    rule, newer_non_current_versions
                 )
             # Current versions: Expiration/Transition
             else:
@@ -860,8 +853,6 @@ class Lifecycle(Filter):
             date = act[act_type].get("Date", None)
         elif act_type == "AbortIncompleteMultipartUpload":
             days = act[act_type].get("DaysAfterInitiation", None)
-        else:
-            raise ValueError("Unsopported action %s", act)
 
         return [days, date, delete_marker]
 
