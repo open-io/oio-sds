@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -278,6 +278,17 @@ class TestRdirServer(RdirTestCase):
         reference = [[_key(rec), _value(rec)] for rec in recs]
         reference.sort()
         self.assertEqual(reference, self.json_loads(resp.data))
+
+        # deleting must succeed
+        resp = self._delete(
+            "/v1/rdir/delete", params={"vol": self.vol}, data=json.dumps(recs)
+        )
+        self.assertEqual(resp.status, 204)
+
+        # fetching must return an empty array
+        resp = self._get("/v1/rdir/fetch", params={"vol": self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), [])
 
     def test_push_missing_fields(self):
         rec = self._record()
@@ -991,6 +1002,19 @@ class TestRdirServerMeta2Ops(RdirTestCase):
             rec["extra_data"] = None
         reference = {"records": recs, "truncated": False}
         self.assertEqual(reference, self.json_loads(resp.data))
+
+        # deleting must succeed
+        resp = self._post(
+            "/v1/rdir/meta2/delete", params={"vol": self.vol}, data=json.dumps(recs)
+        )
+        self.assertEqual(resp.status, 204)
+
+        # fetching must return an empty array
+        resp = self._get("/v1/rdir/meta2/fetch", params={"vol": self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(
+            self.json_loads(resp.data), {"records": [], "truncated": False}
+        )
 
     def test_meta2_delete(self):
         rec = self._meta2_record()

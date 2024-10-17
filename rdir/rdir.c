@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -35,6 +35,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include <proxy/transport_http.h>
 
+#include "core/oiolog.h"
 #include "routes.h"
 
 static gchar *ns_name = NULL;
@@ -904,12 +905,43 @@ _db_vol_delete_generic(struct rdir_base_s *base, GString *key)
 }
 
 static GError *
+_db_vol_delete_generic_batch(struct rdir_base_s *base, GString **kv_array)
+{
+	char *errmsg = NULL;
+	leveldb_writebatch_t *batch = leveldb_writebatch_create();
+	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
+	leveldb_writeoptions_set_sync(options, 0);
+	for (GString **cur = kv_array; kv_array && *cur; cur += 1) {
+		GString *key = *cur;
+		leveldb_writebatch_delete(batch, key->str, key->len);
+	}
+	leveldb_write(base->base, options, batch, &errmsg);
+	leveldb_writeoptions_destroy(options);
+	leveldb_writebatch_destroy(batch);
+
+	if (!errmsg)
+		return NULL;
+	return _map_errno_to_gerror(errno, errmsg);
+}
+
+static GError *
 _db_vol_delete(const char *volid, GString *key){
 	struct rdir_base_s *base = NULL;
 	GError *err = _db_get(volid, FALSE, &base);
 	if (err)
 		return err;
 	return _db_vol_delete_generic(base, key);
+}
+
+static GError *
+_db_vol_delete_many(const char *volid, GString **array)
+{
+	struct rdir_base_s *base = NULL;
+	GError *err = _db_get(volid, FALSE, &base);
+	if (err)
+		return err;
+
+	return _db_vol_delete_generic_batch(base, array);
 }
 
 static void
@@ -1298,17 +1330,39 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	if (!volid)
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
-	/* extraction of the parameters */
 	GError *err = NULL;
-	GString *key = NULL;
-	if ((err = _request_to_key(jbody, FALSE, &key)))
-		return _reply_format_error(args->rp, err);
+	if (json_object_is_type(jbody, json_type_object)) {
+		/* extraction of the parameters */
+		GString *key = NULL;
+		if ((err = _request_to_key(jbody, FALSE, &key)))
+			return _reply_format_error(args->rp, err);
 
-	args->rp->access_tail("key:%s", key->str);
+		args->rp->access_tail("key:%s", key->str);
 
-	/* Eventually remove the record from the database */
-	err = _db_vol_delete(volid, key);
-	g_string_free(key, TRUE);
+		/* Eventually remove the record from the database */
+		err = _db_vol_delete(volid, key);
+		g_string_free(key, TRUE);
+	} else if (json_object_is_type(jbody, json_type_array)) {
+
+		int record_count = json_object_array_length(jbody);
+		GPtrArray *records = g_ptr_array_new_full(
+				record_count + 1,
+				(GDestroyNotify)oio_str_gstring_free);
+		for (int i = 0; i < record_count && !err; i++) {
+			GString *key = NULL;
+			struct json_object *jrec = json_object_array_get_idx(jbody, i);
+			if ((err = _request_to_key(jrec, FALSE, &key)))
+				break;
+			g_ptr_array_add(records, key);
+		}
+		if (!err) {
+			g_ptr_array_add(records, NULL);
+			err = _db_vol_delete_many(volid, (GString **)records->pdata);
+		}
+		g_ptr_array_free(records, TRUE);
+	} else {
+		err = BADREQ("Body must be a JSON array or object");
+	}
 
 	// TODO(FVE): retry with old key format
 	if (err)
@@ -2301,6 +2355,17 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 	return _db_vol_delete_generic(base, key);
 }
 
+static GError *
+_meta2_db_delete_many(const char *volid, GString **array)
+{
+	struct rdir_base_s *base = NULL;
+	GError *err = _meta2_db_get(volid, FALSE, &base);
+	if (err)
+		return err;
+
+	return _db_vol_delete_generic_batch(base, array);
+}
+
 // RDIR{{
 // POST /v1/rdir/meta2/fetch?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2669,29 +2734,55 @@ static enum http_rc_e
 _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 				  const char *meta2_address)
 {
-	if (!jbody || !json_object_is_type(jbody, json_type_object))
+	if (!jbody)
 		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!meta2_address)
 		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
 
 	GError *err = NULL;
-	struct rdir_meta2_record_s rec = {0};
-	if ((err = _meta2_record_extract(&rec, jbody)))
-		return _reply_format_error(args->rp, err);
+	if (json_object_is_type(jbody, json_type_object)) {
+		struct rdir_meta2_record_s rec = {0};
+		if ((err = _meta2_record_extract(&rec, jbody)))
+			return _reply_format_error(args->rp, err);
 
-	GString *key = g_string_new("");
-	err = _meta2_record_to_key(&rec, key);
-	if (err){
+		GString *key = g_string_new("");
+		err = _meta2_record_to_key(&rec, key);
+		if (err){
+			g_string_free(key, TRUE);
+			return _reply_format_error(args->rp, err);
+		}
+
+		args->rp->access_tail("key:%s", key->str);
+
+		/* Eventually delete the record from the database */
+		err = _meta2_db_delete(meta2_address, key);
 		g_string_free(key, TRUE);
-		return _reply_format_error(args->rp, err);
+		_meta2_record_free(&rec);
+
+	} else if (json_object_is_type(jbody, json_type_array)) {
+		int record_count = json_object_array_length(jbody);
+		GPtrArray *records = g_ptr_array_new_full(
+				record_count + 1,
+				(GDestroyNotify)oio_str_gstring_free);
+		for (int i = 0; i < record_count && !err; i++) {
+			struct rdir_meta2_record_s rec = {0};
+			struct json_object *jrec = json_object_array_get_idx(jbody, i);
+			if ((err = _meta2_record_extract(&rec, jrec)))
+				break;
+
+			GString *key = g_string_new("");
+			err = _meta2_record_to_key(&rec, key);
+
+			g_ptr_array_add(records, key);
+		}
+		if (!err) {
+			g_ptr_array_add(records, NULL);
+			err = _meta2_db_delete_many(meta2_address, (GString **)records->pdata);
+		}
+		g_ptr_array_free(records, TRUE);
+	} else {
+		err = BADREQ("Body must be a JSON array or object");
 	}
-
-	args->rp->access_tail("key:%s", key->str);
-
-	/* Eventually delete the record from the database */
-	err = _meta2_db_delete(meta2_address, key);
-	g_string_free(key, TRUE);
-	_meta2_record_free(&rec);
 
 	if (err)
 		return _reply_common_error(args->rp, err);
