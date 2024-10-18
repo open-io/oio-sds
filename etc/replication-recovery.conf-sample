@@ -4,7 +4,9 @@ namespace = OPENIO
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,OPENIO,replication-recovery,1
+log_name =  replication-recovery
+syslog_prefix = replication-recovery
+
 
 # kafka endpoints
 broker_endpoint =
