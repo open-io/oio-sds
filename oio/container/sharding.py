@@ -23,11 +23,14 @@ from oio.common import exceptions
 from oio.common.client import ProxyClient
 from oio.common.constants import (
     CONNECTION_TIMEOUT,
+    DRAINING_STATE_IN_PROGRESS,
+    DRAINING_STATE_NEEDED,
     EXISTING_SHARD_STATE_ABORTED,
     EXISTING_SHARD_STATE_SHARDED,
     HEADER_PREFIX,
     M2_PROP_ACCOUNT_NAME,
     M2_PROP_CONTAINER_NAME,
+    M2_PROP_DRAINING_STATE,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_ROOT,
@@ -444,6 +447,14 @@ class ContainerSharding(ProxyClient):
             and sharding_state != EXISTING_SHARD_STATE_SHARDED
             and sharding_state != EXISTING_SHARD_STATE_ABORTED
             and sharding_state != NEW_SHARD_STATE_CLEANED_UP
+        )
+
+    @staticmethod
+    def draining_in_progress(meta):
+        draining_state = int_value(meta["system"].get(M2_PROP_DRAINING_STATE), 0)
+        return draining_state and draining_state in (
+            DRAINING_STATE_NEEDED,
+            DRAINING_STATE_IN_PROGRESS,
         )
 
     @staticmethod
@@ -1861,6 +1872,12 @@ class ContainerSharding(ProxyClient):
                 self.logger.info(
                     "Sharding in progress for neighboring shard %s"
                     % neighboring_shard["cid"]
+                )
+                continue
+            if self.draining_in_progress(neighboring_shard_meta):
+                self.logger.info(
+                    "Draining in progress for neighboring shard %s",
+                    neighboring_shard["cid"],
                 )
                 continue
             neighboring_shard_root_cid, neighboring_shard = self.meta_to_shard(
