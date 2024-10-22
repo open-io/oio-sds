@@ -147,7 +147,11 @@ class MetachunkWriterTest(unittest.TestCase):
     def _dummy_chunk(self, error=None):
         chunk = {"url": "http://127.0.0.1:7000/" + random_id(64)}
         if error:
-            chunk["error"] = error
+            if isinstance(error, exceptions.ClientException):
+                msg = f"HTTP {error.status}"
+            else:
+                msg = str(error)
+            chunk["error"] = msg
         return chunk
 
     def _check_message(self, successes, failures):
@@ -215,28 +219,6 @@ class MetachunkWriterTest(unittest.TestCase):
             self._dummy_chunk(exceptions.OioTimeout("Failed")),
         ]
         self.assertRaises(
-            exceptions.OioTimeout, self.mcw.quorum_or_fail, successes, failures
-        )
-        self._check_message(successes, failures)
-
-    def test_metachunkwriter_quorum_fail_sourcereadtimeout(self):
-        successes = [self._dummy_chunk(), self._dummy_chunk()]
-        failures = [
-            self._dummy_chunk(Exception("Failed")),
-            self._dummy_chunk(green.SourceReadTimeout(10)),
-        ]
-        self.assertRaises(
-            exceptions.SourceReadTimeout, self.mcw.quorum_or_fail, successes, failures
-        )
-        self._check_message(successes, failures)
-
-    def test_metachunkwriter_quorum_fail_sourcereaderror(self):
-        successes = [self._dummy_chunk(), self._dummy_chunk()]
-        failures = [
-            self._dummy_chunk(Exception("Failed")),
-            self._dummy_chunk(exceptions.SourceReadError("Failed")),
-        ]
-        self.assertRaises(
-            exceptions.SourceReadError, self.mcw.quorum_or_fail, successes, failures
+            exceptions.ServiceBusy, self.mcw.quorum_or_fail, successes, failures
         )
         self._check_message(successes, failures)

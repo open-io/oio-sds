@@ -671,6 +671,7 @@ class EcChunkWriter(object):
         chunk,
         conn,
         write_timeout=None,
+        read_timeout=None,
         chunk_checksum_algo="blake3",
         perfdata=None,
         watchdog=None,
@@ -685,6 +686,7 @@ class EcChunkWriter(object):
         else:
             self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
+        self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
         self.queue = Queue(io.PUT_QUEUE_DEPTH)
         self.reqid = kwargs.get("reqid")
@@ -736,9 +738,8 @@ class EcChunkWriter(object):
         if kwargs.get("chunk_checksum_algo"):
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"],)
         hdrs["Trailer"] = ", ".join(trailers)
-        with WatchdogTimeout(
-            watchdog, connection_timeout or io.CONNECTION_TIMEOUT, ConnectionTimeout
-        ):
+        connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
+        with WatchdogTimeout(watchdog, connection_timeout, ConnectionTimeout):
             perfdata = kwargs.get("perfdata", None)
             perfdata_rawx = (
                 perfdata.setdefault("rawx", {}) if perfdata is not None else None
@@ -749,6 +750,8 @@ class EcChunkWriter(object):
                 parsed.path,
                 hdrs,
                 scheme=parsed.scheme,
+                connect_timeout=connection_timeout,
+                socket_timeout=write_timeout,
                 perfdata=perfdata_rawx,
                 perfdata_suffix=chunk["url"],
             )
@@ -786,7 +789,7 @@ class EcChunkWriter(object):
                     self.conn.send(b"\r\n")
                     self.bytes_transferred += len(data)
                 eventlet_yield()
-            except (Exception, ChunkWriteTimeout) as exc:
+            except (Exception, SocketError, ChunkWriteTimeout) as exc:
                 self.failed = True
                 msg = str(exc)
                 self.logger.warning(
@@ -854,7 +857,7 @@ class EcChunkWriter(object):
                 self.conn.send(to_send)
                 # Last segment sent, disable TCP_CORK to flush buffers
                 self.conn.set_cork(False)
-        except (Exception, ChunkWriteTimeout) as exc:
+        except (Exception, SocketError, ChunkWriteTimeout) as exc:
             self.failed = True
             msg = str(exc)
             self.logger.warning(
@@ -876,7 +879,8 @@ class EcChunkWriter(object):
             # As the server may buffer data before writing it to non-volatile
             # storage, we don't know if we have to wait while sending data or
             # while reading response, thus we apply the same timeout to both.
-            with WatchdogTimeout(self.watchdog, self.write_timeout, ChunkWriteTimeout):
+            with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkWriteTimeout):
+                self.conn.settimeout(self.read_timeout)
                 resp = self.conn.getresponse()
                 return resp
         finally:
@@ -1067,7 +1071,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 exc,
             )
             raise
-        except Timeout as to:
+        except (SocketError, Timeout) as to:
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to) from to
@@ -1100,6 +1104,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 reqid=self.reqid,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
+                read_timeout=self.read_timeout,
                 chunk_checksum_algo=self.chunk_checksum_algo,
                 perfdata=self.perfdata,
                 logger=self.logger,
@@ -1107,7 +1112,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 headers=self.headers,
             )
             return writer, chunk
-        except (Exception, Timeout) as exc:
+        except (Exception, SocketError, Timeout) as exc:
             msg = str(exc)
             self.logger.warning(
                 "Failed to connect to %s (%s, reqid=%s): %s",
@@ -1198,7 +1203,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         # spawned in a coroutine to read the HTTP response
         try:
             resp = writer.getresponse()
-        except (Exception, Timeout) as exc:
+        except (Exception, SocketError, Timeout) as exc:
             resp = None
             msg = str(exc)
             self.logger.warning(
@@ -1325,7 +1330,14 @@ class ECRebuildHandler(object):
             with WatchdogTimeout(
                 self.watchdog, self.connection_timeout, ConnectionTimeout
             ):
-                conn = io.http_connect(parsed.netloc, "GET", parsed.path, headers)
+                conn = io.http_connect(
+                    parsed.netloc,
+                    "GET",
+                    parsed.path,
+                    headers,
+                    connect_timeout=self.connection_timeout,
+                    socket_timeout=self.read_timeout,
+                )
 
             with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkReadTimeout):
                 resp = conn.getresponse()
@@ -1456,7 +1468,7 @@ class ECRebuildHandler(object):
                             in_frags.append(frag)
                     except StopIteration:
                         break
-                    except Timeout as to:
+                    except (SocketError, Timeout) as to:
                         self.logger.error("Timeout (%s) while rebuilding", to)
                     except Exception:
                         self.logger.exception("Error while rebuilding")

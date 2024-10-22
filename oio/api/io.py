@@ -157,7 +157,7 @@ class LinkHandler(_WriteHandler):
         blob_client,
         policy,
         headers=None,
-        **kwargs
+        **kwargs,
     ):
         super(LinkHandler, self).__init__(
             chunk_preparer, storage_method, headers=headers, **kwargs
@@ -181,7 +181,7 @@ class LinkHandler(_WriteHandler):
                     reqid=self.headers.get(REQID_HEADER),
                     connection_timeout=self.connection_timeout,
                     write_timeout=self.write_timeout,
-                    **kwargs
+                    **kwargs,
                 )
                 chunks = handler.link()
             except Exception as ex:
@@ -207,7 +207,7 @@ class WriteHandler(_WriteHandler):
         storage_method,
         headers=None,
         object_checksum_algo="md5",
-        **kwargs
+        **kwargs,
     ):
         """
         :param connection_timeout: timeout to establish the connection
@@ -317,7 +317,7 @@ class ChunkReader(object):
         resp_by_chunk=None,
         watchdog=None,
         verify_checksum=False,
-        **_kwargs
+        **_kwargs,
     ):
         """
         :param chunk_iter:
@@ -437,6 +437,8 @@ class ChunkReader(object):
                     parsed.path,
                     self.request_headers,
                     scheme=parsed.scheme,
+                    connect_timeout=self.connection_timeout,
+                    socket_timeout=self.read_timeout,
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
                 )
@@ -588,11 +590,11 @@ class ChunkReader(object):
         while True:
             try:
                 with WatchdogTimeout(
-                    self.watchdog, CHUNK_TIMEOUT, green.ChunkReadTimeout
+                    self.watchdog, self.read_timeout, green.ChunkReadTimeout
                 ):
                     start, end, length, headers, part = next(parts_iter[0])
                 return (start, end, length, headers, part)
-            except green.ChunkReadTimeout:
+            except (SocketError, green.ChunkReadTimeout):
                 # TODO recover
                 return
 
@@ -612,7 +614,7 @@ class ChunkReader(object):
                     data = part.read(next(self.read_size))
                     count += 1
                     buf += data
-            except (green.ChunkReadTimeout, IOError) as crto:
+            except (SocketError, green.ChunkReadTimeout) as crto:
                 try:
                     self.recover(bytes_consumed)
                 except (exc.UnsatisfiableRange, ValueError):
@@ -715,7 +717,7 @@ class ChunkReader(object):
             except StopIteration:
                 pass
 
-        except green.ChunkReadTimeout:
+        except (SocketError, green.ChunkReadTimeout):
             self.logger.exception("Failure during chunk read (reqid=%s)", self.reqid)
             raise
         except Exception:
@@ -772,7 +774,7 @@ class _MetachunkWriter(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         self.storage_method = storage_method
         self._quorum = quorum
@@ -820,17 +822,11 @@ class _MetachunkWriter(object):
             # of the same object version, and requires special treatment.
             if any(x.get("error") == "HTTP 409" for x in failures):
                 raise exc.Conflict(message=str(new_exc))
-
-            for err in [x.get("error") for x in failures]:
-                if isinstance(err, exc.SourceReadError):
-                    raise exc.SourceReadError(new_exc)
-                elif isinstance(err, green.SourceReadTimeout):
-                    # Never raise 'green' timeouts out of our API
-                    raise exc.SourceReadTimeout(new_exc)
-                elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
-                    raise exc.OioTimeout(new_exc)
-                elif isinstance(err, exc.MethodNotAllowed):
-                    raise exc.MethodNotAllowed(message=str(new_exc))
+            # May occur on a link if the feature is disabled.
+            # FIXME(adu): to remove this feature is no longer used.
+            if any(x.get("error") == "HTTP 405" for x in failures):
+                raise exc.MethodNotAllowed(message=str(new_exc))
+            # All other errors and in particular timeouts.
             raise new_exc
 
 
@@ -851,14 +847,14 @@ class MetachunkLinker(_MetachunkWriter):
         perfdata=None,
         connection_timeout=None,
         write_timeout=None,
-        **kwargs
+        **kwargs,
     ):
         super(MetachunkLinker, self).__init__(
             storage_method=storage_method,
             quorum=quorum,
             reqid=reqid,
             perfdata=perfdata,
-            **kwargs
+            **kwargs,
         )
         self.meta_chunk_target = meta_chunk_target
         self.fullpath = fullpath
@@ -904,7 +900,11 @@ class MetachunkLinker(_MetachunkWriter):
                 new_chunk["url"] = new_chunk_url
                 new_meta_chunks.append(new_chunk)
             except Exception as err:
-                chunk_target["error"] = err
+                if isinstance(err, exc.ClientException):
+                    msg = f"HTTP {err.http_status}"
+                else:
+                    msg = str(err)
+                chunk_target["error"] = msg
                 failed_chunks.append(chunk_target)
         try:
             self.quorum_or_fail(new_meta_chunks, failed_chunks)
@@ -929,14 +929,14 @@ class MetachunkWriter(_MetachunkWriter):
         chunk_buffer_max=262144,
         perfdata=None,
         headers=None,
-        **_kwargs
+        **_kwargs,
     ):
         super(MetachunkWriter, self).__init__(
             storage_method=storage_method,
             quorum=quorum,
             reqid=reqid,
             perfdata=perfdata,
-            **_kwargs
+            **_kwargs,
         )
         self.sysmeta = sysmeta
         self.headers = headers or {}
@@ -1045,7 +1045,7 @@ class MetachunkPreparer(object):
                 position=mc_pos,
                 size=1,
                 stgpol=self.policy,
-                **self.extra_kwargs
+                **self.extra_kwargs,
             )
             self.obj_meta["properties"].update(meta.get("properties", {}))
             self._fix_mc_pos(next_body, mc_pos)
