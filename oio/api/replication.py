@@ -241,9 +241,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     ):
                         if self.perfdata is not None and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
-                        conn.send(b"%x\r\n" % len(data))
-                        conn.send(data)
-                        conn.send(b"\r\n")
+                        if data:
+                            conn.send(b"%x\r\n" % len(data))
+                            conn.send(data)
+                            conn.send(b"\r\n")
+                        else:
+                            conn.send(b"0\r\n\r\n")
                     if not data:
                         if self.perfdata is not None:
                             fin_start = monotonic_time()
