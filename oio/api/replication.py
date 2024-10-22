@@ -138,7 +138,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 err,
             )
             raise
-        except Timeout as to:
+        except (SocketError, Timeout) as to:
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             raise OioTimeout(to) from to
         except Exception as exc:
@@ -203,6 +203,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     parsed.path,
                     hdrs,
                     scheme=parsed.scheme,
+                    connect_timeout=self.connection_timeout,
+                    socket_timeout=self.write_timeout,
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
                 )
@@ -256,7 +258,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                 fin_end - fin_start
                             )
                     green.eventlet_yield()
-                except (Exception, green.ChunkWriteTimeout) as err:
+                except (Exception, SocketError, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk["error"] = str(err)
 
@@ -268,8 +270,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         """
         try:
             with WatchdogTimeout(
-                self.watchdog, self.write_timeout, green.ChunkWriteTimeout
+                self.watchdog, self.read_timeout, green.ChunkWriteTimeout
             ):
+                conn.settimeout(self.read_timeout)
                 resp = conn.getresponse()
                 if self.perfdata is not None:
                     upload_end = monotonic_time()
@@ -278,7 +281,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     perfdata_rawx["upload." + chunk_url] = (
                         upload_end - conn.upload_start
                     )
-        except Timeout as err:
+        except (SocketError, Timeout) as err:
             resp = err
             self.logger.warning(
                 "Failed to read response from %s (reqid=%s): %s",
@@ -305,7 +308,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         And then close `conn`.
         """
         if resp:
-            if isinstance(resp, (Exception, Timeout)):
+            if isinstance(resp, (Exception, SocketError, Timeout)):
                 conn.failed = True
                 conn.chunk["error"] = str(resp)
                 failures.append(conn.chunk)

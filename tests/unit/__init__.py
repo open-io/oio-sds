@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS
+# Copyright (C) 2024 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,6 +39,9 @@ def set_http_requests(cb):
             return self.resp
 
         def close(self):
+            pass
+
+        def settimeout(self, socket_timeout):
             pass
 
     class ConnectionRecord(object):
@@ -134,6 +138,9 @@ def fake_http_connect(*status_iter, **kwargs):
 
         def close(self):
             self.closed = True
+
+        def settimeout(self, socket_timeout):
+            pass
 
     if isinstance(kwargs.get("headers"), (list, tuple)):
         headers_iter = iter(kwargs["headers"])
