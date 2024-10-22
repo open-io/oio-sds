@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -94,6 +94,9 @@ class CustomHttpConnection(HTTPConnection):
         logger.debug("HTTP %s %s:%s %s", self._method, self.host, self.port, self._path)
         return response
 
+    def settimeout(self, socket_timeout):
+        self.sock.settimeout(socket_timeout)
+
 
 class CustomHttpsConnection(HTTPSConnection):
     response_class = CustomHTTPResponse
@@ -120,6 +123,9 @@ class CustomHttpsConnection(HTTPSConnection):
         )
         return response
 
+    def settimeout(self, socket_timeout):
+        self.sock.settimeout(socket_timeout)
+
 
 def http_connect(
     host,
@@ -128,9 +134,19 @@ def http_connect(
     headers=None,
     query_string=None,
     scheme="http",
+    connect_timeout=None,
+    socket_timeout=None,
     perfdata=None,
     perfdata_suffix=None,
 ):
+    """
+    :keyword connect_timeout: The maximum amount of time (in seconds) to wait
+        for a connection attempt to a server to succeed.
+    :type connect_timeout: `int`
+    :keyword socket_timeout: The maximum amount of time (in seconds) to wait
+        between consecutive blocking operations to/from the server.
+    :type socket_timeout: `int`
+    """
     if isinstance(path, str):
         try:
             path = path.encode("utf-8")
@@ -140,18 +156,26 @@ def http_connect(
         path = quote(path)
     else:
         path = quote(b"/" + path)
+    # Connect to a server
+    if connect_timeout is None:
+        connect_timeout = socket_timeout
     if scheme == "https":
-        conn = CustomHttpsConnection(host, context=ssl._create_unverified_context())
+        conn = CustomHttpsConnection(
+            host, context=ssl._create_unverified_context(), timeout=connect_timeout
+        )
     else:
-        conn = CustomHttpConnection(host)
+        conn = CustomHttpConnection(host, timeout=connect_timeout)
     if query_string:
         path += b"?" + query_string
     if perfdata is not None:
         start = monotonic_time()
-        # connect() is called by putrequest() if we don't call it explicitly.
-        # We call it here only because we want to measure it.
         conn.connect()
         connect_end = monotonic_time()
+    else:
+        conn.connect()
+    # Write to the server
+    if socket_timeout != connect_timeout:
+        conn.settimeout(socket_timeout)
     conn.path = path
     conn.putrequest(method, path)
     if headers:

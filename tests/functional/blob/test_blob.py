@@ -23,6 +23,7 @@ import string
 from os.path import isfile
 import time
 from urllib.parse import unquote, urlparse
+from oio.api.io import CHUNK_TIMEOUT, CLIENT_TIMEOUT, CONNECTION_TIMEOUT
 from oio.blob.client import BlobClient
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
@@ -112,7 +113,14 @@ class RawxTestSuite(CommonTestCase):
             for k in trailers.values():
                 headers["Trailer"].append(k)
 
-        conn = http_connect(parsed.netloc, method, parsed.path, headers)
+        conn = http_connect(
+            parsed.netloc,
+            method,
+            parsed.path,
+            headers,
+            connect_timeout=CONNECTION_TIMEOUT,
+            socket_timeout=CHUNK_TIMEOUT,
+        )
         if method == "PUT":
             if body:
                 conn.send(b"%x\r\n%s\r\n" % (len(body), body))
@@ -126,6 +134,7 @@ class RawxTestSuite(CommonTestCase):
         if trailers:
             del headers["Trailer"]
 
+        conn.settimeout(CLIENT_TIMEOUT)
         resp = conn.getresponse()
         body = resp.read()
         conn.close()
