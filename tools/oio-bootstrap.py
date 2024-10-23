@@ -1637,11 +1637,11 @@ pipeline = checkpoint
 use = egg:oio#checkpoint_creator
 topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
+checkpoint_prefix = lifecycle
 
 [filter:log]
 use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
-checkpoint_prefix = lifecycle
 """
 
 template_systemd_service_xcute_event_agent = """
