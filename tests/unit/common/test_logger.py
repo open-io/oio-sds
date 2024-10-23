@@ -20,7 +20,7 @@ import unittest
 from six import StringIO
 
 from oio.common.easy_value import convert_size
-from oio.common.logger import get_logger
+from oio.common.logger import S3AccessLogger, get_logger
 
 
 class TestLogger(unittest.TestCase):
@@ -53,3 +53,42 @@ class TestLogger(unittest.TestCase):
         self.assertEqual(size, "0iB")
         size = convert_size(1024, unit="iB")
         self.assertEqual(size, "1.000KiB")
+
+    def test_s3_access_logger_log(self):
+        logger = S3AccessLogger({})
+        sio = StringIO()
+        logger._internal_logger.addHandler(logging.StreamHandler(sio))
+        logger.log(
+            {
+                "bucket_owner": None,
+                "bucket": "foo",
+                "time": None,
+                "remote_ip": None,
+                "requester": None,
+                "request_id": None,
+                "operation": None,
+                "key": None,
+                "request_uri": None,
+                "http_status": None,
+                "error_code": None,
+                "bytes_sent": None,
+                "object_size": None,
+                "total_time": None,
+                "turn_around_time": None,
+                "referer": None,
+                "user_agent": None,
+                "version_id": None,
+                "host_id": None,
+                "signature_version": None,
+                "cipher_suite": None,
+                "authentication_type": None,
+                "host_header": None,
+                "tls_version": None,
+                "access_point_arn": None,
+            }
+        )
+        self.assertEqual(
+            sio.getvalue(),
+            's3access-foo: - foo [-] - - - - - "-" - - - - - - "-" "-" - - - - - - - '
+            "-\n",
+        )

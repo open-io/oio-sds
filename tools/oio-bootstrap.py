@@ -1721,10 +1721,6 @@ pipeline = lifecycle_actions ${PRESERVE}
 use = egg:oio#lifecycle_actions
 redis_host = ${IP}:${REDIS_PORT}
 
-[filter:log]
-use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
-
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.
 use = egg:oio#notify

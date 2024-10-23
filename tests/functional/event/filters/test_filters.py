@@ -17,12 +17,16 @@
 # License along with this library.
 
 import time
+from datetime import datetime, timezone
 from urllib.parse import quote
 
+from mock import patch
 from testtools.testcase import ExpectedException
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.exceptions import ServiceBusy
+from oio.event.evob import Event
+from oio.event.filters.lifecycle_actions import LifecycleActionContext, LifecycleActions
 from oio.event.filters.notify import KafkaNotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 
@@ -426,3 +430,118 @@ class TestKafkaNotifyFilter(BaseTestCase):
         self.assertTrue(
             self.notify_filter._should_notify(random_str(16), random_str(16))
         )
+
+
+class TestLifecycleAccessLoggerFilter(BaseTestCase):
+    class EchoLogger:
+        def __init__(self):
+            self.lines = []
+
+        def info(self, msg):
+            self.lines.append(msg)
+
+    def setUp(self):
+        super().setUp()
+        self.conf["log_prefix"] = "lifecycle_access-"
+        self.conf["redis_host"] = "127.0.0.1:4000"
+        self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        self.filter = LifecycleActions(app=_App, conf=self.conf)
+
+    def test_should_log(self):
+        # Empty event
+        event = LifecycleActionContext(Event({}))
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(Event({"data": {}}))
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(Event({"data": {"has_bucket_logging": False}}))
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(Event({"data": {"has_bucket_logging": True}}))
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(
+            Event({"data": {"has_bucket_logging": True, "bucket": None}})
+        )
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(
+            Event({"data": {"has_bucket_logging": True, "bucket": ""}})
+        )
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(
+            Event({"data": {"has_bucket_logging": False, "bucket": "foobar"}})
+        )
+        self.assertFalse(self.filter._should_log(event))
+        event = LifecycleActionContext(
+            Event({"data": {"has_bucket_logging": True, "bucket": "foobar"}})
+        )
+        self.assertTrue(self.filter._should_log(event))
+
+    def test_log_event(self):
+        # Missing action
+        event = LifecycleActionContext(
+            Event(
+                {
+                    "url": {},
+                    "data": {
+                        "bucket": "foo",
+                        "has_bucket_logging": True,
+                    },
+                }
+            )
+        )
+        self.assertRaises(ValueError, self.filter._log_event, event)
+
+        with patch("oio.event.filters.lifecycle_actions.datetime") as mock_fmt:
+            mock_fmt.now.return_value = datetime.fromtimestamp(
+                1727682407.0962443, tz=timezone.utc
+            )
+
+            # Invalid action
+            event = LifecycleActionContext(
+                Event(
+                    {
+                        "url": {},
+                        "data": {
+                            "action": "INVALID",
+                            "bucket": "foo",
+                            "has_bucket_logging": True,
+                        },
+                    }
+                )
+            )
+            self.assertRaises(ValueError, self.filter._log_event, event)
+
+            tests = (
+                ("Expiration", False, "S3.EXPIRE.OBJECT"),
+                ("Expiration", True, "S3.CREATE.DELETEMARKER"),
+                ("NoncurrentVersionExpiration", False, "S3.EXPIRE.OBJECT"),
+                ("NoncurrentVersionExpiration", True, "S3.CREATE.DELETEMARKER"),
+                ("AbortIncompleteMultipartUpload", False, "S3.DELETE.UPLOAD"),
+                ("Transition", False, "S3.TRANSITION.OBJECT"),
+                ("NoncurrentVersionTransition", False, "S3.TRANSITION.OBJECT"),
+            )
+
+            for action, marker, s3action in tests:
+
+                # Expiration delete marker action
+                event = LifecycleActionContext(
+                    Event(
+                        {
+                            "url": {},
+                            "request_id": "req-1",
+                            "data": {
+                                "action": action,
+                                "bucket": "foo",
+                                "has_bucket_logging": True,
+                                "add_delete_marker": marker,
+                                "object": "test/bar🔥",
+                            },
+                        }
+                    )
+                )
+                with patch("logging.Logger.info") as mock_logger:
+                    self.filter._log_event(event)
+                    mock_logger.assert_called_once_with(
+                        "lifecycle_access-foo: - foo [30/Sep/2024:07:46:47 +0000] - "
+                        f"OVHcloudS3 req-1 {s3action} "
+                        'test/bar%25F0%259F%2594%25A5 "-" - - - - '
+                        '- - "-" "-" - - - - - - - -'
+                    )

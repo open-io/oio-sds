@@ -22,13 +22,15 @@ from typing import Any, Dict, Generator, List, Tuple
 import xmltodict
 
 from oio.cli import Command
+from oio.common.constants import (
+    OBJECT_REPLICATION_COMPLETED,
+    OBJECT_REPLICATION_PENDING,
+    OBJECT_REPLICATION_REPLICA,
+)
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
 
-OBJECT_REPLICATION_PENDING = "PENDING"
-OBJECT_REPLICATION_REPLICA = "REPLICA"
-OBJECT_REPLICATION_COMPLETED = "COMPLETED"
 OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
 REPLICATION_ROLE_RE = re.compile(r"arn:aws:iam::([a-zA-Z0-9]+):role/([a-zA-Z0-9\_-]+)")
 

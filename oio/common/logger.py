@@ -18,8 +18,20 @@ import errno
 import logging
 import os
 import socket
+import string
 import sys
 from logging.handlers import SocketHandler, SysLogHandler
+
+
+class LogStringFormatter(string.Formatter):
+    def __init__(self, default=""):
+        super(LogStringFormatter, self).__init__()
+        self.default = default
+
+    def format_field(self, value, format_spec):
+        if not value:
+            return self.default
+        return super().format_field(value, format_spec)
 
 
 class StreamToLogger(object):
@@ -108,7 +120,7 @@ def redirect_stdio(logger):
     sys.stderr = StreamToLogger(logger, "STDERR")
 
 
-def get_logger(conf, name=None, verbose=False, fmt=None):
+def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
     if not conf:
         conf = {}
 
@@ -124,11 +136,11 @@ def get_logger(conf, name=None, verbose=False, fmt=None):
     logger = logging.getLogger(name)
     logger.propagate = False
 
-    formatter = logging.Formatter(
+    syslog_formatter = formatter or logging.Formatter(fmt=fmt)
+
+    formatter = formatter or logging.Formatter(
         fmt="%(asctime)s.%(msecs)03d " + fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
-
-    syslog_formatter = logging.Formatter(fmt=fmt)
 
     if not hasattr(get_logger, "handler4logger"):
         get_logger.handler4logger = {}
@@ -181,3 +193,88 @@ def get_logger(conf, name=None, verbose=False, fmt=None):
     logger.setLevel(logging_level)
 
     return logger
+
+
+class S3AccessLogger:
+    """
+    Logger for s3 bucket logging feature
+    """
+
+    DEFAULT_ACCESS_LOG_FORMAT = (
+        "{program}: {bucket_owner} {bucket} [{time}] "
+        "{remote_ip} {requester} {request_id} {operation} {key} "
+        '"{request_uri}" {http_status} {error_code} {bytes_sent} '
+        '{object_size} {total_time} {turn_around_time} "{referer}" '
+        '"{user_agent}" {version_id} {host_id} {signature_version} '
+        "{cipher_suite} {authentication_type} {host_header} {tls_version} "
+        "{access_point_arn}"
+    )
+
+    def __init__(self, conf: dict):
+        self._conf = conf
+        log_name = self._conf.get("log_name", "access_logger_filter")
+        self._log_prefix = self._conf.get("log_prefix", "s3access-")
+        self._access_log_format = self._conf.get(
+            "access_log_format", self.DEFAULT_ACCESS_LOG_FORMAT
+        )
+        self._formatter = LogStringFormatter(default="-")
+        self._validate_format()
+        access_log_conf = {}
+        for key in (
+            "log_facility",
+            "log_name",
+            "log_level",
+            "log_udp_host",
+            "log_udp_port",
+        ):
+            value = self._conf.get("customer_access_" + key)
+            if value:
+                access_log_conf[key] = value
+        self._internal_logger = get_logger(
+            access_log_conf, name=log_name, fmt=None, formatter=logging.Formatter()
+        )
+
+    def _validate_format(self):
+        dummy_env = {
+            "program": None,
+            "bucket_owner": None,
+            "bucket": None,
+            "time": None,
+            "remote_ip": None,
+            "requester": None,
+            "request_id": None,
+            "operation": None,
+            "key": None,
+            "request_uri": None,
+            "http_status": None,
+            "error_code": None,
+            "bytes_sent": None,
+            "object_size": None,
+            "total_time": None,
+            "turn_around_time": None,
+            "referer": None,
+            "user_agent": None,
+            "version_id": None,
+            "host_id": None,
+            "signature_version": None,
+            "cipher_suite": None,
+            "authentication_type": None,
+            "host_header": None,
+            "tls_version": None,
+            "access_point_arn": None,
+        }
+        try:
+            self._formatter.format(self._access_log_format, **dummy_env)
+        except Exception as exc:
+            raise ValueError(f"Cannot interpolate log template, reason: {exc}") from exc
+
+    def log(self, log_env: dict):
+        """
+        Emit an access log entry
+        """
+        env = {
+            **log_env,
+            "program": self._log_prefix + log_env.get("bucket"),
+        }
+        msg = self._formatter.format(self._access_log_format, **env)
+        self._internal_logger.info(msg)

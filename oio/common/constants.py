@@ -251,3 +251,8 @@ LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 MULTIUPLOAD_SUFFIX = "+segments"
 TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
 VERSIONING_PROPERTY_KEY = "X-Container-Sysmeta-Versions-Enabled"
+
+# Constants for replication status
+OBJECT_REPLICATION_PENDING = "PENDING"
+OBJECT_REPLICATION_REPLICA = "REPLICA"
+OBJECT_REPLICATION_COMPLETED = "COMPLETED"
