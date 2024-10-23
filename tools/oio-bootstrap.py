@@ -1725,10 +1725,13 @@ checkpoint_prefix = lifecycle
 
 template_event_agent_lifecycle_actions_handlers = """
 [handler:storage.lifecycle.action]
-pipeline = lifecycle_actions
+pipeline = lifecycle_actions lifecycle_access_logger
 
 [filter:lifecycle_actions]
 use = egg:oio#lifecycle_actions
+
+[filter:lifecycle_access_logger]
+use = egg:oio#lifecycle_access_logger
 
 [filter:log]
 use = egg:oio#logger

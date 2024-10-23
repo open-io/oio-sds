@@ -14,12 +14,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
-import sys
-import socket
 import errno
 import logging
+import os
+import socket
+import string
+import sys
 from logging.handlers import SysLogHandler, SocketHandler
+
+
+class LogStringFormatter(string.Formatter):
+    def __init__(self, default=""):
+        super(LogStringFormatter, self).__init__()
+        self.default = default
+
+    def format_field(self, value, format_spec):
+        if not value:
+            return self.default
+        return super().format_field(value, format_spec)
 
 
 class StreamToLogger(object):
