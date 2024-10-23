@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import json
 import os
 import datetime
 
@@ -109,10 +108,6 @@ class Lifecycle(Filter):
         # Current container peer
         self.peer_to_use = None
 
-        # Bucket Logging destination
-        self.target_bucket = None
-        self.target_prefix = None
-
         # Current container type and info
         self.is_mpu_container = False
         self.is_shard_container = False
@@ -186,17 +181,6 @@ class Lifecycle(Filter):
             raise
         return (props, main_account, root_container)
 
-    def _get_logging_conf(self, logging_conf):
-        target_bucket = None
-        target_prefix = None
-        try:
-            logging_conf_json = json.loads(logging_conf)
-            target_bucket = logging_conf_json.get("Bucket")
-            target_prefix = logging_conf_json.get("Prefix")
-        except ValueError as err:
-            self.logger.warning("Failed to decode JSON logging config: %s", err)
-        return (target_bucket, target_prefix)
-
     def _get_suffix(self, real_path):
         db_id = real_path.rsplit("/")[-1].rsplit(".")
         if len(db_id) < 4:
@@ -217,12 +201,7 @@ class Lifecycle(Filter):
         self.is_mpu_container = False
         self.is_shard_container = False
 
-        self.target_bucket = None
-        self.target_prefix = None
-
         reqid = request_id("lc-crawler-")
-        kwargs = {}
-        kwargs["reqid"] = reqid
 
         # Get suffix for each entry
         self.suffix = self._get_suffix(meta2db.real_path)
@@ -249,11 +228,9 @@ class Lifecycle(Filter):
             )
             lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
             versioning = props["system"].get(M2_PROP_VERSIONING_POLICY)
+
             logging_config = props["properties"].get(LOGGING_PROPERTY_KEY)
-            if logging_config is not None:
-                (self.target_bucket, self.target_prefix) = self._get_logging_conf(
-                    logging_config
-                )
+            has_bucket_logging = logging_config is not None
 
             if lifecycle_config is None:
                 self.logger.warning(
@@ -273,7 +250,7 @@ class Lifecycle(Filter):
             lc_instance.load()
 
             if self.is_shard_container:
-                self.lower, self.upper = self._get_shard_range(meta2db.cid, **kwargs)
+                self.lower, self.upper = self._get_shard_range(meta2db.cid, reqid=reqid)
 
                 # Trim < and > from lower and upper
                 self.lower = self.lower[1:]
@@ -281,6 +258,11 @@ class Lifecycle(Filter):
 
             # init stats
             self._init_container_stats(lc_instance)
+
+            kwargs = {
+                "reqid": reqid,
+                "has_bucket_logging": has_bucket_logging,
+            }
 
             # Reorder rules and apply them by priority
             if self.reorder_rules:
@@ -748,7 +730,7 @@ class Lifecycle(Filter):
             "NoncurrentVersionExpiration",
         ):
             self.logger.warning(
-                "Unsupported action %s for non versioned container %s," " account %s ",
+                "Unsupported action %s for non versioned container %s, account %s ",
                 action,
                 container,
                 account,
@@ -1114,10 +1096,7 @@ class Lifecycle(Filter):
                 data["storage_class"] = policy
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
-                if self.target_bucket:
-                    data["target_bucket"] = self.target_bucket
-                if self.target_prefix:
-                    data["target_prefix"] = self.target_prefix
+                data["has_bucket_logging"] = kwargs.get("has_bucket_logging", False)
 
                 resp, _ = self.proxy_client._request(
                     "POST",
