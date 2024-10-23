@@ -36,7 +36,7 @@ from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time, get_watchdog, eventlet
-from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_PRESERVED_TOPIC, KafkaConsumer
+from oio.common.kafka import DEFAULT_PRESERVED_TOPIC, KafkaConsumer
 from oio.common.storage_method import STORAGE_METHODS
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
@@ -391,9 +391,8 @@ class CommonTestCase(testtools.TestCase):
         return self._beanstalkd0
 
     def get_kafka_consumer(self, topics=None, group_id=DEFAULT_GROUP_ID_TEST):
-        endpoint = DEFAULT_ENDPOINT
         kafka_consumer = KafkaConsumer(
-            endpoint,
+            self.conf["kafka_endpoints"],
             topics,
             group_id,
             logger=self.logger,
