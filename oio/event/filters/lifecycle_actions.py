@@ -13,13 +13,103 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from datetime import datetime, timezone
+from enum import Enum
+from urllib.parse import quote
+
+from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
 from oio.common.easy_value import int_value, boolean_value
-from oio.common.exceptions import BadRequest, Forbidden, NotFound
+from oio.common.exceptions import (
+    NotFound,
+    OioNetworkException,
+    OioTimeout,
+    ServiceBusy,
+)
+from oio.common.kafka import get_retry_delay
+from oio.common.logger import S3AccessLogger
 from oio.common.utils import request_id
-from oio.event.evob import Event, EventTypes
-from oio.event.filters.base import Filter
 from oio.container.client import ContainerClient
-from oio.event.kafka_consumer import RejectMessage
+from oio.event.evob import (
+    Event,
+    EventError,
+    EventTypes,
+    RetryableEventError,
+)
+from oio.event.filters.base import Filter
+
+
+class LifecycleOperationLog(str, Enum):
+    """
+    S3 Lifecycle actions. Ref:
+    https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-and-other-bucket-config.html
+    """
+
+    EXPIRE_OBJECT = "S3.EXPIRE.OBJECT"
+    CREATE_DELETEMARKER = "S3.CREATE.DELETEMARKER"
+    TRANSITION_SIA = "S3.TRANSITION_SIA.OBJECT"  # Standard IA
+    TRANSITION_ZIA = "S3.TRANSITION_ZIA.OBJECT"  # One zone IA
+    TRANSITION_INT = "S3.TRANSITION_INT.OBJECT"  # Intelligent Tiering
+    TRANSITION_GIR = "S3.TRANSITION_GIR.OBJECT"  # Glacier Instant
+    TRANSITION_OBJECT = "S3.TRANSITION.OBJECT"  # Glacier Flexible Retrival
+    TRANSITION_GDA = "S3.TRANSITION_GDA.OBJECT"  # Glacier Deep Archive
+    DELETE_UPLOAD = "S3.DELETE.UPLOAD"
+
+
+def event_to_s3_operation(event):
+    """
+    Mapping from an event to a S3 Lifecycle action
+    """
+    action = event.data.get("action")
+    if action in ("Transition", "NoncurrentVersionTransition"):
+        # TODO: storage class mapping
+        # storage_class = event.data.get("storage_class")
+        return LifecycleOperationLog.TRANSITION_OBJECT
+    if action in ("Expiration", "NoncurrentVersionExpiration"):
+        add_delete_marker = event.data.get("add_delete_marker")
+        if add_delete_marker:
+            return LifecycleOperationLog.CREATE_DELETEMARKER
+        return LifecycleOperationLog.EXPIRE_OBJECT
+    if action in ("AbortIncompleteMultipartUpload",):
+        return LifecycleOperationLog.DELETE_UPLOAD
+    raise ValueError("No mapping to S3 Operation found")
+
+
+class LifecycleActionContext:
+    def __init__(self, event: Event):
+        self.event = event
+        self.reqid = event.reqid or request_id("Lifecycle-actions-")
+
+    @property
+    def run_id(self):
+        return self.event.data.get("run_id")
+
+    @property
+    def account(self):
+        return self.event.data.get("account")
+
+    @property
+    def container(self):
+        return self.event.data.get("container")
+
+    @property
+    def bucket(self):
+        return self.event.data.get("bucket")
+
+    @property
+    def path(self):
+        return self.event.data.get("object")
+
+    @property
+    def version(self):
+        return self.event.data.get("version")
+
+    @property
+    def storage_class(self):
+        return self.event.data.get("storage_class")
+
+    @property
+    def action(self):
+        return self.event.data.get("action")
 
 
 class LifecycleActions(Filter):
@@ -28,161 +118,200 @@ class LifecycleActions(Filter):
     MULTIUPLOAD_SUFFIX = "+segments"
     MPU_MAX_PART = "10000"
 
+    def __init__(self, app, conf, logger=None):
+        self.retry_delay = None
+        self.limit_listing = None
+        self.container_client = None
+        self.metrics = None
+        self.s3_access_logger = None
+        super().__init__(app, conf, logger=logger)
+
     def init(self):
+        self.retry_delay = get_retry_delay(self.conf)
         self.limit_listing = int_value(self.conf.get("limit_listing"), 100)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.metrics = LifecycleMetricTracker(self.conf)
+        self.s3_access_logger = S3AccessLogger(self.conf)
+
+    def _process_expiration(self, context: LifecycleActionContext):
+        add_delete_marker = context.event.data.get("add_delete_marker")
+        version = None if add_delete_marker else context.version
+
+        self.container_client.content_delete(
+            context.account,
+            context.container,
+            context.path,
+            version=version,
+            reqid=context.reqid,
+        )
+
+    def _process_transition(self, context: LifecycleActionContext):
+        raise NotImplementedError("Transition action is not supported")
+
+    def _process_abort_mpu(self, context: LifecycleActionContext):
+        marker = None
+        while True:
+            headers, content_list = self.container_client.content_list(
+                account=context.account,
+                reference=context.container,
+                limit=self.limit_listing,
+                marker=marker,
+                prefix=f"{context.path}/",
+            )
+            paths = []
+            for obj in content_list["objects"]:
+                # What's after the prefix should be an integer (the part number)
+                part_number = obj["name"].rsplit("/", 1)[-1]
+                try:
+                    part_number_int = int(part_number)
+                    if part_number_int < 1 or part_number_int > 10000:
+                        raise ValueError("part number should be between 1 and 10000")
+                    paths.append(obj["name"])
+                except ValueError:
+                    # Ignore this object (not a part of the MPU)
+                    continue
+            if not paths:
+                break
+            self.container_client.content_delete_many(
+                account=context.account,
+                reference=context.container,
+                paths=paths,
+                reqid=context.reqid,
+            )
+            truncated = boolean_value(headers.get("x-oio-list-truncated"))
+            marker = headers.get("x-oio-list-marker")
+            if not truncated:
+                break
+        self.container_client.content_delete(
+            context.account,
+            context.container,
+            context.path,
+            version=context.version,
+            reqid=context.reqid,
+        )
+
+    def _should_log(self, context: LifecycleActionContext):
+        if not context.event.data:
+            return False
+        return context.event.data.get(
+            "has_bucket_logging", False
+        ) and context.event.data.get("bucket")
+
+    def _log_event(self, context: LifecycleActionContext):
+        current_time = datetime.now(timezone.utc).strftime("%d/%b/%Y:%H:%M:%S %z")
+        key = context.path
+        if key:
+            key = quote(quote(key))
+
+        self.s3_access_logger.log(
+            {
+                "bucket_owner": context.account,
+                "bucket": context.bucket,
+                "time": current_time,
+                "remote_ip": None,  # ignored
+                "requester": None,  # ignored
+                "request_id": context.reqid,
+                "operation": event_to_s3_operation(context.event),
+                "key": key,
+                "request_uri": None,  # ignored
+                "http_status": None,  # ignored
+                "error_code": None,  # ignored
+                "bytes_sent": None,  # ignored
+                "object_size": None,  # ignored
+                "total_time": None,  # ignored
+                "turn_around_time": None,  # ignored
+                "referer": None,  # ignored
+                "user_agent": None,  # ignored
+                "version_id": context.version,
+                "host_id": None,  # ignored
+                "signature_version": None,  # ignored
+                "cipher_suite": None,  # ignored
+                "authentication_type": None,  # ignored
+                "host_header": None,  # ignored
+                "tls_version": None,  # ignored
+                "access_point_arn": None,  # ignored
+            }
+        )
 
     def process(self, env, cb):
         event = Event(env)
-        ev_type = event.event_type
-        if ev_type != EventTypes.LIFECYCLE_ACTION:
-            return self.app(env, cb)
-        action = event.data.get("action")
-        if action is None:
+
+        if event.event_type != EventTypes.LIFECYCLE_ACTION:
             return self.app(env, cb)
 
-        reqid = event.reqid
-        if not reqid:
-            reqid = request_id("Lifecycle-actions-")
+        context = LifecycleActionContext(event)
 
-        data = event.data
-        account = data.get("account")
-        container = data.get("container")
-        path = data.get("object")
-        version = data.get("version")
-        storage_class = data.get("storage_class")
+        if not context.action:
+            self.logger.error("Missing 'action' field in context.")
+            return self.app(env, cb)
 
+        action_type = None
         try:
             # Check if given object version still exists
-            content_meta, chunks = self.container_client.content_locate(
-                account=account,
-                reference=container,
-                path=path,
-                version=version,
+            _ = self.container_client.content_get_properties(
+                account=context.account,
+                reference=context.container,
+                path=context.path,
+                version=context.version,
                 force_master=True,
-                reqid=reqid,
+                reqid=context.reqid,
             )
+            if context.action in ("Expiration", "NoncurrentVersionExpiration"):
+                action_type = LifecycleAction.DELETE
+                self._process_expiration(context)
+            elif context.action in ("Transition", "NoncurrentVersionTransition"):
+                action_type = LifecycleAction.TRANSITION
+                self._process_transition(context)
+            elif context.action == "AbortIncompleteMultipartUpload":
+                action_type = LifecycleAction.ABORT_MPU
+                self._process_abort_mpu(context)
+            else:
+                self.logger.error(
+                    "Unsupported lifecycle event action %s", context.action
+                )
+                raise ValueError(f"Unsupported action '{context.action}'")
+
+            if self._should_log(context):
+                self._log_event(context)
 
         except NotFound:
+            # The action should have already been processed
             self.logger.warning(
                 "object %s with version %s not found in container %s",
-                path,
-                version,
-                container,
+                context.path,
+                context.version,
+                context.container,
             )
-            return self.app(env, cb)
-
-        if action == "Expiration":
-            add_delete_marker = data.get("add_delete_marker")
-            try:
-                if add_delete_marker:
-                    self.container_client.content_delete(
-                        account,
-                        container,
-                        path,
-                        reqid=reqid,
-                    )
-                else:
-                    self.container_client.content_delete(
-                        account,
-                        container,
-                        path,
-                        version=version,
-                        reqid=reqid,
-                    )
-            except NotFound:
-                pass
-        elif action in ("Transition", "NoncurrentVersionTransition"):
-            idx = content_meta.get("id")
-            try:
-                self.container_client.content_create(
-                    account,
-                    container,
-                    path,
-                    size=content_meta.get("size"),
-                    hash=content_meta.get("hash"),
-                    version=version,
-                    data={"chunks": chunks},
-                    content_id=idx,
-                    stgpol=storage_class,
-                    change_policy=True,
-                    meta_pos=1,
-                    reqid=reqid,
+        except (ServiceBusy, OioNetworkException, OioTimeout) as exc:
+            resp = RetryableEventError(
+                event=event,
+                body=f"Failed to process lifecycle event (retry), reason: {exc}",
+                delay=self.retry_delay,
+            )
+            return resp(env, cb)
+        except Exception as exc:
+            resp = EventError(
+                event=event, body=f"Failed to process lifecycle event, reason: {exc}"
+            )
+            if action_type is not None:
+                self.metrics.increment_counter(
+                    context.run_id,
+                    context.account,
+                    context.bucket,
+                    context.container,
+                    LifecycleStep.ERROR,
+                    action_type,
                 )
-            except (BadRequest, Forbidden) as exc:
-                raise exc
+            return resp(event.env, cb)
 
-        elif action == "AbortIncompleteMultipartUpload":
-            try:
-                truncated = True
-                marker = None
-                while truncated:
-                    try:
-                        headers, content_list = self.container_client.content_list(
-                            account=account,
-                            reference=container,
-                            limit=self.limit_listing,
-                            marker=marker,
-                            prefix=path,
-                        )
-                    except NotFound as exc:
-                        raise RejectMessage from exc
-                    paths = []
-
-                    for obj in content_list["objects"]:
-                        if obj["name"] == path:
-                            # Delete base object name as last
-                            continue
-                        # What's after the prefix should be an integer (the part number)
-                        part_number = obj["name"].rsplit("/", 2)[-1]
-                        try:
-                            part_number_int = int(part_number)
-                            if part_number_int < 1 or part_number_int > 10000:
-                                raise ValueError(
-                                    "part number should be between 1 and 10000"
-                                )
-                            paths.append(obj["name"])
-                        except ValueError:
-                            # Ignore this object (not a part of the MPU)
-                            continue
-
-                    if not paths:
-                        # Mpu is initiated but no parts
-                        break
-
-                    self.container_client.content_delete_many(
-                        account=account,
-                        reference=container,
-                        paths=paths,
-                        reqid=reqid,
-                    )
-
-                    truncated = boolean_value(headers.get("x-oio-list-truncated"))
-                    marker = headers.get("x-oio-list-marker")
-
-                self.container_client.content_delete(
-                    account,
-                    container,
-                    path,
-                    version=version,
-                    reqid=reqid,
-                )
-
-            except NotFound:
-                pass
-        elif action == "NoncurrentVersionExpiration":
-            try:
-                self.container_client.content_delete(
-                    account,
-                    container,
-                    path,
-                    version=version,
-                )
-            except NotFound:
-                pass
-        else:
-            self.logger.warning("Unsupported lifecycle event action %s", action)
-
+        self.metrics.increment_counter(
+            context.run_id,
+            context.account,
+            context.bucket,
+            context.container,
+            LifecycleStep.PROCESSED,
+            action_type,
+        )
         return self.app(env, cb)
 
 
