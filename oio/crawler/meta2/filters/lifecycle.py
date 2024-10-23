@@ -223,8 +223,6 @@ class Lifecycle(Filter):
         self.is_shard_container = False
 
         reqid = request_id("lc-crawler-")
-        kwargs = {}
-        kwargs["reqid"] = reqid
 
         # Get suffix for each entry
         self.suffix = self._get_suffix(meta2db.real_path)
@@ -253,7 +251,10 @@ class Lifecycle(Filter):
             )
             lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
             versioning = props["system"].get(M2_PROP_VERSIONING_POLICY)
+
             logging_config = props["properties"].get(LOGGING_PROPERTY_KEY)
+            has_bucket_logging = logging_config is not None
+
             if lifecycle_config is None:
                 self.logger.warning(
                     "No lifecycle configuration for given container: %s, "
@@ -301,7 +302,7 @@ class Lifecycle(Filter):
             lc_instance.load()
 
             if self.is_shard_container:
-                self.lower, self.upper = self._get_shard_range(meta2db.cid, **kwargs)
+                self.lower, self.upper = self._get_shard_range(meta2db.cid, reqid=reqid)
 
                 # Trim < and > from lower and upper
                 self.lower = self.lower[1:]
@@ -324,7 +325,8 @@ class Lifecycle(Filter):
                 container,
                 versioning,
                 ended_rules,
-                **kwargs,
+                reqid=reqid,
+                has_bucket_logging=has_bucket_logging,
             )
             self.successes += 1
         except NotFound as exc:
@@ -838,6 +840,7 @@ class Lifecycle(Filter):
                 data["rule_id"] = rule_id
                 if prefix:
                     data["prefix"] = prefix
+                data["has_bucket_logging"] = kwargs.get("has_bucket_logging", False)
 
                 resp, _ = self.proxy_client._request(
                     "POST",
