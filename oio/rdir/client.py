@@ -847,6 +847,23 @@ class RdirClient(HttpApi):
             **kwargs,
         )
 
+    def chunk_push_batch(self, volume_id, chunk_list, headers=None, **kwargs):
+        """
+        Reference a list of chunks in the reverse directory
+        chunk_list must be a list of dict with the following keys, chunk_id,
+        container_id, content_id, path, version, mtime.
+        """
+
+        self._rdir_request(
+            volume_id,
+            "POST",
+            "push",
+            create=False,
+            json=chunk_list,
+            headers=headers,
+            **kwargs,
+        )
+
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id, **kwargs):
         """Unreference a chunk from the reverse directory"""
         body = {
@@ -856,6 +873,15 @@ class RdirClient(HttpApi):
         }
 
         self._rdir_request(volume_id, "DELETE", "delete", json=body, **kwargs)
+
+    def chunk_delete_batch(self, volume_id, chunk_list, **kwargs):
+        """
+        Unreference a list of chunk from the reverse directory
+        chunk_list must be a list of dict with the following keys, chunk_id,
+        container_id, content_id.
+        """
+
+        self._rdir_request(volume_id, "DELETE", "delete", json=chunk_list, **kwargs)
 
     def chunk_fetch(
         self,
