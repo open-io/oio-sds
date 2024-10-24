@@ -109,7 +109,7 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
                 committed_offsets = [o for o in consumer_commits.values()]
                 lower_committed_offset = min(committed_offsets, default=0)
                 topic_lags.append(offset - lower_committed_offset)
-            lags[topic] = max(topic_lags, default=0)
+            lags[topic] = sum(topic_lags)
         self.__topics_lag = lags
 
     def __request_metrics(self):
