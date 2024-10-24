@@ -56,10 +56,6 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
         if not endpoints:
             raise ValueError("Metric endpoints are missing, key: metrics_endpoints")
 
-        # TODO(FVE): remove when deployment is fixed
-        if ";" in endpoints:
-            endpoints = endpoints.replace(";", ",")
-
         self._cache_duration = int_value(
             conf.get("cache_duration"), self.DEFAULT_METRICS_CACHE_DURATION
         )
