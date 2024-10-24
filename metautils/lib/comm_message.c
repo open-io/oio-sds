@@ -27,6 +27,8 @@ License along with this library.
 #include "metautils.h"
 #include "codec.h"
 
+#include <metautils/lib/common_variables.h>
+
 enum message_param_e { MP_ID, MP_NAME, MP_VERSION, MP_BODY };
 
 static void
@@ -74,9 +76,12 @@ _create_named (const char *name, gint64 dl, gboolean with_id)
 	}
 
 	if (dl > 0) {
+		/* Arbitrarily shorten deadline by to compensate
+		 * for the request decoding and the network latency. */
+		dl -= oio_client_timeout_margin;
 		const gint64 now = oio_ext_monotonic_time();
-		metautils_message_add_field_strint64(result, NAME_MSGKEY_TIMEOUT,
-				(now < dl) ? (dl - now) : 1);
+		const gint64 to = (now < dl) ? (dl - now) : 1;
+		metautils_message_add_field_strint64(result, NAME_MSGKEY_TIMEOUT, to);
 	}
 
 	return result;
@@ -209,7 +214,7 @@ message_unmarshall(const guint8 *buf, gsize len, GError ** error)
 	l0 = g_ntohl(l0);
 
 	if (l0 > len-4) {
-		GSETERROR(error, "l4v: uncomplete");
+		GSETERROR(error, "l4v: incomplete");
 		return NULL;
 	}
 
@@ -223,7 +228,7 @@ message_unmarshall(const guint8 *buf, gsize len, GError ** error)
 		return m;
 
 	if (rc.code == RC_WMORE)
-		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "uncomplete content", rc.consumed);
+		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "incomplete content", rc.consumed);
 	else
 		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "invalid content", rc.consumed);
 

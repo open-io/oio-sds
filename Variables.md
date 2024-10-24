@@ -520,6 +520,15 @@ Used by `gcc`
  * cmake directive: *OIO_GRIDD_TIMEOUT_CONNECT_COMMON*
  * range: 0.1 -> 30.0
 
+### gridd.timeout.margin
+
+> How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout.
+
+ * default: **100**
+ * type: gint64
+ * cmake directive: *OIO_GRIDD_TIMEOUT_MARGIN*
+ * range: 0 -> 60 * G_TIME_SPAN_SECOND
+
 ### gridd.timeout.single.common
 
 > Sets the default timeout for unitary (request/response) RPC, without considering the possible redirection.

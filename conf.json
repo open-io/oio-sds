@@ -502,6 +502,11 @@
 				"descr": "Sets the size of the time window used to count the number of network errors." },
 
 
+			{ "type": "monotonic", "name": "oio_client_timeout_margin",
+				"key": "gridd.timeout.margin",
+				"def": 100, "min": 0, "max": "60s",
+				"descr": "How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout." },
+
 			{ "type": "float", "name": "oio_client_timeout_single",
 				"key": "gridd.timeout.single.common",
 				"def": 30.0, "min": 0.01, "max": 120.0,
