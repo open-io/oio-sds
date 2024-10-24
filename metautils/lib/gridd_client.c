@@ -977,9 +977,8 @@ gridd_client_clear_down_hosts(down_hosts_t *pdown)
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
+	/* Documentation says this will never return NULL */
 	struct gridd_client_s *client = g_slice_new0(struct gridd_client_s);
-	if (unlikely(!client))
-		return NULL;
 
 	client->fd = -1;
 	client->step = NONE;

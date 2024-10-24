@@ -412,14 +412,9 @@ label_retry:
 		GByteArray *body = NULL;
 
 		struct gridd_client_s *client = gridd_client_create_empty();
-		if (!client) {
-			err = SYSERR("Memory allocation error");
-		} else {
-			err = gridd_client_connect_url(client, url);
-			if (err) {
-				GRID_WARN("Invalid peer [%s]", url);
-				err->code = ERRCODE_CONN_NOROUTE;
-			}
+		if ((err = gridd_client_connect_url(client, url))) {
+			GRID_WARN("Invalid peer [%s] (reqid=%s)", url, oio_ext_get_reqid());
+			err->code = ERRCODE_CONN_NOROUTE;
 		}
 
 		if (!err) {

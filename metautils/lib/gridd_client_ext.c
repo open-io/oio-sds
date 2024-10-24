@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,8 +34,6 @@ struct gridd_client_s *
 gridd_client_create_idle(const gchar *target)
 {
 	struct gridd_client_s *client = gridd_client_create_empty();
-	if (unlikely(NULL == client))
-		return NULL;
 
 	GError *err = gridd_client_connect_url(client, target);
 	if (likely(NULL == err))
