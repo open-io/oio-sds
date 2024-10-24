@@ -691,12 +691,12 @@ class ShowBucket(ShowOne):
             reqid=reqid,
         )
         if parsed_args.formatter == "table":
-            from oio.common.easy_value import convert_size
+            from oio.common.easy_value import convert_size, convert_timestamp
 
             data["bytes"] = convert_size(data["bytes"])
             if "ctime" in data:
-                data["ctime"] = Timestamp(data.get("ctime", 0.0)).isoformat
-            data["mtime"] = Timestamp(data.get("mtime", 0.0)).isoformat
+                data["ctime"] = convert_timestamp(data.get("ctime", 0.0))
+            data["mtime"] = convert_timestamp(data.get("mtime", 0.0))
         return zip(*sorted(data.items()))
 
 
@@ -717,7 +717,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.easy_value import convert_size
+        from oio.common.easy_value import convert_size, convert_timestamp
 
         self.log.debug("take_action(%s)", parsed_args)
 
@@ -740,7 +740,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         objects = sys.get(M2_PROP_OBJECTS, 0)
         shards = sys.get(M2_PROP_SHARDS, 0)
         if parsed_args.formatter == "table":
-            ctime = int(ctime)
+            ctime = convert_timestamp(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="iB")
             objects = convert_size(int(objects))
             shards = convert_size(int(shards))
@@ -759,10 +759,12 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         for key, value in sys.items():
             if key.startswith(M2_PROP_USAGE + "."):
                 key = f'bytes_usage.{key[len(M2_PROP_USAGE + "."):]}'
-                value = convert_size(int(value), unit="iB")
+                if parsed_args.formatter == "table":
+                    value = convert_size(int(value), unit="iB")
             elif key.startswith(M2_PROP_OBJECTS + "."):
                 key = f'objects.{key[len(M2_PROP_OBJECTS + "."):]}'
-                value = convert_size(int(value))
+                if parsed_args.formatter == "table":
+                    value = convert_size(int(value))
             else:
                 continue
             info[key] = value
@@ -778,7 +780,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             if sharding_timestamp is None:
                 self.log.warning("Missing sharding timestamp")
             elif parsed_args.formatter == "table":
-                sharding_timestamp = int(sharding_timestamp)
+                sharding_timestamp = convert_timestamp(sharding_timestamp)
             info["sharding.timestamp"] = sharding_timestamp
 
         if M2_PROP_SHARDING_ROOT in sys:
@@ -828,11 +830,13 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             draining_timestamp = sys.get(M2_PROP_DRAINING_TIMESTAMP)
             if draining_timestamp is not None:
                 if parsed_args.formatter == "table":
-                    draining_timestamp = int(draining_timestamp)
+                    draining_timestamp = convert_timestamp(draining_timestamp)
                 info["draining.timestamp"] = draining_timestamp
 
         objects_drained = sys.get("extra_counter.drained")
         if objects_drained:
+            if parsed_args.formatter == "table":
+                objects_drained = convert_size(int(objects_drained))
             info["objects_drained"] = objects_drained
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):

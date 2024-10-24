@@ -16,6 +16,8 @@
 
 import re
 
+from oio.common.timestamp import Timestamp
+
 HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]+$")
 
 
@@ -81,6 +83,11 @@ def convert_size(size, unit=""):
         if abs(size) < base:
             return f"{size:.3f}{metric_symbol}{unit}"
     return f"{size:.3f}{METRIC_SYMBOLS[-1]}{unit}"
+
+
+def convert_timestamp(timestamp):
+    """Helper to convert timestamp to isoformat"""
+    return Timestamp(float(timestamp)).isoformat
 
 
 def is_hexa(hexa, size=None):
