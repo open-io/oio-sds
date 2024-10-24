@@ -732,7 +732,9 @@ class ListObject(ContainerCommandMixin, Lister):
                 object_list.append(i)
         except exceptions.OioException as err:
             self.success = False
-            self.log.warn("Listing may be incomplete: container %s: %s", container, err)
+            self.log.warning(
+                "Listing may be incomplete: container %s: %s", container, err
+            )
         return object_list
 
     def take_action(self, parsed_args):
@@ -832,7 +834,7 @@ class ListObject(ContainerCommandMixin, Lister):
                         yield result
                     except KeyError as exc:
                         self.success = False
-                        self.log.warn("Bad object entry, missing '%s': %s", exc, obj)
+                        self.log.warning("Bad object entry, missing '%s': %s", exc, obj)
 
             columns = (
                 "Name",
@@ -862,7 +864,7 @@ class ListObject(ContainerCommandMixin, Lister):
                         yield result
                     except KeyError as exc:
                         self.success = False
-                        self.log.warn("Bad object entry, missing %s: %s", exc, obj)
+                        self.log.warning("Bad object entry, missing %s: %s", exc, obj)
 
             columns = ("Name", "Size", "Hash", "Version")
 
