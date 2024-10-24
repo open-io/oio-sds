@@ -405,6 +405,8 @@ class ShowObject(ObjectCommandMixin, ShowOne):
         return parser
 
     def take_action(self, parsed_args):
+        from oio.common.easy_value import convert_timestamp
+
         self.log.debug("take_action(%s)", parsed_args)
         super(ShowObject, self).take_action(parsed_args)
 
@@ -437,6 +439,11 @@ class ShowObject(ObjectCommandMixin, ShowOne):
             info["size"] = "deleted"
         for k, v in data["properties"].items():
             info["meta." + k] = v
+        if parsed_args.formatter == "table":
+            if info.get("ctime"):
+                info["ctime"] = convert_timestamp(info.get("ctime"))
+            if info.get("mtime"):
+                info["mtime"] = convert_timestamp(info.get("mtime"))
         return list(zip(*sorted(info.items())))
 
 
@@ -802,7 +809,7 @@ class ListObject(ContainerCommandMixin, Lister):
             return "n/a"
 
         if parsed_args.long_listing:
-            from oio.common.timestamp import Timestamp
+            from oio.common.easy_value import convert_timestamp
 
             def _format_props(props):
                 prop_list = ["%s=%s" % (k, v) for k, v in props.items()]
@@ -817,6 +824,9 @@ class ListObject(ContainerCommandMixin, Lister):
             def _gen_results(objects):
                 for obj in objects:
                     try:
+                        mtime = obj["mtime"]
+                        if parsed_args.formatter == "table":
+                            mtime = convert_timestamp(mtime)
                         result = (
                             obj["name"],
                             obj["size"],
@@ -824,7 +834,7 @@ class ListObject(ContainerCommandMixin, Lister):
                             obj["version"],
                             obj["deleted"],
                             obj["mime_type"],
-                            Timestamp(obj["mtime"]).isoformat,
+                            mtime,
                             obj["policy"],
                             obj["chunk_method"],
                             _format_props(obj.get("properties", {})),
