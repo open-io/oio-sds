@@ -776,7 +776,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info["sharding.state"] = sharding_state
             sharding_timestamp = sys.get(M2_PROP_SHARDING_TIMESTAMP)
             if sharding_timestamp is None:
-                self.log.warn("Missing sharding timestamp")
+                self.log.warning("Missing sharding timestamp")
             elif parsed_args.formatter == "table":
                 sharding_timestamp = int(sharding_timestamp)
             info["sharding.timestamp"] = sharding_timestamp
@@ -785,33 +785,33 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info["sharding.root"] = sys.get(M2_PROP_SHARDING_ROOT)
             sharding_lower = sys.get(M2_PROP_SHARDING_LOWER)
             if not sharding_lower:
-                self.log.warn("Missing sharding lower")
+                self.log.warning("Missing sharding lower")
             if sharding_lower[0] == ">":
                 sharding_lower = sharding_lower[1:]
             else:
-                self.log.warn("Wrong format for sharding lower")
+                self.log.warning("Wrong format for sharding lower")
             info["sharding.lower"] = sharding_lower
             sharding_upper = sys.get(M2_PROP_SHARDING_UPPER)
             if not sharding_upper:
-                self.log.warn("Missing sharding upper")
+                self.log.warning("Missing sharding upper")
             if sharding_upper[0] == "<":
                 sharding_upper = sharding_upper[1:]
             else:
-                self.log.warn("Wrong format for sharding upper")
+                self.log.warning("Wrong format for sharding upper")
             info["sharding.upper"] = sharding_upper
             sharding_previous_lower = sys.get(M2_PROP_SHARDING_PREVIOUS_LOWER)
             if sharding_previous_lower:
                 if sharding_previous_lower[0] == ">":
                     sharding_previous_lower = sharding_previous_lower[1:]
                 else:
-                    self.log.warn("Wrong format for previous sharding lower")
+                    self.log.warning("Wrong format for previous sharding lower")
                 info["sharding.lower.previous"] = sharding_previous_lower
             sharding_previous_upper = sys.get(M2_PROP_SHARDING_PREVIOUS_UPPER)
             if sharding_previous_upper:
                 if sharding_previous_upper[0] == "<":
                     sharding_previous_upper = sharding_previous_upper[1:]
                 else:
-                    self.log.warn("Wrong format for previous sharding upper")
+                    self.log.warning("Wrong format for previous sharding upper")
                 info["sharding.upper.previous"] = sharding_previous_upper
             if M2_PROP_SHARDING_MASTER in sys:
                 info["sharding.master"] = sys[M2_PROP_SHARDING_MASTER]

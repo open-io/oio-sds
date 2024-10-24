@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 TIMESTAMP_FORMAT = "%016.05f"
@@ -68,4 +68,4 @@ class Timestamp(object):
     @property
     def isoformat(self):
         t = float(self.normal)
-        return datetime.utcfromtimestamp(t).isoformat()
+        return datetime.fromtimestamp(t, timezone.utc).isoformat()
