@@ -403,7 +403,6 @@ label_retry:
 
 	NAME2CONST(n, ctx->name);
 	const gchar *headers[4] = {SQLX_ADMIN_PEERS, peers, NULL, NULL};
-	GByteArray *packed = pack(&n, headers);
 
 	gboolean stop = FALSE;
 	for (gchar **pu = m1uv; *pu && !stop; ++pu) {
@@ -418,12 +417,14 @@ label_retry:
 		}
 
 		if (!err) {
-			/* TODO ensure the service match the expected TYPE and SEQ */
+			/* Need to pack at each iteration in order to adjust timeout */
+			GByteArray *packed = pack(&n, headers);
 			if (!ctx->decoder) {
 				err = gridd_client_request(client, packed, &body, _on_reply);
 			} else {
 				err = gridd_client_request(client, packed, ctx->decoder_data, ctx->decoder);
 			}
+			g_byte_array_unref(packed);
 		}
 
 		if (!err) {
@@ -481,7 +482,6 @@ label_retry:
 					flag_prefer_master_for_write)) {
 			const char *actual = client ? gridd_client_url(client) : NULL;
 			if (actual && 0 != strcmp(actual, url)) {
-				// TODO(jfs): maybe save the ID instead (or remove this mark)
 				service_learn_master(election_key, actual);
 			}
 		}
@@ -570,7 +570,6 @@ label_retry:
 		oio_ext_set_urlerrorv(urlerrorv);
 	}
 
-	g_byte_array_unref (packed);
 	g_strfreev(m1uv);
 	g_free(peers);
 
