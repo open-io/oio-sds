@@ -22,15 +22,14 @@ from oio.common.constants import (
     M2_PROP_SHARDS,
 )
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.kafka import DEFAULT_DELETE_TOPIC_PREFIX
-from oio.common.kafka_http import KafkaClusterHealthCheckerMixin
+from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.exceptions import OioUnhealthyKafkaClusterError
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 
-class Draining(Filter, KafkaClusterHealthCheckerMixin):
+class Draining(Filter):
     """
     Trigger the draining for a given container.
     """
@@ -38,12 +37,6 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
     NAME = "Draining"
     DEFAULT_DRAIN_LIMIT = 1000
     DEFAULT_DRAIN_LIMIT_PER_PASS = 100000
-
-    def __init__(self, app, conf, logger=None):
-        Filter.__init__(self, app, conf, logger=logger)
-        KafkaClusterHealthCheckerMixin.__init__(
-            self, conf, pool_manager=self.api.container.pool_manager
-        )
 
     def init(self):
         self.api = self.app_env["api"]
@@ -59,10 +52,16 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
                 "Drain limit should never be greater than the limit per pass"
             )
 
-        self.topic_prefix = self.conf.get("topic_prefix", DEFAULT_DELETE_TOPIC_PREFIX)
-
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
+        )
+        kafka_cluster_health_conf = {
+            k[21:]: v
+            for k, v in self.conf.items()
+            if k.startswith("kafka_cluster_health_")
+        }
+        self.kafka_cluster_health = KafkaClusterHealth(
+            kafka_cluster_health_conf, pool_manager=self.api.container.pool_manager
         )
 
         self.successes = 0
@@ -81,7 +80,7 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
         try:
             while truncated and nb_objects + self.drain_limit <= self.limit_per_pass:
                 # Ensure cluster can absorb generated events
-                self.check_cluster_health(topic_prefix=self.topic_prefix)
+                self.kafka_cluster_health.check()
                 resp = self.api.container_drain(
                     account, container, limit=self.drain_limit
                 )

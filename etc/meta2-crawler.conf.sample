@@ -107,21 +107,22 @@ use = egg:oio#logger
 # Trigger the draining for a given container.
 use = egg:oio#draining
 # Drain limit for each call from the crawler to the meta2. It aims to limit
-# the number of draining events generated. Default to 1000.
+# the number of draining events generated.
 drain_limit = 1000
 # Drain limit for each pass/iteration of the crawler. It aims to limit the
-# meta2 usage and to smooth out the calls over time. Default to 100000.
+# meta2 usage and to smooth out the calls over time.
 drain_limit_per_pass = 100000
-# List of endpoints to fetch Redpanda cluster metrics, semi column separated
-metrics_endpoints =
-# Topics prefix to watch
-topic_prefix = oio-delete-
-# Maximum lag allowed on topics (<0 to disable)
-max_lag_threshold =
-# Minimal available space allowed in percent (<0 to disable)
-available_space_percent_threshold = 40.0
-# Kafka metrics cache duration in seconds. Default to 10.
-cache_duration =
+# List of endpoints to fetch Redpanda cluster metrics, comma-separated.
+kafka_cluster_health_metrics_endpoints =
+# Kafka metrics cache duration in seconds.
+kafka_cluster_health_cache_duration = 10
+# List of topic patterns to watch, comma-separated.
+# Only one wildcard is allowed per topic pattern.
+kafka_cluster_health_topics = *
+# Maximum lag allowed by watched topic (<0 to disable).
+kafka_cluster_health_max_lag = -1
+# Minimal available space allowed in percent (<0 to disable).
+kafka_cluster_health_min_available_space = -1
 
 [filter:verify_chunk_placement]
 # Identify misplaced chunks after meta2db scan and tag them with misplaced header.
