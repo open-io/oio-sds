@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -673,3 +673,35 @@ class TestRdirClient(BaseTestCase):
             )
         finally:
             self._service(self.service_to_systemd_key(stopped_rdir, "rdir"), "start")
+
+    def test_batch_push_delete_chunks(self):
+        max_containers = 4
+        max_objects = 5
+        max_chunks = 5
+        max_mtime = 16
+
+        chunk_list = []
+        for _ in range(max_containers):
+            cid = random_id(64)
+            for i in range(random.randrange(2, max_objects)):
+                content_id = random_id(32)
+                content_path = "obj-%d" % i
+                content_ver = 1
+                for _ in range(random.randrange(2, max_chunks)):
+                    chunk_id = random_id(63)
+                    mtime = random.randrange(0, max_mtime + 1)
+                    chunk_list.append(
+                        {
+                            "chunk_id": chunk_id,
+                            "container_id": cid,
+                            "content_id": content_id,
+                            "path": content_path,
+                            "version": content_ver,
+                            "mtime": mtime,
+                        }
+                    )
+        # push chunks
+        self.rdir.chunk_push_batch(self.rawx_id, chunk_list)
+
+        # delete chunks
+        self.rdir.chunk_delete_batch(self.rawx_id, chunk_list)
