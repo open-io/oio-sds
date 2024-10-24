@@ -31,7 +31,7 @@ from oio.common.constants import (
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
 )
-from oio.common.kafka_http import KafkaClusterHealthCheckerMixin
+from oio.common.kafka_http import KafkaClusterHealth
 
 
 def fake_cb(_status, _msg):
@@ -174,7 +174,7 @@ class TestDrainingFilter(BaseTestCase):
             cid = meta2db_env["cid"]
 
         conf = self.conf.copy()
-        conf["metrics_endpoints"] = "http://redpanda-metrics"
+        conf["kafka_cluster_health_metrics_endpoints"] = "http://redpanda-metrics"
         if drain_limit:
             conf["drain_limit"] = drain_limit
         if drain_limit_per_pass:
@@ -200,9 +200,7 @@ class TestDrainingFilter(BaseTestCase):
         # Process the draining
         if not meta2db_env:
             meta2db_env = self._get_meta2db_env(cid)
-        with patch.object(
-            KafkaClusterHealthCheckerMixin, "check_cluster_health", return_value=None
-        ):
+        with patch.object(KafkaClusterHealth, "check", return_value=None):
             for _ in range(nb_passes):
                 draining.process(meta2db_env, callback)
                 meta2db_env.pop("admin_table")

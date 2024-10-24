@@ -389,8 +389,8 @@ use = egg:oio#check_integrity
 use = egg:oio#draining
 drain_limit = 1000
 drain_limit_per_pass = 100000
-metrics_endpoints = ${KAFKA_METRICS_URL}
-topic_prefix = oio-delete-
+kafka_cluster_health_metrics_endpoints = ${KAFKA_METRICS_URL}
+kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
 
 [filter:logger]
 use = egg:oio#logger

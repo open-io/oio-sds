@@ -47,6 +47,7 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
     HEADER_TOTAL_SPACE = "redpanda_storage_disk_total_bytes"
     HEADER_FREE_SPACE_ALERT = "redpanda_storage_disk_free_space_alert"
 
+    KEY_NAMESPACE = "redpanda_namespace"
     KEY_PARTITION = "redpanda_partition"
     KEY_TOPIC = "redpanda_topic"
     KEY_CONSUMER_GROUP = "redpanda_group"
@@ -112,6 +113,18 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
             lags[topic] = sum(topic_lags)
         self.__topics_lag = lags
 
+    def _is_internal_topic(self, key):
+        if key.get(self.KEY_NAMESPACE, "kafka") != "kafka":
+            # kafka - User topics
+            # kafka_internal - Internal Kafka topic,
+            #     such as consumer groups
+            # redpanda - Redpanda-only internal data
+            return True
+        if key[self.KEY_TOPIC] in ("controller", "__consumer_offsets"):
+            # internal topic used by kafka
+            return True
+        return False
+
     def __request_metrics(self):
         data = None
         max_offsets = {}
@@ -141,6 +154,8 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
 
                     if line.startswith(self.HEADER_MAX_OFFSET):
                         key, value = self.__parse_line(line, self.HEADER_MAX_OFFSET)
+                        if self._is_internal_topic(key):
+                            continue
                         self.__store_topic_partition(
                             max_offsets,
                             key[self.KEY_TOPIC],
@@ -151,6 +166,8 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
                         key, value = self.__parse_line(
                             line, self.HEADER_COMMITTED_OFFSET
                         )
+                        if self._is_internal_topic(key):
+                            continue
                         self.__store_topic_partition(
                             committed_offsets,
                             key[self.KEY_TOPIC],
@@ -210,62 +227,80 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
         self.__update_if_needed(force=topic not in self.__topics_lag)
         return int(self.__topics_lag.get(topic, 0))
 
-    def get_topics_max_lag(self, topic_prefix):
+    @staticmethod
+    def _match_topic(pattern, topic):
+        """
+        Match the topic name against the specified pattern.
+        """
+        pattern_parts = pattern.split("*", 1)  # Only one wildcard is authorized
+        if len(pattern_parts) == 1:
+            return pattern == topic
+        return topic.startswith(pattern_parts[0]) and topic.endswith(pattern_parts[1])
+
+    def get_topics_max_lag(self, pattern):
         """
         Retrieve the max lag for topics matching the prefix
         """
         self.__update_if_needed()
-        lags = [0]
+        lags = [(0, None)]
         for topic, lag in self.__topics_lag.items():
-            if topic.startswith(topic_prefix):
-                lags.append(lag)
-        return max(lags)
+            if self._match_topic(pattern, topic):
+                lags.append((lag, topic))
+        return max(lags, key=lambda x: x[0])
 
 
-class KafkaClusterHealthCheckerMixin:
+class KafkaClusterHealth:
     def __init__(self, conf, pool_manager=None):
-        self.kafka_metrics_client = KafkaMetricsClient(
-            self.conf, pool_manager=pool_manager
-        )
-        self._lag_threshold = int_value(conf.get("max_lag_threshold"), -1)
-        self._availailable_space_threshold = float_value(
-            conf.get("available_space_percent_threshold"), -1.0
-        )
+        self.kafka_metrics_client = KafkaMetricsClient(conf, pool_manager=pool_manager)
+        self.topics = []
+        for topic in conf.get("topics", "").split(","):
+            topic = topic.strip()
+            if not topic:
+                continue
+            if topic.count("*") > 1:
+                raise ValueError(
+                    "Topic pattern '{topic}' can not have more than one wildcard"
+                )
+            self.topics.append(topic)
+        if not self.topics:
+            self.topics.append("*")
+        self._max_lag = int_value(conf.get("max_lag"), -1)
+        if self._max_lag < -1:
+            raise ValueError("'max_lag' must be greater than or equal to -1")
+        self._min_available_space = float_value(conf.get("min_available_space"), -1.0)
+        if self._min_available_space < -1:
+            raise ValueError(
+                "'min_available_space' must be greater than or equal to -1"
+            )
 
-    def check_cluster_health(self, topics=None, topic_prefix=None):
+    def check(self):
         # Validate cluster status
         status = self.kafka_metrics_client.cluster_space_status
         if status != KafkaClusterSpaceStatus.OK:
             raise OioUnhealthyKafkaClusterError(f"Status is not OK: {status}")
 
-        if self._availailable_space_threshold >= 0.0:
+        if self._min_available_space >= 0.0:
             # Validate available space
             available_space_percent = (
                 self.kafka_metrics_client.cluster_free_space
                 / self.kafka_metrics_client.cluster_total_space
             ) * 100.0
-            if available_space_percent < self._availailable_space_threshold:
+            if available_space_percent < self._min_available_space:
                 raise OioUnhealthyKafkaClusterError(
                     f"Available space too low ({available_space_percent:.2%} < "
-                    f"{self._availailable_space_threshold:.2%})"
+                    f"{self._min_available_space:.2%})"
                 )
 
-        if self._lag_threshold == -1:
+        if self._max_lag == -1:
             return
 
         # Validate max lag
-        if topics is not None:
-            for topic in topics:
+        for topic in self.topics:
+            if "*" in topic:
+                lag, topic = self.kafka_metrics_client.get_topics_max_lag(topic)
+            else:
                 lag = self.kafka_metrics_client.get_topic_max_lag(topic)
-                if lag > self._lag_threshold:
-                    raise OioUnhealthyKafkaClusterError(
-                        f"Topic '{topic}' lag is too high({lag:.0f} > "
-                        f"{self._lag_threshold})"
-                    )
-        if topic_prefix is not None:
-            max_lag = self.kafka_metrics_client.get_topics_max_lag(topic_prefix)
-            if max_lag > self._lag_threshold:
+            if lag > self._max_lag:
                 raise OioUnhealthyKafkaClusterError(
-                    f"Topics starting with '{topic_prefix}' lag is too high "
-                    f"({max_lag:.0f} > {self._lag_threshold})"
+                    f"Topic '{topic}' lag is too high({lag:.0f} > " f"{self._max_lag})"
                 )

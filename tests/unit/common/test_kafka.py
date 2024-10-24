@@ -29,7 +29,7 @@ class KafkaMetricClientTest(unittest.TestCase):
 # HELP redpanda_kafka_consumer_group_committed_offset Consumer group committed offset
 # TYPE redpanda_kafka_consumer_group_committed_offset gauge
 redpanda_kafka_consumer_group_committed_offset{redpanda_group="event-agent",\
-redpanda_partition="0",redpanda_topic="oio"} 4.000000
+redpanda_partition="0",redpanda_topic="oio"} 3.000000
 # HELP redpanda_kafka_consumer_group_consumers Number of consumers in a group
 # TYPE redpanda_kafka_consumer_group_consumers gauge
 redpanda_kafka_consumer_group_consumers{redpanda_group="event-agent"} 0.000000
@@ -60,7 +60,7 @@ redpanda_topic="oio-deadletter"} 0.000000
 redpanda_kafka_max_offset{redpanda_namespace="redpanda",redpanda_partition="0"\
 ,redpanda_topic="controller"} 2925.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
-redpanda_topic="oio-chunks-127.0.0.1"} 0.000000
+redpanda_topic="oio-chunks"} 0.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
 redpanda_topic="oio-delete-127.0.0.1-even"} 0.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="1",\
@@ -94,8 +94,10 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
 # TYPE redpanda_kafka_consumer_group_committed_offset gauge
 redpanda_kafka_consumer_group_committed_offset{redpanda_group="event-agent",\
 redpanda_partition="1",redpanda_topic="oio"} 2.000000
-redpanda_kafka_consumer_group_committed_offset{redpanda_group="event-agent-chunks",\
-redpanda_partition="1",redpanda_topic="oio-chunks-127.0.0.1"} 1.000000
+redpanda_kafka_consumer_group_committed_offset{redpanda_group="event-agent-delete",\
+redpanda_partition="0",redpanda_topic="oio-delete-127.0.0.1-even"} 2.000000
+redpanda_kafka_consumer_group_committed_offset{redpanda_group="event-agent-delete",\
+redpanda_partition="0",redpanda_topic="oio-delete-127.0.0.1-odd"} 1.000000
 # HELP redpanda_kafka_consumer_group_consumers Number of consumers in a group
 # TYPE redpanda_kafka_consumer_group_consumers gauge
 redpanda_kafka_consumer_group_consumers{redpanda_group="event-agent"} 0.000000
@@ -126,9 +128,9 @@ redpanda_topic="oio-deadletter"} 0.000000
 redpanda_kafka_max_offset{redpanda_namespace="redpanda",redpanda_partition="0"\
 ,redpanda_topic="controller"} 2925.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="1",\
-redpanda_topic="oio-chunks-127.0.0.1"} 2.000000
+redpanda_topic="oio-chunks"} 2.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
-redpanda_topic="oio-delete-127.0.0.1-even"} 0.000000
+redpanda_topic="oio-delete-127.0.0.1-even"} 2.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="1",\
 redpanda_topic="__consumer_offsets"} 3452.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="1",\
@@ -136,7 +138,7 @@ redpanda_topic="oio"} 4.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
 redpanda_topic="oio-rebuild"} 0.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
-redpanda_topic="oio-delete-127.0.0.1-odd"} 0.000000
+redpanda_topic="oio-delete-127.0.0.1-odd"} 8.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="2",\
 redpanda_topic="__consumer_offsets"} 3564.000000
 redpanda_kafka_max_offset{redpanda_namespace="kafka",redpanda_partition="0",\
@@ -184,7 +186,7 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
         with patch.object(
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
-            self.assertEqual(0, client.get_topic_max_lag("oio"))
+            self.assertEqual(1, client.get_topic_max_lag("oio"))
             mock_request.assert_called_once_with("GET", "/public_metrics", endpoint=ANY)
 
         # Missing topic should trigger cache refresh
@@ -197,7 +199,13 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
         with patch.object(
             HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
         ) as mock_request:
-            self.assertEqual(0, client.get_topic_max_lag("oio"))
+            self.assertEqual((4.0, "oio-preserved"), client.get_topics_max_lag("*"))
+            mock_request.assert_not_called()
+
+        with patch.object(
+            HttpApi, "_request", return_value=(200, self.DEFAULT_RESPONSE)
+        ) as mock_request:
+            self.assertEqual(1, client.get_topic_max_lag("oio"))
             mock_request.assert_not_called()
 
     def test_check_all_endpoints_requested(self):
@@ -222,7 +230,8 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
                 OioTimeout(""),
             ),
         ) as mock_request:
-            self.assertEqual(0, client.get_topic_max_lag("oio"))
+            self.assertEqual(1, client.get_topic_max_lag("oio"))
+            self.assertEqual((4.0, "oio-preserved"), client.get_topics_max_lag("*"))
             self.assertListEqual(
                 [unittest.mock.call("GET", f"{e}/public_metrics") for e in endpoints],
                 mock_request.call_args_list,
@@ -250,5 +259,16 @@ redpanda_storage_disk_total_bytes{} 460206137344.000000
                 (200, self.CUSTOM_RESPONSE),
             ),
         ):
-            self.assertEqual(1, client.get_topic_max_lag("oio-chunks-127.0.0.1"))
-            self.assertEqual(2, client.get_topic_max_lag("oio"))
+            self.assertEqual(3, client.get_topic_max_lag("oio"))
+            self.assertEqual(0, client.get_topic_max_lag("oio-delete-127.0.0.1-even"))
+            self.assertEqual(7, client.get_topic_max_lag("oio-delete-127.0.0.1-odd"))
+            self.assertEqual(
+                (7.0, "oio-delete-127.0.0.1-odd"), client.get_topics_max_lag("*")
+            )
+            self.assertEqual(
+                (7.0, "oio-delete-127.0.0.1-odd"), client.get_topics_max_lag("oio*")
+            )
+            self.assertEqual(
+                (7.0, "oio-delete-127.0.0.1-odd"),
+                client.get_topics_max_lag("oio-delete-*"),
+            )
