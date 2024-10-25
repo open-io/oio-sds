@@ -2107,6 +2107,7 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
         )
         self.assertIsNone(event)
 
@@ -2146,6 +2147,7 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
         )
         self.assertIsNone(event)
 
@@ -2176,5 +2178,6 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
+            topic="oio-delete-mpu-parts",
         )
         self.assertIsNotNone(event)

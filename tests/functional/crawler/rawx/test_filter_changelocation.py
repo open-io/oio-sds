@@ -22,7 +22,6 @@ from shutil import copy, copystat
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.exceptions import Conflict
 from oio.common.utils import request_id
-from oio.container.sharding import ContainerSharding
 from oio.crawler.rawx.filters.changelocation import Changelocation
 from oio.event.evob import EventTypes
 
@@ -54,7 +53,6 @@ class TestFilterChangelocation(BaseTestCase):
         self.rawx_srv_list = self.conscience.all_services(
             service_type="rawx",
         )
-        self.container_sharding = ContainerSharding(self.conf, logger=self.logger)
         self.rawx_volumes = {}
         for rawx in self.rawx_srv_list:
             tags = rawx["tags"]

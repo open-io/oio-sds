@@ -250,6 +250,7 @@ class CommonTestCase(testtools.TestCase):
                 "auto.offset.reset": "latest",
             },
         )
+        cls._cls_kafka_consumers_by_topic = {}
         cls._consumers = [cls._cls_kafka_consumer]
 
     def setUp(self):
@@ -841,7 +842,8 @@ class BaseTestCase(CommonTestCase):
         fields=None,
         origin=None,
         timeout=30.0,
-        topics=None,
+        topic=None,
+        assignment_timeout=60.0,
         OffsetEventCap=5,
     ):
         """
@@ -853,9 +855,16 @@ class BaseTestCase(CommonTestCase):
         :param types: list of types of events the method should look for
         """
         kafka_consumer = self._cls_kafka_consumer
-        if topics is not None:
-            kafka_consumer = self.get_kafka_consumer(topics=topics)
-            self._assign_custom_consumer(timeout, OffsetEventCap, kafka_consumer)
+        if topic is not None:
+            kafka_consumer = self._cls_kafka_consumers_by_topic.get(topic)
+            if kafka_consumer is None:
+                kafka_consumer = self.get_kafka_consumer(topics=[topic])
+                self._assign_custom_consumer(
+                    assignment_timeout,
+                    OffsetEventCap,
+                    kafka_consumer,
+                    topic,
+                )
 
         def match_event(key, event):
             if types and event.event_type not in types:
@@ -920,7 +929,7 @@ class BaseTestCase(CommonTestCase):
             logging.warning("%s", err)
         return None
 
-    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer):
+    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer, topic):
         assigned_partitions = None
         now = time.time()
         deadline = now + timeout
@@ -944,6 +953,8 @@ class BaseTestCase(CommonTestCase):
                         part.topic, part.partition, high_offset - OffsetEventCap
                     )
                 )
+        self._cls_kafka_consumers_by_topic[topic] = kafka_consumer
+        self._consumers.append(kafka_consumer)
 
     def wait_until_empty(
         self,
