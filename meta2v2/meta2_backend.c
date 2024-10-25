@@ -3121,7 +3121,9 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			/* The drain uses a marker to know where it is.
 			 * The sharding or shrinking will make that marker obsolete
 			 * for the resulting shards. */
-			err = BADREQ("Draining is in progress");
+			err = NEWERROR(CODE_CONTAINER_DRAINING,
+					"Container draining needed or in progress, cannot shard"
+			);
 			goto rollback;
 		}
 
@@ -3255,7 +3257,9 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 			/* The drain uses a marker to know where it is.
 			 * The sharding or shrinking will make that marker obsolete
 			 * for the resulting shards. */
-			err = BADREQ("Draining is in progress");
+			err = NEWERROR(CODE_CONTAINER_DRAINING,
+					"Container draining needed or in progress, cannot shrink"
+			);
 			goto rollback;
 		}
 

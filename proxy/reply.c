@@ -188,6 +188,7 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_CONTENT_PRECONDITION:
 			return _reply_conflict_error(args, err);
 		case CODE_NOT_ALLOWED:
+		case CODE_CONTAINER_DRAINING:
 			return _reply_forbidden_error(args, err);
 		case CODE_METHOD_NOTALLOWED:
 			return _reply_method_error(args, err, NULL);

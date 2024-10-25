@@ -2644,14 +2644,14 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 	gint64 container_draining_state = m2db_get_drain_state(args->sq3);
 	if (container_draining_state == DRAINING_STATE_NEEDED ||
 			container_draining_state == DRAINING_STATE_IN_PROGRESS) {
-		err = NEWERROR(CODE_NOT_ALLOWED,
+		err = NEWERROR(CODE_CONTAINER_DRAINING,
 				"Container draining needed or in progress, cannot restore");
 		goto label_end;
 	}
 	if (g_strcmp0(CONTENTS_HEADERS_get_chunk_method(current_header)->str,
 				  CHUNK_METHOD_DRAINED) != 0) {
 		err = NEWERROR(CODE_NOT_ALLOWED,
-					   "Restoring is only allowed on drained objects");
+				"Restoring is only allowed on drained objects");
 		goto label_end;
 	}
 	if (CONTENTS_HEADERS_get_size(current_header) !=

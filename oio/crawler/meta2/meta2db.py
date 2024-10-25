@@ -183,5 +183,4 @@ class StatusMap(object):
 status_map = StatusMap()
 Meta2DBOk = status_map[200]
 Meta2DBNotFound = status_map[404]
-Meta2DBOperationAbort = status_map[430]
 Meta2DBError = status_map[500]

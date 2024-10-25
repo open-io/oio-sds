@@ -45,6 +45,7 @@ from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
 from oio.common.exceptions import (
     BadRequest,
     DeadlineReached,
+    Forbidden,
     OioException,
     OioNetworkException,
     OioTimeout,
@@ -1925,6 +1926,13 @@ class ContainerSharding(ProxyClient):
         pre_vacuum=True,
         **kwargs,
     ):
+        """
+        Returns a boolean indicating whether there are any changes or not,
+        i.e. whether the shrink operation took place or was not even attempted.
+
+        The only case that prevents the shrink attempt is when the container
+        is being drained.
+        """
         self.logger.info(
             "Shrinking shards by merging %s and %s in %s",
             str(smaller_shard),
@@ -1940,9 +1948,25 @@ class ContainerSharding(ProxyClient):
 
         # Prepare shrinking on smaller shard
         # FIXME(adu): ServiceBusy or Timeout
-        shrinking_info = self._prepare_sharding(
-            smaller_shard, new_shards=[smaller_shard], **kwargs
-        )
+        try:
+            shrinking_info = self._prepare_sharding(
+                smaller_shard, new_shards=[smaller_shard], **kwargs
+            )
+        except Forbidden as exc:
+            if exc.status == 440:  # Draining is in progress
+                # The shrinking has not yet started and there is no rollback to do,
+                # because there has been no modification.
+                # On this type of normal (when there are drains) and temporary error,
+                # we can just indicate that there has been no modification.
+                self.logger.warning(
+                    "Merge temporarily impossible of %s and %s because draining "
+                    "is in progress, retry later: %s",
+                    str(smaller_shard),
+                    str(bigger_shard),
+                    exc,
+                )
+                return False
+            raise
         smaller_shard["sharding"] = shrinking_info
         # Prepare shrinking on bigger shard or root
         # FIXME(adu): ServiceBusy or Timeout
@@ -2032,6 +2056,8 @@ class ContainerSharding(ProxyClient):
                     "Failed to delete the copy (CID=%s): %s", smaller_shard["cid"], exc
                 )
 
+        return True
+
     def _rollback_shrinking(self, smaller_shard, bigger_shard, new_shard, **kwargs):
         if "sharding" not in smaller_shard and "sharding" not in bigger_shard:
             # Shrinking is complete, but not everything has been cleaned up
@@ -2094,7 +2120,7 @@ class ContainerSharding(ProxyClient):
         self, root_cid, smaller_shard, bigger_shard, new_shard, **kwargs
     ):
         try:
-            self._shrink_shards(
+            return self._shrink_shards(
                 root_cid, smaller_shard, bigger_shard, new_shard, **kwargs
             )
         except Exception:
@@ -2189,7 +2215,6 @@ class ContainerSharding(ProxyClient):
             new_shard["upper"] = shards[1]["upper"]
             new_shard["count"] += shards[1]["count"]
 
-        self._almost_safe_shrink_shards(
+        return self._almost_safe_shrink_shards(
             root_cid, smaller_shard, bigger_shard, new_shard, **kwargs
         )
-        return True

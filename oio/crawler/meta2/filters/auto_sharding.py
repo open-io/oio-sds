@@ -31,7 +31,6 @@ from oio.crawler.meta2.meta2db import (
     Meta2DB,
     Meta2DBNotFound,
     Meta2DBError,
-    Meta2DBOperationAbort,
 )
 
 
@@ -204,11 +203,8 @@ class AutomaticSharding(Filter):
                 "Failed to process %s for the container %s", self.NAME, meta2db.cid
             )
             self.errors += 1
-            resp_class = Meta2DBError
-            if "Draining is in progress" in str(exc):
-                resp_class = Meta2DBOperationAbort
 
-            resp = resp_class(
+            resp = Meta2DBError(
                 meta2db,
                 body=(
                     f"Failed to process {self.NAME} "
@@ -354,20 +350,13 @@ class AutomaticSharding(Filter):
             # The exception is handled in the "process" method
             raise
         except Exception as exc:
-            self.shrinking_errors += 1
-            if "Draining is in progress" in str(exc):
-                self.logger.warning(
-                    "Draining in progress on neighboring shard %s. "
-                    "Failed to merge container %s: %s(reqid=%s)",
-                    neighboring_shard["cid"],
-                    meta2db.cid,
-                    exc,
-                    reqid,
-                )
-                raise
             self.logger.error(
-                "Failed to merge container %s: %s (reqid=%s)", meta2db.cid, exc, reqid
+                "Failed to merge container %s: %s (reqid=%s)",
+                meta2db.cid,
+                exc,
+                reqid,
             )
+            self.shrinking_errors += 1
             raise
 
     def _get_filter_stats(self):

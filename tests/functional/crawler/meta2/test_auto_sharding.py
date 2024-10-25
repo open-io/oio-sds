@@ -304,7 +304,7 @@ class TestAutoSharding(BaseTestCase):
         self.auto_sharding.process(meta2db.env, _cb)
 
         def _cb(status, _msg):
-            self.assertEqual(430, status)
+            self.assertEqual(200, status)
 
         self.auto_sharding.reset_stats()
 
@@ -317,7 +317,7 @@ class TestAutoSharding(BaseTestCase):
         self.auto_sharding.process(meta2db.env, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
-            if key in ("shrinking_errors", "errors"):
+            if key == "shrinking_no_change":
                 self.assertEqual(1, value)
             else:
                 self.assertEqual(0, value)
