@@ -110,6 +110,24 @@ class PerServiceEventQueue(EventQueue):
         return event.get("service_id")
 
 
+class PerVolumeEventQueue(EventQueue):
+    def init(self, conf, workers):
+        self.ids = conf.get("event_queue_ids", "").strip(";").split(";")
+
+        if workers < len(self.ids):
+            raise ValueError(
+                f"Not enough workers to handle queues ({workers} < {len(self.ids)})"
+            )
+
+        for queue_id in self.ids:
+            self.register_queue(queue_id)
+
+    def id_from_event(self, event):
+        data = event.data
+        volume_id = data.get("volume_service_id") or data.get("volume_id")
+        return hash(volume_id) % 10
+
+
 def event_queue_factory(logger, conf, *args, **kwargs):
     event_queue_type = conf.get("event_queue_type")
     _class = None
@@ -119,6 +137,9 @@ def event_queue_factory(logger, conf, *args, **kwargs):
     elif event_queue_type == "per_service":
         logger.info("Instantiate per_service event queue")
         _class = PerServiceEventQueue
+    elif event_queue_type == "per_volume":
+        logger.info("Instantiate per_volume event queue")
+        _class = PerVolumeEventQueue
     else:
         raise NotImplementedError(f"Event queue '{event_queue_type}' not supported")
     return _class(logger, conf, *args, **kwargs)
