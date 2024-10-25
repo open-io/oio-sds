@@ -21,9 +21,7 @@ from typing import Any, Dict, Generator, List, Tuple
 import xmltodict
 
 from oio.cli import Command
-from oio.common.configuration import read_conf
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
-from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
 
@@ -175,29 +173,6 @@ class ReplicationRecovery(Command):
 
     log = None
     kafka_producer = None
-
-    def get_parser(self, prog_name):
-        parser = super(ReplicationRecovery, self).get_parser(prog_name)
-        parser.add_argument("configuration", help="Path to the configuration file")
-        parser.add_argument(
-            "bucket",
-            help="Name of bucket to scan",
-        )
-        parser.add_argument(
-            "--pending",
-            action="store_true",
-            help="Resend only events from objects pending to be replicated.",
-        )
-        parser.add_argument(
-            "--until",
-            help="Date (timestamp) until which the objects must be checked",
-        )
-        parser.add_argument(
-            "--dry-run",
-            action="store_true",
-            help="Display actions but do nothing.",
-        )
-        return parser
 
     def _load_replication_configuration(self, account, bucket) -> None:
         info = self.app.client_manager.storage.container_get_properties(account, bucket)
@@ -366,21 +341,39 @@ class ReplicationRecovery(Command):
                 self.log.warning("Fail to send replication event %s: %s", event, exc)
                 self.success = False
 
+    def get_parser(self, prog_name):
+        parser = super(ReplicationRecovery, self).get_parser(prog_name)
+        parser.add_argument("bucket", help="Name of bucket to scan")
+        parser.add_argument("endpoints", help="Kafka broker endpoints")
+        parser.add_argument(
+            "--pending",
+            action="store_true",
+            help="Resend only events from objects pending to be replicated.",
+        )
+        parser.add_argument(
+            "--until",
+            help="Date (timestamp) until which the objects must be checked",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Display actions but do nothing.",
+        )
+        return parser
+
     def take_action(self, parsed_args):
-        conf = read_conf(parsed_args.configuration, "replication-recovery")
-        namespace = conf["namespace"]
         bucket = parsed_args.bucket
         pending = parsed_args.pending
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
         dry_run = parsed_args.dry_run
-        self.success = True
-        log_conf = {
-            "log_level": conf["log_level"],
-            "log_facility": conf["log_facility"],
-            "log_address": conf["log_address"],
-            "syslog_prefix": conf["syslog_prefix"],
+        broker_endpoints = parsed_args.endpoints
+        namespace = self.app.options.ns
+        conf = {
+            "namespace": namespace,
+            "broker_endpoint": broker_endpoints,
         }
-        self.log = get_logger(log_conf, verbose=True)
+        self.success = True
+        self.log = self.app.client_manager.logger
         account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
 
         replication_conf = self._load_replication_configuration(account, bucket)

@@ -14,7 +14,6 @@
 # License along with this library.
 
 import json
-import tempfile
 from oio.common.easy_value import true_value
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC
 from oio.common.utils import request_id
@@ -109,23 +108,11 @@ class ReplicationRecoveryTest(CliTestCase):
                     else:
                         self.assertFalse(true_value(deleted))
                     break
-        # Write replication recovery tool configuration file
-        with tempfile.NamedTemporaryFile() as f:
-            conf_content = f"""
-[replication-recovery]
-namespace = {self._cls_conf["namespace"]}
-log_facility = LOG_LOCAL0
-log_level = INFO
-log_address = /dev/log
-syslog_prefix = OIO,OPENIO,replication-recovery,1
-# kafka endpoints
-broker_endpoint = {self._cls_conf["kafka_endpoints"]}
-"""
-            f.write(conf_content.encode())
-            f.flush()
-            self.openio(
-                f"replication recovery {f.name} {container_src} --pending", coverage=""
-            )
+        endpoint = self._cls_conf["kafka_endpoints"]
+        self.openio(
+            f"replication recovery {container_src} {endpoint} --pending",
+            coverage="",
+        )
 
         event = self.wait_for_kafka_event(
             types=(EventTypes.CONTENT_NEW,),
