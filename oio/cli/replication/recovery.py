@@ -361,7 +361,7 @@ class ReplicationRecovery(Command):
                     app_conf=conf,
                 )
             try:
-                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event)
+                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event, flush=True)
             except Exception as exc:
                 self.log.warning("Fail to send replication event %s: %s", event, exc)
                 self.success = False
