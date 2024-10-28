@@ -180,7 +180,9 @@ class Content(object):
                 last_exc = err
                 # TODO(FVE): exponential backoff?
         else:
-            if isinstance(last_exc, exc.SpareChunkException):
+            if isinstance(last_exc, exc.Conflict):
+                exc.reraise(exc.Conflict, last_exc)
+            elif isinstance(last_exc, exc.SpareChunkException):
                 exc.reraise(exc.SpareChunkException, last_exc)
             raise exc.SpareChunkException("No spare chunk: %s" % str(last_exc))
 

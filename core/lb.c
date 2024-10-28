@@ -1280,7 +1280,7 @@ __local__patch(struct oio_lb_pool_s *self,
 			polled[i] = known[i];
 	guint count_known_targets = i;
 	if (count_known_targets >= count_targets)
-		return NEWERROR(CODE_BAD_REQUEST,
+		return NEWERROR(CODE_CONTENT_EXISTS,
 			"too many locations already known (%u), "
 			"maximum %u locations for this storage policy",
 			count_known_targets, count_targets);

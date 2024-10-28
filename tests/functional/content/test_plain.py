@@ -22,7 +22,7 @@ from testtools.testcase import ExpectedException
 
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
 from oio.common.exceptions import (
-    BadRequest,
+    Conflict,
     NotFound,
     UnrecoverableContent,
 )
@@ -356,7 +356,7 @@ class TestPlainContent(BaseTestCase):
                         stgpol=stgpol,
                         position=chunks[0]["pos"],
                     )
-                except BadRequest as exc:
+                except Conflict as exc:
                     self.assertIn("too many locations already known", exc.message)
                 else:
                     self.fail("shouldn't happen")
