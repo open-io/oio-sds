@@ -48,6 +48,7 @@ from oio.common.storage_method import (
 )
 from oio.common.logger import get_logger
 
+
 LOGGER = get_logger({}, __name__)
 
 WRITE_CHUNK_SIZE = 65536
@@ -61,6 +62,10 @@ CHUNK_TIMEOUT = 60.0
 CLIENT_TIMEOUT = 60.0
 
 PUT_QUEUE_DEPTH = 10
+
+# Default configuration value for the activation of the TCP_CORK optional behavior
+# toward the rawx services.
+USE_TCP_CORK = True
 
 
 def close_source(source, logger=None):
@@ -865,7 +870,9 @@ class MetachunkLinker(_MetachunkWriter):
     @classmethod
     def filter_kwargs(cls, kwargs):
         return {
-            k: v for k, v in kwargs.items() if k in ("perfdata", "logger", "watchdog")
+            k: v
+            for k, v in kwargs.items()
+            if k in ("perfdata", "logger", "use_tcp_cork", "watchdog")
         }
 
     def link(self):
@@ -942,7 +949,7 @@ class MetachunkWriter(_MetachunkWriter):
             self.chunk_checksum_algo = chunk_checksum_algo
         self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min, chunk_buffer_max)
         self.patch_chunk_method()
-        self.use_cork = True
+        self.use_cork = _kwargs.get("use_tcp_cork", USE_TCP_CORK)
 
     @classmethod
     def filter_kwargs(cls, kwargs):
@@ -956,6 +963,7 @@ class MetachunkWriter(_MetachunkWriter):
                 "chunk_buffer_max",
                 "perfdata",
                 "logger",
+                "use_tcp_cork",
                 "watchdog",
             )
         }
