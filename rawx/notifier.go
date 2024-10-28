@@ -27,11 +27,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"openio-sds/rawx/defs"
 	"openio-sds/rawx/logger"
 	"openio-sds/rawx/utils"
+
+	"github.com/confluentinc/confluent-kafka-go/kafka"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Tells if the current RAWX service may emit notifications
@@ -299,14 +300,10 @@ func (backend *kafkaBackend) connect() error {
 					break
 				}
 				logger.LogError("Failed to deliver event to topic %s: %v", backend.topic, ev.TopicPartition)
-				err := ev.TopicPartition.Error.(kafka.Error).Code()
-				purged := err == kafka.ErrPurgeQueue || err == kafka.ErrPurgeInflight
-				if purged {
-					logger.LogEvent(logger.EventLogEvent{
-						Topic: backend.topic,
-						Event: string(ev.Value),
-					})
-				}
+				logger.LogEvent(logger.EventLogEvent{
+					Topic: backend.topic,
+					Event: string(ev.Value),
+				})
 			}
 		}
 	}()

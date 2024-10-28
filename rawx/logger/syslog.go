@@ -69,7 +69,7 @@ func (l *SysLogger) WriteAccess(m string) {
 
 func (l *SysLogger) WriteInfo(m string)  { l.loggerInfo.Info(m) }
 func (l *SysLogger) WriteError(m string) { l.loggerError.Err(m) }
-func (l *SysLogger) WriteEvent(m string) { l.WriteAccess(m) }
+func (l *SysLogger) WriteEvent(m string) { l.loggerInfo.Info(m) }
 func (l *SysLogger) Close() {
 	l.running = false
 	close(l.queue)
