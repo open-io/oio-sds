@@ -15,7 +15,7 @@
 
 from oio.blob.operator import ChunkOperator
 from oio.common.kafka import get_retry_delay
-from oio.common.exceptions import OioException, OrphanChunk
+from oio.common.exceptions import OioException, OrphanChunk, SpareChunkException
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -40,8 +40,15 @@ class BlobRebuilderFilter(Filter):
                 container_id, content_id, chunk_id, path, version
             )
         except OioException as exc:
-            if not isinstance(exc, OrphanChunk):
-                return exc
+            if isinstance(exc, OrphanChunk):
+                return None
+            if isinstance(
+                exc, SpareChunkException
+            ) and "too many locations already known" in str(exc):
+                return None
+
+            return exc
+
         return None
 
     def process(self, env, cb):
