@@ -344,7 +344,6 @@ class ReplicationRecovery(Command):
     def get_parser(self, prog_name):
         parser = super(ReplicationRecovery, self).get_parser(prog_name)
         parser.add_argument("bucket", help="Name of bucket to scan")
-        parser.add_argument("endpoints", help="Kafka broker endpoints")
         parser.add_argument(
             "--pending",
             action="store_true",
@@ -366,7 +365,7 @@ class ReplicationRecovery(Command):
         pending = parsed_args.pending
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
         dry_run = parsed_args.dry_run
-        broker_endpoints = parsed_args.endpoints
+        broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
         namespace = self.app.options.ns
         conf = {
             "namespace": namespace,

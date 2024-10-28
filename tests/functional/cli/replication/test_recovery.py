@@ -108,9 +108,8 @@ class ReplicationRecoveryTest(CliTestCase):
                     else:
                         self.assertFalse(true_value(deleted))
                     break
-        endpoint = self._cls_conf["kafka_endpoints"]
         self.openio(
-            f"replication recovery {container_src} {endpoint} --pending",
+            f"replication recovery {container_src} --pending",
             coverage="",
         )
 
