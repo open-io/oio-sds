@@ -98,6 +98,8 @@ soft_max_unused_pages_ratio = 0.1
 # Force the vacuum to be triggered when the ratio is reached
 # (ignore "min_waiting_time_after_last_modification").
 hard_max_unused_pages_ratio = 0.2
+# Set the timeout of the vacuum operation.
+vacuum_timeout = 30.0
 
 [filter:logger]
 # Log info for for given container.

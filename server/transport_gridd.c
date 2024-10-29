@@ -672,11 +672,13 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 				NAME_MSGKEY_TIMEOUT, tostr, sizeof(tostr))) {
 		gint64 to = 0;
 		if (oio_str_is_number(tostr, &to) && to > 0) {
-			_subject("timeout_float:%.6f", to / (float) G_TIME_SPAN_SECOND);
 			const gint64 req_deadline = now + to;
 			ctx.deadline = MIN(ctx.deadline, req_deadline);
 		}
 	}
+	_subject("timeout_float:%.6f",
+			(ctx.deadline - now) / (float) G_TIME_SPAN_SECOND);
+
 	gint64 req_perfdata_enabled = FALSE;
 	if (metautils_message_extract_string_noerror(req_ctx->request,
 				NAME_MSGKEY_PERFDATA, tostr, sizeof(tostr))) {

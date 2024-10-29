@@ -35,6 +35,7 @@ class AutomaticVacuum(Filter):
     DEFAULT_MIN_WAITING_TIME_AFTER_LAST_MODIFICATION = 30
     DEFAULT_SOFT_MAX_UNUSED_PAGES_RATIO = 0.1
     DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO = 0.2
+    DEFAULT_VACUUM_TIMEOUT = 30.0
 
     def init(self):
         self.min_waiting_time_after_last_modification = int_value(
@@ -48,6 +49,10 @@ class AutomaticVacuum(Filter):
         self.hard_max_unused_pages_ratio = float_value(
             self.conf.get("hard_max_unused_pages_ratio"),
             AutomaticVacuum.DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO,
+        )
+        self.vacuum_timeout = float_value(
+            self.conf.get("vacuum_timeout"),
+            AutomaticVacuum.DEFAULT_VACUUM_TIMEOUT,
         )
 
         if self.hard_max_unused_pages_ratio < self.soft_max_unused_pages_ratio:
@@ -145,7 +150,9 @@ class AutomaticVacuum(Filter):
                 meta2db.cid,
                 unused_pages_ratio * 100,
             )
-            self.admin.vacuum_base("meta2", cid=meta2db.cid, reqid=reqid)
+            self.admin.vacuum_base(
+                "meta2", cid=meta2db.cid, reqid=reqid, timeout=self.vacuum_timeout
+            )
             self.successes += 1
 
             # The meta2 database size has changed, delete the cache

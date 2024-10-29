@@ -163,6 +163,9 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
     def get_parser(self, prog_name):
         parser = super(CleanContainerSharding, self).get_parser(prog_name)
         self.patch_parser_container_sharding(parser)
+        # If user does not specify any timeout, keep the default timeout
+        # from ContainerSharding.clean_container
+        parser.set_defaults(timeout=None)
         parser.add_argument(
             "--attempts",
             type=int,
@@ -188,6 +191,7 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
             parsed_args.container,
             vacuum=parsed_args.vacuum,
             attempts=parsed_args.attempts,
+            timeout=self.app.options.timeout,
         )
         return ("Status",), [("Ok",)]
 
@@ -354,7 +358,7 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             type=float,
             help="""
             Maximum amount of time the sharding process is allowed
-            to pre-clean shard copie (default: %f).
+            to pre-clean shard copies (default: %f).
             """
             % ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT,
         )
@@ -459,7 +463,7 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             type=float,
             help="""
             Maximum amount of time the sharding process is allowed
-            to pre-clean shard copie (default: %f).
+            to pre-clean shard copies (default: %f).
             """
             % ContainerSharding.DEFAULT_PRECLEAN_TIMEOUT,
         )

@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,8 @@ class ContainerVacuum(ContainerCommandMixin, lister.Lister):
 
     Execute the operation on the master service, then
     resynchronize the database on the slaves.
+
+    For large databases, it is recommended to set a long timeout.
     """
 
     columns = ("Container", "Status")
@@ -38,7 +41,12 @@ class ContainerVacuum(ContainerCommandMixin, lister.Lister):
         if parsed_args.is_cid:
             for cid in parsed_args.containers:
                 try:
-                    admin.vacuum_base("meta2", cid=cid, reqid=self.app.request_id())
+                    admin.vacuum_base(
+                        "meta2",
+                        cid=cid,
+                        reqid=self.app.request_id(),
+                        timeout=self.app.options.timeout,
+                    )
                     yield cid, "OK"
                 except Exception as err:
                     yield cid, str(err)
@@ -50,6 +58,7 @@ class ContainerVacuum(ContainerCommandMixin, lister.Lister):
                         account=self.app.options.account,
                         reference=cname,
                         reqid=self.app.request_id(),
+                        timeout=self.app.options.timeout,
                     )
                     yield cname, "OK"
                 except Exception as err:

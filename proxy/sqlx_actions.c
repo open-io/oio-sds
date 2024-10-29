@@ -430,6 +430,7 @@ enum http_rc_e
 action_admin_vacuum(struct req_args_s *args)
 {
 	oio_ext_set_admin(TRUE);
+	oio_ext_allow_long_timeout(TRUE);
 	gboolean local = _request_get_flag(args, "local");
 	PACKER_VOID(_pack) { return sqlx_pack_VACUUM(_u, local, DL()); }
 	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
