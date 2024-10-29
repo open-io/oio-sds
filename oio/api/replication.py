@@ -206,7 +206,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
                 )
-                if self.use_cork:
+                if self.use_tcp_cork:
                     conn.set_cork(True)
                 conn.chunk = chunk
             return conn, chunk
@@ -246,7 +246,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if self.perfdata is not None:
                             fin_start = monotonic_time()
                         # Last segment sent, disable TCP_CORK to flush buffers
-                        if self.use_cork:
+                        if self.use_tcp_cork:
                             conn.set_cork(False)
                         if self.perfdata is not None:
                             fin_end = monotonic_time()

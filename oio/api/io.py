@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 
 from oio.common import exceptions as exc, green
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER, CHUNK_XATTR_EXTRA_PREFIX
+from oio.common.easy_value import boolean_value
 from oio.common.fullpath import decode_fullpath
 from oio.common.http import (
     parse_content_type,
@@ -949,7 +950,7 @@ class MetachunkWriter(_MetachunkWriter):
             self.chunk_checksum_algo = chunk_checksum_algo
         self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min, chunk_buffer_max)
         self.patch_chunk_method()
-        self.use_cork = _kwargs.get("use_tcp_cork", USE_TCP_CORK)
+        self.use_tcp_cork = boolean_value(_kwargs.get("use_tcp_cork", USE_TCP_CORK))
 
     @classmethod
     def filter_kwargs(cls, kwargs):

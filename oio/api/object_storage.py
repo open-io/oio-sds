@@ -27,7 +27,7 @@ from urllib.parse import unquote, quote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
-from oio.api.io import MetachunkPreparer, LinkHandler, USE_TCP_CORK
+from oio.api.io import MetachunkPreparer, LinkHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.utils import (
     cid_from_name,
@@ -83,6 +83,7 @@ class ObjectStorageApi(object):
         "cache",
         "object_checksum_algo",
         "tls",
+        "use_tcp_cork",
         "watchdog",
     )
 
@@ -134,8 +135,6 @@ class ObjectStorageApi(object):
         if not self._watchdog:
             # This will create and start one.
             self._global_kwargs["watchdog"] = self.watchdog
-        # Start the propagation of the use_cork configuration
-        self._global_kwargs["use_tcp_cork"] = kwargs.get("use_tcp_cork", USE_TCP_CORK)
         self.logger.debug("Global API parameters: %s", self._global_kwargs)
 
         from oio.container.client import ContainerClient
