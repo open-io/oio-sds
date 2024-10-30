@@ -72,7 +72,6 @@ class ObjectStorageApi(object):
         - `headers`: `dict` of extra headers to pass to the proxy
         - `connection_timeout`: `float`
         - `read_timeout`: `float`
-        - `write_timeout`: `float`
     """
 
     EXTRA_KEYWORDS = (
@@ -100,8 +99,6 @@ class ObjectStorageApi(object):
         :keyword read_timeout: timeout for rawx responses and data reads from
             the caller (when uploading), and metadata requests
         :type read_timeout: `float` seconds
-        :keyword write_timeout: timeout for rawx write requests
-        :type write_timeout: `float` seconds
         :keyword pool_manager: a pooled connection manager that will be used
             for all HTTP based APIs (except rawx)
         :type pool_manager: `urllib3.PoolManager`

@@ -380,7 +380,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
     @ensure_headers
     @ensure_request_id
     def chunk_link(
-        self, target, link, fullpath, headers=None, write_timeout=None, **kwargs
+        self, target, link, fullpath, headers=None, read_timeout=None, **kwargs
     ):
         hdrs = headers.copy()
         if link is None:
@@ -391,8 +391,8 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             link = target[: offset + 1] + link[:maxlen]
         hdrs["Destination"] = link
         hdrs[CHUNK_HEADERS["full_path"]] = fullpath
-        if write_timeout is not None:
-            kwargs["read_timeout"] = write_timeout
+        if read_timeout is not None:
+            kwargs["read_timeout"] = read_timeout
         resp = self._request("COPY", target, headers=hdrs, **kwargs)
         if resp.status != 201:
             raise exc.from_response(resp)
@@ -415,7 +415,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         :type volume: str
         :param min_to_return: minimum items returned, defaults to 1000
         :type min_to_return: int, optional
-        :param max_attempts: max attemps while retrieving chunks, defaults to 3
+        :param max_attempts: max attempts while retrieving chunks, defaults to 3
         :type max_attempts: int, optional
         :param start_after: list chunks after this marker, defaults to None
         :type start_after: str, optional

@@ -41,7 +41,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         storage_method,
         quorum=None,
         connection_timeout=None,
-        write_timeout=None,
         read_timeout=None,
         **kwargs,
     ):
@@ -51,7 +50,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
-        self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.logger = kwargs.get("logger", LOGGER)
 
@@ -204,7 +202,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     hdrs,
                     scheme=parsed.scheme,
                     connect_timeout=self.connection_timeout,
-                    socket_timeout=self.write_timeout,
+                    socket_timeout=self.read_timeout,
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
                 )
@@ -237,7 +235,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             if not conn.failed:
                 try:
                     with WatchdogTimeout(
-                        self.watchdog, self.write_timeout, green.ChunkWriteTimeout
+                        self.watchdog, self.read_timeout, green.ChunkWriteTimeout
                     ):
                         if self.perfdata is not None and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
@@ -348,11 +346,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 ):
                     conn.failed = True
                     conn.chunk["error"] = (
-                        "chunk size mismatch: %d (local), %s (rawx)"
-                        % (
-                            bytes_transferred,
-                            rawx_chunk_size,
-                        )
+                        f"chunk size mismatch: {bytes_transferred} (local), "
+                        f"{rawx_chunk_size} (rawx)"
                     )
                     failures.append(conn.chunk)
                 else:
@@ -381,7 +376,6 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 global_checksum,
                 self.storage_method,
                 connection_timeout=self.connection_timeout,
-                write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
                 **kwargs,

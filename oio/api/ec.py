@@ -670,7 +670,6 @@ class EcChunkWriter(object):
         self,
         chunk,
         conn,
-        write_timeout=None,
         read_timeout=None,
         chunk_checksum_algo="blake3",
         perfdata=None,
@@ -685,7 +684,6 @@ class EcChunkWriter(object):
             self.checksum = get_hasher(chunk_checksum_algo)
         else:
             self.checksum = None
-        self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
         self.queue = Queue(io.PUT_QUEUE_DEPTH)
@@ -711,7 +709,7 @@ class EcChunkWriter(object):
         sysmeta,
         reqid=None,
         connection_timeout=None,
-        write_timeout=None,
+        read_timeout=None,
         watchdog=None,
         headers=None,
         **kwargs,
@@ -751,7 +749,7 @@ class EcChunkWriter(object):
                 hdrs,
                 scheme=parsed.scheme,
                 connect_timeout=connection_timeout,
-                socket_timeout=write_timeout,
+                socket_timeout=read_timeout,
                 perfdata=perfdata_rawx,
                 perfdata_suffix=chunk["url"],
             )
@@ -760,7 +758,7 @@ class EcChunkWriter(object):
         return cls(
             chunk,
             conn,
-            write_timeout=write_timeout,
+            read_timeout=read_timeout,
             reqid=reqid,
             watchdog=watchdog,
             **kwargs,
@@ -780,7 +778,7 @@ class EcChunkWriter(object):
             # to write data to RAWX
             try:
                 with WatchdogTimeout(
-                    self.watchdog, self.write_timeout, ChunkWriteTimeout
+                    self.watchdog, self.read_timeout, ChunkWriteTimeout
                 ):
                     if self.perfdata is not None and self.conn.upload_start is None:
                         self.conn.upload_start = monotonic_time()
@@ -853,7 +851,7 @@ class EcChunkWriter(object):
         if self.perfdata is not None:
             fin_start = monotonic_time()
         try:
-            with WatchdogTimeout(self.watchdog, self.write_timeout, ChunkWriteTimeout):
+            with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkWriteTimeout):
                 self.conn.send(to_send)
                 # Last segment sent, disable TCP_CORK to flush buffers
                 self.conn.set_cork(False)
@@ -876,9 +874,6 @@ class EcChunkWriter(object):
     def getresponse(self):
         """Read the HTTP response from the connection"""
         try:
-            # As the server may buffer data before writing it to non-volatile
-            # storage, we don't know if we have to wait while sending data or
-            # while reading response, thus we apply the same timeout to both.
             with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkWriteTimeout):
                 self.conn.settimeout(self.read_timeout)
                 resp = self.conn.getresponse()
@@ -901,7 +896,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
         global_checksum,
         storage_method,
         connection_timeout=None,
-        write_timeout=None,
         read_timeout=None,
         **kwargs,
     ):
@@ -916,7 +910,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
         # by rawx services, we have to compute the checksum client-side.
         self.checksum = get_hasher(self.chunk_checksum_algo or "blake3")
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
-        self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = []
         self.logger = kwargs.get("logger", LOGGER)
@@ -1103,7 +1096,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 self.sysmeta,
                 reqid=self.reqid,
                 connection_timeout=self.connection_timeout,
-                write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 chunk_checksum_algo=self.chunk_checksum_algo,
                 perfdata=self.perfdata,
@@ -1135,11 +1127,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     and checksum.lower() != writer.checksum.hexdigest()
                 ):
                     writer.chunk["error"] = (
-                        "checksum mismatch: %s (local), %s (rawx)"
-                        % (
-                            writer.checksum.hexdigest(),
-                            checksum.lower(),
-                        )
+                        f"checksum mismatch: {writer.checksum.hexdigest()} (local), "
+                        f"{checksum.lower()} (rawx)"
                     )
                     self.failed_chunks.append(writer.chunk)
                 elif (
@@ -1147,11 +1136,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     and int(chunk_size) != writer.bytes_transferred
                 ):
                     writer.chunk["error"] = (
-                        "chunk size mismatch: %d (local), %s (rawx)"
-                        % (
-                            writer.bytes_transferred,
-                            chunk_size,
-                        )
+                        f"chunk size mismatch: {writer.bytes_transferred} (local), "
+                        f"{chunk_size} (rawx)"
                     )
                     self.failed_chunks.append(writer.chunk)
                 else:
@@ -1260,7 +1246,6 @@ class ECWriteHandler(io.WriteHandler):
                 self.storage_method,
                 reqid=self.headers.get(REQID_HEADER),
                 connection_timeout=self.connection_timeout,
-                write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
                 **kwargs,

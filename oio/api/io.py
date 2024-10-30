@@ -140,9 +140,9 @@ class _WriteHandler(object):
             self.chunk_prep = chunk_preparer
 
     @property
-    def write_timeout(self):
-        if "write_timeout" in self.extra_kwargs:
-            return self.extra_kwargs["write_timeout"]
+    def read_timeout(self):
+        if "read_timeout" in self.extra_kwargs:
+            return self.extra_kwargs["read_timeout"]
         elif self.deadline is not None:
             return deadline_to_timeout(self.deadline, True)
         return CHUNK_TIMEOUT
@@ -180,7 +180,7 @@ class LinkHandler(_WriteHandler):
                     policy=self.policy,
                     reqid=self.headers.get(REQID_HEADER),
                     connection_timeout=self.connection_timeout,
-                    write_timeout=self.write_timeout,
+                    read_timeout=self.read_timeout,
                     **kwargs,
                 )
                 chunks = handler.link()
@@ -211,8 +211,8 @@ class WriteHandler(_WriteHandler):
     ):
         """
         :param connection_timeout: timeout to establish the connection
-        :param write_timeout: timeout to send a buffer of data
         :param read_timeout: timeout to read a buffer of data from source
+            or to wait for a response from a socket
         :param chunk_checksum_algo: algorithm to use to compute chunk
             checksums locally. Can be `None` to disable local checksum
             computation and let the rawx compute it (will be blake3).
@@ -846,7 +846,7 @@ class MetachunkLinker(_MetachunkWriter):
         reqid=None,
         perfdata=None,
         connection_timeout=None,
-        write_timeout=None,
+        read_timeout=None,
         **kwargs,
     ):
         super(MetachunkLinker, self).__init__(
@@ -861,7 +861,7 @@ class MetachunkLinker(_MetachunkWriter):
         self.blob_client = blob_client
         self.policy = policy
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
-        self.write_timeout = write_timeout or CHUNK_TIMEOUT
+        self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self.logger = kwargs.get("logger", LOGGER)
 
     @classmethod
@@ -891,7 +891,7 @@ class MetachunkLinker(_MetachunkWriter):
                     chunk_id,
                     self.fullpath,
                     connection_timeout=self.connection_timeout,
-                    write_timeout=self.write_timeout,
+                    read_timeout=self.read_timeout,
                     reqid=self.reqid,
                     perfdata=self.perfdata,
                     logger=self.logger,

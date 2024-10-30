@@ -45,7 +45,7 @@ CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0
 
 # Name of keywords used to set timeouts
-TIMEOUT_KEYS = ("connection_timeout", "read_timeout", "write_timeout")
+TIMEOUT_KEYS = ("connection_timeout", "read_timeout")
 
 STRLEN_REFERENCEID = 66
 STRLEN_CID = 64
