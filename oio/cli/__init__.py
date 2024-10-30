@@ -108,7 +108,18 @@ def add_common_parser_options(parser):
             "For looping commands, a suffix may be appended."
         ),
     )
-
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        metavar="<seconds>",
+        default=30.0,
+        type=float,
+        help=(
+            "Set a timeout for the request(s). The interpretation of this "
+            "parameter depends on the subcommand."
+        ),
+    )
+    # --- Parameters for developers ---
     parser.add_argument(
         "--profile",
         help=(

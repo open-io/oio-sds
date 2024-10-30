@@ -243,6 +243,7 @@ class OpenIOShell(CommonShell):
                 logging.getLogger("").getEffectiveLevel()
             ),
             "is_cli": True,
+            "timeout": self.options.timeout,
         }
         if self.options.dump_perfdata:
             options["perfdata"] = dict()

@@ -38,6 +38,7 @@ class OpenioAdminApp(CommonShell):
             "account_url": self.options.account_url,
             "admin_mode": self.options.admin_mode,
             "is_cli": True,
+            "timeout": self.options.timeout,
         }
         self.client_manager = ClientManager(options)
 
