@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -52,7 +52,7 @@ class TestAdmin(BaseTestCase):
         self.assertEqual(1, len(election))
         self.assertEqual(200, election[service_id]["status"]["status"])
 
-    def test_election_leave_serveral_service_ids(self):
+    def test_election_leave_several_service_ids(self):
         status = self.admin.election_status(
             "meta2", account=self.account, reference=self.container
         )
@@ -161,16 +161,14 @@ class TestAdmin(BaseTestCase):
         status = self.admin.remove_base(**bad_params)
         expected = {
             self.peer_to_use: {
-                "body": "",
+                "body": {"deleted": False},
                 "status": {
-                    "message": "sqlite3_open error: (errno=2 No "
-                    "such file or directory) (rc=14) "
-                    "SQLITE_CANTOPEN",
-                    "status": 431,
+                    "message": "OK",
+                    "status": 200,
                 },
             }
         }
-        self.assertEqual(status, expected)
+        self.assertEqual(expected, status)
 
         # Check copy doesn't exist neither on master nor on other slave
         # This applies only when several peers are present
@@ -190,16 +188,14 @@ class TestAdmin(BaseTestCase):
                 status = self.admin.remove_base(**params)
                 expected = {
                     peer: {
-                        "body": "",
+                        "body": {"deleted": False},
                         "status": {
-                            "message": "sqlite3_open error: (errno=2 No "
-                            "such file or directory) (rc=14) "
-                            "SQLITE_CANTOPEN",
-                            "status": 431,
+                            "message": "OK",
+                            "status": 200,
                         },
                     }
                 }
-                self.assertEqual(status, expected)
+                self.assertEqual(expected, status)
 
         # Check local copy exists at last step by removing it successfully
         params = {
@@ -210,6 +206,9 @@ class TestAdmin(BaseTestCase):
         }
         status = self.admin.remove_base(**params)
         expected = {
-            self.peer_to_use: {"status": {"status": 200, "message": "OK"}, "body": ""}
+            self.peer_to_use: {
+                "body": {"deleted": True},
+                "status": {"status": 200, "message": "OK"},
+            }
         }
-        self.assertEqual(status, expected)
+        self.assertEqual(expected, status)

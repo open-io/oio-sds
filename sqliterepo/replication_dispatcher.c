@@ -1158,22 +1158,25 @@ _handler_REMOVE(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
-	if (err) {
+	if (err && err->code != CODE_CONTAINER_NOTFOUND) {
 		reply->send_error(0, err);
 		return TRUE;
+	} else if (!err) {
+		sq3->deleted = TRUE;
+		sqlx_repository_unlock_and_close_noerror(sq3);
+		reply->add_body(metautils_gba_from_string("{\"deleted\":true}"));
+	} else {
+		/* We want to delete the database, but it was already deleted. */
+		reply->add_body(metautils_gba_from_string("{\"deleted\":false}"));
+		g_clear_error(&err);
 	}
-	sq3->deleted = TRUE;
-	sqlx_repository_unlock_and_close_noerror(sq3);
-
-	/* TODO(FVE): send an event telling this service is no more responsible
-	 * for the base, and use this event to deindex the base from rdir. */
 
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
