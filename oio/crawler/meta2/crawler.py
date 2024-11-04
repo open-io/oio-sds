@@ -82,6 +82,7 @@ class Meta2Worker(PipelineWorker):
         meta2db.real_path = path
         meta2db.volume_id = self.volume_id
         meta2db.cid = db_cid
+        meta2db.suffix = db_suffix
         try:
             meta2db.seq = int(db_seq)
         except ValueError:

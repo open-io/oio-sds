@@ -26,7 +26,7 @@ from oio.common.easy_value import int_value
 from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 
 
@@ -36,7 +36,7 @@ from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 SHRINKING_COEF_LAST_SHARD = 2.5
 
 
-class AutomaticSharding(Filter):
+class AutomaticSharding(Meta2Filter):
     """
     Trigger the sharding for given container.
     """
@@ -115,7 +115,7 @@ class AutomaticSharding(Filter):
         self.shrinking_successes = 0
         self.shrinking_errors = 0
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """
         Trigger cleaning/sharding/shrinking.
         """

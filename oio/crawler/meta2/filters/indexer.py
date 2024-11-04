@@ -114,7 +114,7 @@ class Indexer(Filter):
         # TODO(adu): remove database (but we must be sure)
         return True
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """
         Add a meta2 database to the rdir index.
         """
