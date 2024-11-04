@@ -288,7 +288,7 @@ class TestLifecycleFilter(BaseTestCase):
             "service_type": "meta2",
             "cid": meta2db_env["cid"],
             "svc_from": meta2db_env["volume_id"],
-            "suffix": f"lifecycle-{self.now_suffix}",
+            "suffix": f"lifecycle.{self.now_suffix}",
         }
 
         # Request a local copy of the meta2 database
@@ -297,8 +297,8 @@ class TestLifecycleFilter(BaseTestCase):
     def _make_symbolic_link(self, meta2db_env):
         path_segs = (meta2db_env["path"]).rsplit("/", 2)
         local_dir = "/".join([path_segs[0], "local_lifecycle"])
-        src = ".".join([meta2db_env["path"], f"lifecycle-{self.now_suffix}"])
-        copy_name = ".".join([path_segs[2], f"lifecycle-{self.now_suffix}"])
+        src = ".".join([meta2db_env["path"], f"lifecycle.{self.now_suffix}"])
+        copy_name = ".".join([path_segs[2], f"lifecycle.{self.now_suffix}"])
         dst = "/".join([local_dir, copy_name])
 
         if not os.path.isdir(local_dir):
@@ -364,6 +364,8 @@ class TestLifecycleFilter(BaseTestCase):
         conf = self.conf.copy()
 
         conf["bypass_days_dates"] = True
+        conf["redis_sentinel_name"] = "oio"
+        conf["redis_host"] = "127.0.0.1:6379"
 
         lifecycle = Lifecycle_filter(app=self.app, conf=conf)
 

@@ -39,6 +39,15 @@ from oio.container.lifecycle import (
 )
 
 from oio.directory.admin import AdminClient
+from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
+
+
+class Context:
+    def __init__(self, run_id, account_id, bucket_id, container_id):
+        self.run_id = run_id
+        self.account_id = account_id
+        self.bucket_id = bucket_id
+        self.container_id = container_id
 
 
 class Lifecycle(Filter):
@@ -72,6 +81,10 @@ class Lifecycle(Filter):
             **container_args,
         )
 
+        # Metrics helper
+        self._metrics = LifecycleMetricTracker(self.conf)
+        self._context = None
+
         self.batch_size = int_value(self.conf.get("lifecycle_batch_size"), 1000)
 
         # Budget per container (not bucket), as containers of same bucket would be
@@ -80,6 +93,7 @@ class Lifecycle(Filter):
             self.conf.get("budget_per_container"), 25000
         )
 
+        self.budget_per_bucket = int_value(self.conf.get("budget_per_bucket"), 500000)
         # Crawler can remove local copy directly without
         # make an extra http call
         self.direct_remove = True
@@ -107,6 +121,9 @@ class Lifecycle(Filter):
 
         # Current container stats
         self.total_events = 0
+        self.total_expirations = 0
+        self.total_transitions = 0
+        self.total_abort_mpu = 0
         # Stats of rule actions
         self.rules_stats = {}
         # Aggregated stats per rule
@@ -173,12 +190,16 @@ class Lifecycle(Filter):
         return (props, main_account, root_container)
 
     def _get_suffix(self, real_path):
-        db_id = real_path.rsplit("/")[-1].rsplit(".")
+        db_id = real_path.rsplit("/")[-1].rsplit(".", 4)
         if len(db_id) < 4:
             return None
         if db_id[2] != "meta2":
             return None
-        return db_id[3]
+        return ".".join([db_id[3], db_id[4]])
+
+    def _get_run_id(self, suffix):
+        "suffix pattern: {yyyy-mm-dd}.{run_id}"
+        return suffix.rsplit(".", 1)[1]
 
     def process(self, env, cb):
         """Process current container:
@@ -206,6 +227,8 @@ class Lifecycle(Filter):
                 meta2db.real_path,
             )
             return self.app(env, cb)
+
+        run_id = self._get_run_id(self.suffix)
 
         self.nb_match_per_container = 0
         try:
@@ -239,6 +262,28 @@ class Lifecycle(Filter):
                     root_container,
                     account,
                 )
+
+            self._context = Context(run_id, main_account, root_container, container)
+
+            # If number of matches from metrics >= self.budget_per_bucket
+            try:
+                metrics = self._metrics.get_bucket_metrics(
+                    run_id, main_account, root_container
+                )
+                stats = metrics.get(LifecycleStep.SUBMITTED, {})
+                total = 0
+                for _, value in stats.items():
+                    total += int(value)
+                if total >= self.budget_per_bucket:
+                    self.logger.warning(
+                        "Account:%s Bucket:%s reached day budget %s",
+                        main_account,
+                        root_container,
+                        self.budget_per_bucket,
+                    )
+                    return
+            except NotFound:
+                pass
 
             lc_instance = ContainerLifecycle(
                 self.api, main_account, root_container, logger=self.logger
@@ -814,6 +859,9 @@ class Lifecycle(Filter):
 
     def _init_container_stats(self, lc_instance):
         self.total_events = 0
+        self.total_expirations = 0
+        self.total_transitions = 0
+        self.total_abort_mpu = 0
         self.count_actions = 0
         self.finished_actions = 0
         self.finished_rules = 0
@@ -838,6 +886,24 @@ class Lifecycle(Filter):
         self.rules_stats[rule_id][action_name] += value
         self.aggregated_stats[rule_id] += value
         self.total_events += value
+        step = LifecycleStep.SUBMITTED
+        if action_name in ("Expiration", "NoncurrentVersionExpiration"):
+            action = LifecycleAction.DELETE
+        elif action_name in ("Transition", "NoncurrentVersionTransition"):
+            action = LifecycleAction.TRANSITION
+        elif action_name in ("AbortIncompleteMultipartUpload",):
+            action = LifecycleAction.ABORT_MPU
+        else:
+            raise ValueError("Unsopported action  %s for stats ", action_name)
+        self._metrics.increment_counter(
+            self._context.run_id,
+            self._context.account_id,
+            self._context.bucket_id,
+            self._context.container_id,
+            step,
+            action,
+            value=value,
+        )
 
     def _get_action_parameters(self, act):
         days = None
@@ -876,6 +942,9 @@ class Lifecycle(Filter):
         self.successes = 0
         self.errors = 0
         self.total_events = 0
+        self.total_expirations = 0
+        self.total_transitions = 0
+        self.total_abort_mpu = 0
         self.count_actions = 0
         self.finished_actions = 0
         self.finished_rules = 0

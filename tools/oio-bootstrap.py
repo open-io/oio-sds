@@ -467,6 +467,7 @@ pipeline = logger lifecycle
 [filter:lifecycle]
 use = egg:oio#lifecycle
 lifecycle_batch_size = 5000
+redis_host = ${IP}:${REDIS_PORT}
 
 [filter:logger]
 use = egg:oio#logger
