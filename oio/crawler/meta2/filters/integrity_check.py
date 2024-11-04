@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -59,6 +59,10 @@ class Meta2IntegrityCheck(Filter):
         # 3. Check if there is an election running
         # 4.a. If master, trigger a repair and then sync
         # 4.b. If slave, just warn
+        meta2db = Meta2DB(self.app_env, env)
+        if meta2db.is_copy:
+            return self.app(env, cb)
+
         with Meta2DB(self.app_env, env, use_reflink=True) as meta2db:
             self.check_integrity(meta2db)
         return self.app(env, cb)

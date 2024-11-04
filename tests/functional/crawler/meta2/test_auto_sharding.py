@@ -114,6 +114,25 @@ class TestAutoSharding(BaseTestCase):
         self.assertEqual(2, len(shards))
         return shards
 
+    def test_copy(self):
+        def _cb(status, _msg):
+            self.assertEqual(200, status)
+
+        for i in range(2):
+            self.storage.object_create(
+                self.account, self.cname, obj_name=f"obj-{i}", data=b"data"
+            )
+        meta2db = self._get_meta2db(self.cname)
+        meta2db.suffix = "foobar"
+        meta2db.file_status["st_size"] = meta2db.file_status["st_size"] * 1024
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == "skipped":
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+
     def test_nothing_todo(self):
         def _cb(status, _msg):
             self.assertEqual(200, status)

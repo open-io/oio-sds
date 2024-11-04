@@ -102,7 +102,7 @@ class CrawlerWorkerMarkerMixin:
             return
 
         # Open it RW (file should exist as checked above)
-        with open(self.marker_path, "r") as marker_file:
+        with open(self.marker_path, "r", encoding="utf-8") as marker_file:
             self.current_marker = marker_file.readline()
             if self.current_marker == "":
                 self.current_marker = self.DEFAULT_MARKER
@@ -120,7 +120,7 @@ class CrawlerWorkerMarkerMixin:
             if not isdir(self.marker_dir):
                 makedirs(self.marker_dir, exist_ok=True)
 
-            with open(self.marker_path, "w") as marker_file:
+            with open(self.marker_path, "w", encoding="utf-8") as marker_file:
                 marker_file.write(self.current_marker)
             self.nb_path_processed = 0
         except OSError as err:
