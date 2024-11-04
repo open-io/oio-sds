@@ -15,18 +15,20 @@
 
 import time
 
-from oio.crawler.common.base import Filter
 from oio.common.easy_value import int_value
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, delete_meta2_db
 from oio.directory.admin import AdminClient
 
 
-class CopyCleaner(Filter):
+class CopyCleaner(Meta2Filter):
     """
     Remove old database copies
     """
 
     DEFAULT_DELAY = 172800  # 2 days
+    PROCESS_COPY = True
+    PROCESS_ORIGINAL = False
 
     def __init__(self, app, conf, logger=None):
         super().__init__(app, conf, logger=logger)
@@ -49,13 +51,11 @@ class CopyCleaner(Filter):
             pool_manager=self.app_env["api"].container.pool_manager,
         )
 
-    def process(self, env, cb):
-        """ """
+    def _process(self, env, cb):
+        """
+        Remove old database
+        """
         meta2db = Meta2DB(self.app_env, env)
-
-        if not meta2db.is_copy:
-            self.skipped += 1
-            return self.app(env, cb)
 
         # Extract info from suffix
         timestamp = int(meta2db.suffix.split("-")[-1])

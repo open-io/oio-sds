@@ -26,11 +26,11 @@ from oio.common.kafka import DEFAULT_DELETE_TOPIC_PREFIX
 from oio.common.kafka_http import KafkaClusterHealthCheckerMixin
 from oio.common.exceptions import OioUnhealthyKafkaClusterError
 from oio.container.sharding import ContainerSharding
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 
-class Draining(Filter, KafkaClusterHealthCheckerMixin):
+class Draining(Meta2Filter, KafkaClusterHealthCheckerMixin):
     """
     Trigger the draining for a given container.
     """
@@ -40,7 +40,7 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
     DEFAULT_DRAIN_LIMIT_PER_PASS = 100000
 
     def __init__(self, app, conf, logger=None):
-        Filter.__init__(self, app, conf, logger=logger)
+        Meta2Filter.__init__(self, app, conf, logger=logger)
         KafkaClusterHealthCheckerMixin.__init__(
             self, conf, pool_manager=self.api.container.pool_manager
         )
@@ -126,12 +126,8 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
         else:
             return True, None
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         meta2db = Meta2DB(self.app_env, env)
-
-        if meta2db.is_copy:
-            self.skipped += 1
-            return self.app(env, cb)
 
         # Check if the meta2 needs draining
         draining_state = int_value(meta2db.system.get(M2_PROP_DRAINING_STATE), 0)

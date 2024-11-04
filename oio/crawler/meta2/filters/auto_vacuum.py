@@ -21,12 +21,12 @@ from oio.common.exceptions import NotFound
 from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 from oio.directory.admin import AdminClient
 
 
-class AutomaticVacuum(Filter):
+class AutomaticVacuum(Meta2Filter):
     """
     Trigger the vacuum for given container.
     """
@@ -100,7 +100,7 @@ class AutomaticVacuum(Filter):
         finally:
             meta2db_conn.close()
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """
         Check the unused pages ratio for the meta2 database
         and trigger the vacuum if this ratio is reached
