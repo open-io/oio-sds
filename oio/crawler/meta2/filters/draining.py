@@ -128,6 +128,11 @@ class Draining(Filter, KafkaClusterHealthCheckerMixin):
 
     def process(self, env, cb):
         meta2db = Meta2DB(self.app_env, env)
+
+        if meta2db.is_copy:
+            self.skipped += 1
+            return self.app(env, cb)
+
         # Check if the meta2 needs draining
         draining_state = int_value(meta2db.system.get(M2_PROP_DRAINING_STATE), 0)
         if draining_state in (DRAINING_STATE_NEEDED, DRAINING_STATE_IN_PROGRESS):

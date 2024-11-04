@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ class Logger(Filter):
     def process(self, env, cb):
         try:
             meta2db = Meta2DB(self.app_env, env)
-            self.logger.info("Got container %s", meta2db.cid)
+            self.logger.info("Got container %s, suffix %s", meta2db.cid, meta2db.suffix)
             self.successes += 1
         except Exception:
             self.errors += 1

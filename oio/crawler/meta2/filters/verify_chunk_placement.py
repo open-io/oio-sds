@@ -613,6 +613,10 @@ class VerifyChunkPlacement(Filter):
         :type cb: function
         """
         meta2db = Meta2DB(self.app_env, env)
+
+        if meta2db.is_copy:
+            return self.app(env, cb)
+
         cid = meta2db.cid
         account = meta2db.system["sys.account"]
         container = meta2db.system["sys.user.name"]

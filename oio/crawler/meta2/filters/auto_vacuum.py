@@ -107,6 +107,11 @@ class AutomaticVacuum(Filter):
         (and the base has not been changed recently).
         """
         meta2db = Meta2DB(self.app_env, env)
+
+        if meta2db.is_copy:
+            self.skipped += 1
+            return self.app(env, cb)
+
         reqid = request_id(prefix="autovacuum-")
 
         try:

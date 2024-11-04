@@ -119,6 +119,11 @@ class Indexer(Filter):
         Add a meta2 database to the rdir index.
         """
         meta2db = Meta2DB(self.app_env, env)
+
+        if meta2db.is_copy:
+            self.skipped += 1
+            return self.app(env, cb)
+
         reqid = request_id(prefix="meta2-indexer-")
 
         try:
