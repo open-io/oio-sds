@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,25 +13,27 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 
 
-class Logger(Filter):
+class Logger(Meta2Filter):
     """
     Log info for for given container.
     """
 
     NAME = "Logger"
+    PROCESS_COPY = True
+    PROCESS_ORIGINAL = True
 
     def init(self):
         self.successes = 0
         self.errors = 0
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         try:
             meta2db = Meta2DB(self.app_env, env)
-            self.logger.info("Got container %s", meta2db.cid)
+            self.logger.info("Got container %s, suffix %s", meta2db.cid, meta2db.suffix)
             self.successes += 1
         except Exception:
             self.errors += 1

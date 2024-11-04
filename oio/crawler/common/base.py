@@ -49,7 +49,7 @@ class Filter(object):
         return self.process(env, cb)
 
     def _get_filter_stats(self):
-        return dict()
+        return {}
 
     def _reset_filter_stats(self):
         return

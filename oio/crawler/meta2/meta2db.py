@@ -61,12 +61,15 @@ def delete_meta2_db(cid, path, suffix, volume_id, admin_client, logger):
                 path + "." + suffix,
                 res[volume_id]["status"]["message"],
             )
+            return False
     except Exception as exc:
         logger.exception(
             "Failed to remove this meta2db copy %s: %s.",
             path + "." + suffix,
             exc,
         )
+        return False
+    return True
 
 
 class Meta2DB:
@@ -83,6 +86,7 @@ class Meta2DB:
     volume_id = _meta2db_env_property("volume_id")
     cid = _meta2db_env_property("cid")
     seq = _meta2db_env_property("seq")
+    suffix = _meta2db_env_property("suffix")
     file_status = _meta2db_env_property(
         "file_status", fetch_value_function=_fetch_file_status
     )
@@ -126,6 +130,10 @@ class Meta2DB:
         if self.use_reflink:
             return self.real_path + ".link"
         return self.real_path
+
+    @property
+    def is_copy(self):
+        return self.suffix is not None
 
     def execute_sql(self, statement, params=(), open_mode="ro"):
         """

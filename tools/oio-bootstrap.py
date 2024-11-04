@@ -355,7 +355,7 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer
+pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer copy_cleaner
 
 [filter:indexer]
 use = egg:oio#indexer
@@ -391,6 +391,11 @@ drain_limit = 1000
 drain_limit_per_pass = 100000
 kafka_cluster_health_metrics_endpoints = ${KAFKA_METRICS_URL}
 kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
+
+[filter:copy_cleaner]
+use = egg:oio#copy_cleaner
+keywords = VerifyChunkPlacement-
+delay = 172800
 
 [filter:logger]
 use = egg:oio#logger

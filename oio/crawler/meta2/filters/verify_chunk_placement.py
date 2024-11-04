@@ -28,12 +28,12 @@ from oio.common.utils import (
     ratelimit,
 )
 from oio.content.quality import NB_LOCATION_LEVELS, format_location
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, delete_meta2_db
 from oio.directory.admin import AdminClient
 
 
-class VerifyChunkPlacement(Filter):
+class VerifyChunkPlacement(Meta2Filter):
     """
     Trigger chunks placement verification on all meta2 database.
     This filter will also trigger rebuild of chunks that need to be recovered.
@@ -603,7 +603,7 @@ class VerifyChunkPlacement(Filter):
         logger = self.logger
         delete_meta2_db(cid, path, suffix, volume_id, admin_client, logger)
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """
         Verify location of chunks referenced in the meta2 data base
 
@@ -613,6 +613,7 @@ class VerifyChunkPlacement(Filter):
         :type cb: function
         """
         meta2db = Meta2DB(self.app_env, env)
+
         cid = meta2db.cid
         account = meta2db.system["sys.account"]
         container = meta2db.system["sys.user.name"]

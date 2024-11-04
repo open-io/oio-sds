@@ -25,11 +25,11 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.exceptions import OioUnhealthyKafkaClusterError
 from oio.container.sharding import ContainerSharding
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 
-class Draining(Filter):
+class Draining(Meta2Filter):
     """
     Trigger the draining for a given container.
     """
@@ -132,8 +132,9 @@ class Draining(Filter):
             self.root_waiting += 1
             return False, None
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         meta2db = Meta2DB(self.app_env, env)
+
         # Check if the meta2 needs draining
         draining_state = int_value(meta2db.system.get(M2_PROP_DRAINING_STATE), 0)
         if draining_state in (DRAINING_STATE_NEEDED, DRAINING_STATE_IN_PROGRESS):

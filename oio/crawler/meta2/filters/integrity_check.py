@@ -1,4 +1,4 @@
-# Copyright (C) 2023 OVH SAS
+# Copyright (C) 2023-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 import re
 
 from oio.common.exceptions import CorruptDb
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 
 
@@ -24,7 +24,7 @@ RE_MISSING_FROM_INDEX = re.compile(r"row \d+ missing from index (.+)")
 RE_WRONG_NUMBER_IN_INDEX = re.compile(r"wrong # of entries in index (.+)")
 
 
-class Meta2IntegrityCheck(Filter):
+class Meta2IntegrityCheck(Meta2Filter):
     """
     Check Meta2 database integrity, repair if possible.
     """
@@ -52,7 +52,7 @@ class Meta2IntegrityCheck(Filter):
         self.errors = 0
         self.healthy = 0
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         # 1. Make a "reflink" copy of the database (or just a hardlink?)
         # 2. Check integrity
         # TODO(FVE):

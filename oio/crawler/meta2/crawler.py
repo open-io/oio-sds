@@ -15,11 +15,9 @@
 
 
 import re
-import time
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.crawler.common.crawler import Crawler, PipelineWorker
-from oio.crawler.meta2.meta2db import Meta2DB, delete_meta2_db
-from oio.directory.admin import AdminClient
+from oio.crawler.meta2.meta2db import Meta2DB
 
 
 class Meta2Worker(PipelineWorker):
@@ -34,11 +32,6 @@ class Meta2Worker(PipelineWorker):
             conf, volume_path, logger=logger, api=api, **kwargs
         )
         self.sharding_suffix_regex = re.compile(r"sharding-([\d]+)-([\d])")
-        self.admin_client = AdminClient(
-            self.conf,
-            logger=self.logger,
-            pool_manager=self.app_env["api"].container.pool_manager,
-        )
 
     def cb(self, status, msg):
         if 500 <= status <= 599:
@@ -51,45 +44,30 @@ class Meta2Worker(PipelineWorker):
             self.logger.debug("Ignoring sqlite journal file: %s", path)
             self.ignored_paths += 1
             return False
-        db_id = path.rsplit("/")[-1].rsplit(".")
-        if len(db_id) != 3:
-            if "VerifyChunkPlacement-" in db_id[-1]:
-                # This is a meta2 db copy left over after
-                # placement-checker-crawler execution, we need to delete it.
+        db_id = path.rsplit("/")[-1].split(".", 4)
 
-                # We will delete copies older than two days
-                # to avoid to delete meta2 db currently being
-                # used by placement-checker-crawler
-                timestamp = int(db_id[-1].split("-")[-1])
-                if time.time() > (timestamp + 172800):
-                    delete_meta2_db(
-                        cid=db_id[0],
-                        path=path,
-                        suffix=db_id[-1],
-                        volume_id=self.volume_id,
-                        admin_client=self.admin_client,
-                        logger=self.logger,
-                    )
-                    self.logger.warning(
-                        "Delete meta2 db copy coming from previous "
-                        "placement-checker-crawler execution: %s",
-                        path,
-                    )
-                self.invalid_paths += 1
-                return False
-
-            if (len(db_id)) == 4 and self.sharding_suffix_regex.match(db_id[3]):
-                self.ignored_paths += 1
-                return False
+        if len(db_id) < 3:
             self.logger.warning("Malformed db file name: %s", path)
             self.invalid_paths += 1
             return False
-        if db_id[2] != "meta2":
+
+        db_cid, db_seq, db_type, *db_suffix = db_id
+
+        if db_suffix:
+            db_suffix = db_suffix[0]
+
+            if self.sharding_suffix_regex.match(db_suffix):
+                self.ignored_paths += 1
+                return False
+        else:
+            db_suffix = None
+
+        if db_type != "meta2":
             self.logger.warning("Bad extension filename: %s", path)
             self.invalid_paths += 1
             return False
 
-        cid_seq = ".".join([db_id[0], db_id[1]])
+        cid_seq = ".".join([db_cid, db_seq])
         if len(cid_seq) < STRLEN_REFERENCEID:
             self.logger.warning("Not a valid CID: %s", cid_seq)
             return False
@@ -97,11 +75,12 @@ class Meta2Worker(PipelineWorker):
         meta2db = Meta2DB(self.app_env, {})
         meta2db.real_path = path
         meta2db.volume_id = self.volume_id
-        meta2db.cid = db_id[0]
+        meta2db.cid = db_cid
+        meta2db.suffix = db_suffix
         try:
-            meta2db.seq = int(db_id[1])
+            meta2db.seq = int(db_seq)
         except ValueError:
-            self.logger.warning("Bad sequence number: %s", db_id[1])
+            self.logger.warning("Bad sequence number: %s", db_seq)
             return False
 
         try:

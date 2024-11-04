@@ -19,12 +19,12 @@ from oio.common.exceptions import NotFound, OioException
 from oio.common.green import time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import request_id
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 from oio.rdir.client import RdirClient
 
 
-class Indexer(Filter):
+class Indexer(Meta2Filter):
     """
     Index meta2 databases to the associated rdir service(s).
     """
@@ -114,7 +114,7 @@ class Indexer(Filter):
         # TODO(adu): remove database (but we must be sure)
         return True
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """
         Add a meta2 database to the rdir index.
         """
