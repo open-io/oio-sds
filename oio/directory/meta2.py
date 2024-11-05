@@ -354,28 +354,43 @@ class Meta2Database(object):
                 dst,
                 exc,
             )
-
-        try:
-            election = self.admin.election_status(self.service_type, cid=cid, **kwargs)
-            for service, status in election["peers"].items():
-                if status["status"]["status"] in (200, 303):
-                    continue
+        try_election = True
+        error = None
+        while try_election:
+            try:
+                if error:
+                    # Retry an election leave
+                    data = self.admin.election_leave(
+                        self.service_type, cid=cid, service_id=src, **kwargs
+                    )
+                    from_multi_responses(data)
+                election = self.admin.election_status(
+                    self.service_type, cid=cid, **kwargs
+                )
+                for service, status in election["peers"].items():
+                    if status["status"]["status"] in (200, 303):
+                        continue
+                    self.logger.warn(
+                        "Election not started "
+                        "(base=%s src=%s dst=%s service=%s status=%s)",
+                        bseq,
+                        src,
+                        dst,
+                        service,
+                        status,
+                    )
+                try_election = False
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.warn(
-                    "Election not started (base=%s src=%s dst=%s service=%s status=%s)",
+                    "Failed to get election status (base=%s src=%s dst=%s): %s",
                     bseq,
                     src,
                     dst,
-                    service,
-                    status,
+                    exc,
                 )
-        except Exception as exc:  # pylint: disable=broad-except
-            self.logger.warn(
-                "Failed to get election status (base=%s src=%s dst=%s): %s",
-                bseq,
-                src,
-                dst,
-                exc,
-            )
+                if error:  # Retry only once
+                    raise
+                error = exc
 
     def _safe_move(self, bseq, src, dst, raise_error=False, dry_run=False, **kwargs):
         err = None
