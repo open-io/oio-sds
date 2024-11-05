@@ -141,7 +141,6 @@ GByteArray* m2v2_remote_pack_content_DRAIN(
 
 GByteArray* m2v2_remote_pack_CHECKPOINT(
 		struct oio_url_s *url,
-		const char* prefix,
 		const char* suffix,
 		gint64 dl);
 
