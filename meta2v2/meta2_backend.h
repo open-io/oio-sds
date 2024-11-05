@@ -304,7 +304,7 @@ GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
 
 /** Create meta2 checkpoint */
 GError* meta2_backend_checkpoint(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, const gchar* prefix, const gchar* suffix);
+		struct oio_url_s *url, const gchar* suffix);
 
 /** Prepare views to use for select queries */
 GError* meta2_backend_create_lifecycle_views(struct meta2_backend_s *m2b,
