@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2024 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -54,7 +54,7 @@ License along with this library.
 
 /** One plus the maximum length of a database suffix, including all its subtypes
  * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_BASESUFFIX 32
+#define LIMIT_LENGTH_BASESUFFIX 64
 
 /** One plus the maximum length of the textual representation of a service id
  * i.e. a size enough to store the C string */
