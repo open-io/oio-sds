@@ -32,7 +32,7 @@ from oio.common.utils import request_id
 
 from oio.container.client import ContainerClient
 
-from oio.crawler.common.base import Filter
+from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 from oio.container.lifecycle import (
     ContainerLifecycle,
@@ -51,7 +51,7 @@ class Context:
         self.container_id = container_id
 
 
-class Lifecycle(Filter):
+class Lifecycle(Meta2Filter):
     """Lifecycle filter.
 
     Load lifecycle configuration
@@ -60,6 +60,8 @@ class Lifecycle(Filter):
     """
 
     NAME = "Lifecycle"
+    PROCESS_COPY = True
+    PROCESS_ORIGINAL = False
 
     # Maximum number of versions to handle in NoncurrentVersion actions is
     # limited to 50.
@@ -198,19 +200,11 @@ class Lifecycle(Filter):
             raise
         return (props, main_account, root_container)
 
-    def _get_suffix(self, real_path):
-        db_id = real_path.rsplit("/")[-1].rsplit(".", 4)
-        if len(db_id) < 4:
-            return None
-        if db_id[2] != "meta2":
-            return None
-        return ".".join([db_id[3], db_id[4]])
-
     def _get_run_id(self, suffix):
         "suffix pattern: {yyyy-mm-dd}.{run_id}"
         return suffix.rsplit(".", 1)[1]
 
-    def process(self, env, cb):
+    def _process(self, env, cb):
         """Process current container:
 
         Get information about container from associated main container
@@ -218,22 +212,16 @@ class Lifecycle(Filter):
         Reorder rules and apply each one in defined order
         """
         meta2db = Meta2DB(self.app_env, env)
+        if not meta2db.suffix.startswith("Lifecycle-"):
+            return self.app(env, cb)
+
         self.peer_to_use = env["volume_id"]
         self.is_mpu_container = False
         self.is_shard_container = False
 
         reqid = request_id("lc-crawler-")
 
-        # Get suffix for each entry
-        self.suffix = self._get_suffix(meta2db.real_path)
-        if self.suffix is None:
-            self.errors += 1
-            self.logger.warning(
-                "Failed to find lifecycle local copy cid=%s, real_path=%s",
-                meta2db.cid,
-                meta2db.real_path,
-            )
-            return self.app(env, cb)
+        self.suffix = meta2db.suffix
 
         run_id = self._get_run_id(self.suffix)
 
