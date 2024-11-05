@@ -1937,10 +1937,8 @@ action_m2_container_checkpoint(struct req_args_s *args,
 	struct json_object *jargs)
 {
 	GError *err = NULL;
-	struct json_object *jprefix = NULL;
 	struct json_object *jsuffix = NULL;
 	struct oio_ext_json_mapping_s m[] = {
-		{"prefix", &jprefix, json_type_string, 1},
 		{"suffix", &jsuffix, json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -1950,12 +1948,11 @@ action_m2_container_checkpoint(struct req_args_s *args,
 	{
 		return _reply_m2_error(args, err);
 	}
-	const gchar *prefix = json_object_get_string(jprefix);
 	const gchar *suffix = json_object_get_string(jsuffix);
 
 	PACKER_VOID(_pack)
 	{
-		return m2v2_remote_pack_CHECKPOINT(args->url, prefix, suffix, DL());
+		return m2v2_remote_pack_CHECKPOINT(args->url, suffix, DL());
 	};
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 
@@ -2929,7 +2926,6 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 // code-block:: json
 //
 //    {
-//      "prefix": "<checkpoint-prefix>",
 //      "suffix": "<checkpoint-suffix>"
 //    }
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2944,7 +2940,6 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 //    Content-Length: 0
 //    Content-Type: application/json
 //    {
-//      "prefix": "my-prefix",
 //      "suffix": "my-suffix"
 //    }
 //

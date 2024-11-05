@@ -582,14 +582,6 @@ Used by `gcc`
  * cmake directive: *OIO_META2_BATCH_MAXLEN*
  * range: 1 -> 100000
 
-### meta2.checkpoints_directory
-
-> Directory in which symlinks to containers to proceess will be stored.
-
- * default: ****
- * type: string
- * cmake directive: *OIO_META2_CHECKPOINTS_DIRECTORY*
-
 ### meta2.container.max_size
 
 > How many bytes may be stored in each container.

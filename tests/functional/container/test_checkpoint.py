@@ -140,7 +140,9 @@ class TestCheckpointContainer(BaseTestCase):
     def test_checkpoint_existing_container(self):
         # Create container
         self.api.container.container_checkpoint(
-            account=self.account, reference=self.container, prefix="my-prefix"
+            account=self.account,
+            reference=self.container,
+            suffix="my-suffix",
         )
 
         entries = self._list_base_in_master(self.container_base)
@@ -148,25 +150,18 @@ class TestCheckpointContainer(BaseTestCase):
         # keep only base with suffix
         entries = [e for e in entries if not e.endswith(".meta2")]
         self.assertEqual(len(entries), 1)
+        self.assertTrue(entries[0].endswith(".my-suffix"))
 
         entries = self._list_base_in_slaves(self.container_base)
         self.assertEqual(len(entries), len(self._data_dirs[1]))
-        # keep only base with suffix
         entries = [e for e in entries if not e.endswith(".meta2")]
         self.assertEqual(len(entries), 0)
-
-        # Ensure the symlink is correctly created
-        entries = self._list_lifecycle_symlinks(self.container_base)
-        self.assertEqual(len(entries), 1)
-        entry = entries[0]
-        self.assertTrue(entry.startswith("my-prefix."))
 
     def test_checkpoint_existing_container_with_suffix(self):
         # Create container checkpoint
         self.api.container.container_checkpoint(
             account=self.account,
             reference=self.container,
-            prefix="my-prefix",
             suffix="my-suffix",
         )
 
@@ -175,6 +170,7 @@ class TestCheckpointContainer(BaseTestCase):
         # keep only base with suffix
         entries = [e for e in entries if not e.endswith(".meta2")]
         self.assertEqual(len(entries), 1)
+        self.assertTrue(entries[0].endswith(".my-suffix"))
 
         entries = self._list_base_in_slaves(self.container_base)
         self.assertEqual(len(entries), len(self._data_dirs[1]))
@@ -182,18 +178,10 @@ class TestCheckpointContainer(BaseTestCase):
         entries = [e for e in entries if not e.endswith(".meta2")]
         self.assertEqual(len(entries), 0)
 
-        # Ensure the symlink is correctly created
-        entries = self._list_lifecycle_symlinks(self.container_base)
-        self.assertEqual(len(entries), 1)
-        entry = entries[0]
-        self.assertTrue(entry.startswith("my-prefix."))
-        self.assertTrue(entry.endswith("my-suffix"))
-
-        # Create container with same suffix and prefix
+        # Create container with same suffix
         self.api.container.container_checkpoint(
             account=self.account,
             reference=self.container,
-            prefix="my-prefix",
             suffix="my-suffix",
         )
         entries = self._list_base_in_master(self.container_base)
@@ -201,14 +189,7 @@ class TestCheckpointContainer(BaseTestCase):
         # keep only base with suffix
         entries = [e for e in entries if not e.endswith(".meta2")]
         self.assertEqual(len(entries), 1)
-        print(entries)
-
-        # Ensure the symlink is correctly created
-        entries = self._list_lifecycle_symlinks(self.container_base)
-        self.assertEqual(len(entries), 1)
-        entry = entries[0]
-        self.assertTrue(entry.startswith("my-prefix."))
-        self.assertTrue(entry.endswith("my-suffix"))
+        self.assertTrue(entries[0].endswith(".my-suffix"))
 
     def test_checkpoint_invalid_container(self):
         self.assertRaises(
@@ -216,7 +197,7 @@ class TestCheckpointContainer(BaseTestCase):
             self.api.container.container_checkpoint,
             account=self.account,
             reference="invalid",
-            prefix="my-prefix",
+            suffix="my-suffix",
         )
 
     def test_checkpoint_invalid_account(self):
@@ -225,15 +206,7 @@ class TestCheckpointContainer(BaseTestCase):
             self.api.container.container_checkpoint,
             account="invalid",
             reference=self.container,
-            prefix="my-prefix",
-        )
-
-    def test_checkpoint_missing_prefix(self):
-        self.assertRaises(
-            BadRequest,
-            self.api.container.container_checkpoint,
-            account=self.account,
-            reference=self.container,
+            suffix="my-suffix",
         )
 
     def _add_objects(
@@ -305,20 +278,19 @@ class TestCheckpointContainer(BaseTestCase):
 
             # Create  checkpoint on root container
             self.api.container.container_checkpoint(
-                account=self.account, reference=self.container, prefix="my-prefix"
+                account=self.account,
+                reference=self.container,
+                suffix="my-suffix",
             )
             entries = self._list_base_in_master(self.container_base)
             self.assertEqual(len(entries), 2)
-            entries = self._list_lifecycle_symlinks(self.container_base)
-            self.assertEqual(len(entries), 1)
 
             shards = self.container_sharding.show_shards(self.account, self.container)
             for shard in shards:
                 self.api.container.container_checkpoint(
-                    cid=shard["cid"], prefix="my-prefix"
+                    cid=shard["cid"],
+                    suffix="my-suffix",
                 )
                 self._data_dirs = self._get_data_dirs(cid=shard["cid"])
                 entries = self._list_base_in_master(shard["cid"])
                 self.assertEqual(len(entries), 2)
-                entries = self._list_lifecycle_symlinks(shard["cid"])
-                self.assertEqual(len(entries), 1)
