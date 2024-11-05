@@ -609,14 +609,6 @@ Used by `gcc`
  * cmake directive: *OIO_META2_BATCH_MAXLEN*
  * range: 1 -> 100000
 
-### meta2.checkpoints_directory
-
-> Directory in which symlinks to containers to proceess will be stored.
-
- * default: ****
- * type: string
- * cmake directive: *OIO_META2_CHECKPOINTS_DIRECTORY*
-
 ### meta2.container.max_size
 
 > How many bytes may be stored in each container.
@@ -811,14 +803,6 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
 
-### meta2.tube.manifest_deleted
-
-> Tube name (or routing key) for 'storage.manifest.deleted' events.
-
- * default: **oio-delete-mpu-parts**
- * type: string
- * cmake directive: *OIO_META2_TUBE_MANIFEST_DELETED*
-
 ### meta2.tube.lifecycle_generated
 
 > Tube name for lifecycle events
@@ -826,6 +810,14 @@ Used by `gcc`
  * default: **oio-lifecycle**
  * type: string
  * cmake directive: *OIO_META2_TUBE_LIFECYCLE_GENERATED*
+
+### meta2.tube.manifest_deleted
+
+> Tube name (or routing key) for 'storage.manifest.deleted' events.
+
+ * default: **oio-delete-mpu-parts**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_MANIFEST_DELETED*
 
 ### meta2.tube.meta2_deleted
 
@@ -1044,7 +1036,7 @@ Used by `gcc`
 
 ### proxy.prefer.master_for_write
 
-> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB
+> In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB.
 
  * default: **TRUE**
  * type: gboolean
@@ -1788,7 +1780,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_none
 
-> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten
+> In the current sqliterepo repository, sets the amount of time an election without status will be forgotten.
 
  * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -2255,7 +2247,7 @@ the cmake command line.
 
 ### enbug.sqliterepo.synchro.failure
 
-> Fake Error rate on synchronism RPC (a.k.a. ZK)
+> Fake Error rate on synchronism RPC (a.k.a. ZK).
 
  * default: **0**
  * type: gint32

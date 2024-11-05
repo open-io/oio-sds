@@ -640,10 +640,9 @@ meta2_filter_action_checkpoint(struct gridd_filter_ctx_s *ctx,
 {
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	const gchar* prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
 	const gchar* suffix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SUFFIX);
 
-	GError *err = meta2_backend_checkpoint(m2b, url, prefix, suffix);
+	GError *err = meta2_backend_checkpoint(m2b, url, suffix);
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;

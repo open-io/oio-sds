@@ -4199,11 +4199,10 @@ end:
 
 GError*
 meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const gchar* prefix, const gchar* suffix)
+	const gchar* suffix)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(prefix != NULL);
 
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -4228,35 +4227,25 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = BADREQ("Sharding is in progress");
 			goto end;
 		}
-		gint64 timestamp = oio_ext_real_time();
 
 		// Build database copy path
 		gchar *copy_path = NULL;
-		copy_path = g_strdup_printf(
-				"%s.%"G_GINT64_FORMAT,
-				sq3->path_inline, timestamp);
-		// Build symlink path
-		gchar *link_path = NULL;
-		gchar *checkpoint_suffix = NULL;
 		if (suffix && *suffix) {
-			checkpoint_suffix = g_strdup(suffix);
+			// Use provided suffix
+			copy_path = g_strdup_printf("%s.%s", sq3->path_inline, suffix);
 		} else {
-			checkpoint_suffix = g_strdup_printf("%"G_GINT64_FORMAT, timestamp);
+			gint64 timestamp = oio_ext_real_time();
+			copy_path = g_strdup_printf(
+				"%s.%"G_GINT64_FORMAT, sq3->path_inline, timestamp);
 		}
-		link_path = g_strdup_printf("%s/%s.%s.meta2.%s",
-			meta2_checkpoints_directory, prefix, sq3->name.base, checkpoint_suffix);
 
-		if (g_access(link_path, F_OK | R_OK) != 0) {
+		if (g_access(copy_path, F_OK | R_OK) != 0) {
 			// Create a database copy (ref link)
 			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
 				goto rollback;
-			}
-			// Create sym link
-			if(symlink(copy_path, link_path)) {
-				err = SYSERR("Unable to create symlink: %s", g_strerror(errno));
 			}
 		}
 
@@ -4271,8 +4260,6 @@ rollback:
 
 		// Cleanup
 		g_free(copy_path);
-		g_free(link_path);
-		g_free(checkpoint_suffix);
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 end:
@@ -4338,11 +4325,13 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
 		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
+	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
 		*jquery_set_tag = NULL, *jprefix = NULL;
 	int is_markers = 0;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
+	struct json_object *jmain_account = NULL, *jrun_id = NULL;
 
 	struct json_object *jhas_bucket_logging = NULL;
 
@@ -4364,6 +4353,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
+		{"main_account", &jmain_account, json_type_string, 0},
+		{"run_id", &jrun_id, json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4399,6 +4390,12 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 	if (jprefix) {
 		prefix = json_object_get_string(jprefix);
+	}
+	if (jmain_account) {
+		main_account = json_object_get_string(jmain_account);
+	}
+	if (jrun_id) {
+		run_id = json_object_get_string(jrun_id);
 	}
 
 	if (query_set_tag) {
@@ -4463,7 +4460,6 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		found_match = TRUE;
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
 				sqlite3_column_bytes(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
@@ -4479,11 +4475,14 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 				}
 			}
 		}
+		found_match = TRUE;
 		gint64 mtime = sqlite3_column_int64(stmt, 4);
 		GString *event = oio_event__create_with_id(
 				"storage.lifecycle.action", url, oio_ext_get_reqid());
 		g_string_append(event, ",\"data\":{");
 		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+		append_str(event, "main_account", g_strdup(main_account));
+		append_str(event, "run_id", g_strdup(run_id));
 		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 		append_str(event, "object", object_name);
 		append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
@@ -4527,7 +4526,7 @@ rollback:
 	if (err) {
 		goto close;
 	}
-	if (query_set_tag && !found_match) {
+	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
 	}
 
@@ -4558,10 +4557,13 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
 		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
+	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
 		*jquery_set_tag = NULL, *jprefix = NULL;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL,
 	*jhas_bucket_logging = NULL;
+
+	struct json_object *jmain_account = NULL, *jrun_id = NULL;
 
 	int batch_size = 0;
 	gboolean found_match = FALSE;
@@ -4580,6 +4582,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
+		{"run_id", &jrun_id, json_type_string, 0},
+		{"main_account", &jmain_account, json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4620,6 +4624,12 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 	if (jhas_bucket_logging) {
 		has_bucket_logging = json_object_get_boolean(jhas_bucket_logging);
+	}
+	if (jmain_account) {
+		main_account = json_object_get_string(jmain_account);
+	}
+	if (jrun_id) {
+		run_id = json_object_get_string(jrun_id);
 	}
 
 	if (query_set_tag) {
@@ -4700,6 +4710,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 				"storage.lifecycle.action", url, oio_ext_get_reqid());
 		g_string_append(event, ",\"data\":{");
 		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+		append_str(event, "main_account", g_strdup(main_account));
+		append_str(event, "run_id", g_strdup(run_id));
 		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 		append_str(event, "object", object_name);
 		append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
@@ -4734,7 +4746,7 @@ rollback:
 		goto close;
 	}
 
-	if (query_set_tag && !found_match) {
+	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
 	}
 close:

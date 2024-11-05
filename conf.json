@@ -66,12 +66,7 @@
 			{ "type": "monotonic", "name": "meta2_sharding_replicated_clean_timeout",
 				"key": "meta2.sharding.replicated_clean_timeout",
 				"descr": "Maximum time to clean a shard (in replicated mode) from the moment the lock is taken.",
-				"def": "1s", "min": "1ms", "max": "1m" },
-
-			{ "type": "string", "name": "meta2_checkpoints_directory",
-				"key": "meta2.checkpoints_directory",
-				"descr": "Directory in which symlinks to containers to proceess will be stored.",
-				"def": "", "limit": 256 }
+				"def": "1s", "min": "1ms", "max": "1m" }
 		]
 	},
 	"rawx": {
@@ -663,7 +658,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_NONE",
 				"key": "sqliterepo.election.delay.expire_none",
-				"descr": "In the current sqliterepo repository, sets the amount of time an election without status will be forgotten ",
+				"descr": "In the current sqliterepo repository, sets the amount of time an election without status will be forgotten.",
 				"def": "30m", "min": "1s", "max": "1d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_expire_SLAVE",
@@ -733,7 +728,7 @@
 
 			{ "type": "int32", "name": "oio_sync_failure_threshold_action",
 				"key": "enbug.sqliterepo.synchro.failure",
-				"descr": "Fake Error rate on synchronism RPC (a.k.a. ZK) ",
+				"descr": "Fake Error rate on synchronism RPC (a.k.a. ZK).",
 				"def": 0, "min": 0, "max": 100 },
 
 			{ "type": "bool", "name": "_cache_fail_on_heavy_load",
@@ -1145,7 +1140,7 @@
 
 			{ "type": "bool", "name": "flag_prefer_master_for_write",
 				"key": "proxy.prefer.master_for_write",
-				"descr": "In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB ",
+				"descr": "In a proxy, upon a write request, should the proxy prefer services known to host the MASTER copy of the DB.",
 				"def": true },
 
 			{ "type": "bool", "name": "flag_prefer_master_for_read",

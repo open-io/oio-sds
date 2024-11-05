@@ -655,7 +655,7 @@ class ContainerClient(ProxyClient):
         return {"truncated": boolean_value(resp.getheader("x-oio-truncated"), False)}
 
     def container_checkpoint(
-        self, account=None, reference=None, cid=None, prefix=None, suffix=None, **kwargs
+        self, account=None, reference=None, cid=None, suffix=None, **kwargs
     ):
         """
         Create a checkpoint of a container. This checkpoint can be used for later
@@ -671,13 +671,10 @@ class ContainerClient(ProxyClient):
         :param cid: container id that can be used instead of account
             and reference
         :type cid: `str`
-        :param prefix: checkpoint prefix. It can be used to filter checkpoints
 
         """
         params = self._make_params(account, reference, cid=cid)
         data = {}
-        if prefix:
-            data["prefix"] = prefix
         if suffix:
             data["suffix"] = suffix
         data = json.dumps(data)

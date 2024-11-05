@@ -21,7 +21,6 @@
 from __future__ import print_function
 from six import iterkeys, iteritems
 from six.moves import xrange
-
 import errno
 import grp
 import yaml
@@ -1382,7 +1381,6 @@ ns.meta1_digits=${M1_DIGITS}
 meta2.flush_limit=64
 meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
-meta2.checkpoints_directory=${LIFECYCLEDIR}
 
 # Lifecycle
 lifecycle.redis_host=${IP}:${REDIS_PORT}
@@ -2102,7 +2100,6 @@ def generate(options):
     want_service_id = "" if options.get("with_service_id") else "#"
 
     DATADIR = options.get("DATADIR", SDSDIR + "/data")
-    LIFECYCLEDIR = DATADIR + f"/{ns}-lifecycle"
     WEBHOOK = "webhook" if options.get("webhook_enabled", False) else ""
     WEBHOOK_ENDPOINT = options.get("webhook_endpoint", "")
 
@@ -2132,7 +2129,6 @@ def generate(options):
         SDSDIR=SDSDIR,
         TMPDIR=TMPDIR,
         DATADIR=DATADIR,
-        LIFECYCLEDIR=LIFECYCLEDIR,
         CFGDIR=CFGDIR,
         SYSTEMDDIR=systemd_dir(),
         RUNDIR=RUNDIR,
@@ -2344,7 +2340,6 @@ def generate(options):
     mkdir_noerror(CODEDIR)
     mkdir_noerror(DATADIR)
     mkdir_noerror(CFGDIR)
-    mkdir_noerror(LIFECYCLEDIR)
     mkdir_noerror(systemd_dir())
     mkdir_noerror(WATCHDIR)
     mkdir_noerror(RUNDIR)
@@ -3443,7 +3438,6 @@ def generate(options):
     final_conf["with_service_id"] = options["with_service_id"]
     final_conf["random_service_id"] = bool(options["random_service_id"])
     final_conf["webhook"] = WEBHOOK_ENDPOINT
-    final_conf["lifecycle_path"] = LIFECYCLEDIR
     final_conf["use_tls"] = bool(options.get("use_tls"))
     final_conf["set_nice"] = bool(options.get("set_nice"))
     final_conf["set_ionice"] = bool(options.get("set_ionice"))

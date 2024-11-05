@@ -745,7 +745,6 @@ static gridd_filter M2V2_CHECKPOINT_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
-	meta2_filter_extract_prefix,
 	meta2_filter_extract_suffix,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,

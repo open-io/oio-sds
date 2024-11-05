@@ -29,8 +29,6 @@ from oio.lifecycle.metrics import (
     statsd_key,
 )
 
-DEFAULT_CHECKPOINT_PREFIX = "lifecycle"
-
 
 class Context:
     def __init__(self, run_id, account_id, bucket_id, container_id, root_container_id):
@@ -47,9 +45,11 @@ class CheckpointCreatorFilter(Filter):
     Create Meta2 database checkpoint for lifecycle processing
     """
 
+    _DEFAULT_CHECKPOINT_SUFFIX = "Lifecycle"
+
     def __init__(self, *args, endpoint=None, **kwargs):
         self._retry_delay = None
-        self._checkpoint_prefix = None
+        self._checkpoint_suffix = None
         self._endpoint = endpoint
         self._producer = None
         self._topic = None
@@ -60,8 +60,8 @@ class CheckpointCreatorFilter(Filter):
 
     def init(self):
         self._retry_delay = get_retry_delay(self.conf)
-        self._checkpoint_prefix = self.conf.get(
-            "checkpoint_prefix", DEFAULT_CHECKPOINT_PREFIX
+        self._checkpoint_suffix = self.conf.get(
+            "checkpoint_suffix", self._DEFAULT_CHECKPOINT_SUFFIX
         )
         self._topic = self.conf.get("topic")
         self._sharding_client = ContainerSharding(self.conf, logger=self.logger)
@@ -154,8 +154,7 @@ class CheckpointCreatorFilter(Filter):
         try:
             _ = self._container_client.container_checkpoint(
                 cid=cid,
-                prefix=f"{self._checkpoint_prefix}",
-                suffix=f"{run_id}",
+                suffix=f"{self._checkpoint_suffix}-{run_id}",
             )
         except ClientException as exc:
             self.logger.error(
