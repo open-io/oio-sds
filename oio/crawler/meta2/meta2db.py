@@ -159,6 +159,8 @@ class Meta2DB:
                 pass
             raise sqerr
         finally:
+            if open_mode == "rw":
+                meta2db_conn.commit()
             if meta2db_conn:
                 meta2db_conn.close()
 

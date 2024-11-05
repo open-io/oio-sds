@@ -236,6 +236,8 @@ M2_PROP_VERSIONING_POLICY = "sys.m2.policy.version"
 M2_PROP_DRAINING_STATE = "sys.m2.draining.state"
 # Draining timestamp for the container and its shards.
 M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
+# Lifecycle time bypass flag for testing purpose only.
+M2_PROP_LIFECYCLE_TIME_BYPASS = "sys.m2.lifecycle.time_bypass"
 
 # HTTP Content-Type
 HTTP_CONTENT_TYPE_BINARY = "application/octet-stream"
@@ -243,4 +245,9 @@ HTTP_CONTENT_TYPE_DELETED = "application/x-deleted"
 HTTP_CONTENT_TYPE_JSON = "application/json"
 HTTP_CONTENT_TYPE_TEXT = "text/plain"
 
+# Constants for lifecycle crawler
+LOGGING_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Logging"
+LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 MULTIUPLOAD_SUFFIX = "+segments"
+TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
+VERSIONING_PROPERTY_KEY = "X-Container-Sysmeta-Versions-Enabled"

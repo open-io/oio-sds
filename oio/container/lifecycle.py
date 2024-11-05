@@ -16,21 +16,95 @@
 
 import json
 
+from oio.common.constants import (
+    LIFECYCLE_PROPERTY_KEY,
+    TAGGING_KEY,
+)
 from oio.common.logger import get_logger
-
-LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
-TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
+from oio.lifecycle.metrics import LifecycleAction
 
 LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
 
 
+class _LifecycleAction:
+    step = None
+    accelerator = None
+    field = None
+    current = True
+
+    def __init__(self, rule_id, action_id):
+        self.rule_id = rule_id
+        self.action_id = action_id
+
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}(rule={self.rule_id}, action={self.action_id})"
+        )
+
+
+class AbortMpuAction(_LifecycleAction):
+    step = LifecycleAction.ABORT_MPU
+    accelerator = "_abort_mpu_rules"
+    field = "AbortIncompleteMultipartUpload"
+
+
+class ExpirationAction(_LifecycleAction):
+    step = LifecycleAction.DELETE
+    accelerator = "_expiration_rules"
+    field = "Expiration"
+
+
+class DeleteMarkerAction(_LifecycleAction):
+    step = LifecycleAction.DELETE
+    accelerator = "_delete_marker_rules"
+    field = "Expiration"
+
+
+class TransitionAction(_LifecycleAction):
+    step = LifecycleAction.TRANSITION
+    accelerator = "_transition_rules"
+    field = "Transition"
+
+
+class NonCurrentExpirationAction(_LifecycleAction):
+    step = LifecycleAction.DELETE
+    accelerator = "_non_current_expiration_rules"
+    field = "NoncurrentVersionExpiration"
+    current = False
+
+
+class NonCurrentTransitionAction(_LifecycleAction):
+    step = LifecycleAction.TRANSITION
+    accelerator = "_non_current_transition_rules"
+    field = "NoncurrentVersionTransition"
+    current = False
+
+
+class LifecycleConfigurationInvalid(Exception):
+    pass
+
+
+class LifecycleConfigurationNotFound(Exception):
+    pass
+
+
+def lifecycle_backup_path(account, bucket):
+    """
+    Compute the path of lifecycle configuration backup stored in the technical bucket.
+    """
+    return f"{account}/{bucket}/lifecycle-config"
+
+
 class ContainerLifecycle(object):
+    # List lifecycle configuration versions supported by filter
+    SUPPORTED_CONFIGURATION_VERSIONS = (1,)
+
     def __init__(self, api, account, container, logger=None):
         self.api = api
         self.account = account
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
-        self.conf_json = None
+        self.lifecycle_conf = None
 
     def get_configuration(self):
         """
@@ -39,24 +113,32 @@ class ContainerLifecycle(object):
         props = self.api.container_get_properties(self.account, self.container)
         return props["properties"].get(LIFECYCLE_PROPERTY_KEY)
 
-    def load(self):
+    def load(self, conf=None):
         """
-        Load lifecycle conf from container property.
+        Load lifecycle conf from provided conf or container property.
 
         :returns: True if a lifecycle configuration has been loaded
         """
-        json_conf = self.get_configuration()
-        if not json_conf:
-            self.logger.info(
-                "No Lifecycle configuration for %s/%s", self.account, self.container
+        if conf is None:
+            conf = self.get_configuration()
+
+        if not conf:
+            raise LifecycleConfigurationInvalid("Configuration is empty")
+        if isinstance(conf, dict):
+            self.lifecycle_conf = conf
+        else:
+            try:
+                self.load_json(conf)
+            except ValueError as exc:
+                raise LifecycleConfigurationInvalid(
+                    "Unable to parse configuration"
+                ) from exc
+
+        schema_version = self.lifecycle_conf.get("_schema_version", -1)
+        if schema_version not in self.SUPPORTED_CONFIGURATION_VERSIONS:
+            raise LifecycleConfigurationInvalid(
+                f"Schema version {schema_version} is not supported"
             )
-            return False
-        try:
-            self.load_json(json_conf)
-        except ValueError as err:
-            self.logger.warning("Failed to decode JSON configuration: %s", err)
-            return False
-        return True
 
     def load_json(self, json_str):
         """
@@ -64,11 +146,11 @@ class ContainerLifecycle(object):
 
         :raises ValueError: if the string is not decodable as JSON
         """
-        json_conf = json.loads(json_str)
-        self.conf_json = json_conf
+        conf = json.loads(json_str)
+        self.lifecycle_conf = conf
 
     def __str__(self):
-        return json.dumps(self.conf_json)
+        return json.dumps(self.lifecycle_conf)
 
     def save(self, json_str=None):
         """
@@ -90,6 +172,35 @@ class ContainerLifecycle(object):
             "NOT IN (SELECT alias||version||key FROM properties))"
         )
 
+    def _actions_to_apply(self, use_versioning, is_mpu_container):
+        if is_mpu_container:
+            return (AbortMpuAction,)
+
+        if use_versioning:
+            return (
+                DeleteMarkerAction,
+                NonCurrentExpirationAction,
+                TransitionAction,
+                NonCurrentTransitionAction,
+                ExpirationAction,
+            )
+        return (
+            TransitionAction,
+            ExpirationAction,
+        )
+
+    def actions_iter(self, use_versioning, is_mpu_container):
+        for action_class in self._actions_to_apply(use_versioning, is_mpu_container):
+            actions = self.lifecycle_conf.get(action_class.accelerator, [])
+            if isinstance(actions, dict):
+                actions = [v for a in actions.values() for v in a]
+            for rule_action_id in actions:
+                rule_id, action_id = rule_action_id.split("-")
+                rule = self.lifecycle_conf["Rules"][rule_id]
+                action = rule[action_class.field][action_id]
+
+                yield rule_action_id, action_class(rule_id, action_id), rule, action
+
     def build_sql_query(
         self,
         rule,
@@ -98,29 +209,11 @@ class ContainerLifecycle(object):
         non_current=False,
         versioned=False,
         expired_delete_marker=None,
-        **kwargs,
     ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
         rule_filter = RuleFilter(rule)
         _query = " "
-        skip_size_and_tag = False
-        if expired_delete_marker:
-            skip_size_and_tag = True
-
-        time_flag = False
-        if formated_days is not None:
-            time_flag = True
-        if date is not None:
-            time_flag = True
-
-        nb_filters = len(rule_filter.tags)
-        if rule_filter.prefix is not None:
-            nb_filters += 1
-        if rule_filter.lesser is not None:
-            nb_filters += 1
-        if rule_filter.greater is not None:
-            nb_filters += 1
 
         _slo_cond = (
             " LEFT JOIN properties pr ON al.alias=pr.alias AND"
@@ -129,8 +222,9 @@ class ContainerLifecycle(object):
         )
 
         _lesser = ""
-        # bypass size when dealing with delete marker
-        if not skip_size_and_tag:
+        _greater = ""
+        # bypass size and tags when dealing with delete marker
+        if not expired_delete_marker:
             if rule_filter.lesser is not None:
                 _lesser = (
                     f" AND "
@@ -138,9 +232,6 @@ class ContainerLifecycle(object):
                     f"pr.value < {rule_filter.lesser})"
                 )
 
-        _greater = ""
-        # bypass size and tags when dealing with delete marker
-        if not skip_size_and_tag:
             if rule_filter.greater is not None:
                 _greater = (
                     f" AND "
@@ -153,7 +244,6 @@ class ContainerLifecycle(object):
                     " INNER JOIN properties pr2 ON al.alias ="
                     "pr2.alias AND al.version=pr2.version "
                 )
-
                 _tags = f" AND pr2.key='{TAGGING_KEY}'"
                 for el in rule_filter.tags:
                     ((k, v),) = el.items()
@@ -166,58 +256,41 @@ class ContainerLifecycle(object):
 
                 _query = f"{_query}{_base_tag}{_tags}"
 
-        if _lesser or _greater:
-            _query = f"{_query}{_slo_cond}"
-            if _lesser:
-                _query = f"{_query}{_lesser}"
-            if _greater:
-                _query = f"{_query}{_greater}"
+            if _lesser or _greater:
+                _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
 
-        if rule_filter.prefix is not None or time_flag:
-            _query = f"{_query} WHERE ("
-
-        if rule_filter.prefix is not None:
-            _prefix_cond = "( al.alias LIKE ?||'%')"
-            _query = f"{_query}{_prefix_cond}"
-        if expired_delete_marker is None:
-            if rule_filter.prefix is not None and time_flag:
-                _query = f"{_query}  AND "
-            if formated_days is not None:
-                _time_cond = (
-                    f" ((al.mtime + {formated_days}) < (CAST "
-                    f"(strftime('%s', 'now') AS INTEGER )))"
-                )
-                _query = f"{_query}{_time_cond}"
-            elif date is not None:
-                _time_cond = (
-                    f" ((CAST "
-                    f"(strftime('%s', '{date}') AS INTEGER )) < (CAST "
-                    f"(strftime('%s', 'now') AS INTEGER )))"
-                )
-                _query = f"{_query}{_time_cond}"
-            else:
-                # Condition shouldn't occur
-                # (days or date is present except in case of
-                # expired delete marker)
-                raise ValueError(
-                    "Configuration needs days or date in filter ",
-                )
-
+        # Create WHERE clause
+        where_clauses = []
+        if rule_filter.prefix:
+            where_clauses.append("( al.alias LIKE ?||'%')")
+        if formated_days is not None:
+            where_clauses.append(
+                f" ((al.mtime + {formated_days}) < (CAST "
+                f"(strftime('%s', 'now') AS INTEGER )))"
+            )
+        elif date is not None:
+            where_clauses.append(
+                f" ((CAST (strftime('%s', '{date}') AS INTEGER )) < (CAST "
+                "(strftime('%s', 'now') AS INTEGER )))"
+            )
+        where_clauses.append(self._processed_sql_condition())
         # close WHERE clause
-        if rule_filter.prefix is not None or time_flag:
-            _query = f"{_query} AND {self._processed_sql_condition()} )"
+        _query = f"{_query} WHERE ({' AND '.join(where_clauses)})"
 
         if non_current or versioned:
             _query = f"{_query} GROUP BY al.alias"
         return _query
 
-    def create_noncurrent_view(self, rule, formated_time=None, **kwargs):
+    def create_noncurrent_view(self, rule):
         rule_filter = RuleFilter(rule)
         # Create forced on meta2 side
         _query = (
             "VIEW noncurrent_view AS SELECT *, "
-            "ROW_NUMBER() OVER (PARTITION BY al.alias) AS row_id FROM aliases"
-            " AS al"
+            "LAG(al.mtime, 1, -1) OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
+            " AS non_current_since, "
+            "ROW_NUMBER() OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
+            " AS row_id "
+            "FROM aliases AS al"
         )
 
         _slo_cond = (
@@ -264,46 +337,28 @@ class ContainerLifecycle(object):
                 _query = f"{_query}{_base_tag}{_tags}"
 
         if _lesser or _greater:
-            _query = f"{_query}{_slo_cond}"
-            if _lesser:
-                _query = f"{_query}{_lesser}"
-            if _greater:
-                _query = f"{_query}{_greater}"
+            _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
 
-        if formated_time is not None:
-            _query = f"{_query} WHERE ("
-
-        if formated_time is not None:
-            _time_cond = (
-                f" ((al.mtime + {formated_time}) < (CAST "
-                f"(strftime('%s', 'now') AS INTEGER )))"
-            )
-            _query = f"{_query}{_time_cond}"
-        # close WHERE clause
-        if formated_time is not None:
-            _query = f"{_query} )"
-        _query = f"{_query} ORDER BY al.version ASC"
         return _query
 
     def create_common_views(
-        self, view_name, rule, formated_time=None, date=None, deleted=None, **kwargs
+        self, view_name, formated_time=None, date=None, deleted=None
     ):
         if not view_name:
             raise ValueError("Lifecycle views, empty view name!")
         # CREATE forced on meta2 side
         _query = (
             f"VIEW {view_name} AS SELECT *, "
-            "COUNT(*) AS nb_versions from aliases AS al"
+            "COUNT(*) AS nb_versions FROM aliases AS al "
+            "GROUP BY al.alias HAVING MAX(al.version)"
         )
-        _query = f"{_query} GROUP BY al.alias HAVING MAX(al.version)"
 
         if deleted is not None:
             if deleted:
                 _query = f"{_query} AND (al.deleted=1)"
             else:
                 _query = f"{_query} AND (al.deleted=0)"
-
-        if formated_time is not None:
+        elif formated_time is not None:
             _time_cond = (
                 f" AND ( (al.mtime + {formated_time}) < (CAST "
                 f"(strftime('%s', 'now') AS INTEGER )))"
@@ -316,15 +371,7 @@ class ContainerLifecycle(object):
                 f"(strftime('%s', 'now') AS INTEGER )))"
             )
             _query = f"{_query}{_time_cond}"
-        else:
-            # Condition shouldn't occur
-            # (days or date is present except in case of
-            # expired delete marker)
-            if not deleted:
-                raise ValueError(
-                    "Configuration needs days or date in filter %s",
-                    str(self),
-                )
+
         return _query
 
     def get_prefix(self, rule):
@@ -334,7 +381,7 @@ class ContainerLifecycle(object):
         rule_filter = RuleFilter(rule)
         return rule_filter.prefix
 
-    def noncurrent_query(self, rule, noncurrent_versions):
+    def noncurrent_query(self, rule, noncurrent_versions, formated_time):
         """
         Deal with non current versions
         """
@@ -345,18 +392,18 @@ class ContainerLifecycle(object):
             noncurrent_versions = 0
         # SELECT is forced on meta2 side
         query = (
-            f" , (cv.nb_versions - 1 - {noncurrent_versions}) AS"
-            " noncurrent_nb_candidates,"
-            " (SELECT COUNT(*) FROM noncurrent_view WHERE alias=al.alias)"
-            " AS count, row_id FROM noncurrent_view AS al"
-            " INNER JOIN current_view AS cv ON "
-            " al.alias=cv.alias WHERE ((row_id <= noncurrent_nb_candidates)"
-            f" AND {self._processed_sql_condition()} "
+            "FROM noncurrent_view AS al "
+            f"WHERE (row_id > {1 + noncurrent_versions}) "
+            f"AND {self._processed_sql_condition()} "
         )
-        if rule_filter.prefix is not None:
-            _prefix_cond = " AND ( al.alias LIKE ?||'%') "
-            query = f"{query}{_prefix_cond}"
-        query = f"{query} )"
+        if formated_time is not None:
+            _time_cond = (
+                f" AND ((al.non_current_since + {formated_time}) < "
+                f"CAST(strftime('%s', 'now') AS INTEGER)) "
+            )
+            query = f"{query}{_time_cond}"
+        if rule_filter.prefix:
+            query = f"{query} AND (al.alias LIKE ?||'%')"
         return query
 
     def markers_query(self):
@@ -365,10 +412,10 @@ class ContainerLifecycle(object):
         """
 
         # SELECT is forced on meta2 side
-        query = " WHERE nb_versions=1"
+        query = " WHERE nb_versions=1" f" AND {self._processed_sql_condition()} "
         return query
 
-    def abort_incomplete_query(self, rule, formated_days=None, **kwargs):
+    def abort_incomplete_query(self, rule, formated_days=None):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
         rule_filter = RuleFilter(rule)
@@ -392,8 +439,8 @@ class ContainerLifecycle(object):
         _query = f"{_query}{_time_cond}"
         _query = f"{_query} AND {self._processed_sql_condition()} "
 
-        if rule_filter.prefix is not None:
-            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+        if rule_filter.prefix:
+            _prefix_cond = " AND ( al.alias LIKE ?||'%')"
             _query = f"{_query}{_prefix_cond}"
         _query = f"{_query} )"
 

@@ -32,6 +32,7 @@ class LifecycleAction(str, Enum):
     CHECKPOINT = "checkpoint"
     DELETE = "delete"
     TRANSITION = "transition"
+    ABORT_MPU = "abortmpu"
 
 
 def statsd_key(run_id, step, action):
