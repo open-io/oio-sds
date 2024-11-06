@@ -27,6 +27,7 @@ Build-Depends:
   libattr1-dev,
   libleveldb-dev,
   libsystemd-dev,
+  obsto-libisal-2.31.0-ovhdev1623,
 Standards-Version: 3.9.5
 Homepage: https://openio.io
 
