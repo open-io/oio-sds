@@ -442,12 +442,11 @@ template_meta2_lifecycle_crawler_service = """
 namespace = ${NS}
 user = ${USER}
 volume_list = ${META2_VOLUMES}
-working_dir = ${LIFECYCLEDIR}
 
-wait_random_time_before_starting = True
+wait_random_time_before_starting = False
 use_eventlet = True
 use_marker = False
-interval = 1200
+interval = 300
 report_interval = 300
 scanned_per_second = 10
 # represents 30 seconds at max rate
@@ -2658,9 +2657,10 @@ def generate(options):
     # oio-meta2-lifecycle-crawler
     _tmp_env = subenv(
         {
+            "IP": host,
             "META2_VOLUMES": ",".join(meta2_volumes),
-            "SRVTYPE": "meta2-crawler",
-            "SRVNUM": "3",
+            "SRVTYPE": "meta2-lifecycle-crawler",
+            "SRVNUM": "1",
             "GROUPTYPE": "crawler",
             "EXE": "oio-meta2-crawler",
         }
@@ -2674,7 +2674,7 @@ def generate(options):
     register_service(
         _tmp_env,
         template_systemd_service_lifecycle_crawler,
-        None,
+        crawler_target,
         add_service_to_conf=False,
         coverage_wrapper=shutil.which("coverage")
         + " run --context meta2-crawler --concurrency=eventlet -p ",

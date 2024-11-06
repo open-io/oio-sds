@@ -200,9 +200,13 @@ class Lifecycle(Meta2Filter):
             raise
         return (props, main_account, root_container)
 
-    def _get_run_id(self, suffix):
-        "suffix pattern: {yyyy-mm-dd}.{run_id}"
-        return suffix.rsplit(".", 1)[1]
+    def _get_run_id(self):
+        "suffix pattern: Lifecycle-{run_id}-{timestamp}"
+        suffix_parts = self.suffix.split("-")
+        self.logger.info("parts: %s", suffix_parts)
+        if len(suffix_parts) == 3:
+            return suffix_parts[1]
+        return None
 
     def _process(self, env, cb):
         """Process current container:
@@ -223,7 +227,13 @@ class Lifecycle(Meta2Filter):
 
         self.suffix = meta2db.suffix
 
-        run_id = self._get_run_id(self.suffix)
+        run_id = self._get_run_id()
+        if run_id is None:
+            self.logger.error(
+                "Failed to extract 'run_id' from suffix, meta2db: %s", meta2db.path
+            )
+            self.errors += 1
+            return self.app(env, cb)
 
         self.nb_match_per_container = 0
         try:
@@ -323,53 +333,6 @@ class Lifecycle(Meta2Filter):
                 meta2db.cid,
                 str(exc),
             )
-        finally:
-            # Make call to remove local copy*
-            if not self.direct_remove:
-                params = {
-                    "service_type": "meta2",
-                    "cid": meta2db.cid,
-                    "service_id": self.peer_to_use,
-                    "suffix": self.suffix,
-                }
-                res = self.admin_client.remove_base(**params, reqid=reqid)
-                res_master = res.get(self.peer_to_use, {})
-                if res_master["status"]["status"] != 200:
-                    self.logger.warning(
-                        "Failed to remove the local copy cid: %s msg: %s",
-                        meta2db.cid,
-                        res_master["status"]["message"],
-                    )
-
-            # Remove directory if no original copy (container was
-            # sharded/shrinked,...)
-            full_path_copy = meta2db.path
-            if os.path.islink(full_path_copy):
-                real_copy_path = os.path.realpath(full_path_copy)
-
-                # meta2 db without lifecycle suffix
-                original_meta2_db = real_copy_path.rsplit(".", 1)[0]
-                # Remove directory if it doesn't contain original meta2 db
-                if not os.path.exists(original_meta2_db):
-                    # get base directory of meta2 db
-                    base_dir = original_meta2_db.rsplit("/", 1)[0]
-
-                    # Remove local lifecycle copy
-                    if self.direct_remove:
-                        os.unlink(real_copy_path)
-                    # Add security check
-                    check_based_dir = base_dir.rsplit("/", 1)
-                    if len(check_based_dir) > 1 and len(check_based_dir[1]) == 3:
-                        os.rmdir(base_dir)
-                else:
-                    self.logger.warning(
-                        "Link to original meta2 db %s still exist", original_meta2_db
-                    )
-            else:
-                self.logger.warning(
-                    "Not a sym link to local copy of meta2 db %s",
-                    full_path_copy,
-                )
         return self.app(env, cb)
 
     def _get_shard_range(self, cid, **kwargs):
