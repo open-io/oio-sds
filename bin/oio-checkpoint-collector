@@ -29,7 +29,7 @@ from multiprocessing.queues import Empty
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import read_conf
 from oio.common.constants import LIFECYCLE_PROPERTY_KEY, MULTIUPLOAD_SUFFIX
-from oio.common.exceptions import NoSuchContainer
+from oio.common.exceptions import NoSuchContainer, NoSuchObject, NotFound
 from oio.common.easy_value import int_value
 from oio.common.green import GreenPool, LightQueue, sleep
 from oio.common.kafka import KafkaSender
@@ -54,6 +54,14 @@ class Aborted(Exception):
     pass
 
 
+class LifecycleConfigurationNotFound(Exception):
+    pass
+
+
+class LifecycleBackupContainerNotFound(Exception):
+    pass
+
+
 class CheckpointCollector:
     def __init__(self, conf, logger, feature, run_id):
         self._conf = conf
@@ -67,8 +75,18 @@ class CheckpointCollector:
         self._topic = self._conf.get("topic", CHECKPOINT_TOPIC_DEFAULT)
 
         # Global bucket to save versions fof lifecyce configs
-        self.default_account = self._conf.get("default_lc_account", "AUTH_demo")
-        self.default_bucket = self._conf.get("default_lc_bucket", "lc-bucket")
+        self.lc_backup_account = self._conf.get(
+            "lifecycle_configuration_backup_account"
+        )
+        if not self.lc_backup_account:
+            raise ValueError(
+                "Missing value for 'lifecycle_configuration_backup_account'"
+            )
+        self.lc_backup_bucket = self._conf.get("lifecycle_configuration_backup_bucket")
+        if not self.lc_backup_account:
+            raise ValueError(
+                "Missing value for 'lifecycle_configuration_backup_bucket'"
+            )
 
         # Threading
         self._pool = GreenPool(self._concurrency)
@@ -104,9 +122,9 @@ class CheckpointCollector:
 
     def _reload_progress(self):
         # load marker
-        self._logger.info("Retrieve progress from file: '%s'", self.progress_file)
-        if exists(self.progress_file):
-            with open(self.progress_file, "r", encoding="utf-8") as progress_file:
+        self._logger.info("Retrieve progress from file: '%s'", self._progress_file)
+        if exists(self._progress_file):
+            with open(self._progress_file, "r", encoding="utf-8") as progress_file:
                 line = progress_file.readline()
                 if not line:
                     return
@@ -120,11 +138,11 @@ class CheckpointCollector:
                 self._last_commited_marker = self._marker = (account, bucket)
 
     @property
-    def progress_file(self):
+    def _progress_file(self):
         return join(self._progress_dir, f"checkpoint-collector.progress.{self._run_id}")
 
     @property
-    def error_file(self):
+    def _error_file(self):
         return join(self._progress_dir, f"checkpoint-collector.error.{self._run_id}")
 
     def _make_payload(self, account, bucket, cid, shard_info):
@@ -176,6 +194,54 @@ class CheckpointCollector:
         self._logger.info("Produce event %s", container)
         self._kafka_producer.send(self._topic, payload, flush=True)
 
+    def _upload_configuration(self, account, bucket, props):
+        lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
+        if not lifecycle_config:
+            self._logger.error(
+                "Failed to get lifecycle config for account %s, bucket %s",
+                account,
+                bucket,
+            )
+            raise LifecycleConfigurationNotFound()
+        try:
+            obj_name = f"{account}/{bucket}/lifecycle-config"
+            should_upload = False
+            try:
+                object_props = self._api.object_get_properties(
+                    self.lc_backup_account,
+                    self.lc_backup_bucket,
+                    obj_name,
+                )
+                # Compute lifecycle configuration hash
+                hasher = get_hasher("md5")
+                hasher.update(lifecycle_config.encode("utf-8"))
+                checksum = hasher.hexdigest().upper()
+
+                if checksum != object_props.get("hash"):
+                    should_upload = True
+
+            except (NotFound, NoSuchObject):
+                self._logger.info(
+                    "No previous lifecycle configuration found for %s", obj_name
+                )
+                should_upload = True
+
+            if should_upload:
+                self._api.object_create(
+                    self.lc_backup_account,
+                    self.lc_backup_bucket,
+                    obj_name=obj_name,
+                    data=lifecycle_config,
+                )
+        except NoSuchContainer as exc:
+            self._logger.error(
+                "Failed to access lifecycle configuration backup container, "
+                "account: %s, container: %s",
+                self.lc_backup_account,
+                self.lc_backup_bucket,
+            )
+            raise LifecycleBackupContainerNotFound() from exc
+
     def _process_bucket(self, account, bucket):
         error = None
         self._progress[(account, bucket)] = None
@@ -183,54 +249,26 @@ class CheckpointCollector:
         ctx = (account, bucket)
         try:
             for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
-                _bucket = f"{bucket}{ct_suffix}"
+                container = f"{bucket}{ct_suffix}"
                 try:
                     self._logger.info(
                         "Get info on container: acct=%s, ref=%s", account, bucket
                     )
-                    props = self._api.container_show(account, bucket)
+                    props = self._api.container_show(account, container)
                     if not ct_suffix:
-                        lifecycle_config = props["properties"].get(
-                            LIFECYCLE_PROPERTY_KEY
-                        )
-                        if not lifecycle_config:
-                            self._logger.warning(
-                                "Failed to get lifecycle config for bucket %s", bucket
-                            )
-                            continue
-                        obj_name = f"{account}/{bucket}/lifecycle-config"
-                        extra_args = {}
-                        extra_args["prefix"] = obj_name
-                        objects_meta = self._api.object_list(
-                            self.default_account,
-                            self.default_bucket,
-                            **extra_args,
-                        )
-                        objects = objects_meta.get("objects", [])
-                        if len(objects):
-                            last_object = objects[0]
-                            hash_object = last_object.get("hash")
+                        # This is the main container
+                        self._upload_configuration(account, bucket, props)
 
-                            hasher = get_hasher("md5")
-                            hasher.update(lifecycle_config.encode("utf-8"))
-                            checksum = hasher.hexdigest().upper()
-                            if checksum != hash_object:
-                                self._api.object_create(
-                                    self.default_account,
-                                    self.default_bucket,
-                                    obj_name=obj_name,
-                                    data=lifecycle_config,
-                                )
-                        else:
-                            self._api.object_create(
-                                self.default_account,
-                                self.default_bucket,
-                                obj_name=obj_name,
-                                data=lifecycle_config,
-                            )
-                    self._process_container(account, _bucket, ctx=ctx)
+                    self._process_container(account, container, ctx=ctx)
                 except NoSuchContainer:
+                    self._logger.info(
+                        "Container not found account: %s, container: %s",
+                        account,
+                        container,
+                    )
                     continue
+        except LifecycleBackupContainerNotFound:
+            raise
         except Exception as exc:
             self._logger.error("Failed to process bucket %s, reason: %s", bucket, exc)
             error = exc
@@ -257,6 +295,7 @@ class CheckpointCollector:
         marker = None
 
         while True:
+            key = None
             value = None
             if self._progress:
                 # Retrieve first item
@@ -271,8 +310,8 @@ class CheckpointCollector:
 
     def _fetch_progression(self):
         last_marker = None
-        with open(self.progress_file, "w", encoding="utf-8") as progress_file:
-            with open(self.error_file, "w", encoding="utf-8") as error_file:
+        with open(self._progress_file, "w", encoding="utf-8") as progress_file:
+            with open(self._error_file, "w", encoding="utf-8") as error_file:
                 while True:
                     try:
                         result = self._result_queue.get(timeout=1)
