@@ -50,7 +50,7 @@ class Meta2Worker(PipelineWorker):
             self.logger.debug("Ignoring sqlite journal file: %s", path)
             self.ignored_paths += 1
             return False
-        db_id = path.rsplit("/")[-1].split(".", 4)
+        db_id = path.rsplit("/")[-1].split(".", 3)
 
         if len(db_id) < 3:
             self.logger.warning("Malformed db file name: %s", path)
