@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 # License along with this library.
 
 
+from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
 
 
@@ -33,4 +34,9 @@ class Filter(object):
         return self.app(env, cb)
 
     def __call__(self, env, cb):
-        self.process(env, cb)
+        res = self.process(env, cb)
+        if res is not None:
+            raise OioException(
+                f"Unexpected return value when filter {self.__class__.__name__} "
+                f"processed an event: {res}"
+            )
