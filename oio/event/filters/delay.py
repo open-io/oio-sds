@@ -47,30 +47,27 @@ class DelayFilter(Filter):
             self.conf.get("events_time_to_live"), self.DEFAULT_EVENT_TIME_TO_LIVE
         )
 
-    def process(self, env, cb):
-        if not self._producer:
-            self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
-
+    def _process(self, env):
         # Ensure the event contains all required data
         data = env.get("data")
         if not data:
-            return EventError(body="'data' field is missing")(env, cb)
+            return EventError(body="'data' field is missing")
 
         next_due_time = data.get("next_due_time")
         if next_due_time is None:
-            return EventError(body="'next_due_time' field is missing")(env, cb)
+            return EventError(body="'next_due_time' field is missing")
 
         due_time = data.get("due_time")
         if due_time is None:
-            return EventError(body="'due_time' field is missing")(env, cb)
+            return EventError(body="'due_time' field is missing")
 
         destination_topic = data.get("dest_topic")
         if not destination_topic:
-            return EventError(body="'dest_topic' field is missing")(env, cb)
+            return EventError(body="'dest_topic' field is missing")
 
         source_event = data.get("source_event")
         if not source_event:
-            return EventError(body="'source_event' field is missing")(env, cb)
+            return EventError(body="'source_event' field is missing")
 
         requeue = due_time > next_due_time
         now = datetime.now().timestamp()
@@ -99,6 +96,13 @@ class DelayFilter(Filter):
 
             self._producer.send(destination_topic, source_event)
 
+    def process(self, env, cb):
+        if not self._producer:
+            self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+
+        resp = self._process(env)
+        if resp:
+            return resp(env, cb)
         return self.app(env, cb)
 
 
