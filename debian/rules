@@ -54,6 +54,7 @@ override_dh_install:
 	  --upgrade-pip \
 	  --preinstall "setuptools>=48.0.0" \
 	  --preinstall wheel \
+	  --extra-pip-arg --no-binary=pyeclib \
 	  --index-url https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
 	# do dh_install after dh_virtualenv as it cleans everything
 	# make install, to install oio except the python part
