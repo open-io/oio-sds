@@ -250,7 +250,7 @@ class ReplicationRecovery(Command):
         replicator_id = match.group(2)
         event = {}
         event["event"] = EventTypes.CONTENT_NEW
-        event["when"] = time.time()
+        event["when"] = int(time.time() * 1000000)  # use time in micro seconds
         event["url"] = {}
         event["url"]["ns"] = namespace
         event["url"]["account"] = account
