@@ -304,6 +304,9 @@ class Lifecycle(Meta2Filter):
 
             self._context = Context(run_id, main_account, root_container, container)
 
+            kwargs = {}
+            kwargs["run_id"] = run_id
+            kwargs["main_account"] = main_account
             # If number of matches from metrics >= self.budget_per_bucket
             try:
                 metrics = self._metrics.get_bucket_metrics(
@@ -360,6 +363,7 @@ class Lifecycle(Meta2Filter):
                 versioning,
                 reqid=reqid,
                 has_bucket_logging=has_bucket_logging,
+                **kwargs,
             )
             self.successes += 1
         except NotFound as exc:
@@ -695,6 +699,9 @@ class Lifecycle(Meta2Filter):
 
             if prefix:
                 data["prefix"] = prefix
+
+            data["run_id"] = kwargs.get("run_id")
+            data["main_account"] = kwargs.get("main_account")
 
             params = {
                 "cid": cid,
