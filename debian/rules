@@ -23,6 +23,8 @@ export C_INCLUDE_PATH := $(PYTHON_PATH)/include
 
 export DH_VIRTUALENV_INSTALL_ROOT=/opt
 
+export PYECLIB_LIB_PATH=$(DESTDIR)/${PREFIX}/lib/python3.7/site-packages/pyeclib.libs
+
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/default.mk
 
@@ -54,10 +56,14 @@ override_dh_install:
 	  --upgrade-pip \
 	  --preinstall "setuptools>=48.0.0" \
 	  --preinstall wheel \
+	  --extra-pip-arg --no-binary=pyeclib
 	  --index-url https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
 	# do dh_install after dh_virtualenv as it cleans everything
 	# make install, to install oio except the python part
 	dh_install
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
 	# copy zookeeper libraries not to depend on zookeeper package
 	cp -a ${ZOOKEEPER_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
 	# create env file for library directory
@@ -73,6 +79,52 @@ override_dh_install:
 	# fix shebangs
 	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
 	./tools/patch-python-modules.sh "${DESTDIR}${PREFIX}"
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_installdocs:
+	dh_installdocs
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_installchangelogs:
+	dh_installchangelogs
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_installinit:
+	dh_installinit
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_perl:
+	dh_perl
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_link:
+	dh_link
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_strip_nondeterminism:
+	dh_strip_nondeterminism
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_compress:
+	dh_compress
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_fixperms:
+	dh_fixperms
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_missing:
+	dh_missing
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_strip:
+	dh_strip
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
+	ldd ${PYECLIB_LIB_PATH}/* || true
+
+override_dh_makeshlibs:
+	dh_makeshlibs
+	sha256sum ${PYECLIB_LIB_PATH}/* || true
 
 # remove postinst from dh-virtualenv as it's buggy and useless
 override_dh_installdeb:
