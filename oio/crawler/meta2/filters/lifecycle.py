@@ -15,6 +15,7 @@
 
 import os
 import datetime
+from collections import Counter
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
@@ -37,10 +38,16 @@ from oio.crawler.meta2.meta2db import Meta2DB
 from oio.container.lifecycle import (
     ContainerLifecycle,
     RuleFilter,
+    lifecycle_backup_path,
 )
 
 from oio.directory.admin import AdminClient
 from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
+from oio.container.lifecycle import (
+    AbortMpuAction,
+    DeleteMarkerAction,
+    NonCurrentExpirationAction,
+)
 
 
 class Context:
@@ -62,10 +69,17 @@ class Lifecycle(Meta2Filter):
     NAME = "Lifecycle"
     PROCESS_COPY = True
     PROCESS_ORIGINAL = False
+    PROGRESSION_MARKER_PREFIX = "lifecycle.processed."
 
     # Maximum number of versions to handle in NoncurrentVersion actions is
     # limited to 50.
     LIMIT = 50
+
+    def __init__(self, app, conf, logger=None):
+        self.progression = []
+        self.lifecycle_backup_account = None
+        self.lifecycle_backup_bucket = None
+        super().__init__(app, conf, logger=logger)
 
     def init(self):
         self.api = self.app_env["api"]
@@ -83,6 +97,21 @@ class Lifecycle(Meta2Filter):
             logger=self.logger,
             **container_args,
         )
+        # Lifecycle backup bucket credentials
+        self.lifecycle_backup_account = self.conf.get(
+            "lifecycle_configuration_backup_account"
+        )
+        if not self.lifecycle_backup_account:
+            raise ValueError(
+                "Missing value for 'lifecycle_configuration_backup_account'"
+            )
+        self.lifecycle_backup_bucket = self.conf.get(
+            "lifecycle_configuration_backup_bucket"
+        )
+        if not self.lifecycle_backup_bucket:
+            raise ValueError(
+                "Missing value for 'lifecycle_configuration_backup_bucket'"
+            )
 
         # Metrics helper
         self._metrics = LifecycleMetricTracker(self.conf)
@@ -114,6 +143,8 @@ class Lifecycle(Meta2Filter):
 
         # shorten days / dates
         self.shorten_days_dates = int_value(self.conf.get("shorten_days_dates"), 1440)
+        if not self.bypass_days_dates:
+            self.shorten_days_dates = 1
 
         self.suffix = None
 
@@ -126,7 +157,6 @@ class Lifecycle(Meta2Filter):
 
         # Current container type and info
         self.is_mpu_container = False
-        self.is_shard_container = False
         self.lower = None
         self.upper = None
 
@@ -143,9 +173,6 @@ class Lifecycle(Meta2Filter):
         # To have a ratio of finished actions
         self.count_actions = 0
         self.finished_actions = 0
-        # Updated when using user defined order
-        self.finished_rules = 0
-        self.count_disabled_rules = 0
 
         self.conf_not_found = 0
 
@@ -176,7 +203,6 @@ class Lifecycle(Meta2Filter):
             self.logger.info("Lifeycle processing shard %s", container)
             main_account = account[len(SHARDING_ACCOUNT_PREFIX) :]
             root_container = container.rsplit("-", 3)[0]
-            self.is_shard_container = True
         else:
             self.logger.info("Lifeycle processing container %s", container)
             main_account = account
@@ -203,10 +229,22 @@ class Lifecycle(Meta2Filter):
     def _get_run_id(self):
         "suffix pattern: Lifecycle-{run_id}-{timestamp}"
         suffix_parts = self.suffix.split("-")
-        self.logger.info("parts: %s", suffix_parts)
         if len(suffix_parts) == 3:
             return suffix_parts[1]
         return None
+
+    def _retrieve_lifecycle_config(self, account, bucket, reqid=None):
+        _, stream = self.api.object_fetch(
+            self.lifecycle_backup_account,
+            self.lifecycle_backup_bucket,
+            lifecycle_backup_path(account, bucket),
+            properties=False,
+            reqid=reqid,
+        )
+        config = b""
+        for chunk in stream:
+            config += chunk
+        return config
 
     def _process(self, env, cb):
         """Process current container:
@@ -221,7 +259,6 @@ class Lifecycle(Meta2Filter):
 
         self.peer_to_use = env["volume_id"]
         self.is_mpu_container = False
-        self.is_shard_container = False
 
         reqid = request_id("lc-crawler-")
 
@@ -235,7 +272,12 @@ class Lifecycle(Meta2Filter):
             self.errors += 1
             return self.app(env, cb)
 
-        self.nb_match_per_container = 0
+        # Get progression from meta2db
+        self._load_progression(meta2db)
+        # Check if container is fully processed
+        if self._is_processed("container"):
+            return self.app(env, cb)
+
         try:
             account, container = self.api.resolve_cid(meta2db.cid)
             if account is None or container is None:
@@ -244,27 +286,16 @@ class Lifecycle(Meta2Filter):
                 )
                 return self.app(env, cb)
             # Get properties from main container (if Lifecycle config is removed?)
-            (props, main_account, root_container) = self._get_main_container_props(
+            props, main_account, root_container = self._get_main_container_props(
                 account, container
             )
-            lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
-            versioning = props["system"].get(M2_PROP_VERSIONING_POLICY)
+            # Retrieve versioning status
+            status = props["system"].get(M2_PROP_VERSIONING_POLICY)
+            versioning = status is not None and int(status) != 0
 
             logging_config = props["properties"].get(LOGGING_PROPERTY_KEY)
             has_bucket_logging = logging_config is not None
-
-            if lifecycle_config is None:
-                self.logger.warning(
-                    "No lifecycle configuration for given container: %s, "
-                    " account: %s, cid: %s",
-                    container,
-                    account,
-                    meta2db.cid,
-                )
-                self.conf_not_found += 1
-                return self.app(env, cb)
-
-            if logging_config:
+            if has_bucket_logging:
                 self.logger.info(
                     "Access logging enabled for root_container %s, account: %s",
                     root_container,
@@ -289,40 +320,42 @@ class Lifecycle(Meta2Filter):
                         root_container,
                         self.budget_per_bucket,
                     )
-                    return
+                    return self.app(env, cb)
             except NotFound:
                 pass
+
+            lifecycle_conf = self._retrieve_lifecycle_config(
+                main_account, root_container, reqid=reqid
+            )
+            if lifecycle_conf is None:
+                self.logger.warning(
+                    "No lifecycle configuration for given container: %s, "
+                    " account: %s, cid: %s",
+                    container,
+                    account,
+                    meta2db.cid,
+                )
+                self.conf_not_found += 1
+                return self.app(env, cb)
 
             lc_instance = ContainerLifecycle(
                 self.api, main_account, root_container, logger=self.logger
             )
+            lc_instance.load(json_conf=lifecycle_conf)
 
-            lc_instance.load()
-
-            if self.is_shard_container:
-                self.lower, self.upper = self._get_shard_range(meta2db.cid, reqid=reqid)
-
-                # Trim < and > from lower and upper
-                self.lower = self.lower[1:]
-                self.upper = self.upper[1:]
-
-            # Get ended actions, rules status from local database
-            ended_rules = self._get_finished_status(meta2db, "ended")
-            key_container = ".".join(["ended", "processing"])
-            if self._is_processed(ended_rules, key_container):
-                return self.app(env, cb)
+            self.lower, self.upper = self._get_container_range(meta2db.cid, reqid=reqid)
 
             # init stats
             self._init_container_stats(lc_instance)
-
+            # Budget tracking
+            self.nb_match_per_container = 0
             # Apply rules/actions as defined in configuration
-            self._exec_rules_user_defined_order(
+            self._apply_rules(
                 lc_instance,
                 meta2db,
                 account,
                 container,
                 versioning,
-                ended_rules,
                 reqid=reqid,
                 has_bucket_logging=has_bucket_logging,
             )
@@ -335,12 +368,16 @@ class Lifecycle(Meta2Filter):
             )
         return self.app(env, cb)
 
-    def _get_shard_range(self, cid, **kwargs):
+    def _get_container_range(self, cid, **kwargs):
         props = self.container.container_get_properties(
             cid=cid, service_id=self.peer_to_use, suffix=self.suffix, **kwargs
         )
-        lower = props.get("system").get(M2_PROP_SHARDING_LOWER)
-        upper = props.get("system").get(M2_PROP_SHARDING_UPPER)
+        lower = props.get("system").get(M2_PROP_SHARDING_LOWER) or ""
+        upper = props.get("system").get(M2_PROP_SHARDING_UPPER) or ""
+        if lower.startswith(">"):
+            lower = lower[1:]
+        if upper.startswith("<"):
+            upper = upper[1:]
         return (lower, upper)
 
     def _gen_views_non_current_action(
@@ -350,15 +387,14 @@ class Lifecycle(Meta2Filter):
 
         noncurrent_view depends on current_view.
         """
-        view_queries = {}
         noncurrent_view = lc.create_noncurrent_view(rule, non_current_days_in_sec)
         current_view = lc.create_common_views(
             "current_view", rule, non_current_days_in_sec
         )
-        view_queries["noncurrent_view"] = noncurrent_view
-        view_queries["current_view"] = current_view
-
-        return view_queries
+        return {
+            "noncurrent_view": noncurrent_view,
+            "current_view": current_view,
+        }
 
     def _gen_views_current_action(self, lc, rule, days_in_sec, date):
         """Generate views to handle current version and delete marker
@@ -366,48 +402,19 @@ class Lifecycle(Meta2Filter):
         Current views are used in case of versioned container.
         No need to create them for non versioned container
         """
-        view_queries = {}
         delete_marker_view = lc.create_common_views(
             "marker_view", rule, days_in_sec, date, deleted=True
         )
-        vesioned_view = lc.create_common_views(
+        versioned_view = lc.create_common_views(
             "versioned_view", rule, days_in_sec, deleted=False
         )
+        return {
+            "marker_view": delete_marker_view,
+            "versioned_view": versioned_view,
+        }
 
-        view_queries["marker_view"] = delete_marker_view
-        view_queries["versioned_view"] = vesioned_view
-
-        return view_queries
-
-    def _is_non_current(self, act):
-        act_type = next(iter(act))
-        if act_type in ("NoncurrentVersionExpiration", "NoncurrentVersionTransitions"):
-            return True
-        return False
-
-    def _is_abort_impu(self, act):
-        act_type = next(iter(act))
-        if act_type == "AbortIncompleteMultipartUpload":
-            return True
-        return False
-
-    def _get_non_current_days(self, act):
-        act_type = next(iter(act))
-        if self._is_non_current(act):
-            return act[act_type].get("NoncurrentDays")
-        return None
-
-    def _get_non_current_versions(self, act):
-        act_type = next(iter(act))
-        if self._is_non_current(act):
-            return act[act_type].get("NewerNoncurrentVersions")
-        return None
-
-    def _get_policy(self, act):
-        act_type = next(iter(act))
-        if act_type in ("Transitions", "NoncurrentVersionTransitions"):
-            return act[act_type].get("StorageClass")
-        return None
+    def _get_policy(self, action):
+        return action.get("StorageClass")
 
     def _get_action_name(self, act):
         if isinstance(act, dict):
@@ -419,49 +426,39 @@ class Lifecycle(Meta2Filter):
         return action_name
 
     def _is_prefix_outside_range(self, rule):
-        if self.is_shard_container:
-            rule_filter = RuleFilter(rule)
-            if rule_filter.prefix:
-                if (self.lower and rule_filter.prefix < self.lower) or (
-                    self.upper and rule_filter.prefix >= self.upper
-                ):
-                    self.logger.info(
-                        "Skipped rule %s, prefix %s is outside of range [%s: %s]",
-                        rule,
-                        rule_filter.prefix,
-                        self.lower,
-                        self.upper,
-                    )
-                    return True
+        rule_filter = RuleFilter(rule)
+        if rule_filter.prefix:
+            if (self.lower and rule_filter.prefix < self.lower) or (
+                self.upper and rule_filter.prefix >= self.upper
+            ):
+                self.logger.info(
+                    "Skipped rule %s, prefix %s is outside of range [%s: %s]",
+                    rule,
+                    rule_filter.prefix,
+                    self.lower,
+                    self.upper,
+                )
+                return True
         return False
-
-    def _get_actions(self, rule):
-        """
-        Note the changes:
-        """
-        actions = {}
-        expiration = rule.get("Expiration", None)
-        transitions = rule.get("Transitions", [])
-        noncurrent_expiration = rule.get("NoncurrentVersionExpiration", None)
-        noncurrent_transitions = rule.get("NoncurrentVersionTransitions", [])
-        abort_mpu = rule.get("AbortIncompleteMultipartUpload", None)
-        if expiration is not None:
-            actions["Expiration"] = [expiration]
-        if len(transitions) > 0:
-            actions["Transitions"] = transitions
-        if noncurrent_expiration is not None:
-            actions["NoncurrentVersionExpiration"] = [noncurrent_expiration]
-        if len(noncurrent_transitions) > 0:
-            actions["NoncurrentVersionTransitions"] = noncurrent_transitions
-
-        if abort_mpu is not None:
-            actions["AbortIncompleteMultipartUpload"] = [abort_mpu]
-        return actions
 
     def _is_budget_reached(self):
         if self.budget_per_container:
             return self.nb_match_per_container >= self.budget_per_container
         return False
+
+    def _get_days(self, action):
+        for field in ("Days", "DaysAfterInitiation", "NoncurrentDays"):
+            days = action.get(field)
+            if days is None:
+                continue
+            return 86400 * int(days) / self.shorten_days_dates
+        return None
+
+    def _get_date(self, action):
+        date = action.get("Date")
+        if date is not None:
+            return self._date_or_bypass(date)
+        return None
 
     def _process_action(
         self,
@@ -469,6 +466,7 @@ class Lifecycle(Meta2Filter):
         cid,
         account,
         container,
+        action_class,
         rule,
         action,
         versioning_enabled,
@@ -477,186 +475,99 @@ class Lifecycle(Meta2Filter):
         """Process one action by batches.
         Handle different types of actions and versioned/not versioned container
         """
-
         rule_id = rule.get("ID")
-        prefix = lc_instance.get_prefix(rule)
-        days_in_sec = None
-        base_sql_query = None
-        queries = {}
+        rule_filter = RuleFilter(rule)
         view_queries = {}
-        action_name = self._get_action_name(action)
-        non_current = self._is_non_current(action)
-        abort_action = self._is_abort_impu(action)
 
-        # Default value for NoncurrentExpiration/ is zero
-        newer_non_current_versions = self._get_non_current_versions(action)
-        non_current_days = self._get_non_current_days(action)
-        days, date, delete_marker = self._get_action_parameters(action)
-        policy = self._get_policy(action)
-
-        if not versioning_enabled and action_name in (
-            "NoncurrentVersionTransitions",
-            "NoncurrentVersionExpiration",
-        ):
-            self.logger.warning(
-                "Unsupported action %s in rule_id %s for non versioned container: "
-                "%s account: %s",
-                action_name,
-                rule_id,
-                container,
-                account,
-            )
-            return True
-
-        # AbortIncompleteMultiPartUpload doesn't depend on versioning
-        if abort_action:
-            days_in_sec = self._days_or_bypass(days)
-            base_sql_query = lc_instance.abort_incomplete_query(rule, days_in_sec)
-            queries["base"] = base_sql_query
-            return self._send_query_events(
-                cid,
-                queries,
-                action,
-                view_queries,
-                policy,
-                prefix,
-                rule_id,
-                **kwargs,
-            )
-
-        # Versioning
-        if versioning_enabled:
-            if non_current:
-                # NoncurrentVersions, NoncurrentVersions doesn't support dates
-                if non_current_days is None:
-                    self.logger.warning(
-                        "Shouldn't occur no non_current_days of  action %s "
-                        "  rule_id %s for non versioned bucket %s ",
-                        action_name,
-                        rule_id,
-                        container,
-                    )
-                    return True
-                non_current_days_in_sec = self._days_or_bypass(non_current_days)
-
+        if isinstance(action_class, AbortMpuAction):
+            # AbortIncompleteMultiPartUpload doesn't depend on versioning
+            query = lc_instance.abort_incomplete_query(rule, self._get_days(action))
+        elif versioning_enabled:
+            # Versioned
+            if isinstance(action_class, DeleteMarkerAction):
+                query = lc_instance.markers_query()
+                view_queries = self._gen_views_current_action(
+                    lc_instance, rule, None, None
+                )
+            elif not action_class.current:
+                # Non current
+                newer_non_current_versions = action.get("NewerNoncurrentVersions")
                 # Create views
                 view_queries = self._gen_views_non_current_action(
-                    lc_instance, rule, non_current_days_in_sec
+                    lc_instance, rule, self._get_days(action)
                 )
-                queries["base"] = lc_instance.noncurrent_query(
-                    rule, newer_non_current_versions
-                )
-            # Current versions: Expiration/Transition
+                query = lc_instance.noncurrent_query(rule, newer_non_current_versions)
             else:
-                if days is not None:
-                    days_in_sec = self._days_or_bypass(days)
-                if date is not None:
-                    date = self._date_or_bypass(date)
+                # Current versions: Expiration/Transition
+                days_in_sec = self._get_days(action)
+                date = self._get_date(action)
                 view_queries = self._gen_views_current_action(
                     lc_instance, rule, days_in_sec, date
                 )
-
-                if delete_marker is None:
-                    queries["base"] = lc_instance.build_sql_query(
-                        rule, days_in_sec, None, False, True, True
-                    )
-                elif delete_marker:
-                    queries["marker"] = lc_instance.markers_query()
-                else:
-                    self.logger.warning(
-                        "Skip Expiration with deletemarker set to false rule_id %s,"
-                        " action %s",
-                        rule_id,
-                        action_name,
-                    )
-                    return True
-
-        else:  # non versioned
-            if days is not None:
-                days_in_sec = self._days_or_bypass(days)
-            if date is not None:
-                date = self._date_or_bypass(date)
-            base_sql_query = lc_instance.build_sql_query(rule, days_in_sec, date)
-            queries["base"] = base_sql_query
+                query = lc_instance.build_sql_query(
+                    rule, days_in_sec, date, False, True, True
+                )
+        else:
+            # Non versioned
+            days_in_sec = self._get_days(action)
+            date = self._get_date(action)
+            query = lc_instance.build_sql_query(rule, days_in_sec, date)
 
         return self._send_query_events(
             cid,
-            queries,
+            query,
             action,
             view_queries,
-            policy,
-            prefix,
+            self._get_policy(action),
+            rule_filter.prefix,
             rule_id,
+            action_class,
             **kwargs,
         )
 
-    def _exec_rules_user_defined_order(
-        self, lc, meta2db, account, container, versioning_enabled, ended_rules, **kwargs
+    def _apply_rules(
+        self, lc, meta2db, account, container, versioning_enabled, **kwargs
     ):
-        json_dict = lc.conf_json
-
-        cid = meta2db.cid
-
-        for rule_id, rule in json_dict["Rules"].items():
-            rule["ID"] = rule_id
-            key_rule = ".".join(["ended", "rule", rule_id])
-            if rule["Status"] == "Disabled":
-                self.logger.info(
-                    "Lifecycle rule with id %s is disabled ", rule.get("ID")
-                )
-                self.count_disabled_rules += 1
-                self.finished_rules += 1
+        for action_id, action_class, rule, action in lc.actions_iter(
+            use_versioning=versioning_enabled, is_mpu_container=self.is_mpu_container
+        ):
+            if self._is_processed(action_id):
+                self.logger.debug("Action '%s' already processed")
                 continue
 
-            if self._is_processed(ended_rules, key_rule):
-                self.finished_rules += 1
-                continue
+            self.logger.info(
+                "Processing action %s(%s %s) for container: %s",
+                action_class,
+                action_class.rule_id,
+                action_id,
+                meta2db.path,
+            )
 
             if self._is_prefix_outside_range(rule):
-                self.finished_rules += 1
                 continue
-            actions = self._get_actions(rule)
-            count_actions = 0
-            for act_type, act_list in actions.items():
-                count_actions += len(act_list)
 
-            for act_type, act_list in actions.items():
-                if self.is_mpu_container:
-                    if act_type != "AbortIncompleteMultipartUpload":
-                        self.finished_actions += 1
-                        continue
-                else:
-                    if act_type == "AbortIncompleteMultipartUpload":
-                        self.finished_actions += 1
-                        continue
-                for i, act in enumerate(act_list):
-                    current_action = {act_type: act}
-                    key_action = ".".join(
-                        ["ended", "action", act_type, str(i), rule_id]
-                    )
-                    if self._is_processed(ended_rules, key_action):
-                        self.finished_actions += 1
-                        continue
-                    is_finished_action = self._process_action(
-                        lc,
-                        cid,
-                        account,
-                        container,
-                        rule,
-                        current_action,
-                        versioning_enabled,
-                        **kwargs,
-                    )
-                    if is_finished_action:
-                        self.finished_actions += 1
-                        self._set_finished_status(meta2db, key_action)
-            if self.finished_actions == count_actions:
-                self.finished_rules += 1
-                self._set_finished_status(meta2db, key_rule)
-
-        if self.finished_rules == len(json_dict["Rules"]):
-            key_container = ".".join(["ended", "processing"])
-            self._set_finished_status(meta2db, key_container)
+            is_finished_action = self._process_action(
+                lc,
+                meta2db.cid,
+                account,
+                container,
+                action_class,
+                rule,
+                action,
+                versioning_enabled,
+                **kwargs,
+            )
+            if not is_finished_action:
+                # We reached the budget
+                break
+            self._set_finished_status(meta2db, action_id)
+            self.logger.info(
+                "Container %s action %s processed", meta2db.path, action_id
+            )
+        else:
+            # All action are processed
+            self.logger.info("Container %s fully processed", meta2db.path)
+            self._set_finished_status(meta2db, "container")
 
     def _create_views_request(self, cid, view_queries, **kwargs):
         """Create views
@@ -700,129 +611,116 @@ class Lifecycle(Meta2Filter):
         Store {key, 1} in admin table, the key reflects a finished action,
         finished rule or finished processing
         """
-        statement = "INSERT OR REPLACE INTO admin(k,v) " f'VALUES ("{key}", "1");'
+        statement = (
+            "INSERT OR REPLACE INTO admin(k,v) "
+            f'VALUES ("{self.PROGRESSION_MARKER_PREFIX}{key}", "1");'
+        )
         res = meta2db.execute_sql(statement, open_mode="rw")
         return res
 
-    def _get_finished_status(self, meta2db, key):
+    def _load_progression(self, meta2db):
         """
-        Check if key exists in admin table
+        Load progression from database
         """
-        statement = f'SELECT k, v FROM admin where k LIKE "{key}.%";'
-        processed = {}
-        for key, value in meta2db.execute_sql(statement, open_mode="ro"):
-            processed[key] = value
-        return debinarize(processed)
+        statement = (
+            f'SELECT k, v FROM admin where k LIKE "{self.PROGRESSION_MARKER_PREFIX}%";'
+        )
+        processed = []
+        for key, _value in meta2db.execute_sql(statement, open_mode="ro"):
+            processed.append(key[len(self.PROGRESSION_MARKER_PREFIX) :])
+        self.progression = debinarize(processed)
 
-    def _is_processed(self, ended_rules, key):
+    def _is_processed(self, key):
         """
         Check if a container, rule action is done.
         This is accomplished by setting a specific key in admin table.
         """
-        return key in ended_rules
+        return key in self.progression
 
     def _send_query_events(
         self,
         cid,
-        queries,
+        query,
         action,
         view_queries,
         policy,
         prefix,
         rule_id,
+        action_class,
         **kwargs,
     ):
-        is_finished = False
-        action_name = self._get_action_name(action)
-        for key_query, val_query in queries.items():
-            offset = self._get_offest(cid, action_name, rule_id, **kwargs)
-            while True:
-                # Check budget first
-                if self._is_budget_reached():
-                    self.logger.info(
-                        "Budget is reached for container cid %s rule %s, action %s",
-                        cid,
-                        rule_id,
-                        action,
-                    )
-                    return is_finished
-
-                sql_query = val_query
-                if action_name in (
-                    "NoncurrentVersionExpiration",
-                    "NoncurrentVersionTransition",
-                ):
-                    sql_query = (
-                        f"{sql_query} limit {self.noncurrent_limit}"
-                        f" offset {offset} "
-                    )
-                else:
-                    sql_query = (
-                        f"{sql_query} limit {self.batch_size}" f" offset {offset} "
-                    )
-                params = {"cid": cid, "service_id": self.peer_to_use}
-                if action_name in (
-                    "NoncurrentVersionExpiration",
-                    "NoncurrentVersionTransition",
-                ):
-                    params["action_type"] = "noncurrent"
-                else:
-                    params["action_type"] = "current"
-
-                data = {}
-                data["action"] = action_name
-                data["suffix"] = self.suffix
-                if offset == 0 and key_query in ("base", "marker"):
-                    resp = self._create_views_request(cid, view_queries, **kwargs)
-                    if resp.status != 204:
-                        self.logger.error(
-                            "Failed to create views for rule %s," " action %s",
-                            rule_id,
-                            action_name,
-                        )
-                        break
-                if key_query == "marker":
-                    data["is_markers"] = 1
-
-                data["query"] = sql_query
-                data["query_set_tag"] = val_query
-                data["storage_class"] = policy
-                data["batch_size"] = self.batch_size
-                data["rule_id"] = rule_id
-                if prefix:
-                    data["prefix"] = prefix
-                data["has_bucket_logging"] = kwargs.get("has_bucket_logging", False)
-
-                resp, _ = self.proxy_client._request(
-                    "POST",
-                    "/container/lifecycle/apply",
-                    params=params,
-                    json=data,
-                    **kwargs,
-                )
-
-                if resp.status != 204:
-                    self.logger.error(
-                        "Failed to apply batch for rule %s, " " action %s",
-                        rule_id,
-                        action_name,
-                    )
-                    break
-
-                count = int(resp.getheader("x-oio-count"))
-                offset += count
-                self._update_container_stats(rule_id, action_name, count)
-                self.nb_match_per_container += count
-                if count == 0:
-                    is_finished = True
-                    break
-        return is_finished
-
-    def _is_last_action_last_rule(self, rules, actions, count_rules, count_actions):
-        if (count_rules == len(rules) - 1) and (count_actions == len(actions) - 1):
-            return True
-        else:
+        # Create view
+        # TODO: Install only if not already present
+        resp = self._create_views_request(cid, view_queries, **kwargs)
+        if resp.status != 204:
+            self.logger.error(
+                "Failed to create views for rule %s, action %s",
+                rule_id,
+                action_class,
+            )
             return False
+
+        while True:
+            # Check budget first
+            if self._is_budget_reached():
+                self.logger.info(
+                    "Budget is reached for container cid %s rule %s, action %s",
+                    cid,
+                    rule_id,
+                    action,
+                )
+                return False
+
+            if not action_class.current:
+                limit = self.noncurrent_limit
+            else:
+                limit = self.batch_size
+
+            sql_query = f"{query} LIMIT {limit} "
+
+            data = {
+                "action": action_class.field,
+                "suffix": self.suffix,
+                "query": sql_query,
+                "query_set_tag": query,
+                "storage_class": policy,
+                "batch_size": self.batch_size,
+                "rule_id": rule_id,
+                "has_bucket_logging": kwargs.get("has_bucket_logging", False),
+            }
+            if isinstance(action_class, DeleteMarkerAction):
+                data["is_markers"] = 1
+
+            if prefix:
+                data["prefix"] = prefix
+
+            params = {
+                "cid": cid,
+                "service_id": self.peer_to_use,
+                "action_type": action_class.field,
+            }
+
+            resp, _ = self.proxy_client._request(
+                "POST",
+                "/container/lifecycle/apply",
+                params=params,
+                json=data,
+                **kwargs,
+            )
+            if resp.status != 204:
+                self.logger.error(
+                    "Failed to apply batch for rule %s, action %s",
+                    rule_id,
+                    action_class.field,
+                )
+                return False
+
+            count = int(resp.getheader("x-oio-count"))
+            self._update_container_stats(rule_id, action_class, count)
+            self.nb_match_per_container += count
+            if count == 0:
+                # No matches means we are done with this action
+                return True
 
     def _init_container_stats(self, lc_instance):
         self.total_events = 0
@@ -831,63 +729,24 @@ class Lifecycle(Meta2Filter):
         self.total_abort_mpu = 0
         self.count_actions = 0
         self.finished_actions = 0
-        self.finished_rules = 0
         self.rules_stats = {}
-        self.aggregated_stats = {}
+        self.aggregated_stats = Counter()
 
-        conf_json = lc_instance.conf_json
-        for rule_id, rule in conf_json["Rules"].items():
-            # rule_id is unique
-            rule_id = rule["ID"] = rule_id
-            self.rules_stats[rule_id] = {}
-            self.aggregated_stats[rule_id] = 0
-            actions = self._get_actions(rule)
-            for act_type, act_list in actions.items():
-                for act in act_list:
-                    # Full action string is used as key
-                    action_name = self._get_action_name(act_type)
-                    self.rules_stats[rule_id][action_name] = 0
-                    self.count_actions += 1
-
-    def _update_container_stats(self, rule_id, action_name, value):
-        self.rules_stats[rule_id][action_name] += value
+    def _update_container_stats(self, rule_id, action_class, value):
+        rule_stats = self.rules_stats.setdefault(rule_id, Counter())
+        rule_stats[action_class.field] += value
         self.aggregated_stats[rule_id] += value
         self.total_events += value
         step = LifecycleStep.SUBMITTED
-        if action_name in ("Expiration", "NoncurrentVersionExpiration"):
-            action = LifecycleAction.DELETE
-        elif action_name in ("Transition", "NoncurrentVersionTransition"):
-            action = LifecycleAction.TRANSITION
-        elif action_name in ("AbortIncompleteMultipartUpload",):
-            action = LifecycleAction.ABORT_MPU
-        else:
-            raise ValueError("Unsopported action  %s for stats ", action_name)
         self._metrics.increment_counter(
             self._context.run_id,
             self._context.account_id,
             self._context.bucket_id,
             self._context.container_id,
             step,
-            action,
+            action_class.step,
             value=value,
         )
-
-    def _get_action_parameters(self, act):
-        days = None
-        date = None
-        delete_marker = None
-        act_type = next(iter(act))
-        if act_type == "Expiration":
-            days = act[act_type].get("Days", None)
-            date = act[act_type].get("Date", None)
-            delete_marker = act[act_type].get("ExpiredObjectDeleteMarker", None)
-        elif act_type == "Transitions":
-            days = act[act_type].get("Days", None)
-            date = act[act_type].get("Date", None)
-        elif act_type == "AbortIncompleteMultipartUpload":
-            days = act[act_type].get("DaysAfterInitiation", None)
-
-        return [days, date, delete_marker]
 
     def _days_to_seconds(self, days):
         return 86400 * int(days)
@@ -912,8 +771,6 @@ class Lifecycle(Meta2Filter):
             "total_events": self.total_events,
             "count_actions": self.count_actions,
             "finished_actions": self.finished_actions,
-            "finished_rules": self.finished_rules,
-            "count_disabled_rules": self.count_disabled_rules,
         }
         # (TODO) append agregated stats per rule/action??
         return main_stats
@@ -927,8 +784,6 @@ class Lifecycle(Meta2Filter):
         self.total_abort_mpu = 0
         self.count_actions = 0
         self.finished_actions = 0
-        self.finished_rules = 0
-        self.count_disabled_rules = 0
 
 
 def filter_factory(global_conf, **local_conf):
