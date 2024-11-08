@@ -4373,7 +4373,6 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	gint64 deleted = 0, nb_version = 0;
 	gboolean allow_transition = FALSE;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		found_match = TRUE;
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
 				sqlite3_column_bytes(stmt, 0));
 		gint64 version = sqlite3_column_int64(stmt, 1);
@@ -4398,6 +4397,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 				}
 			}
 		}
+		found_match = TRUE;
 		gint64 mtime = sqlite3_column_int64(stmt, 4);
 		GString *event = oio_event__create_with_id(
 				"storage.lifecycle.action", url, oio_ext_get_reqid());
@@ -4446,7 +4446,7 @@ rollback:
 	if (err) {
 		goto close;
 	}
-	if (query_set_tag && !found_match) {
+	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
 	}
 
