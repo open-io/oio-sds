@@ -466,6 +466,9 @@ pipeline = logger lifecycle
 use = egg:oio#lifecycle
 lifecycle_batch_size = 5000
 redis_host = ${IP}:${REDIS_PORT}
+# Lifecycle backup
+lifecycle_configuration_backup_account = AUTH_demo
+lifecycle_configuration_backup_bucket = lc-bucket
 
 [filter:logger]
 use = egg:oio#logger

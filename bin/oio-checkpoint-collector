@@ -36,6 +36,7 @@ from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.timestamp import Timestamp
+from oio.container.lifecycle import lifecycle_backup_path
 from oio.common.utils import cid_from_name, get_hasher
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
@@ -204,7 +205,7 @@ class CheckpointCollector:
             )
             raise LifecycleConfigurationNotFound()
         try:
-            obj_name = f"{account}/{bucket}/lifecycle-config"
+            obj_name = lifecycle_backup_path(account, bucket)
             should_upload = False
             try:
                 object_props = self._api.object_get_properties(
