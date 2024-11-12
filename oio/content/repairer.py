@@ -158,7 +158,15 @@ class ContentRepairerWorker(ToolWorker):
             return exc
 
     def _repair_metachunk(
-        self, item, content_id, stg_met, pos, chunks, path, version, reqid=None
+        self,
+        item,
+        content_id,
+        stg_met,
+        metachunk_pos,
+        chunks,
+        path,
+        version,
+        reqid=None,
     ):
         """
         Check that a metachunk has the right number of chunks.
@@ -172,7 +180,7 @@ class ContentRepairerWorker(ToolWorker):
                 subs = {x["num"] for x in chunks}
                 for sub in range(required):
                     if sub not in subs:
-                        pos = f"{pos}.{sub}"
+                        pos = f"{metachunk_pos}.{sub}"
                         exc = self._safe_chunk_rebuild(
                             item=item,
                             content_id=content_id,
@@ -184,6 +192,7 @@ class ContentRepairerWorker(ToolWorker):
                         if exc:
                             exceptions.append((pos, exc))
             else:
+                pos = metachunk_pos
                 missing_chunks = required - len(chunks)
                 for _ in range(missing_chunks):
                     exc = self._safe_chunk_rebuild(
@@ -265,7 +274,7 @@ class ContentRepairerWorker(ToolWorker):
                     item=item,
                     content_id=content_id,
                     stg_met=stg_met,
-                    pos=pos,
+                    metachunk_pos=pos,
                     chunks=chunks,
                     path=obj_name,
                     version=version,

@@ -263,7 +263,7 @@ class Tool(object):
         if not self.success:
             return False
         if self.total_items_processed == 0:
-            self.logger.warn("No item to process")
+            self.logger.warning("No item to process")
         return self.total_errors == 0
 
 
