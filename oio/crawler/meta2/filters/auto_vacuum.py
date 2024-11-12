@@ -17,7 +17,7 @@ import os
 import sqlite3
 
 from oio.common.easy_value import float_value, int_value
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import NotFound, OutOfSyncDB
 from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
@@ -105,6 +105,41 @@ class AutomaticVacuum(Filter):
         finally:
             meta2db_conn.close()
 
+    def _check_master_meta2db(self, meta2db, validate_ratio_func, reqid=None):
+        """
+        Return true if the master database matches the local database scan.
+        """
+        meta2db_size = meta2db.file_status["st_size"]
+        data = self.container_sharding.container.container_get_properties(
+            cid=meta2db.cid,
+            admin_mode=True,
+            params={"urgent": 1},
+            reqid=reqid,
+        )
+        sys = data["system"]
+        master_unused_pages_ratio = int(sys["stats.freelist_count"]) / int(
+            sys["stats.page_count"]
+        )
+        if validate_ratio_func(master_unused_pages_ratio):
+            return True
+        master_meta2db_size = int(sys["stats.page_count"]) * int(sys["stats.page_size"])
+        if abs(master_meta2db_size - meta2db_size) / master_meta2db_size > 0.1:
+            raise OutOfSyncDB(
+                f"The meta2 database {meta2db} seems to be out of sync: "
+                f"size={meta2db_size} master_size={master_meta2db_size} "
+                f"master_unused_pages_ratio={master_unused_pages_ratio}"
+            )
+        self.logger.info(
+            "The meta2 database %s seems to have evolved slightly, to the point "
+            "that no further modifications are needed for vacuum: "
+            "size=%d master_size=%d, master_unused_pages_ratio=%f",
+            meta2db,
+            meta2db_size,
+            master_meta2db_size,
+            master_unused_pages_ratio,
+        )
+        return False
+
     def process(self, env, cb):
         """
         Check the unused pages ratio for the meta2 database
@@ -119,14 +154,24 @@ class AutomaticVacuum(Filter):
             page_count, unused_pages = self.get_db_page_count(meta2db)
             unused_pages_ratio = unused_pages / (page_count or 1)
             if unused_pages_ratio >= self.hard_max_unused_pages_ratio:
-                skip = False
+                if self._check_master_meta2db(
+                    meta2db,
+                    lambda x: x >= self.hard_max_unused_pages_ratio,
+                    reqid=reqid,
+                ):
+                    skip = False
             elif unused_pages_ratio >= self.soft_max_unused_pages_ratio:
                 meta2db_mtime = meta2db.file_status["st_mtime"]
                 if (
                     time.time() - meta2db_mtime
                     > self.min_waiting_time_after_last_modification
                 ):
-                    skip = False
+                    if self._check_master_meta2db(
+                        meta2db,
+                        lambda x: x >= self.soft_max_unused_pages_ratio,
+                        reqid=reqid,
+                    ):
+                        skip = False
                 else:
                     self.logger.info(
                         "Push back the vacuum to hope to trigger it "
