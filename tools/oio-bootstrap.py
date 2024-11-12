@@ -1714,6 +1714,7 @@ pipeline = lifecycle_actions lifecycle_access_logger
 
 [filter:lifecycle_actions]
 use = egg:oio#lifecycle_actions
+redis_host = ${IP}:${REDIS_PORT}
 
 [filter:lifecycle_access_logger]
 use = egg:oio#lifecycle_access_logger

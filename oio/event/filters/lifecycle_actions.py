@@ -20,6 +20,7 @@ from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 from oio.container.client import ContainerClient
 from oio.event.kafka_consumer import RejectMessage
+from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
 
 
 class LifecycleActions(Filter):
@@ -31,6 +32,9 @@ class LifecycleActions(Filter):
     def init(self):
         self.limit_listing = int_value(self.conf.get("limit_listing"), 100)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
+
+        # Metrics helper
+        self._metrics = LifecycleMetricTracker(self.conf)
 
     def process(self, env, cb):
         event = Event(env)
@@ -53,6 +57,7 @@ class LifecycleActions(Filter):
         storage_class = data.get("storage_class")
         main_account = data.get("main_account", None)
         bucket = data.get("bucket", None)
+        run_id = data.get("run_id")
 
         main_account = main_account or account
         bucket = bucket or container
@@ -186,8 +191,30 @@ class LifecycleActions(Filter):
                 pass
         else:
             self.logger.warning("Unsupported lifecycle event action %s", action)
+        self._update_metrics(main_account, bucket, container, run_id, action)
 
         return self.app(env, cb)
+
+    def _update_metrics(self, account, bucket, container, run_id, action):
+        # update metrics
+        step = LifecycleStep.PROCESSED
+        if action in ("Expiration", "NoncurrentVersionExpiration"):
+            action = LifecycleAction.DELETE
+        elif action in ("Transition", "NoncurrentVersionTransition"):
+            action = LifecycleAction.TRANSITION
+        elif action in ("AbortIncompleteMultipartUpload",):
+            action = LifecycleAction.ABORT_MPU
+        else:
+            raise ValueError("Unsopported action  %s for stats ", action)
+        self._metrics.increment_counter(
+            run_id,
+            account,
+            bucket,
+            container,
+            step,
+            action,
+            value=1,
+        )
 
 
 def filter_factory(global_conf, **local_conf):
