@@ -23,6 +23,7 @@ from oio.common.constants import (
     EXISTING_SHARD_STATE_LOCKED,
 )
 from oio.common.easy_value import int_value
+from oio.common.exceptions import OutOfSyncDB
 from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
@@ -156,14 +157,20 @@ class AutomaticSharding(Filter):
                 return self.app(env, cb)
 
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
-                modified = self._shard(meta2db, reqid=reqid)
+                if self._check_master_meta2db(
+                    meta2db, lambda x: x > self.sharding_db_size, reqid=reqid
+                ):
+                    modified = self._shard(meta2db, reqid=reqid)
             elif self.shrinking_db_size > 0:
                 root_cid, shard = self.container_sharding.meta_to_shard(
                     {"system": meta2db.system}
                 )
                 if root_cid:  # It's a shard
                     if meta2db_size < self.shrinking_db_size:
-                        modified = self._shrink(meta2db, reqid=reqid)
+                        if self._check_master_meta2db(
+                            meta2db, lambda x: x < self.shrinking_db_size, reqid=reqid
+                        ):
+                            modified = self._shrink(meta2db, reqid=reqid)
                     elif not shard["lower"] and not shard["upper"]:
                         # It's the one and last shard
                         if (
@@ -265,6 +272,36 @@ class AutomaticSharding(Filter):
             self.cleaning_errors += 1
 
         return True
+
+    def _check_master_meta2db(self, meta2db, validate_size_func, reqid=None):
+        """
+        Return true if the master database matches the local database scan.
+        """
+        meta2db_size = meta2db.file_status["st_size"]
+        data = self.container_sharding.container.container_get_properties(
+            cid=meta2db.cid,
+            admin_mode=True,
+            params={"urgent": 1},
+            reqid=reqid,
+        )
+        sys = data["system"]
+        master_meta2db_size = int(sys["stats.page_count"]) * int(sys["stats.page_size"])
+        if validate_size_func(master_meta2db_size):
+            return True
+        if abs(master_meta2db_size - meta2db_size) / master_meta2db_size > 0.1:
+            raise OutOfSyncDB(
+                f"The meta2 database {meta2db} seems to be out of sync: "
+                f"size={meta2db_size} master_size={master_meta2db_size}"
+            )
+        self.logger.info(
+            "The meta2 database %s seems to have evolved slightly, to the point "
+            "that no further modifications are needed for sharding: "
+            "size=%d master_size=%d",
+            meta2db,
+            meta2db_size,
+            master_meta2db_size,
+        )
+        return False
 
     def _shard(self, meta2db, reqid=None):
         self.logger.info(

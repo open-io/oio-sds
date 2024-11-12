@@ -16,6 +16,7 @@
 import math
 import random
 import time
+from unittest.mock import patch
 
 from oio.common.constants import (
     DRAINING_STATE_IN_PROGRESS,
@@ -130,6 +131,27 @@ class TestAutoSharding(BaseTestCase):
         shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertEqual(0, len(shards))
 
+    def _increase_db_size_and_process(self, meta2db, cb, increase_factor=1024):
+        _container_get_properties = (
+            self.container_sharding.container.container_get_properties
+        )
+
+        def _modified_container_get_properties(*args, **kwargs):
+            data = _container_get_properties(*args, **kwargs)
+            sys = data["system"]
+            if "stats.page_count" in sys:
+                sys["stats.page_count"] = str(
+                    int(sys["stats.page_count"]) * increase_factor
+                )
+            return data
+
+        with patch(
+            "oio.container.client.ContainerClient.container_get_properties",
+            wraps=_modified_container_get_properties,
+        ):
+            meta2db.file_status["st_size"] *= increase_factor
+            self.auto_sharding.process(meta2db.env, cb)
+
     def test_sharding_root(self):
         def _cb(status, _msg):
             self.assertEqual(200, status)
@@ -141,8 +163,7 @@ class TestAutoSharding(BaseTestCase):
 
         meta2db = self._get_meta2db(self.cname)
         # Simulate a large size to trigger sharding
-        meta2db.file_status["st_size"] = meta2db.file_status["st_size"] * 1024
-        self.auto_sharding.process(meta2db.env, _cb)
+        self._increase_db_size_and_process(meta2db, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
             if key == "sharding_successes":
@@ -166,8 +187,7 @@ class TestAutoSharding(BaseTestCase):
 
         meta2db = self._get_meta2db(None, cid=shard_cid)
         # Simulate a large size to trigger sharding
-        meta2db.file_status["st_size"] = meta2db.file_status["st_size"] * 1024
-        self.auto_sharding.process(meta2db.env, _cb)
+        self._increase_db_size_and_process(meta2db, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
             if key == "sharding_successes":
@@ -184,11 +204,26 @@ class TestAutoSharding(BaseTestCase):
 
         meta2db = self._get_meta2db(self.cname)
         # Simulate a large size to trigger sharding
-        meta2db.file_status["st_size"] = meta2db.file_status["st_size"] * 1024
-        self.auto_sharding.process(meta2db.env, _cb)
+        self._increase_db_size_and_process(meta2db, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
             if key == "sharding_no_change":
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+
+    def test_sharding_ou_of_sync_container(self):
+        def _cb(status, msg):
+            self.assertEqual(500, status)
+            self.assertIn("out of sync", msg)
+
+        meta2db = self._get_meta2db(self.cname)
+        # Simulates an out-of-sync database
+        meta2db.file_status["st_size"] *= 1024
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == "errors":
                 self.assertEqual(1, value)
             else:
                 self.assertEqual(0, value)

@@ -183,6 +183,10 @@ class MissingName(OioException):
     pass
 
 
+class OutOfSyncDB(OioException):
+    pass
+
+
 class FileNotFound(OioException):
     pass
 
