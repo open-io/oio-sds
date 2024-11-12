@@ -51,12 +51,16 @@ class LifecycleActions(Filter):
         path = data.get("object")
         version = data.get("version")
         storage_class = data.get("storage_class")
+        main_account = data.get("main_account", None)
+        bucket = data.get("bucket", None)
 
+        main_account = main_account or account
+        bucket = bucket or container
         try:
             # Check if given object version still exists
             content_meta, chunks = self.container_client.content_locate(
-                account=account,
-                reference=container,
+                account=main_account,
+                reference=bucket,
                 path=path,
                 version=version,
                 force_master=True,
@@ -77,15 +81,15 @@ class LifecycleActions(Filter):
             try:
                 if add_delete_marker:
                     self.container_client.content_delete(
-                        account,
-                        container,
+                        main_account,
+                        bucket,
                         path,
                         reqid=reqid,
                     )
                 else:
                     self.container_client.content_delete(
-                        account,
-                        container,
+                        main_account,
+                        bucket,
                         path,
                         version=version,
                         reqid=reqid,
@@ -96,8 +100,8 @@ class LifecycleActions(Filter):
             idx = content_meta.get("id")
             try:
                 self.container_client.content_create(
-                    account,
-                    container,
+                    main_account,
+                    bucket,
                     path,
                     size=content_meta.get("size"),
                     hash=content_meta.get("hash"),
@@ -119,7 +123,7 @@ class LifecycleActions(Filter):
                 while truncated:
                     try:
                         headers, content_list = self.container_client.content_list(
-                            account=account,
+                            account=main_account,
                             reference=container,
                             limit=self.limit_listing,
                             marker=marker,
@@ -151,7 +155,7 @@ class LifecycleActions(Filter):
                         break
 
                     self.container_client.content_delete_many(
-                        account=account,
+                        account=main_account,
                         reference=container,
                         paths=paths,
                         reqid=reqid,
@@ -173,8 +177,8 @@ class LifecycleActions(Filter):
         elif action == "NoncurrentVersionExpiration":
             try:
                 self.container_client.content_delete(
-                    account,
-                    container,
+                    main_account,
+                    bucket,
                     path,
                     version=version,
                 )
