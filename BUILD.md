@@ -104,3 +104,48 @@ Then install FoundationDB with oio-install-fdb.sh
 
 A lot of variables are available, consider reading [Variables.md](./Variables.md) for more information.
 
+
+
+# Step by step
+
+### FoundationDB install
+- install et conf FondationDB (cf script oio-sds/tools/oio-install-fdb.sh)
+
+### Zookeeper install
+- sudo apt-get install libzookeeper-mt-dev zookeeper
+
+### Golang install
+- install golang from website version 1.22.5 and place it where you want (I did in ~/bin)
+
+### Ubuntu packages install
+- sudo apt-get install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt)
+
+### Prepare venv to install packages inside
+- python3 -m venv venv (python3 version 3.10.12)
+- source venv/bin/activate
+
+### Build repo
+- mkdir build && cd build
+- mkdir ~/local
+- export SDS="~/local"
+- export PATH="$PATH:/~/bin/go/bin/:~/local/bin" < change go/bin directory if not in ~/bin
+- cmake -DCMAKE_INSTALL_PREFIX=${SDS} -DLD_LIBDIR=lib -DCMAKE_BUILD_TYPE=Debug ..
+- make install -j
+- cd ..
+
+### Start redpanda
+- export OIO_NS=OPENIO
+- export OIO_ACCOUNT=AUTH_demo
+- start redpanda from oio-sds/docker -> 'docker-compose -f redpanda.docker-compose.yml up -d'
+
+### Install python3 packages
+- pip install .
+- pip install -r test-requirements.txt
+
+### Reset stack and start it all
+- oio-reset.sh -f ../oio-sds/etc/bootstrap-preset-SINGLE.yml -r RegionOne -U
+
+#### Check if openio responds correctly
+- openio cluster show
+#### Check the services in systemctl
+- systemctl --user list-dependencies oio-cluster.target
