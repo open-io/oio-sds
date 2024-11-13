@@ -28,6 +28,8 @@ from oio.event.evob import EventTypes
 
 OBJECT_REPLICATION_PENDING = "PENDING"
 OBJECT_REPLICATION_REPLICA = "REPLICA"
+OBJECT_REPLICATION_COMPLETED = "COMPLETED"
+OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
 REPLICATION_ROLE_RE = re.compile(r"arn:aws:iam::([a-zA-Z0-9]+):role/([a-zA-Z0-9\_-]+)")
 
 
@@ -182,7 +184,7 @@ class ReplicationRecovery(Command):
         return replication_conf
 
     def get_objects_to_replicate(
-        self, account, bucket, pending, until, replication_conf
+        self, account, bucket, pending, until, only_metadata, replication_conf
     ) -> Generator[Tuple[Dict[str, Any], List[str], str], None, None]:
         objects_gen = depaginate(
             self.app.client_manager.storage.object_list,
@@ -208,6 +210,17 @@ class ReplicationRecovery(Command):
                 )
                 if pending:
                     if replication_status != OBJECT_REPLICATION_PENDING:
+                        continue
+                elif only_metadata:  # Update only metadata
+                    if replication_status != OBJECT_REPLICATION_COMPLETED:
+                        continue
+                    has_client_metadata = False
+                    for key_metadata in metadata:
+                        if key_metadata.startswith(OBJECT_TRANSIENT_SYSMETA_PREFIX):
+                            has_client_metadata = True
+                            break
+                    if not has_client_metadata:
+                        # List only object with client metadata
                         continue
                 elif replication_status is not None:
                     # PENDING: replication in progress
@@ -244,12 +257,13 @@ class ReplicationRecovery(Command):
         namespace: str,
         account: str,
         bucket: str,
+        event_type: str,
     ) -> Dict[str, Any]:
         match = REPLICATION_ROLE_RE.fullmatch(role)
         src_project_id = match.group(1)
         replicator_id = match.group(2)
         event = {}
-        event["event"] = EventTypes.CONTENT_NEW
+        event["event"] = event_type
         event["when"] = int(time.time() * 1000000)  # use time in micro seconds
         event["url"] = {}
         event["url"]["ns"] = namespace
@@ -289,16 +303,17 @@ class ReplicationRecovery(Command):
             )
             properties = OrderedDict(obj["properties"].items())
             for prop in properties:
-                value = obj["properties"].get(prop)
-                event["data"].append(
-                    {
-                        "type": "properties",
-                        "alias": obj["name"],
-                        "version": obj["version"],
-                        "key": prop,
-                        "value": value,
-                    }
-                )
+                if not prop.startswith(OBJECT_TRANSIENT_SYSMETA_PREFIX):
+                    value = obj["properties"].get(prop)
+                    event["data"].append(
+                        {
+                            "type": "properties",
+                            "alias": obj["name"],
+                            "version": obj["version"],
+                            "key": prop,
+                            "value": value,
+                        }
+                    )
         event["repli"] = {}
         event["repli"]["destinations"] = ";".join(dest_buckets)
         event["repli"]["replicator_id"] = replicator_id
@@ -350,6 +365,11 @@ class ReplicationRecovery(Command):
             help="Resend only events from objects pending to be replicated.",
         )
         parser.add_argument(
+            "--only-metadata",
+            action="store_true",
+            help="Resend only events from objects with metadatata to be replicated.",
+        )
+        parser.add_argument(
             "--until",
             help="Date (timestamp) until which the objects must be checked",
         )
@@ -363,6 +383,7 @@ class ReplicationRecovery(Command):
     def take_action(self, parsed_args):
         bucket = parsed_args.bucket
         pending = parsed_args.pending
+        only_metadata = parsed_args.only_metadata
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
         dry_run = parsed_args.dry_run
         broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
@@ -378,11 +399,14 @@ class ReplicationRecovery(Command):
         replication_conf = self._load_replication_configuration(account, bucket)
         self.log.info("Scan bucket %s in account %s", bucket, account)
         objects_to_replicate = self.get_objects_to_replicate(
-            account, bucket, pending, until, replication_conf
+            account, bucket, pending, until, only_metadata, replication_conf
+        )
+        event_type = (
+            EventTypes.CONTENT_UPDATE if only_metadata else EventTypes.CONTENT_NEW
         )
         for obj, dest_buckets, role in objects_to_replicate:
             object_event = self.object_to_event(
-                obj, dest_buckets, role, namespace, account, bucket
+                obj, dest_buckets, role, namespace, account, bucket, event_type
             )
             self.send_event(conf, obj, dest_buckets, object_event, dry_run)
         if self.kafka_producer is not None:

@@ -29,7 +29,7 @@ class ReplicationRecoveryTest(CliTestCase):
         super(ReplicationRecoveryTest, self).setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
 
-    def _test_recovery_tool(self, is_deletion=False):
+    def _test_recovery_tool(self, is_deletion=False, is_update=False):
         account = self.account_from_env()
         obj = "test-repli-recovery" + random_str(6)
         container_src = "container" + random_str(6) + "-src"
@@ -58,6 +58,7 @@ class ReplicationRecoveryTest(CliTestCase):
         props = {"X-Container-Sysmeta-S3Api-Replication": json.dumps(repli_conf)}
         self.storage.container_set_properties(account, container_src, properties=props)
         reqid = request_id()
+        replication_status = "COMPLETED" if is_update else "PENDING"
         # Create an object
         self.storage.object_create_ext(
             account,
@@ -70,7 +71,8 @@ class ReplicationRecoveryTest(CliTestCase):
             replication_role_project_id="repliRecoveryRole",
             properties={
                 "x-object-sysmeta-s3api-acl": "myuseracls",
-                "x-object-sysmeta-s3api-replication-status": "PENDING",
+                "x-object-sysmeta-s3api-replication-status": replication_status,
+                "x-object-transient-sysmeta-myprop": "toto",
             },
         )
         event = self.wait_for_kafka_event(
@@ -108,13 +110,17 @@ class ReplicationRecoveryTest(CliTestCase):
                     else:
                         self.assertFalse(true_value(deleted))
                     break
+        option = "--pending"
+        event_types = (EventTypes.CONTENT_NEW,)
+        if is_update:
+            option = "--only-metadata"
+            event_types = (EventTypes.CONTENT_UPDATE,)
         self.openio(
-            f"replication recovery {container_src} --pending",
+            f"replication recovery {container_src} {option}",
             coverage="",
         )
-
         event = self.wait_for_kafka_event(
-            types=(EventTypes.CONTENT_NEW,),
+            types=event_types,
             fields={
                 "account": account,
                 "user": container_src,
@@ -149,3 +155,6 @@ class ReplicationRecoveryTest(CliTestCase):
 
     def test_replication_recovery_content_delete(self):
         self._test_recovery_tool(is_deletion=True)
+
+    def test_replication_recovery_content_update(self):
+        self._test_recovery_tool(is_update=True)
