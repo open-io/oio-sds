@@ -74,7 +74,7 @@ class LifecycleAccessLoggerFilter(Filter):
     )
 
     def __init__(self, *args, **kwargs):
-        self._logger = None
+        self._access_logger = None
         self._log_prefix = None
         self._log_format = None
         self._formatter = None
@@ -86,7 +86,7 @@ class LifecycleAccessLoggerFilter(Filter):
         self._log_prefix = self.conf.get("log_prefix", "s3access-")
         self._formatter = LogStringFormatter(default="-")
         self._validate_format()
-        self._logger = get_logger(self.conf, name=log_name, fmt="")
+        self._access_logger = get_logger(self.conf, name=log_name, fmt=None)
 
     def _validate_format(self):
         dummy_env = {
@@ -140,7 +140,7 @@ class LifecycleAccessLoggerFilter(Filter):
             "time": current_time,
             "remote_ip": None,  # ignored
             "requester": None,  # ignored
-            "request_id": event.data.get("request_id"),
+            "request_id": event.reqid,
             "operation": event_to_s3_operation(event),
             "key": key,
             "request_uri": None,  # ignored
@@ -161,7 +161,7 @@ class LifecycleAccessLoggerFilter(Filter):
             "tls_version": None,  # ignored
             "access_point_arn": None,  # ignored
         }
-        self._logger.info(self._formatter.format(self._log_format, **log_env))
+        self._access_logger.info(self._formatter.format(self._log_format, **log_env))
 
     def process(self, env, cb):
         event = Event(env)

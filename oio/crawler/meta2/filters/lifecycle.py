@@ -341,7 +341,9 @@ class Lifecycle(Meta2Filter):
             lc_instance = ContainerLifecycle(
                 self.api, main_account, root_container, logger=self.logger
             )
-            lc_instance.load(json_conf=lifecycle_conf)
+            if not lc_instance.load(json_conf=lifecycle_conf):
+                self.errors += 1
+                return self.app(env, cb)
 
             self.lower, self.upper = self._get_container_range(meta2db.cid, reqid=reqid)
 

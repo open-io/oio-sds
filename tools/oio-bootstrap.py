@@ -3280,13 +3280,13 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to lifecycle actions events
     # -------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details():
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-lifecycle",
             url,
             workers="1",
+            srv_type="event-agent-lifecycle-actions",
             group_id="event-agent-lifecycle-actions",
             template_handler=template_event_agent_lifecycle_actions_handlers,
         )

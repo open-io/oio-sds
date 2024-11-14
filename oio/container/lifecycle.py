@@ -87,6 +87,9 @@ def lifecycle_backup_path(account, bucket):
 
 
 class ContainerLifecycle(object):
+    # List lifecycle configuration versions supported by filter
+    SUPPORTED_CONFIGURATION_VERSIONS = (1,)
+
     def __init__(self, api, account, container, logger=None):
         self.api = api
         self.account = account
@@ -120,6 +123,13 @@ class ContainerLifecycle(object):
         except ValueError as err:
             self.logger.warning("Failed to decode JSON configuration: %s", err)
             return False
+        schema_version = self.conf_json.get("_schema_version", -1)
+        if schema_version not in self.SUPPORTED_CONFIGURATION_VERSIONS:
+            self.logger.warning(
+                "Configuration schema version '%s' is not supported", schema_version
+            )
+            return False
+
         return True
 
     def load_json(self, json_str):

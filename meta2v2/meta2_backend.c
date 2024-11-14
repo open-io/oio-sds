@@ -4624,7 +4624,7 @@ rollback:
 		goto close;
 	}
 
-	if (query_set_tag && !found_match) {
+	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
 	}
 close:
