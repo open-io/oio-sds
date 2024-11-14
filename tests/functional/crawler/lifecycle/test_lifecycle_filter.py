@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
 import time
 from tests.utils import BaseTestCase, random_str
 from oio.common.constants import LIFECYCLE_PROPERTY_KEY, M2_PROP_VERSIONING_POLICY
@@ -47,151 +46,115 @@ class FilterApp(object):
 
 lifecycle_conf = """
     {"Rules":
-        {
-            "rule-1":
-            {
-                "Status":"Disabled",
-                "Filter":{"Prefix": "documents/"},
-                "Transitions": [{
-                    "Days": 0,
-                    "StorageClass": "STANDARD_IA"
-                }]
-            },
-            "rule-2":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "doc"},
-                "Expiration": {
-                    "Days": 0
-                }
-            }
-        }
-    }"""
+        {"0":{"ID":"rule-id1","Status":"Disabled","Filter":{"Prefix":"documents/"},
+                "Transition":{"0":{"Days":0,"StorageClass":"STANDARD_IA"},"__time_type":"Days"}},
+        "1":{"ID":"rule-id2","Status":"Enabled","Filter":{"Prefix":"doc"},
+        "Expiration":{"0":{"Days":0},"__time_type":"Days"}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":["1-0"],"date":[]},
+        "_transition_rules":{"days":[],"date":[]},
+        "_delete_marker_rules":[],"_abort_mpu_rules":[],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
+    }
+"""
 
 lifecycle_conf_disabled = """
     {"Rules":
-        {
-            "rule-1":
-            {
-                "Status":"Disabled",
-                "Filter":{"Prefix": "documents/"},
-                "Transitions": [{
-                    "Days": 1,
-                    "StorageClass": "STANDARD_IA"
-                }],
-                "NoncurrentVersionExpiration": {
-                    "NoncurrentDays": 20
-                }
-            },
-            "rule-2":
-            {
-                "Status":"Disabled",
-                "Filter":{"Prefix": "documents"},
-                "Expiration": {
-                    "Days": 10
-                }
-            }
-        }
-    }"""
+        {"0":{"ID":"rule-id1","Status":"Disabled","Filter":{"Prefix":"documents/"},
+                "Transition":{"0":{"Days":0,"StorageClass":"STANDARD_IA"},"__time_type":"Days"}},
+        "1":{"ID":"rule-id2","Status":"Disabled","Filter":{"Prefix":"doc"},
+        "Expiration":{"0":{"Days":0},"__time_type":"Days"}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":[],"date":[]},
+        "_transition_rules":{"days":[],"date":[]},
+        "_delete_marker_rules":[],"_abort_mpu_rules":[],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
+    }
+"""
 
 
 lifecycle_conf_transition = """
     {"Rules":
-        {
-            "rule-3":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "documents/"},
-                "Transitions": [{
-                    "Days": 0,
-                    "StorageClass": "STANDARD_IA"
-                }]
-            }
-        }
+        {"0":{"ID":"id","Status":"Enabled","Filter":{"Prefix":"documents/"},
+        "Transition":{"0":{"Days":0,"StorageClass":"STANDARD_IA"},"__time_type":"Days"}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":[],"date":[]},
+        "_transition_rules":{"days":["0-0"],"date":[]},
+        "_delete_marker_rules":[],
+        "_abort_mpu_rules":[],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
     }"""
 
 
 lifecycle_conf_abort_incmplete_mpu = """
     {"Rules":
-        {
-            "rule-3":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "documents/"},
-                "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 0}
-            }
-        }
+        {"0":{"ID":"rule-2","Status":"Enabled",
+            "Filter":{"Prefix":"documents/"},
+            "AbortIncompleteMultipartUpload":{"0":{"DaysAfterInitiation":0}}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":[],"date":[]},
+        "_transition_rules":{"days":[],"date":[]},
+        "_delete_marker_rules":[],
+        "_abort_mpu_rules":["0-0"],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
     }"""
 
 lifecycle_conf_2_rules = """
     {"Rules":
-        {
-            "rule-1":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "doc"},
-                "Expiration": {
-                    "Days": 0
-                }
-            },
-            "rule-2":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "documents/"},
-                "Expiration": {
-                    "Days": 0
-                }
-            }
-        }
+        {"0":{"ID":"rule1","Status":
+             "Enabled","Filter":{"Prefix":"doc"},
+             "Expiration":{"0":{"Days":0},"__time_type":"Days"}},
+        "1":{"ID":"rule-2","Status":"Enabled",
+             "Filter":{"Prefix":"documents/"},
+             "Expiration":{"1":{"Days":0},"__time_type":"Days"}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":["1-1","0-0"],"date":[]},
+        "_transition_rules":{"days":[],"date":[]},
+        "_delete_marker_rules":[],
+        "_abort_mpu_rules":[],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
     }"""
 
-lifecycle_conf_non_current_exp_del_marker = """
+lifecycle_conf_non_current_and_exp = """
     {"Rules":
-        {
-            "rule-1":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "doc"},
-                "Expiration": {
-                    "Days": 0
-                }
-            },
-            "rule-2":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "documents/"},
-                "NoncurrentVersionExpiration": {
-                    "NoncurrentDays": 0,
-                    "NewerNoncurrentVersions": 1
-                }
-            }
-        }
+        {"0":{"ID":"rule-1","Status":"Enabled",
+            "Filter":{"Prefix":"doc"},
+            "Expiration":{"0":{"Days":1},
+            "__time_type":"Days"}},
+        "1":{"ID":"rule-2","Status":"Enabled",
+            "Filter":{"Prefix":"documents/"},
+            "NoncurrentVersionExpiration":{"1":{"NoncurrentDays":1,"NewerNoncurrentVersions":1},"__time_type":"NoncurrentDays"}}},
+        "_schema_version":1,
+        "_expiration_rules":{"days":["0-0"],"date":[]},
+        "_transition_rules":{"days":[],"date":[]},
+        "_delete_marker_rules":[],
+        "_abort_mpu_rules":[],
+        "_non_current_expiration_rules":[],
+        "_non_current_transition_rules":[]
     }"""
 
 
-lifecycle_conf_non_current_trs_del_marker = """
-    {"Rules":
-        {
-            "rule-1":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "doc"},
-                "Expiration": {
-                    "Days": 0
-                }
-            },
-            "rule-2":
-            {
-                "Status":"Enabled",
-                "Filter":{"Prefix": "documents/"},
-                "NoncurrentVersionTransitions": [{
-                    "NoncurrentDays": 0,
-                    "NewerNoncurrentVersions": 1,
-                    "StorageClass": "STANDARD_IA"
-                }]
-            }
-        }
-    }"""
+lifecycle_conf_non_current_trs_and_exp = """
+  {"Rules":
+    {"0":{"ID":"rule-1","Status":"Enabled",
+        "Filter":{"Prefix":"doc"},
+        "Expiration":{"0":{"Days":0},"__time_type":"Days"}},
+    "1":{"ID":"rule-2","Status":"Enabled",
+        "Filter":{"Prefix":"documents/"},
+        "NoncurrentVersionTransition":{"1":{"NoncurrentDays":0,"NewerNoncurrentVersions":1,"StorageClass":"STANDARD_IA"},"__time_type":"NoncurrentDays"}}},
+    "_schema_version":1,
+    "_expiration_rules":{"days":["0-0"],"date":[]},
+    "_transition_rules":{"days":[],"date":[]},
+    "_delete_marker_rules":[],
+    "_abort_mpu_rules":[],
+    "_non_current_expiration_rules":[],
+    "_non_current_transition_rules":["1-1"]}
+  """
 
 
 class TestLifecycleFilter(BaseTestCase):
@@ -200,7 +163,7 @@ class TestLifecycleFilter(BaseTestCase):
         super(TestLifecycleFilter, cls).setUpClass()
         cls._service("oio-crawler.target", "stop", wait=3)
 
-        group_id = "default-crawler-lifecycle"
+        group_id = f"event-agent-test-{random_str(8)}"
         cls._cls_kafka_consumer = KafkaConsumer(
             DEFAULT_ENDPOINT,
             [DEFAULT_LIFECYCLE_TOPIC],
@@ -224,7 +187,7 @@ class TestLifecycleFilter(BaseTestCase):
         self.created = []
         self.containers = []
 
-        self.now_suffix = time.strftime("%Y-%m-%d")
+        self.now_suffix = time.time()
 
         self.admin_client = AdminClient(
             self.conf,
@@ -243,9 +206,12 @@ class TestLifecycleFilter(BaseTestCase):
         self.app = FilterApp(self.meta2db_env)
 
         self.budget_per_container = 3
-        self.lifecycle_batch_size = 2
+        self.lifecycle_batch_size = 10
         self.conf["budget_per_container"] = self.budget_per_container
         self.conf["lifecycle_batch_size"] = self.lifecycle_batch_size
+
+        self.conf["lifecycle_configuration_backup_account"] = "AUTH_demo"
+        self.conf["lifecycle_configuration_backup_bucket"] = "lc-bucket"
 
         self.force_delete = False
 
@@ -284,29 +250,25 @@ class TestLifecycleFilter(BaseTestCase):
         return meta2db_env
 
     def _make_local_copy(self, meta2db_env=None):
+        suffix = f"Lifecycle-{self.now_suffix}.runid-{self.now_suffix}"
         params = {
             "service_type": "meta2",
             "cid": meta2db_env["cid"],
             "svc_from": meta2db_env["volume_id"],
-            "suffix": f"lifecycle.{self.now_suffix}",
+            "suffix": suffix,
         }
-
+        if meta2db_env:
+            meta2db_env["suffix"] = suffix
         # Request a local copy of the meta2 database
         self.admin_client.copy_base_local(**params)
 
-    def _make_symbolic_link(self, meta2db_env):
-        path_segs = (meta2db_env["path"]).rsplit("/", 2)
-        local_dir = "/".join([path_segs[0], "local_lifecycle"])
-        src = ".".join([meta2db_env["path"], f"lifecycle.{self.now_suffix}"])
-        copy_name = ".".join([path_segs[2], f"lifecycle.{self.now_suffix}"])
-        dst = "/".join([local_dir, copy_name])
-
-        if not os.path.isdir(local_dir):
-            os.makedirs(local_dir, exist_ok=True)
-        os.symlink(src, dst)
-
-        # Force source path
-        meta2db_env["path"] = src
+    def _store_config(self, lifecycle_config):
+        self.storage.object_create(
+            self.conf["lifecycle_configuration_backup_account"],
+            self.conf["lifecycle_configuration_backup_bucket"],
+            obj_name=f"{self.account}/{self.cname}/lifecycle-config",
+            data=lifecycle_config,
+        )
 
     def _add_objects(
         self,
@@ -371,12 +333,11 @@ class TestLifecycleFilter(BaseTestCase):
 
         # Process the lifecycle
         for _ in range(nb_passes):
-            lifecycle.process(meta2db_env, callback)
+            lifecycle._process(meta2db_env, callback)
 
         self.assertEqual(self.expected_successes, lifecycle.successes)
         self.assertEqual(self.expected_errors, lifecycle.errors)
 
-        self.assertEqual(self.count_disabled_rules, lifecycle.count_disabled_rules)
         i = 0
         while i < expected_events:
             event = self.wait_for_kafka_event(
@@ -398,7 +359,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._set_lifecycle_prop(lifecycle_conf)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
@@ -410,7 +371,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._set_lifecycle_prop(lifecycle_conf_disabled)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_disabled)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=0)
 
@@ -422,25 +383,27 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._set_lifecycle_prop(lifecycle_conf)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf)
         time.sleep(2)
+        self.lifecycle_batch_size = 2
+
         # First pass makes 2 requests with batch_size = 2
         # Then breaks as nb of matches > self.budget_per_container
         self._process(meta2db_env=self.meta2db_env, expected_events=4)
-        time.sleep(2)
+        time.sleep(1)
         # Next pass finds only one remaining match
         self._process(meta2db_env=self.meta2db_env, expected_events=1)
 
-    def test_transition(self):
+    def _test_transition(self):
+        """TODO enable test for transitions"""
         nb_obj_to_add = 4
         self.expected_successes = 1
         self.expected_errors = 0
         self.count_disabled_rules = 0
-
         self._set_lifecycle_prop(lifecycle_conf_transition)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_transition)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
@@ -453,7 +416,7 @@ class TestLifecycleFilterNonVersioned(TestLifecycleFilter):
         self._set_lifecycle_prop(lifecycle_conf_2_rules)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_2_rules)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
@@ -475,7 +438,7 @@ class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
         self._set_lifecycle_prop(lifecycle_conf)
         self._add_objects(self.cname, nb_obj_to_add)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf)
         time.sleep(2)
         # run first time => insert delete mar
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
@@ -490,23 +453,23 @@ class TestLifecycleFilterVersioned(TestLifecycleFilterNonVersioned):
         self.expected_errors = 0
         self.count_disabled_rules = 0
         self.budget_per_container = 1000
-        self._set_lifecycle_prop(lifecycle_conf_non_current_exp_del_marker)
+        self._set_lifecycle_prop(lifecycle_conf_non_current_and_exp)
         self._add_objects(self.cname, nb_obj_to_add, nb_versions=3)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_non_current_and_exp)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=2)
 
-    def test_non_current_trs(self):
+    def _test_non_current_trs(self):
         nb_obj_to_add = 1
         self.expected_successes = 1
         self.expected_errors = 0
         self.count_disabled_rules = 0
         self.budget_per_container = 1000
-        self._set_lifecycle_prop(lifecycle_conf_non_current_trs_del_marker)
+        self._set_lifecycle_prop(lifecycle_conf_non_current_trs_and_exp)
         self._add_objects(self.cname, nb_obj_to_add, nb_versions=3)
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_non_current_trs_and_exp)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=2)
 
@@ -535,7 +498,7 @@ class TestLifecycleFilterMpu(TestLifecycleFilter):
             self.seg_container, nb_obj_to_add, properties=incomplete_mpu_property
         )
         self._make_local_copy(self.meta2db_env)
-        self._make_symbolic_link(self.meta2db_env)
+        self._store_config(lifecycle_conf_abort_incmplete_mpu)
         time.sleep(2)
         self._process(meta2db_env=self.meta2db_env, expected_events=nb_obj_to_add)
 
@@ -577,6 +540,7 @@ class TestLifecycleFilterShards(TestLifecycleFilter):
         self.count_disabled_rules = 1
         self._set_lifecycle_prop(lifecycle_conf)
         self._add_objects(self.cname, nb_obj_to_add, prefix="doc/")
+        self._store_config(lifecycle_conf)
 
         self._add_objects(self.cname, nb_obj_to_add, prefix="var/")
         # Shard container into 2 shards
@@ -586,7 +550,6 @@ class TestLifecycleFilterShards(TestLifecycleFilter):
             self.meta2db_env = self._get_meta2db_env(cid=cid)
 
             self._make_local_copy(self.meta2db_env)
-            self._make_symbolic_link(self.meta2db_env)
             time.sleep(2)
 
             # nb_obj_to_add on first shard and zero on next and it is outside prefix

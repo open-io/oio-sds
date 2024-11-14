@@ -415,7 +415,7 @@ class ContainerLifecycle(object):
         """
 
         # SELECT is forced on meta2 side
-        query = " WHERE nb_versions=1"
+        query = " WHERE nb_versions=1" f" AND {self._processed_sql_condition()} "
         return query
 
     def abort_incomplete_query(self, rule, formated_days=None, **kwargs):
@@ -443,7 +443,7 @@ class ContainerLifecycle(object):
         _query = f"{_query} AND {self._processed_sql_condition()} "
 
         if rule_filter.prefix is not None:
-            _prefix_cond = " AND ( al.alias LIKE '" f"{rule_filter.prefix}" "%')"
+            _prefix_cond = " AND ( al.alias LIKE ?||'%')"
             _query = f"{_query}{_prefix_cond}"
         _query = f"{_query} )"
 

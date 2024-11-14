@@ -272,17 +272,20 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
     ):
         for key_query, val_query in queries.items():
             offset = 0
+            elements_to_match = ()
+            if len(self.to_match_markers[rule_id][action_type]) > 0:
+                elements_to_match = self.to_match_markers[rule_id][action_type]
+            else:
+                elements_to_match = self.to_match[rule_id][action_type]
             while True:
                 sql_query = val_query
                 if action in (
                     "NoncurrentVersionExpiration",
                     "NoncurrentVersionTransitions",
                 ):
-                    sql_query = f"{sql_query} limit 100" f" offset {offset} "
+                    sql_query = f"{sql_query} limit {self.batch_size}"
                 else:
-                    sql_query = (
-                        f"{sql_query} limit {self.batch_size} " f" offset {offset} "
-                    )
+                    sql_query = f"{sql_query} limit {self.batch_size} "
 
                 kwargs = {}
                 params = {"cid": self.cid, "service_id": self.peer_to_use}
@@ -306,8 +309,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 if key_query == "marker":
                     data["is_markers"] = 1
                 data["query"] = sql_query
-                data["query_set_tag"] = val_query
-                data["policy"] = policy
+                data["query_set_tag"] = sql_query
+                data["storage_class"] = policy
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
 
@@ -340,31 +343,16 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                 count = int(resp.getheader("x-oio-count", 0))
                 offset += count
                 count_events = 0
-                if action in ("Expiration", "Transition"):
-                    exptected_events = (
-                        count * self.expected_to_cycle[rule_id][action_type]
-                    )
-                else:
-                    exptected_events = self.expected_to_cycle[rule_id][action_type]
 
-                while count_events < exptected_events:
+                while len(elements_to_match) > 0:
                     event = self.wait_for_kafka_event(
                         types=(EventTypes.LIFECYCLE_ACTION,)
                     )
+
                     self.assertIsNotNone(event)
                     self.assertEqual(event.event_type, "storage.lifecycle.action")
                     self.assertEqual(event.data["account"], self.account)
                     self.assertEqual(event.data["container"], self.container)
-
-                    elements_to_match = ()
-
-                    if (
-                        key_query == "marker"
-                        or len(self.to_match_markers[rule_id][action_type]) > 0
-                    ):
-                        elements_to_match = self.to_match_markers[rule_id][action_type]
-                    else:
-                        elements_to_match = self.to_match[rule_id][action_type]
 
                     [found, elem_to_remove] = self._check_event(
                         elements_to_match, event
@@ -373,6 +361,7 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
                         # For debug
                         print("elements_to_match:", elements_to_match)
                         print("event.data:", event.data)
+
                     self.assertEqual(found, True)
                     list_of_bool = [
                         True
@@ -385,7 +374,8 @@ class TestLifecycleConform(CliTestCase, BaseClassLifeCycle):
 
                     self.assertEqual(event.data["action"], action)
                     count_events += 1
-
+                    if count_events >= self.batch_size:
+                        break
                 if count == 0:
                     break
 
@@ -3668,7 +3658,7 @@ class TestLifecycleConformExpiredDelete(TestLifecycleConform):
                 self.account, self.container, deleted=True, versions=True
             )
             self.to_match_markers[self.rule_id][self.action] = objects["objects"]
-        self._check_and_apply(source, nothing_to_match=True)
+        self._check_and_apply(source, nothing_to_match=False)
 
     def test_expired_delete_marker_false(self):
         """Add some versions of object, add delete marker then
@@ -4197,6 +4187,7 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
         for rule_id, rule in json_dict["Rules"].items():
             rule["ID"] = rule_id
             actions = self._get_actions(rule)
+            prefix = lc.get_prefix(rule)
             for act_type, act_list in actions.items():
                 for act in act_list:
                     # Force expiration for test
@@ -4228,6 +4219,7 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
                         None,
                         None,
                         rule_id,
+                        prefix,
                     )
 
                     count_actions += 1
@@ -4243,12 +4235,20 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
         policy,
         last_rule_action,
         rule_id,
+        prefix,
     ):
         for key_query, val_query in queries.items():
             offset = 0
-            while True:
+
+            elements_to_match = (
+                self.to_match[rule_id][action]
+                if key_query == "base"
+                else self.to_match_markers[rule_id][action]
+            )
+
+            while len(elements_to_match) > 0:
                 sql_query = val_query
-                sql_query = f"{sql_query} limit {self.batch_size} " f" offset {offset} "
+                sql_query = f"{sql_query} limit {self.batch_size} "
                 kwargs = {}
                 params = {"cid": self.cid, "service_id": self.peer_to_use}
                 data = {}
@@ -4257,6 +4257,11 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
                 data["query"] = sql_query
                 data["batch_size"] = self.batch_size
                 data["rule_id"] = rule_id
+
+                data["query_set_tag"] = sql_query
+
+                if prefix:
+                    data["prefix"] = prefix
 
                 reqid = request_id()
                 resp, body = self.proxy_client._request(
@@ -4270,12 +4275,10 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
                 self.assertEqual(resp.status, 204)
                 count = int(resp.getheader("x-oio-count", 0))
                 offset += count
+
                 count_events = 0
 
-                exptected_events = min(
-                    len(self.to_match[rule_id][action]), self.batch_size
-                )
-                while count > 0 and count_events < exptected_events:
+                while count_events < count:
                     event = self.wait_for_kafka_event(
                         types=(EventTypes.LIFECYCLE_ACTION,)
                     )
@@ -4284,12 +4287,6 @@ class TestLifecycleAbortIncompleteMpu(TestLifecycleConform):
                     self.assertEqual(event.data["account"], self.account)
                     self.assertEqual(
                         event.data["container"], self.container + "+segments"
-                    )
-
-                    elements_to_match = (
-                        self.to_match[rule_id][action]
-                        if key_query == "base"
-                        else self.to_match_markers[rule_id][action]
                     )
 
                     [found, elem_to_remove] = self._check_event(
