@@ -143,7 +143,7 @@ A lot of variables are available, consider reading [Variables.md](./Variables.md
 - pip install -r test-requirements.txt
 
 ### Reset stack and start it all
-- oio-reset.sh -f ../oio-sds/etc/bootstrap-preset-SINGLE.yml -r RegionOne -U
+- oio-reset.sh -f oio-sds/etc/bootstrap-preset-SINGLE.yml -r RegionOne -U
 
 #### Check if openio responds correctly
 - openio cluster show
