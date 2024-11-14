@@ -38,6 +38,10 @@ log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,rawx-crawler
 
+# use_tcp_cork controls the usage of the TCP_CORK options on sockets towards
+# the rawx services. Set to true by default. It accepts boolean values
+use_tcp_cork = true
+
 [pipeline:main]
 # Checksum filter has a dedicated instance: oio-checksum-checker-crawler
 #pipeline = logger checksum indexer

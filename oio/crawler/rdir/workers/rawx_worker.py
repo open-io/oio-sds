@@ -47,8 +47,8 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
                 new one with a default size of 10 will be created.
         """
         super().__init__(
-            conf=conf,
-            volume_path=volume_path,
+            conf,
+            volume_path,
             logger=logger,
             pool_manager=pool_manager,
             watchdog=watchdog,
@@ -64,7 +64,9 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
         self._rawx_service = RawxService(status=False, last_time=0)
 
         self.chunk_operator = ChunkOperator(
-            self.conf, logger=self.logger, watchdog=watchdog
+            self.conf,
+            logger=self.logger,
+            watchdog=watchdog,
         )
         if self.use_marker:
             self.nb_path_processed = 0

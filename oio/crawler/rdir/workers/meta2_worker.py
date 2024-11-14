@@ -44,8 +44,8 @@ class RdirWorkerForMeta2(RdirWorker):
                 new one with a default size of 10 will be created.
         """
         super().__init__(
-            conf=conf,
-            volume_path=volume_path,
+            conf,
+            volume_path,
             logger=logger,
             pool_manager=pool_manager,
             watchdog=watchdog,

@@ -43,7 +43,7 @@ from oio.common.constants import (
     CHUNK_XATTR_EXTRA_PREFIX,
     CHUNK_XATTR_EXTRA_PREFIX_LEN,
 )
-from oio.common.easy_value import int_value
+from oio.common.easy_value import int_value, boolean_value
 from oio.common.exceptions import OioNetworkException, ServiceBusy, SourceReadError
 from oio.common.http import (
     HeadersDict,
@@ -56,6 +56,10 @@ from oio.common.storage_method import ECDriverError
 from oio.common.utils import fix_ranges, get_hasher, monotonic_time, request_id
 
 LOGGER = get_logger({}, __name__)
+
+# Default configuration value for the activation of the TCP_CORK optional behavior
+# toward the rawx services, under erasure coding circumstances
+USE_TCP_CORK = True
 
 
 def segment_range_to_fragment_range(
@@ -670,6 +674,7 @@ class EcChunkWriter(object):
         self,
         chunk,
         conn,
+        use_tcp_cork,
         read_timeout=None,
         chunk_checksum_algo="blake3",
         perfdata=None,
@@ -693,6 +698,7 @@ class EcChunkWriter(object):
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
+        self.use_tcp_cork = use_tcp_cork
 
     @property
     def chunk(self):
@@ -707,6 +713,7 @@ class EcChunkWriter(object):
         cls,
         chunk,
         sysmeta,
+        use_tcp_cork,
         reqid=None,
         connection_timeout=None,
         read_timeout=None,
@@ -753,11 +760,13 @@ class EcChunkWriter(object):
                 perfdata=perfdata_rawx,
                 perfdata_suffix=chunk["url"],
             )
-            conn.set_cork(True)
+            if use_tcp_cork:
+                conn.set_cork(True)
             conn.chunk = chunk
         return cls(
             chunk,
             conn,
+            use_tcp_cork=use_tcp_cork,
             read_timeout=read_timeout,
             reqid=reqid,
             watchdog=watchdog,
@@ -854,7 +863,8 @@ class EcChunkWriter(object):
             with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkWriteTimeout):
                 self.conn.send(to_send)
                 # Last segment sent, disable TCP_CORK to flush buffers
-                self.conn.set_cork(False)
+                if self.use_tcp_cork:
+                    self.conn.set_cork(False)
         except (Exception, SocketError, ChunkWriteTimeout) as exc:
             self.failed = True
             msg = str(exc)
@@ -913,6 +923,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = []
         self.logger = kwargs.get("logger", LOGGER)
+        self.use_tcp_cork = boolean_value(kwargs.get("use_tcp_cork", USE_TCP_CORK))
 
     def stream(self, source, size):
         writers = self._get_writers()
@@ -1094,6 +1105,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             writer = EcChunkWriter.connect(
                 chunk,
                 self.sysmeta,
+                self.use_tcp_cork,
                 reqid=self.reqid,
                 connection_timeout=self.connection_timeout,
                 read_timeout=self.read_timeout,

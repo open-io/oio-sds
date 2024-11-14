@@ -27,14 +27,16 @@ class RdirWorker(CrawlerWorker):
     CONSCIENCE_CACHE = 30
     CRAWLER_TYPE = "rdir"
 
-    def __init__(self, pool_manager=None, watchdog=None, **kwargs) -> None:
+    def __init__(
+        self, conf, volume_path, pool_manager=None, watchdog=None, **kwargs
+    ) -> None:
         """
         Initializes an RdirWorker.
 
         :param pool_manager: A connection pool manager. If none is given, a
                 new one with a default size of 10 will be created.
         """
-        super().__init__(**kwargs)
+        super().__init__(conf, volume_path, **kwargs)
 
         # If True delete entries not referenced in meta2/
         # set to False by default

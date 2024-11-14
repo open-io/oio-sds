@@ -119,6 +119,12 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         KafkaProducerMixin.__init__(self, logger=logger, conf=conf)
 
         self.conf = conf
+
+        if "use_tcp_cork" in kwargs:
+            if self.conf is None:
+                self.conf = {}
+            self.conf["use_tcp_cork"] = kwargs["use_tcp_cork"]
+
         self.perfdata = perfdata
         self.watchdog = watchdog
         if not watchdog:
@@ -137,6 +143,18 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             conf=self.conf,
             logger=logger,
         )
+
+    EXTRA_KEYWORDS = ("use_tcp_cork",)
+
+    def build_conf(self, **kwargs):
+        """Propagates several key/value pairs from the configuration
+        in the kwargs"""
+        out = dict()
+        for key in self.__class__.EXTRA_KEYWORDS:
+            if key in self.conf:
+                out[key] = self.conf[key]
+        out.update(kwargs)
+        return out
 
     def resolve_url(self, url, end_user_request=False):
         """Returns real url if end_user_request and internal url if not"""
@@ -178,7 +196,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             logger=self.logger,
             watchdog=self.watchdog,
             headers=headers,
-            **kwargs
+            **self.build_conf(**kwargs),
         )
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
@@ -256,7 +274,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             buf_size=buffer_size,
             verify_checksum=verify_checksum,
             watchdog=self.watchdog,
-            **kwargs
+            **kwargs,
         )
         # This must be done now if we want to access headers
         stream = reader.stream()

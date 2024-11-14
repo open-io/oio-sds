@@ -1,6 +1,7 @@
 [event-agent]
 namespace = OPENIO
 user = openio
+
 # URL of the queue to listen to. Notice that the old event-agent is only able
 # to listen to Beanstalkd, and the new one is only able to listen to AMQP queues.
 queue_url = beanstalk://127.0.0.1:11300
@@ -86,3 +87,8 @@ events_per_second = 0
 #kafka_consumer_
 #kafka_producer_
 #kafka_common_
+
+# use_tcp_cork controls the usage of the TCP_CORK options on sockets towards
+# the rawx services. Set to true by default. It accepts boolean values
+use_tcp_cork = true
+

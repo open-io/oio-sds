@@ -65,7 +65,7 @@ CLIENT_TIMEOUT = 60.0
 PUT_QUEUE_DEPTH = 10
 
 # Default configuration value for the activation of the TCP_CORK optional behavior
-# toward the rawx services.
+# toward the rawx services, under replication circumstances
 USE_TCP_CORK = True
 
 

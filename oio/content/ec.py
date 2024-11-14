@@ -86,6 +86,13 @@ class ECContent(Content):
         )
         new_chunk = Chunk({"pos": current_chunk.pos, "url": spare_url[0]})
 
+        # Extract configuration fields that may be useful for the blob client
+        # underlying in the ECRebuildHandler
+        cfg = {}
+        for k in ("use_tcp_cork",):
+            if k in self.conf:
+                cfg[k] = self.conf[k]
+
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
             chunks.raw(),
@@ -95,6 +102,7 @@ class ECContent(Content):
             watchdog=self.blob_client.watchdog,
             reqid=reqid,
             logger=self.logger,
+            **cfg,
         )
         expected_chunk_size, stream, extra_properties = handler.rebuild()
 

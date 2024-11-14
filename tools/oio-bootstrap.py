@@ -1440,6 +1440,8 @@ kafka_consumer_group.instance.id = ${SRVTYPE}.${SRVNUM}
 
 rdir_connection_timeout = 0.5
 rdir_read_timeout = 5.0
+
+${TCP_CORK_COMMENT}use_tcp_cork = ${TCP_CORK}
 """
 
 template_event_agent_handlers = """
@@ -1693,6 +1695,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 broker_endpoint = ${QUEUE_URL}
 group_id = ${GROUP_ID}
+${TCP_CORK_COMMENT}use_tcp_cork = ${TCP_CORK}
 """
 
 template_xcute_event_agent_handlers = """
@@ -1944,12 +1947,17 @@ COMPRESSION = "compression"
 APPLICATION_KEY = "application_key"
 META_HEADER = "x-oio-chunk-meta"
 COVERAGE = os.getenv("PYTHON_COVERAGE")
+# Fill with "#" to comment the line out of the config files
+# or leave empty to activate the option on config files
+TCP_CORK_COMMENT = "#"
+TCP_CORK = "false"
 TLS_CERT_FILE = None
 TLS_KEY_FILE = None
 HASH_WIDTH = "hash_width"
 HASH_DEPTH = "hash_depth"
 KAFKA_ENDPOINT = "kafka_endpoint"
 KAFKA_METRICS_ENDPOINTS = "kafka_metrics_endpoints"
+
 
 defaults = {
     "NS": "OPENIO",
@@ -2154,6 +2162,8 @@ def generate(options):
         STATSD_PORT=statsd_port,
         STATSD_ADDR=statsd_addr,
         SYSTEMCTL_TIMEOUT_STOP_SEC=systemctl_timeout_stop_sec,
+        TCP_CORK=TCP_CORK,
+        TCP_CORK_COMMENT=TCP_CORK_COMMENT,
         TLS_CERT_FILE=TLS_CERT_FILE,
         TLS_KEY_FILE=TLS_KEY_FILE,
         WANT_SERVICE_ID=want_service_id,
