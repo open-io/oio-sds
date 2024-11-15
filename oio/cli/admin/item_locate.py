@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -255,7 +255,6 @@ class ItemLocateCommand(lister.Lister):
 
     def locate_containers(self, containers, is_cid=False):
         reqid = self.app.request_id(self.reqid_prefix)
-        # FIXME(FVE): manage --cid here
 
         if not is_cid:
             for field in self.locate_accounts([self.app.options.account]):
@@ -332,6 +331,13 @@ class ItemLocateCommand(lister.Lister):
                     chunk_info=True,
                     reqid=reqid,
                 )
+                # If the object is in a shard (not in the root container),
+                # also display info about this shard.
+                if "shard_hexid" in obj_md:
+                    for item in self.locate_containers(
+                        (obj_md["shard_hexid"],), is_cid=True
+                    ):
+                        yield item
                 obj_item = encode_fullpath(
                     self.app.options.account, ct, obj, obj_md["version"], obj_md["id"]
                 )

@@ -216,6 +216,10 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 				ctx.resolve_duration, ctx.request_duration);
 		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
 	}
+	if (redirect_url) {
+		args->rp->add_header(PROXYD_HEADER_SHARD_HEXID,
+				g_strdup(oio_url_get(redirect_url, OIOURL_HEXID)));
+	}
 
 	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_enable_perfdata(FALSE);

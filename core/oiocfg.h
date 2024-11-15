@@ -113,6 +113,9 @@ extern "C" {
 #  define PROXYD_HEADER_FORCE_VERSIONING PROXYD_HEADER_PREFIX "force-versioning"
 # endif
 
+/** Hexadecimal ID of the shard the request was redirected to */
+#define PROXYD_HEADER_SHARD_HEXID PROXYD_HEADER_PREFIX "shard-hexid"
+
 # ifndef PROXYD_HEADER_SIMULATE_VERSIONING
 #  define PROXYD_HEADER_SIMULATE_VERSIONING PROXYD_HEADER_PREFIX "simulate-versioning"
 # endif

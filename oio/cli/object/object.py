@@ -431,6 +431,7 @@ class ShowObject(ObjectCommandMixin, ShowOne):
             "mtime": "mtime",
             "policy": "policy",
             "chunk_method": "chunk_method",
+            "shard_hexid": "shard_hexid",
         }
         for key0, key1 in conv.items():
             info[key0] = data.get(key1, "n/a")
@@ -997,7 +998,7 @@ class LocateObject(ObjectCommandMixin, Lister):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
-        data = self.app.client_manager.storage.object_locate(
+        obj_md, obj_chunks = self.app.client_manager.storage.object_locate(
             account,
             container,
             obj,
@@ -1005,6 +1006,9 @@ class LocateObject(ObjectCommandMixin, Lister):
             version=parsed_args.object_version,
             chunk_info=parsed_args.chunk_info,
         )
+
+        if "shard_hexid" in obj_md:
+            self.log.info("shard_hexid: %s", obj_md["shard_hexid"])
 
         # Build columns
         columns = ("Pos", "Id", "Metachunk size", "Metachunk hash")
@@ -1015,7 +1019,7 @@ class LocateObject(ObjectCommandMixin, Lister):
 
         # Build chunks with data
         chunks = []
-        for c in data[1]:
+        for c in obj_chunks:
             chunk = (c["pos"], c["url"], c["size"], c["hash"])
             if parsed_args.chunk_info:
                 chunk += (c.get("chunk_size", "n/a"), c.get("chunk_hash", "n/a"))

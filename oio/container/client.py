@@ -18,7 +18,7 @@ import time
 import warnings
 from functools import wraps
 
-from six.moves.urllib_parse import unquote
+from urllib.parse import unquote
 
 from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
@@ -32,7 +32,12 @@ from oio.common.cache import (
     set_cached_object_metadata,
     del_cached_object_metadata,
 )
-from oio.common.constants import DELETEMARKER_HEADER, VERSIONID_HEADER
+from oio.common.constants import (
+    DELETEMARKER_HEADER,
+    HEADER_PREFIX,
+    SHARD_HEXID_HEADER,
+    VERSIONID_HEADER,
+)
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioNetworkException
 from oio.common.green import eventlet
@@ -72,6 +77,11 @@ def extract_content_headers_meta(headers):
             else:
                 short_key = short_key.replace("-", "_")
                 resp_headers[short_key] = unquote(headers[key])
+        # Extract other headers which are not content metadata
+        # but deserve to be propagated.
+        if key.lower() == SHARD_HEXID_HEADER.lower():
+            short_key = key[len(HEADER_PREFIX) :].lower().replace("-", "_")
+            resp_headers[short_key] = unquote(headers[key])
     chunk_size = headers.get("x-oio-ns-chunk-size")
     if chunk_size:
         resp_headers["chunk_size"] = int(chunk_size)

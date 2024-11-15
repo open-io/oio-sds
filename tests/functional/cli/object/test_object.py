@@ -58,6 +58,7 @@ OBJ_FIELDS = [
     "mtime",
     "object",
     "policy",
+    "shard_hexid",
     "size",
     "version",
 ]
