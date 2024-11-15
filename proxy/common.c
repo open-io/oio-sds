@@ -567,7 +567,9 @@ label_retry:
 	EXTRA_ASSERT(urlv->len == errorv->len);
 
 	if (urlerrorv->len > 0) {
-		oio_ext_set_urlerrorv(urlerrorv);
+		// Increase the reference count
+		GPtrArray *shared_urlerrorv = g_ptr_array_ref(urlerrorv);
+		oio_ext_set_urlerrorv(shared_urlerrorv);
 	}
 
 	g_strfreev(m1uv);
@@ -583,6 +585,8 @@ label_retry:
 	FinishArray(ctx->urlv, gchar, urlv);
 	FinishArray(ctx->bodyv, GByteArray, bodyv);
 	FinishArray(ctx->errorv, GError, errorv);
+	// Unreference the urlerrov array
+	g_ptr_array_unref(urlerrorv);
 
 	return err;
 }

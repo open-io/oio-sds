@@ -224,7 +224,7 @@ static void _local_free(gpointer p) {
 		l->perfdata = NULL;
 	}
 	if (l->urlerrorv) {
-		g_ptr_array_free(l->urlerrorv, TRUE);
+		g_ptr_array_unref(l->urlerrorv);
 	}
 	g_free (l);
 }
@@ -473,7 +473,7 @@ GPtrArray *oio_ext_get_urlerrorv(void) {
 void oio_ext_set_urlerrorv(GPtrArray *urlerrorv) {
 	struct oio_ext_local_s *l = _local_ensure();
 	if (l->urlerrorv) {
-		g_ptr_array_free(l->urlerrorv, TRUE);
+		g_ptr_array_unref(l->urlerrorv);
 	}
 	l->urlerrorv = urlerrorv;
 }
