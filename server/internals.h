@@ -87,7 +87,6 @@ struct network_server_s
 	int eventfd;
 	int epollfd;
 	volatile gboolean flag_continue;
-	gboolean abort_allowed;
 	gboolean udp_allowed;
 
 	GCond req_mem_cond;

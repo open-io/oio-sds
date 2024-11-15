@@ -271,12 +271,6 @@ action_forward_get_info (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_forward_kill (struct req_args_s *args)
-{
-	return _forward_XXX(args, "REQ_KILL", NULL, proxy_timeout_common);
-}
-
-enum http_rc_e
 action_forward_flush (struct req_args_s *args)
 {
 	return _forward_XXX(args, NAME_MSGNAME_SQLX_FLUSH, NULL,

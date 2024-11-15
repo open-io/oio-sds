@@ -1118,7 +1118,6 @@ configure_request_handlers (void)
 	SET("/forward/stats/#POST", action_forward_stats);
 
 	SET("/forward/ping/#GET", action_forward_get_ping);
-	SET("/forward/kill/#POST", action_forward_kill);
 
 	/* Reload the internal load balancer of the specified sqliterepo
 	 * service. */

@@ -867,19 +867,6 @@ dispatch_PING(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-dispatch_KILL(struct gridd_reply_ctx_s *reply,
-		gpointer gdata UNUSED, gpointer hdata UNUSED)
-{
-	if (reply->client->server->abort_allowed) {
-		abort();
-		reply->send_reply(CODE_FINAL_OK, "OK");
-	} else {
-		reply->send_reply(CODE_NOT_ALLOWED, "abort disabled");
-	}
-	return TRUE;
-}
-
-static gboolean
 dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
@@ -1129,7 +1116,6 @@ gridd_get_common_requests(void)
 		{"REQ_SETCFG",    dispatch_SETCFG,        &_local_variable},
 		{"REQ_REDIRECT",  dispatch_REDIRECT,      &_local_variable},
 		{"REQ_LEAN",      dispatch_LEAN,          &_local_variable},
-		{"REQ_KILL",      dispatch_KILL,          &_local_variable},
 		{NULL, NULL, NULL}
 	};
 
