@@ -114,6 +114,7 @@ _reply_json_error(struct req_args_s *args, int code, const char *msg,
 			);
 		}
 	}
+	g_string_free(service_id, FALSE);
 	return _reply_json(args, code, msg, gstr);
 }
 
