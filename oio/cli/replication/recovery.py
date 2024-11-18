@@ -26,11 +26,14 @@ from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
 
 
+OBJECT_DELETE_AT = "x-delete-at"
 OBJECT_REPLICATION_PENDING = "PENDING"
 OBJECT_REPLICATION_REPLICA = "REPLICA"
 OBJECT_REPLICATION_COMPLETED = "COMPLETED"
 OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
 REPLICATION_ROLE_RE = re.compile(r"arn:aws:iam::([a-zA-Z0-9]+):role/([a-zA-Z0-9\_-]+)")
+
+META_TO_IGNORE = (OBJECT_DELETE_AT, OBJECT_TRANSIENT_SYSMETA_PREFIX)
 
 
 def _tagging_obj_to_dict(tag_obj: Dict[str, Any]) -> Dict[str, List[str]]:
@@ -216,7 +219,7 @@ class ReplicationRecovery(Command):
                         continue
                     has_client_metadata = False
                     for key_metadata in metadata:
-                        if key_metadata.startswith(OBJECT_TRANSIENT_SYSMETA_PREFIX):
+                        if key_metadata.startswith(META_TO_IGNORE):
                             has_client_metadata = True
                             break
                     if not has_client_metadata:
@@ -303,7 +306,7 @@ class ReplicationRecovery(Command):
             )
             properties = OrderedDict(obj["properties"].items())
             for prop in properties:
-                if not prop.startswith(OBJECT_TRANSIENT_SYSMETA_PREFIX):
+                if not prop.startswith(META_TO_IGNORE):
                     value = obj["properties"].get(prop)
                     event["data"].append(
                         {
