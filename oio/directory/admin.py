@@ -150,6 +150,8 @@ class AdminClient(ProxyClient):
         """
         Force all peers to leave the election.
         """
+        # By default enable service down bypass
+        params.update({"bypass_service_down": "true"})
         _, body = self._request("POST", "/leave", params=params, **kwargs)
         return body
 

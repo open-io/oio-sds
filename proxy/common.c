@@ -443,14 +443,19 @@ label_retry:
 			} else {
 #endif /* HAVE_ENBUG */
 				/* Send a unitary request */
-				if (ctx->which == CLIENT_RUN_ALL
-						|| ctx->which == CLIENT_SPECIFIED)
+				if (ctx->which == CLIENT_RUN_ALL || ctx->which == CLIENT_SPECIFIED) {
 					gridd_client_no_redirect(client);
+				}
 				gridd_client_set_timeout(client,
 						oio_clamp_timeout(proxy_timeout_common, deadline));
+				if (oio_str_parse_bool(BYPASS_SERVICE_DOWN(), FALSE)) {
+					// To bypass service check
+					gridd_client_set_avoidance(client, FALSE);
+				}
 				gridd_client_start(client);
-				if (!(err = gridd_client_loop(client)))
+				if (!(err = gridd_client_loop(client))) {
 					err = gridd_client_error(client);
+				}
 #ifdef HAVE_ENBUG
 			}
 #endif
