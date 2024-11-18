@@ -66,6 +66,7 @@ class AutomaticVacuum(Filter):
             logger=self.logger,
             pool_manager=self.app_env["api"].container.pool_manager,
         )
+        self.container = self.app_env["api"].container
 
         self.skipped = 0
         self.successes = 0
@@ -110,7 +111,7 @@ class AutomaticVacuum(Filter):
         Return true if the master database matches the local database scan.
         """
         meta2db_size = meta2db.file_status["st_size"]
-        data = self.container_sharding.container.container_get_properties(
+        data = self.container.container_get_properties(
             cid=meta2db.cid,
             admin_mode=True,
             params={"urgent": 1},
