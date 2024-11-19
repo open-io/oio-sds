@@ -1700,17 +1700,20 @@ log_format=topic:%(topic)s    event:%(event)s
 
 template_event_agent_lifecycle_checkpoint_handlers = """
 [handler:lifecycle.checkpoint]
-pipeline = checkpoint
+pipeline = checkpoint ${PRESERVE}
 
 [filter:checkpoint]
 use = egg:oio#checkpoint_creator
 topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
 
-[filter:log]
-use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
-checkpoint_prefix = lifecycle
+[filter:preserve]
+# Preserve all events in the oio-preserved topic. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_event_agent_lifecycle_actions_handlers = """
@@ -1723,6 +1726,14 @@ use = egg:oio#lifecycle_actions
 [filter:log]
 use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
 """
 
 template_systemd_service_xcute_event_agent = """
@@ -3282,13 +3293,13 @@ def generate(options):
 
     # Configure a special oio-event-agent dedicated to lifecycle actions events
     # -------------------------------------------------------------------------
-    num += 1
-    for _, url, event_agent_bin in get_event_agent_details():
+    for num, url, event_agent_bin in get_event_agent_details():
         add_event_agent_conf(
             num,
             "oio-lifecycle",
             url,
             workers="1",
+            srv_type="event-agent-lifecycle-actions",
             group_id="event-agent-lifecycle-actions",
             template_handler=template_event_agent_lifecycle_actions_handlers,
         )

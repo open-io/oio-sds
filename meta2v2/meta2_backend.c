@@ -4593,7 +4593,6 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		found_match = TRUE;
-
 		if(is_transition) {
 			gchar *old_policy  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
 			allow_transition = _check_allowed_transition(m2b, storage_class, old_policy);
@@ -4666,7 +4665,7 @@ rollback:
 		goto close;
 	}
 
-	if (query_set_tag && !found_match) {
+	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
 	}
 close:

@@ -31,8 +31,6 @@ class CopyCleaner(Meta2Filter):
     PROCESS_ORIGINAL = False
 
     def __init__(self, app, conf, logger=None):
-        super().__init__(app, conf, logger=logger)
-
         self.delay = None
         self.keywords = None
         self.admin_client = None
@@ -40,6 +38,7 @@ class CopyCleaner(Meta2Filter):
         self.success = 0
         self.skipped = 0
         self.errors = 0
+        super().__init__(app, conf, logger=logger)
 
     def init(self):
         super().init()

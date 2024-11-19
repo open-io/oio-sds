@@ -108,7 +108,7 @@ def redirect_stdio(logger):
     sys.stderr = StreamToLogger(logger, "STDERR")
 
 
-def get_logger(conf, name=None, verbose=False, fmt=None):
+def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
     if not conf:
         conf = {}
 
@@ -124,11 +124,11 @@ def get_logger(conf, name=None, verbose=False, fmt=None):
     logger = logging.getLogger(name)
     logger.propagate = False
 
-    formatter = logging.Formatter(
+    syslog_formatter = formatter or logging.Formatter(fmt=fmt)
+
+    formatter = formatter or logging.Formatter(
         fmt="%(asctime)s.%(msecs)03d " + fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
-
-    syslog_formatter = logging.Formatter(fmt=fmt)
 
     if not hasattr(get_logger, "handler4logger"):
         get_logger.handler4logger = {}
