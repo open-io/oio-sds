@@ -132,8 +132,10 @@ class MpuPartCleaner(Filter):
                 reqid=reqid,
             )
         except NotFound:
-            # How can we delete parts if the "+segments" does not even exist ?
-            raise RejectMessage("+segments container not found")
+            # This happens if the customer deletes its bucket before this event is
+            # processed. As everything is already deleted, we shouldn't do anything
+            # else here.
+            return self.app(env, cb)
 
         paths = []
         for obj in content_list["objects"]:
