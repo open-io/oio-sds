@@ -334,6 +334,11 @@ gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 
 	const gint64 req_start = oio_ext_monotonic_time();
 
+	if (req_start >= deadline) {
+		return BUSY("Deadline reached, %s subrequest not executed",
+				ctx->type);
+	}
+
 	/* Locate the services */
 label_retry:
 	if (ctx->which == CLIENT_SPECIFIED) {
