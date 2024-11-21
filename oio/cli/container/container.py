@@ -580,7 +580,8 @@ class FlushContainer(ContainerCommandMixin, Command):
             action="store_true",
             dest="quick",
             help="""Flush container quickly, may put high pressure
- on the event system.""",
+ on the event system. Does not work on a sharded bucket
+ (but can be called on each shard individually).""",
         )
         parser.add_argument(
             "--limit",
@@ -607,6 +608,10 @@ class FlushContainer(ContainerCommandMixin, Command):
         kwargs = {}
         if parsed_args.limit:
             kwargs["limit"] = parsed_args.limit
+        else:
+            kwargs["limit"] = int_value(
+                self.app.client_manager.sds_conf.get("proxy.bulk.max.delete_many"), 100
+            )
         if parsed_args.delay:
             kwargs["delay"] = parsed_args.delay
 
@@ -616,13 +621,17 @@ class FlushContainer(ContainerCommandMixin, Command):
             container = parsed_args.container
         else:
             account, container = self.app.client_manager.storage.resolve_cid(
-                parsed_args.cid
+                parsed_args.cid,
+                reqid=self.app.request_id(),
+                timeout=self.app.options.timeout,
             )
         self.app.client_manager.storage.container_flush(
             account,
             container,
             fast=parsed_args.quick,
             all_versions=parsed_args.all_versions,
+            reqid=self.app.request_id(),
+            timeout=self.app.options.timeout,
             **kwargs,
         )
 

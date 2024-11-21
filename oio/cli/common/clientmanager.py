@@ -189,6 +189,7 @@ class ClientManager(object):
                 endpoint=self.get_endpoint(),
                 account_endpoint=self.get_service_endpoint("account"),
                 pool_manager=self.pool_manager,
+                logger=self.logger,
             )
         return self._storage
 

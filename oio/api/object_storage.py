@@ -524,7 +524,14 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_flush(
-        self, account, container, fast=False, delay=None, all_versions=False, **kwargs
+        self,
+        account,
+        container,
+        fast=False,
+        delay=None,
+        all_versions=False,
+        attempts=3,
+        **kwargs,
     ):
         """
         Flush a container
@@ -562,16 +569,31 @@ class ObjectStorageApi(object):
                 )
 
         while True:
-            # No need to keep a marker: we are deleting objects
-            resp = self.object_list(account, container, versions=all_versions, **kwargs)
-            if not resp["objects"]:
-                break
-            objects = [obj["name"] for obj in resp["objects"]]
-            deleted = self.object_delete_many(account, container, objects, **kwargs)
-            if not any(x[1] for x in deleted):
-                raise exc.OioException(
-                    "None of the %d objects could be deleted" % len(deleted)
-                )
+            last_err = None
+            for attempt in range(attempts):
+                try:
+                    # No need to keep a marker: we are deleting objects
+                    resp = self.object_list(
+                        account, container, versions=all_versions, **kwargs
+                    )
+                    if not resp["objects"]:
+                        return
+                    objects = [obj["name"] for obj in resp["objects"]]
+                    deleted = self.object_delete_many(
+                        account, container, objects, **kwargs
+                    )
+                    if not any(x[1] for x in deleted):
+                        raise exc.OioException(
+                            f"None of the {len(deleted)} objects could be deleted"
+                        )
+                    break
+                except exc.OioTimeout as err:
+                    if attempt < attempts - 1:
+                        self.logger.info("Got a timeout, will retry: %s", err)
+                    last_err = err
+                    continue
+            else:
+                raise last_err
             if delay:
                 sleep(delay)
 
