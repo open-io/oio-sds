@@ -62,4 +62,4 @@ install(TARGETS
 			meta0_client
 		RUNTIME DESTINATION bin
 		#CONFIGURATIONS Debug
-		COMPONENT dev)
+		)

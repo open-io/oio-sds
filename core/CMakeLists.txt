@@ -116,4 +116,4 @@ install(TARGETS
 			tool_roundtrip
 			tool_sdk
 		DESTINATION bin
-		CONFIGURATIONS Debug COMPONENT dev)
+		CONFIGURATIONS Debug)

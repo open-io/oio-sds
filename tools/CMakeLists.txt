@@ -71,7 +71,7 @@ install(TARGETS
 			oio-file
 			oio-zk-harass
 		DESTINATION bin
-		CONFIGURATIONS Debug COMPONENT dev)
+		CONFIGURATIONS Debug)
 
 install(PROGRAMS
 			oio-flush-all.sh
@@ -83,5 +83,5 @@ install(PROGRAMS
 			oio-webhook-test.py
 			openioctl.sh
 		DESTINATION bin
-		CONFIGURATIONS Debug COMPONENT dev)
+		CONFIGURATIONS Debug)
 

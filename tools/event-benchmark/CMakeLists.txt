@@ -26,4 +26,4 @@ target_link_libraries(event_benchmark
 install(TARGETS
 			event_benchmark
 		DESTINATION bin
-		CONFIGURATIONS Debug COMPONENT dev)
+		CONFIGURATIONS Debug)
