@@ -275,6 +275,6 @@ add_library(metautils STATIC
 # processes seamless restart.
 target_link_libraries(metautils
 		oiocore
-		-lsystemd
+		${SYSTEMD_LIBRARIES}
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		-lm ${CMAKE_THREAD_LIBS_INIT})
