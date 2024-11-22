@@ -91,20 +91,6 @@ target_link_libraries(tool_sdk oiosds)
 add_executable(tool_roundtrip tool_roundtrip.c)
 target_link_libraries(tool_roundtrip oiosds)
 
-install(FILES
-			oiocfg.h
-			oiodir.h
-			oioext.h
-			oiolog.h
-			oioloc.h
-			oiostr.h
-			oiourl.h
-			oiovar.h
-			oiocs.h
-			oiolb.h
-			lrutree.h
-		DESTINATION include/core)
-
 install(TARGETS
 			oiocore
 			oiosds
