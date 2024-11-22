@@ -52,6 +52,31 @@ class TestAdmin(BaseTestCase):
         self.assertEqual(1, len(election))
         self.assertEqual(200, election[service_id]["status"]["status"])
 
+    def test_election_leave_service_down(self):
+        if int(self.conf.get("container_replicas", 1)) < 3:
+            self.skipTest("Container replication must be enabled")
+        peers = self.storage.directory.list(
+            self.account, self.container, service_type="meta2"
+        )
+        service_id = peers["srv"][1]["host"]
+        self.storage.logger.info("Stopping meta2 %s", service_id)
+        try:
+            self._service(self.service_to_systemd_key(service_id, "meta2"), "stop")
+            election = self.admin.election_leave(
+                "meta2",
+                account=self.account,
+                reference=self.container,
+                service_id=service_id,
+            )
+            self.assertEqual(1, len(election))
+            self.assertEqual(2, election[service_id]["status"]["status"])
+            self.assertEqual(
+                f"{service_id}: [errno=111] Connection refused",
+                election[service_id]["status"]["message"],
+            )
+        finally:
+            self._service(self.service_to_systemd_key(service_id, "meta2"), "start")
+
     def test_election_leave_several_service_ids(self):
         status = self.admin.election_status(
             "meta2", account=self.account, reference=self.container
