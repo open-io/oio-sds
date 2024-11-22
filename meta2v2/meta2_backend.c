@@ -400,12 +400,16 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 	return FALSE;
 }
 
-static void sep (GString *gs1) {
+static void sep(GString *gs1) {
 	if (gs1->len > 1 && !strchr(",[{", gs1->str[gs1->len-1]))
 		g_string_append_c(gs1, ',');
 }
+static void append_boolean(GString *gs1, const char *k, gboolean v) {
+	sep(gs1);
+	g_string_append_printf(gs1, "\"%s\":%s", k, v ? "true" : "false");
+}
 
-static void append_int64 (GString *gs1, const char *k, gint64 v) {
+static void append_int64(GString *gs1, const char *k, gint64 v) {
 	sep(gs1);
 	g_string_append_printf(gs1, "\"%s\":%"G_GINT64_FORMAT, k, v);
 }
@@ -4340,8 +4344,11 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
 
+	struct json_object *jhas_bucket_logging = NULL;
+
 	gboolean found_match = FALSE;
 	guint32 count_rows = 0;
+	gboolean has_bucket_logging = FALSE;
 
 	gchar *offset_key = NULL;
 
@@ -4356,6 +4363,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"batch_size", &jbatch_size, json_type_int, 0},
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
+		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4398,6 +4406,11 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 	}
+
+	if (jhas_bucket_logging) {
+		has_bucket_logging = json_object_get_boolean(jhas_bucket_logging);
+	}
+
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4473,8 +4486,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
 		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 		append_str(event, "object", object_name);
+		append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 		append_int64(event, "version", version);
 		append_int64(event, "mtime", mtime);
+		append_boolean(event, "has_bucket_logging", has_bucket_logging);
 		// Add delete marker when versioning and Expiration and
 		// current version is not a deleted marker
 		if (VERSIONS_ENABLED(versioning) && (deleted == 0) && \
@@ -4545,12 +4560,14 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
 		*jquery_set_tag = NULL, *jprefix = NULL;
-	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL;
+	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL,
+	*jhas_bucket_logging = NULL;
 
 	int batch_size = 0;
 	gboolean found_match = FALSE;
 	guint32 count_rows = 0;
 	gchar *offset_key = NULL;
+	gboolean has_bucket_logging = FALSE;
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4562,6 +4579,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"batch_size", &jbatch_size, json_type_int, 0},
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
+		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4600,12 +4618,17 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jprefix) {
 		prefix = json_object_get_string(jprefix);
 	}
+	if (jhas_bucket_logging) {
+		has_bucket_logging = json_object_get_boolean(jhas_bucket_logging);
+	}
+
 	if (query_set_tag) {
 		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 		base_set_adapted_tags = g_strdup_printf( \
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
 	}
+
 	struct m2_open_args_s open_args = {
 			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, NULL};
 	err = m2b_open_with_args(m2b, url, suffix, &open_args, &sq3);
@@ -4679,8 +4702,10 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
 		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 		append_str(event, "object", object_name);
+		append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 		append_int64(event, "version", version);
 		append_int64(event, "mtime", mtime);
+		append_boolean(event, "has_bucket_logging", has_bucket_logging);
 		append_str(event, "action", g_strdup(action));
 		if (policy) {
 			append_str(event, "policy", g_strdup(policy));
