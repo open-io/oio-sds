@@ -854,6 +854,7 @@ class BaseTestCase(CommonTestCase):
         types=None,
         fields=None,
         origin=None,
+        data_fields=None,
         timeout=30.0,
         kafka_consumer=None,
     ):
@@ -883,6 +884,11 @@ class BaseTestCase(CommonTestCase):
                 return False
             if origin and event.origin != origin:
                 logging.info("ignore event %s (origin mismatch)", event)
+                return False
+            if data_fields and any(
+                data_fields[k] != event.data.get(k) for k in data_fields
+            ):
+                logging.info("ignore event %s (data_fields mismatch)", event)
                 return False
 
             logging.info("event %s", event)
@@ -985,8 +991,13 @@ class BaseTestCase(CommonTestCase):
         if not account:
             account = self.account
 
-        objs = self.storage.object_list(account=account, container=container)["objects"]
-        mid_obj_name = objs[len(objs) // 2]["name"]
+        objs = self.storage.object_list(
+            account=account, container=container, deleted=True
+        )["objects"]
+        objs.sort(key=lambda x: x["name"])
+        if len(objs) < 2:
+            return []
+        mid_obj_name = objs[len(objs) // 2 - 1]["name"]
         shards = [
             {"index": 0, "lower": "", "upper": mid_obj_name},
             {"index": 1, "lower": mid_obj_name, "upper": ""},
@@ -1000,13 +1011,17 @@ class BaseTestCase(CommonTestCase):
 
         # Update list to clean containers during teardown
         new_shards = self.container_sharding.show_shards(account, container)
+        new_containers = []
+        shard_account = f".shards_{self.account}"
         for shard in new_shards:
             props = self.storage.container_get_properties(
                 account=None, container=None, cid=shard["cid"]
             )
             cname = props["system"][M2_PROP_CONTAINER_NAME]
-            self.clean_later(
-                container=cname,
-                account=f".shards_{self.account}",
-                prepend=True,
-            )
+            # self.clean_later(
+            #     container=cname,
+            #     account=shard_account,
+            #     prepend=True,
+            # )
+            new_containers.append((shard_account, cname))
+        return new_containers
