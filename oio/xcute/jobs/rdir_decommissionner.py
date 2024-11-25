@@ -61,8 +61,8 @@ class RdirDecommissionTask(XcuteTask):
         )
         all_services = dispatcher.assign_services(
             hosted_service_type,
-            reassign=self.service_id,
             service_id=hosted_service_id,
+            reassigned_host=self.service_id,
             min_dist=self.min_dist,
             replicas=self.replicas,
             reqid=reqid,

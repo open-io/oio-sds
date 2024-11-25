@@ -19,6 +19,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
+from typing import Dict
 from six import iterkeys, iteritems
 from six.moves import xrange
 
@@ -1948,7 +1949,7 @@ KAFKA_METRICS_ENDPOINTS = "kafka_metrics_endpoints"
 
 defaults = {
     "NS": "OPENIO",
-    SVC_HOSTS: ("127.0.0.1",),
+    SVC_HOSTS: ({"ip": "127.0.0.1"},),
     KAFKA_ENDPOINT: "127.0.0.1:19092",
     KAFKA_METRICS_ENDPOINTS: "127.0.0.1:19644",
     "ZK": "127.0.0.1:2181",
@@ -2201,9 +2202,18 @@ def generate(options):
         env["VOLUME"] = "{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
         return env
 
-    def build_location(ip, num):
-        dcnum = int(ip.split(".")[-1]) % 2
-        return f"dc{dcnum}.rack.{ip.replace('.', '-')}.{num}"
+    def build_location(host_info: Dict[str, str], num: int) -> str:
+        ip: str = host_info["ip"]
+        datacenter: str = host_info.get("datacenter")
+        if datacenter is None:
+            datacenter = f"dc{int(ip.split('.')[-1]) % 3}"
+        rack: str = host_info.get("rack")
+        if rack is None:
+            rack = "rack"
+        server: str = host_info.get("server")
+        if server is None:
+            server = ip.replace(".", "-")
+        return ".".join((datacenter, rack, server, str(num)))
 
     targets = dict()
     systemd_prefix = "oio-"
@@ -2217,13 +2227,24 @@ def generate(options):
 
         num = int(env["SRVNUM"])
         out = {"num": str(num)}
+        host_info: Dict[str, str] = None
         if "IP" not in env:
             _h = tuple(hosts)
             if t in options and isinstance(options[t], dict):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
-            env["IP"] = _h[(num - 1) % len(_h)]
+            host_info = _h[(num - 1) % len(_h)]
+            if isinstance(host_info, str):
+                host_info = {"ip": host_info}
+            env["IP"] = host_info["ip"]
+        else:
+            for _h in hosts:
+                if env["IP"] == _h["ip"]:
+                    host_info = _h
+                    break
+            else:
+                host_info = {"ip": env["IP"]}
         if "LOC" not in env:
-            env["LOC"] = build_location(env["IP"], env["SRVNUM"])
+            env["LOC"] = build_location(host_info, env["SRVNUM"])
         if "PORT" in env:
             out["addr"] = "%s:%s" % (env["IP"], env["PORT"])
         if "TLS_PORT" in env:
@@ -2357,10 +2378,13 @@ def generate(options):
         ENV.update(
             {
                 "CS_ALL_PUB": ",".join(
-                    [str(host) + ":" + str(port) for _, host, port, _ in cs]
+                    [str(host["ip"]) + ":" + str(port) for _, host, port, _ in cs]
                 ),
                 "CS_ALL_HUB": ",".join(
-                    ["tcp://" + str(host) + ":" + str(hub) for _, host, _, hub in cs]
+                    [
+                        "tcp://" + str(host["ip"]) + ":" + str(hub)
+                        for _, host, _, hub in cs
+                    ]
                 ),
                 "CS_HUB_THREADS": str(hub_threads),
                 "CS_CACHE_SERVICES": str(cache_service_lists),
@@ -2400,7 +2424,7 @@ def generate(options):
                 {
                     "SRVTYPE": "beanstalkd",
                     "SRVNUM": num,
-                    "IP": host,
+                    "IP": host["ip"],
                     "PORT": port,
                     "EXE": "beanstalkd",
                 }
@@ -2414,7 +2438,7 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
 
         beanstalkd_cnxstring = ";".join(
-            "beanstalk://" + str(h) + ":" + str(p) for _, h, p in all_beanstalkd
+            "beanstalk://" + str(h["ip"]) + ":" + str(p) for _, h, p in all_beanstalkd
         )
         ENV.update(
             {
@@ -2633,7 +2657,7 @@ def generate(options):
             slot = get_rawx_slot(i)
             env = subenv(
                 {
-                    "IP": host,
+                    "IP": host["ip"],
                     "SRVTYPE": srvtype,
                     "SRVNUM": i + 1,
                     "EXE": "oio-rawx",
@@ -2650,12 +2674,12 @@ def generate(options):
                     "SHALLOW_COPY": (
                         "enabled" if options[SHALLOW_COPY] else "disabled"
                     ),
-                    "TOPIC": f"oio-chunks-{host}",
+                    "TOPIC": f"oio-chunks-{host['ip']}",
                 }
             )
             rawx_volumes.append(env["VOLUME"])
             env["SERVICE_ID"] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
-            host_rawxs = rawx_per_host.setdefault(host, [])
+            host_rawxs = rawx_per_host.setdefault(host["ip"], [])
             host_rawxs.append(env["SERVICE_ID"])
             if options.get("use_tls", False):
                 env["TLS_CERT_FILE"] = ENV["TLS_CERT_FILE"]
@@ -3091,13 +3115,13 @@ def generate(options):
                 num += 1
                 add_event_agent_conf(
                     num,
-                    f"oio-delete-{host}-{slot}",
+                    f"oio-delete-{host['ip']}-{slot}",
                     url,
                     srv_type="event-agent-delete",
-                    workers=len(rawx_per_host[host]),
+                    workers=len(rawx_per_host[host["ip"]]),
                     group_id="event-agent-delete",
                     queue_type="per_service",
-                    queue_ids=";".join(rawx_per_host[host]).lower(),
+                    queue_ids=";".join(rawx_per_host[host["ip"]]).lower(),
                     template_handler=template_event_agent_delete_handlers,
                     target=event_agents_delete_target,
                 )
@@ -3112,10 +3136,10 @@ def generate(options):
             num += 1
             add_event_agent_conf(
                 num,
-                f"oio-chunks-{host}",
+                f"oio-chunks-{host['ip']}",
                 url,
                 srv_type="event-agent-chunks",
-                workers=len(rawx_per_host[host]),
+                workers=len(rawx_per_host[host["ip"]]),
                 group_id="event-agent-chunks",
                 template_handler=template_event_agent_chunks_handlers,
             )
@@ -3223,7 +3247,7 @@ def generate(options):
             num += 1
             add_event_agent_conf(
                 num,
-                queue_name=f"oio-xcute-job-{host}",
+                queue_name=f"oio-xcute-job-{host['ip']}",
                 workers="2",
                 url=url,
                 srv_type="xcute-event-agent-local",
@@ -3316,7 +3340,7 @@ def generate(options):
 
     # system config
     with open("{OIODIR}/sds.conf".format(**ENV), "w+") as f:
-        env = merge_env({"IP": hosts[0], "REDIS_PORT": 6379})
+        env = merge_env({"IP": hosts[0]["ip"], "REDIS_PORT": 6379})
         cluster_file = cluster(env)
         env.update({"CLUSTERFILE": cluster_file})
         tpl = Template(template_local_header)
@@ -3354,11 +3378,11 @@ def generate(options):
     # Add delete topics per host
     for i in range(2):
         slot = get_rawx_slot(i)
-        topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
+        topics_to_declare.extend([f"oio-delete-{h['ip']}-{slot}" for h in rawx_hosts])
     # Add chunks topics per host
-    topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
+    topics_to_declare.extend([f"oio-chunks-{h['ip']}" for h in rawx_hosts])
     # Add xcute-job topic per host, to gather delete events from blob mover
-    topics_to_declare.extend([f"oio-xcute-job-{h}" for h in rawx_hosts])
+    topics_to_declare.extend([f"oio-xcute-job-{h['ip']}" for h in rawx_hosts])
 
     with open(f"{CFGDIR}/topics.yml", "w+") as f:
         f.write(

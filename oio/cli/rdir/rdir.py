@@ -93,6 +93,11 @@ class RdirBootstrap(Lister):
             help="Number of rdirs per service.",
         )
         parser.add_argument(
+            "--constraint-only-between-rdirs",
+            action="store_true",
+            help="???",
+        )
+        parser.add_argument(
             "--service-id",
             metavar="<service-id>",
             help="Assign an rdir only for this service ID.",
@@ -110,6 +115,7 @@ class RdirBootstrap(Lister):
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
                 replicas=parsed_args.replicas,
+                constraint_only_between_rdirs=parsed_args.constraint_only_between_rdirs,
                 service_id=parsed_args.service_id,
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0,
@@ -323,8 +329,8 @@ class RdirReassign(Lister):
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type,
-                reassign=parsed_args.rdir_id,
                 service_id=parsed_args.service_id,
+                reassigned_host=parsed_args.rdir_id,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
                 replicas=parsed_args.replicas,

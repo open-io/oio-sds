@@ -4,6 +4,6 @@ config:
 redis: true
 fdb: true
 rdir:
-  count: 2
+  count: 6
 rawx:
   count: 11
