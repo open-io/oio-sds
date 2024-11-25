@@ -23,7 +23,7 @@ from os import walk
 from os.path import isfile, join
 from tests.utils import BaseTestCase, random_str
 
-from oio.common.exceptions import BadRequest, NotFound, NoSuchContainer, NoSuchAccount
+from oio.common.exceptions import NotFound, NoSuchContainer, NoSuchAccount
 from oio.common.utils import cid_from_name, request_id
 
 
