@@ -733,8 +733,15 @@ static void
 _client_react_timeout(struct gridd_client_s *client)
 {
 	_client_reset_cnx(client);
-	_client_replace_error(client, NEWERROR(client->step == CONNECTING
-			? ERRCODE_CONN_TIMEOUT : ERRCODE_READ_TIMEOUT, "Timeout"));
+	GError *err = NULL;
+	if (client->step == CONNECTING) {
+		err = NEWERROR(ERRCODE_CONN_TIMEOUT, "Connect timeout (%.3fs)",
+				client->delay_connect / (float) G_TIME_SPAN_SECOND);
+	} else {
+		err = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout (%.3fs)",
+				client->delay_single / (float) G_TIME_SPAN_SECOND);
+	}
+	_client_replace_error(client, err);
 	client->step = STATUS_FAILED;
 }
 
