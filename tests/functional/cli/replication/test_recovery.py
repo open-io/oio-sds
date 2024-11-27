@@ -25,6 +25,13 @@ from tests.utils import random_str
 class ReplicationRecoveryTest(CliTestCase):
     """Functional tests for replication recovery."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._cls_replication_consumer = cls._register_consumer(
+            topic=DEFAULT_REPLICATION_TOPIC
+        )
+
     def setUp(self):
         super(ReplicationRecoveryTest, self).setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
@@ -125,8 +132,9 @@ class ReplicationRecoveryTest(CliTestCase):
                 "account": account,
                 "user": container_src,
             },
-            topic=DEFAULT_REPLICATION_TOPIC,
             origin="s3-replication-recovery",
+            kafka_consumer=self._cls_replication_consumer,
+            timeout=60,
         )
         self.assertIsNotNone(event)
         self.assertEqual(container_dst, event.repli["destinations"])

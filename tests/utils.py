@@ -238,10 +238,17 @@ class CommonTestCase(testtools.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
-        group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
-        cls._cls_kafka_consumer = KafkaConsumer(
+        cls._consumers = []
+        cls._cls_kafka_consumer = cls._register_consumer()
+
+    @classmethod
+    def _register_consumer(cls, topic=DEFAULT_PRESERVED_TOPIC, group_id=None):
+        if group_id is None:
+            group_id = f"{DEFAULT_GROUP_ID_TEST}-{random_str(8)}"
+
+        consumer = KafkaConsumer(
             cls._cls_conf["kafka_endpoints"],
-            [DEFAULT_PRESERVED_TOPIC],
+            [topic],
             group_id,
             logger=cls._cls_logger,
             app_conf=cls._cls_conf,
@@ -250,8 +257,8 @@ class CommonTestCase(testtools.TestCase):
                 "auto.offset.reset": "latest",
             },
         )
-        cls._cls_kafka_consumers_by_topic = {}
-        cls._consumers = [cls._cls_kafka_consumer]
+        cls._consumers.append(consumer)
+        return consumer
 
     def setUp(self):
         super(CommonTestCase, self).setUp()
@@ -290,41 +297,49 @@ class CommonTestCase(testtools.TestCase):
         self._containers_to_clean = []
         self._deregister_at_teardown = []
 
-        self._assigned_partitions = []
         self._cached_events = {}
         self._used_events = set()
 
-        self._wait_kafka_partition_assignment()
-        self._set_kafka_offset()
+        for consumer in self._consumers:
+            partitions = self._wait_kafka_partition_assignment(kafka_consumer=consumer)
+            self._set_kafka_offset(partitions, kafka_consumer=consumer)
 
-    def _wait_kafka_partition_assignment(self):
-        if not self._cls_kafka_consumer:
+    def _wait_kafka_partition_assignment(self, kafka_consumer=None):
+        if not kafka_consumer:
+            kafka_consumer = self._cls_kafka_consumer
+
+        if not kafka_consumer:
             return
-        while not self._assigned_partitions:
-            self._cls_kafka_consumer._client.poll(1.0)
-            self._assigned_partitions = self._cls_kafka_consumer._client.assignment()
+
+        assigned_partitions = []
+        while not assigned_partitions:
+            kafka_consumer._client.poll(1.0)
+            assigned_partitions = kafka_consumer._client.assignment()
+
         self.logger.warning(
             "Assigned partitions: [%s]",
             ",".join(
                 [
                     f"(topic: {p.topic},part:{p.partition},offset:{p.offset})"
-                    for p in self._assigned_partitions
+                    for p in assigned_partitions
                 ],
             ),
         )
+        return assigned_partitions
 
-    def _set_kafka_offset(self, offset=OFFSET_END):
-        if not self._cls_kafka_consumer:
+    def _set_kafka_offset(self, partitions, kafka_consumer=None, offset=OFFSET_END):
+        if not kafka_consumer:
+            kafka_consumer = self._cls_kafka_consumer
+        if not kafka_consumer:
             return
+
         self.logger.warning("Seek partition offset: %s", offset)
-        for part in self._assigned_partitions:
-            watermark = self._cls_kafka_consumer._client.get_watermark_offsets(
-                part, timeout=5
-            )
+        for part in partitions:
+            watermark = kafka_consumer._client.get_watermark_offsets(part, timeout=5)
             self.logger.warning("Get watermark for %s = %s", str(part), str(watermark))
             self.assertIsNotNone(watermark)
             _, high_offset = watermark
-            self._cls_kafka_consumer._client.seek(
+            kafka_consumer._client.seek(
                 TopicPartition(part.topic, part.partition, high_offset)
             )
 
@@ -842,9 +857,7 @@ class BaseTestCase(CommonTestCase):
         fields=None,
         origin=None,
         timeout=30.0,
-        topic=None,
-        assignment_timeout=60.0,
-        OffsetEventCap=5,
+        kafka_consumer=None,
     ):
         """
         Wait for an event to pass through event agents.
@@ -854,17 +867,8 @@ class BaseTestCase(CommonTestCase):
         :param fields: dict of fields to look for in the event's URL
         :param types: list of types of events the method should look for
         """
-        kafka_consumer = self._cls_kafka_consumer
-        if topic is not None:
-            kafka_consumer = self._cls_kafka_consumers_by_topic.get(topic)
-            if kafka_consumer is None:
-                kafka_consumer = self.get_kafka_consumer(topics=[topic])
-                self._assign_custom_consumer(
-                    assignment_timeout,
-                    OffsetEventCap,
-                    kafka_consumer,
-                    topic,
-                )
+        if not kafka_consumer:
+            kafka_consumer = self._cls_kafka_consumer
 
         def match_event(key, event):
             if types and event.event_type not in types:
@@ -928,33 +932,6 @@ class BaseTestCase(CommonTestCase):
         except ResponseError as err:
             logging.warning("%s", err)
         return None
-
-    def _assign_custom_consumer(self, timeout, OffsetEventCap, kafka_consumer, topic):
-        assigned_partitions = None
-        now = time.time()
-        deadline = now + timeout
-        while not assigned_partitions:
-            now = time.time()
-            if now > deadline:
-                break
-            kafka_consumer._client.poll(1.0)
-            assigned_partitions = kafka_consumer._client.assignment()
-            for part in assigned_partitions:
-                watermark = kafka_consumer._client.get_watermark_offsets(
-                    part, timeout=5
-                )
-                self.logger.warning(
-                    "Get watermark for %s = %s", str(part), str(watermark)
-                )
-                self.assertIsNotNone(watermark)
-                _, high_offset = watermark
-                kafka_consumer._client.seek(
-                    TopicPartition(
-                        part.topic, part.partition, high_offset - OffsetEventCap
-                    )
-                )
-        self._cls_kafka_consumers_by_topic[topic] = kafka_consumer
-        self._consumers.append(kafka_consumer)
 
     def wait_until_empty(
         self,

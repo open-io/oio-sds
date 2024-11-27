@@ -1,4 +1,5 @@
 # Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,11 +25,13 @@ class ElectionTest(CliTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         cls.openio("container create " + cls.NAME)
 
     @classmethod
     def tearDownClass(cls):
         cls.openio("container delete " + cls.NAME)
+        super().tearDownClass()
 
     def test_election_leave(self):
         self.openio("election leave meta2 " + self.NAME)

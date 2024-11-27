@@ -1263,6 +1263,7 @@ class TestMeta2Contents(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(TestMeta2Contents, cls).setUpClass()
+        cls._cls_mpu_consumer = cls._register_consumer(topic="oio-delete-mpu-parts")
         cls._cls_reload_meta()
         cls._cls_reload_proxy()
 
@@ -2107,7 +2108,7 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
-            topic="oio-delete-mpu-parts",
+            kafka_consumer=self._cls_mpu_consumer,
         )
         self.assertIsNone(event)
 
@@ -2147,7 +2148,7 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
-            topic="oio-delete-mpu-parts",
+            kafka_consumer=self._cls_mpu_consumer,
         )
         self.assertIsNone(event)
 
@@ -2178,6 +2179,6 @@ class TestMeta2Contents(BaseTestCase):
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.MANIFEST_DELETED,),
-            topic="oio-delete-mpu-parts",
+            kafka_consumer=self._cls_mpu_consumer,
         )
         self.assertIsNotNone(event)
