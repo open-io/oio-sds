@@ -912,6 +912,7 @@ class ObjectStorageApi(object):
         properties=None,
         extra_properties=None,
         properties_callback=None,
+        pre_commit_hook=None,
         **kwargs,
     ):
         """
@@ -966,6 +967,9 @@ class ObjectStorageApi(object):
         :keyword properties_callback: called after the upload of the data,
             but before saving metadata, allow to provide extra object
             properties. Should return a dictionary.
+        :keyword pre_commit_hook: called after the upload of the data,
+            but before saving metadata, allow the client to abort an object
+            creation.
 
         :returns: `list` of chunks, size, hash and metadata of what has been
             uploaded
@@ -1011,6 +1015,7 @@ class ObjectStorageApi(object):
                 key_file=key_file,
                 append=append,
                 properties_callback=properties_callback,
+                pre_commit_hook=pre_commit_hook,
                 **kwargs,
             )
         else:
@@ -1027,6 +1032,7 @@ class ObjectStorageApi(object):
                     key_file=key_file,
                     append=append,
                     properties_callback=properties_callback,
+                    pre_commit_hook=pre_commit_hook,
                     **kwargs,
                 )
 
@@ -1885,6 +1891,7 @@ class ObjectStorageApi(object):
         properties=None,
         extra_properties=None,
         properties_callback=None,
+        pre_commit_hook=None,
         policy=None,
         key_file=None,
         **kwargs,
@@ -1939,6 +1946,28 @@ class ObjectStorageApi(object):
             kwargs["cid"] = obj_meta.get("container_id")
             self._delete_orphan_chunks(chunk_prep.all_chunks_so_far(), **kwargs)
             raise
+
+        if pre_commit_hook:
+            try:
+                pre_commit_hook()
+            except exc.ClientPreconditionFailed as err:
+                self.logger.warning("(%s), deleting chunks", err)
+                kwargs["cid"] = obj_meta.get("container_id")
+                self._delete_orphan_chunks(ul_chunks, **kwargs)
+                err.info["obj_checksum"] = obj_checksum
+                err.info["mtime"] = obj_meta["mtime"]
+                err.info["version_id"] = obj_meta["version"]
+                raise
+
+            except Exception as err:
+                self.logger.warning(
+                    "Failed to commit to call the mpu callback "
+                    "(%s), deleting chunks",
+                    err,
+                )
+                kwargs["cid"] = obj_meta.get("container_id")
+                self._delete_orphan_chunks(ul_chunks, **kwargs)
+                raise
 
         try:
             trailing_props = properties_callback() if properties_callback else {}

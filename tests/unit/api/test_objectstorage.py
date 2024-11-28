@@ -661,6 +661,7 @@ class ObjectStorageTest(unittest.TestCase):
             policy=ANY,
             properties=ANY,
             extra_properties=ANY,
+            pre_commit_hook=ANY,
             reqid=ANY,
             properties_callback=ANY,
             **kwargs
