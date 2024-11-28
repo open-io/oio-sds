@@ -912,6 +912,7 @@ class ObjectStorageApi(object):
         properties=None,
         extra_properties=None,
         properties_callback=None,
+        check_manifest_callback=None,
         **kwargs,
     ):
         """
@@ -1011,6 +1012,7 @@ class ObjectStorageApi(object):
                 key_file=key_file,
                 append=append,
                 properties_callback=properties_callback,
+                check_manifest_callback=check_manifest_callback,
                 **kwargs,
             )
         else:
@@ -1027,6 +1029,7 @@ class ObjectStorageApi(object):
                     key_file=key_file,
                     append=append,
                     properties_callback=properties_callback,
+                    check_manifest_callback=check_manifest_callback,
                     **kwargs,
                 )
 
@@ -1885,6 +1888,7 @@ class ObjectStorageApi(object):
         properties=None,
         extra_properties=None,
         properties_callback=None,
+        check_manifest_callback=None,
         policy=None,
         key_file=None,
         **kwargs,
@@ -1939,6 +1943,19 @@ class ObjectStorageApi(object):
             kwargs["cid"] = obj_meta.get("container_id")
             self._delete_orphan_chunks(chunk_prep.all_chunks_so_far(), **kwargs)
             raise
+
+        if check_manifest_callback:
+            try:
+                check_manifest_callback()
+            except Exception as err:
+                self.logger.warning(
+                    "Failed to commit to call the mpu callback "
+                    "(%s), deleting chunks",
+                    err,
+                )
+                kwargs["cid"] = obj_meta.get("container_id")
+                self._delete_orphan_chunks(ul_chunks, **kwargs)
+                raise
 
         try:
             trailing_props = properties_callback() if properties_callback else {}

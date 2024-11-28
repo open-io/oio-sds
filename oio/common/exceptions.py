@@ -138,6 +138,10 @@ class MalformedBucket(Exception):
     pass
 
 
+class MpuAlreadyCompleted(Exception):
+    pass
+
+
 class ExplicitBury(OioException):
     pass
 
