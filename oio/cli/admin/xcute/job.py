@@ -29,7 +29,7 @@ class JobList(XcuteCommand, Lister):
     List jobs sorted by descending creation date.
     """
 
-    columns = ("ID", "Status", "Type", "Lock", "Progress")
+    columns = ("ID", "Status", "Type", "Service ID", "Lock", "Progress")
 
     def get_parser(self, prog_name):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
@@ -38,6 +38,11 @@ class JobList(XcuteCommand, Lister):
         parser.add_argument(
             "--date",
             help="Filter jobs with the specified job date (%%Y-%%m-%%dT%%H:%%M:%%S)",
+        )
+        parser.add_argument(
+            "--results",
+            action="store_true",
+            help="Display an extra column with jobs results and errors",
         )
         parser.add_argument(
             "--status",
@@ -69,7 +74,7 @@ class JobList(XcuteCommand, Lister):
         )
         return parser
 
-    def _take_action(self, parsed_args):
+    def _build_list_prefix(self, parsed_args):
         prefix = None
         if parsed_args.date:
             datetime_input_format = ""
@@ -103,6 +108,10 @@ class JobList(XcuteCommand, Lister):
             except ValueError:
                 raise ValueError("Wrong date format")
             prefix = job_date.strftime(datetime_output_format)
+        return prefix
+
+    def _take_action(self, parsed_args):
+        prefix = self._build_list_prefix(parsed_args)
 
         if parsed_args.no_paging:
             jobs = depaginate(
@@ -142,16 +151,28 @@ class JobList(XcuteCommand, Lister):
             status = job_main_info["status"]
             if status == XcuteJobStatus.FINISHED and job_errors.get("total", 0) > 0:
                 status += "_WITH_ERRORS"
-            yield (
+            service_id = job_info["config"].get("params", {}).get("service_id", "n/a")
+            entry = (
                 job_main_info["id"],
                 status,
                 job_main_info["type"],
+                service_id,
                 job_main_info.get("lock"),
-                "%.2f%%" % progress,
+                f"{progress:.2f}%",
             )
+            if parsed_args.results:
+                job_errors.pop("total", None)
+                entry += (job_errors, job_info.get("results", {}))
+            yield entry
 
     def take_action(self, parsed_args):
         self.logger.debug("take_action(%s)", parsed_args)
+
+        if parsed_args.results:
+            self.columns += (
+                "Errors",
+                "Results",
+            )
 
         return self.columns, self._take_action(parsed_args)
 
