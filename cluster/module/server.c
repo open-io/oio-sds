@@ -2082,13 +2082,13 @@ restart_srv_from_other_consciences(void)
 			/* If there is no lock, we must declare the score as "unset", and
 			 * let the conscience compute it. Any other value will lock it. */
 			lock_tag = service_info_get_tag(si->tags, NAME_TAGNAME_GET_LOCK);
-			if (service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
-					&& is_locked) {
+			if (!(service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
+					&& is_locked)) {
 				si->get_score.value = SCORE_UNSET;
 			}
 			lock_tag = service_info_get_tag(si->tags, NAME_TAGNAME_PUT_LOCK);
-			if (service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
-					&& is_locked) {
+			if (!(service_tag_get_value_boolean(lock_tag, &is_locked, NULL)
+					&& is_locked)) {
 				si->put_score.value = SCORE_UNSET;
 			}
 			struct service_info_dated_s *sid = push_service(si);

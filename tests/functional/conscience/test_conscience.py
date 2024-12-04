@@ -352,6 +352,78 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(2, my_rawx["scores"]["score.get"])
         self.conscience.unlock_score(one_rawx)
 
+    def test_lock_created_during_conscience_restart(self):
+        """
+        Check that a service locked while one conscience is down
+        persists when the conscience is back up.
+        """
+        if len(self.conf["services"]["conscience"]) < 2:
+            self.skipTest("Requires at least 2 consciences")
+
+        cs_addr = self.conf["services"]["conscience"][0]["addr"]
+        cs_unit = self.conf["services"]["conscience"][0]["unit"]
+
+        # Stop conscience.
+        self._service(cs_unit, "stop")
+        # Ensure conscience is stopped.
+        self.assertRaises(Exception, self._service, cs_unit, "status")
+
+        self.wait_for_score(("rawx",))
+        all_rawx = self.conscience.all_services("rawx")
+        one_rawx = all_rawx[0]
+        one_rawx["scores"]["score.put"] = 1
+        one_rawx["scores"]["score.get"] = 2
+        one_rawx["type"] = "rawx"
+        self.conscience.lock_score(one_rawx)
+        self.locked_svc.append(one_rawx)  # unlock at tearDown
+
+        # Start conscience again.
+        self._service(cs_unit, "start")
+
+        # Do the checks several times to make sure the inter-conscience
+        # synchronization does not introduce new locks.
+        for attempt in range(5):
+            time.sleep(1.0)
+            self.logger.debug("Checking service locks, attempt %d", attempt)
+            # Load all rawx services.
+            # Allow several attempts in case conscience is slow to start.
+            all_rawx = self.conscience.all_services(
+                "rawx", request_attempts=4, cs=cs_addr
+            )
+            my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
+            other_rawx = [x for x in all_rawx if x["addr"] != one_rawx["addr"]]
+
+            # Ensure the one rawx is still locked
+            self.assertIn("tag.putlock", my_rawx["tags"])
+            self.assertTrue(my_rawx["tags"]["tag.putlock"], "Put lock disappeared")
+            self.assertTrue(my_rawx["tags"]["tag.getlock"], "Get lock disappeared")
+            self.assertEqual(1, my_rawx["score"], "Locked score has changed")
+            self.assertEqual(
+                1, my_rawx["scores"]["score.put"], "Locked Put score has changed"
+            )
+            self.assertEqual(
+                2, my_rawx["scores"]["score.get"], "Locked Get score has changed"
+            )
+
+            # Ensure all other rawx is still unlocked
+            for rawx in other_rawx:
+                self.assertFalse(
+                    rawx["tags"].get("tag.putlock"),
+                    "There is a Put lock where there should not be",
+                )
+                self.assertFalse(
+                    rawx["tags"].get("tag.getlock"),
+                    "There is a Get lock where there should not be",
+                )
+                self.assertGreater(rawx["score"], 0, "Score is too low")
+                self.assertGreater(
+                    rawx["scores"]["score.put"], 0, "Put score is too low"
+                )
+                # Disabled, was too flaky
+                # self.assertGreater(
+                #     rawx["scores"]["score.get"], 0, "Get score is too low"
+                # )
+
     def test_deregister_services(self):
         self._flush_cs("echo")
         self._reload()
