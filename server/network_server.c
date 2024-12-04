@@ -171,6 +171,13 @@ network_server_get_memory_usage(struct network_server_s *srv UNUSED)
 }
 
 gboolean
+network_server_has_free_memory(struct network_server_s *srv, guint64 how_much)
+{
+	return (((srv->req_mem_usage + how_much) < server_request_max_memory)
+			|| server_request_max_memory == 0);
+}
+
+gboolean
 network_server_request_memory(struct network_server_s *srv, guint64 how_much)
 {
 	gboolean rc = TRUE;
