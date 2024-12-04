@@ -101,6 +101,10 @@ struct network_server_s * network_server_init(void);
 /** Get the total memory usage (RSS) of the process, in bytes. */
 gint64 network_server_get_memory_usage(struct network_server_s *srv);
 
+/** Test if request memory usage is under server_request_max_memory.
+ * If too much memory is used, returns FALSE. */
+gboolean network_server_has_free_memory(struct network_server_s *srv, guint64 how_much);
+
 /** Test if request memory usage is under server_request_max_memory,
  * increase the counter by how_much, and return TRUE.
  * If too much memory is used, returns FALSE without touching the counter. */

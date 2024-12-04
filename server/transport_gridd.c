@@ -396,6 +396,19 @@ detect_http(guint32 payload_size, GByteArray *gba)
 	return is_http;
 }
 
+static void
+transport_gridd_return_memory_exhausted(struct network_client_s *clt,
+		guint32 payload_size)
+{
+	GRID_WARN("Memory usage too high "
+			"(server.request.max_memory=%"G_GUINT64_FORMAT"), "
+			"cannot decode request of size %u bytes",
+			server_request_max_memory, payload_size);
+	MESSAGE answer = metaXServer_reply_simple(
+			NULL, CODE_UNAVAILABLE, "Memory exhausted");
+	_reply_message(clt, answer);
+}
+
 static int
 transport_gridd_notify_input(struct network_client_s *clt)
 {
@@ -459,6 +472,13 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			}
 			/* We must continue because "ds" is no more valid here. */
 			continue;
+		} else if (!network_server_has_free_memory(clt->server, payload_size)) {
+			/* This is a precheck we did not actually reserve the memory. */
+			transport_gridd_return_memory_exhausted(clt, payload_size);
+			data_slab_sequence_unshift(&(clt->input), ds);
+			_ctx_reset(ctx);
+			network_client_close_output(clt, FALSE);
+			return RC_ERROR;
 		}
 
 		/* This may not read the whole request body. */
@@ -466,17 +486,10 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		data_slab_sequence_unshift(&(clt->input), ds);
 
 		if (ctx->gba_l4v->len >= 4 + payload_size) { /* complete */
-			/* FIXME(FVE): this check should be done earlier!
-			 * Unfortunately, this function has many return statements,
-			 * and must be refactored before... */
+			/* We did a precheck, but did not actually reserve the memory.
+			 * Do it now, hoping it's still available. */
 			if (!network_server_request_memory(clt->server, payload_size)) {
-				GRID_WARN("Memory usage too high "
-						"(server.request.max_memory=%"G_GUINT64_FORMAT"), "
-						"cannot decode request of size %u bytes",
-						server_request_max_memory, payload_size);
-				MESSAGE answer = metaXServer_reply_simple(
-						NULL, CODE_UNAVAILABLE, "Memory exhausted");
-				_reply_message(clt, answer);
+				transport_gridd_return_memory_exhausted(clt, payload_size);
 				_ctx_reset(ctx);
 				network_client_close_output(clt, FALSE);
 				return RC_ERROR;
