@@ -17,6 +17,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from urllib.parse import quote
 
+from oio.common.constants import (
+    OBJECT_REPLICATION_PENDING,
+)
+
 from oio.common.easy_value import int_value, boolean_value
 from oio.common.exceptions import (
     NotFound,
@@ -144,6 +148,21 @@ class LifecycleActions(Filter):
         add_delete_marker = context.event.data.get("add_delete_marker")
         version = None if add_delete_marker else context.version
 
+        if add_delete_marker:
+            # Get last version info
+            obj_meta = self.container_client.content_get_properties(
+                account=context.account,
+                reference=context.container,
+                path=context.path,
+                force_master=True,
+                reqid=context.reqid,
+            )
+            metadata = obj_meta.get("properties") or {}
+            is_last_delete_marker = metadata["deleted"] or None
+            if is_last_delete_marker:
+                # To log info or raise some exception (to avoid metrics)
+                return
+
         self.container_client.content_delete(
             context.account,
             context.container,
@@ -258,7 +277,7 @@ class LifecycleActions(Filter):
         action_type = None
         try:
             # Check if given object version still exists
-            _ = self.container_client.content_get_properties(
+            obj_meta = self.container_client.content_get_properties(
                 account=context.account,
                 reference=context.container,
                 path=context.path,
@@ -266,6 +285,21 @@ class LifecycleActions(Filter):
                 force_master=True,
                 reqid=context.reqid,
             )
+            metadata = obj_meta.get("properties") or {}
+            replication_status = metadata.get(
+                "x-object-sysmeta-s3api-replication-status"
+            )
+            if replication_status == OBJECT_REPLICATION_PENDING:
+                resp = RetryableEventError(
+                    event=event,
+                    body=(
+                        "Unable to process lifecycle event (retry),"
+                        "reason: Replication pending"
+                    ),
+                    delay=self.retry_delay,
+                )
+                return resp(env, cb)
+
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
                 self._process_expiration(context)
