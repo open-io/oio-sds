@@ -17,6 +17,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from urllib.parse import quote
 
+from oio.common.constants import (
+    MULTIUPLOAD_SUFFIX,
+    OBJECT_REPLICATION_PENDING,
+)
+
 from oio.common.easy_value import int_value, boolean_value
 from oio.common.exceptions import (
     NotFound,
@@ -36,6 +41,16 @@ from oio.event.evob import (
 )
 from oio.event.filters.base import Filter
 from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleStep, LifecycleAction
+
+
+class DeleteMarkerExists(Exception):
+    """Exception raised when a delete marker is the last version"""
+
+
+class RecentVersionExists(Exception):
+    """Exception raised when we find a recent version than one
+    delete marker
+    """
 
 
 class LifecycleOperationLog(str, Enum):
@@ -118,7 +133,6 @@ class LifecycleActionContext:
 class LifecycleActions(Filter):
     """Filter to execute Lifecycle actions"""
 
-    MULTIUPLOAD_SUFFIX = "+segments"
     MPU_MAX_PART = "10000"
 
     def __init__(self, app, conf, logger=None):
@@ -143,6 +157,20 @@ class LifecycleActions(Filter):
     def _process_expiration(self, context: LifecycleActionContext):
         add_delete_marker = context.event.data.get("add_delete_marker")
         version = None if add_delete_marker else context.version
+        if add_delete_marker:
+            # Get last version info
+            obj_meta = self.container_client.content_get_properties(
+                account=context.account,
+                reference=context.container,
+                path=context.path,
+                force_master=True,
+                reqid=context.reqid,
+            )
+            is_last_delete_marker = boolean_value(obj_meta["deleted"]) or None
+            if is_last_delete_marker:
+                raise DeleteMarkerExists()
+            if obj_meta["version"] != str(context.version):
+                raise RecentVersionExists()
 
         self.container_client.content_delete(
             context.account,
@@ -258,7 +286,7 @@ class LifecycleActions(Filter):
         action_type = None
         try:
             # Check if given object version still exists
-            _ = self.container_client.content_get_properties(
+            obj_meta = self.container_client.content_get_properties(
                 account=context.account,
                 reference=context.container,
                 path=context.path,
@@ -266,6 +294,21 @@ class LifecycleActions(Filter):
                 force_master=True,
                 reqid=context.reqid,
             )
+            metadata = obj_meta.get("properties") or {}
+            replication_status = metadata.get(
+                "x-object-sysmeta-s3api-replication-status"
+            )
+            if replication_status == OBJECT_REPLICATION_PENDING:
+                resp = RetryableEventError(
+                    event=event,
+                    body=(
+                        "Unable to process lifecycle event (retry),"
+                        "reason: Replication pending"
+                    ),
+                    delay=self.retry_delay,
+                )
+                return resp(env, cb)
+
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
                 self._process_expiration(context)
@@ -291,6 +334,15 @@ class LifecycleActions(Filter):
                 context.path,
                 context.version,
                 context.container,
+            )
+        except (DeleteMarkerExists, RecentVersionExists):
+            self.metrics.increment_counter(
+                context.run_id,
+                context.account,
+                context.bucket,
+                context.container,
+                LifecycleStep.SKIPPED,
+                action_type,
             )
         except (ServiceBusy, OioNetworkException, OioTimeout) as exc:
             resp = RetryableEventError(
