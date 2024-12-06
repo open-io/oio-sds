@@ -122,6 +122,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
         )
 
     def process_message(self, message, _properties):
+        if not isinstance(message, dict):
+            raise RejectMessage("Malformed")
+
         start = time.monotonic()
         reqid = message.get("request_id")
         event = message.get("event")

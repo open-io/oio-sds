@@ -522,7 +522,7 @@ class KafkaBatchFeeder(
                             "data": event_data,
                         },
                     )
-                except json.JSONDecodeError as exc:
+                except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                     self.logger.error("Unable to parse event, reason: %s", exc)
                     self.reject_message(
                         {
