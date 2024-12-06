@@ -192,7 +192,7 @@ class KafkaOffsetHelperMixin:
                 if start_offset != first_offset:
                     self.logger.warning(
                         "First event not ready to commit (topic=%s partition=%s)."
-                        " Expected %d, got %d",
+                        " Expected %s, got %s",
                         topic,
                         partition,
                         start_offset,
@@ -559,7 +559,7 @@ class KafkaBatchFeeder(
                     offset_batch_id = offset.get("batch_id")
                     if offset_batch_id != self._batch_id:
                         self.logger.warning(
-                            "Offset belongs to previous batch (got=%d expect=%d)",
+                            "Offset belongs to previous batch (got=%s expect=%s)",
                             offset_batch_id,
                             self._batch_id,
                         )
@@ -587,7 +587,7 @@ class KafkaBatchFeeder(
                 except Empty:
                     pass
                 if self._registered_offsets == self._ready_offsets:
-                    # All events had been processed and are ready to be commited
+                    # All events had been processed and are ready to be committed
                     break
 
     def run(self):
