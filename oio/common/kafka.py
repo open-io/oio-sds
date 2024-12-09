@@ -225,6 +225,15 @@ class KafkaSender(KafkaClient):
             elif isinstance(data, dict):
                 data = json.dumps(data, separators=(",", ":")).encode("utf8")
 
+            # Data is neither string nor dict nor bytes, discard it
+            if not isinstance(data, bytes):
+                self._logger.error(
+                    "Event data is not bytes, refusing to send it to topic %s: %r",
+                    topic,
+                    data,
+                )
+                return
+
             self._client.produce(topic, data, callback=self._produce_callback)
 
             if flush:
@@ -400,7 +409,7 @@ class KafkaConsumer(KafkaClient):
 
     def commit(self, message=None, offsets=None):
         """
-        Aknowledge message or a list of offsets
+        Acknowledge message or a list of offsets
         """
         kwargs = {"asynchronous": False}
         if offsets is not None:
