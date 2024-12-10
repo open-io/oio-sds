@@ -284,3 +284,17 @@ class TestBucketClient(AccountBaseTestCase):
         info = self.bucket_client.bucket_show(bucket, account=account, details=True)
         self.assertIn(BUCKET_PROP_RATELIMIT, info)
         self.assertDictEqual(info[BUCKET_PROP_RATELIMIT], ratelimit)
+
+    def test_bucket_get_backup_region(self):
+        account = "account-1"
+        bucket = "bucket-get-backup-region-1"
+        self._create_account(account)
+        self._create_bucket(account, bucket)
+        resp = self.bucket_client.bucket_get_backup_region(bucket)
+        self.assertIn("backup-bucket", resp)
+        self.assertIn("backup-region", resp)
+        self.assertIn("token", resp)
+
+        # values are validated in unit tests.
+        # This functional test is just here to check the call works with a real
+        # service.

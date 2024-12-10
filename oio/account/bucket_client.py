@@ -123,6 +123,13 @@ class BucketClient(ServiceClient):
             bucket, "POST", "refresh", params=params, **kwargs
         )
 
+    def bucket_get_backup_region(self, bucket, **kwargs):
+        """
+        Get the backup region destination for a given bucket.
+        """
+        _resp, body = self.bucket_request(bucket, "GET", "get-backup-region", **kwargs)
+        return body
+
     def bucket_reserve(self, bucket, account, **kwargs):
         """
         Reserve the bucket name during bucket creation.
