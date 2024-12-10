@@ -15,6 +15,7 @@
 # License along with this library.
 
 import base64
+from random import choice
 import secrets
 import time
 
@@ -24,11 +25,16 @@ from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
 
-from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
+from oio.common.constants import (
+    HTTP_CONTENT_TYPE_JSON,
+    HTTP_CONTENT_TYPE_TEXT,
+    MAX_STRLEN_BUCKET,
+)
 from oio.common.easy_value import boolean_value, int_value, true_value, float_value
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd  # noqa: E402
+from oio.common.utils import get_hasher
 from oio.common.wsgi import WerkzeugApp
 
 
@@ -39,6 +45,7 @@ BUCKET_LISTING_MAX_LIMIT = 10000
 KMS_SECRET_BYTES_DEFAULT = 32
 KMS_SECRET_BYTES_MIN = 8
 KMS_SECRET_BYTES_MAX = 512
+REGION_BACKUP_PREFIX = "region_backup_"
 
 
 def force_master(func):
@@ -53,6 +60,33 @@ def force_master(func):
 class Account(WerkzeugApp):
     # pylint: disable=no-member
 
+    def _extract_region_backup_from_conf(self) -> None:
+        """
+        Extract all region backup from the conf.
+        Each group is prefixed with REGION_BACKUP_PREFIX.
+        For each region of a group, a dict will be created with all other members in
+        a list.
+        Example: "REGIONONE,REGIONTWO,REGIONTHREE"
+        {
+            "REGIONONE": ["REGIONTWO", "REGIONTHREE"],
+            "REGIONTWO": ["REGIONONE", "REGIONTHREE"],
+            "REGIONTHREE": ["REGIONTWO", "REGIONONE"],
+        }
+        This way, it will be very easy to find a backup region on runtime.
+        """
+        for key, value in self.conf.items():
+            if not key.startswith(REGION_BACKUP_PREFIX):
+                continue
+            regions = value.split(",")
+            for region in regions:
+                if self.region_backup_dict.get(region):
+                    raise ValueError(f"region={region} is in 2 groups")
+                self.region_backup_dict[region] = [r for r in regions if r != region]
+
+        # If feature is enabled, backup token is mandatory
+        if self.region_backup_dict and not self.conf.get("backup_pepper"):
+            raise ValueError("backup_pepper is missing in conf")
+
     def __init__(self, conf, backend, iam_db, kms_api, logger=None):
         self.conf = conf
         self.backend = backend
@@ -60,6 +94,9 @@ class Account(WerkzeugApp):
         self.kms_api = kms_api
         self.logger = logger or get_logger(conf)
         self.statsd = get_statsd(conf=conf)
+
+        self.region_backup_dict = {}
+        self._extract_region_backup_from_conf()
 
         self.kmsapi_domains = []
         if kms_api.enabled:
@@ -174,6 +211,11 @@ class Account(WerkzeugApp):
                 Rule(
                     "/v1.0/bucket/feature/list-buckets",
                     endpoint="feature_list_buckets",
+                    methods=["GET"],
+                ),
+                Rule(
+                    "/v1.0/bucket/get-backup-region",
+                    endpoint="bucket_get_backup_region",
                     methods=["GET"],
                 ),
                 # IAM
@@ -1621,6 +1663,75 @@ class Account(WerkzeugApp):
             kwargs["check_owner"] = check_owner
         self.backend.refresh_bucket(bucket_name, account=account, **kwargs)
         return Response(status=204)
+
+    # ACCT{{
+    # GET /v1.0/bucket/get-backup-region?id=<bucket_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get backup region for a given bucket. Extra information such as a token
+    # and the backup bucket name are also provided, but it may be temporary.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/bucket/get-backup-region?id=mybucket HTTP/1.1
+    #    Host: 127.0.0.1:6001
+    #    User-Agent: curl/7.58.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn
+    #    Date: Tue, 10 Dec 2024 09:13:42 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 172
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "backup-bucket": "backup-REGIONONE-REGIONTWO-1733821977158-mybucket",
+    #      "backup-region": "REGIONTWO",
+    #      "token": "39002b57442edd2ce1c100cb9e7aa9cd359eb54ba5fe527ecdb1c8a03b0ae0fc"
+    #    }
+    #
+    # }}ACCT
+    def on_bucket_get_backup_region(self, req, **kwargs):
+        """
+        See comment above.
+        """
+        bname = self._get_item_id(req, what="bucket")
+
+        info = self.backend.get_bucket_info(bname, **kwargs)
+        src_region = info["region"]
+
+        # Choose a random destination region
+        dst_regions = self.region_backup_dict.get(src_region)
+        if not dst_regions:
+            return BadRequest(f"region={src_region} unknown for backup feature")
+        dst_region = choice(dst_regions)
+
+        # Build backup bucket name
+        dst_bname = f"backup-{src_region}-{dst_region}-{int(time.time() * 1000)}-"
+        dst_bname = dst_bname.lower()  # regions are in uppercase
+        remaining = MAX_STRLEN_BUCKET - len(dst_bname)
+        dst_bname = f"{dst_bname}{bname[:remaining]}"
+
+        # Build token
+        hasher = get_hasher("blake3")
+        hasher.update(f"{dst_bname}/{self.conf['backup_pepper']}".encode())
+
+        resp = {
+            "backup-bucket": dst_bname,
+            "backup-region": dst_region,
+            "token": hasher.hexdigest(),
+        }
+        return Response(
+            json.dumps(resp, separators=(",", ":")), mimetype=HTTP_CONTENT_TYPE_JSON
+        )
 
     @force_master
     def on_bucket_feature_activate(self, req, **kwargs):
