@@ -186,7 +186,6 @@ network_server_request_memory(struct network_server_s *srv, guint64 how_much)
 			|| server_request_max_memory == 0) {
 		srv->req_mem_usage += how_much;
 	} else {
-		// TODO(FVE): wait on srv->req_mem_cond, retry
 		rc = FALSE;
 	}
 	g_mutex_unlock(&srv->req_mem_lock);
@@ -198,7 +197,6 @@ network_server_release_memory(struct network_server_s *srv, guint64 how_much)
 {
 	g_mutex_lock(&srv->req_mem_lock);
 	srv->req_mem_usage -= how_much;
-	// TODO(FVE): g_cond_broadcast(srv->req_mem_cond)
 	g_mutex_unlock(&srv->req_mem_lock);
 }
 
@@ -262,7 +260,6 @@ network_server_init(void)
 	result->gq_counter_cnx_close =  g_quark_from_static_string ("counter cnx.close");
 
 	g_mutex_init(&result->req_mem_lock);
-	g_cond_init(&result->req_mem_cond);
 
 	/* no limit at the creation ... */
 	result->pool_tcp = g_thread_pool_new(
@@ -392,7 +389,6 @@ network_server_clean(struct network_server_s *srv)
 		srv->statsd_client = NULL;
 	}
 
-	g_cond_clear(&srv->req_mem_cond);
 	g_mutex_clear(&srv->req_mem_lock);
 
 	g_free(srv);
