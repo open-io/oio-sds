@@ -89,7 +89,6 @@ struct network_server_s
 	volatile gboolean flag_continue;
 	gboolean udp_allowed;
 
-	GCond req_mem_cond;
 	GMutex req_mem_lock;
 	guint64 req_mem_usage;
 };
