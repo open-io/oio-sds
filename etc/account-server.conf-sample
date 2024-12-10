@@ -44,3 +44,10 @@ kmsapi_domain2_cert_file = /etc/oio/OPENIO/account/domain2-client.crt
 kmsapi_domain2_key_file = /etc/oio/OPENIO/account/domain2-client.key
 kmsapi_domain2_key_id = 44686a20-aaaa-bbbb-cccc-e4f338299090
 kmsapi_domain2_pool_maxsize = 32  # Max connections per worker
+
+# GROUPS FOR REGION BACKUPS (comma separated)
+# One region should be in only 1 group.
+# A group correspond to all regions where the backup bucket can be created.
+region_backup_local = LOCALHOST,LOCALHOSTBIS 
+region_backup_numbers = REGIONONE,REGIONTWO,REGIONTHREE
+backup_pepper = this-is-not-really-a-random-string-but-should-be-in-prod

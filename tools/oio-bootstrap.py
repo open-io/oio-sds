@@ -1784,6 +1784,11 @@ kmsapi_domain1_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain1
 kmsapi_domain1_key_id = abcdefgh-aaaa-bbbb-cccc-123456789abc
 kmsapi_domain2_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
 kmsapi_domain2_key_id = abcdefgh-aaaa-bbbb-cccc-123456789def
+
+# GROUPS FOR REGION BACKUPS
+region_backup_local = LOCALHOST,LOCALHOSTBIS 
+region_backup_numbers = REGIONONE,REGIONTWO,REGIONTHREE
+backup_pepper = this-is-not-really-a-random-string-but-should-be-in-prod
 """
 
 template_kms = """
