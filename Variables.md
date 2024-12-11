@@ -1927,7 +1927,7 @@ Used by `gcc`
  * default: **10.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_REPLICATE*
- * range: 0.01 -> 30.0
+ * range: 0.01 -> 120.0
 
 ### sqliterepo.outgoing.timeout.req.resync
 

@@ -59,7 +59,8 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 		return NULL;
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump, deadline);
+	GByteArray *encoded = _pack_RESTORE(name, dump,
+			oio_clamp_deadline(oio_election_replicate_timeout_req, deadline));
 	struct gridd_client_s *client = gridd_client_create(target, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
@@ -90,7 +91,8 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 				name->base, name->type);
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump, deadline);
+	GByteArray *encoded = _pack_RESTORE(name, dump,
+			oio_clamp_deadline(oio_election_replicate_timeout_req, deadline));
 	struct gridd_client_s **clients = gridd_client_create_many(
 			targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
@@ -161,7 +163,8 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 	if (!target)
 		return SYSERR("No target URL");
 
-	encoded = sqlx_pack_DUMP(name, chunked, check_type, deadline);
+	encoded = sqlx_pack_DUMP(name, chunked, check_type,
+			oio_clamp_deadline(3600.0, deadline));
 	client = gridd_client_create(target, encoded, NULL, on_reply);
 	g_byte_array_unref(encoded);
 
