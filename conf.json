@@ -572,7 +572,7 @@
 			{ "type": "float", "name": "oio_election_replicate_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.replicate",
 				"descr": "Sets the global timeout when sending a replication RPC, from the current MASTER to a SLAVE",
-				"def": 10.0, "min": 0.01, "max": 30.0 },
+				"def": 10.0, "min": 0.01, "max": 120.0 },
 
 			{ "type": "float", "name": "oio_election_resync_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.resync",

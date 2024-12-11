@@ -735,11 +735,11 @@ _client_react_timeout(struct gridd_client_s *client)
 	_client_reset_cnx(client);
 	GError *err = NULL;
 	if (client->step == CONNECTING) {
-		err = NEWERROR(ERRCODE_CONN_TIMEOUT, "Connect timeout (%.3fs)",
-				client->delay_connect / (float) G_TIME_SPAN_SECOND);
+		err = NEWERROR(ERRCODE_CONN_TIMEOUT, "Connect timeout (%.3fs) to %s",
+				client->delay_connect / (float) G_TIME_SPAN_SECOND, client->url);
 	} else {
-		err = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout (%.3fs)",
-				client->delay_single / (float) G_TIME_SPAN_SECOND);
+		err = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout (%.3fs) to %s",
+				client->delay_single / (float) G_TIME_SPAN_SECOND, client->url);
 	}
 	_client_replace_error(client, err);
 	client->step = STATUS_FAILED;
