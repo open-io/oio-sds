@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2024 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,14 +35,21 @@ class AccountServiceClean(ShowOne):
             dest="dry_run",
             default=True,
             action="store_false",
-            help="Report action that should be taken",
+            help="Disable dry-run mode",
+        )
+        parser.add_argument(
+            "--force",
+            dest="force",
+            default=False,
+            action="store_true",
+            help="Skip confirmation",
         )
         return parser
 
     def take_action(self, parsed_args):
         self.logger.debug("take_action(%s)", parsed_args)
 
-        if not parsed_args.dry_run:
+        if not parsed_args.dry_run and not parsed_args.force:
             input_text = input(
                 "Please note that this command will delete data in "
                 "the account service.\nAre you sure you want to continue? "
@@ -61,6 +68,11 @@ class AccountServiceClean(ShowOne):
         )
         self.success = cleaner.run()
         return (
-            ("success", "deleted-containers", "deleted-buckets"),
-            (self.success, cleaner.deleted_containers, cleaner.deleted_buckets),
+            ("dry-run", "success", "deleted-containers", "deleted-buckets"),
+            (
+                parsed_args.dry_run,
+                self.success,
+                cleaner.deleted_containers,
+                cleaner.deleted_buckets,
+            ),
         )
