@@ -23,6 +23,7 @@ from oio.common.exceptions import (
     NotFound,
     ClientPreconditionFailed,
     OioNetworkException,
+    ServiceBusy,
 )
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.tool import Tool, ToolWorker
@@ -214,7 +215,12 @@ class ContentRepairerWorker(ToolWorker):
                     verify_checksum=True,
                     reqid=reqid,
                 )
-            except (NotFound, ClientPreconditionFailed, OioNetworkException) as exc:
+            except (
+                NotFound,
+                ClientPreconditionFailed,
+                ServiceBusy,  # I/O error
+                OioNetworkException,
+            ) as exc:
                 if (
                     isinstance(exc, OioNetworkException)
                     and not self.rebuild_on_network_error
