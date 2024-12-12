@@ -638,7 +638,7 @@
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
 				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.",
-				"def": "4s", "min": "100ms", "max": "1h" },
+				"def": "500ms", "min": "100ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_wait",
 				"key": "sqliterepo.election.wait.delay",
