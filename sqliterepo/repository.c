@@ -949,8 +949,8 @@ static GError*
 _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		struct sqlx_sqlite3_s **result, gchar **pmaster)
 {
-	GError *err = NULL;
-	enum election_status_e status = 0;
+	GError *err = NULL, *get_status_err = NULL;
+	enum election_status_e status_before = 0, status_after = 0;
 
 	const gboolean election_configured =
 		election_manager_configured(args->repo->election_manager);
@@ -987,12 +987,11 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	} else {
 		gchar *url = NULL;
 
-		GError *get_status_err = NULL;
-		status = election_get_status(args->repo->election_manager,
+		status_before = election_get_status(args->repo->election_manager,
 				&args->name, &url, args->deadline, &get_status_err);
-		GRID_TRACE("Status got=%d expected=%d master=%s", status, expected, url);
+		GRID_TRACE("Status got=%d expected=%d master=%s", status_before, expected, url);
 
-		switch (status) {
+		switch (status_before) {
 			case ELECTION_LOST:
 				if (pmaster && url)
 					*pmaster = g_strdup(url);
@@ -1016,7 +1015,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 							"Election failed [%s][%s]: (%d) %s",
 							args->name.base, args->name.type,
 							get_status_err->code, get_status_err->message);
-					g_error_free(get_status_err);
+					g_clear_error(&get_status_err);
 				}
 				break;
 		}
@@ -1025,14 +1024,31 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	}
 	oio_ext_add_perfdata("db_election", oio_ext_monotonic_time() - start);
 
+	/* *** This call can take time! ******** */
 	if (!err)
 		err = args->repo->cache
 			? __open_maybe_cached(args, result)
 			: __open_not_cached(args, result);
+	/* ************************************* */
+
+	if (!err && expected && election_configured && args->is_replicated) {
+		status_after = election_get_status(
+				args->repo->election_manager, &args->name, NULL, 1, &err);
+		if (err) {
+			GRID_ERROR("Failed to check election status after opening DB: %s",
+					err->message);
+		} else if (status_after != status_before) {
+			err = BUSY("Election status changed while waiting for the database");
+			sqlx_repository_unlock_and_close_noerror(*result);
+			*result = NULL;
+			GRID_ERROR("%s", err->message);
+		}
+	}
+
 	if (!err) {
 		if ((*result)->admin_dirty)
 			sqlx_alert_dirty_base (*result, "opened with dirty admin");
-		(*result)->election = status;
+		(*result)->election = status_after;
 	}
 
 	if (!err && args->is_replicated) {

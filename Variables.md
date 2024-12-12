@@ -1861,7 +1861,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.
 
- * default: **4 * G_TIME_SPAN_SECOND**
+ * default: **500 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_WAIT_QUANTUM*
  * range: 100 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR

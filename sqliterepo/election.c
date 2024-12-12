@@ -108,7 +108,7 @@ struct election_manager_s
 	struct sqlx_sync_s **sync_tab;
 	guint sync_nb;
 
-	/* Copied from the managed variable. It is used for modulo compuations
+	/* Copied from the managed variable. It is used for modulo computations
 	 * and MUST remain constant during the process lifetime. */
 	guint mux_factor;
 
@@ -2314,6 +2314,11 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline,
 	while (!STATUS_FINAL(m->step)) {
 
 		const gint64 now = oio_ext_monotonic_time();
+
+		if (m->manager->exiting) {
+			*err = BUSY("service exiting");
+			return FALSE;
+		}
 
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
