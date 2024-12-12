@@ -33,6 +33,7 @@ from oio.common.constants import (
     M2_PROP_DEL_EXC_VERSIONS,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
+    M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_MASTER,
@@ -380,6 +381,11 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             "frozen": str(OIO_DB_FROZEN),
         }
 
+        self.time_bypass_value = {
+            "enabled": "1",
+            "disabled": "0",
+        }
+
         parser = super(SetContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
         self.patch_parser_container(parser)
@@ -400,6 +406,11 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             choices=self.status_value.keys(),
             help="Set container status",
         )
+        parser.add_argument(
+            "--lifecycle-bypass-time",
+            choices=self.time_bypass_value.keys(),
+            help="Apply time factor (reducing day duration) for lifecycle actions",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -408,6 +419,10 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
         super(SetContainer, self).take_action_container(parsed_args)
         properties = parsed_args.property
         system = {}
+        if parsed_args.lifecycle_bypass_time:
+            system[M2_PROP_LIFECYCLE_TIME_BYPASS] = self.time_bypass_value[
+                parsed_args.lifecycle_bypass_time
+            ]
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.storage_policy is not None:
@@ -849,6 +864,12 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             if parsed_args.formatter == "table":
                 objects_drained = convert_size(int(objects_drained))
             info["objects_drained"] = objects_drained
+
+        lifecycle_time_bypass = sys.get(M2_PROP_LIFECYCLE_TIME_BYPASS)
+        if lifecycle_time_bypass:
+            info["lifecyle.time_bypass"] = (
+                "Enabled" if lifecycle_time_bypass == "1" else "Disabled"
+            )
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):
             info[k] = int_value(sys.get(k), 0)

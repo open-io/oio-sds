@@ -32,7 +32,11 @@ from os.path import exists, join
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import read_conf
-from oio.common.constants import LIFECYCLE_PROPERTY_KEY, MULTIUPLOAD_SUFFIX
+from oio.common.constants import (
+    LIFECYCLE_PROPERTY_KEY,
+    M2_PROP_LIFECYCLE_TIME_BYPASS,
+    MULTIUPLOAD_SUFFIX,
+)
 from oio.common.easy_value import int_value
 from oio.common.exceptions import NoSuchContainer, NoSuchObject, NotFound
 from oio.common.green import GreenPool, LightQueue, sleep
@@ -67,12 +71,13 @@ class LifecycleBackupContainerNotFound(Exception):
 
 
 class CheckpointCollector:
-    def __init__(self, conf, logger, feature, run_id):
+    def __init__(self, conf, logger, feature, run_id, with_time_bypass=False):
         self._conf = conf
         self._logger = logger
         self._running = False
         self._feature_name = feature
         self._marker = None
+        self._with_time_bypass = with_time_bypass
 
         # Configuration
         self._concurrency = int_value(self._conf.get("concurrency"), 100)
@@ -258,6 +263,11 @@ class CheckpointCollector:
             for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
                 container = f"{bucket}{ct_suffix}"
                 try:
+                    if self._with_time_bypass and not ct_suffix:
+                        props = self._api.container_get_properties(account, container)
+                        if props.get(M2_PROP_LIFECYCLE_TIME_BYPASS, False):
+                            break
+
                     self._logger.debug(
                         "Get info on container: acct=%s, ref=%s", account, bucket
                     )
@@ -401,6 +411,12 @@ def make_arg_parser():
     )
     parser.add_argument(
         "--run-id", help="Run identifier", default=str(Timestamp().timestamp)
+    )
+    parser.add_argument(
+        "--only-with-time-bypass",
+        help="Trigger lifecycle pass only for bucket with time bypass enabled",
+        default=False,
+        action="store_true",
     )
     parser.add_argument("configuration", help="Path to the legacy configuration file")
     return parser
