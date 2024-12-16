@@ -1823,6 +1823,8 @@ class ContainerSharding(ProxyClient):
 
         if self.sharding_in_progress(meta):
             raise ValueError("Sharding already in progress")
+        if self.draining_in_progress(meta):
+            raise ValueError("Draining in progress")
         root_cid_, current_shard = self.meta_to_shard(meta)
         if root_cid_ is None:
             raise ValueError("Not a shard")
