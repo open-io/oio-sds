@@ -1035,13 +1035,14 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		status_after = election_get_status(
 				args->repo->election_manager, &args->name, NULL, 1, &err);
 		if (err) {
-			GRID_ERROR("Failed to check election status after opening DB: %s",
-					err->message);
+			g_prefix_error(&err, "Failed to check election after opening DB: ");
 		} else if (status_after != status_before) {
 			err = BUSY("Election status changed while waiting for the database");
+		}
+		if (err) {
+			GRID_ERROR("%s", err->message);
 			sqlx_repository_unlock_and_close_noerror(*result);
 			*result = NULL;
-			GRID_ERROR("%s", err->message);
 		}
 	}
 
