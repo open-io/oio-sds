@@ -43,8 +43,8 @@ retry:
 		if (errno != ERANGE)
 			err = NEWERROR(errno, "XATTR get error: %s", strerror(errno));
 		else { /* buffer too small */
-			bufsize = realsize + 1;
-			max_size = 1 + MAX(max_size,bufsize);
+			bufsize *= 2;
+			max_size = bufsize;
 			buf = g_realloc(buf, bufsize);
 			goto retry;
 		}
