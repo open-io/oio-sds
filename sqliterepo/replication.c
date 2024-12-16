@@ -302,10 +302,22 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 /* HOOKS ------------------------------------------------------------------- */
 
 static void
-_leave_election(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
+_leave_election(gchar **peers, struct sqlx_repctx_s *ctx, gboolean local,
+		gint64 deadline)
 {
 	NAME2CONST(n, ctx->sq3->name);
 	dump_request(__FUNCTION__, peers, "SQLX_EXITELECTION", &n);
+
+	// Leave the election locally
+	GError *err = election_exit(ctx->sq3->manager, &n);
+	if (err) {
+		GRID_WARN("Failed to leave election locally: %s", err->message);
+		g_clear_error(&err);
+	}
+
+	if (local) {
+		return;
+	}
 
 	GByteArray *encoded = sqlx_pack_EXITELECTION(&n, deadline);
 	struct gridd_client_s **clients =
@@ -322,13 +334,6 @@ _leave_election(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 				oio_clamp_timeout(oio_election_replicate_timeout_cnx, deadline));
 		gridd_clients_set_timeout(clients,
 				oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
-	}
-
-	// Leave the election himself
-	GError *err = election_exit(ctx->sq3->manager, &n);
-	if (err) {
-		GRID_WARN("Failed to leave election locally: %s", err->message);
-		g_clear_error(&err);
 	}
 
 	// Ask others peers to leave the election
@@ -353,6 +358,9 @@ static GError*
 _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 {
 	guint count_success = 0;
+	guint other_master = 0;
+	guint slave_ahead = 0;
+	guint slave_behind = 0;
 
 	NAME2CONST(n, ctx->sq3->name);
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
@@ -372,32 +380,29 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	gridd_clients_set_timeout(clients,
 			oio_clamp_timeout(oio_election_replicate_timeout_req, deadline));
 
-	gboolean leave_election = FALSE;
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);
 	if (!err) {
+		// 1st pass: analyze the response codes
 		for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 			GError *e = gridd_client_error(*pc);
 			if (!e) {
 				++ count_success;
 			} else {
-				if (e->code == CODE_IS_MASTER) {
-					// Let the quorum decide if the write is committed.
-					// On the other hand, all peers must leave the election.
-					leave_election = TRUE;
-				} else if (e->code == CODE_PIPEFROM || e->code == CODE_PIPETO
-						|| e->code == CODE_CONCURRENT) {
-					// XXX JFS Previously, the SLAVE triggered a RESYNC. Now
-					// we immediately send the DUMP as soon as the COMMIT is
-					// terminated. We Just store the SLAVE's address.
-					// XXX Why do the resync in case of a PIPEFROM (understand
-					// as 'pipe from the peer') ? The current host is MASTER
-					// it is the reference for several others bases, and
-					// whatever the remote problem on *that* peer, the it
-					// is MASTER because the election succeeded, and we won't
-					// restart a whole election
-					g_ptr_array_add(ctx->resync_todo, g_strdup(
-							gridd_client_url(*pc)));
+				switch (e->code) {
+				case CODE_IS_MASTER:
+					other_master++;
+					break;
+				case CODE_PIPETO:
+				case CODE_CONCURRENT:
+					slave_ahead++;
+					break;
+				case CODE_PIPEFROM:
+				case SQLITE_CORRUPT:
+					slave_behind++;
+					break;
+				default:
+					break;
 				}
 				g_string_append_printf(ctx->errors, " [%s/%d/%s]",
 						gridd_client_url(*pc), e->code, e->message);
@@ -405,7 +410,9 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 			}
 		}
 
-		++ count_success; // XXX JFS: don't forget the local success!
+		// Count the successes (including the local update),
+		// and decide if we commit or rollback.
+		++ count_success;
 		guint groupsize = 1 + g_strv_length(peers);
 		if (election_manager_get_mode(ctx->sq3->manager) == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize) {
@@ -424,15 +431,72 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 						err->message);
 			}
 		}
+
+		/* 2nd pass: trigger resyncs if we have quorum (and no other master)
+		+------------------+------------------------+------------------------+
+		|        \   Other | = 0                    | > 0 (another master)   |
+		| Slaves  \ master |                        |                        |
+		+------------------+------------------------+------------------------+
+		| ahead > 0        | DB_RESTORE(ahead)      | Rollback               |
+		|                  |                        | Leave election locally |
+		|                  | -> Note 1              | -> Note 3              |
+		+------------------+------------------------+------------------------+
+		| behind > 0       | DB_RESTORE(behind)     | Commit                 |
+		|                  |                        | Reset election         |
+		|                  | -> Note 2              | -> Note 4              |
+		+------------------+------------------------+------------------------+
+		| ahead = 0        |                        | Commit                 |
+		| behind = 0       |                        | Reset election         |
+		|                  |                        | -> Note 4              |
+		+------------------+------------------------+------------------------+
+
+		Note 1: 1 (or more) slave successfully applied the last change, but
+		        was slow to do it, and the master timed out and rolled back
+				the transaction. We can send a full copy of the database so
+				the last change is rolled back and the current change applies.
+
+		Note 2: 1 (or more) slave did not get the last change (connection
+		        failure or service down). Send a full copy so the slave gets
+				the missed changes (including the current change).
+		*/
+		if (!err && !other_master && (slave_ahead || slave_behind)) {
+			for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
+				GError *e = gridd_client_error(*pc);
+				if (!e) {
+					continue;
+				} else if (e->code == SQLITE_CORRUPT
+						|| e->code == CODE_PIPETO
+						|| e->code == CODE_PIPEFROM
+						|| e->code == CODE_CONCURRENT) {
+					/* Send a dump of the database to the out-of-sync slave. */
+					g_ptr_array_add(
+							ctx->resync_todo, g_strdup(gridd_client_url(*pc)));
+				}
+				g_clear_error(&e);
+			}
+		}
 	}
 
 	gridd_clients_free(clients);
 
-	if (leave_election) {
-		GRID_WARN("Double master detected, try to leave the election "
-				"on all peers [%s][%s] reqid=%s", ctx->sq3->name.base,
+	if (other_master > 0) {
+		if (slave_ahead > 0) {
+			/* Note 3: the remote peers agree that the local peer has missed
+			 * some information. Leave the election locally (maybe we have
+			 * already left while the current request was in progress). */
+			GRID_WARN("Master changed? Leave the election locally [%s][%s] reqid=%s",
+					ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
+			_leave_election(peers, ctx, TRUE, 0);
+		} else {
+			/* Note 4: not sure who is right, make everyone leave. The new
+			 * election process will compare all versions and decide.
+			 * Notice that we may still validate the transaction (if enough
+			 * slaves have agreed to replicate the changes). */
+			GRID_WARN("Double master detected, try to leave the election "
+					"on all peers [%s][%s] reqid=%s", ctx->sq3->name.base,
 				ctx->sq3->name.type, oio_ext_get_reqid());
-		_leave_election(peers, ctx, 0);
+			_leave_election(peers, ctx, FALSE, 0);
+		}
 	}
 
 	return err;
