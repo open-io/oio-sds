@@ -47,6 +47,9 @@ void sqlx_cache_set_close_hook(sqlx_cache_t *cache,
  * configuration facility */
 void sqlx_cache_reconfigure(sqlx_cache_t *cache);
 
+/* Tell the cache the service is running (or not). */
+void sqlx_cache_set_running(sqlx_cache_t *cache, gboolean is_running);
+
 void sqlx_cache_clean(sqlx_cache_t *cache);
 
 void sqlx_cache_debug(sqlx_cache_t *cache);

@@ -109,6 +109,7 @@ struct sqlx_cache_s
 	guint bases_max_hard;
 	guint bases_used;
 
+	gboolean is_running;
 	gint64 last_memory_usage;
 
 	/* Doubly linked lists of tables, one by status */
@@ -525,6 +526,12 @@ sqlx_cache_reconfigure(sqlx_cache_t *cache)
 }
 
 void
+sqlx_cache_set_running(sqlx_cache_t *cache, gboolean is_running)
+{
+	cache->is_running = is_running;
+}
+
+void
 sqlx_cache_set_unlock_hook(sqlx_cache_t *cache, sqlx_cache_unlock_hook hook)
 {
 	EXTRA_ASSERT(cache != NULL);
@@ -573,6 +580,7 @@ sqlx_cache_init(void)
 		SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
 	}
 
+	cache->is_running = TRUE;
 	return cache;
 }
 
@@ -688,8 +696,10 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 retry:
 	attempts++;
 
-	bd = sqlx_lookup_id(cache, hname);
-	if (bd < 0) {
+	if (!cache->is_running) {
+		err = BUSY("service exiting");
+	}
+	else if ((bd = sqlx_lookup_id(cache, hname)) < 0) {
 		if (!(err = sqlx_base_reserve(cache, hname, &base))) {
 			if (base) {
 				bd = base->index;

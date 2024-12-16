@@ -264,8 +264,9 @@ error_is_bad_redirect(GError *err)
 gboolean
 error_is_exiting(GError *err)
 {
+	// Some modules prefix the error message (e.g. "cache error: ")
 	return err && err->code == CODE_UNAVAILABLE
-			&& !g_strcmp0(err->message, "service exiting");
+			&& g_str_has_suffix(err->message, "service exiting");
 }
 
 /** Evaluate the probability of success of a retry.

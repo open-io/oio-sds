@@ -771,6 +771,11 @@ sqlx_service_specific_stop(void)
 	if (SRV.server)
 		network_server_stop(SRV.server);
 
+	struct sqlx_cache_s *cache = sqlx_repository_get_cache(SRV.repository);
+	if (cache) {
+		sqlx_cache_set_running(cache, FALSE);
+	}
+
 	if (election_manager_is_operational(SRV.election_manager)) {
 		/* Ask elections to leave, but do not wait (timeout=0). */
 		election_manager_exit_all(SRV.election_manager, TRUE, 0);
