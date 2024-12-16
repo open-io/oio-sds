@@ -381,10 +381,14 @@ label_rollback:
 		gint64 worst = 0;
 		err = version_validate_diff(expected_version, postvers, &worst);
 		if (err == NULL) {
-			if (worst != 0) { /* Diff missed */
+			if (worst > 0) {
 				err = NEWERROR(CODE_CONCURRENT,
-						"Concurrent change detected: local is 1 version %s",
-						worst < 0? "behind":"ahead");
+						"Concurrent change detected: local is 1 version ahead"
+				);
+			} else if (worst < 0) { /* Diff missed */
+				err = NEWERROR(CODE_PIPEFROM,
+						"Concurrent change detected: local is 1 version behind"
+				);
 			}
 		}
 		if (err != NULL)
