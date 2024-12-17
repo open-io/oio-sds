@@ -3198,12 +3198,11 @@ action_m2_container_sharding_lock(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
 	GError *err = NULL;
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_LOCK_SHARDING(args->url, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	}
+	
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_LOCK_SHARDING(args->url, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
 }
 
@@ -3274,17 +3273,13 @@ _container_sharding_show(struct req_args_s *args,
 {
 	GError *err = NULL;
 	struct list_result_s list_out = {0};
-	if (!err) {
-		m2v2_list_result_init(&list_out);
-	}
 
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_SHOW_SHARDING(args->url, &list_in, DL());
-		};
-		err = _resolve_meta2(args, _prefer_slave(), _pack, &list_out,
+	m2v2_list_result_init(&list_out);
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_SHOW_SHARDING(args->url, &list_in, DL());
+	};
+	err = _resolve_meta2(args, _prefer_slave(), _pack, &list_out,
 				m2v2_list_result_extract);
-	}
 
 	if (!err) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
@@ -3308,17 +3303,15 @@ action_m2_container_sharding_abort(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
 	GError *err = NULL;
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_ABORT_SHARDING(args->url, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	}
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_ABORT_SHARDING(args->url, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
 }
 
 // SHARDING{{
-// GET /v3.0/{NS}/container/sharding/find?acct={account}&ref={container}
+// GET /v3.0/{NS}/container/sharding/find?acct={account}&ref={container}&strategy={strategy}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Find the distribution of shard ranges on unsharded container
 // or an existing shard
@@ -3388,14 +3381,12 @@ action_container_sharding_find(struct req_args_s *args)
 	}
 
 	m2v2_list_result_init(&list_out);
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_FIND_SHARDS(args->url,
-					strategy, args->rq->body, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, &list_out,
-				m2v2_list_result_extract);
-	}
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_FIND_SHARDS(args->url,
+				strategy, args->rq->body, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, &list_out,
+			m2v2_list_result_extract);
 
 	enum http_rc_e rc = _reply_shard_ranges_list_result(args, err, &list_out);
 	m2v2_list_result_clean(&list_out);
