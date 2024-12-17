@@ -181,16 +181,18 @@ _info(const char *dest)
 	gint64 start = oio_ext_monotonic_time();
 	GError *err = gridd_client_exec_and_concat(dest, timeout, encoded, &out);
 	gint64 end = oio_ext_monotonic_time();
+	int ret = 0;
 	if (err) {
 		g_print("KO (%d) %s\n", err->code, err->message);
 		g_clear_error(&err);
-		return 1;
+		ret = 1;
 	} else {
 		g_print("OK %lfs\n", (end - start) / (gdouble)G_TIME_SPAN_SECOND);
 		g_print("%.*s\n", (int)out->len, (gchar*)out->data);
-		return 0;
+		ret = 0;
 	}
 	if (out) g_byte_array_free(out, TRUE);
+	return ret;
 }
 
 static int
