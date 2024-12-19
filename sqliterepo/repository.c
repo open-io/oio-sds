@@ -1040,9 +1040,16 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			err = BUSY("Election status changed while waiting for the database");
 		}
 		if (err) {
-			GRID_ERROR("%s", err->message);
-			sqlx_repository_unlock_and_close_noerror(*result);
-			*result = NULL;
+			/* Consider the status change is fatal
+			 * only if ELECTION_LEADER is requested. */
+			if (expected & ELECTION_LEADER && !(expected & ELECTION_LOST)) {
+				GRID_ERROR("%s", err->message);
+				sqlx_repository_unlock_and_close_noerror(*result);
+				*result = NULL;
+			} else {
+				GRID_WARN("%s", err->message);
+				g_clear_error(&err);
+			}
 		}
 	}
 
