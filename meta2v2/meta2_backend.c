@@ -1616,7 +1616,7 @@ _meta2_send_manifest_event(struct meta2_backend_s *m2b,
 	{
 		EXTRA_ASSERT(plist == NULL);
 		EXTRA_ASSERT(bean != NULL);
-		
+
 		if (&descr_struct_PROPERTIES == DESCR(bean)) {
 			struct bean_PROPERTIES_s *prop = bean;
 			gchar *expected_prop = "x-object-sysmeta-s3api-upload-id";
@@ -3133,7 +3133,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			copy_path = g_strdup_printf(
 				"%s.sharding-%"G_GINT64_FORMAT"-%s",
 				sq3->path_inline, timestamp, index);
-			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			err = sqlx_repository_flush_wal(sq3);
+			if (!err) {
+				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			}
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
@@ -4103,7 +4106,10 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 		if (g_access(link_path, F_OK | R_OK) != 0) {
 			// Create a database copy (ref link)
-			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			err = sqlx_repository_flush_wal(sq3);
+			if (!err) {
+				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			}
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);

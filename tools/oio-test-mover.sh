@@ -147,7 +147,9 @@ oio_meta2_mover()
   fi
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${META2_LOC_TO_MOVE}" "${TMP_VOLUME}"
-  /usr/bin/find "${TMP_VOLUME}" -type f -name "*-journal" -delete
+  /usr/bin/find "${TMP_VOLUME}" -type f \
+    \( -name "*-journal" -or -name "*-wal" -or -name "*-shm" \) \
+    -delete
 
   set +e
 

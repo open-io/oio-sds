@@ -40,7 +40,7 @@ class Meta2Worker(PipelineWorker):
             )
 
     def process_entry(self, path, reqid=None):
-        if path.endswith("-journal") or path.endswith("-wal"):
+        if path.endswith(("-journal", "-shm", "-wal")):
             self.logger.debug("Ignoring sqlite journal file: %s", path)
             self.ignored_paths += 1
             return False

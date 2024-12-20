@@ -1868,12 +1868,12 @@ Used by `gcc`
 
 ### sqliterepo.journal_mode
 
-> Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY.
+> Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY, 4 = WAL.
 
  * default: **3**
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_JOURNAL_MODE*
- * range: 0 -> 3
+ * range: 0 -> 4
 
 ### sqliterepo.outgoing.timeout.cnx.getvers
 

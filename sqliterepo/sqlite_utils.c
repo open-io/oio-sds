@@ -31,7 +31,7 @@ static const gchar *sqlx_journal_mode_sql[] = {
 	"PRAGMA journal_mode = TRUNCATE",
 	"PRAGMA journal_mode = PERSIST",
 	"PRAGMA journal_mode = MEMORY",
-//	"PRAGMA journal_mode = WAL",  // Not tested
+	"PRAGMA journal_mode = WAL",
 //	"PRAGMA journal_mode = OFF",  // Dangerous
 	NULL,
 };
