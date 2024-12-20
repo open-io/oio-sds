@@ -55,6 +55,7 @@ SYSMETA_KEYS = (
     "mime-type",
     "name",
     "policy",
+    "target-policy",
     "size",
     "version",
 )
@@ -115,7 +116,7 @@ def extract_reference_params(func):
             path=path,
             cid=cid,
             params=params,
-            **kwargs
+            **kwargs,
         )
 
     return _reference_params
@@ -320,7 +321,7 @@ class ContainerClient(ProxyClient):
                 params=params,
                 data=data,
                 region=region,
-                **kwargs
+                **kwargs,
             )
             if resp.status not in (204, 200):
                 raise exceptions.from_response(resp, body)
@@ -828,7 +829,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, body = self._direct_request(
@@ -848,7 +849,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
@@ -894,7 +895,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         data = self._add_replication_info({}, **kwargs)
@@ -988,7 +989,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=properties,
-            **kwargs
+            **kwargs,
         )
         if content_meta is not None and chunks is not None:
             self._maybe_refresh_rawx_scores(**kwargs)
@@ -1018,7 +1019,7 @@ class ContainerClient(ProxyClient):
                     cid=cid,
                     content=content,
                     version=version,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 raise
@@ -1032,7 +1033,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=properties,
-            **kwargs
+            **kwargs,
         )
 
         return content_meta, chunks
@@ -1105,7 +1106,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=True,
-            **kwargs
+            **kwargs,
         )
         if obj_meta is not None:
             return obj_meta
@@ -1127,7 +1128,7 @@ class ContainerClient(ProxyClient):
             cid=cid,
             version=version,
             properties=True,
-            **kwargs
+            **kwargs,
         )
 
         return obj_meta
@@ -1162,7 +1163,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         _resp, _body = self._direct_request(
@@ -1208,7 +1209,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         resp, _body = self._direct_request(
@@ -1268,7 +1269,7 @@ class ContainerClient(ProxyClient):
             path=path,
             cid=cid,
             version=version,
-            **kwargs
+            **kwargs,
         )
 
         _resp, body = self._direct_request("POST", uri, params=params, **kwargs)
@@ -1287,3 +1288,29 @@ class ContainerClient(ProxyClient):
         )
 
         self._direct_request("POST", uri, params=params, **kwargs)
+
+    def content_request_transition(
+        self,
+        account=None,
+        reference=None,
+        path=None,
+        cid=None,
+        version=None,
+        policy=None,
+        **kwargs
+    ):
+        uri = self._make_uri("content/transition")
+        params = self._make_params(account, reference, path, cid=cid, version=version)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid, **kwargs
+        )
+
+        self._direct_request(
+            "POST",
+            uri,
+            params=params,
+            json={
+                "policy": policy,
+            },
+            **kwargs,
+        )

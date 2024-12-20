@@ -57,6 +57,7 @@ struct meta2_backend_s
 	struct oio_events_queue_s *notifier_content_updated;
 	struct oio_events_queue_s *notifier_content_drained;
 	struct oio_events_queue_s *notifier_content_broken;
+	struct oio_events_queue_s *notifier_content_transitioned;
 
 	struct oio_events_queue_s *notifier_meta2_deleted;
 	struct oio_events_queue_s *notifier_lifecycle_generated;

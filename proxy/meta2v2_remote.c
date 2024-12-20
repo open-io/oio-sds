@@ -307,6 +307,15 @@ m2v2_remote_pack_CHANGE_POLICY(struct oio_url_s *url, GSList *beans, gint64 dl)
 }
 
 GByteArray*
+m2v2_remote_pack_POLICY_TRANSITION(struct oio_url_s *url, const gchar* policy, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(
+		NAME_MSGNAME_M2V2_POLICY_TRANSITION, url, NULL, dl);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_CHANGE_POLICY, policy);
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_RESTORE_DRAINED(struct oio_url_s *url, GSList *beans, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);

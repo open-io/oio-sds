@@ -101,7 +101,6 @@ GByteArray* m2v2_remote_pack_DEDUP(
 		struct oio_url_s *url,
 		gint64 deadline);
 
-
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
 		GSList *beans,
@@ -123,6 +122,11 @@ GByteArray* m2v2_remote_pack_UPDATE(
 GByteArray* m2v2_remote_pack_CHANGE_POLICY(
 		struct oio_url_s *url,
 		GSList *beans,
+		gint64 deadline);
+
+GByteArray* m2v2_remote_pack_POLICY_TRANSITION(
+		struct oio_url_s *url,
+		const gchar *policy,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_RESTORE_DRAINED(

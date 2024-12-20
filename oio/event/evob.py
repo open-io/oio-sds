@@ -99,6 +99,7 @@ class EventTypes(object):
     CONTENT_DELETED = "storage.content.deleted"
     CONTENT_DRAINED = "storage.content.drained"
     CONTENT_UPDATE = "storage.content.update"
+    CONTENT_TRANSITIONED = "storage.content.transitioned"
     CONTENT_NEW = "storage.content.new"
     CONTENT_REBUILT = "storage.content.rebuilt"
     DELAYED = "delayed"

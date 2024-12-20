@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -52,11 +52,21 @@ encode_header (GString *g, gpointer bean)
 	g_string_append_c(g, ',');
 	OIO_JSON_append_int(g, "size", CONTENTS_HEADERS_get_size(bean));
 	g_string_append_c(g, ',');
-	OIO_JSON_append_gstr(g, "policy", CONTENTS_HEADERS_get_policy(bean));
+	gchar* actual_policy = NULL;
+	gchar* target_policy = NULL;
+	m2v2_policy_decode(
+		CONTENTS_HEADERS_get_policy(bean), &actual_policy, &target_policy);
+	OIO_JSON_append_str(g, "policy", actual_policy);
 	g_string_append_c(g, ',');
+	if (g_strcmp0(actual_policy, target_policy) != 0) {
+		OIO_JSON_append_str(g, "target-policy", target_policy);
+		g_string_append_c(g, ',');
+	}
 	OIO_JSON_append_gstr(g, "chunk-method", CONTENTS_HEADERS_get_chunk_method(bean));
 	g_string_append_c(g, ',');
 	OIO_JSON_append_gstr(g, "mime-type", CONTENTS_HEADERS_get_mime_type(bean));
+	g_free(actual_policy);
+	g_free(target_policy);
 }
 
 static void

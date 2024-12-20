@@ -795,6 +795,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_DRAINED*
 
+### meta2.tube.content_transitioned
+
+> Tube name (or routing key) for 'storage.content.transitioned' events.
+
+ * default: **oio-transitioned**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_TRANSITIONED*
+
 ### meta2.tube.content_updated
 
 > Tube name (or routing key) for 'storage.content.update' events.

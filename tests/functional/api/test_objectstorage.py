@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,7 @@ from oio.common.constants import (
 from oio.common.easy_value import true_value
 from oio.common.fullpath import encode_fullpath
 from oio.common.http_eventlet import CustomHTTPResponse
+from oio.common.kafka import DEFAULT_TRANSITION_TOPIC
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.storage_method import (
     STORAGE_METHODS,
@@ -2874,6 +2875,185 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             policy="SINGLE",
             change_policy=True,
         )
+
+
+class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._cls_transition_consumer = cls._register_consumer(
+            topic=DEFAULT_TRANSITION_TOPIC
+        )
+
+    def setUp(self):
+        super().setUp()
+        self._container = f"policy-transition-{random_str(6)}"
+
+    def _create_object(self, data="data"):
+        name = f"{self._container}-{random_str(6)}"
+        self._create(name)
+        self.api.object_create(self.account, self._container, obj_name=name, data=data)
+        obj = self.api.object_get_properties(self.account, self._container, name)
+        return name, obj
+
+    def test_same_policy(self):
+        name, obj = self._create_object()
+        reqid = request_id()
+        self.api.object_request_transition(
+            self.account, self._container, name, obj["policy"], reqid=reqid
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTAINER_STATE,),
+            timeout=5,
+        )
+        self.assertIsNone(evt)
+        props = self.api.object_get_properties(self.account, self._container, name)
+        self.assertEqual(props["policy"], obj["policy"])
+        self.assertNotIn("target_policy", props)
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED,),
+            kafka_consumer=self._cls_transition_consumer,
+        )
+        self.assertIsNone(evt)
+
+    def test_change_policy(self):
+        name, obj = self._create_object()
+        obj_size = int(obj["size"])
+        reqid = request_id(self._container)
+        self.api.object_request_transition(
+            self.account, self._container, name, "TWOCOPIES", reqid=reqid
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTAINER_STATE,),
+        )
+        self.assertIsNotNone(evt)
+        self.assertIn("TWOCOPIES", evt.data.get("bytes-details", {}))
+        self.assertEqual(evt.data["bytes-details"]["TWOCOPIES"], obj_size)
+        self.assertIn("TWOCOPIES", evt.data.get("objects-details", {}))
+        self.assertEqual(evt.data["objects-details"]["TWOCOPIES"], 1)
+        props = self.api.object_get_properties(self.account, self._container, name)
+        self.assertEqual(props["policy"], obj["policy"])
+        self.assertIn("target_policy", props)
+        self.assertEqual(props["target_policy"], "TWOCOPIES")
+        self._check_stats(
+            self._container,
+            expected_count=1,
+            expected_size=obj_size,
+            expected_count_by_policy={"TWOCOPIES": 1},
+            expected_size_by_policy={"TWOCOPIES": obj_size},
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED,),
+            kafka_consumer=self._cls_transition_consumer,
+        )
+        self.assertIsNotNone(evt)
+
+    def test_multiple_change_policy(self):
+        name, obj = self._create_object()
+        obj_size = int(obj["size"])
+        target_policies = {
+            "TWOCOPIES": ("SINGLE", "THREECOPIES"),
+            "THREECOPIES": ("TWOCOPIES", "SINGLE"),
+        }
+        first_policy = obj["policy"]
+        for policy in target_policies.get(first_policy, ("TWOCOPIES", "THREECOPIES")):
+            reqid = request_id(self._container)
+            self.api.object_request_transition(
+                self.account, self._container, name, policy, reqid=reqid
+            )
+            evt = self.wait_for_kafka_event(
+                fields={"user": self._container},
+                reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE,),
+            )
+            self.assertIsNotNone(evt)
+            self.assertIn(policy, evt.data.get("bytes-details", {}))
+            self.assertEqual(evt.data["bytes-details"][policy], obj_size)
+            self.assertIn(policy, evt.data.get("objects-details", {}))
+            self.assertEqual(evt.data["objects-details"][policy], 1)
+            props = self.api.object_get_properties(self.account, self._container, name)
+            self.assertEqual(props["policy"], obj["policy"])
+            self.assertIn("target_policy", props)
+            self.assertEqual(props["target_policy"], policy)
+            self._check_stats(
+                self._container,
+                expected_count=1,
+                expected_size=obj_size,
+                expected_count_by_policy={policy: 1},
+                expected_size_by_policy={policy: obj_size},
+            )
+            evt = self.wait_for_kafka_event(
+                fields={"user": self._container},
+                reqid=reqid,
+                types=(EventTypes.CONTENT_TRANSITIONED,),
+                kafka_consumer=self._cls_transition_consumer,
+            )
+            self.assertIsNotNone(evt)
+
+        # Reset to original policy
+        policy = first_policy
+        reqid = request_id(self._container)
+        self.api.object_request_transition(
+            self.account, self._container, name, policy, reqid=reqid
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTAINER_STATE,),
+        )
+        self.assertIsNotNone(evt)
+        self.assertIn(policy, evt.data.get("bytes-details", {}))
+        self.assertEqual(evt.data["bytes-details"][policy], obj_size)
+        self.assertIn(policy, evt.data.get("objects-details", {}))
+        self.assertEqual(evt.data["objects-details"][policy], 1)
+        props = self.api.object_get_properties(self.account, self._container, name)
+        self.assertEqual(props["policy"], obj["policy"])
+        self.assertNotIn("target_policy", props)
+        self._check_stats(
+            self._container,
+            expected_count=1,
+            expected_size=obj_size,
+            expected_count_by_policy={policy: 1},
+            expected_size_by_policy={policy: obj_size},
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED,),
+            kafka_consumer=self._cls_transition_consumer,
+        )
+        self.assertIsNone(evt)
+
+    def test_non_valid_policy(self):
+        name, obj = self._create_object()
+        reqid = request_id()
+        self.assertRaises(
+            exc.BadRequest,
+            self.api.object_request_transition,
+            self.account,
+            self._container,
+            name,
+            "INVALID",
+            reqid=reqid,
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTAINER_STATE,),
+            timeout=5,
+        )
+        self.assertIsNone(evt)
+        props = self.api.object_get_properties(self.account, self._container, name)
+        self.assertEqual(props["policy"], obj["policy"])
+        self.assertNotIn("target_policy", props)
 
 
 class TestObjectRestoreDrained(ObjectStorageApiTestBase):

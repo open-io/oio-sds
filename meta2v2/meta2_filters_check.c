@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -183,6 +183,7 @@ meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 	CHECK(m2b->notifier_content_updated);
 	CHECK(m2b->notifier_content_broken);
 	CHECK(m2b->notifier_content_drained);
+	CHECK(m2b->notifier_content_transitioned);
 	return FILTER_OK;
 }
 

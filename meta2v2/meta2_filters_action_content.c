@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -284,7 +284,7 @@ _m2b_extract_repli_properties(struct gridd_filter_ctx_s *ctx, GSList **out)
 	{
 		EXTRA_ASSERT(plist != NULL);
 		EXTRA_ASSERT(bean != NULL);
-		
+
 		if (&descr_struct_PROPERTIES == DESCR(bean)) {
 			struct bean_PROPERTIES_s *prop = bean;
 			gchar *expected_prop = "x-object-sysmeta-s3api-acl";
@@ -791,4 +791,27 @@ meta2_filter_action_purge_content(struct gridd_filter_ctx_s *ctx,
 	GRID_DEBUG("Object purge failed (%d): %s", err->code, err->message);
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
+}
+
+int
+meta2_filter_action_request_policy_transition(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	TRACE_FILTER();
+	GError *err = NULL;
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	GSList *transitioned = NULL;
+
+	const gchar* policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY);
+
+	err = meta2_backend_request_policy_transition(m2b, url, policy);
+	if (err != NULL) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	_bean_cleanl2(transitioned);
+
+	return FILTER_OK;
 }
