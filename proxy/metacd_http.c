@@ -1240,6 +1240,7 @@ configure_request_handlers (void)
 	SET("/$NS/content/update/#POST", action_content_update);
 	SET("/$NS/content/truncate/#POST", action_content_truncate);
 	SET("/$NS/content/purge/#POST", action_content_purge);
+	SET("/$NS/content/transition/#POST", action_content_policy_transition);
 
 	// Admin
 	/* Ask each peer to trigger or update the election ("DB_USE"). */

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -2235,3 +2235,39 @@ class ObjectStorageApi(object):
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
             return False
         return True
+
+    @handle_object_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def object_request_transition(
+        self,
+        account,
+        container,
+        obj,
+        policy,
+        version=None,
+        **kwargs,
+    ):
+        """
+        Request an asynchronous policy change for object. The counters (bytes and
+        objects count) are updated but the data are not moved. The data move will
+        occur later.
+
+        :param account: name of the account the object belongs to
+        :type account: `str`
+        :param container: name of the container the object belongs to
+        :type container: `str`
+        :param obj: name of the object to transition
+        :param policy: name of the new storage policy
+        :type policy: `str`
+        :param version: version of the object to transition
+        """
+        return self.container.content_request_transition(
+            account=account,
+            reference=container,
+            path=obj,
+            policy=policy,
+            version=version,
+            **kwargs,
+        )

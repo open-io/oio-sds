@@ -131,6 +131,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_list_by_chunk_id);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_id);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_hash);
 M2V2_DECLARE_FILTER(meta2_filter_action_put_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_request_policy_transition);
 M2V2_DECLARE_FILTER(meta2_filter_action_append_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_check_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_get_content);

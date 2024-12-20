@@ -192,23 +192,24 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	STRING_STACKIFY(url);
 
 	GError *err = NULL;
-	INIT(m2->notifier_container_created, oio_meta2_tube_container_new, FALSE);
-	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted, FALSE);
-	INIT(m2->notifier_container_state, oio_meta2_tube_container_state, FALSE);
-	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated, FALSE);
+	INIT(m2->notifier_container_created, oio_meta2_tube_container_new, FALSE)
+	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted, FALSE)
+	INIT(m2->notifier_container_state, oio_meta2_tube_container_state, FALSE)
+	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated, FALSE)
 
-	INIT(m2->notifier_content_created, oio_meta2_tube_content_created, FALSE);
-	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended, FALSE);
-	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted, FALSE);
-	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated, FALSE);
-	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken, FALSE);
-	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained, FALSE);
+	INIT(m2->notifier_content_created, oio_meta2_tube_content_created, FALSE)
+	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended, FALSE)
+	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted, FALSE)
+	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated, FALSE)
+	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken, FALSE)
+	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained, FALSE)
+	INIT(m2->notifier_content_transitioned, oio_meta2_tube_content_transitioned, FALSE)
 
-	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted, FALSE);
+	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted, FALSE)
 
-	INIT(m2->notifier_manifest_deleted, oio_meta2_tube_manifest_deleted, TRUE);
+	INIT(m2->notifier_manifest_deleted, oio_meta2_tube_manifest_deleted, TRUE)
 
-	INIT(m2->notifier_lifecycle_generated, oio_meta2_tube_lifecycle_generated, FALSE);
+	INIT(m2->notifier_lifecycle_generated, oio_meta2_tube_lifecycle_generated, FALSE)
 
 	return err;
 #undef INIT
@@ -284,22 +285,23 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->resolver)
 		m2->resolver = NULL;
 
-	CLEAN(m2->notifier_container_created);
-	CLEAN(m2->notifier_container_deleted);
-	CLEAN(m2->notifier_container_state);
-	CLEAN(m2->notifier_container_updated);
+	CLEAN(m2->notifier_container_created)
+	CLEAN(m2->notifier_container_deleted)
+	CLEAN(m2->notifier_container_state)
+	CLEAN(m2->notifier_container_updated)
 
-	CLEAN(m2->notifier_content_created);
-	CLEAN(m2->notifier_content_appended);
-	CLEAN(m2->notifier_content_deleted);
-	CLEAN(m2->notifier_content_updated);
-	CLEAN(m2->notifier_content_broken);
-	CLEAN(m2->notifier_content_drained);
+	CLEAN(m2->notifier_content_created)
+	CLEAN(m2->notifier_content_appended)
+	CLEAN(m2->notifier_content_deleted)
+	CLEAN(m2->notifier_content_updated)
+	CLEAN(m2->notifier_content_broken)
+	CLEAN(m2->notifier_content_drained)
+	CLEAN(m2->notifier_content_transitioned)
 
-	CLEAN(m2->notifier_meta2_deleted);
-	CLEAN(m2->notifier_lifecycle_generated);
+	CLEAN(m2->notifier_meta2_deleted)
+	CLEAN(m2->notifier_lifecycle_generated)
 
-	CLEAN(m2->notifier_manifest_deleted);
+	CLEAN(m2->notifier_manifest_deleted)
 
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;
@@ -1814,6 +1816,52 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(m2b, sq3, url);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
+		struct oio_url_s *url, const gchar* new_policy)
+{
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(new_policy != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+	gboolean should_update = FALSE;
+	gboolean emit_event = FALSE;
+
+	err = m2b_open_for_object(m2, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED,
+			&sq3);
+
+	if (!err) {
+		EXTRA_ASSERT(sq3 != NULL);
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			err = m2db_transition_policy(
+				sq3, url, m2->nsinfo, &should_update, &emit_event, new_policy);
+		}
+		err = sqlx_transaction_end(repctx, err);
+		if (!err) {
+			if (should_update) {
+				m2b_add_modified_container(m2, sq3);
+			}
+
+			if (emit_event) {
+				// Send event
+				GString *event = oio_event__create_with_id(
+					"storage.content.transitioned", url, oio_ext_get_reqid());
+				g_string_append(event, ",\"data\":{");
+				oio_str_gstring_append_json_pair(event, "target_policy", new_policy);
+				g_string_append(event, "}}");
+				oio_events_queue__send(
+					m2->notifier_content_transitioned, g_string_free (event, FALSE));
+			}
+		}
+		m2b_close(m2, sq3, url);
 	}
 
 	return err;

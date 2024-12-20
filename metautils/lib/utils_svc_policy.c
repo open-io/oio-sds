@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -450,3 +450,42 @@ service_update_tagfilter(struct service_update_policies_s *pol,
 	return service_update_tagfilter2(pol, htype, pname, pvalue);
 }
 
+gchar*
+m2v2_policy_encode(const gchar* current, const gchar* target)
+{
+	EXTRA_ASSERT(current != NULL);
+
+	if (target != NULL && g_strcmp0(current, target) != 0) {
+		return g_strdup_printf("%s>%s", current, target);
+	}
+	return g_strdup(current);
+}
+
+void
+m2v2_policy_decode(const GString* policy, gchar** current, gchar** target)
+{
+	if (policy == NULL || policy->str == NULL) {
+		if (current != NULL) *current = NULL;
+		if (target != NULL) *target = NULL;
+		return;
+	}
+
+	// Find transitional marker index
+	gsize i = 0;
+	for (i = 0; i < policy->len; ++i) {
+		if (policy->str[i] == '>') {
+			break;
+		}
+	}
+	if (current != NULL) {
+		*current = g_strndup(policy->str, i);
+	}
+
+	if (target != NULL) {
+		if (i == policy ->len) {
+			*target = g_strndup(policy->str, i);
+		} else {
+			*target = g_strndup(&(policy->str[i + 1]), policy->len - i - 1);
+		}
+	}
+}

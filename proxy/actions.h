@@ -123,6 +123,7 @@ enum http_rc_e action_content_spare (struct req_args_s *args);
 enum http_rc_e action_content_update(struct req_args_s *args);
 enum http_rc_e action_content_truncate(struct req_args_s *args);
 enum http_rc_e action_content_purge (struct req_args_s *args);
+enum http_rc_e action_content_policy_transition(struct req_args_s *args);
 
 // Admin on SQLX bases
 

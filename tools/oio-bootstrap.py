@@ -3475,6 +3475,7 @@ def generate(options):
         "oio-lifecycle-checkpoint",
         "oio-lifecycle",
         "oio-preserved",
+        "oio-transitioned",
         "oio-rebuild",
         "oio-replication",
         "oio-xcute-job",

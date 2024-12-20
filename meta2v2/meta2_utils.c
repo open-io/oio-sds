@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -627,12 +627,16 @@ m2v2_sorted_content_extend_chunk_urls(struct m2v2_sorted_content_s *content,
 	if (g_tree_nnodes(content->metachunks) < 1)
 		return NULL;  // No chunk, nothing to do.
 
+	gchar* policy = NULL;
+	m2v2_policy_decode(CONTENTS_HEADERS_get_policy(content->header), &policy, NULL);
+
 	struct _url_n_pol_s url_n_pol = {
 		url,
-		CONTENTS_HEADERS_get_policy(content->header)->str,
+		policy,
 		NULL
 	};
 	g_tree_foreach(content->metachunks, _foreach_chunk_extend_url, &url_n_pol);
+	g_free(policy);
 	return url_n_pol.err;
 }
 
@@ -1490,13 +1494,11 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 		// recompute container size and object count
 		if (&descr_struct_CONTENTS_HEADERS == DESCR(l->data)) {
 			gint64 decrement = CONTENTS_HEADERS_get_size(l->data);
-			const gchar *policy = NULL;
-			GString *policy_str = CONTENTS_HEADERS_get_policy(l->data);
-			if (policy_str && policy_str->str) {
-				policy = policy_str->str;
-			}
+			gchar *policy = NULL;
+			m2v2_policy_decode(CONTENTS_HEADERS_get_policy(l->data), NULL, &policy);
 			m2db_update_size(sq3, -decrement, policy);
 			m2db_update_obj_count(sq3, -1, policy);
+			g_free(policy);
 		}
 
 		// But do not notify ALIAS already marked deleted
@@ -1758,7 +1760,7 @@ clean:
 			ALIASES_set_ctime(new_alias, now);
 			ALIASES_set_mtime(new_alias, now);
 			err = _db_save_bean(sq3, new_alias);
-			if (!err && delete_marker_created != NULL) { 
+			if (!err && delete_marker_created != NULL) {
 				*delete_marker_created = TRUE;
 			}
 			if (!err && cb) {
@@ -1881,17 +1883,15 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	err = _db_save_beans_list(sq3, kept);
 
 	if (!err) {
-		const gchar *policy = NULL;
-		GString *policy_str = CONTENTS_HEADERS_get_policy(original_header);
-		if (policy_str && policy_str->str) {
-			policy = policy_str->str;
-		}
+		gchar *policy = NULL;
+		m2v2_policy_decode(CONTENTS_HEADERS_get_policy(original_header), NULL, &policy);
 		m2db_update_size(sq3, -sz_gap, policy);
 		*out_added = kept;
 		*out_deleted = discarded;
 		// prevent cleanup
 		kept = NULL;
 		discarded = NULL;
+		g_free(policy);
 	}
 
 cleanup:
@@ -1998,7 +1998,7 @@ _fetch_content_size(GSList *beans)
 	return 0;
 }
 
-static const gchar*
+static const GString*
 _fetch_content_policy(GSList *beans)
 {
 	for (GSList *l = beans; l; l = l->next) {
@@ -2008,7 +2008,7 @@ _fetch_content_policy(GSList *beans)
 		}
 		GString *policy = CONTENTS_HEADERS_get_policy(bean);
 		if (policy && policy->str) {
-			return policy->str;
+			return policy;
 		}
 		return NULL;
 	}
@@ -2135,9 +2135,12 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		_patch_beans_with_version(beans, find_alias_version(beans));
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 		if (!err) {
-			const gchar *policy = _fetch_content_policy(beans);
+			const GString *policy_str = _fetch_content_policy(beans);
+			gchar* policy = NULL;
+			m2v2_policy_decode(policy_str, NULL, &policy);
 			m2db_update_size(args->sq3, _fetch_content_size(beans), policy);
 			m2db_update_obj_count(args->sq3, 1, policy);
+			g_free(policy);
 		}
 	} else {
 		/* We found an ALIAS with the same name and version. Just add the chunks
@@ -2251,11 +2254,8 @@ GError* m2db_update_content(struct sqlx_sqlite3_s *sq3,
 		goto cleanup;
 
 	/* Update the size of the container and notify the caller with new beans */
-	const gchar *policy = NULL;
-	GString *policy_str = CONTENTS_HEADERS_get_policy(header);
-	if (policy_str && policy_str->str) {
-		policy = policy_str->str;
-	}
+	gchar *policy = NULL;
+	m2v2_policy_decode(CONTENTS_HEADERS_get_policy(header), NULL, &policy);
 	m2db_update_size(sq3, added_size, policy);
 	if (cb_deleted) {
 		cb_deleted(u0_deleted, g_slist_prepend(old_beans, header));
@@ -2266,12 +2266,14 @@ GError* m2db_update_content(struct sqlx_sqlite3_s *sq3,
 		for (GSList *l = new_beans; l; l = l->next)
 			cb_added(u0_added, _bean_dup(l->data));
 	}
+	g_free(policy);
 
 cleanup:
 	_bean_clean(header);
 	_bean_cleanl2(aliases);
 	_bean_cleanl2(new_beans);
 	_bean_cleanl2(old_beans);
+
 	g_tree_destroy(old_positions_seen);
 	g_tree_destroy(positions_seen);
 	oio_url_clean(local_url);
@@ -2405,9 +2407,13 @@ suspended:
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 	}
 	if (!err) {
-		const gchar *policy = _fetch_content_policy(beans);
+
+		const GString *policy_str = _fetch_content_policy(beans);
+		gchar* policy = NULL;
+		m2v2_policy_decode(policy_str, NULL, &policy);
 		m2db_update_size(args->sq3,  _fetch_content_size(beans), policy);
 		m2db_update_obj_count(args->sq3, 1, policy);
+		g_free(policy);
 	}
 
 	/* Purge the latest alias if the condition was met */
@@ -2568,13 +2574,11 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 		 * counters, we need to update them again.
 		 */
 		gint64 size = CONTENTS_HEADERS_get_size(new_header);
-		const gchar *policy = NULL;
-		GString *policy_str = CONTENTS_HEADERS_get_policy(new_header);
-		if (policy_str && policy_str->str) {
-			policy = policy_str->str;
-		}
+		gchar *policy = NULL;
+		m2v2_policy_decode(CONTENTS_HEADERS_get_policy(new_header), NULL, &policy);
 		m2db_update_size(args->sq3, size, policy);
 		m2db_update_obj_count(args->sq3, 1, policy);
+		g_free(policy);
 	}
 
 label_end:
@@ -2693,13 +2697,11 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 		 * counters, we need to update them again.
 		 */
 		gint64 size = CONTENTS_HEADERS_get_size(new_header);
-		const gchar *policy = NULL;
-		GString *policy_str = CONTENTS_HEADERS_get_policy(new_header);
-		if (policy_str && policy_str->str) {
-			policy = policy_str->str;
-		}
+		gchar *policy = NULL;
+		m2v2_policy_decode(CONTENTS_HEADERS_get_policy(new_header), NULL, &policy);
 		m2db_update_size(args->sq3, size, policy);
 		m2db_update_obj_count(args->sq3, 1, policy);
+		g_free(policy);
 	}
 label_end:
 
@@ -2828,12 +2830,10 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		}
 	}
 	if (!err) {
-		const gchar *policy = NULL;
-		GString *policy_str = CONTENTS_HEADERS_get_policy(header);
-		if (policy_str && policy_str->str) {
-			policy = policy_str->str;
-		}
+		gchar *policy = NULL;
+		m2v2_policy_decode(CONTENTS_HEADERS_get_policy(header), NULL, &policy);
 		m2db_update_size(sq3, added_size, policy);
+		g_free(policy);
 	}
 
 out:
@@ -3167,22 +3167,29 @@ m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 	GError *err = NULL;
 
 	struct storage_policy_s *pol = NULL;
-	GString *polname = NULL;
+	gchar* policy = NULL;
 
-	if (sorted_content->header != NULL)
-		polname = CONTENTS_HEADERS_get_policy(sorted_content->header);
-	if (polname && polname->str && polname->len)
-		pol = storage_policy_init(nsinfo, polname->str);
-	if (!pol)
+	if (sorted_content->header != NULL) {
+		m2v2_policy_decode(
+			CONTENTS_HEADERS_get_policy(sorted_content->header),  &policy, NULL);
+	}
+	if (policy) {
+		pol = storage_policy_init(nsinfo, policy);
+	}
+	if (!pol) {
 		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-				"Invalid policy: %s", polname ? polname->str : "not found");
-
-	if (!err)
+				"Invalid policy: %s", policy ? policy : "not found");
+	}
+	if (!err) {
 		err = _m2db_check_content_validity(sorted_content, pol,
 				checked_content_p, partial);
+	}
 
-	if (pol)
+	if (pol) {
 		storage_policy_clean(pol);
+	}
+
+	g_free(policy);
 
 	return err;
 }
@@ -3205,10 +3212,13 @@ _get_content_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			err = _db_get_FK_by_name(latest, "image", sq3, _bean_buffer_cb, tmp);
 			if (!err && tmp->len > 0) {
 				struct bean_CONTENTS_HEADERS_s *header = tmp->pdata[0];
-				GString *polname = CONTENTS_HEADERS_get_policy(header);
-				if (polname && polname->str && polname->len) {
-					policy = storage_policy_init(nsinfo, polname->str);
+				gchar *policy_name = NULL;
+				m2v2_policy_decode(
+					CONTENTS_HEADERS_get_policy(header), &policy_name, NULL);
+				if (policy_name) {
+					policy = storage_policy_init(nsinfo, policy_name);
 				}
+				g_free(policy_name);
 			}
 		}
 	}
@@ -3753,6 +3763,96 @@ end:
 	return err;
 }
 
+GError*
+m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct namespace_info_s* nsinfo, gboolean* updated,
+		gboolean* send_event, const gchar *new_policy)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	gchar* actual_policy = NULL;
+	gchar* target_policy = NULL;
+	struct storage_policy_s* pol = NULL;
+	struct bean_ALIASES_s *current_alias = NULL;
+	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+
+	void _search_alias_and_size(gpointer ignored, gpointer bean) {
+		(void) ignored;
+		if (DESCR(bean) == &descr_struct_ALIASES) {
+			current_alias = bean;
+		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			current_header = bean;
+		}
+	}
+
+	*updated = FALSE;
+	*send_event = FALSE;
+
+	// Ensure policy is valid
+	pol = storage_policy_init(nsinfo, new_policy);
+	if (!pol) {
+		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy: %s", new_policy);
+		goto cleanup;
+	}
+
+	err = m2db_get_alias(
+		sq3, url,
+		M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS|M2V2_FLAG_NORECURSION,
+		_search_alias_and_size, NULL);
+	if (err) {
+		goto cleanup;
+	}
+
+	m2v2_policy_decode(
+		CONTENTS_HEADERS_get_policy(current_header), &actual_policy, &target_policy);
+
+	// Ensure new policy is not already applied
+	if (g_strcmp0(new_policy, target_policy) == 0) {
+		goto cleanup;
+	}
+	if (g_strcmp0(new_policy, actual_policy) == 0) {
+		if (g_strcmp0(target_policy, actual_policy) == 0) {
+			// Nothing to do
+			goto cleanup;
+		}
+		// Only update stats and policy but do not emit an event as data
+		// is already in the right location
+	} else {
+		*send_event = TRUE;
+	}
+
+	gchar* previous_policy = actual_policy;
+	if (target_policy != NULL) {
+		previous_policy = target_policy;
+	}
+	// Update bean
+	gint64 size = CONTENTS_HEADERS_get_size(current_header);
+	const gchar* new_policy_str = m2v2_policy_encode(actual_policy, new_policy);
+	CONTENTS_HEADERS_set2_policy(current_header, new_policy_str);
+	err = _db_save_bean(sq3, current_header);
+	// Decrement old policy
+	m2db_update_size(sq3, -size, previous_policy);
+	m2db_update_obj_count(sq3, -1, previous_policy);
+	// Increment new policy
+	m2db_update_size(sq3, size, new_policy);
+	m2db_update_obj_count(sq3, 1, new_policy);
+
+	*updated = TRUE;
+
+
+cleanup:
+	if (pol) {
+		storage_policy_clean(pol);
+	}
+	g_free(actual_policy);
+	g_free(target_policy);
+	_bean_clean(current_alias);
+	_bean_clean(current_header);
+
+	return err;
+}
 
 
 /* Sharding ----------------------------------------------------------------- */

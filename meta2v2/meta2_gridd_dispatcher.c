@@ -313,6 +313,30 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	NULL
 };
 
+
+static gridd_filter M2V2_POLICY_TRANSITION_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_optional_overwrite,
+	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_header_optional_async_replication,
+	meta2_filter_extract_force_versioning,
+	meta2_filter_extract_simulate_versioning,
+	meta2_filter_extract_admin,
+	meta2_filter_extract_user_agent,
+	meta2_filter_extract_sharding_info,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_events_not_stalled,
+	meta2_filter_action_request_policy_transition,
+	meta2_filter_reply_success,
+	NULL
+};
+
+
+
 static gridd_filter M2V2_APPEND_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -789,6 +813,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_GET,     (hook) meta2_dispatch_all, M2V2_GET_FILTERS},
 
 		{NAME_MSGNAME_M2V2_PUT,     (hook) meta2_dispatch_all, M2V2_PUT_FILTERS},
+		{NAME_MSGNAME_M2V2_POLICY_TRANSITION, (hook) meta2_dispatch_all, M2V2_POLICY_TRANSITION_FILTERS},
 		{NAME_MSGNAME_M2V2_APPEND,  (hook) meta2_dispatch_all, M2V2_APPEND_FILTERS},
 		{NAME_MSGNAME_M2V2_CONTENT_DRAIN, (hook) meta2_dispatch_all, M2V2_DRAIN_CONTENT_FILTERS},
 		{NAME_MSGNAME_M2V2_DEL,     (hook) meta2_dispatch_all, M2V2_DELETE_FILTERS},

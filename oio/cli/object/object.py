@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -428,6 +428,7 @@ class ShowObject(ObjectCommandMixin, ShowOne):
             "ctime": "ctime",
             "mtime": "mtime",
             "policy": "policy",
+            "target_policy": "target_policy",
             "chunk_method": "chunk_method",
             "shard_hexid": "shard_hexid",
         }
@@ -694,7 +695,7 @@ class ListObject(ContainerCommandMixin, Lister):
                 account=account,
                 container=container_marker,
                 marker=marker,
-                **kwargs
+                **kwargs,
             ):
                 count += 1
                 yield element
@@ -733,7 +734,7 @@ class ListObject(ContainerCommandMixin, Lister):
                 truncated_key=lambda x: x["truncated"],
                 account=account,
                 container=container,
-                **kwargs
+                **kwargs,
             ):
                 object_list.append(i)
         except exceptions.OioException as err:
@@ -787,7 +788,7 @@ class ListObject(ContainerCommandMixin, Lister):
                     account=account,
                     container=container,
                     cid=cid,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 resp = self.app.client_manager.storage.object_list(
@@ -1155,5 +1156,5 @@ class LinkObject(ObjectCommandMixin, Command):
             link_content_id=parsed_args.dest_content_id,
             properties_directive=directive,
             cid=cid,
-            **kwargs
+            **kwargs,
         )

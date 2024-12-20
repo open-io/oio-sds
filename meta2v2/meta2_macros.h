@@ -274,6 +274,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_BEANS              "M2_PREP"
 # define NAME_MSGNAME_M2V2_APPEND             "M2_APPEND"
 # define NAME_MSGNAME_M2V2_GET                "M2_GET"
+# define NAME_MSGNAME_M2V2_POLICY_TRANSITION  "M2_POLTRANS"
 # define NAME_MSGNAME_M2V2_CONTENT_DRAIN      "M2_DRAIN"
 # define NAME_MSGNAME_M2V2_CONTAINER_DRAIN    "M2_BDRAIN"
 # define NAME_MSGNAME_M2V2_DEL                "M2_DEL"

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -74,10 +74,9 @@ struct m2v2_sorted_content_s {
 
 struct checked_content_s;
 
+void m2v2_position_encode(GString *out, struct m2v2_position_s *p);
 
 struct m2v2_position_s m2v2_position_decode(const char *str);
-
-void m2v2_position_encode(GString *out, struct m2v2_position_s *p);
 
 /* If the chunk has a short ID, with only a service ID, replace it
  * by a full URL composed of the service ID and a path generated
@@ -340,6 +339,10 @@ GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 
 GError* m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 		gpointer u0, gint64 limit, gboolean *truncated);
+
+GError* m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct namespace_info_s* nsinfo, gboolean* updated, gboolean* send_event,
+		const gchar *new_policy);
 
 /* --- Low level ----------------------------------------------------------- */
 

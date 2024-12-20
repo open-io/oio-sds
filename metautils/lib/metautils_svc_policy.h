@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -59,5 +60,9 @@ GError* service_update_reconfigure(struct service_update_policies_s *pol,
 		const gchar *cfg);
 
 gchar* service_update_policies_dump(struct service_update_policies_s *pol);
+
+gchar* m2v2_policy_encode(const gchar* current, const gchar* target);
+
+void m2v2_policy_decode(const GString* policy, gchar** current, gchar** target);
 
 #endif /*OIO_SDS__metautils__lib__metautils_svc_policy_h*/

@@ -482,7 +482,7 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 {
 	/* Url will can be altered (if <chunks> is not NULL), so let's use a copy */
 	struct oio_url_s *object_url = oio_url_dup(url);
-	const gchar *policy = NULL;
+	gchar *policy = NULL;
 	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
 
 	g_string_append_static (gstr, "\"objects\":[");
@@ -523,6 +523,9 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 		if (h) {
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_gstr(gstr, "policy",
+					CONTENTS_HEADERS_get_policy(h));
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gstr(gstr, "target-policy",
 					CONTENTS_HEADERS_get_policy(h));
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_gstr(gstr, "chunk-method",
@@ -576,7 +579,7 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 					ALIASES_get_version(a));
 			oio_url_set(object_url, OIOURL_VERSION, strver);
 			if (h) {
-				policy = CONTENTS_HEADERS_get_policy(h)->str;
+				m2v2_policy_decode(CONTENTS_HEADERS_get_policy(h), &policy, NULL);
 			} else {
 				/* No header, no possibility to compute chunks */
 				continue;
@@ -603,6 +606,8 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 		g_string_append_c(gstr, '}');
 	}
 	g_string_append_c (gstr, ']');
+
+	g_free(policy);
 
 	oio_url_clean(object_url);
 }
@@ -757,9 +762,19 @@ _populate_headers_with_header (struct req_args_s *args,
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-length",
 			g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
 
-	if (CONTENTS_HEADERS_get_policy (header)) {
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-policy",
-				g_strdup(CONTENTS_HEADERS_get_policy(header)->str));
+	if (CONTENTS_HEADERS_get_policy(header)) {
+		gchar* policy = NULL;
+		gchar* target_policy = NULL;
+		m2v2_policy_decode(CONTENTS_HEADERS_get_policy(header), &policy, &target_policy);
+
+		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-policy",policy);
+
+		if (g_strcmp0(policy, target_policy) != 0) {
+			args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-target-policy",
+					target_policy);
+		} else {
+			g_free(target_policy);
+		}
 	}
 
 	if (CONTENTS_HEADERS_get_hash(header)) {
@@ -817,7 +832,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	gboolean first = TRUE, first_prop = TRUE;
-	const gchar *policy = NULL;
+	gchar *policy = NULL;
 	GError *chunk_err = NULL;
 
 	GString *gstr, *props_gstr = NULL;
@@ -872,7 +887,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
 			header = l0->data;
-			policy = CONTENTS_HEADERS_get_policy(header)->str;
+			m2v2_policy_decode(CONTENTS_HEADERS_get_policy(header), &policy, NULL);
 		}
 		else if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
 			struct bean_PROPERTIES_s *prop = l0->data;
@@ -914,6 +929,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 				chunk_err->message, oio_ext_get_reqid());
 		g_clear_error(&chunk_err);
 	}
+	g_free(policy);
 	_bean_cleanl2 (beans);
 
 	args->rp->access_tail("hexid:%s\tversion_id:%s",
@@ -5024,6 +5040,62 @@ enum http_rc_e action_content_drain(struct req_args_s *args) {
 	PACKER_VOID(_pack) {return m2v2_remote_pack_content_DRAIN(args->url, DL());}
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
+}
+
+
+static enum http_rc_e
+action_m2_content_policy_transition(struct req_args_s *args,struct json_object *jargs)
+{
+	GError *err = NULL;
+	struct json_object *jpolicy = NULL;
+
+	struct oio_ext_json_mapping_s m[] = {
+		{"policy", &jpolicy, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+
+	err = oio_ext_extract_json(jargs, m);
+	if (err) {
+		return _reply_m2_error(args, err);
+	}
+
+	const gchar *policy = json_object_get_string(jpolicy);
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_POLICY_TRANSITION(args->url, policy, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	return _reply_m2_error (args, err);
+}
+
+
+// CONTENT{{
+// POST /v3.0/{NS}/content/transition?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Trigger an asynchrous policy transition from the current policy to the one specified
+// Container stats are updated before data is moved
+//
+// .. code-block:: json
+//
+//    {
+//      "policy": "new_policy"
+//    }
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/transition?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
+enum http_rc_e action_content_policy_transition(struct req_args_s *args) {
+	return rest_action(args, action_m2_content_policy_transition);
 }
 
 // CONTENT{{

@@ -148,6 +148,12 @@
 				"descr": "Tube name (or routing key) for 'storage.content.broken' events."
 			},
 			{ "type": "string",
+				"name": "oio_meta2_tube_content_transitioned",
+				"key": "meta2.tube.content_transitioned",
+				"limit": 256, "def": "oio-transitioned",
+				"descr": "Tube name (or routing key) for 'storage.content.transitioned' events."
+			},
+			{ "type": "string",
 				"name": "oio_meta2_tube_manifest_deleted",
 				"key": "meta2.tube.manifest_deleted",
 				"limit": 256, "def": "oio-delete-mpu-parts",
