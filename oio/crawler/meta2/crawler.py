@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class Meta2Worker(PipelineWorker):
             )
 
     def process_entry(self, path, reqid=None):
-        if path.endswith("-journal") or path.endswith("-wal"):
+        if path.endswith(("-journal", "-shm", "-wal")):
             self.logger.debug("Ignoring sqlite journal file: %s", path)
             self.ignored_paths += 1
             return False

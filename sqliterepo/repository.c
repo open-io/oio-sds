@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -127,7 +127,7 @@ __delete_base(struct sqlx_sqlite3_s *sq3)
 		if (oio_sqliterepo_journal_mode == 1
 				|| oio_sqliterepo_journal_mode == 2) {
 			gchar *journal_file = g_strconcat(sq3->path_inline, "-journal", NULL);
-			if (unlink(journal_file) != 0) {
+			if (unlink(journal_file) != 0 && errno != ENOENT) {
 				GRID_INFO(
 						"Journal for [%s][%s] (%s) was not deleted: (%d) %s",
 						sq3->name.base, sq3->name.type, journal_file,
@@ -135,6 +135,17 @@ __delete_base(struct sqlx_sqlite3_s *sq3)
 				);
 			}
 			g_free(journal_file);
+		} else if (oio_sqliterepo_journal_mode == 4) {
+			gchar *wal_file = g_strconcat(sq3->path_inline, "-wal", NULL);
+			if (unlink(wal_file) != 0 && errno != ENOENT) {
+				GRID_INFO(
+						"WAL for [%s][%s] (%s) was not deleted: (%d) %s",
+						sq3->name.base, sq3->name.type, wal_file,
+						errno, strerror(errno)
+				);
+			}
+			g_free(wal_file);
+
 		}
 	} else {
 		GRID_WARN("DELETE failed [%s][%s] (%s): (%d) %s",
@@ -1667,6 +1678,20 @@ sqlite3_db_cacheflush(sqlite3 *db UNUSED)
 #endif
 
 GError*
+sqlx_repository_flush_wal(struct sqlx_sqlite3_s *sq3)
+{
+	if (oio_sqliterepo_journal_mode != 4) {
+		return NULL;
+	}
+	int rc = sqlite3_wal_checkpoint_v2(
+			sq3->db, NULL, SQLITE_CHECKPOINT_TRUNCATE, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		return SYSERR("failed to flush WAL: (%d) %s", rc, sqlite_strerror(rc));
+	}
+	return NULL;
+}
+
+GError*
 sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 		gboolean check_size, gint check_type,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
@@ -1749,12 +1774,23 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 		goto end;
 	}
 
+	// Flush the cache to permanent storage
 	if ((rc = sqlite3_db_cacheflush(sq3->db)) != SQLITE_OK) {
-		GRID_NOTICE("Failed to flush [%s][%s]: %s, %s",
+		GRID_NOTICE("Failed to flush cache [%s][%s]: %s, %s",
 					sq3->name.base, sq3->name.type, sqlite_strerror(rc),
 					fallback_msg);
 		err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
-	} else {
+	}
+	// Flush the WAL (if journal_mode=WAL) to main database file
+	else if ((rc = sqlite3_wal_checkpoint_v2(
+			sq3->db, NULL, SQLITE_CHECKPOINT_TRUNCATE, NULL, NULL)) != SQLITE_OK) {
+		GRID_NOTICE("Failed to flush WAL [%s][%s]: %s, %s",
+					sq3->name.base, sq3->name.type, sqlite_strerror(rc),
+					fallback_msg);
+		err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
+	}
+	// Now read the main database file
+	else {
 		if (fd < 0) {
 			err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
 		} else {

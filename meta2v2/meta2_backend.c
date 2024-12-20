@@ -3142,7 +3142,10 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			copy_path = g_strdup_printf(
 				"%s.sharding-%"G_GINT64_FORMAT"-%s",
 				sq3->path_inline, timestamp, index);
-			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			err = sqlx_repository_flush_wal(sq3);
+			if (!err) {
+				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			}
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
@@ -4241,7 +4244,10 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 		if (g_access(copy_path, F_OK | R_OK) != 0) {
 			// Create a database copy (ref link)
-			err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			err = sqlx_repository_flush_wal(sq3);
+			if (!err) {
+				err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+			}
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);

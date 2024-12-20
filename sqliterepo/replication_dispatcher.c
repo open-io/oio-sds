@@ -1323,8 +1323,11 @@ _handler_LOCAL_COPY(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
-	gchar *copy_path = g_strdup_printf("%s.%s",sq3->path_inline, suffix);
-	err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+	gchar *copy_path = g_strdup_printf("%s.%s", sq3->path_inline, suffix);
+	err = sqlx_repository_flush_wal(sq3);
+	if (!err) {
+		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+	}
 	if (err != NULL) {
 		g_prefix_error(&err, "Failed to make local copy of %s to %s: ",
 				sq3->path_inline, copy_path);

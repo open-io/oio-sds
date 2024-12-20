@@ -683,8 +683,8 @@
 
 			{ "type": "uint", "name": "oio_sqliterepo_journal_mode",
 				"key": "sqliterepo.journal_mode",
-				"descr": "Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY.",
-				"def": 3, "min": 0, "max": "3" },
+				"descr": "Set the 'journal_mode' sqlite pragma when opening a database. 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY, 4 = WAL.",
+				"def": 3, "min": 0, "max": "4" },
 
 			{ "type": "uint", "name": "_page_size",
 				"key": "sqliterepo.page_size",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -127,7 +127,9 @@ check_and_remove_meta()
   echo >&2 "Remove the ${TYPE} ${META_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${META_LOC_TO_REBUILD}" "${TMP_VOLUME}"
-  /usr/bin/find "${TMP_VOLUME}" -type f -name "*-journal" -delete
+  /usr/bin/find "${TMP_VOLUME}" -type f \
+    \( -name "*-journal" -or -name "*-wal" -or -name "*-shm" \) \
+    -delete
   /bin/rm -rf "${META_LOC_TO_REBUILD}"
   /bin/mkdir "${META_LOC_TO_REBUILD}"
 
@@ -279,6 +281,8 @@ openioadmin_meta_rebuild()
       FAIL=true
       continue
     fi
+
+    /usr/bin/sqlite3 "${META_AFTER}" "PRAGMA wal_checkpoint(TRUNCATE)"
 
     if [ "${TYPE}" == "meta1" ]; then
       if ! LAST_REBUILD=$(/usr/bin/sqlite3 "${META_AFTER}" \

@@ -111,7 +111,7 @@ class TestCheckpointContainer(BaseTestCase):
         for entry in dirs:
             for root, _, files in walk(entry):
                 for file in files:
-                    if skip_journal and file.endswith("-journal"):
+                    if skip_journal and file.endswith(("-journal", "-shm", "-wal")):
                         continue
                     path = join(root, file)
                     if isfile(path):

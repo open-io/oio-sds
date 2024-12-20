@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@ static const gchar *sqlx_journal_mode_sql[] = {
 	"PRAGMA journal_mode = TRUNCATE",
 	"PRAGMA journal_mode = PERSIST",
 	"PRAGMA journal_mode = MEMORY",
-//	"PRAGMA journal_mode = WAL",  // Not tested
+	"PRAGMA journal_mode = WAL",
 //	"PRAGMA journal_mode = OFF",  // Dangerous
 	NULL,
 };

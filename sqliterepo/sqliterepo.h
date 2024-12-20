@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -325,6 +325,9 @@ typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
 GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		gint chunk_size, gint check_type,
 		dump_base_chunked_cb callback, gpointer callback_arg);
+
+/** Flush the WAL of the database (does nothing if journal_mode!=WAL). */
+GError* sqlx_repository_flush_wal(struct sqlx_sqlite3_s *sq3);
 
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
