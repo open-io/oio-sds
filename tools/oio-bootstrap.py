@@ -3342,6 +3342,7 @@ def generate(options):
         "oio-drained",
         "oio-lifecycle-checkpoint",
         "oio-preserved",
+        "oio-transitioned",
         "oio-rebuild",
         "oio-replication",
         "oio-xcute-job",

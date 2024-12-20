@@ -203,6 +203,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated, FALSE);
 	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken, FALSE);
 	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained, FALSE);
+	INIT(m2->notifier_content_transitioned, oio_meta2_tube_content_transitioned, FALSE);
 
 	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted, FALSE);
 
@@ -293,6 +294,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_updated);
 	CLEAN(m2->notifier_content_broken);
 	CLEAN(m2->notifier_content_drained);
+	CLEAN(m2->notifier_content_transitioned);
 
 	CLEAN(m2->notifier_meta2_deleted);
 
@@ -1616,7 +1618,7 @@ _meta2_send_manifest_event(struct meta2_backend_s *m2b,
 	{
 		EXTRA_ASSERT(plist == NULL);
 		EXTRA_ASSERT(bean != NULL);
-		
+
 		if (&descr_struct_PROPERTIES == DESCR(bean)) {
 			struct bean_PROPERTIES_s *prop = bean;
 			gchar *expected_prop = "x-object-sysmeta-s3api-upload-id";
@@ -1807,6 +1809,36 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		m2b_close(m2b, sq3, url);
 	}
 
+	return err;
+}
+
+GError*
+meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
+		struct oio_url_s *url, GSList** transitioned, const gchar* new_policy)
+{
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(new_policy != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+	gboolean should_update = FALSE;
+
+	err = m2b_open_for_object(m2, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED,
+			&sq3);
+
+	if (!err) {
+		EXTRA_ASSERT(sq3 != NULL);
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			err = m2db_transition_policy(sq3, url, m2->nsinfo, transitioned, &should_update, new_policy);
+		}
+		err = sqlx_transaction_end(repctx, err);
+		if (!err && should_update){
+			m2b_add_modified_container(m2, sq3);
+		}
+		m2b_close(m2, sq3, url);
+	}
 	return err;
 }
 

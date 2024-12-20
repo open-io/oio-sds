@@ -52,6 +52,7 @@ SYSMETA_KEYS = (
     "mime-type",
     "name",
     "policy",
+    "target-policy",
     "size",
     "version",
 )
@@ -1282,3 +1283,26 @@ class ContainerClient(ProxyClient):
         )
 
         self._direct_request("POST", uri, params=params, **kwargs)
+
+    def content_request_transition(
+        self,
+        account=None,
+        reference=None,
+        path=None,
+        cid=None,
+        version=None,
+        policy=None,
+        **kwargs
+    ):
+        uri = self._make_uri("content/transition")
+        params = self._make_params(account, reference, path, cid=cid, version=version)
+        data = json.dumps(
+            {
+                "policy": policy,
+            }
+        )
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid, **kwargs
+        )
+
+        self._direct_request("POST", uri, params=params, data=data, **kwargs)

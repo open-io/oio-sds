@@ -137,6 +137,9 @@ GError* meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
+GError* meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
+		struct oio_url_s *url, GSList** tansitioned, const gchar* new_policy);
+
 GError* meta2_backend_restore_drained(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
@@ -181,10 +184,10 @@ GError *meta2_backend_drain_content(struct meta2_backend_s *m2b,
 /** Delete an object version. The deleted alias, or the created delete
  * marker, will be sent to the callback. Notice that when a delete marker
  * is removed, no alias is sent to the callback!
- * 
+ *
  * If dryrun is True, the deletion will not be effective. It's useful
  * to check if the triggers allow the deletion but without doing it.
- * 
+ *
  * If slo_manifest is True (and dryrun False and not a delete marker),
  * send a specific event with upload_id. Notice that if slo_manifest is True and
  * the event emission failed, the deletion will not be effective.

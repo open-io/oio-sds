@@ -60,4 +60,8 @@ GError* service_update_reconfigure(struct service_update_policies_s *pol,
 
 gchar* service_update_policies_dump(struct service_update_policies_s *pol);
 
+gchar* m2v2_policy_encode(const gchar* current, const gchar* target);
+
+void m2v2_policy_decode(const GString* policy, gchar** current, gchar** target);
+
 #endif /*OIO_SDS__metautils__lib__metautils_svc_policy_h*/

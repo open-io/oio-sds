@@ -183,6 +183,7 @@ meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 	CHECK(m2b->notifier_content_updated);
 	CHECK(m2b->notifier_content_broken);
 	CHECK(m2b->notifier_content_drained);
+	CHECK(m2b->notifier_content_transitioned);
 	return FILTER_OK;
 }
 

@@ -2180,3 +2180,25 @@ class ObjectStorageApi(object):
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
             return False
         return True
+
+    @handle_object_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def object_request_transition(
+        self,
+        account,
+        container,
+        obj,
+        policy,
+        version=None,
+        **kwargs,
+    ):
+        return self.container.content_request_transition(
+            account=account,
+            reference=container,
+            path=obj,
+            policy=policy,
+            version=version,
+            **kwargs,
+        )
