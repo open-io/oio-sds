@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -124,6 +124,8 @@ struct storage_class_s * get_storage_classe_from_policy(struct namespace_info_s 
 struct storage_class_s * storage_class_get(struct namespace_info_s *ni, const char *name);
 
 gboolean compare_storage_classes(struct storage_class_s *src, struct storage_class_s *dst);
+
+gchar * split_policy(const char * current_value);
 
 void storage_class_clean(struct storage_class_s *sp);
 

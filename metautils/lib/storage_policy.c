@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -325,6 +325,18 @@ gboolean compare_storage_classes(struct storage_class_s *src, struct storage_cla
 		return ((src->order) > (dst->order));
 	}
 	return FALSE;
+}
+
+gchar * split_policy(const char * current_value) {
+	gchar *current = NULL;
+	gchar **tok = g_strsplit(current_value, ">", 2);
+	for (gchar **p = tok;  *p; p++) {
+		if (*p && ! *(p+1)) {
+			current = g_strdup(*p);
+		}
+	}
+	g_strfreev(tok);
+	return current;
 }
 
 /* Various getters --------------------------------------------------------- */

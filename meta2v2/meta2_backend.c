@@ -4485,8 +4485,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		gint64 version = sqlite3_column_int64(stmt, 1);
 
 		if(is_transition) {
-			gchar *old_policy  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			gchar *policy_value  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			gchar *old_policy = split_policy(policy_value);
 			allow_transition = _check_allowed_transition(m2b, storage_class, old_policy);
+			g_free(policy_value);
 			g_free(old_policy);
 			if (!allow_transition) {
 				continue;
@@ -4715,8 +4717,10 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		found_match = TRUE;
 
 		if(is_transition) {
-			gchar *old_policy  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			gchar *policy_value  = g_strdup((gchar *) sqlite3_column_text(stmt, 5));
+			gchar *old_policy = split_policy(policy_value);
 			allow_transition = _check_allowed_transition(m2b, storage_class, old_policy);
+			g_free(policy_value);
 			g_free(old_policy);
 			if (!allow_transition) {
 				continue;
