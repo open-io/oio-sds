@@ -37,7 +37,7 @@ BEGIN
 		storagePolicy  [4] ParameterSequence,
 		dataSecurity   [5] ParameterSequence,
 		servicePools   [8] ParameterSequence,
-		storageClasses [8] ParameterSequence
+		storageClasses [9] ParameterSequence
 	}
 
 	-- meta0 mapping information

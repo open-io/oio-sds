@@ -662,7 +662,7 @@ class Lifecycle(Meta2Filter):
 
         while True:
             next_batch_size = self._get_next_limit()
-            sql_query = f"{query} LIMIT {next_batch_size} "
+            sql_query = f"{query} "
 
             data = {
                 "action": action_class.field,
@@ -703,7 +703,6 @@ class Lifecycle(Meta2Filter):
                 return False
 
             count = int(resp.getheader("x-oio-count", default=0))
-
             self._update_container_stats(action_class, count)
             if count == 0:
                 # No matches means we are done with this action

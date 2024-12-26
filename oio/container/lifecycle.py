@@ -275,7 +275,7 @@ class ContainerLifecycle(object):
             )
         where_clauses.append(self._processed_sql_condition())
         # close WHERE clause
-        _query = f"{_query} WHERE ({' AND '.join(where_clauses)})"
+        _query = f"{_query} WHERE {' AND '.join(where_clauses)}"
 
         if non_current or versioned:
             _query = f"{_query} GROUP BY al.alias"
