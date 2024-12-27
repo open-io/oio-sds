@@ -59,7 +59,7 @@ class Expectation:
         )
 
 
-class TestLifecycleCrawler(BaseTestCase):
+class TestLifecycleBase(BaseTestCase):
     TIME_FACTOR = 43200  # 1 day =>  2 seconds
     DEFAULT_STATS = {
         "successes": 0,
@@ -325,6 +325,8 @@ class TestLifecycleCrawler(BaseTestCase):
                 )
             self._ensure_no_more_event()
 
+
+class TestLifecycleCrawler(TestLifecycleBase):
     def test_disabled_time_bypass(self):
         def callback(status, _msg):
             self.assertEqual(200, status)
@@ -1639,3 +1641,783 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration_non_current_since()
+
+
+class TestLifecycleCrawlerTransitions(TestLifecycleBase):
+    def test_transition(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Transition": {
+                        "1": {"Days": 10, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "2": {
+                    "ID": "rule-3",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": " OR 1=1 "},
+                    "Transition": {
+                        "2": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "2-2", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/", count=10)
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._create_objects_for_rule(None, prefix="bar/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_no_filter(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {
+                "days": [],
+                "date": [],
+            },
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 20,
+                "total_transition": 20,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/", count=10)
+        self._create_objects_for_rule("rule-1", prefix="foo/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_tagging(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Tags": [{"key1": "value1"}, {"key2": "value2"}]},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Tags": [{"key1": "value1"}]},
+                    "Transition": {
+                        "1": {"Days": 10, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, tags={"key1": "value1", "key2": "value2"}
+        )
+        self._create_objects_for_rule(
+            None, prefix="foo/", count=10, tags={"key1": "value1"}
+        )
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_less_than(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"ObjectSizeLessThan": 10},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/", count=10, size=8)
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=20)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_greater_than(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"ObjectSizeGreaterThan": 10},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/", count=10, size=18)
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=8)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_all_filters(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {
+                        "ObjectSizeLessThan": 20,
+                        "ObjectSizeGreaterThan": 10,
+                        "Tags": [{"key1": "value1"}],
+                        "Prefix": "doc/",
+                    },
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        # Match all criteria
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, size=18, tags={"key1": "value1"}
+        )
+        # Match all criteria but one
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=18)
+        self._create_objects_for_rule(
+            None, prefix="doc/", count=10, size=28, tags={"key1": "value1"}
+        )
+        self._create_objects_for_rule(
+            None, prefix="doc/", count=10, size=8, tags={"key1": "value1"}
+        )
+        self._create_objects_for_rule(
+            None, prefix="foo/", count=10, size=18, tags={"key1": "value1"}
+        )
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_multiple_passes(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Transition": {
+                        "1": {"Days": 6, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "container_budget_reached": 1,
+                "total_events": 20,
+                "total_transition": 20,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 20,
+                "total_transition": 20,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 20,
+                "total_transition": 20,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/a", count=60)
+        self._create_objects_for_rule(None, prefix="doc/z", count=40)
+        self._create_objects_for_rule(None, prefix="foo/", count=100)
+        self._wait_n_days(3)
+        # Only the two first passes should generate events
+        self._run_scenario(
+            configuration,
+            callback,
+            filter_conf={"container_budget_per_pass": 20},
+            passes=3,
+        )
+
+    def test_bucket_budget_reached(self):
+        # self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Transition": {
+                        "1": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_transition": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_transition": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_transition": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_transition": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_transition": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "bucket_budget_reached": 1,
+            },
+        )
+
+        self._create_objects_for_rule("rule-1", prefix="doc/a/", count=10)
+        self._create_objects_for_rule("rule-1", prefix="doc/b/", count=5)
+        self._create_objects_for_rule("rule-1", prefix="doc/c/", count=5)
+        self._create_objects_for_rule("rule-1", prefix="doc/z/", count=5)
+        self._create_objects_for_rule(None, prefix="foo/", count=5)
+        self._wait_n_days(3)
+        self._run_scenario(
+            configuration,
+            callback,
+            filter_conf={"budget_per_bucket": 25, "container_budget_per_pass": 5},
+            passes=6,
+        )
+
+    def test_non_current_budget_reached(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionExpiration": {
+                        "0": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 100},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "NoncurrentVersionExpiration": {
+                        "1": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 100},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": ["0-0", "1-1"],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_delete": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_delete": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_delete": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_delete": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 1,
+                "total_events": 5,
+                "total_delete": 5,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "bucket_budget_reached": 1,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/a/", count=10, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/b/", count=5, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/c/", count=5, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/z/", count=5, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+
+        self._create_objects_for_rule(None, prefix="foo/", count=5, versions=102)
+        self._wait_n_days(3)
+        self._run_scenario(
+            configuration,
+            callback,
+            filter_conf={"budget_per_bucket": 25, "container_budget_per_pass": 5},
+            passes=6,
+        )
+
+    def test_transition_versionned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Transition": {
+                        "1": {"Days": 1, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            count=10,
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._wait_n_days(3)
+        self._run_scenario(configuration, callback)
+
+    def test_non_current_transition_versionned_multiple_passes(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionTransition": {
+                        "0": {
+                            "NoncurrentDays": 2,
+                            "NewerNoncurrentVersions": 2,
+                            "StorageClass": "STANDARD_IA",
+                        },
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": ["0-0"],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "container_budget_reached": 1,
+                "total_events": 3,
+                "total_transition": 3,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "total_events": 1,
+                "total_transition": 1,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=1, versions=4
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=3)
+        self._wait_n_days(3)
+        self._run_scenario(
+            configuration,
+            callback,
+            filter_conf={"container_budget_per_pass": 3},
+            passes=3,
+        )
+
+    def test_non_current_transition_versionned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionTransition": {
+                        "0": {
+                            "NoncurrentDays": 2,
+                            "NewerNoncurrentVersions": 5,
+                            "StorageClass": "STANDARD_IA",
+                        },
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "NoncurrentVersionTransition": {
+                        "1": {
+                            "NoncurrentDays": 2,
+                            "NewerNoncurrentVersions": 1,
+                            "StorageClass": "STANDARD_IA",
+                        },
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": ["0-0", "1-1"],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 150,
+                "total_transition": 150,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, versions=5
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=5)
+        self._wait_n_days(3)
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+
+        objects = self._create_objects_for_rule(
+            "rule-2", prefix="foo/", count=10, versions=10
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._wait_n_days(3)
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._run_scenario(configuration, callback)
+
+    def test_transition_non_current_since(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionTransition": {
+                        "0": {
+                            "NoncurrentDays": 2,
+                            "StorageClass": "STANDARD_IA",
+                        },
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": ["0-0"],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._wait_n_days(3)
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._wait_n_days(1)
+        self._run_scenario(configuration, callback)
