@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,7 @@ class AccountServiceClean(ShowOne):
 
     def take_action(self, parsed_args):
         self.logger.debug("take_action(%s)", parsed_args)
+        reqid = self.app.request_id()
 
         if not parsed_args.dry_run and not parsed_args.force:
             input_text = input(
@@ -66,7 +67,7 @@ class AccountServiceClean(ShowOne):
             dry_run=parsed_args.dry_run,
             logger=self.logger,
         )
-        self.success = cleaner.run()
+        self.success = cleaner.run(reqid=reqid)
         return (
             ("dry-run", "success", "deleted-containers", "deleted-buckets"),
             (
