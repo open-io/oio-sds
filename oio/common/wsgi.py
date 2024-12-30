@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@ from werkzeug.exceptions import (
 from werkzeug.wrappers import Request, Response
 
 from oio.common.configuration import read_conf
+from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.logger import get_logger
 from oio.common.utils import CPU_COUNT
@@ -111,7 +112,7 @@ class ServiceLogger(Logger):
         # not coming from oio-sds services, hence with a different request ID
         # header.
         atoms["reqid"] = atoms.get(
-            "{x-oio-req-id}i",
+            f"{{{REQID_HEADER}}}i",
             atoms.get(
                 "{x-openstack-request-id}i", atoms.get("{http_x_oio_req_id}e", "-")
             ),
@@ -132,24 +133,43 @@ class WerkzeugApp(object):
 
     def dispatch_request(self, req):
         adapter = self.url_map.bind_to_environ(req.environ)
+        reqid = self.find_request_id(req)
         try:
             endpoint, params = adapter.match()
+            params["reqid"] = reqid
             resp = getattr(self, "on_" + endpoint)(req, **params)
         except HTTPException as exc:
             resp = exc
         except ServiceBusy as exc:
             if self.logger:
-                self.logger.error(str(exc))
-            resp = ServiceUnavailable("Could not satisfy the request: %s" % exc)
+                self.logger.error("%s (reqid=%s)", exc, reqid)
+            resp = ServiceUnavailable(f"Could not satisfy the request: {exc}")
         except ValueError as exc:
             resp = BadRequest(description=str(exc))
         except Exception as exc:
             if self.logger:
-                self.logger.exception("ERROR Unhandled exception in request")
-            resp = InternalServerError("Unmanaged error: %s" % exc)
+                self.logger.exception(
+                    "ERROR Unhandled exception in request (reqid=%s)",
+                    reqid,
+                )
+            resp = InternalServerError(f"Unmanaged error: {exc}")
         if isinstance(resp, HTTPException) and not resp.response:
-            resp.response = Response(escape(resp.description, quote=True), resp.code)
+            resp.response = Response(
+                escape(resp.description, quote=True),
+                status=resp.code,
+                headers=[(REQID_HEADER, reqid)],
+            )
         return resp
+
+    def find_request_id(self, req):
+        """
+        Find a request ID in the request environment.
+        """
+        for key in ("HTTP_X_OIO_REQ_ID", "HTTP_X_OPENSTACK_REQUEST_ID"):
+            val = req.environ.get(key)
+            if val:
+                return val
+        return None
 
     def wsgi_app(self, environ, start_response):
         req = Request(environ)

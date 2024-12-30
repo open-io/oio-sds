@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -91,12 +91,12 @@ class XcuteServer(WerkzeugApp):
         super(XcuteServer, self).__init__(url_map, logger)
 
     @handle_exceptions
-    def on_status(self, req):
+    def on_status(self, req, **kwargs):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype="application/json")
 
     @handle_exceptions
-    def on_job_list(self, req):
+    def on_job_list(self, req, **kwargs):
         limit = int_value(req.args.get("limit"), None)
         prefix = req.args.get("prefix")
         marker = req.args.get("marker")
@@ -122,7 +122,7 @@ class XcuteServer(WerkzeugApp):
         return Response(json.dumps(jobs), mimetype="application/json")
 
     @handle_exceptions
-    def on_job_create(self, req):
+    def on_job_create(self, req, **kwargs):
         job_type = req.args.get("type")
         if not job_type:
             raise HTTPBadRequest("Missing job type")
@@ -147,27 +147,27 @@ class XcuteServer(WerkzeugApp):
         return job_id
 
     @handle_exceptions
-    def on_job_show(self, req):
+    def on_job_show(self, req, **kwargs):
         job_id = self._get_job_id(req)
         job_info = self.backend.get_job_info(job_id)
         return Response(json.dumps(job_info), mimetype="application/json")
 
     @handle_exceptions
-    def on_job_pause(self, req):
+    def on_job_pause(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.request_pause(job_id)
         job_info = self.backend.get_job_info(job_id)
         return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
-    def on_job_resume(self, req):
+    def on_job_resume(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.resume(job_id)
         job_info = self.backend.get_job_info(job_id)
         return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
-    def on_job_update(self, req):
+    def on_job_update(self, req, **kwargs):
         job_id = self._get_job_id(req)
 
         job_info = self.backend.get_job_info(job_id)
@@ -186,25 +186,25 @@ class XcuteServer(WerkzeugApp):
         return Response(json.dumps(job_config), mimetype="application/json", status=202)
 
     @handle_exceptions
-    def on_job_abort(self, req):
+    def on_job_abort(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.fail(job_id)
         job_info = self.backend.get_job_info(job_id)
         return Response(json.dumps(job_info), mimetype="application/json", status=202)
 
     @handle_exceptions
-    def on_job_delete(self, req):
+    def on_job_delete(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.delete(job_id)
         return Response(status=204)
 
     @handle_exceptions
-    def on_lock_list(self, req):
+    def on_lock_list(self, req, **kwargs):
         locks = self.backend.list_locks()
         return Response(json.dumps(locks), mimetype="application/json")
 
     @handle_exceptions
-    def on_lock_show(self, req):
+    def on_lock_show(self, req, **kwargs):
         lock = req.args.get("lock")
         if not lock:
             raise HTTPBadRequest("Missing lock")
