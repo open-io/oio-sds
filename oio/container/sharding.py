@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1057,6 +1057,7 @@ class ContainerSharding(ProxyClient):
                     if resp.status != 204:
                         raise exceptions.from_response(resp, body)
                     successes += 1
+                    truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
                     break
                 except BadRequest:
                     raise
@@ -1094,7 +1095,6 @@ class ContainerSharding(ProxyClient):
                     )
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
-            truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
 
     def _safe_vacuum(self, shard, parent_shard=None, **kwargs):
         """
@@ -1264,7 +1264,7 @@ class ContainerSharding(ProxyClient):
         Retrieve the list of shards with content in range ]lower; upper]
         :returns: list of shards
         """
-        formated_shards = self._get_shards_in_range(
+        formatted_shards = self._get_shards_in_range(
             root_account,
             root_container,
             lower,
@@ -1272,7 +1272,7 @@ class ContainerSharding(ProxyClient):
             **kwargs,
         )
         partial = lower != "" or upper != ""
-        return self._check_shards(formated_shards, partial=partial, **kwargs)
+        return self._check_shards(formatted_shards, partial=partial, **kwargs)
 
     def _abort_sharding(self, shard, attempts=1, **kwargs):
         for i in range(attempts):
