@@ -32,7 +32,7 @@ from oio.common.constants import (
     SHARDING_ACCOUNT_PREFIX,
 )
 from oio.common.easy_value import boolean_value, float_value, int_value
-from oio.common.exceptions import ServiceBusy
+from oio.common.exceptions import DeadlineReached, ServiceBusy
 from oio.common.timestamp import Timestamp
 
 fdb.api_version(CommonFdb.FDB_VERSION)
@@ -110,6 +110,22 @@ def catch_service_errors(func):
             raise ServiceBusy(message=str(err)) from err
 
     return catch_service_errors_wrapper
+
+
+def set_deadline(func):
+    """
+    Set a deadline in the request context if there is none.
+    """
+
+    @wraps(func)
+    def set_deadline_wrapper(self, tr, *args, **kwargs):
+        deadline = kwargs.get("deadline")
+        our_deadline = time.monotonic() + self.fdb_max_req_duration
+        if not deadline or deadline > our_deadline:
+            kwargs["deadline"] = our_deadline
+        return func(self, tr, *args, **kwargs)
+
+    return set_deadline_wrapper
 
 
 def use_snapshot_reads(func):
@@ -237,6 +253,9 @@ class AccountBackendFdb(object):
         self.conf = conf
         self.logger = logger
         self.fdb_file = None
+        self.fdb_max_req_duration = float_value(
+            self.conf.get("fdb_max_req_duration"), 2.0
+        )
         self.fdb_max_retries = int_value(self.conf.get("fdb_max_retries"), 4)
         self.autocreate = boolean_value(conf.get("autocreate"), True)
         self.time_window_clear_deleted = float_value(
@@ -403,10 +422,21 @@ class AccountBackendFdb(object):
 
     @fdb.transactional
     @use_snapshot_reads
+    @set_deadline
     def _list_items(
-        self, tr, start, stop, limit, filters, unpack, format_item, **kwargs
+        self,
+        tr,
+        start,
+        stop,
+        limit,
+        filters,
+        unpack,
+        format_item,
+        deadline=0.0,
+        **kwargs,
     ):
         items = []
+        next_marker = None
 
         def _append_item(name, keys_values):
             if not keys_values:
@@ -417,19 +447,41 @@ class AccountBackendFdb(object):
                     break
             else:
                 items.append(format_item(tr, name, info))
+            if time.monotonic() > deadline:
+                raise DeadlineReached
 
         iterator = tr.get_range(start, stop)
-        item_keys_values = None, None
-        for key, value in iterator:
-            item_name, *key = unpack(key)
-            if item_name != item_keys_values[0]:
-                _append_item(*item_keys_values)
-                if len(items) >= limit:
-                    return items
-                item_keys_values = item_name, []
-            item_keys_values[1].append((key, value))
-        _append_item(*item_keys_values)
-        return items
+        try:
+            item_keys_values = None, None
+            for key, value in iterator:
+                item_name, *key = unpack(key)
+                if item_name != item_keys_values[0]:
+                    # We found a new item, append the last one to the result
+                    _append_item(*item_keys_values)
+                    next_marker = item_keys_values[0]
+                    if len(items) >= limit:
+                        # We have enough items, return
+                        raise StopIteration
+                    # Prepare the next item
+                    item_keys_values = item_name, []
+                item_keys_values[1].append((key, value))
+            _append_item(*item_keys_values)
+            next_marker = None
+        except (DeadlineReached, StopIteration):
+            # Client will retry with marker=next_marker
+            pass
+        except fdb.impl.FDBError as exc:
+            # Code 1007 is "transaction_too_old".
+            if exc.code != 1007 or next_marker is None:
+                raise
+            # The transaction was not committed, and the fdb.transactional decorator
+            # will retry. Hopefully the next attempt will be faster.
+            self.logger.error(
+                "Got error %r despite fdb_max_req_duration=%s",
+                exc,
+                self.fdb_max_req_duration,
+            )
+        return items, next_marker
 
     @fdb.transactional
     def _update_metadata(self, tr, space, to_update, to_delete, forbidden_keys=None):
@@ -1636,8 +1688,6 @@ class AccountBackendFdb(object):
             containers, next_marker = self._list_items(
                 tr, start, stop, limit, filters, unpack, format_container
             )
-            if next_marker:
-                next_marker = next_marker[0]
         else:
             containers = []
             next_marker = None
