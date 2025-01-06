@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1000,13 +1000,13 @@ class AccountBackendFdb(object):
         else:
             format_account = self._format_account_for_listing
 
-        remaining = limit + 1
+        remaining = limit
         accounts = []
         while remaining > 0:
             start, stop = self._get_start_and_stop(
                 accounts_space, prefix=prefix, marker=marker, end_marker=end_marker
             )
-            accounts_sublist = self._list_accounts(
+            accounts_sublist, next_marker = self._list_accounts(
                 self.db,
                 start,
                 stop,
@@ -1024,21 +1024,15 @@ class AccountBackendFdb(object):
                     continue
                 accounts.append(account)
                 new_accounts += 1
-            if not accounts_sublist or len(accounts_sublist) < remaining:
+            if not next_marker:
                 break
             remaining -= new_accounts
-            last_account_id = accounts_sublist[-1]["id"]
-            if not sharding_accounts and last_account_id.startswith(
+            if not sharding_accounts and next_marker.startswith(
                 SHARDING_ACCOUNT_PREFIX
             ):
-                marker = SHARDING_ACCOUNT_PREFIX + LAST_UNICODE_CHAR
-            else:
-                marker = last_account_id
+                next_marker = SHARDING_ACCOUNT_PREFIX + LAST_UNICODE_CHAR
+            marker = next_marker
 
-        next_marker = None
-        if len(accounts) > limit:
-            accounts.pop()
-            next_marker = accounts[-1]["id"]
         return accounts, next_marker
 
     @fdb.transactional
@@ -1047,7 +1041,7 @@ class AccountBackendFdb(object):
         self, tr, start, stop, limit, filters, unpack, format_account, **_kwargs
     ):
         if limit > 0:
-            accounts = self._list_items(
+            accounts, next_marker = self._list_items(
                 tr,
                 start,
                 stop,
@@ -1059,7 +1053,8 @@ class AccountBackendFdb(object):
             )
         else:
             accounts = []
-        return accounts
+            next_marker = None
+        return accounts, next_marker
 
     @fdb.transactional
     @use_snapshot_reads
@@ -1605,12 +1600,12 @@ class AccountBackendFdb(object):
         start, stop = self._get_start_and_stop(
             containers_space, prefix=prefix, marker=marker, end_marker=end_marker
         )
-        account_info, containers = self._list_containers(
+        account_info, containers, next_marker = self._list_containers(
             self.db,
             account_id,
             start,
             stop,
-            limit + 1,
+            limit,
             filters,
             containers_space.unpack,
             self._format_container_for_listing,
@@ -1618,11 +1613,6 @@ class AccountBackendFdb(object):
         )
         if not account_info:
             return None, None, None
-
-        next_marker = None
-        if len(containers) > limit:
-            containers.pop()
-            next_marker = containers[-1][0]
         return account_info, containers, next_marker
 
     @fdb.transactional
@@ -1641,14 +1631,17 @@ class AccountBackendFdb(object):
     ):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
-            return None, None
+            return None, None, None
         if limit > 0:
-            containers = self._list_items(
+            containers, next_marker = self._list_items(
                 tr, start, stop, limit, filters, unpack, format_container
             )
+            if next_marker:
+                next_marker = next_marker[0]
         else:
             containers = []
-        return account_info, containers
+            next_marker = None
+        return account_info, containers, next_marker
 
     @fdb.transactional
     @use_snapshot_reads
@@ -2261,12 +2254,12 @@ class AccountBackendFdb(object):
         start, stop = self._get_start_and_stop(
             buckets_space, prefix=prefix, marker=marker, end_marker=end_marker
         )
-        account_info, buckets = self._list_buckets(
+        account_info, buckets, next_marker = self._list_buckets(
             self.db,
             account_id,
             start,
             stop,
-            limit + 1,
+            limit,
             filters,
             buckets_space.unpack,
             self._format_bucket_for_listing,
@@ -2274,11 +2267,6 @@ class AccountBackendFdb(object):
         )
         if not account_info:
             return None, None, None
-
-        next_marker = None
-        if len(buckets) > limit:
-            buckets.pop()
-            next_marker = buckets[-1]["name"]
         return account_info, buckets, next_marker
 
     @fdb.transactional
@@ -2288,14 +2276,15 @@ class AccountBackendFdb(object):
     ):
         account_info = self._account_info(tr, account, full=True)
         if not account_info:
-            return None, None
+            return None, None, None
         if limit > 0:
-            buckets = self._list_items(
+            buckets, next_marker = self._list_items(
                 tr, start, stop, limit, filters, unpack, format_bucket
             )
         else:
             buckets = []
-        return account_info, buckets
+            next_marker = None
+        return account_info, buckets, next_marker
 
     @fdb.transactional
     @use_snapshot_reads
