@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1252,6 +1252,71 @@ class TestAccountBackend(BaseTestCase):
         )
         self.assertEqual(next_marker, "3-0052-0049")
 
+    def _create_fake_buckets(self, account, num=50):
+        scenario = {
+            account: [],
+            SHARDING_ACCOUNT_PREFIX + account: [],
+        }
+        for i in range(num):
+            bname = f"fakebucket{i:06d}"
+            scenario[SHARDING_ACCOUNT_PREFIX + account].append(
+                {
+                    "name": bname,
+                    "region": "REGION_1",
+                    "containers": [
+                        {
+                            "name": f"{bname}-shard1",
+                            "objects": {"POL_1": 5, "POL_2": 10},
+                            "bytes": {"POL_1": 50, "POL_2": 100},
+                        },
+                        {
+                            "name": f"{bname}-shard2",
+                            "objects": {"POL_1": 6},
+                            "bytes": {"POL_1": 60},
+                        },
+                    ],
+                },
+            )
+            scenario[account].append(
+                {
+                    "name": bname,
+                    "region": "REGION_1",
+                    "containers": [
+                        {
+                            "name": bname,
+                            "objects": {"POL_1": 5, "POL_2": 10},
+                            "bytes": {"POL_1": 50, "POL_2": 100},
+                        },
+                    ],
+                }
+            )
+
+        return self._create_scenario(scenario)
+
+    def test_list_containers_truncated(self):
+        account = f"test-list-containers-{random_str(4)}"
+        self._create_fake_buckets(account, 50)
+        orig_unmarshall = self.backend._unmarshal_info
+
+        def slow_unmarshall(*args, **kwargs):
+            sleep(0.5)
+            return orig_unmarshall(*args, **kwargs)
+
+        with patch(
+            "oio.account.backend_fdb.AccountBackendFdb._unmarshal_info",
+            wraps=slow_unmarshall,
+        ) as mock_unmarshall_info:
+            start = time()
+            account_info, containers, next_marker = self.backend.list_containers(
+                account
+            )
+            end = time()
+            self.assertGreaterEqual(len(containers), 1)
+            self.assertLess(len(containers), 50)
+            self.assertGreaterEqual(mock_unmarshall_info.call_count, 1)
+            self.assertTrue(next_marker)
+            self.assertLess(end - start, 4.0)
+
     def test_refresh_metrics(self):
         account_id = random_str(16)
 
@@ -2355,7 +2420,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertIsNone(self.backend.db[b_space["bytes"]["NON_EXISTING_POLICY"]])
         self.assertIsNone(self.backend.db[b_space["objects"]["NON_EXISTING_POLICY"]])
 
-    def test_update_bucket_metada(self):
+    def test_update_bucket_metadata(self):
         region = "LOCALHOST"
         bucket = "metadata_" + random_str(8)
         metadata = {"owner": "owner1", "user": "user1"}
