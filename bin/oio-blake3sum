@@ -15,16 +15,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import blake3
 import sys
+
+import blake3
 
 
 def usage():
-    print(f"usage: {sys.argv[0]} [FILE...]\n\n"
-          "Print the blake3 checksum of the specified files.")
+    print(
+        f"usage: {sys.argv[0]} [FILE...]\n\n"
+        "Print the blake3 checksum of the specified files."
+    )
 
 
-if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
     usage()
     sys.exit(1)
 
@@ -32,7 +35,7 @@ if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
 for path in sys.argv[1:]:
     try:
         checksum = blake3.blake3()
-        with open(path, 'rb') as ifile:
+        with open(path, "rb") as ifile:
             checksum.update(ifile.read())
         hexdigest = checksum.hexdigest()
         print(f"{hexdigest}  {path}")

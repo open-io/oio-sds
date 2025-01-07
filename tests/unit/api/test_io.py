@@ -15,12 +15,12 @@
 # License along with this library.
 
 import unittest
-from mock import MagicMock, patch
-from oio.api.io import ChunkReader, discard_bytes, MetachunkWriter
-from oio.common import exceptions
-from oio.common import green
-from oio.common.storage_method import STORAGE_METHODS
 
+from mock import MagicMock, patch
+
+from oio.api.io import ChunkReader, MetachunkWriter, discard_bytes
+from oio.common import exceptions, green
+from oio.common.storage_method import STORAGE_METHODS
 from tests.utils import random_id
 
 

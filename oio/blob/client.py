@@ -16,36 +16,36 @@
 
 
 import json
-from oio.common.green import GreenPile
-
 import random
 from email.utils import parsedate
 from functools import wraps
-from urllib.parse import unquote
 from time import mktime, sleep
+from urllib.parse import unquote
 
-from oio.common.kafka import GetTopicMixin, KafkaProducerMixin
-from oio.common.logger import get_logger
-from oio.common.http_urllib3 import (
-    get_pool_manager,
-    oio_exception_from_httperror,
-    urllib3,
-)
-from oio.common import exceptions as exc, utils
+from oio.api.io import ChunkReader
+from oio.api.replication import ReplicatedMetachunkWriter
+from oio.common import exceptions as exc
+from oio.common import utils
 from oio.common.constants import (
+    CHECKHASH_HEADER,
     CHUNK_HEADERS,
     CHUNK_XATTR_KEYS_OPTIONAL,
     FETCHXATTR_HEADER,
     HTTP_CONTENT_TYPE_JSON,
     REQID_HEADER,
-    CHECKHASH_HEADER,
 )
 from oio.common.decorators import ensure_headers, ensure_request_id
-from oio.api.io import ChunkReader
-from oio.api.replication import ReplicatedMetachunkWriter
-from oio.common.storage_method import parse_chunk_method, STORAGE_METHODS
-from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioNetworkException
+from oio.common.green import GreenPile
+from oio.common.http_urllib3 import (
+    get_pool_manager,
+    oio_exception_from_httperror,
+    urllib3,
+)
+from oio.common.kafka import GetTopicMixin, KafkaProducerMixin
+from oio.common.logger import get_logger
+from oio.common.storage_method import STORAGE_METHODS, parse_chunk_method
+from oio.conscience.client import ConscienceClient
 
 # RAWX connection timeout
 CONNECTION_TIMEOUT = 10.0

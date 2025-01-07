@@ -16,7 +16,7 @@
 
 import unittest
 
-from oio.common.fullpath import encode_fullpath, decode_fullpath
+from oio.common.fullpath import decode_fullpath, encode_fullpath
 
 
 class FullpathTest(unittest.TestCase):

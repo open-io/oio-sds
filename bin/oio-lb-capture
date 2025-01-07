@@ -18,7 +18,6 @@ import os
 
 from oio.conscience.client import ConscienceClient
 
-
 DESCR = """Capture the whole list of services of the cluster
 along with their current location, score and slots."""
 PARSER = argparse.ArgumentParser(description=DESCR)

@@ -14,9 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import string
 import os
-from mock import MagicMock as Mock, patch
+import string
+
+from mock import MagicMock as Mock
+from mock import patch
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import CHUNK_XATTR_KEYS, read_chunk_metadata
@@ -28,8 +30,7 @@ from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 from oio.crawler.rawx.filters.indexer import Indexer
 from oio.event.evob import EventTypes
-
-from tests.functional.blob import random_chunk_id, random_buffer
+from tests.functional.blob import random_buffer, random_chunk_id
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
 from tests.utils import BaseTestCase, random_id, random_str
 

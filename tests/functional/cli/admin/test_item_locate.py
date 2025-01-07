@@ -15,6 +15,7 @@
 # License along with this library.
 
 import json
+
 from oio.common.utils import cid_from_name
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str

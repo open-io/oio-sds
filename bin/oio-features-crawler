@@ -18,12 +18,13 @@
 
 import argparse
 from datetime import datetime
-from oio.cli import make_logger_args_parser, get_logger_from_args
+
 from oio.api.object_storage import ObjectStorageApi
-from oio.event.filters.account_update import SYSMETA_S3API_PREFIX
+from oio.cli import get_logger_from_args, make_logger_args_parser
+from oio.common.exceptions import NoSuchAccount, NoSuchContainer, NotFound
 from oio.common.timestamp import Timestamp
-from oio.common.utils import request_id, depaginate
-from oio.common.exceptions import NoSuchContainer, NoSuchAccount, NotFound
+from oio.common.utils import depaginate, request_id
+from oio.event.filters.account_update import SYSMETA_S3API_PREFIX
 
 DEFAULT_FEATURE_MTIME = Timestamp(
     datetime.fromisoformat("2024-05-31T00:00:00").timestamp()

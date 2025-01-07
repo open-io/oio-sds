@@ -17,10 +17,9 @@
 
 import time
 
+from oio.api.object_storage import ObjectStorageApi
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json
-from oio.api.object_storage import ObjectStorageApi
-
 from tests.utils import BaseTestCase
 
 

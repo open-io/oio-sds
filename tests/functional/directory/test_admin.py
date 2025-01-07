@@ -14,10 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import random
 import os
-from oio.common.utils import cid_from_name
+import random
 
+from oio.common.utils import cid_from_name
 from tests.utils import BaseTestCase, random_str
 
 

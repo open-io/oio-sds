@@ -24,7 +24,6 @@ from oio.common.exceptions import Conflict, OioException, ServiceBusy
 from oio.common.green import sleep
 from oio.common.logger import get_logger
 
-
 REQUEST_ATTEMPTS = 1
 
 

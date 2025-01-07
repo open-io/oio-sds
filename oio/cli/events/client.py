@@ -14,6 +14,7 @@
 # License along with this library.
 
 from logging import getLogger
+
 from oio.event.client import EventClient
 
 LOG = getLogger(__name__)

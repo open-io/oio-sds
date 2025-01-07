@@ -13,18 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 from os.path import isfile
+
 from oio.blob.operator import ChunkOperator
+from oio.blob.utils import chunk_id_to_path
 from oio.common import exceptions as exc
 from oio.common.constants import REQID_HEADER
-from oio.common.green import time
 from oio.common.easy_value import int_value
-from oio.common.utils import request_id, ratelimit
+from oio.common.green import time
+from oio.common.logger import logging
+from oio.common.utils import ratelimit, request_id
 from oio.content.content import ChunksHelper
 from oio.crawler.common.base import RawxService, RawxUpMixin
 from oio.crawler.common.crawler import TAGS_TO_DEBUG
 from oio.crawler.rdir.workers.common import RdirWorker
-from oio.common.logger import logging
-from oio.blob.utils import chunk_id_to_path
 
 
 class RdirWorkerForRawx(RawxUpMixin, RdirWorker):

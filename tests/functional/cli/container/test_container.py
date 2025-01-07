@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import uuid
 import re
 import tempfile
+import uuid
 
 from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes

@@ -15,6 +15,7 @@
 
 
 import re
+
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.crawler.common.crawler import Crawler, PipelineWorker
 from oio.crawler.meta2.meta2db import Meta2DB

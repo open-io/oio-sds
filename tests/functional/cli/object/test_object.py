@@ -17,12 +17,12 @@
 import os
 import tempfile
 import uuid
+
 from oio.common.constants import HTTP_CONTENT_TYPE_DELETED, M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import true_value
 from oio.common.utils import get_hasher
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
-
 
 HEADERS = ["Name", "Created"]
 OBJ_HEADERS = ["Name", "Size", "Hash"]

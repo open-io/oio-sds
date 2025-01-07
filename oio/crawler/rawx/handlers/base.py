@@ -14,8 +14,8 @@
 # License along with this library.
 
 
-from oio.event.consumer import StopServe
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, RawxCrawlerOk
+from oio.event.consumer import StopServe
 
 
 class Handler(object):

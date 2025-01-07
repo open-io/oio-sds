@@ -14,9 +14,11 @@
 # License along with this library.
 
 from time import sleep
+
 from redis.exceptions import ResponseError
-from oio.lifecycle.metrics import LifecycleMetricTracker, LifecycleAction, LifecycleStep
-from oio.common.exceptions import ServiceBusy, NotFound
+
+from oio.common.exceptions import NotFound, ServiceBusy
+from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
 from tests.utils import BaseTestCase
 
 

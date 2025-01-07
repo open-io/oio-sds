@@ -16,11 +16,11 @@
 
 from time import monotonic
 
-from oio.common.http_urllib3 import get_pool_manager
-from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
 from oio.common.exceptions import ClientException, VolumeException, from_multi_responses
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
+from oio.conscience.client import ConscienceClient
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
 from oio.rdir.client import RdirClient

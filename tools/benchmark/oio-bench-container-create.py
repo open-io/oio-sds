@@ -18,11 +18,12 @@
 from __future__ import print_function
 
 import time
+
 from eventlet import sleep
 from eventlet.greenpool import GreenPool
 from eventlet.queue import LightQueue
-from oio import ObjectStorageApi
 
+from oio import ObjectStorageApi
 
 API = None
 POOL = None

@@ -29,25 +29,25 @@ def make_arg_parser():
     """
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument(
-        'config',
+        "config",
         help="""
         A file containing an oio-billing-agent configuration file.
         Any arguments passed alongside a configuration file will be ignored.
-        """)
+        """,
+    )
     parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help="More verbose output")
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
     return parser
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = make_arg_parser().parse_args()
     verbose = args.verbose
     config = args.config
 
-    conf = read_conf(config, 'billing-agent')
-    logger = get_logger(conf, 'billing-agent', verbose=verbose)
+    conf = read_conf(config, "billing-agent")
+    logger = get_logger(conf, "billing-agent", verbose=verbose)
 
     agent = BillingAgent(conf)
     agent.start()

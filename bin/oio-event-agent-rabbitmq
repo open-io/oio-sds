@@ -14,17 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-
 from urllib.parse import parse_qsl
 
-from oio.cli.common.utils import KeyValueAction
 from oio.common.amqp import (
     DEFAULT_ENDPOINT,
     DEFAULT_EXCHANGE,
     DEFAULT_QUEUE,
     DEFAULT_QUEUE_ARGS,
 )
-from oio.common.configuration import read_conf, load_namespace_conf
+from oio.common.configuration import load_namespace_conf, read_conf
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.event.amqp_agent import AmqpEventWorker

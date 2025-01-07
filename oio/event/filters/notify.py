@@ -18,7 +18,7 @@ import re
 from urllib.parse import unquote
 
 from oio.common.json import json
-from oio.common.kafka import KafkaSendException, KafkaSender, get_retry_delay
+from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.filters.base import Filter

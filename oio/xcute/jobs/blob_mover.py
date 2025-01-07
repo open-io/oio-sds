@@ -18,7 +18,7 @@ import json
 import math
 
 from oio.blob.client import BlobClient
-from oio.common.easy_value import float_value, int_value, boolean_value
+from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import (
     ContentDrained,
     ContentNotFound,

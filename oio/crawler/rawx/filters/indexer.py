@@ -15,13 +15,13 @@
 
 import errno
 
-from oio.rdir.client import RdirClient
-from oio.crawler.common.base import Filter
 from oio.common import exceptions as exc
 from oio.common.green import time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import request_id
+from oio.crawler.common.base import Filter
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError
+from oio.rdir.client import RdirClient
 
 
 class Indexer(Filter):

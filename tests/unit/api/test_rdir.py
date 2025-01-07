@@ -15,11 +15,12 @@
 # License along with this library.
 
 import unittest
+
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
-from tests.utils import random_id
 from tests.unit.api import FakeResponse
+from tests.utils import random_id
 
 
 class TestRdirClient(unittest.TestCase):

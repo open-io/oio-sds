@@ -17,14 +17,13 @@
 
 # pylint: disable=no-member
 
-from unittest.mock import patch
-
 from os import walk
 from os.path import isfile, join
-from tests.utils import BaseTestCase, random_str
+from unittest.mock import patch
 
-from oio.common.exceptions import BadRequest, NotFound, NoSuchContainer, NoSuchAccount
+from oio.common.exceptions import BadRequest, NoSuchAccount, NoSuchContainer, NotFound
 from oio.common.utils import cid_from_name, request_id
+from tests.utils import BaseTestCase, random_str
 
 
 class TestCheckpointContainer(BaseTestCase):

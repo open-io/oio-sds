@@ -15,8 +15,8 @@
 # License along with this library.
 
 
-from oio.event.filters.base import Filter
 from oio.common.exceptions import ExplicitBury
+from oio.event.filters.base import Filter
 
 
 class BuryFilter(Filter):

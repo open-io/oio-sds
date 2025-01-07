@@ -15,10 +15,10 @@
 # License along with this library.
 
 import time
+from urllib.parse import urlparse
 
 from mock import MagicMock as Mock
 from urllib3 import exceptions as urllibexc
-from urllib.parse import urlparse
 
 from oio.account.backend_fdb import AccountBackendFdb
 from oio.common.exceptions import (

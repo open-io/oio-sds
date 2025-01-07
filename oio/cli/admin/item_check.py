@@ -15,16 +15,16 @@
 # License along with this library.
 
 from cliff import lister
-from oio.cli import ShowOne, flat_dict_from_dict, get_all_values
 
+from oio.cli import ShowOne, flat_dict_from_dict, get_all_values
 from oio.cli.admin.common import (
     AccountCommandMixin,
+    ChunkCommandMixin,
     ContainerCommandMixin,
     ObjectCommandMixin,
-    ChunkCommandMixin,
 )
 from oio.common.exceptions import NotFound, OioException
-from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH
+from oio.crawler.integrity import DEFAULT_DEPTH, Checker, Target
 
 
 class ItemCheckCommand(lister.Lister):

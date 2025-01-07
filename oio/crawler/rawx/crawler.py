@@ -13,11 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import os
+
 from oio.blob.utils import read_chunk_metadata
 from oio.common import exceptions as exc
 from oio.common.utils import is_chunk_id_valid
 from oio.crawler.common.crawler import Crawler, PipelineWorker
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, is_success, is_error
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, is_error, is_success
 
 
 class RawxWorker(PipelineWorker):

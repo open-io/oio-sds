@@ -18,7 +18,7 @@ from cliff import lister
 
 from oio.account.rebuilder import AccountRebuilder
 from oio.blob.rebuilder import BlobRebuilder
-from oio.cli.admin.common import ToolCommandMixin, SingleServiceCommandMixin
+from oio.cli.admin.common import SingleServiceCommandMixin, ToolCommandMixin
 from oio.directory.meta2_rebuilder import Meta2Rebuilder
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
 

@@ -18,22 +18,20 @@ import copy
 import os
 import re
 import time
-import simplejson as json
 from pathlib import Path
 
+import fdb
+import simplejson as json
 from nose.plugins.attrib import attr
-
 from werkzeug.test import Client
 from werkzeug.wrappers import Response
 
-import fdb
-
 from oio.account.backend_fdb import AccountBackendFdb
+from oio.account.common_fdb import CommonFdb
 from oio.account.server import create_app
 from oio.common.exceptions import NotFound
 from oio.common.timestamp import Timestamp
 from tests.utils import BaseTestCase
-from oio.account.common_fdb import CommonFdb
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 

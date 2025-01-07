@@ -14,13 +14,12 @@
 # License along with this library.
 
 
-from oio.common.green import sleep
-
-from oio.check_service.common import CheckService, random_buffer
 from oio.account.client import AccountClient
+from oio.check_service.common import CheckService, random_buffer
+from oio.common.configuration import load_namespace_conf
+from oio.common.green import sleep
 from oio.container.client import ContainerClient
 from oio.directory.client import DirectoryClient
-from oio.common.configuration import load_namespace_conf
 
 
 def cmp(x, y):

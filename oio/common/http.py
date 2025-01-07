@@ -15,12 +15,12 @@
 # License along with this library.
 
 import re
+
 from six import text_type
 from six.moves.urllib_parse import quote
 
 from oio.common.constants import CHUNK_HEADERS
 from oio.content.quality import location_constraint_margin
-
 
 _TOKEN = r"[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+"
 _EXT_PATTERN = re.compile(

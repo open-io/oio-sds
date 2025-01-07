@@ -14,20 +14,20 @@
 # License along with this library.
 
 from copy import deepcopy
+
 from oio.common.exceptions import ClientException
 from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
 from oio.common.statsd import get_statsd
 from oio.container.client import ContainerClient
 from oio.container.sharding import ContainerSharding
-from oio.event.filters.base import Filter
 from oio.event.evob import Event, RetryableEventError
+from oio.event.filters.base import Filter
 from oio.lifecycle.metrics import (
     LifecycleAction,
     LifecycleMetricTracker,
     LifecycleStep,
     statsd_key,
 )
-
 
 DEFAULT_CHECKPOINT_PREFIX = "lifecycle"
 

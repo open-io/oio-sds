@@ -20,8 +20,8 @@ import time
 from oio import ObjectStorageApi
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
-from tests.utils import random_str
 from tests.functional.cli import CliTestCase
+from tests.utils import random_str
 
 
 class ServiceRebuildTest(CliTestCase):

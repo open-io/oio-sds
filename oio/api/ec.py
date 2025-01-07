@@ -14,42 +14,42 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import (
-    ChunkReadTimeout,
-    ChunkWriteTimeout,
-    ContextPool,
-    ConnectionTimeout,
-    Empty,
-    GreenPile,
-    LightQueue,
-    SourceReadTimeout,
-    Timeout,
-    Queue,
-    eventlet_yield,
-    WatchdogTimeout,
-)
-
 import collections
 import math
 from socket import error as SocketError
 from urllib.parse import urlparse
+
 from greenlet import GreenletExit
 
 from oio.api import io
 from oio.common import exceptions
 from oio.common.constants import (
     CHUNK_HEADERS,
-    REQID_HEADER,
     CHUNK_XATTR_EXTRA_PREFIX,
     CHUNK_XATTR_EXTRA_PREFIX_LEN,
+    REQID_HEADER,
 )
-from oio.common.easy_value import int_value, boolean_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import OioNetworkException, ServiceBusy, SourceReadError
+from oio.common.green import (
+    ChunkReadTimeout,
+    ChunkWriteTimeout,
+    ConnectionTimeout,
+    ContextPool,
+    Empty,
+    GreenPile,
+    LightQueue,
+    Queue,
+    SourceReadTimeout,
+    Timeout,
+    WatchdogTimeout,
+    eventlet_yield,
+)
 from oio.common.http import (
     HeadersDict,
+    headers_from_object_metadata,
     parse_content_range,
     ranges_from_http_header,
-    headers_from_object_metadata,
 )
 from oio.common.logger import get_logger, logging
 from oio.common.storage_method import ECDriverError

@@ -15,16 +15,15 @@
 # License along with this library.
 
 
-from oio.common.green import socket, Empty, LifoQueue, threading, time
-
 import os
 import sys
+
+import yaml
 from six import BytesIO, iteritems
 from six.moves.urllib_parse import urlparse
-import yaml
 
 from oio.common import exceptions
-
+from oio.common.green import Empty, LifoQueue, socket, threading, time
 
 SYM_CRLF = b"\r\n"
 

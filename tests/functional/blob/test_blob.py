@@ -20,21 +20,21 @@ import json
 import os
 import re
 import string
-from os.path import isfile
 import time
+from os.path import isfile
 from urllib.parse import unquote, urlparse
+
 from oio.api.io import CHUNK_TIMEOUT, CLIENT_TIMEOUT, CONNECTION_TIMEOUT
 from oio.blob.client import BlobClient
-from oio.common.http import headers_from_object_metadata
-from oio.common.http_eventlet import http_connect
+from oio.blob.utils import read_chunk_metadata
 from oio.common.constants import CHUNK_HEADERS, HTTP_CONTENT_TYPE_JSON, REQID_HEADER
 from oio.common.easy_value import true_value
 from oio.common.fullpath import encode_fullpath
+from oio.common.http import headers_from_object_metadata
+from oio.common.http_eventlet import http_connect
 from oio.common.utils import cid_from_name, get_hasher, request_id
-from oio.blob.utils import read_chunk_metadata
-from tests.utils import BaseTestCase, CommonTestCase, random_id, strange_paths
 from tests.functional.blob import random_buffer, random_chunk_id
-
+from tests.utils import BaseTestCase, CommonTestCase, random_id, strange_paths
 
 map_cfg = {"addr": "Listen", "ns": "namespace", "basedir": "docroot"}
 

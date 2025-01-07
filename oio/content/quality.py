@@ -22,7 +22,6 @@ from oio.common import exceptions as exc
 from oio.common.json import json
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 
-
 NB_LOCATION_LEVELS = 4
 CHUNK_SYSMETA_PREFIX = "__OIO_CHUNK__"
 

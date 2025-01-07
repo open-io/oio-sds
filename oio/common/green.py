@@ -14,30 +14,35 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import eventlet
-
-import time
 import logging
+import time
 import warnings
-
 from datetime import datetime, timedelta
 
-from six import string_types
-
-from oio.common.utils import ratelimit
+import eventlet
 import eventlet.hubs as eventlet_hubs  # noqa
-from eventlet import sleep, patcher, greenthread  # noqa
-from eventlet import Queue, Timeout, GreenPile, GreenPool  # noqa
-from eventlet.green import thread, threading, socket  # noqa
+from eventlet import (  # noqa  # noqa
+    GreenPile,
+    GreenPool,
+    Queue,
+    Timeout,
+    greenthread,
+    patcher,
+    sleep,
+)
 from eventlet.event import Event  # noqa
+from eventlet.green import socket, thread, threading  # noqa
 from eventlet.green.httplib import (  # noqa
-    HTTPConnection,
-    HTTPSConnection,
-    HTTPResponse,
     _UNKNOWN,
+    HTTPConnection,
+    HTTPResponse,
+    HTTPSConnection,
 )
 from eventlet.queue import Empty, LifoQueue, LightQueue  # noqa
 from eventlet.semaphore import Semaphore  # noqa
+from six import string_types
+
+from oio.common.utils import ratelimit
 
 
 def eventlet_monkey_patch():

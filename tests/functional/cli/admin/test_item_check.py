@@ -18,7 +18,6 @@
 import json
 import random
 import time
-
 from subprocess import CalledProcessError
 
 from oio import ObjectStorageApi

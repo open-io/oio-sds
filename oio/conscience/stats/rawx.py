@@ -16,6 +16,7 @@
 
 # -*- coding: utf-8 -*-
 import time
+
 from oio.common.easy_value import true_value
 from oio.conscience.stats.http import HttpStat
 

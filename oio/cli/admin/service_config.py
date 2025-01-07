@@ -13,11 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from cliff import lister
-from cliff import show
+from cliff import lister, show
 
+from oio.cli.admin.common import ProxyCommandMixin, SingleServiceCommandMixin
 from oio.cli.common.utils import KeyValueAction
-from oio.cli.admin.common import SingleServiceCommandMixin, ProxyCommandMixin
 
 
 class ServiceGetConfig(SingleServiceCommandMixin, show.ShowOne):

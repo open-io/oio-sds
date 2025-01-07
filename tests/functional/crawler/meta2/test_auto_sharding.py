@@ -20,16 +20,16 @@ from unittest.mock import patch
 
 from oio.common.constants import (
     DRAINING_STATE_IN_PROGRESS,
+    EXISTING_SHARD_STATE_LOCKED,
     M2_PROP_DRAINING_STATE,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
     NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
     NEW_SHARD_STATE_CLEANED_UP,
     NEW_SHARD_STATE_CLEANING_UP,
-    EXISTING_SHARD_STATE_LOCKED,
 )
-from oio.common.utils import cid_from_name
 from oio.common.statsd import get_statsd
+from oio.common.utils import cid_from_name
 from oio.crawler.meta2.filters.auto_sharding import (
     SHRINKING_COEF_LAST_SHARD,
     AutomaticSharding,

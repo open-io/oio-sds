@@ -14,22 +14,20 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import GreenPool
-
 import os
 from logging import getLogger
 from sys import stdin
 
-from oio.common.json import json
 from oio.cli import Command, Lister, ShowOne
+from oio.common import exceptions
 from oio.common.constants import HTTP_CONTENT_TYPE_DELETED
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import CommandError
+from oio.common.green import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
-from oio.common.utils import depaginate
+from oio.common.json import json
 from oio.common.json import json as jsonlib
-from oio.common import exceptions
-
+from oio.common.utils import depaginate
 
 # flatns_manager field is not seen as callable.
 # pylint: disable=not-callable

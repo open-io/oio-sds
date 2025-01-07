@@ -15,8 +15,9 @@
 # License along with this library.
 
 import re
-from itertools import takewhile
 from ctypes import c_char_p, c_uint, create_string_buffer
+from itertools import takewhile
+
 from six import PY3, string_types
 
 from oio.common.utils import CDLL

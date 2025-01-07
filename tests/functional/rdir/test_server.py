@@ -18,15 +18,13 @@ import subprocess
 import tempfile
 import time
 import uuid
-from os import remove, getuid
+from os import getuid, remove
 from shutil import rmtree
 
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json
-
-from tests.utils import CommonTestCase, random_str, random_id
-
-from tests.proc import check_process_absent, wait_for_slow_startup, does_startup_fail
+from tests.proc import check_process_absent, does_startup_fail, wait_for_slow_startup
+from tests.utils import CommonTestCase, random_id, random_str
 
 
 def _key(rec):

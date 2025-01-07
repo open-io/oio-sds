@@ -15,7 +15,9 @@
 # License along with this library.
 
 import unittest
-from mock import MagicMock as Mock, patch
+
+from mock import MagicMock as Mock
+from mock import patch
 
 from oio.common.exceptions import Conflict, ServiceBusy
 from oio.common.green import get_watchdog

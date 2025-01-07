@@ -19,7 +19,6 @@ from oio.common.exceptions import CorruptDb
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 
-
 RE_MISSING_FROM_INDEX = re.compile(r"row \d+ missing from index (.+)")
 RE_WRONG_NUMBER_IN_INDEX = re.compile(r"wrong # of entries in index (.+)")
 

@@ -15,8 +15,8 @@
 # License along with this library.
 
 from oio.common import exceptions as exc
-from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.conscience.stats.base import BaseStat
+from oio.event.beanstalk import Beanstalk, ConnectionError
 
 
 class BeanstalkdStat(BaseStat):

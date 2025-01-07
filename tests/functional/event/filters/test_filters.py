@@ -19,12 +19,12 @@
 import time
 from urllib.parse import quote
 
-from oio.blob.rebuilder import BlobRebuilder
-from oio.event.filters.notify import KafkaNotifyFilter
-from tests.utils import BaseTestCase, random_str, strange_paths
 from testtools.testcase import ExpectedException
 
+from oio.blob.rebuilder import BlobRebuilder
 from oio.common.exceptions import ServiceBusy
+from oio.event.filters.notify import KafkaNotifyFilter
+from tests.utils import BaseTestCase, random_str, strange_paths
 
 
 class _App(object):

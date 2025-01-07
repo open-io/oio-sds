@@ -16,9 +16,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
 
 eventlet_monkey_patch()
+# isort: on
 
 import signal
 import sys
@@ -31,7 +34,6 @@ from oio.common.wsgi import Application, ServiceLogger
 from oio.xcute.orchestrator import XcuteOrchestrator as BeanstalkOrchestrator
 from oio.xcute.orchestrator_kafka import XcuteOrchestrator as KafkaOrchestrator
 from oio.xcute.server import create_app
-
 
 DEFAULT_SECTION = "DEFAULT"
 SERVER_SECTION = "xcute-server"

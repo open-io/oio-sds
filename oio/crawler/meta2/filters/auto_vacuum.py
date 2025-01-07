@@ -22,7 +22,7 @@ from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.base import Meta2Filter
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
+from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, Meta2DBNotFound
 from oio.directory.admin import AdminClient
 
 

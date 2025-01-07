@@ -16,6 +16,7 @@
 
 import os
 import random
+
 from tests.functional.cli import CliTestCase, execute
 from tests.utils import random_str
 

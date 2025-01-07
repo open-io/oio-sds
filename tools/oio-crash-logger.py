@@ -19,6 +19,7 @@ Create a logger with bad configuration and ensure there is no infinite recursion
 
 import sys
 from tempfile import NamedTemporaryFile
+
 from oio.common.logger import get_logger, redirect_stdio
 
 with NamedTemporaryFile(mode="rb", prefix="nolog-") as tmp:

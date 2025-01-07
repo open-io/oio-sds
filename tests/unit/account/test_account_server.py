@@ -16,8 +16,9 @@
 import re
 import unittest
 from unittest.mock import MagicMock
-from werkzeug.wrappers import Response
+
 from werkzeug.exceptions import BadRequest
+from werkzeug.wrappers import Response
 
 from oio.account.server import Account
 from oio.common.utils import get_hasher

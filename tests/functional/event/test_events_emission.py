@@ -19,15 +19,13 @@
 import shutil
 import subprocess
 import time
-
 from signal import SIGINT
 
-from oio.event.evob import EventTypes
 from oio.common.amqp import AmqpConnector, AMQPError
 from oio.common.json import json
 from oio.common.utils import cid_from_name, request_id
+from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase
-
 
 REASONABLE_EVENT_DELAY = 3.0
 

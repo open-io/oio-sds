@@ -16,30 +16,23 @@
 
 """Container-related commands"""
 
-from six import iteritems
 from logging import getLogger
-from time import sleep, time as now
+from time import sleep
+from time import time as now
+
+from six import iteritems
 
 from oio.cli import Command, Lister, ShowOne
-from oio.common.exceptions import (
-    CommandError,
-    Conflict,
-    NoSuchContainer,
-    NotFound,
-    OioException,
-)
-from oio.common.timestamp import Timestamp
-from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import (
     BUCKET_PROP_RATELIMIT,
+    DRAINING_STATE_NAME,
+    DRAINING_STATE_NEEDED,
     GLOBAL_RATELIMIT_GROUP,
-    OIO_DB_STATUS_NAME,
-    OIO_DB_ENABLED,
-    OIO_DB_DISABLED,
-    OIO_DB_FROZEN,
     M2_PROP_BUCKET_NAME,
     M2_PROP_CTIME,
     M2_PROP_DEL_EXC_VERSIONS,
+    M2_PROP_DRAINING_STATE,
+    M2_PROP_DRAINING_TIMESTAMP,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_MASTER,
@@ -54,13 +47,22 @@ from oio.common.constants import (
     M2_PROP_STORAGE_POLICY,
     M2_PROP_USAGE,
     M2_PROP_VERSIONING_POLICY,
+    OIO_DB_DISABLED,
+    OIO_DB_ENABLED,
+    OIO_DB_FROZEN,
+    OIO_DB_STATUS_NAME,
     SHARDING_STATE_NAME,
-    M2_PROP_DRAINING_STATE,
-    DRAINING_STATE_NEEDED,
-    DRAINING_STATE_NAME,
-    M2_PROP_DRAINING_TIMESTAMP,
 )
 from oio.common.easy_value import boolean_value, int_value
+from oio.common.exceptions import (
+    CommandError,
+    Conflict,
+    NoSuchContainer,
+    NotFound,
+    OioException,
+)
+from oio.common.timestamp import Timestamp
+from oio.common.utils import depaginate, request_id, timeout_to_deadline
 
 
 class SetPropertyCommandMixin(object):

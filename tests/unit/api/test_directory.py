@@ -13,13 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import unittest
 import json
+import unittest
 
 from mock import MagicMock as Mock
 
 from oio.common import exceptions
-from tests.unit.api import FakeDirectoryClient, FakeApiResponse
+from tests.unit.api import FakeApiResponse, FakeDirectoryClient
 from tests.utils import random_str
 
 

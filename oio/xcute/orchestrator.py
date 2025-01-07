@@ -17,25 +17,28 @@
 import math
 import random
 from collections import OrderedDict
+
 from redis import (
     ConnectionError as RedisConnectionError,
+)
+from redis import (
     TimeoutError as RedisTimeoutError,
 )
 
 from oio.common.constants import STRLEN_REQID
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden, OioTimeout
-from oio.common.logger import get_logger
 from oio.common.green import sleep, threading, time
 from oio.common.json import json
+from oio.common.logger import get_logger
 from oio.common.utils import ratelimit, request_id
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import (
+    DEFAULT_TTR,
     Beanstalk,
     BeanstalkdListener,
     BeanstalkError,
     ConnectionError,
-    DEFAULT_TTR,
 )
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend

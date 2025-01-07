@@ -15,13 +15,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
-from oio.crawler.rawx.crawler import RawxCrawler
+
 from oio.common.daemon import run_daemon
+from oio.crawler.rawx.crawler import RawxCrawler
 
 
 def make_arg_parser():
@@ -30,22 +34,23 @@ def make_arg_parser():
     """
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument(
-        'config',
+        "config",
         help="""
         A file containing an oio-rawx-crawler configuration file.
         Any arguments passed alongside a configuration file will be ignored.
-        """)
+        """,
+    )
     parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help="More verbose output")
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
     return parser
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = make_arg_parser().parse_args()
     verbose = args.verbose
     config = args.config
 
-    run_daemon(RawxCrawler, conf_file=config, section_name='rawx-crawler',
-               verbose=verbose)
+    run_daemon(
+        RawxCrawler, conf_file=config, section_name="rawx-crawler", verbose=verbose
+    )

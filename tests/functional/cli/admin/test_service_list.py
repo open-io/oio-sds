@@ -14,10 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.event.evob import EventTypes
 from oio.common.utils import request_id
-from tests.utils import random_str
+from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase
+from tests.utils import random_str
 
 
 class ServiceListTest(CliTestCase):

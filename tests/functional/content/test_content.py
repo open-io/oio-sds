@@ -18,18 +18,18 @@
 import os
 import time
 from io import BytesIO
+
 from mock import MagicMock as Mock
-from testtools.matchers import Contains
-from testtools.matchers import Not
+from testtools.matchers import Contains, Not
 from testtools.testcase import ExpectedException
 
 from oio.common.exceptions import ContentNotFound, OrphanChunk
-from oio.common.utils import cid_from_name, get_hasher
 from oio.common.fullpath import encode_fullpath
+from oio.common.utils import cid_from_name, get_hasher
 from oio.container.client import ContainerClient
+from oio.content.ec import ECContent
 from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
-from oio.content.ec import ECContent
 from tests.utils import BaseTestCase, ec, strange_paths
 
 

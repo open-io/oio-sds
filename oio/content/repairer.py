@@ -17,11 +17,11 @@
 from datetime import datetime
 
 from oio.api.object_storage import _sort_chunks
-from oio.blob.operator import ChunkOperator
 from oio.blob.client import BlobClient
+from oio.blob.operator import ChunkOperator
 from oio.common.exceptions import (
-    NotFound,
     ClientPreconditionFailed,
+    NotFound,
     OioNetworkException,
     ServiceBusy,
 )

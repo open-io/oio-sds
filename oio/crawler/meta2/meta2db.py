@@ -15,10 +15,9 @@
 
 import os
 import sqlite3
+from functools import partial
 
 import reflink
-
-from functools import partial
 
 from oio.common.easy_value import debinarize
 from oio.common.exceptions import CorruptDb

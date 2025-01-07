@@ -18,6 +18,7 @@ import math
 import time
 from io import BytesIO
 from urllib.parse import urlparse
+
 from testtools.testcase import ExpectedException
 
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
@@ -26,13 +27,13 @@ from oio.common.exceptions import (
     NotFound,
     UnrecoverableContent,
 )
+from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import cid_from_name
-from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
-from tests.functional.content.test_content import random_data, hash_data, hash_stream
+from tests.functional.content.test_content import hash_data, hash_stream, random_data
 from tests.utils import BaseTestCase, random_str
 
 

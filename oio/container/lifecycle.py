@@ -18,7 +18,6 @@ import json
 
 from oio.common.logger import get_logger
 
-
 LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
 

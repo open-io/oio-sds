@@ -19,8 +19,8 @@ from time import sleep
 from oio.common.easy_value import int_value
 from oio.common.kafka import (
     DEFAULT_DELAYED_TOPIC,
-    get_delay_granularity,
     KafkaSender,
+    get_delay_granularity,
 )
 from oio.event.evob import EventError
 from oio.event.filters.base import Filter

@@ -14,18 +14,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from os import listdir, path
 import random
 import time
+from os import listdir, path
 from urllib.parse import urlparse
-
-from tests.utils import BaseTestCase, random_str
 
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.utils import request_id
 from oio.content.quality import location_constraint_margin
+from tests.utils import BaseTestCase, random_str
 
 
 class TestPerfectibleContent(BaseTestCase):

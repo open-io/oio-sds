@@ -18,8 +18,9 @@ import gevent.monkey
 gevent.monkey.patch_ssl()
 
 import json  # noqa: E402
-import urllib3  # noqa: E402
 import time  # noqa: E402
+
+import urllib3  # noqa: E402
 
 from oio.common.easy_value import boolean_value  # noqa: E402
 from oio.common.exceptions import from_response  # noqa: E402

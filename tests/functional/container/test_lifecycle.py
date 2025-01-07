@@ -16,10 +16,9 @@
 
 import time
 
-
 from oio.container.lifecycle import (
-    ContainerLifecycle,
     LIFECYCLE_PROPERTY_KEY,
+    ContainerLifecycle,
 )
 from tests.utils import BaseTestCase, random_str
 

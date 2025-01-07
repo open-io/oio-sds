@@ -18,16 +18,16 @@ from urllib.parse import urlencode
 
 from oio.common.constants import (
     ADMIN_HEADER,
-    TIMEOUT_HEADER,
-    PERFDATA_HEADER,
-    FORCEMASTER_HEADER,
     CONNECTION_TIMEOUT,
+    ENDUSERREQUEST_HEADER,
+    FORCEMASTER_HEADER,
+    HTTP_CONTENT_TYPE_JSON,
+    PERFDATA_HEADER,
     READ_TIMEOUT,
     REGION_HEADER,
     REQID_HEADER,
     STRLEN_REQID,
-    HTTP_CONTENT_TYPE_JSON,
-    ENDUSERREQUEST_HEADER,
+    TIMEOUT_HEADER,
 )
 from oio.common.easy_value import true_value
 from oio.common.exceptions import (
@@ -38,10 +38,10 @@ from oio.common.exceptions import (
     from_response,
 )
 from oio.common.http_urllib3 import (
-    urllib3,
+    URLLIB3_REQUESTS_KWARGS,
     get_pool_manager,
     oio_exception_from_httperror,
-    URLLIB3_REQUESTS_KWARGS,
+    urllib3,
 )
 from oio.common.json import json as jsonlib
 from oio.common.logger import get_logger

@@ -14,15 +14,15 @@
 # License along with this library.
 
 import os
+import random
 import sqlite3
 import time
-import random
-from os.path import join, isfile, islink, exists
+from os.path import exists, isfile, islink, join
 from urllib.parse import urlparse
+
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
-from oio.common.utils import cid_from_name
-from oio.common.utils import request_id
 from oio.common.green import get_watchdog
+from oio.common.utils import cid_from_name, request_id
 from oio.content.factory import ContentFactory
 from oio.crawler.meta2.filters.verify_chunk_placement import (
     VerifyChunkPlacement,

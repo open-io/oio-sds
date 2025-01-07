@@ -14,13 +14,13 @@
 # License along with this library.
 
 from oio.common.constants import (
+    EXISTING_SHARD_STATE_LOCKED,
     M2_PROP_ACCOUNT_NAME,
     M2_PROP_CONTAINER_NAME,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
     NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
     NEW_SHARD_STATE_CLEANING_UP,
-    EXISTING_SHARD_STATE_LOCKED,
 )
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OutOfSyncDB
@@ -30,10 +30,9 @@ from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import (
     Meta2DB,
-    Meta2DBNotFound,
     Meta2DBError,
+    Meta2DBNotFound,
 )
-
 
 # Coefficient from which the last shard can be merged into the root container.
 # Otherwise it is sharded to give 2 new shards which will necessarily have a size

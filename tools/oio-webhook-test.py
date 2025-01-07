@@ -21,7 +21,9 @@
 import argparse
 import json
 import socket
-from six.moves import BaseHTTPServer, socketserver as SocketServer
+
+from six.moves import BaseHTTPServer
+from six.moves import socketserver as SocketServer
 
 PORT = 9081
 DATA = {}

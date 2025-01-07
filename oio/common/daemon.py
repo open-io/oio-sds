@@ -15,17 +15,15 @@
 # License along with this library.
 
 
-from oio.common.green import eventlet_hubs, get_hub
-
-import sys
-import signal
-
 import os
+import signal
+import sys
 from re import sub
 
-from oio.common.utils import drop_privileges
 from oio.common.configuration import read_conf
-from oio.common.logger import redirect_stdio, get_logger
+from oio.common.green import eventlet_hubs, get_hub
+from oio.common.logger import get_logger, redirect_stdio
+from oio.common.utils import drop_privileges
 
 
 class Daemon(object):

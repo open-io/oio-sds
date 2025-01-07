@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 from collections import Counter, namedtuple
 from os.path import join
-import time
 from urllib.parse import urlparse
 
 from oio.common import exceptions as exc

@@ -15,16 +15,17 @@
 
 
 from enum import IntEnum
-import yaml
 
+import yaml
 from confluent_kafka import TopicCollection
 from confluent_kafka.admin import (
     AdminClient,
-    NewTopic,
-    NewPartitions,
-    KafkaException,
     ConfigResource,
+    KafkaException,
+    NewPartitions,
+    NewTopic,
 )
+
 from oio.cli import Lister, ShowOne
 
 

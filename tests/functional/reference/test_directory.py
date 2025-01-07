@@ -14,7 +14,9 @@
 # License along with this library.
 
 import logging
+
 import simplejson as json
+
 from tests.utils import BaseTestCase
 
 

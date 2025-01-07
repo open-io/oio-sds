@@ -25,13 +25,13 @@ LOOPS: average number of entries to create during each send batch
 
 from __future__ import print_function
 
+import random
 import sys
 import time
-import random
-from oio.event.evob import EventTypes
-from oio.conscience.client import ConscienceClient
-from oio.rdir.client import RdirClient
 
+from oio.conscience.client import ConscienceClient
+from oio.event.evob import EventTypes
+from oio.rdir.client import RdirClient
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
 

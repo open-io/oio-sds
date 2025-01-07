@@ -17,15 +17,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.green import eventlet_monkey_patch, get_watchdog
+# ruff: noqa: E402
+# isort: off
+from oio.common.green import eventlet_monkey_patch
 
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
 import sys
 
 from oio.blob.rebuilder import BlobRebuilder
-from oio.cli import make_logger_args_parser, get_logger_from_args
+from oio.cli import get_logger_from_args, make_logger_args_parser
+from oio.common.green import get_watchdog
 
 
 def make_arg_parser():

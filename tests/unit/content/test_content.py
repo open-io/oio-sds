@@ -15,8 +15,9 @@
 # License along with this library.
 
 import unittest
-from oio.content.content import Chunk, ChunksHelper
+
 from oio.common.utils import GeneratorIO
+from oio.content.content import Chunk, ChunksHelper
 
 
 class TestChunk(unittest.TestCase):

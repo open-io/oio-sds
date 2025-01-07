@@ -16,7 +16,8 @@
 
 from sys import exc_info
 
-from six import binary_type, reraise as six_reraise
+from six import binary_type
+from six import reraise as six_reraise
 
 
 class OioException(Exception):

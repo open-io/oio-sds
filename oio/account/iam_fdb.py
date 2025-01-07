@@ -14,15 +14,14 @@
 # License along with this library.
 
 import copy
-from functools import wraps
-from jsonschema import ValidationError, validate
 import os
 import re
 import time
+from functools import wraps
 
 import fdb
 from fdb.tuple import unpack
-
+from jsonschema import ValidationError, validate
 from werkzeug.exceptions import NotImplemented
 
 from oio.account.common_fdb import CommonFdb
@@ -30,7 +29,6 @@ from oio.common.easy_value import boolean_value
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.logger import get_logger
-
 
 # As AWS, 10 (user policy per user) * 2048 (max user policy size)
 MAX_USER_POLICY_SIZE = 10 * 2048

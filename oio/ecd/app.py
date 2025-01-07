@@ -14,21 +14,21 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six.moves import range
-from six.moves.urllib_parse import unquote
 from hashlib import md5
 
+from six.moves import range
+from six.moves.urllib_parse import unquote
 from werkzeug.exceptions import BadRequest
 from werkzeug.routing import Map, Rule
 from werkzeug.wrappers import Response
 
+from oio.api.ec import ECChunkDownloadHandler, EcMetachunkWriter
+from oio.api.io import ChunkReader
+from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common.constants import REQID_HEADER
 from oio.common.green import get_watchdog
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import request_id
-from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
-from oio.api.replication import ReplicatedMetachunkWriter
-from oio.api.io import ChunkReader
 from oio.common.wsgi import WerkzeugApp
 
 SYS_PREFIX = "x-oio-chunk-meta-"

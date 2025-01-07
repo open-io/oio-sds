@@ -15,19 +15,17 @@
 # License along with this library.
 
 
-from oio.common.green import LightQueue, Timeout, GreenPile, WatchdogTimeout
-
 from socket import error as SocketError
-
 from urllib.parse import urlparse
 
 from oio.api import io
-from oio.common.exceptions import OioTimeout, SourceReadError, SourceReadTimeout
-from oio.common.http import headers_from_object_metadata
-from oio.common.utils import encode, get_hasher, monotonic_time
-from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
+from oio.common.constants import CHUNK_HEADERS
+from oio.common.exceptions import OioTimeout, SourceReadError, SourceReadTimeout
+from oio.common.green import GreenPile, LightQueue, Timeout, WatchdogTimeout
+from oio.common.http import headers_from_object_metadata
 from oio.common.logger import get_logger
+from oio.common.utils import encode, get_hasher, monotonic_time
 
 LOGGER = get_logger({}, __name__)
 

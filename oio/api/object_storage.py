@@ -17,45 +17,46 @@
 
 from __future__ import absolute_import
 
+import os
+import time
+import warnings
 from copy import deepcopy
 from io import BytesIO
-import os
-import warnings
-import time
+from urllib.parse import quote_plus, unquote
 
-from urllib.parse import unquote, quote_plus
-
-from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
-from oio.api.io import MetachunkPreparer, LinkHandler
+from oio.api.io import LinkHandler, MetachunkPreparer
 from oio.api.replication import ReplicatedWriteHandler
-from oio.common.utils import (
-    cid_from_name,
-    GeneratorIO,
-    monotonic_time,
-    depaginate,
-    set_deadline_from_read_timeout,
-    compute_perfdata_stats,
-)
-from oio.common.easy_value import float_value, true_value
-from oio.common.green import sleep
-from oio.common.logger import get_logger
-from oio.common.decorators import ensure_headers, ensure_request_id, ensure_request_id2
-from oio.common.storage_method import STORAGE_METHODS
+from oio.common import exceptions as exc
+from oio.common.cache import aggregate_cache_perfdata, del_cached_object_metadata
 from oio.common.constants import (
     HEADER_PREFIX,
-    TIMEOUT_KEYS,
     SHARDING_ACCOUNT_PREFIX,
+    TIMEOUT_KEYS,
 )
 from oio.common.decorators import (
+    ensure_headers,
+    ensure_request_id,
+    ensure_request_id2,
     handle_account_not_found,
     handle_container_not_found,
     handle_object_not_found,
     patch_kwargs,
 )
-from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
+from oio.common.easy_value import float_value, true_value
 from oio.common.fullpath import encode_fullpath
-from oio.common.cache import del_cached_object_metadata, aggregate_cache_perfdata
+from oio.common.green import sleep
+from oio.common.logger import get_logger
+from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
+from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import (
+    GeneratorIO,
+    cid_from_name,
+    compute_perfdata_stats,
+    depaginate,
+    monotonic_time,
+    set_deadline_from_read_timeout,
+)
 from oio.content.quality import pop_chunk_qualities
 
 

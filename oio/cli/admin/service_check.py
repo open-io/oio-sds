@@ -16,10 +16,10 @@
 
 from six import iteritems
 
-from oio.crawler.integrity import Target
 from oio.cli import Lister
-from oio.cli.admin.item_check import ItemCheckCommand
 from oio.cli.admin.common import MultipleServicesCommandMixin
+from oio.cli.admin.item_check import ItemCheckCommand
+from oio.crawler.integrity import Target
 
 CID_PREFIX_COUNT = 65536
 
@@ -122,7 +122,7 @@ class Meta0Check(BaseCheckCommand):
     SRV = "meta0"
 
     def _take_action(self, parsed_args):
-        from oio.zk.client import get_meta0_paths, get_connected_handles
+        from oio.zk.client import get_connected_handles, get_meta0_paths
 
         self.logger.debug("Checking meta0 services")
 
@@ -207,8 +207,9 @@ class DirectoryCheck(BaseCheckCommand):
 
     def _take_action(self, parsed_args):
         import subprocess
-        from oio.directory.meta0 import Meta0Client
+
         from oio.common.json import json
+        from oio.directory.meta0 import Meta0Client
 
         self.logger.debug("Checking the directory bootstrap.")
 

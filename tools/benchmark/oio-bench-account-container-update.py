@@ -35,11 +35,12 @@ from __future__ import print_function
 
 import multiprocessing
 import time
+
 from eventlet import sleep
 from eventlet.greenpool import GreenPool
 from eventlet.queue import Empty, LightQueue
-from oio.account.client import AccountClient
 
+from oio.account.client import AccountClient
 
 ACCOUNT = None
 DURATION = 60.0

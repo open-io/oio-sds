@@ -18,25 +18,33 @@ import random
 
 from oio.api.base import HttpApi
 from oio.common.constants import HEADER_PREFIX, REQID_HEADER, TIMEOUT_KEYS
-from oio.common.easy_value import boolean_value, float_value
-from oio.common.exceptions import ClientException, NotFound, VolumeException
-from oio.common.exceptions import ServiceUnavailable, ServerException
+from oio.common.decorators import ensure_headers, ensure_request_id, patch_kwargs
+from oio.common.easy_value import boolean_value, float_value, true_value
 from oio.common.exceptions import (
-    OioNetworkException,
+    ClientException,
+    NotFound,
     OioException,
+    OioNetworkException,
+    ServerException,
+    ServiceUnavailable,
+    VolumeException,
+)
+from oio.common.exceptions import (
     reraise as oio_reraise,
 )
+from oio.common.green import GreenPile, sleep
 from oio.common.http_urllib3 import DEFAULT_NB_POOL_CONNECTIONS, DEFAULT_POOL_MAXSIZE
-from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
-from oio.common.decorators import ensure_headers, ensure_request_id, patch_kwargs
+from oio.common.utils import (
+    cid_from_name,
+    depaginate,
+    group_chunk_errors,
+    monotonic_time,
+    request_id,
+)
 from oio.conscience.client import ConscienceClient
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
-from oio.common.utils import depaginate, cid_from_name, monotonic_time
-from oio.common.green import sleep
-from oio.common.easy_value import true_value
-from oio.common.green import GreenPile
 
 RDIR_ACCT = "_RDIR"
 

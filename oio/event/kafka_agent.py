@@ -14,17 +14,17 @@
 
 import time
 
-from oio.account.client import AccountClient
 from oio.account.bucket_client import BucketClient
+from oio.account.client import AccountClient
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
-from oio.conscience.client import ConscienceClient
-from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
-from oio.event.evob import is_success, is_retryable
-from oio.event.loader import loadhandlers
-from oio.rdir.client import RdirClient
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
+from oio.conscience.client import ConscienceClient
+from oio.event.evob import is_retryable, is_success
+from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
+from oio.event.loader import loadhandlers
+from oio.rdir.client import RdirClient
 
 
 class KafkaEventWorker(KafkaConsumerWorker):

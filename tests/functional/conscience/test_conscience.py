@@ -20,8 +20,7 @@ import re
 import time
 
 from oio.common.json import json
-from tests.utils import BaseTestCase
-from tests.utils import CODE_SRVTYPE_NOTMANAGED
+from tests.utils import CODE_SRVTYPE_NOTMANAGED, BaseTestCase
 
 
 class TestConscienceFunctional(BaseTestCase):

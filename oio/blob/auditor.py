@@ -14,19 +14,18 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from contextlib import closing
-import zlib
 import time
+import zlib
+from contextlib import closing
 
 from oio.blob.utils import check_volume, read_chunk_metadata
-from oio.container.client import ContainerClient
-from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen, ratelimit
+from oio.common.daemon import Daemon
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.storage_method import parse_chunk_method
-
+from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen, ratelimit
+from oio.container.client import ContainerClient
 
 SLEEP_TIME = 30
 

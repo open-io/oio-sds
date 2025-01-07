@@ -17,14 +17,14 @@
 from cliff import lister
 
 from oio.account.rebuilder import AccountRebuilder
-from oio.container.repairer import ContainerRepairer
-from oio.content.repairer import ContentRepairer
 from oio.cli.admin.common import (
     AccountCommandMixin,
     ContainerCommandMixin,
     ObjectCommandMixin,
     ToolCommandMixin,
 )
+from oio.container.repairer import ContainerRepairer
+from oio.content.repairer import ContentRepairer
 
 
 class ItemRepairCommand(ToolCommandMixin, lister.Lister):

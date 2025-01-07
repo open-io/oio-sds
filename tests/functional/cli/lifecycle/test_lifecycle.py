@@ -17,6 +17,7 @@
 
 import uuid
 from tempfile import NamedTemporaryFile
+
 from tests.functional.cli import CliTestCase
 
 

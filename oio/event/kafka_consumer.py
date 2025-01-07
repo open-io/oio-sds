@@ -18,22 +18,21 @@ import os
 import signal
 import time
 import uuid
-
 from multiprocessing import Event, Process, Queue
 from multiprocessing.queues import Empty
 
 from confluent_kafka import TopicPartition
+
 from oio.common.easy_value import float_value, int_value
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
     KafkaConsumer,
-    KafkaSender,
     KafkaFatalException,
+    KafkaSender,
     get_retry_delay,
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time, ratelimit
-
 
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_BATCH_INTERVAL = 1.0

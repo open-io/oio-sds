@@ -14,33 +14,33 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
 import grp
 import hashlib
+import os
 import pwd
 import re
 import sys
 import time
-
-# specific import to avoid using the monkey patched one
-from time import monotonic as monotonic_time
-from urllib.parse import parse_qs, quote as _quote, urlparse
-
-from blake3 import blake3
+from codecs import getdecoder, getencoder
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
 from getpass import getuser
+from io import RawIOBase
+from itertools import chain, islice
 
 # from math import sqrt
 from random import getrandbits
-from io import RawIOBase
-from itertools import chain, islice
-from codecs import getdecoder, getencoder
+
+# specific import to avoid using the monkey patched one
+from time import monotonic as monotonic_time
+from urllib.parse import parse_qs, urlparse
+from urllib.parse import quote as _quote
+
+from blake3 import blake3
+
 from oio.common.constants import MAX_STRLEN_CHUNKID, MIN_STRLEN_CHUNKID
 from oio.common.easy_value import is_hexa
-
-from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
-
+from oio.common.exceptions import DeadlineReached, OioException, ServiceBusy
 
 try:
     import multiprocessing

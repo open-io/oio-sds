@@ -16,8 +16,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
 
@@ -27,31 +31,40 @@ from oio.common.daemon import run_daemon
 
 def make_arg_parser():
     parser = argparse.ArgumentParser(description=BlobAuditor.__doc__)
-    parser.add_argument('--namespace', '--ns', help="Namespace")
-    parser.add_argument('--volume', help="Volume to audit")
-    parser.add_argument('config', help="Configuration file or empty file")
+    parser.add_argument("--namespace", "--ns", help="Namespace")
+    parser.add_argument("--volume", help="Volume to audit")
+    parser.add_argument("config", help="Configuration file or empty file")
     parser.add_argument(
-        '--generate-config', action='store_true',
-        help="Generate configuration file with given arguments")
-    parser.add_argument('--append-config', action='store_true',
-                        help="Append given arguments on configuration file")
-    parser.add_argument('--daemon', action='store_true',
-                        help="Run auditor as a daemon.")
-    parser.add_argument('--report-interval', type=int,
-                        help="Interval between passes in seconds")
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help="More verbose output")
-    parser.add_argument('--user', help='run auditor as user')
-    parser.add_argument('--bytes-per-second', type=int,
-                        help="Throttle: max byte per second")
-    parser.add_argument('--chunks-per-second', type=int,
-                        help="Throttle: max chunks per second")
-    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
-    parser.add_argument('--log-level', choices=levels,
-                        help="Log level")
-    parser.add_argument('--log-syslog-prefix', help="Syslog prefix")
-    parser.add_argument('--log-facility', help="Log facility")
-    parser.add_argument('--log-address', help="Log address")
+        "--generate-config",
+        action="store_true",
+        help="Generate configuration file with given arguments",
+    )
+    parser.add_argument(
+        "--append-config",
+        action="store_true",
+        help="Append given arguments on configuration file",
+    )
+    parser.add_argument(
+        "--daemon", action="store_true", help="Run auditor as a daemon."
+    )
+    parser.add_argument(
+        "--report-interval", type=int, help="Interval between passes in seconds"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="More verbose output"
+    )
+    parser.add_argument("--user", help="run auditor as user")
+    parser.add_argument(
+        "--bytes-per-second", type=int, help="Throttle: max byte per second"
+    )
+    parser.add_argument(
+        "--chunks-per-second", type=int, help="Throttle: max chunks per second"
+    )
+    levels = ["DEBUG", "INFO", "WARN", "ERROR"]
+    parser.add_argument("--log-level", choices=levels, help="Log level")
+    parser.add_argument("--log-syslog-prefix", help="Syslog prefix")
+    parser.add_argument("--log-facility", help="Log facility")
+    parser.add_argument("--log-address", help="Log address")
 
     return parser
 
@@ -71,16 +84,16 @@ def generate_config_file(path, mode):
     def create_content():
         header = "[blob-auditor]\n"
         cont = dict()
-        add_value(cont, 'namespace', args.namespace)
-        add_value(cont, 'volume', args.volume)
-        add_value(cont, 'log_level', args.log_level)
-        add_value(cont, 'log_facility', args.log_facility)
-        add_value(cont, 'log_address', args.log_address)
-        add_value(cont, 'syslog_prefix', args.log_syslog_prefix)
-        add_value(cont, 'report_interval', args.report_interval)
-        add_value(cont, 'bytes_per_second', args.bytes_per_second)
-        add_value(cont, 'chunks_per_second', args.chunks_per_second)
-        add_value(cont, 'user', args.user)
+        add_value(cont, "namespace", args.namespace)
+        add_value(cont, "volume", args.volume)
+        add_value(cont, "log_level", args.log_level)
+        add_value(cont, "log_facility", args.log_facility)
+        add_value(cont, "log_address", args.log_address)
+        add_value(cont, "syslog_prefix", args.log_syslog_prefix)
+        add_value(cont, "report_interval", args.report_interval)
+        add_value(cont, "bytes_per_second", args.bytes_per_second)
+        add_value(cont, "chunks_per_second", args.chunks_per_second)
+        add_value(cont, "user", args.user)
         return dic_to_string(cont, header)
 
     with open(path, mode) as conf:
@@ -96,11 +109,11 @@ def main():
     config = args.config
 
     if args.generate_config:
-        config = generate_config_file(config, 'w')
+        config = generate_config_file(config, "w")
     if args.append_config:
-        config = generate_config_file(config, 'a')
+        config = generate_config_file(config, "a")
     run_daemon(BlobAuditor, config, daemon=daemon, verbose=verbose)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

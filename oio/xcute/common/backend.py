@@ -14,12 +14,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
+from datetime import datetime
+from fnmatch import fnmatchcase
 from functools import wraps
 
-from datetime import datetime
 import redis
-import random
-from fnmatch import fnmatchcase
 
 from oio.common.easy_value import debinarize, true_value
 from oio.common.exceptions import Forbidden, NotFound
@@ -27,7 +27,6 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
-
 
 END_MARKER = "\U0010fffd"
 

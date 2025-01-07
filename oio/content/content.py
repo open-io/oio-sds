@@ -16,21 +16,22 @@
 
 import json
 import time
-from oio.common import exceptions as exc
-from oio.common.logger import get_logger
+
 from oio.blob.client import BlobClient
-from oio.container.client import ContainerClient
+from oio.common import exceptions as exc
 from oio.common.decorators import ensure_request_id2
 from oio.common.exceptions import (
     ObjectUnavailable,
     UnrecoverableContent,
 )
 from oio.common.fullpath import encode_fullpath
+from oio.common.logger import get_logger
 from oio.common.storage_functions import (
-    _get_weighted_random_score,
     RAWX_PERMANENT_ERRORS,
+    _get_weighted_random_score,
 )
 from oio.common.storage_method import STORAGE_METHODS
+from oio.container.client import ContainerClient
 from oio.content.quality import ensure_better_chunk_qualities, pop_chunk_qualities
 from oio.event.evob import EventTypes
 

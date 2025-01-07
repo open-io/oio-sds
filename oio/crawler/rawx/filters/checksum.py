@@ -20,7 +20,7 @@ from shutil import move
 from oio.api.io import get_file_hash
 from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
-from oio.common.constants import CHUNK_SUFFIX_CORRUPT, CHUNK_QUARANTINE_FOLDER_NAME
+from oio.common.constants import CHUNK_QUARANTINE_FOLDER_NAME, CHUNK_SUFFIX_CORRUPT
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point

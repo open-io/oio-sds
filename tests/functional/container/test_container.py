@@ -18,38 +18,40 @@
 
 # pylint: disable=no-member
 
-import time
 import binascii
 import logging
 import random
-import simplejson as json
 import struct
-from tests.utils import (
-    BaseTestCase,
-    random_str,
-    random_id,
-    strange_paths,
-    CODE_POLICY_NOT_SUPPORTED,
-)
+import time
+
+import simplejson as json
+
 from oio.common import exceptions as exc
 from oio.common.constants import (
     DELETEMARKER_HEADER,
     ENDUSERREQUEST_HEADER,
-    OIO_DB_STATUS_NAME,
-    OIO_DB_ENABLED,
-    OIO_DB_FROZEN,
-    OIO_DB_DISABLED,
-    OBJECT_METADATA_PREFIX,
     FORCEVERSIONING_HEADER,
     M2_PROP_OBJECTS,
     M2_PROP_USAGE,
+    OBJECT_METADATA_PREFIX,
+    OIO_DB_DISABLED,
+    OIO_DB_ENABLED,
+    OIO_DB_FROZEN,
+    OIO_DB_STATUS_NAME,
     SIMULATEVERSIONING_HEADER,
     VERSIONID_HEADER,
 )
-from oio.event.evob import EventTypes
 from oio.common.easy_value import boolean_value
 from oio.common.utils import request_id
 from oio.conscience.client import ConscienceClient
+from oio.event.evob import EventTypes
+from tests.utils import (
+    CODE_POLICY_NOT_SUPPORTED,
+    BaseTestCase,
+    random_id,
+    random_str,
+    strange_paths,
+)
 
 
 def random_content():

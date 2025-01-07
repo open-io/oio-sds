@@ -16,11 +16,11 @@
 
 from random import randint
 
-from oio.rdir.client import RdirClient
+from oio.common.utils import cid_from_name
+from oio.container.client import ContainerClient
 from oio.directory.client import DirectoryClient
 from oio.directory.indexer import Meta2IndexingWorker
-from oio.container.client import ContainerClient
-from oio.common.utils import cid_from_name
+from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_str
 
 

@@ -12,8 +12,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
-from functools import reduce
 import random
 import re
 import signal
@@ -21,11 +19,13 @@ import ssl
 import sys
 import time
 import uuid
+from datetime import datetime
+from functools import reduce
 
 import pika
 from pika.exchange_type import ExchangeType
 
-from oio.account.backend_fdb import AccountBackendFdb, BYTES_FIELD, OBJECTS_FIELD
+from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD, AccountBackendFdb
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import MalformedBucket
 from oio.common.json import json

@@ -16,25 +16,26 @@
 
 import os
 from collections import OrderedDict
-from oio.common.constants import CHUNK_HEADERS
-from oio.common.green import get_watchdog, time, GreenPool
+
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
-from oio.common.exceptions import ContentDrained, ContentNotFound, SpareChunkException
-from oio.container.client import ContainerClient
-from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
+from oio.common.constants import CHUNK_HEADERS
+from oio.common.daemon import Daemon
+from oio.common.easy_value import int_value, true_value
+from oio.common.exceptions import ContentDrained, ContentNotFound, SpareChunkException
+from oio.common.fullpath import decode_fullpath
+from oio.common.green import GreenPool, get_watchdog, time
+from oio.common.logger import get_logger
 from oio.common.utils import (
+    cid_from_name,
     is_chunk_id_valid,
     paths_gen,
-    statfs,
-    cid_from_name,
     ratelimit,
+    statfs,
 )
-from oio.common.easy_value import int_value, true_value
-from oio.common.logger import get_logger
-from oio.common.fullpath import decode_fullpath
 from oio.conscience.client import ConscienceClient
+from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30

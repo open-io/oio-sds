@@ -23,7 +23,6 @@ from pika.exchange_type import ExchangeType  # noqa: F401, pylint: disable=unuse
 
 from oio.common.utils import rotate_list
 
-
 DEFAULT_ENDPOINT = "amqp://guest:guest@127.0.0.1:5672/%2F"
 DEFAULT_EXCHANGE = "oio"
 DEFAULT_QUEUE = "oio"

@@ -16,7 +16,7 @@
 import signal
 from multiprocessing import Event, Process
 from os import makedirs, nice
-from os.path import join, basename, splitext, isdir, isfile
+from os.path import basename, isdir, isfile, join, splitext
 from random import randint
 from time import monotonic, sleep
 
@@ -25,7 +25,7 @@ from oio.blob.utils import check_volume_for_service_type
 from oio.common.daemon import Daemon
 from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ConfigurationException
-from oio.common.green import get_watchdog, GreenPool, time
+from oio.common.green import GreenPool, get_watchdog, time
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit

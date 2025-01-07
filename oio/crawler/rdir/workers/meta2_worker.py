@@ -15,10 +15,11 @@
 
 import logging
 from os.path import isfile
+
 from oio.common import exceptions as exc
-from oio.common.green import time
 from oio.common.easy_value import int_value
-from oio.common.utils import request_id, ratelimit
+from oio.common.green import time
+from oio.common.utils import ratelimit, request_id
 from oio.crawler.common.crawler import TAGS_TO_DEBUG
 from oio.crawler.rdir.workers.common import RdirWorker
 from oio.directory.meta2 import Meta2Database

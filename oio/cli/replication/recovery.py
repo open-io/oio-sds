@@ -13,18 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections import OrderedDict
 import json
 import re
 import time
+from collections import OrderedDict
 from typing import Any, Dict, Generator, List, Tuple
+
 import xmltodict
 
 from oio.cli import Command
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
-
 
 OBJECT_REPLICATION_PENDING = "PENDING"
 OBJECT_REPLICATION_REPLICA = "REPLICA"

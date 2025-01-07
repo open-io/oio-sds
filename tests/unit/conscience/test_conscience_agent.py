@@ -14,6 +14,7 @@
 # License along with this library.
 
 import unittest
+
 from mock import MagicMock as Mock
 
 from oio.conscience.checker.asn1 import Asn1PingChecker

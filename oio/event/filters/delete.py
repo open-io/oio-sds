@@ -15,11 +15,12 @@
 
 from copy import deepcopy
 
-from oio.common.kafka import GetTopicMixin, get_retry_delay
 from oio.common.kafka import (
     DEFAULT_DELETE_TOPIC_PREFIX,
+    GetTopicMixin,
     KafkaSender,
     KafkaSendException,
+    get_retry_delay,
 )
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter

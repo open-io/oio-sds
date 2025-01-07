@@ -17,11 +17,7 @@
 
 from time import time as now
 from unittest.mock import patch
-from tests.utils import BaseTestCase, random_str
 
-from oio.common.utils import cid_from_name, request_id
-from oio.crawler.meta2.filters.draining import Draining
-from oio.event.evob import EventTypes
 from oio.common.constants import (
     DRAINING_STATE_IN_PROGRESS,
     DRAINING_STATE_NEEDED,
@@ -31,6 +27,10 @@ from oio.common.constants import (
     M2_PROP_SHARDING_LOWER,
 )
 from oio.common.kafka_http import KafkaClusterHealth
+from oio.common.utils import cid_from_name, request_id
+from oio.crawler.meta2.filters.draining import Draining
+from oio.event.evob import EventTypes
+from tests.utils import BaseTestCase, random_str
 
 
 def fake_cb(_status, _msg):

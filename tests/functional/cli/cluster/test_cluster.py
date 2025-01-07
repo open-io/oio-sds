@@ -14,8 +14,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
 import json
+import time
+
 from tests.functional.cli import CliTestCase
 
 CLUSTER_FIELDS = ["namespace", "storage_policy", "chunksize"]

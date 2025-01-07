@@ -16,14 +16,15 @@
 
 """Command-line interface to the OpenIO APIs"""
 
-import sys
 import logging
+import sys
+
 from cliff.app import App
 
 from oio import __version__ as oio_version
 from oio.cli import add_common_parser_options
-from oio.cli.common.commandmanager import CommandManager
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
+from oio.cli.common.commandmanager import CommandManager
 from oio.common.json import json
 from oio.common.utils import request_id
 

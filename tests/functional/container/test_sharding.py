@@ -18,8 +18,8 @@
 import random
 import sqlite3
 import time
-from unittest.mock import ANY, call, patch
 from datetime import datetime, timedelta, timezone
+from unittest.mock import ANY, call, patch
 
 from oio.common.constants import (
     M2_PROP_BUCKET_NAME,
@@ -30,8 +30,8 @@ from oio.common.constants import (
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TABLES_CLEANED,
     M2_PROP_SHARDING_UPPER,
-    NEW_SHARD_STATE_CLEANED_UP,
     M2_PROP_VERSIONING_POLICY,
+    NEW_SHARD_STATE_CLEANED_UP,
     OIO_DB_ENABLED,
     OIO_DB_FROZEN,
     TIMEOUT_HEADER,

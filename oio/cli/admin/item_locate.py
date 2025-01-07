@@ -14,21 +14,21 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from cliff import lister
 from itertools import chain
+
+from cliff import lister
 from six import iteritems
 from six.moves.urllib_parse import quote, urlparse
 
+from oio.cli.admin.common import (
+    AccountCommandMixin,
+    ChunkCommandMixin,
+    ContainerCommandMixin,
+    ObjectCommandMixin,
+)
 from oio.common import exceptions
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
-from oio.cli.admin.common import (
-    AccountCommandMixin,
-    ContainerCommandMixin,
-    ObjectCommandMixin,
-    ChunkCommandMixin,
-)
-
 
 DUMMY_SERVICE = {"addr": None, "score": 0, "scores": {}, "tags": {}}
 

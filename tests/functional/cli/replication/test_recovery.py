@@ -14,6 +14,7 @@
 # License along with this library.
 
 import json
+
 from oio.common.easy_value import true_value
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC
 from oio.common.utils import request_id

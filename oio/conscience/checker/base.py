@@ -16,9 +16,9 @@
 
 
 from oio.common import exceptions as exc
+from oio.common.easy_value import float_value
 from oio.common.green import Timeout
 from oio.common.utils import RingBuffer
-from oio.common.easy_value import float_value
 
 
 class BaseChecker(object):

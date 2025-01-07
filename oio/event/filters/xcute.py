@@ -14,11 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.event.evob import Event, EventTypes
-from oio.event.beanstalk import BeanstalkError
-from oio.event.filters.base import Filter
 from oio.common.easy_value import int_value
 from oio.common.json import json
+from oio.event.beanstalk import BeanstalkError
+from oio.event.evob import Event, EventTypes
+from oio.event.filters.base import Filter
 from oio.xcute.common.worker import BeanstalkXcuteWorker, KafkaXcuteWorker
 
 

@@ -19,9 +19,9 @@ from datetime import datetime
 from oio.cli import Lister, ShowOne, flat_dict_from_dict
 from oio.cli.admin.xcute import XcuteCommand
 from oio.cli.common.utils import KeyValueAction
+from oio.common.utils import depaginate
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
-from oio.common.utils import depaginate
 
 
 class JobList(XcuteCommand, Lister):

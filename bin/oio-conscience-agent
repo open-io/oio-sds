@@ -15,17 +15,20 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
-from oio.conscience.agent import ConscienceAgent
-from oio.common.daemon import run_daemon
-from oio.common.configuration import parse_options
-from optparse import OptionParser
+from optparse import OptionParser  # noqa: E402
 
-if __name__ == '__main__':
+from oio.common.configuration import parse_options  # noqa: E402
+from oio.common.daemon import run_daemon  # noqa: E402
+from oio.conscience.agent import ConscienceAgent  # noqa: E402
+
+if __name__ == "__main__":
     parser = OptionParser("%prog CONFIG [options]")
     config, options = parse_options(parser)
-    options.update({'use_yaml': True})
+    options.update({"use_yaml": True})
     run_daemon(ConscienceAgent, config, **options)

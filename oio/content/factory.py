@@ -14,16 +14,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.blob.client import BlobClient
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
-from oio.common.exceptions import ContentNotFound
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import ContentNotFound, NotFound
 from oio.common.logger import get_logger
+from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
-from oio.blob.client import BlobClient
-from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
-from oio.common.storage_method import STORAGE_METHODS
+from oio.content.plain import PlainContent
 
 
 class ContentFactory(object):

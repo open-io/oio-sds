@@ -16,13 +16,15 @@
 
 from random import shuffle
 
-from oio.common.exceptions import OrphanChunk
-from oio.content.content import Content, Chunk
-from oio.api.ec import ECWriteHandler, ECRebuildHandler
-from oio.common.exceptions import ChunkException
-from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
+from oio.api.ec import ECRebuildHandler, ECWriteHandler
+from oio.common.exceptions import ChunkException, OrphanChunk
+from oio.common.storage_functions import (
+    _get_weighted_random_score,
+    _sort_chunks,
+    fetch_stream_ec,
+)
 from oio.common.utils import GeneratorIO, request_id
-from oio.common.storage_functions import _get_weighted_random_score
+from oio.content.content import Chunk, Content
 
 
 class ECContent(Content):

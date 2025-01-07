@@ -18,11 +18,11 @@
 
 from __future__ import print_function
 
-from tests.utils import BaseTestCase
 from tests.utils import (
-    CODE_SRVTYPE_NOTMANAGED,
     CODE_POLICY_NOT_SATISFIABLE,
     CODE_POLICY_NOT_SUPPORTED,
+    CODE_SRVTYPE_NOTMANAGED,
+    BaseTestCase,
 )
 
 

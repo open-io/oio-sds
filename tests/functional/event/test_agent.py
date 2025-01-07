@@ -16,6 +16,7 @@
 import tempfile
 import time
 from multiprocessing import Queue
+
 from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import int_value
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_TOPIC

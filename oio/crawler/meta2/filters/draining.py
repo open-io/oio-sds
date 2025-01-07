@@ -22,8 +22,8 @@ from oio.common.constants import (
     M2_PROP_SHARDS,
 )
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.exceptions import OioUnhealthyKafkaClusterError
+from oio.common.kafka_http import KafkaClusterHealth
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError

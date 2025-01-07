@@ -14,13 +14,14 @@
 # License along with this library.
 
 import unittest
+
 from oio.common.exceptions import DeadlineReached
-from oio.common.storage_functions import obj_range_to_meta_chunk_range
 from oio.common.http_urllib3 import get_pool_manager
+from oio.common.storage_functions import obj_range_to_meta_chunk_range
 from oio.common.utils import (
     deadline_to_timeout,
-    set_deadline_from_read_timeout,
     monotonic_time,
+    set_deadline_from_read_timeout,
 )
 
 

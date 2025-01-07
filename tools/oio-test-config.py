@@ -20,8 +20,9 @@
 from __future__ import print_function
 
 import os
-import yaml
 from optparse import OptionParser as OptionParser
+
+import yaml
 
 default_conf_path = os.path.expandvars("${HOME}/.oio/sds/conf/test.yml")
 conf_path = os.environ.get("SDS_TEST_CONFIG_FILE", default_conf_path)

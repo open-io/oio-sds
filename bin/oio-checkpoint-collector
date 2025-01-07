@@ -14,23 +14,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
 
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
 import json
 import signal
 import time
-from os.path import exists, join
 from collections import OrderedDict
 from multiprocessing.queues import Empty
+from os.path import exists, join
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import read_conf
 from oio.common.constants import MULTIUPLOAD_SUFFIX
-from oio.common.exceptions import NoSuchContainer
 from oio.common.easy_value import int_value
+from oio.common.exceptions import NoSuchContainer
 from oio.common.green import GreenPool, LightQueue, sleep
 from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
@@ -40,12 +43,11 @@ from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
 from oio.lifecycle.metrics import (
-    LifecycleMetricTracker,
     LifecycleAction,
+    LifecycleMetricTracker,
     LifecycleStep,
     statsd_key,
 )
-
 
 CHECKPOINT_TOPIC_DEFAULT = "oio-lifecycle-checkpoint"
 

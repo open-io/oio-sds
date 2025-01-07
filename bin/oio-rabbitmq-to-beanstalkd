@@ -19,8 +19,8 @@ import os
 from oio.cli.common.utils import KeyValueAction
 from oio.common.logger import get_logger
 from oio.event.amqp_consumer import (
-    AmqpConsumerWorker,
     AmqpConsumerPool,
+    AmqpConsumerWorker,
     RejectMessage,
     RetryLater,
 )

@@ -16,14 +16,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
 import sys
 
-from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.blob.registrator import BlobRegistrator
+from oio.cli import get_logger_from_args, make_logger_args_parser
 
 
 def make_arg_parser():
@@ -36,9 +40,11 @@ it registers them in their container.
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
 
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
-    parser.add_argument('namespace', help="Namespace")
+    parser.add_argument("namespace", help="Namespace")
     parser.add_argument(
-        "action", metavar='action', choices=('insert', 'update', 'check'),
+        "action",
+        metavar="action",
+        choices=("insert", "update", "check"),
         help="""
 A value among 'insert', 'update' and 'check'.
 'insert': Should the script insert the chunkks in the container,
@@ -46,19 +52,28 @@ without overriding the chunks in place.
 'update': Should the script update the meta2 with the xattr.
 'check': Only query the meta2 to check for the presence
 of the chunks in the volume.
-""")
-    parser.add_argument('volume', help="The volume path to use")
-    parser.add_argument('container_ids', metavar='<container_id>', nargs='*',
-                        help="The container IDs to use")
+""",
+    )
+    parser.add_argument("volume", help="The volume path to use")
+    parser.add_argument(
+        "container_ids",
+        metavar="<container_id>",
+        nargs="*",
+        help="The container IDs to use",
+    )
 
     parser.add_argument(
-        '--chunks-per-second', type=int,
-        help='Max chunks per second. '
-             '(default=%s)' % BlobRegistrator.DEFAULT_CHUNKS_PER_SECOND)
+        "--chunks-per-second",
+        type=int,
+        help="Max chunks per second. "
+        "(default=%s)" % BlobRegistrator.DEFAULT_CHUNKS_PER_SECOND,
+    )
     parser.add_argument(
-        '--report-interval', type=int,
-        help='Report interval in seconds '
-             '(default=%d)' % BlobRegistrator.DEFAULT_REPORT_INTERVAL)
+        "--report-interval",
+        type=int,
+        help="Report interval in seconds "
+        "(default=%d)" % BlobRegistrator.DEFAULT_REPORT_INTERVAL,
+    )
 
     return parser
 
@@ -67,26 +82,25 @@ def main():
     args = make_arg_parser().parse_args()
 
     conf = {}
-    conf['namespace'] = args.namespace
-    conf['action'] = args.action
+    conf["namespace"] = args.namespace
+    conf["action"] = args.action
 
     logger = get_logger_from_args(args, default_conf=conf)
 
     if args.chunks_per_second is not None:
-        conf['chunks_per_second'] = args.chunks_per_second
+        conf["chunks_per_second"] = args.chunks_per_second
     if args.report_interval is not None:
-        conf['report_interval'] = args.report_interval
+        conf["report_interval"] = args.report_interval
 
     success = False
     try:
-        registrator = BlobRegistrator(conf, logger, args.volume,
-                                      args.container_ids)
+        registrator = BlobRegistrator(conf, logger, args.volume, args.container_ids)
         success = registrator.pass_volume()
     except Exception as e:
-        logger.exception('ERROR in registrator: %s' % e)
+        logger.exception("ERROR in registrator: %s" % e)
     if not success:
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

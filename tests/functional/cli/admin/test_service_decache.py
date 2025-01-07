@@ -16,9 +16,8 @@
 
 from oio.common.easy_value import true_value
 from oio.common.json import json
-
-from tests.utils import random_str
 from tests.functional.cli import CliTestCase
+from tests.utils import random_str
 
 
 class ServiceDecacheTest(CliTestCase):

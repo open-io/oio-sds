@@ -25,7 +25,6 @@ from oio.common.utils import ratelimit
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender
 
-
 DISTRIBUTED_DISPATCHER_TIMEOUT = 300
 
 

@@ -14,26 +14,25 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import eventlet, Timeout, greenthread, get_watchdog
-
-import greenlet
 import os
 import signal
 import sys
 import time
 
+import greenlet
+
 from oio.account.client import AccountClient
-from oio.rdir.client import RdirClient
-from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
-from oio.common.utils import drop_privileges
 from oio.common.easy_value import float_value, int_value
+from oio.common.exceptions import ClientException, ExplicitBury, OioNetworkException
+from oio.common.green import Timeout, eventlet, get_watchdog, greenthread
 from oio.common.json import json
-from oio.event.evob import is_success, is_retryable
-from oio.event.loader import loadhandlers
-from oio.common.exceptions import ExplicitBury, OioNetworkException, ClientException
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
-
+from oio.common.utils import drop_privileges
+from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
+from oio.event.evob import is_retryable, is_success
+from oio.event.loader import loadhandlers
+from oio.rdir.client import RdirClient
 
 SLEEP_TIME = 1
 ACCOUNT_SERVICE_TIMEOUT = 60

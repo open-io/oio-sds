@@ -15,9 +15,9 @@
 
 import time
 
+from oio.common.constants import BUCKET_PROP_RATELIMIT
 from oio.common.exceptions import Forbidden, NotFound
 from tests.functional.account.helpers import AccountBaseTestCase
-from oio.common.constants import BUCKET_PROP_RATELIMIT
 
 
 class TestBucketClient(AccountBaseTestCase):

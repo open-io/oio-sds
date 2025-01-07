@@ -15,18 +15,18 @@
 # License along with this library.
 
 from datetime import datetime
+
 from oio.blob.utils import check_volume_for_service_type
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.common.daemon import Daemon
-from oio.common.easy_value import float_value, int_value, boolean_value
-from oio.common.green import ContextPool
+from oio.common.easy_value import boolean_value, float_value, int_value
+from oio.common.green import ContextPool, time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
+from oio.common.utils import paths_gen, ratelimit
 from oio.directory.client import DirectoryClient
 from oio.rdir.client import RdirClient
-from oio.common.green import time
-from oio.common.utils import paths_gen, ratelimit
 
 
 class Meta2IndexingWorker(object):

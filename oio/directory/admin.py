@@ -15,6 +15,7 @@
 # License along with this library.
 
 from functools import wraps
+
 from oio.common.client import ProxyClient
 from oio.conscience.client import ConscienceClient
 

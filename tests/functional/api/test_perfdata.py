@@ -18,7 +18,7 @@ import logging
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.storage_method import STORAGE_METHODS
-from tests.utils import random_str, BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
 
 class TestObjectStorageApiPerfdata(BaseTestCase):

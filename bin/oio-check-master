@@ -16,68 +16,77 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
-import argparse  # noqa
-import json  # noqa
-import logging  # noqa
-from os import getenv  # noqa
+import argparse
+import json
+import logging
+from os import getenv
 
-from oio.common.http_urllib3 import get_pool_manager  # noqa
-from oio.common.configuration import load_namespace_conf  # noqa
-
+from oio.common.configuration import load_namespace_conf
+from oio.common.http_urllib3 import get_pool_manager
 
 http = get_pool_manager()
 
 
 def make_proxy_url(action, **kwargs):
-    url = 'http://%s/v3.0/%s/%s?type=%s' % (
-        kwargs['proxy'], kwargs['ns'], action, kwargs['srv'])
+    url = "http://%s/v3.0/%s/%s?type=%s" % (
+        kwargs["proxy"],
+        kwargs["ns"],
+        action,
+        kwargs["srv"],
+    )
     cid = kwargs.get("cid")
     if cid:
-        url += '&cid=%s' % cid
+        url += "&cid=%s" % cid
         return url
 
-    if ('acct' not in kwargs or 'ref' not in kwargs):
+    if "acct" not in kwargs or "ref" not in kwargs:
         raise Exception("Missing parameters cid or (acct, ref)")
 
-    url += '&acct=%s&ref=%s' % (kwargs['acct'], kwargs['ref'])
+    url += "&acct=%s&ref=%s" % (kwargs["acct"], kwargs["ref"])
     return url
 
 
 def leave_all(**kwargs):
-    url = make_proxy_url('admin/leave', **kwargs)
+    url = make_proxy_url("admin/leave", **kwargs)
     info = (
-        kwargs['srv'] + ' ' + kwargs.get(
-            'cid', '%s/%s' % (kwargs.get('acct'), kwargs.get('ref'))))
+        kwargs["srv"]
+        + " "
+        + kwargs.get("cid", "%s/%s" % (kwargs.get("acct"), kwargs.get("ref")))
+    )
 
-    ret = http.request('POST', url)
+    ret = http.request("POST", url)
     if ret.status != 200:
-        logging.error("%s: received error (%s): %s",
-                      info, ret.status, ret.data)
+        logging.error("%s: received error (%s): %s", info, ret.status, ret.data)
     else:
         for url, v in json.loads(ret.data).items():
-            logging.info('%s -> %s', url, v['status'])
+            logging.info("%s -> %s", url, v["status"])
 
 
 def check_master(**kwargs):
-    url = make_proxy_url('admin/status', **kwargs)
+    url = make_proxy_url("admin/status", **kwargs)
     info = (
-        kwargs['srv'] + ' ' + kwargs.get(
-            'cid', '%s/%s' % (kwargs.get('acct'), kwargs.get('ref'))))
+        kwargs["srv"]
+        + " "
+        + kwargs.get("cid", "%s/%s" % (kwargs.get("acct"), kwargs.get("ref")))
+    )
 
-    ret = http.request('POST', url)
+    ret = http.request("POST", url)
     if ret.status != 200:
-        logging.error("%s: received error (%s): %s",
-                      info, ret.status, ret.data)
+        logging.error("%s: received error (%s): %s", info, ret.status, ret.data)
         return False
 
     data = json.loads(ret.data)
     for url, v in data.items():
-        logging.debug('%s -> %s', url, v['status'])
+        logging.debug("%s -> %s", url, v["status"])
 
-    master = [v for k, v in data.items() if v['status']['status'] == 200]
+    master = [v for k, v in data.items() if v["status"]["status"] == 200]
     if len(master) == 1:
         logging.info("%s: one master", info)
         return True
@@ -87,42 +96,66 @@ def check_master(**kwargs):
 
 
 def main():
-    all_types = ('meta0', 'meta1', 'meta2')
-    descr = "Check an OpenIO entity that is based on sqliterepo " + \
-            "replicated databases does not exhibit multiple masters " + \
-            "in its paths of directories."
+    all_types = ("meta0", "meta1", "meta2")
+    descr = (
+        "Check an OpenIO entity that is based on sqliterepo "
+        + "replicated databases does not exhibit multiple masters "
+        + "in its paths of directories."
+    )
     parser = argparse.ArgumentParser(description=descr)
     parser.add_argument(
-        "--verbose", "-v",
-        dest='flag_verbose', action='store_true', default=False,
-        help="Enable the verbose mode")
+        "--verbose",
+        "-v",
+        dest="flag_verbose",
+        action="store_true",
+        default=False,
+        help="Enable the verbose mode",
+    )
     parser.add_argument(
-        "--type", '-t',
-        dest="type", action='append', default=[],
+        "--type",
+        "-t",
+        dest="type",
+        action="append",
+        default=[],
         choices=all_types,
-        help="Service(s) to check. Default: all of them.")
+        help="Service(s) to check. Default: all of them.",
+    )
     parser.add_argument(
         "--cid",
-        dest="flag_cid", action="store_true",
+        dest="flag_cid",
+        action="store_true",
         help="Specify the list of tokens are CID (id of containers) "
-        "intead of reference names.")
+        "intead of reference names.",
+    )
     parser.add_argument(
-        "--fix", "-x",
-        dest="flag_fix", action="store_true",
+        "--fix",
+        "-x",
+        dest="flag_fix",
+        action="store_true",
         help="USE THIS AT YOUR OWN RISK. "
-        "Attempt to come back to a single-master status")
+        "Attempt to come back to a single-master status",
+    )
     parser.add_argument(
         "--oio-account",
-        dest="account", type=str, default=getenv('OIO_ACCOUNT'),
+        dest="account",
+        type=str,
+        default=getenv("OIO_ACCOUNT"),
         help="Specify an account instead of the OIO_ACCOUNT env var."
-        " (useless with --cid)")
+        " (useless with --cid)",
+    )
     parser.add_argument(
         "--oio-ns",
-        dest="ns", type=str, default=getenv('OIO_NS'),
-        help="Specify a namespace instead on the OIO_NS env var.")
+        dest="ns",
+        type=str,
+        default=getenv("OIO_NS"),
+        help="Specify a namespace instead on the OIO_NS env var.",
+    )
     parser.add_argument(
-        "container_or_cid", metavar='<CONTAINER_OR_CID>',
-        nargs='+', help="Items to check")
+        "container_or_cid",
+        metavar="<CONTAINER_OR_CID>",
+        nargs="+",
+        help="Items to check",
+    )
     args = parser.parse_args()
 
     if not args.ns:
@@ -137,23 +170,25 @@ def main():
     # Logging configuration
     if args.flag_verbose:
         logging.basicConfig(
-            format='%(asctime)s %(message)s',
-            datefmt='%m/%d/%Y %I:%M:%S',
-            level=logging.DEBUG)
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S",
+            level=logging.DEBUG,
+        )
     else:
         logging.basicConfig(
-            format='%(asctime)s %(message)s',
-            datefmt='%m/%d/%Y %I:%M:%S',
-            level=logging.INFO)
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S",
+            level=logging.INFO,
+        )
 
-    params = {'proxy': conf['proxy'], 'ns': args.ns}
+    params = {"proxy": conf["proxy"], "ns": args.ns}
     if args.account:
-        params['acct'] = args.account
+        params["acct"] = args.account
     for item in args.container_or_cid:
         if args.flag_cid:
-            params['cid'] = item
+            params["cid"] = item
         else:
-            params['ref'] = item
+            params["ref"] = item
         for srvtype in args.type:
             if not check_master(srv=srvtype, **params) and args.flag_fix:
                 leave_all(srv=srvtype, **params)

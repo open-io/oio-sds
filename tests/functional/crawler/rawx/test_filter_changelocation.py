@@ -19,12 +19,12 @@ import time
 from os import listdir, rename
 from os.path import dirname, exists, isdir, isfile, islink, join
 from shutil import copy, copystat
+
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.exceptions import Conflict
 from oio.common.utils import request_id
 from oio.crawler.rawx.filters.changelocation import Changelocation
 from oio.event.evob import EventTypes
-
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
 from tests.utils import BaseTestCase, random_str
 

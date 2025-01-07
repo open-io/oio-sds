@@ -15,17 +15,26 @@
 # License along with this library.
 
 from functools import wraps
+
+from werkzeug.exceptions import (
+    BadRequest as HTTPBadRequest,
+)
+from werkzeug.exceptions import (
+    Forbidden as HTTPForbidden,
+)
 from werkzeug.exceptions import (
     HTTPException,
-    BadRequest as HTTPBadRequest,
-    Forbidden as HTTPForbidden,
-    NotFound as HTTPNotFound,
+)
+from werkzeug.exceptions import (
     InternalServerError as HTTPInternalServerError,
+)
+from werkzeug.exceptions import (
+    NotFound as HTTPNotFound,
 )
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
-from oio.common.easy_value import int_value, boolean_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.json import json
 from oio.common.logger import get_logger

@@ -14,14 +14,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
 import itertools
+import logging
+from time import time as now
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError
 from kazoo.security import OPEN_ACL_UNSAFE
-from time import time as now
-
 
 _PREFIX = "/hc"
 _PREFIX_NS = _PREFIX + "/ns"

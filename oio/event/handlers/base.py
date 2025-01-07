@@ -17,7 +17,7 @@
 from oio.common.kafka import get_retry_delay
 from oio.event.beanstalk import ConnectionError as BeanstalkdConnectionError
 from oio.event.consumer import StopServe
-from oio.event.evob import Event, EventOk, EventError, RetryableEventError
+from oio.event.evob import Event, EventError, EventOk, RetryableEventError
 
 
 class Handler(object):

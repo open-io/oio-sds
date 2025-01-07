@@ -14,12 +14,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
-import sys
-import socket
 import errno
 import logging
-from logging.handlers import SysLogHandler, SocketHandler
+import os
+import socket
+import sys
+from logging.handlers import SocketHandler, SysLogHandler
 
 
 class StreamToLogger(object):

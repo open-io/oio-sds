@@ -14,13 +14,13 @@
 # License along with this library.
 
 
-import unittest
-from unittest.mock import patch, ANY
 import time
+import unittest
+from unittest.mock import ANY, patch
 
-from oio.common.exceptions import ServiceBusy, OioTimeout, NotFound
 from oio.api.base import HttpApi
-from oio.common.kafka_http import KafkaMetricsClient, KafkaClusterSpaceStatus
+from oio.common.exceptions import NotFound, OioTimeout, ServiceBusy
+from oio.common.kafka_http import KafkaClusterSpaceStatus, KafkaMetricsClient
 
 
 class KafkaMetricClientTest(unittest.TestCase):

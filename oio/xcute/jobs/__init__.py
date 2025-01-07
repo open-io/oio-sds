@@ -22,7 +22,6 @@ from .meta2_relocator import Meta2RelocationJob
 from .rdir_decommissionner import RdirDecommissionJob
 from .tester import TesterJob
 
-
 JOB_TYPES = {
     Meta2DecommissionJob.JOB_TYPE: Meta2DecommissionJob,
     Meta2RebuildJob.JOB_TYPE: Meta2RebuildJob,

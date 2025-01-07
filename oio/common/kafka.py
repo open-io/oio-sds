@@ -12,17 +12,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
 import json
 import time
+from datetime import datetime
 from urllib.parse import urlparse
+
 from confluent_kafka import (
-    Consumer,
-    Producer,
-    KafkaException,
-    TopicPartition,
     OFFSET_INVALID,
+    Consumer,
+    KafkaException,
+    Producer,
+    TopicPartition,
 )
+
 from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioException

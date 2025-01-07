@@ -22,7 +22,6 @@ import time
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from oio.xcute.client import XcuteClient
-
 from tests.utils import BaseTestCase
 
 

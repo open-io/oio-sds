@@ -15,26 +15,30 @@
 
 import math
 from collections import OrderedDict
+
 from redis import (
     ConnectionError as RedisConnectionError,
+)
+from redis import (
     TimeoutError as RedisTimeoutError,
 )
+
 from oio.common.constants import STRLEN_REQID
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden
-from oio.common.logger import get_logger
 from oio.common.green import sleep, threading, time
 from oio.common.json import json
 from oio.common.kafka import (
+    DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+    DEFAULT_XCUTE_JOB_TOPIC,
     KafkaConsumer,
     KafkaFatalException,
     KafkaSender,
-    DEFAULT_XCUTE_JOB_TOPIC,
-    DEFAULT_XCUTE_JOB_REPLY_TOPIC,
 )
+from oio.common.logger import get_logger
 from oio.common.utils import ratelimit, request_id
 from oio.event.evob import EventTypes
-from oio.event.kafka_consumer import KafkaRejectorMixin, KafkaOffsetHelperMixin
+from oio.event.kafka_consumer import KafkaOffsetHelperMixin, KafkaRejectorMixin
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES

@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from datetime import datetime, timezone
 import time
+from datetime import datetime, timezone
 
 TIMESTAMP_FORMAT = "%016.05f"
 

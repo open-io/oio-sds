@@ -17,10 +17,8 @@
 """Lifecycle-related commands"""
 
 
-from logging import getLogger
-
 from collections import defaultdict
-
+from logging import getLogger
 
 from oio.cli import Command, Lister
 from oio.common.exceptions import LifecycleNotFound

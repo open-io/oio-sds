@@ -16,26 +16,24 @@
 # License along with this library.
 
 import logging
-import sys
 import os
 import random
 import string
-
+import sys
 from collections import defaultdict
 from functools import wraps
 from subprocess import check_call
-
 from urllib.parse import urlencode
 
-import yaml
 import testtools
-from confluent_kafka import TopicPartition, OFFSET_END
+import yaml
+from confluent_kafka import OFFSET_END, TopicPartition
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
-from oio.common.constants import REQID_HEADER, M2_PROP_CONTAINER_NAME
+from oio.common.constants import M2_PROP_CONTAINER_NAME, REQID_HEADER
+from oio.common.green import eventlet, get_watchdog, time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
-from oio.common.green import time, get_watchdog, eventlet
 from oio.common.kafka import DEFAULT_PRESERVED_TOPIC, KafkaConsumer
 from oio.common.storage_method import STORAGE_METHODS
 from oio.event.beanstalk import Beanstalk, ResponseError

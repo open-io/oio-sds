@@ -16,15 +16,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+
+# isort: on
 
 import argparse
 import sys
 
+from oio.cli import get_logger_from_args, make_logger_args_parser
 from oio.directory.meta2 import Meta2Database
-
-from oio.cli import make_logger_args_parser, get_logger_from_args
 
 
 def make_arg_parser():
@@ -33,40 +37,37 @@ def make_arg_parser():
     If the destination service isn't set,
     a destination service is automatically selected.
     """
-    parser = argparse.ArgumentParser(description=descr,
-                                     parents=[make_logger_args_parser()])
-    parser.add_argument('namespace',
-                        metavar='<namespace>',
-                        help="Namespace")
-    parser.add_argument('base',
-                        metavar='<base>',
-                        help="ID of the base (cid[.seq]). If the "
-                             "sequence is not set, apply to all sequences.")
-    parser.add_argument('src',
-                        metavar='<service_id>',
-                        help="ID of the source service")
-    parser.add_argument('dst',
-                        metavar='<service_id>',
-                        nargs='?',
-                        help="ID of the destination service")
+    parser = argparse.ArgumentParser(
+        description=descr, parents=[make_logger_args_parser()]
+    )
+    parser.add_argument("namespace", metavar="<namespace>", help="Namespace")
+    parser.add_argument(
+        "base",
+        metavar="<base>",
+        help="ID of the base (cid[.seq]). If the "
+        "sequence is not set, apply to all sequences.",
+    )
+    parser.add_argument("src", metavar="<service_id>", help="ID of the source service")
+    parser.add_argument(
+        "dst", metavar="<service_id>", nargs="?", help="ID of the destination service"
+    )
     return parser
 
 
-if __name__ == '__main__':
-    print("DEPRECATED: You'd better use 'openio-admin container move'",
-          file=sys.stderr)
+if __name__ == "__main__":
+    print("DEPRECATED: You'd better use 'openio-admin container move'", file=sys.stderr)
 
     args = make_arg_parser().parse_args()
     logger = get_logger_from_args(args)
 
-    meta2 = Meta2Database({'namespace': args.namespace}, logger=logger)
+    meta2 = Meta2Database({"namespace": args.namespace}, logger=logger)
     moved = meta2.move(args.base, args.src, dst=args.dst)
 
     return_code = 0
     for res in moved:
-        if res['err'] is None:
-            print(res['base'])
+        if res["err"] is None:
+            print(res["base"])
         else:
-            print("ERROR: " + str(res['err']), file=sys.stderr)
+            print("ERROR: " + str(res["err"]), file=sys.stderr)
             return_code = 1
     sys.exit(return_code)

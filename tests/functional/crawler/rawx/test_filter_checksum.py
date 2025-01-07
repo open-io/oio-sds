@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import random
 import os
+import random
 
 from oio.common.constants import CHUNK_QUARANTINE_FOLDER_NAME, CHUNK_SUFFIX_CORRUPT
 from oio.common.utils import request_id

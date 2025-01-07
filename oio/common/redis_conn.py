@@ -14,11 +14,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from functools import wraps
-from time import time, sleep
-import uuid
-import math
 import importlib
+import math
+import uuid
+from functools import wraps
+from time import sleep, time
+
 from six import string_types
 
 from oio.common.easy_value import true_value

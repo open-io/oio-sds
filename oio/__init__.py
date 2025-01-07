@@ -31,9 +31,10 @@ Basic object storage example:
 """
 
 
-import pkg_resources
 import importlib
 import sys
+
+import pkg_resources
 
 
 class ObjectStorageApi(object):

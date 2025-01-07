@@ -15,30 +15,30 @@
 # License along with this library.
 
 
-from oio.common.green import Timeout
-
+import hashlib
 import unittest
 from collections import defaultdict
 from io import BytesIO
-import hashlib
+
 from mock import patch
 
+from oio.api import io
+from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common import exceptions as exc
 from oio.common import green
-from oio.api.replication import ReplicatedMetachunkWriter
+from oio.common.decorators import ensure_headers
+from oio.common.green import Timeout
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import get_hasher
+from tests.unit import set_http_connect, set_http_requests
 from tests.unit.api import (
     CHUNK_SIZE,
     EMPTY_BLAKE3,
     EMPTY_SHA256,
-    empty_stream,
-    decode_chunked_body,
     FakeResponse,
+    decode_chunked_body,
+    empty_stream,
 )
-from oio.api import io
-from tests.unit import set_http_connect, set_http_requests
-from oio.common.decorators import ensure_headers
-from oio.common.utils import get_hasher
 
 
 class TestReplication(unittest.TestCase):

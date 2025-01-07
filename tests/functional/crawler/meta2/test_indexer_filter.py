@@ -18,8 +18,8 @@ import time
 
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, M2_PROP_CONTAINER_NAME
 from oio.common.exceptions import NoSuchContainer
-from oio.common.utils import cid_from_name, request_id
 from oio.common.statsd import get_statsd
+from oio.common.utils import cid_from_name, request_id
 from oio.crawler.meta2.filters.indexer import Indexer
 from oio.crawler.meta2.meta2db import Meta2DB
 from oio.event.evob import EventTypes

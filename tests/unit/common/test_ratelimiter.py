@@ -15,13 +15,13 @@
 # License along with this library.
 
 import unittest
-
 from datetime import datetime, timedelta
+
 from oio.common.green import (
     ratelimit_function_curr_rate,
     ratelimit_function_next_rate,
-    ratelimit_validate_policy,
     ratelimit_policy_from_string,
+    ratelimit_validate_policy,
 )
 
 

@@ -22,16 +22,18 @@ import unittest
 from io import IOBase
 from os.path import basename
 from tempfile import NamedTemporaryFile
-from mock import MagicMock as Mock, ANY
 
+from mock import ANY
+from mock import MagicMock as Mock
+
+from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions
 from oio.common.constants import CONTAINER_HEADERS, OBJECT_HEADERS, REQID_HEADER
 from oio.common.decorators import handle_container_not_found, handle_object_not_found
 from oio.common.green import get_watchdog
 from oio.common.storage_functions import _sort_chunks
-from oio.api.object_storage import ObjectStorageApi
+from tests.unit.api import FakeApiResponse, FakeStorageApi
 from tests.utils import random_str
-from tests.unit.api import FakeStorageApi, FakeApiResponse
 
 
 def chunk(suffix, position, score=100):

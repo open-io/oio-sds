@@ -13,14 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from collections import Counter
 import os
+from collections import Counter
 from time import monotonic as time
 
-from oio.common.exceptions import ClientException, ServiceBusy
 from oio.blob.utils import chunk_id_to_path
 from oio.cli import Lister
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import ClientException, NotFound, ServiceBusy
 from oio.common.utils import ratelimit
 
 

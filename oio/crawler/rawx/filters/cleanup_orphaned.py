@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import time
-from os import lstat, makedirs, rename, unlink, remove
+from os import lstat, makedirs, remove, rename, unlink
 from os.path import isdir
 from shutil import move
 

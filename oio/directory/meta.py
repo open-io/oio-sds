@@ -16,11 +16,11 @@
 
 from collections import defaultdict
 
-from oio.directory.admin import AdminClient
-from oio.rdir.client import RdirClient
-from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException, ServiceBusy, from_multi_responses
 from oio.common.logger import get_logger
+from oio.conscience.client import ConscienceClient
+from oio.directory.admin import AdminClient
+from oio.rdir.client import RdirClient
 
 
 class MetaMapping(object):

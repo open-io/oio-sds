@@ -16,14 +16,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
+# isort: off
 from oio.common.green import eventlet_monkey_patch
 
 eventlet_monkey_patch()
+# isort: on
 
 import argparse
-from os import getenv
-from oio.check_service.check_rawx import CheckRawx
+
 from oio.check_service.check_meta2 import CheckMeta2
+from oio.check_service.check_rawx import CheckRawx
 
 
 def make_arg_parser():

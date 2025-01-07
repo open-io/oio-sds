@@ -14,13 +14,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import tempfile
 import fileinput
 import os
+import tempfile
 
 from oio.common import exceptions
 from oio.common.utils import cid_from_name, request_id
-from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH, IRREPARABLE_PREFIX
+from oio.crawler.integrity import DEFAULT_DEPTH, IRREPARABLE_PREFIX, Checker, Target
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 

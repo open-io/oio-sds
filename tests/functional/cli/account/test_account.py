@@ -14,12 +14,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import uuid
 import re
-from oio.account.backend_fdb import AccountBackendFdb
-from tests.functional.cli import CliTestCase
+import uuid
+
 from testtools.matchers import Equals
 
+from oio.account.backend_fdb import AccountBackendFdb
+from tests.functional.cli import CliTestCase
 
 HEADERS = ["Name", "Created"]
 ACCOUNT_FIELDS = (

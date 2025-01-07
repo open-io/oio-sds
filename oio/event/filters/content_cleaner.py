@@ -16,7 +16,7 @@
 
 from oio.blob.client import BlobClient
 from oio.common.constants import REQID_HEADER
-from oio.common.easy_value import int_value, float_value, boolean_value
+from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS, urllib3
 from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id

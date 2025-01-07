@@ -14,18 +14,19 @@
 # License along with this library.
 
 from __future__ import print_function
-from oio.common.green import eventlet
 
-import sys
-import random
 import errno
-import signal
-import time
 import os
-from oio.common.utils import CPU_COUNT, drop_privileges
-from oio.common.easy_value import int_value
+import random
+import signal
+import sys
+import time
+
 from oio.common.configuration import read_conf
+from oio.common.easy_value import int_value
+from oio.common.green import eventlet
 from oio.common.logger import get_logger, redirect_stdio
+from oio.common.utils import CPU_COUNT, drop_privileges
 
 
 class HaltServer(BaseException):

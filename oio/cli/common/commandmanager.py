@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from pkg_resources import iter_entry_points
 from cliff import commandmanager
+from pkg_resources import iter_entry_points
 
 
 class CommandManager(commandmanager.CommandManager):

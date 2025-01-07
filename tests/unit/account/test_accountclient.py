@@ -15,6 +15,7 @@
 # License along with this library.
 
 import unittest
+
 from mock import MagicMock as Mock
 
 from oio.account.client import AccountClient

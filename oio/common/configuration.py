@@ -17,12 +17,12 @@
 from __future__ import print_function
 
 import sys
-import yaml
-
-from os import path
-from optparse import OptionParser
-from glob import glob
 from configparser import ConfigParser
+from glob import glob
+from optparse import OptionParser
+from os import path
+
+import yaml
 
 
 def parse_options(parser=None):

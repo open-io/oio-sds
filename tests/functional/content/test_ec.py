@@ -14,28 +14,26 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
-import time
-
 import math
+import os
 import random
+import time
 from io import BytesIO
 
-from oio.common.utils import cid_from_name
 from oio.common.exceptions import (
-    OrphanChunk,
     NotFound,
-    UnrecoverableContent,
     OioException,
+    OrphanChunk,
+    UnrecoverableContent,
 )
 from oio.common.fullpath import encode_fullpath
+from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
-from oio.content.factory import ContentFactory
 from oio.content.ec import ECContent
-from tests.functional.content.test_content import hash_stream, random_data, hash_data
+from oio.content.factory import ContentFactory
+from tests.functional.content.test_content import hash_data, hash_stream, random_data
 from tests.utils import BaseTestCase, random_str
-
 
 DAT_LEGIT_SIZE = 1024
 

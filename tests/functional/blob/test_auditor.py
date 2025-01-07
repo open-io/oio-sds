@@ -16,12 +16,12 @@
 
 import random
 
-from oio.common.easy_value import true_value
-from oio.common.utils import cid_from_name
-from oio.common.exceptions import OrphanChunk
 from oio.blob.auditor import BlobAuditorWorker
-from tests.utils import BaseTestCase, random_str
+from oio.common.easy_value import true_value
+from oio.common.exceptions import OrphanChunk
+from oio.common.utils import cid_from_name
 from tests.functional.blob import copy_chunk
+from tests.utils import BaseTestCase, random_str
 
 
 class TestBlobAuditor(BaseTestCase):

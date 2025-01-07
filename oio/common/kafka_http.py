@@ -12,10 +12,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from enum import IntEnum
 import time
+from enum import IntEnum
+
 from oio.api.base import MultiEndpointHttpApi
-from oio.common.easy_value import int_value, float_value
+from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import (
     OioException,
     OioUnhealthyKafkaClusterError,

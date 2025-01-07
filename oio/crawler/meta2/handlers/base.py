@@ -14,8 +14,8 @@
 # License along with this library.
 
 
+from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, Meta2DBOk
 from oio.event.consumer import StopServe
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBOk, Meta2DBError
 
 
 class Handler(object):

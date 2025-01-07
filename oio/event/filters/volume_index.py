@@ -15,16 +15,15 @@
 # License along with this library.
 
 from oio.common.easy_value import int_value
-from oio.common.kafka import get_retry_delay
 from oio.common.exceptions import (
     OioException,
     OioNetworkException,
     OioTimeout,
     ServiceBusy,
 )
+from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
-
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
 SERVICE_EVENTS = [

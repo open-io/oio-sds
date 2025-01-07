@@ -15,12 +15,12 @@
 # License along with this library.
 
 
-from oio.common.green import sleep
-
 from io import BytesIO
+
+from oio.api.object_storage import ObjectStorageApi
+from oio.common.green import sleep
 from oio.common.http import HeadersDict
 from oio.common.http_urllib3 import urllib3
-from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 
 CHUNK_SIZE = 1048576

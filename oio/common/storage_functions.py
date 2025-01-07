@@ -17,12 +17,11 @@
 
 import random
 
-from oio.api.io import ChunkReader
 from oio.api.ec import ECChunkDownloadHandler
+from oio.api.io import ChunkReader
 from oio.common import exceptions as exc
-from oio.common.http import http_header_from_ranges
 from oio.common.decorators import ensure_headers
-
+from oio.common.http import http_header_from_ranges
 
 RAWX_PERMANENT_ERRORS = (
     exc.NotFound,  # Chunk does not exist

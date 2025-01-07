@@ -15,20 +15,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
-from oio.common.green import eventlet_hubs, get_hub
+from optparse import OptionParser  # noqa: E402
 
-from optparse import OptionParser
-from oio.common.configuration import parse_options
-from oio import __canonical_version__
-from oio.event.agent import Runner
-from oio.event.consumer import EventWorker
+from oio import __canonical_version__  # noqa: E402
+from oio.common.configuration import parse_options  # noqa: E402
+from oio.common.green import eventlet_hubs, get_hub  # noqa: E402
+from oio.event.agent import Runner  # noqa: E402
+from oio.event.consumer import EventWorker  # noqa: E402
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     doc = """%%prog CONFIG [options]
 
 For a sample configuration file, see

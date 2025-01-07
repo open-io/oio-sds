@@ -18,7 +18,6 @@
 import random
 from math import ceil
 
-from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
 from oio.common.exceptions import (
     ConfigurationException,
@@ -26,7 +25,7 @@ from oio.common.exceptions import (
     PreconditionFailed,
 )
 from oio.common.json import json
-
+from oio.directory.meta import MetaMapping
 
 _LEVELS = {"site": 0, "rack": 1, "host": 2, "volume": 3}
 _LEVEL_NAME = {v: k for k, v in _LEVELS.items()}

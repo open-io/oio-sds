@@ -15,6 +15,7 @@
 
 import time
 from random import choice
+
 from oio.blob.client import BlobClient
 from oio.common import exceptions
 from oio.common.json import json

@@ -15,7 +15,8 @@
 
 import os
 import random
-from os.path import basename, exists, isdir, splitext, join, isfile
+from os.path import basename, exists, isdir, isfile, join, splitext
+
 from oio.common.utils import cid_from_name, request_id
 from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
 from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx

@@ -15,16 +15,19 @@
 # License along with this library.
 
 from oio.api.replication import ReplicatedWriteHandler
-from oio.common.storage_functions import _sort_chunks, fetch_stream
-from oio.content.content import Content, Chunk, RAWX_PERMANENT_ERRORS
 from oio.common.exceptions import (
     Conflict,
     ObjectUnavailable,
     OrphanChunk,
     UnrecoverableContent,
 )
-from oio.common.storage_functions import _get_weighted_random_score
+from oio.common.storage_functions import (
+    _get_weighted_random_score,
+    _sort_chunks,
+    fetch_stream,
+)
 from oio.common.utils import group_chunk_errors, request_id
+from oio.content.content import RAWX_PERMANENT_ERRORS, Chunk, Content
 
 
 class PlainContent(Content):

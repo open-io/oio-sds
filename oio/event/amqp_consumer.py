@@ -15,7 +15,6 @@
 import os
 import signal
 import time
-
 from multiprocessing import Event, Process
 from random import shuffle
 

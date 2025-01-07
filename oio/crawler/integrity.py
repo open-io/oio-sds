@@ -19,29 +19,27 @@ Recursively check account, container, content and chunk integrity.
 """
 
 
-from oio.common.green import (
-    Event,
-    GreenPool,
-    LightQueue,
-    sleep,
-    Semaphore,
-    ratelimit_function_build,
-)
-
 import csv
 import sys
 from time import time
 
+from oio.api.object_storage import ObjectStorageApi, _sort_chunks
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath
+from oio.common.green import (
+    Event,
+    GreenPool,
+    LightQueue,
+    Semaphore,
+    ratelimit_function_build,
+    sleep,
+)
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.utils import cid_from_name, CacheDict, depaginate
+from oio.common.utils import CacheDict, cid_from_name, depaginate
 from oio.event.beanstalk import BeanstalkdSender
-from oio.api.object_storage import ObjectStorageApi
-from oio.api.object_storage import _sort_chunks
 from oio.rdir.client import RdirClient
 
 DEFAULT_DEPTH = 4
@@ -1164,6 +1162,7 @@ def main():
     Main function for legacy integrity crawler.
     """
     import argparse
+
     from oio.cli import get_logger_from_args, make_logger_args_parser
 
     parser = argparse.ArgumentParser(

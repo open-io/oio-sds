@@ -15,7 +15,9 @@
 # License along with this library.
 
 from logging import getLogger
+
 from cliff import lister
+
 from oio.cli import Command
 
 
@@ -35,7 +37,8 @@ class ElectionCmdMixin(object):
         return ns, cnxstr
 
     def iterate_groups(self, parsed_args, non_leaf=False):
-        from oio.zk.client import get_connected_handles, generate_namespace_tree as _run
+        from oio.zk.client import generate_namespace_tree as _run
+        from oio.zk.client import get_connected_handles
 
         ns, cnxstr = self.get_params(parsed_args)
         for zh in get_connected_handles(cnxstr, logger=self.log):
@@ -276,7 +279,7 @@ class HierarchyArmageddon(ElectionCmdMixin, Command):
         if not parsed_args.yeah:
             self.log.warn("This action on [%s] requires iron bollocks.", ns)
             return
-        from oio.zk.client import get_connected_handles, delete_children
+        from oio.zk.client import delete_children, get_connected_handles
 
         for zh in get_connected_handles(cnxstr, logger=self.log):
             try:
@@ -319,7 +322,7 @@ class HierarchyBootstrap(ElectionCmdMixin, Command):
             batch_size = 8
         # Send a bootstrap on each ensemble
         ns, cnxstr = self.get_params(parsed_args)
-        from oio.zk.client import get_connected_handles, create_namespace_tree
+        from oio.zk.client import create_namespace_tree, get_connected_handles
 
         for zh in get_connected_handles(cnxstr, logger=self.log):
             try:

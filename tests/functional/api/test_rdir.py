@@ -16,11 +16,12 @@
 
 import math
 import random
+
 from mock import MagicMock as Mock
 
 from oio.common.exceptions import NotFound, OioException, OioNetworkException
 from oio.common.utils import cid_from_name, request_id
-from oio.rdir.client import _filter_rdir_hosts, RDIR_ACCT
+from oio.rdir.client import RDIR_ACCT, _filter_rdir_hosts
 from tests.utils import BaseTestCase, random_id
 
 

@@ -16,14 +16,13 @@
 from datetime import datetime
 
 from oio.common.constants import MULTIUPLOAD_SUFFIX, SHARDING_ACCOUNT_PREFIX
-from oio.container.client import ContainerClient
-from oio.common.easy_value import int_value, boolean_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
+from oio.container.client import ContainerClient
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
-from oio.event.kafka_consumer import RetryLater, RejectMessage
-
+from oio.event.kafka_consumer import RejectMessage, RetryLater
 
 UPLOAD_ID = "x-object-sysmeta-s3api-upload-id"
 SLO = "x-static-large-object"

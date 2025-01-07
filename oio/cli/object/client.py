@@ -15,6 +15,7 @@
 # License along with this library.
 
 from logging import getLogger
+
 from oio.api.object_storage import ObjectStorageApi
 
 LOG = getLogger(__name__)

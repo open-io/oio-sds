@@ -19,11 +19,11 @@ from collections import Counter
 from oio.common.constants import STRLEN_REQID
 from oio.common.json import json
 from oio.common.kafka import (
-    KafkaSender,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
+    KafkaSender,
 )
 from oio.common.logger import get_logger
-from oio.common.utils import CacheDict, request_id, ratelimit
+from oio.common.utils import CacheDict, ratelimit, request_id
 from oio.event.beanstalk import Beanstalk
 from oio.xcute.jobs import JOB_TYPES
 

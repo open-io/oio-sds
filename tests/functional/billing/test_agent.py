@@ -17,10 +17,11 @@ import math
 import os
 from datetime import datetime
 
-from mock import MagicMock as Mock, patch
+from mock import MagicMock as Mock
+from mock import patch
 from nose.plugins.attrib import attr
-from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
 
+from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
 from oio.billing.agent import BillingAgent
 from oio.common.constants import M2_PROP_BUCKET_NAME
 from oio.common.exceptions import MalformedBucket

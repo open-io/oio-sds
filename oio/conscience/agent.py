@@ -15,23 +15,22 @@
 # License along with this library.
 
 
-from oio.common.green import GreenPool, sleep
-
-import re
-import os
 import glob
+import os
+import re
 
 import pkg_resources
 
-from oio.common.daemon import Daemon
-from oio.common.http_urllib3 import get_pool_manager
-from oio.common.easy_value import float_value, int_value, true_value
-from oio.common.configuration import parse_config, validate_service_conf
-from oio.common.logger import get_logger
 from oio.common.client import ProxyClient
-from oio.conscience.client import ConscienceClient
+from oio.common.configuration import parse_config, validate_service_conf
+from oio.common.daemon import Daemon
+from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import OioException
+from oio.common.green import GreenPool, sleep
+from oio.common.http_urllib3 import get_pool_manager
+from oio.common.logger import get_logger
 from oio.common.utils import request_id
+from oio.conscience.client import ConscienceClient
 
 
 def load_modules(group_name):

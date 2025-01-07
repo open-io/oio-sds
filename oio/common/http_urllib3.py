@@ -15,18 +15,16 @@
 # License along with this library.
 
 from six.moves.urllib_parse import urlparse
-
-from oio.common.green import patcher
-
 from urllib3 import exceptions as urllibexc
+
 from oio.common.exceptions import (
-    reraise,
     OioException,
     OioNetworkException,
     OioProtocolError,
     OioTimeout,
+    reraise,
 )
-
+from oio.common.green import patcher
 
 urllib3 = patcher.import_patched("urllib3.__init__")
 

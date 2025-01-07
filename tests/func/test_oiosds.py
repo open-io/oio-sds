@@ -16,10 +16,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import sys
 import json
+import sys
 import threading
 from ctypes import cdll
+
 from six import string_types
 from six.moves import BaseHTTPServer
 

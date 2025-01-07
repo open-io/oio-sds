@@ -18,13 +18,14 @@ from __future__ import print_function
 
 import random
 import time
-from mock import MagicMock as Mock, ANY, call
 
-from oio.common.utils import cid_from_name
+from mock import ANY, call
+from mock import MagicMock as Mock
+
 from oio.common import exceptions as exc
-from oio.rdir.client import RdirDispatcher, RDIR_ACCT, _make_id
-from tests.utils import random_str, BaseTestCase
-
+from oio.common.utils import cid_from_name
+from oio.rdir.client import RDIR_ACCT, RdirDispatcher, _make_id
+from tests.utils import BaseTestCase, random_str
 
 _FAKE_LOCATION = "whatever"
 

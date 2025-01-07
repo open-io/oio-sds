@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
 import sys
+import time
 
 from oio import ObjectStorageApi
 from oio.common.exceptions import (

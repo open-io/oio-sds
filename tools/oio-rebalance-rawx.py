@@ -16,10 +16,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
-from os import remove
-from oio.conscience.client import ConscienceClient
+
 import argparse
 import subprocess
+from os import remove
+
+from oio.conscience.client import ConscienceClient
 
 
 def move_rawx(volume, target_use, user, namespace, conf):

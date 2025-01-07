@@ -17,32 +17,30 @@
 import time
 import warnings
 from functools import wraps
-
 from urllib.parse import unquote
 
-from oio.common.client import ProxyClient
-from oio.common.decorators import ensure_headers
-from oio.common.json import json
 from oio.common import exceptions
 from oio.common.cache import (
-    get_cached_container_metadata,
-    set_cached_container_metadata,
     del_cached_container_metadata,
-    get_cached_object_metadata,
-    set_cached_object_metadata,
     del_cached_object_metadata,
+    get_cached_container_metadata,
+    get_cached_object_metadata,
+    set_cached_container_metadata,
+    set_cached_object_metadata,
 )
+from oio.common.client import ProxyClient
 from oio.common.constants import (
     DELETEMARKER_HEADER,
     HEADER_PREFIX,
     SHARD_HEXID_HEADER,
     VERSIONID_HEADER,
 )
+from oio.common.decorators import ensure_headers
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioNetworkException
 from oio.common.green import eventlet
+from oio.common.json import json
 from oio.conscience.client import ConscienceClient
-
 
 CONTENT_HEADER_PREFIX = "x-oio-content-meta-"
 SYSMETA_KEYS = (

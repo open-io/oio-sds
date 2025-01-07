@@ -24,9 +24,11 @@ from oio.common.exceptions import PreconditionFailed
 # from oio.common.logger import get_logger
 from oio.directory.meta0 import (
     Meta0PrefixMapping,
-    generate_short_prefixes as prefixes,
-    _slice_services,
     _bootstrap,
+    _slice_services,
+)
+from oio.directory.meta0 import (
+    generate_short_prefixes as prefixes,
 )
 
 

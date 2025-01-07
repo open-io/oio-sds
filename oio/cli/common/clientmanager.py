@@ -15,9 +15,7 @@
 # License along with this library.
 
 import sys
-
-from logging import getLogger, getLevelName
-
+from logging import getLevelName, getLogger
 
 LOG = getLogger(__name__)
 

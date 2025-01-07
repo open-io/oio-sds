@@ -15,40 +15,39 @@
 # License along with this library.
 
 
-from oio.common.green import eventlet_yield, Timeout, get_watchdog, WatchdogTimeout
-
-from io import BufferedReader, RawIOBase, IOBase
 import itertools
+from io import BufferedReader, IOBase, RawIOBase
 from socket import error as SocketError
 from urllib.parse import urlparse
 
-from oio.common import exceptions as exc, green
-from oio.common.constants import CHUNK_HEADERS, REQID_HEADER, CHUNK_XATTR_EXTRA_PREFIX
+from oio.common import exceptions as exc
+from oio.common import green
+from oio.common.constants import CHUNK_HEADERS, CHUNK_XATTR_EXTRA_PREFIX, REQID_HEADER
 from oio.common.easy_value import boolean_value
 from oio.common.fullpath import decode_fullpath
+from oio.common.green import Timeout, WatchdogTimeout, eventlet_yield, get_watchdog
 from oio.common.http import (
-    parse_content_type,
-    parse_content_range,
-    ranges_from_http_header,
     http_header_from_ranges,
+    parse_content_range,
+    parse_content_type,
+    ranges_from_http_header,
 )
 from oio.common.http_eventlet import http_connect
-from oio.common.utils import (
-    group_chunk_errors,
-    deadline_to_timeout,
-    monotonic_time,
-    set_deadline_from_read_timeout,
-    cid_from_name,
-    compute_chunk_id,
-    get_hasher,
-)
+from oio.common.logger import get_logger
 from oio.common.storage_method import (
     STORAGE_METHODS,
     parse_chunk_method,
     unparse_chunk_method,
 )
-from oio.common.logger import get_logger
-
+from oio.common.utils import (
+    cid_from_name,
+    compute_chunk_id,
+    deadline_to_timeout,
+    get_hasher,
+    group_chunk_errors,
+    monotonic_time,
+    set_deadline_from_read_timeout,
+)
 
 LOGGER = get_logger({}, __name__)
 

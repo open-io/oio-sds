@@ -15,14 +15,15 @@
 # License along with this library.
 
 from functools import wraps
+
 from oio.common.constants import REQID_HEADER
-from oio.common.utils import request_id, set_deadline_from_read_timeout
 from oio.common.exceptions import (
-    NotFound,
     NoSuchAccount,
-    NoSuchObject,
     NoSuchContainer,
+    NoSuchObject,
+    NotFound,
 )
+from oio.common.utils import request_id, set_deadline_from_read_timeout
 
 
 def ensure_headers(func):

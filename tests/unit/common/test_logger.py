@@ -14,11 +14,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import unittest
 import logging
+import unittest
+
 from six import StringIO
-from oio.common.logger import get_logger
+
 from oio.common.easy_value import convert_size
+from oio.common.logger import get_logger
 
 
 class TestLogger(unittest.TestCase):

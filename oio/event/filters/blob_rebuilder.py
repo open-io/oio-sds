@@ -14,8 +14,8 @@
 # License along with this library.
 
 from oio.blob.operator import ChunkOperator
-from oio.common.kafka import get_retry_delay
 from oio.common.exceptions import OioException, OrphanChunk, SpareChunkException
+from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 

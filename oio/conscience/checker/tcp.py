@@ -16,7 +16,6 @@
 
 
 from oio.common.green import socket
-
 from oio.conscience.checker.base import BaseChecker
 
 

@@ -16,30 +16,29 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from typing import Generator, Tuple
-import eventlet
-import fdb
 import os
 import random
 import struct
-
-from nose.plugins.attrib import attr
 from pathlib import Path
-from tests.utils import BaseTestCase, random_str
-from testtools.testcase import ExpectedException
 from time import sleep, time
+from typing import Generator, Tuple
 from unittest.mock import patch
+
+import eventlet
+import fdb
+from nose.plugins.attrib import attr
+from testtools.testcase import ExpectedException
 from werkzeug.exceptions import BadRequest, Conflict
 
-from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.account.backend_fdb import (
+    FEATURE_ACTIONS_HISTORY,
     AccountBackendFdb,
     FeatureAction,
-    FEATURE_ACTIONS_HISTORY,
 )
 from oio.account.common_fdb import CommonFdb
+from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.timestamp import Timestamp
-
+from tests.utils import BaseTestCase, random_str
 
 fdb.api_version(CommonFdb.FDB_VERSION)
 

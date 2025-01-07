@@ -15,15 +15,16 @@
 # License along with this library.
 
 from argparse import ArgumentError
-from logging import getLogger
-from six import iteritems
 from itertools import combinations
+from logging import getLogger
+
+from six import iteritems
 
 from oio.cli import Lister
-from oio.common.exceptions import OioException
-from oio.rdir.client import DEFAULT_RDIR_REPLICAS
 from oio.cli.common.utils import ValueCheckStoreTrueAction, format_detailed_scores
+from oio.common.exceptions import OioException
 from oio.content.quality import get_distance
+from oio.rdir.client import DEFAULT_RDIR_REPLICAS
 
 
 def _format_assignments(all_services, svc_col_title="Rawx", check=False):

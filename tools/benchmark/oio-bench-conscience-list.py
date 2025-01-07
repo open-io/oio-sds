@@ -16,13 +16,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
+
 from eventlet import sleep
 from eventlet.greenpool import GreenPool
+
 from oio import ObjectStorageApi
 from oio.common.configuration import load_namespace_conf
 from oio.common.utils import request_id
 from oio.directory.admin import AdminClient
-
 
 API = None
 CS_ADDR = None

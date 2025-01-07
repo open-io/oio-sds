@@ -17,10 +17,10 @@
 
 import time
 
-from tests.utils import BaseTestCase, random_str
-from oio.common.exceptions import NoSuchObject
 from oio.common.easy_value import true_value
+from oio.common.exceptions import NoSuchObject
 from oio.common.utils import depaginate
+from tests.utils import BaseTestCase, random_str
 
 
 class TestContentVersioning(BaseTestCase):

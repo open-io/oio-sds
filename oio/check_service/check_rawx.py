@@ -15,6 +15,7 @@
 # License along with this library.
 
 import string
+
 from oio.check_service.common import CheckService, random_buffer
 from oio.common.constants import CHUNK_HEADERS
 from oio.common.utils import get_hasher

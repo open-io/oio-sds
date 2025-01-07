@@ -18,9 +18,6 @@ import time
 from logging import getLogger
 
 from oio.cli import Lister, ShowOne
-from oio.common.easy_value import convert_size, int_value
-from oio.common.utils import cid_from_name
-from oio.container.sharding import ContainerSharding
 from oio.common.constants import (
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_QUEUE,
@@ -28,6 +25,9 @@ from oio.common.constants import (
     M2_PROP_SHARDING_TIMESTAMP,
     SHARDING_STATE_NAME,
 )
+from oio.common.easy_value import convert_size, int_value
+from oio.common.utils import cid_from_name
+from oio.container.sharding import ContainerSharding
 
 
 class ContainerShardingCommandMixin(object):

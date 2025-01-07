@@ -18,18 +18,18 @@ from html import escape
 
 from gunicorn.app.base import BaseApplication
 from gunicorn.glogging import Logger
-from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import (
+    BadRequest,
     HTTPException,
     InternalServerError,
     ServiceUnavailable,
-    BadRequest,
 )
+from werkzeug.wrappers import Request, Response
 
-from oio.common.exceptions import ServiceBusy
-from oio.common.utils import CPU_COUNT
 from oio.common.configuration import read_conf
+from oio.common.exceptions import ServiceBusy
 from oio.common.logger import get_logger
+from oio.common.utils import CPU_COUNT
 
 
 class Application(BaseApplication):

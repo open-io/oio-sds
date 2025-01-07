@@ -13,13 +13,14 @@
 # License along with this library.
 
 
-from tests.utils import BaseTestCase
 from mock import MagicMock as Mock
+
 from oio.common.client import ProxyClient
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON
+from oio.common.exceptions import OioException, ServiceBusy
 from oio.common.http_urllib3 import urllib3
-from oio.common.exceptions import ServiceBusy, OioException
 from oio.common.json import json
+from tests.utils import BaseTestCase
 
 
 class TestProxyClient(BaseTestCase):

@@ -16,15 +16,11 @@
 import argparse
 import os
 import socket
-
 from functools import partial
 
 from oio.common.amqp import AmqpConnector, AMQPError, ExchangeType
 from oio.common.logger import get_logger
-
-from oio.event.beanstalk import (
-    BeanstalkdListener,
-)
+from oio.event.beanstalk import BeanstalkdListener
 
 
 class AmqpSender(AmqpConnector):

@@ -15,30 +15,32 @@
 # License along with this library.
 
 
-from oio.common.green import get_watchdog, Timeout
-
+import hashlib
 import logging
 import random
 import unittest
-from io import BytesIO
 from collections import defaultdict
-import hashlib
 from copy import deepcopy
+from io import BytesIO
+
 from mock import patch
-from oio.common.storage_method import STORAGE_METHODS
-from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, ECRebuildHandler
-from oio.common import exceptions as exc, green
+
+from oio.api.ec import ECChunkDownloadHandler, EcMetachunkWriter, ECRebuildHandler
+from oio.common import exceptions as exc
+from oio.common import green
 from oio.common.constants import CHUNK_HEADERS
+from oio.common.green import Timeout, get_watchdog
+from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import get_hasher
+from tests.unit import set_http_connect, set_http_requests
 from tests.unit.api import (
-    empty_stream,
-    decode_chunked_body,
-    FakeResponse,
     CHUNK_SIZE,
     EMPTY_BLAKE3,
     EMPTY_SHA256,
+    FakeResponse,
+    decode_chunked_body,
+    empty_stream,
 )
-from tests.unit import set_http_connect, set_http_requests
-from oio.common.utils import get_hasher
 
 
 class TestEC(unittest.TestCase):

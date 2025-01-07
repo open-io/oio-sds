@@ -15,28 +15,26 @@
 # License along with this library.
 
 import base64
-from random import choice
 import secrets
 import time
-
 from functools import wraps
+from random import choice
 
-from werkzeug.wrappers import Response
+from werkzeug.exceptions import BadRequest, Conflict, HTTPException, NotFound
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
+from werkzeug.wrappers import Response
 
 from oio.common.constants import (
     HTTP_CONTENT_TYPE_JSON,
     HTTP_CONTENT_TYPE_TEXT,
     MAX_STRLEN_BUCKET,
 )
-from oio.common.easy_value import boolean_value, int_value, true_value, float_value
+from oio.common.easy_value import boolean_value, float_value, int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd  # noqa: E402
 from oio.common.utils import get_hasher
 from oio.common.wsgi import WerkzeugApp
-
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000

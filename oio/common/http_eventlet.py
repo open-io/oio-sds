@@ -15,14 +15,13 @@
 # License along with this library.
 
 import ssl
-
 from urllib.parse import quote
 
 from oio.common.green import (
-    socket,
     HTTPConnection,
-    HTTPSConnection,
     HTTPResponse,
+    HTTPSConnection,
+    socket,
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time

@@ -16,8 +16,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import sys
 import subprocess
+import sys
 from hashlib import md5
 
 

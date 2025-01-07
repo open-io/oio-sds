@@ -17,14 +17,14 @@
 
 from oio.common import exceptions
 from oio.common.http_urllib3 import (
-    urllib3,
     get_pool_manager,
     oio_exception_from_httperror,
+    urllib3,
 )
 from oio.common.json import json
+from oio.container.client import ContainerClient
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
-from oio.container.client import ContainerClient
 
 
 class WebhookFilter(Filter):

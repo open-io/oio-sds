@@ -14,10 +14,12 @@
 # License along with this library.
 
 import random
+
 from urllib3.response import HTTPResponse
-from oio.conscience.client import ConscienceClient
-from oio.common.exceptions import ClientException
+
 from oio.api.base import HttpApi
+from oio.common.exceptions import ClientException
+from oio.conscience.client import ConscienceClient
 
 
 def random_buffer(dictionary, n):

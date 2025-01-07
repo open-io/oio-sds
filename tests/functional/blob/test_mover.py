@@ -16,16 +16,18 @@
 
 import random
 from os import listdir
+from os.path import exists, join
+
 from mock import MagicMock as Mock
-from os.path import join, exists
-from oio.common.utils import GeneratorIO, cid_from_name
+
+from oio.blob.mover import BlobMoverWorker
 from oio.common.exceptions import (
     ChunkException,
     Conflict,
     ObjectUnavailable,
     SpareChunkException,
 )
-from oio.blob.mover import BlobMoverWorker
+from oio.common.utils import GeneratorIO, cid_from_name
 from oio.content.quality import get_distance
 from tests.utils import BaseTestCase, random_str
 

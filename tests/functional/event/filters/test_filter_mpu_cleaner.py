@@ -16,9 +16,9 @@
 import time
 
 from oio.common.utils import request_id
-from oio.event.filters.mpu_cleaner import MpuPartCleaner
-from oio.event.kafka_consumer import RetryLater, RejectMessage
 from oio.event.evob import EventTypes
+from oio.event.filters.mpu_cleaner import MpuPartCleaner
+from oio.event.kafka_consumer import RejectMessage, RetryLater
 from tests.utils import BaseTestCase, random_str
 
 

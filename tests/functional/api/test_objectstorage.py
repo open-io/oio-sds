@@ -19,10 +19,13 @@ import copy
 import logging
 import random
 import time
-from mock import MagicMock as Mock, patch
 from functools import partial
-from urllib3.util import parse_url
+
+from mock import MagicMock as Mock
+from mock import patch
 from urllib3 import HTTPResponse
+from urllib3.util import parse_url
+
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.cache import get_cached_object_metadata
@@ -35,16 +38,16 @@ from oio.common.constants import (
     REQID_HEADER,
 )
 from oio.common.easy_value import true_value
+from oio.common.fullpath import encode_fullpath
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
-from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
-from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import (
-    parse_chunk_method,
     STORAGE_METHODS,
+    parse_chunk_method,
 )
+from oio.common.utils import cid_from_name, depaginate, get_hasher, request_id
 from oio.event.evob import EventTypes
-from tests.utils import random_str, random_data, random_id, BaseTestCase
+from tests.utils import BaseTestCase, random_data, random_id, random_str
 
 
 class ObjectStorageApiTestBase(BaseTestCase):

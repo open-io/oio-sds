@@ -14,8 +14,8 @@
 # License along with this library.
 
 from oio.crawler.common.crawler import Crawler
-from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx
 from oio.crawler.rdir.workers.meta2_worker import RdirWorkerForMeta2
+from oio.crawler.rdir.workers.rawx_worker import RdirWorkerForRawx
 
 
 def worker_class_for_type(conf):

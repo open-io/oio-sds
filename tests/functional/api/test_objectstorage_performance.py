@@ -17,8 +17,7 @@
 import logging
 
 from oio.common.utils import monotonic_time
-from tests.utils import random_str, BaseTestCase
-
+from tests.utils import BaseTestCase, random_str
 
 TEST_DATA = b"\0" * 4096
 

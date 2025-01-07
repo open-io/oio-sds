@@ -19,8 +19,7 @@ import logging
 from oio import ObjectStorageApi
 from oio.account.backend_fdb import AccountBackendFdb
 from oio.common.constants import ACCOUNT_BETA_FEATURE_PREFIX
-from tests.utils import random_str, BaseTestCase
-
+from tests.utils import BaseTestCase, random_str
 
 PROPERTIES_COUNT = 2048
 

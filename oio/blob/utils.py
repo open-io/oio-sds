@@ -16,15 +16,15 @@
 from os.path import join as path_join
 
 from oio.common import exceptions as exc
-from oio.common.xattr import read_user_xattr
 from oio.common.constants import (
+    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
     CHUNK_XATTR_KEYS,
     CHUNK_XATTR_KEYS_OPTIONAL,
     VOLUME_XATTR_KEYS,
-    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
 )
 from oio.common.fullpath import decode_fullpath
 from oio.common.utils import cid_from_name
+from oio.common.xattr import read_user_xattr
 
 
 def check_volume(volume_path):

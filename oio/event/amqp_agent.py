@@ -17,7 +17,7 @@ from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.common.json import json
 from oio.event.amqp_consumer import AmqpConsumerWorker, RejectMessage, RetryLater
-from oio.event.evob import is_success, is_retryable
+from oio.event.evob import is_retryable, is_success
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 

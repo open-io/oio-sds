@@ -16,8 +16,8 @@
 
 from cliff import lister
 
-from oio.common.exceptions import ClientException
 from oio.cli.admin.common import SingleServiceCommandMixin
+from oio.common.exceptions import ClientException
 
 
 class ServiceListCommand(SingleServiceCommandMixin, lister.Lister):

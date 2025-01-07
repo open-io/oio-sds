@@ -19,9 +19,9 @@ from datetime import datetime
 from oio.common.easy_value import int_value
 from oio.common.exceptions import from_multi_responses
 from oio.common.tool import Tool, ToolWorker
-from oio.rdir.client import RdirClient
 from oio.directory.admin import AdminClient
 from oio.directory.meta2 import Meta2Database
+from oio.rdir.client import RdirClient
 
 
 class Meta2Rebuilder(Tool):

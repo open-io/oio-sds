@@ -14,19 +14,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import Queue, GreenPile, sleep
-
-from logging import getLogger, INFO
+from logging import INFO, getLogger
 
 from oio.cli import Command
+from oio.common import green
 from oio.common.exceptions import (
     ClientException,
     ConfigurationException,
     PreconditionFailed,
 )
-from oio.common import green
-from oio.directory.meta0 import generate_prefixes, count_prefixes
-
+from oio.common.green import GreenPile, Queue, sleep
+from oio.directory.meta0 import count_prefixes, generate_prefixes
 
 M0_CONN_TIMEOUT = 30.0
 M0_READ_TIMEOUT = 60.0

@@ -16,11 +16,12 @@
 
 
 from oio.common.constants import (
-    REQID_HEADER,
     CONNECTION_TIMEOUT,
-    READ_TIMEOUT,
     HIDDEN_ACCOUNTS,
+    READ_TIMEOUT,
+    REQID_HEADER,
 )
+from oio.common.easy_value import float_value
 from oio.common.exceptions import (
     BadRequest,
     ClientException,
@@ -28,11 +29,9 @@ from oio.common.exceptions import (
     OioTimeout,
 )
 from oio.common.kafka import get_retry_delay
-from oio.common.easy_value import float_value
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
-
 
 SYSMETA_S3API_PREFIX = "X-Container-Sysmeta-S3Api-"
 

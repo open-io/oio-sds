@@ -18,15 +18,15 @@
 
 from __future__ import print_function
 
-import time
-import os
-
 # parser
 import argparse
+import os
+import time
 
-from eventlet import sleep, monkey_patch
+from eventlet import monkey_patch, sleep
 from eventlet.greenpool import GreenPool
 from eventlet.queue import LightQueue
+
 from oio import ObjectStorageApi
 from oio.common.utils import depaginate
 

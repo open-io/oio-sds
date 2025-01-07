@@ -17,17 +17,16 @@
 import os
 import time
 
-from oio.common.easy_value import boolean_value
-from oio.common.utils import cid_from_name, compute_chunk_id, get_hasher
-from oio.common.logger import get_logger
 from oio.blob.auditor import BlobAuditorWorker
-from oio.common import exceptions as exc
-from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
-from oio.common.constants import CHUNK_XATTR_KEYS
-from tests.utils import BaseTestCase, random_str, random_id
-from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common import exceptions as exc
+from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, CHUNK_XATTR_KEYS
+from oio.common.easy_value import boolean_value
 from oio.common.fullpath import encode_fullpath
+from oio.common.logger import get_logger
+from oio.common.utils import cid_from_name, compute_chunk_id, get_hasher
+from oio.container.client import ContainerClient
+from tests.utils import BaseTestCase, random_id, random_str
 
 
 class TestContent(object):

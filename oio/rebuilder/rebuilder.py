@@ -16,10 +16,10 @@
 
 import random
 import signal
-from oio.common.green import eventlet, threading, ContextPool, time
 
-from oio.common.easy_value import int_value
 from oio.common import exceptions
+from oio.common.easy_value import int_value
+from oio.common.green import ContextPool, eventlet, threading, time
 from oio.common.logger import get_logger
 from oio.common.utils import ratelimit
 

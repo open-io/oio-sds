@@ -15,13 +15,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# isort: off
 from oio.common.green import eventlet_monkey_patch
+
 eventlet_monkey_patch()
+# isort: on
 
-import sys
+import sys  # noqa: E402
 
-from oio.crawler.integrity import main
+from oio.crawler.integrity import main  # noqa: E402
 
 if __name__ == "__main__":
     sys.exit(main())

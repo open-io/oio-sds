@@ -16,14 +16,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# ruff: noqa: E402
 import sys
+
+# isort: off
 from oio.common.green import eventlet_monkey_patch
 
 eventlet_monkey_patch()
+# isort: on
 
-from oio.directory.indexer import Meta2Indexer
-from oio.common.daemon import run_daemon
 import argparse
+
+from oio.common.daemon import run_daemon
+from oio.directory.indexer import Meta2Indexer
 
 
 def make_arg_parser():

@@ -13,11 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import eventlet, eventlet_yield, time, Empty, LightQueue
-
 import copy
-from greenlet import GreenletExit
 from urllib.parse import unquote
+
+from greenlet import GreenletExit
 
 from oio.common import exceptions
 from oio.common.client import ProxyClient
@@ -41,6 +40,7 @@ from oio.common.constants import (
     SHARDING_STATE_NAME,
     STRLEN_CID,
 )
+from oio.common.decorators import ensure_request_id
 from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
 from oio.common.exceptions import (
     BadRequest,
@@ -52,6 +52,7 @@ from oio.common.exceptions import (
     ServiceBusy,
     from_multi_responses,
 )
+from oio.common.green import Empty, LightQueue, eventlet, eventlet_yield, time
 from oio.common.http_urllib3 import urllib3
 from oio.common.json import json
 from oio.common.logger import get_logger
@@ -62,10 +63,8 @@ from oio.common.utils import (
     timeout_to_deadline,
 )
 from oio.container.client import ContainerClient
-from oio.common.decorators import ensure_request_id
 from oio.directory.admin import AdminClient
 from oio.event.beanstalk import Beanstalk, ResponseError
-
 
 UPDATE_NEW_SHARD_BUFFER_SIZE = 1000
 

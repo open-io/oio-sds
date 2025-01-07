@@ -14,14 +14,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six import iteritems
 from logging import getLogger
 
+from six import iteritems
+
 from oio.cli import Lister, ShowOne
+from oio.cli.common.utils import format_detailed_scores
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioException, OioNetworkException, ServiceBusy
-from oio.cli.common.utils import format_detailed_scores
-
 
 DETAILED_SCORES = ("get", "put")
 
@@ -449,7 +449,8 @@ class ClusterWait(Lister):
         return parser
 
     def _wait(self, parsed_args):
-        from time import time as now, sleep
+        from time import sleep
+        from time import time as now
 
         min_scores = []
         if parsed_args.detail_score:

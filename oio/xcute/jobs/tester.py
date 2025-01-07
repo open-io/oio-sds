@@ -20,7 +20,6 @@ import oio.common.exceptions as exc
 from oio.common.easy_value import int_value
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
-
 EXCEPTIONS = [
     exc.BadRequest,
     exc.Forbidden,

@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from time import sleep
-from subprocess import Popen
 import errno
+from subprocess import Popen
+from time import sleep
 
 
 def wait_for_slow_startup(port):

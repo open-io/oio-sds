@@ -14,12 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import configparser
 import os
 import random
-from subprocess import check_call
 import time
-
-import configparser
+from subprocess import check_call
 
 from oio.common.exceptions import ServiceBusy
 from tests.utils import BaseTestCase, random_str

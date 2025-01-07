@@ -16,6 +16,7 @@
 import sqlite3
 from collections import Counter
 from urllib.parse import urlparse
+
 from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import NoSuchObject, NotFound
@@ -23,9 +24,9 @@ from oio.common.green import time
 from oio.common.utils import (
     cid_from_name,
     get_nb_chunks,
+    ratelimit,
     request_id,
     service_pool_to_dict,
-    ratelimit,
 )
 from oio.content.quality import NB_LOCATION_LEVELS, format_location
 from oio.crawler.meta2.filters.base import Meta2Filter

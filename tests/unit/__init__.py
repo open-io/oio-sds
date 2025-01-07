@@ -13,15 +13,14 @@
 # License along with this library.
 
 
-from oio.common.green import Timeout, sleep
-
 from contextlib import contextmanager
 
+import mock
 from six import PY2
 
-from oio.common.http import HeadersDict
-import mock
 import oio
+from oio.common.green import Timeout, sleep
+from oio.common.http import HeadersDict
 
 
 @contextmanager

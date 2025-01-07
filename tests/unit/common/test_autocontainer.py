@@ -16,9 +16,9 @@ import unittest
 
 from oio.common.autocontainer import (
     ContainerBuilder,
-    RegexContainerBuilder,
     HashedContainerBuilder,
     NoMatchFound,
+    RegexContainerBuilder,
 )
 
 
