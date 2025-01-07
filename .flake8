@@ -1,4 +1,0 @@
-[flake8]
-ignore=E203,W503
-show-source = True
-max-line-length = 88

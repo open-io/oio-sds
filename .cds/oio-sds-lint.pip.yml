@@ -22,9 +22,7 @@ jobs:
         script:
           - set -x
           - . $HOME/venv/bin/activate
-          - black --check --diff --quiet --exclude "/(venv|\.local)/" --config pyproject.toml "oio" "tests" "tools" "bin"
-          - pylint --rcfile=.pylintrc --exit-zero -E "oio" "tests" "tools" "bin"
-          - flake8 --config .flake8 --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
+          - ruff check  --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
 
     requirements:
       - model: ubuntu-focal

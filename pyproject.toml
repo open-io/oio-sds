@@ -1,10 +1,28 @@
 [project]
 name = "oio"
-dynamic = ["authors", "classifiers", "dependencies", "entry-points", "readme", "scripts", "version"]
+dynamic = [
+  "authors",
+  "classifiers",
+  "dependencies",
+  "entry-points",
+  "readme",
+  "scripts",
+  "version",
+]
 
 [build-system]
-requires = ["black", "setuptools >= 47.1.0", "wheel"]
+requires = ["ruff", "setuptools >= 47.1.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.black]
+[tool.ruff]
+target-version = "py37"
 line-length = 88
+extend-include = ["bin/*", "tools/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["E", "I"]
+ignore = ["D203", "D212"]
+exclude = ["tools/oio-bootstrap.py"]
+
+[tool.ruff.lint.per-file-ignores]
+"{tests,tools}/**" = ["D"]
