@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -17,6 +17,7 @@ import json
 import re
 import time
 from collections import OrderedDict
+from datetime import datetime
 from typing import Any, Dict, Generator, List, Tuple
 
 import xmltodict
@@ -386,7 +387,20 @@ class ReplicationRecovery(Command):
         bucket = parsed_args.bucket
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
+        if pending and only_metadata:
+            raise ValueError(
+                "Cannot use both pending and only-metadata options at the same time"
+            )
+        elif not (pending or only_metadata):
+            # When no option is defined, use pending by default
+            pending = True
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
+        if pending and not until:
+            # List only objects having PENDING status and created more than 48 hours ago
+            until = (
+                int(datetime.timestamp(datetime.now() - datetime.timedelta(hours=48)))
+                * 1000000
+            )
         dry_run = parsed_args.dry_run
         broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
         namespace = self.app.options.ns

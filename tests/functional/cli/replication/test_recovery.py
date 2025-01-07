@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ from oio.common.easy_value import true_value
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
 
 
@@ -37,7 +37,9 @@ class ReplicationRecoveryTest(CliTestCase):
         super(ReplicationRecoveryTest, self).setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
 
-    def _test_recovery_tool(self, is_deletion=False, is_update=False):
+    def _test_recovery_tool(
+        self, is_deletion=False, is_update=False, with_invalid_option=False
+    ):
         account = self.account_from_env()
         obj = "test-repli-recovery" + random_str(6)
         container_src = "container" + random_str(6) + "-src"
@@ -123,6 +125,16 @@ class ReplicationRecoveryTest(CliTestCase):
         if is_update:
             option = "--only-metadata"
             event_types = (EventTypes.CONTENT_UPDATE,)
+        if with_invalid_option:
+            option = "--pending --only-metadata"
+            self.assertRaisesRegex(
+                CommandFailed,
+                "Cannot use both pending and only-metadata options at the same time",
+                lambda: self.openio(
+                    f"replication recovery {container_src} {option}", ""
+                ),
+            )
+            return
         self.openio(
             f"replication recovery {container_src} {option}",
             coverage="",
@@ -167,3 +179,6 @@ class ReplicationRecoveryTest(CliTestCase):
 
     def test_replication_recovery_content_update(self):
         self._test_recovery_tool(is_update=True)
+
+    def test_replication_recovery_content_invalid_option(self):
+        self._test_recovery_tool(with_invalid_option=True)
