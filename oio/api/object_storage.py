@@ -1066,7 +1066,9 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_change_policy(self, account, container, obj, policy, **kwargs):
+    def object_change_policy(
+        self, account, container, obj, policy, validate=False, **kwargs
+    ):
         """
         Change the storage policy of an object
 
@@ -1080,6 +1082,8 @@ class ObjectStorageApi(object):
         :type obj: `str`
         :param policy: name of the new storage policy
         :type policy: `str`
+        :param validate: validate the transitional policy matches the provided one
+        :type validate: `boolean`
 
         :returns: `list` of chunks, size, hash and metadata of object
         """
@@ -1093,7 +1097,13 @@ class ObjectStorageApi(object):
         if meta["policy"] == policy:
             del stream
             raise exc.Conflict(
-                "The object is already using the %s storage policy" % policy
+                f"The object is already using the {policy} storage policy"
+            )
+        if validate and meta.get("target_policy") != policy:
+            del stream
+            raise exc.Conflict(
+                f"The object target policy ({meta.get('target_policy')}) does not "
+                f"match provided policy ({policy})"
             )
         kwargs["version"] = meta["version"]
         return self.object_create_ext(

@@ -2528,6 +2528,23 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 		goto label_end;
 	}
 
+	// Validate policy
+	gchar* actual_policy = NULL;
+	gchar* target_policy = NULL;
+	m2v2_policy_decode(
+		CONTENTS_HEADERS_get_policy(current_header), &actual_policy, &target_policy);
+	gboolean policies_match = \
+		g_strcmp0(target_policy, CONTENTS_HEADERS_get_policy(new_header)->str) == 0;
+	g_free(actual_policy);
+	g_free(target_policy);
+
+	if (!policies_match) {
+		err = BADREQ(
+			"Invalid policy (does not match target policy %s)",
+			CONTENTS_HEADERS_get_policy(new_header)->str);
+		goto label_end;
+	}
+
 	/* Needed later several times, we extract now the content-id */
 	const char *content_hexid = oio_url_get(args->url, OIOURL_CONTENTID);
 	if (!content_hexid) {
