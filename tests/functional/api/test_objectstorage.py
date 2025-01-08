@@ -2528,6 +2528,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._cls_transition_consumer = cls._register_consumer(
+            topic=DEFAULT_TRANSITION_TOPIC
+        )
+
     def setUp(self):
         super(TestObjectChangePolicy, self).setUp()
         self.chunk_size = self.conf["chunk_size"]
@@ -2552,6 +2559,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         elif "SINGLE" in (old_policy, new_policy) and self.nb_rawx < 1:
             self.skipTest("need at least 1 rawx to run")
 
+        # Prepare test
         name = "change-policy-" + random_str(6)
         self._create(name)
 
@@ -2610,10 +2618,49 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             reqid=reqid,
         )
 
+        # Request policy transition
+        reqid = request_id("chgpol-trans-")
+        self.api.object_request_transition(
+            self.account,
+            name,
+            name,
+            new_policy,
+            version=obj1["version"],
+            reqid=reqid,
+        )
+
+        # Wait container update
+        if old_policy == new_policy:
+            evt = self.wait_for_kafka_event(
+                fields={"user": name},
+                reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE,),
+                timeout=5.0,
+            )
+            self.assertIsNone(
+                evt,
+                "Change to same policy should not trigger a container state event",
+            )
+        else:
+            evt = self.wait_for_kafka_event(
+                fields={"user": name},
+                reqid=reqid,
+                types=(EventTypes.CONTAINER_STATE,),
+                timeout=5.0,
+            )
+            self.assertIsNotNone(evt)
+
         reqid = request_id("chgpol-chg-")
         self.api.object_change_policy(
-            self.account, name, name, new_policy, version=obj1["version"], reqid=reqid
+            self.account,
+            name,
+            name,
+            new_policy,
+            validate=True,
+            version=obj1["version"],
+            reqid=reqid,
         )
+
         expected_count_by_policy[old_policy] = (
             expected_count_by_policy.get(old_policy, 0) - 1
         )
@@ -2675,7 +2722,6 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             expected_size_by_policy=expected_size_by_policy,
             reqid=reqid,
         )
-
         _, stream = self.api.object_fetch(
             self.account, name, name, version=obj2["version"]
         )

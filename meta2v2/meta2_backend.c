@@ -1812,8 +1812,8 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
-			if (!err)
-				m2b_add_modified_container(m2b, sq3);
+			// No need to update container stats as it should have been updated on
+			// transition request.
 		}
 		m2b_close(m2b, sq3, url);
 	}
