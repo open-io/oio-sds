@@ -14,6 +14,8 @@
 # License along with this library.
 
 import json
+import time
+from datetime import datetime
 
 from oio.common.easy_value import true_value
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC
@@ -125,8 +127,11 @@ class ReplicationRecoveryTest(CliTestCase):
         if is_update:
             option = "--only-metadata"
             event_types = (EventTypes.CONTENT_UPDATE,)
+        time.sleep(1)
+        until_date = int(datetime.timestamp(datetime.now()))
+        option += f" --linger-ms 0 --until {until_date} --use-marker 2"
         if with_invalid_option:
-            option = "--pending --only-metadata"
+            option = "--pending --only-metadata --use-marker 2"
             self.assertRaisesRegex(
                 CommandFailed,
                 "Cannot use both pending and only-metadata options at the same time",
