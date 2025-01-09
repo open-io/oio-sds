@@ -2421,3 +2421,50 @@ class TestLifecycleCrawlerTransitions(TestLifecycleBase):
         self._create_objects_for_rule(None, objects=objects, versions=1)
         self._wait_n_days(1)
         self._run_scenario(configuration, callback)
+
+    def test_transition_non_current_not_allowed(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionTransition": {
+                        "0": {
+                            "NoncurrentDays": 2,
+                            "StorageClass": "STANDARD",
+                        },
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": ["0-0"],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 0,
+                "total_transition": 0,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, versions=1
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._wait_n_days(3)
+        self._create_objects_for_rule(None, objects=objects, versions=1)
+        self._wait_n_days(1)
+        # No event expected as storage class is same
+        self.expectations = []
+        self._run_scenario(configuration, callback)
