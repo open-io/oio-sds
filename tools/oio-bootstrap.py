@@ -3,7 +3,7 @@
 # oio-bootstrap.py
 # Copyright (C) 2015 Conrad Kleinespel
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -1860,7 +1860,7 @@ kmsapi_domain2_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
 kmsapi_domain2_key_id = abcdefgh-aaaa-bbbb-cccc-123456789def
 
 # GROUPS FOR REGION BACKUPS
-region_backup_local = LOCALHOST,LOCALHOSTBIS 
+region_backup_local = LOCALHOST,LOCALHOSTBIS
 region_backup_numbers = REGIONONE,REGIONTWO,REGIONTHREE
 backup_pepper = this-is-not-really-a-random-string-but-should-be-in-prod
 """

@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -181,10 +181,10 @@ GError *meta2_backend_drain_content(struct meta2_backend_s *m2b,
 /** Delete an object version. The deleted alias, or the created delete
  * marker, will be sent to the callback. Notice that when a delete marker
  * is removed, no alias is sent to the callback!
- * 
+ *
  * If dryrun is True, the deletion will not be effective. It's useful
  * to check if the triggers allow the deletion but without doing it.
- * 
+ *
  * If slo_manifest is True (and dryrun False and not a delete marker),
  * send a specific event with upload_id. Notice that if slo_manifest is True and
  * the event emission failed, the deletion will not be effective.
