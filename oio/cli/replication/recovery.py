@@ -14,10 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import os
 import re
+import signal
 import time
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Tuple
 
 import xmltodict
@@ -178,6 +181,7 @@ class ReplicationRecovery(Command):
 
     log = None
     kafka_producer = None
+    marker_file = None
 
     def _load_replication_configuration(self, account, bucket) -> None:
         info = self.app.client_manager.storage.container_get_properties(account, bucket)
@@ -187,7 +191,14 @@ class ReplicationRecovery(Command):
         return replication_conf
 
     def get_objects_to_replicate(
-        self, account, bucket, pending, until, only_metadata, replication_conf
+        self,
+        account,
+        bucket,
+        pending,
+        until,
+        only_metadata,
+        replication_conf,
+        marker=None,
     ) -> Generator[Tuple[Dict[str, Any], List[str], str], None, None]:
         objects_gen = depaginate(
             self.app.client_manager.storage.object_list,
@@ -199,6 +210,7 @@ class ReplicationRecovery(Command):
             container=bucket,
             properties=True,
             versions=True,
+            marker=marker,
         )
         for obj in objects_gen:
             key = obj["name"]
@@ -338,6 +350,7 @@ class ReplicationRecovery(Command):
         dest_buckets: List[str],
         event: Dict[str, Any],
         dry_run: bool,
+        kafka_conf: Dict[str, Any],
     ):
         log = self.log.info if dry_run else self.log.debug
         log(
@@ -352,9 +365,10 @@ class ReplicationRecovery(Command):
                     conf.get("broker_endpoint"),
                     self.log,
                     app_conf=conf,
+                    kafka_conf=kafka_conf,
                 )
             try:
-                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event, flush=True)
+                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event)
             except Exception as exc:
                 self.log.warning("Fail to send replication event %s: %s", event, exc)
                 self.success = False
@@ -370,23 +384,111 @@ class ReplicationRecovery(Command):
         parser.add_argument(
             "--only-metadata",
             action="store_true",
-            help="Resend only events from objects with metadatata to be replicated.",
+            help="Resend only events from objects with metadatata to be replicated",
         )
         parser.add_argument(
             "--until",
-            help="Date (timestamp) until which the objects must be checked",
+            help="Date (timestamp) until which the objects must be checked. "
+            "If pending is set to True and until is not specified, until will "
+            "default to a timestamp representing the current date (timestamp) "
+            "minus 48 hours.",
+        )
+        parser.add_argument(
+            "--batch-num-messages",
+            type=int,
+            default=1000,
+            help="Maximum number of messages in a single batch. (default=1000)",
+        )
+        parser.add_argument(
+            "--linger-ms",
+            type=int,
+            default=1000,
+            help="Artificial delay in ms to wait before sending each batch of events. "
+            "(default=1000)",
+        )
+        parser.add_argument(
+            "--use-marker",
+            choices=["0", "1", "2"],
+            default="0",
+            help="""
+            Indicate whether or not maker is to be considered:
+            0: Execute the command but stop the process if marker found.
+               If marker exists, only option 1 or 2 are accepted.
+            1: enable use of maker
+            2: bypass marker
+            (default=0)
+            """,
+        )
+        parser.add_argument(
+            "--marker-update-after",
+            type=int,
+            default=1000,
+            help="Number of messages sent before marker update. (default=1000)",
         )
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Display actions but do nothing.",
+            help="Display actions but do nothing",
         )
         return parser
 
+    def _clean_exit(self, *args):
+        """Exit the tool"""
+        if self.kafka_producer is not None:
+            nb_msg = self.kafka_producer.flush(1.0)
+            if nb_msg > 0:
+                self.log.warning(
+                    "All events are not flushed. %d are still in queue", nb_msg
+                )
+            # Close the producer
+            self.kafka_producer.close()
+        self.log.info("Replication recovery exiting.")
+
+    def _get_marker_file_path(self, operation, account, bucket):
+        """Return the marker file path according to the INFRA"""
+        marker_file_name = (
+            f"replication_recovery_marker_{operation}_{account}_{bucket}.json"
+        )
+        parent_dir = None
+        for path_dir in (
+            str(Path.home()) + "/.oio/sds",
+            str(Path.home()) + "/var/cache",
+        ):
+            if os.path.exists(path_dir):
+                parent_dir = path_dir
+                break
+        if parent_dir:
+            os.makedirs(f"{parent_dir}/replicationrecovery", exist_ok=True)
+            return f"{parent_dir}/replicationrecovery/{marker_file_name}"
+        return None
+
+    def update_marker_file(self, obj_name, bucket, account):
+        """Update the marker file with the latest listed object in the bucket."""
+        try:
+            # Load existing data if the marker file exists
+            if os.path.exists(self.marker_file):
+                with open(self.marker_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = {}
+
+            # Update the marker file
+            data[str((account, bucket))] = obj_name
+            with open(self.marker_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            self.log.debug(f"Marker file updated: ({account}, {bucket}) -> {obj_name}")
+        except Exception as err:
+            self.log.warning(
+                f"Error while updating marker file {self.marker_file}: {err}"
+            )
+
     def take_action(self, parsed_args):
+        signal.signal(signal.SIGTERM, self._clean_exit)
         bucket = parsed_args.bucket
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
+        use_marker = parsed_args.use_marker
+        marker_update_after = parsed_args.marker_update_after
         if pending and only_metadata:
             raise ValueError(
                 "Cannot use both pending and only-metadata options at the same time"
@@ -398,8 +500,7 @@ class ReplicationRecovery(Command):
         if pending and not until:
             # List only objects having PENDING status and created more than 48 hours ago
             until = (
-                int(datetime.timestamp(datetime.now() - datetime.timedelta(hours=48)))
-                * 1000000
+                int(datetime.timestamp(datetime.now() - timedelta(hours=48))) * 1000000
             )
         dry_run = parsed_args.dry_run
         broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
@@ -408,23 +509,95 @@ class ReplicationRecovery(Command):
             "namespace": namespace,
             "broker_endpoint": broker_endpoints,
         }
+        # Maximum number of message in a single batch
+        batch_num_messages = parsed_args.batch_num_messages
+        # Time to wait before sending events in a batch
+        linger_ms = parsed_args.linger_ms
+        kafka_conf = {
+            "batch.num.messages": batch_num_messages,
+            "linger.ms": linger_ms,
+        }
         self.success = True
         self.log = self.app.client_manager.logger
         account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
+        if pending:
+            operation = "pending"
+        elif only_metadata:
+            operation = "metadata"
+        else:
+            operation = "all"
+        self.marker_file = self._get_marker_file_path(operation, account, bucket)
+        marker = None
+        if not self.marker_file:
+            self.log.warning("Failed to build marker file path")
+        else:
+            if os.path.exists(self.marker_file):
+                with open(self.marker_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    marker = data.get(str((account, bucket)))
+        if marker:
+            if use_marker == "0":
+                raise ValueError(
+                    f"Use-maker option must be set to 1 or 2 "
+                    f"if a marker is found: marker={marker}"
+                )
+            elif use_marker == "2":
+                # Start from the beginning
+                marker = None
 
         replication_conf = self._load_replication_configuration(account, bucket)
         self.log.info("Scan bucket %s in account %s", bucket, account)
         objects_to_replicate = self.get_objects_to_replicate(
-            account, bucket, pending, until, only_metadata, replication_conf
+            account,
+            bucket,
+            pending,
+            until,
+            only_metadata,
+            replication_conf,
+            marker=marker,
         )
         event_type = (
             EventTypes.CONTENT_UPDATE if only_metadata else EventTypes.CONTENT_NEW
         )
-        for obj, dest_buckets, role in objects_to_replicate:
-            object_event = self.object_to_event(
-                obj, dest_buckets, role, namespace, account, bucket, event_type
-            )
-            self.send_event(conf, obj, dest_buckets, object_event, dry_run)
-        if self.kafka_producer is not None:
-            # Close the producer
-            self.kafka_producer.close()
+        obj = None
+        counter = 0
+        try:
+            for obj, dest_buckets, role in objects_to_replicate:
+                object_event = self.object_to_event(
+                    obj, dest_buckets, role, namespace, account, bucket, event_type
+                )
+                self.send_event(
+                    conf, obj, dest_buckets, object_event, dry_run, kafka_conf
+                )
+                counter += 1
+                if counter == marker_update_after and self.success:
+                    nb_msg = self.kafka_producer.flush(1.0)
+                    attempt = 0
+                    while nb_msg > 0 and attempt < 3:
+                        self.log.warning(
+                            "All events are not flushed. %d are still in queue", nb_msg
+                        )
+                        nb_msg = self.kafka_producer.flush(1.0)
+                        # Wait little bit
+                        time.sleep(0.1)
+                        attempt += 1
+                    if nb_msg <= 0:
+                        # Update the marker only if we were able to send the events
+                        self.update_marker_file(obj["name"], bucket, account)
+                    # Reinitialize the counter
+                    counter = 0
+        except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
+            if obj and self.success:
+                # If the latest listed object is defined
+                # and we were always able to send event
+                self.update_marker_file(obj["name"], bucket, account)
+        else:
+            if marker:
+                try:  # Remove the marker file
+                    os.remove(self.marker_file)
+                    self.log.info(f"Marker file {self.marker_file} removed")
+                except Exception as err:
+                    self.log.error(
+                        f"Failed to remove marker file: {self.marker_file}: {err}"
+                    )
+        self._clean_exit()
