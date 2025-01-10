@@ -1,6 +1,6 @@
 --extra-index-url https://pypi.org/simple
 
-blake3~=1.0.1
+blake3~=0.3.4
 cliff~=3.10.1
 confluent_kafka~=2.3.0
 eventlet~=0.33.0
