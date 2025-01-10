@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -789,7 +789,7 @@ _direct_use(struct sqlx_peering_s *self,
 		req->master = master;
 		if (!grid_string_to_sockaddr(url,
 					(struct sockaddr*)&(req->addr), &req->addr_len)) {
-			GRID_WARN("Invalid peer addr [%s]", url);
+			GRID_WARN("Invalid peer addr [%s] reqid=%s", url, oio_ext_get_reqid());
 		} else {
 			g_strlcpy(req->reqid, oio_ext_ensure_reqid("sync-use-"),
 					LIMIT_LENGTH_REQID);
@@ -804,8 +804,8 @@ _direct_use(struct sqlx_peering_s *self,
 		}
 		return FALSE;
 	} else {
-		/* No UDP socket was configured, thus we prepare a handle for a defered
-		 * TCP RPC */
+		/* No UDP socket was configured, thus we prepare a handle for
+		 * a deferred TCP RPC */
 		struct event_client_s *mc =
 			g_slice_alloc0(sizeof(struct event_client_s));
 		mc->struct_size = sizeof(struct event_client_s);
@@ -891,25 +891,21 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 			oio_clamp_timeout(oio_election_resync_timeout_req, deadline));
 
 	GError *err = gridd_client_connect_url (mc->ec.client, url);
-	if (NULL != err) {
+	if (err) {
 		gridd_client_fail(mc->ec.client, err);
-		event_client_free(&mc->ec);
-		return FALSE;
 	} else {
 		NAME2CONST(n0, *n);
 		GByteArray *req = sqlx_pack_PIPEFROM(&n0, src, check_type,
 				oio_clamp_deadline(oio_election_resync_timeout_req, deadline));
 		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
 		g_byte_array_unref(req);
-		if (NULL != err) {
+		if (err) {
 			gridd_client_fail(mc->ec.client, err);
-			event_client_free(&mc->ec);
-			return FALSE;
-		} else {
-			gridd_client_pool_defer(p->pool, &mc->ec);
-			return TRUE;
 		}
 	}
+	// See comment in _direct_getvers().
+	gridd_client_pool_defer(p->pool, &mc->ec);
+	return TRUE;
 }
 
 struct evtclient_GETVERS_s
@@ -1004,24 +1000,23 @@ _direct_getvers (struct sqlx_peering_s *self,
 	gridd_client_set_timeout_cnx(mc->ec.client, oio_election_getvers_timeout_cnx);
 
 	GError *err = gridd_client_connect_url (mc->ec.client, url);
-	if (NULL != err) {
+	if (err) {
 		gridd_client_fail(mc->ec.client, err);
-		event_client_free(&mc->ec);
-		return FALSE;
 	} else {
 		NAME2CONST(n0, *n);
 		GByteArray *req = sqlx_pack_GETVERS(&n0, peers, deadline);
 		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 		g_byte_array_unref(req);
-		if (NULL != err) {
+		if (err) {
 			gridd_client_fail(mc->ec.client, err);
-			event_client_free(&mc->ec);
-			return FALSE;
-		} else {
-			gridd_client_pool_defer(p->pool, &mc->ec);
-			return TRUE;
 		}
 	}
+	/* Sometimes we already know there is a problem, but we are currently
+	 * holding the election manager's lock. We must release the lock before
+	 * trying to handle the error (because the error handler on_end() may try
+	 * to take the lock, which would cause a deadlock). */
+	gridd_client_pool_defer(p->pool, &mc->ec);
+	return TRUE;
 }
 
 /* -------------------------------------------------------------------------- */
