@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -279,6 +279,7 @@ class AutomaticSharding(Meta2Filter):
         meta2db_size = meta2db.file_status["st_size"]
         data = self.container_sharding.container.container_get_properties(
             cid=meta2db.cid,
+            force_master=True,
             admin_mode=True,
             params={"urgent": 1},
             reqid=reqid,
