@@ -1755,6 +1755,21 @@ topic = oio-preserved
 broker_endpoint = ${QUEUE_URL}
 """
 
+template_event_agent_policy_transition_handlers = """
+[handler:storage.content.transitioned]
+pipeline = transition ${PRESERVE}
+
+[filter:transition]
+use = egg:oio#transition
+retry_delay = 60
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
 template_xcute_event_agent = """
 [event-agent]
 topic = ${QUEUE_NAME}
@@ -3329,6 +3344,22 @@ def generate(options):
             srv_type="event-agent-lifecycle-actions",
             group_id="event-agent-lifecycle-actions",
             template_handler=template_event_agent_lifecycle_actions_handlers,
+        )
+
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to policy transition
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-transitioned",
+            url,
+            workers="1",
+            srv_type="event-agent-policy-transition",
+            group_id="event-agent-policy-transition",
+            template_handler=template_event_agent_policy_transition_handlers,
         )
 
         # We need only one service
