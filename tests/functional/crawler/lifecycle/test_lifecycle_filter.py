@@ -121,6 +121,8 @@ class TestLifecycleCrawler(BaseTestCase):
         self.app = FilterApp(self.app_env)
         self.run_id = f"runid_{random_str(4)}"
 
+        self.wait_for_score(("meta2",), score_threshold=2)
+
     def _wait_n_days(self, days):
         wait = days * 86400 / self.TIME_FACTOR
         time.sleep(wait)
@@ -236,7 +238,9 @@ class TestLifecycleCrawler(BaseTestCase):
 
     def _get_meta2db_env(self, cid):
         services = self.conscience.all_services("meta2")
-        volumes = {s["id"]: s["tags"]["tag.vol"] for s in services}
+        volumes = {
+            s["id"]: s["tags"]["tag.vol"] for s in services if "tag.vol" in s["tags"]
+        }
         status = self.admin.election_status("meta2", cid=cid)
         master = status.get("master")
         return {
@@ -980,7 +984,7 @@ class TestLifecycleCrawler(BaseTestCase):
             passes=6,
         )
 
-    def test_expiration_versionned(self):
+    def test_expiration_versioned(self):
         self._enable_versioning()
 
         def callback(status, _msg):
@@ -1031,7 +1035,7 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(3)
         self._run_scenario(configuration, callback)
 
-    def test_non_current_expiration_versionned_multiple_passes(self):
+    def test_non_current_expiration_versioned_multiple_passes(self):
         self._enable_versioning()
 
         def callback(status, _msg):
@@ -1088,7 +1092,7 @@ class TestLifecycleCrawler(BaseTestCase):
             passes=3,
         )
 
-    def test_non_current_expiration_versionned(self):
+    def test_non_current_expiration_versioned(self):
         self._enable_versioning()
 
         def callback(status, _msg):
@@ -1583,7 +1587,7 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         )
         super().test_non_current_budget_reached()
 
-    def test_expiration_versionned(self):
+    def test_expiration_versioned(self):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
@@ -1592,9 +1596,9 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
                 "total_delete": 10,
             },
         )
-        super().test_expiration_versionned()
+        super().test_expiration_versioned()
 
-    def test_non_current_expiration_versionned(self):
+    def test_non_current_expiration_versioned(self):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
@@ -1603,9 +1607,9 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
                 "total_delete": 150,
             },
         )
-        super().test_non_current_expiration_versionned()
+        super().test_non_current_expiration_versioned()
 
-    def test_non_current_expiration_versionned_multiple_passes(self):
+    def test_non_current_expiration_versioned_multiple_passes(self):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
@@ -1627,7 +1631,7 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
 
-        super().test_non_current_expiration_versionned_multiple_passes()
+        super().test_non_current_expiration_versioned_multiple_passes()
 
     def test_expiration_non_current_since(self):
         self.metrics_by_passes_with_sharding = (
