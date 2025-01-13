@@ -277,8 +277,6 @@ class ContainerLifecycle(object):
         # close WHERE clause
         _query = f"{_query} WHERE {' AND '.join(where_clauses)}"
 
-        if non_current or versioned:
-            _query = f"{_query} GROUP BY al.alias"
         return _query
 
     def create_noncurrent_view(self, rule):

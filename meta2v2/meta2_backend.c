@@ -4313,7 +4313,7 @@ end:
 
 static GError* _tag_matched_properties(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3, const char *prefix,
 			const char *base_set_adapted_tags, const char *full_query_set_tag,
-			gboolean is_transition, char *storage_class, int batch_size) {
+			gboolean is_transition, gboolean versioning_enabled, char *storage_class, int batch_size) {
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx_clean = NULL;
 	gchar *query_update_properties = NULL;
@@ -4330,12 +4330,31 @@ static GError* _tag_matched_properties(struct meta2_backend_s *m2b, struct sqlx_
 		return err;
 	}
 	if (is_transition) {
-		if (prefix)
-			query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?2, ?3, pol) LIMIT %d ) ", base_set_adapted_tags, full_query_set_tag, batch_size);
-		else
-			query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?1, ?2, pol) LIMIT %d )", base_set_adapted_tags, full_query_set_tag, batch_size);
+		if (prefix) {
+			if (versioning_enabled) {
+				query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?2, ?3, pol) GROUP BY al.alias LIMIT %d ) ",
+					base_set_adapted_tags, full_query_set_tag, batch_size);
+			} else {
+				query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?2, ?3, pol) LIMIT %d ) ",
+					base_set_adapted_tags, full_query_set_tag, batch_size);
+			}
+		} else {
+			if (versioning_enabled) {
+				query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?1, ?2, pol) GROUP BY al.alias LIMIT %d )",
+					base_set_adapted_tags, full_query_set_tag, batch_size);
+			} else {
+				query_update_properties = g_strdup_printf("%s ( %s  AND _is_allowed_transition(?1, ?2, pol) LIMIT %d )",
+					base_set_adapted_tags, full_query_set_tag, batch_size);
+			}
+		}
 	} else {
-		query_update_properties = g_strdup_printf("%s ( %s  LIMIT %d )", base_set_adapted_tags, full_query_set_tag, batch_size);
+		if (versioning_enabled) {
+			query_update_properties = g_strdup_printf("%s ( %s  GROUP BY al.alias LIMIT %d )",
+				base_set_adapted_tags, full_query_set_tag, batch_size);
+		} else {
+			query_update_properties = g_strdup_printf("%s ( %s  LIMIT %d )",
+				base_set_adapted_tags, full_query_set_tag, batch_size);
+		}
 	}
 	sqlite3_stmt *stmt_update = NULL;
 	int rc = sqlite3_prepare_v2(sq3->db, query_update_properties, -1, &stmt_update, NULL);
@@ -4495,12 +4514,13 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	gboolean abort_incomplete_mpu = (g_strcmp0(action, "AbortIncompleteMultipartUpload") == 0);
 	gboolean is_transition = (g_strcmp0(action, "Transition") == 0);
+	gboolean versioning_enabled = VERSIONS_ENABLED(versioning);
 
 	if (!current_action && !abort_incomplete_mpu) {
 		g_prefix_error(&err, "Bad action: %s", action);
 		goto end;
 	}
-	if (!VERSIONS_ENABLED(versioning)) {
+	if (!versioning_enabled) {
 		full_query = g_strdup_printf("%s %s LIMIT %d", base_query, query, batch_size);
 		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
 	} else {
@@ -4615,7 +4635,8 @@ rollback:
 		goto close;
 	}
 	if (query_set_tag && found_match) {
-		err = _tag_matched_properties(m2b, sq3, prefix, base_set_adapted_tags, full_query_set_tag, is_transition, storage_class, batch_size);
+		err = _tag_matched_properties(m2b, sq3, prefix, base_set_adapted_tags, full_query_set_tag,
+			is_transition, versioning_enabled, storage_class, batch_size);
 	}
 
 close:
@@ -4739,8 +4760,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 			== 0 || g_strcmp0(action, "NoncurrentVersionTransition") == 0);
 
 	gboolean is_transition = (g_strcmp0(action, "NoncurrentVersionTransition") == 0);
+	gboolean versioning_enabled = VERSIONS_ENABLED(versioning);
 
-	if (!VERSIONS_ENABLED(versioning)  && non_current_action) {
+	if (!versioning_enabled  && non_current_action) {
 		g_prefix_error(&err, "Unsupported configuration action: %s for non versioned container", action);
 		goto end;
 	}
@@ -4852,7 +4874,7 @@ rollback:
 
 	if (query_set_tag && found_match) {
 		err = _tag_matched_properties(m2b, sq3, prefix, base_set_adapted_tags, full_query_set_tag,
-			is_transition, storage_class, batch_size);
+			is_transition, versioning_enabled, storage_class, batch_size);
 	}
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);

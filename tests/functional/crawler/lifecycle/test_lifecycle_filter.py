@@ -2223,7 +2223,7 @@ class TestLifecycleCrawlerTransitions(TestLifecycleBase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "foo/"},
                     "Transition": {
-                        "1": {"Days": 1, "StorageClass": "STANDARD_IA"},
+                        "1": {"Days": 6, "StorageClass": "STANDARD_IA"},
                     },
                 },
             },
@@ -2240,7 +2240,7 @@ class TestLifecycleCrawlerTransitions(TestLifecycleBase):
                 **self.DEFAULT_STATS,
                 "successes": 2,
                 "total_events": 10,
-                "total_delete": 10,
+                "total_transition": 10,
             },
         )
         self._create_objects_for_rule(

@@ -662,13 +662,19 @@ class Lifecycle(Meta2Filter):
 
         while True:
             next_batch_size = self._get_next_limit()
-            sql_query = f"{query} "
 
+            # GROUP BY is added to query_set_tag in meta2 backend
+            if self.context.has_versioning:
+                sql_query = f"{query} GROUP BY al.alias"
+            else:
+                sql_query = query
+
+            query_set_tag = query
             data = {
                 "action": action_class.field,
                 "suffix": self.context.suffix,
                 "query": sql_query,
-                "query_set_tag": sql_query,
+                "query_set_tag": query_set_tag,
                 "storage_class": policy,
                 "batch_size": next_batch_size,
                 "rule_id": rule_id,
