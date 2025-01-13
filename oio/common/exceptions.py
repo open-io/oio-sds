@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -222,6 +222,16 @@ class SourceReadError(OioException):
 
 class OioNetworkException(OioException):
     """Network related exception (connection, timeout...)."""
+
+    pass
+
+
+class EventletUrllibBug(OioNetworkException):
+    """
+    Suspected bug in eventlet when returning the result of select.select()
+
+    This inherits OioNetworkException because we plan to handle it the same way.
+    """
 
     pass
 

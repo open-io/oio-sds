@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,10 +14,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six.moves.urllib_parse import urlparse
+from urllib.parse import urlparse
+
 from urllib3 import exceptions as urllibexc
 
 from oio.common.exceptions import (
+    EventletUrllibBug,
     OioException,
     OioNetworkException,
     OioProtocolError,
@@ -67,6 +69,8 @@ class SafePoolManager(urllib3.PoolManager):
     """
     `urllib3.PoolManager` wrapper that filters out keyword arguments
     not recognized by urllib3.
+
+    Also protects against a known bug in urllib3.
     """
 
     def request(self, *args, **kwargs):
@@ -75,7 +79,12 @@ class SafePoolManager(urllib3.PoolManager):
         then call `urllib3.PoolManager.request`.
         """
         kwargs2 = {k: v for k, v in kwargs.items() if k in URLLIB3_REQUESTS_KWARGS}
-        return super(SafePoolManager, self).request(*args, **kwargs2)
+        try:
+            return super().request(*args, **kwargs2)
+        except ValueError as err:
+            if "not enough values to unpack" in str(err):
+                raise EventletUrllibBug("eventlet/urllib3 bug?") from err
+            raise
 
 
 def get_pool_manager(

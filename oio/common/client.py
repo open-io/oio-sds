@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,12 @@ from random import randrange
 from oio.api.base import HttpApi
 from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.common.constants import HEADER_PREFIX
-from oio.common.exceptions import Conflict, OioException, ServiceBusy
+from oio.common.exceptions import (
+    Conflict,
+    OioException,
+    OioNetworkException,
+    ServiceBusy,
+)
 from oio.common.green import sleep
 from oio.common.logger import get_logger
 
@@ -113,7 +118,7 @@ class ProxyClient(HttpApi):
                 return super(ProxyClient, self)._direct_request(
                     method, url, headers=headers, **kwargs
                 )
-            except ServiceBusy:
+            except (OioNetworkException, ServiceBusy):
                 if i >= request_attempts - 1:
                     raise
                 # retry with exponential backoff
