@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,6 +16,7 @@ import time
 
 from oio.account.bucket_client import BucketClient
 from oio.account.client import AccountClient
+from oio.api.object_storage import ObjectStorageApi
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
@@ -84,6 +85,11 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.app_env["conscience_client"] = ConscienceClient(
             self.conf,
             logger=self.logger,
+        )
+        self.app_env["api"] = ObjectStorageApi(
+            self.conf["namespace"],
+            logger=self.logger,
+            pool_manager=self.app_env["account_client"].pool_manager,
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 

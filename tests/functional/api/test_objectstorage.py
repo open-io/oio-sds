@@ -2527,13 +2527,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
-
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls._cls_transition_consumer = cls._register_consumer(
             topic=DEFAULT_TRANSITION_TOPIC
         )
+        cls._service("oio-event-agent-policy-transition-1.service", "stop", wait=5)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-event-agent-policy-transition-1.service", "start", wait=1)
+        super().tearDownClass()
 
     def setUp(self):
         super(TestObjectChangePolicy, self).setUp()
@@ -2930,6 +2935,11 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
         cls._cls_transition_consumer = cls._register_consumer(
             topic=DEFAULT_TRANSITION_TOPIC
         )
+        cls._service("oio-event-agent-policy-transition-1.service", "stop", wait=5)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-event-agent-policy-transition-1.service", "start", wait=1)
 
     def setUp(self):
         super().setUp()
