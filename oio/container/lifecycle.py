@@ -185,8 +185,8 @@ class ContainerLifecycle(object):
                 ExpirationAction,
             )
         return (
-            TransitionAction,
             ExpirationAction,
+            TransitionAction,
         )
 
     def actions_iter(self, use_versioning, is_mpu_container):

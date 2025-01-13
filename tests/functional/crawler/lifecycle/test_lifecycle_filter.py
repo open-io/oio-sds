@@ -2468,3 +2468,105 @@ class TestLifecycleCrawlerTransitions(TestLifecycleBase):
         # No event expected as storage class is same
         self.expectations = []
         self._run_scenario(configuration, callback)
+
+
+class TestLifecycleCrawlerConflicts(TestLifecycleBase):
+    def test_transition_expiration(self):
+        """expiration takes priority over transition"""
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["1-1"], "date": []},
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-2", prefix="doc/", count=10)
+        self._wait_n_days(3)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_transition_delete_marker(self):
+        """transition takes priority over delete marker"""
+
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["1-1"], "date": []},
+            "_transition_rules": {"days": ["0-0"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_transition": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule("rule-1", prefix="doc/", count=10)
+        self._wait_n_days(3)
+        self._run_scenario(configuration, callback, passes=2)
