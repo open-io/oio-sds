@@ -387,6 +387,11 @@ class ReplicationRecovery(Command):
             help="Resend only events from objects with metadatata to be replicated",
         )
         parser.add_argument(
+            "--all",
+            action="store_true",
+            help="Resend events from all objects",
+        )
+        parser.add_argument(
             "--until",
             help="Date (timestamp) until which the objects must be checked. "
             "If pending is set to True and until is not specified, until will "
@@ -488,12 +493,14 @@ class ReplicationRecovery(Command):
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
         use_marker = parsed_args.use_marker
+        all = parsed_args.all
         marker_update_after = parsed_args.marker_update_after
-        if pending and only_metadata:
+        if (pending and only_metadata) or (pending and all) or (only_metadata and all):
             raise ValueError(
-                "Cannot use both pending and only-metadata options at the same time"
+                "Options conflict: cannot combine 'pending', 'only-metadta' and"
+                " 'all' options. Only one option at a time is supported"
             )
-        elif not (pending or only_metadata):
+        elif not (pending or only_metadata or all):
             # When no option is defined, use pending by default
             pending = True
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
