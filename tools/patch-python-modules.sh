@@ -9,6 +9,13 @@ if [ -z "${ENV_PATH}" ]; then
 fi
 
 PATCHES_DIR="$(realpath "$(dirname "$0")/../python-patches")"
+
+if [ ! -d "$PATCHES_DIR" ]
+then
+  echo "Nothing to patch"
+  exit 0
+fi
+
 for VENV in "${ENV_PATH}/lib/python"*"/site-packages/"; do
     VENV=$(realpath "${VENV}")
     cd "${VENV}"
