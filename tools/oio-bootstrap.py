@@ -3195,6 +3195,7 @@ def generate(options):
             url,
             workers="2",
             group_id="event-agent",
+            queue_type="per_volume",
             template_handler=template_event_agent_handlers,
         )
 
@@ -3234,6 +3235,7 @@ def generate(options):
                 srv_type="event-agent-chunks",
                 workers=len(rawx_per_host[host]),
                 group_id="event-agent-chunks",
+                queue_type="per_volume",
                 template_handler=template_event_agent_chunks_handlers,
             )
 
