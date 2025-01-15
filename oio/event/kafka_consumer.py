@@ -123,9 +123,13 @@ class PerVolumeEventQueue(EventQueue):
             self.register_queue(queue_id)
 
     def id_from_event(self, event):
-        data = event.data
-        volume_id = data.get("volume_service_id") or data.get("volume_id")
-        return hash(volume_id) % 10
+        data = event.get("data")
+        if type(data) is list:
+            return self.DEFAULT_QUEUE
+        else:
+            volume_id = data.get("volume_service_id") or data.get("volume_id")
+            return volume_id
+#            return hash(volume_id) % 10
 
 
 def event_queue_factory(logger, conf, *args, **kwargs):
@@ -562,9 +566,19 @@ class KafkaBatchFeeder(
 
             if self._registered_offsets == self._batch_size:
                 # Batch complete
+                for queue_id in self._events_queue.ids:
+                    self._events_queue.put(
+                        queue_id,
+                        "End of batch marker",
+                    )
                 break
             if self.has_registered_offsets() and monotonic_time() > deadline:
                 # Deadline reached
+                for queue_id in self._events_queue.queue_ids:
+                    self._events_queue.put(
+                        queue_id,
+                        "End of batch marker",
+                    )
                 break
 
     def _wait_batch_processed(self):
