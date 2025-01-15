@@ -48,6 +48,7 @@ class TestRdirClient(BaseTestCase):
         self.incident_date = random.randrange(2, max_mtime - 1)
 
         expected_entries = list()
+        chunk_list = []
         for _ in range(max_containers):
             cid = random_id(64)
             for i in range(random.randrange(2, max_objects)):
@@ -61,15 +62,25 @@ class TestRdirClient(BaseTestCase):
                         chunk_id += "0"
                     else:
                         chunk_id += "1"
-                    self.rdir.chunk_push(
-                        self.rawx_id,
-                        cid,
-                        content_id,
-                        chunk_id,
-                        content_path,
-                        content_ver,
-                        mtime=mtime,
+                    chunk_list.append(
+                        {
+                            "chunk_id": chunk_id,
+                            "container_id": cid,
+                            "content_id": content_id,
+                            "path": content_path,
+                            "version": content_ver,
+                            "mtime": mtime,
+                        }
                     )
+#                    self.rdir.chunk_push(
+#                        self.rawx_id,
+#                        cid,
+#                        content_id,
+#                        chunk_id,
+#                        content_path,
+#                        content_ver,
+#                        mtime=mtime,
+#                    )
                     entry = (
                         cid,
                         chunk_id,
@@ -81,6 +92,7 @@ class TestRdirClient(BaseTestCase):
                         },
                     )
                     expected_entries.append(entry)
+        self.rdir.chunk_push_batch(self.rawx_id, chunk_list)
         self.expected_entries = sorted(expected_entries)
 
     def _delete_chunks(self):
