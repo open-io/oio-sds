@@ -409,12 +409,12 @@ class Lifecycle(Meta2Filter):
         self.successes += 1
         return self.app(env, cb)
 
-    def _gen_views_non_current_action(self, lc, rule, non_current_days_in_sec):
+    def _gen_views_non_current_action(self, lc, rule_filter, non_current_days_in_sec):
         """Generate views for NoncurrentExpiration/NoncurrentTransition.
 
         noncurrent_view depends on current_view.
         """
-        noncurrent_view = lc.create_noncurrent_view(rule)
+        noncurrent_view = lc.create_noncurrent_view(rule_filter)
         current_view = lc.create_common_views(
             "current_view", formated_time=non_current_days_in_sec
         )
@@ -452,20 +452,12 @@ class Lifecycle(Meta2Filter):
             action_name = action_name[:-1]
         return action_name
 
-    def _is_prefix_outside_range(self, rule):
-        rule_filter = RuleFilter(rule)
+    def _is_prefix_outside_range(self, rule_filter):
         if rule_filter.prefix:
             prefix = rule_filter.prefix
             if (self.context.lower and prefix < self.context.lower[: len(prefix)]) or (
                 self.context.upper and prefix > self.context.upper[: len(prefix)]
             ):
-                self.logger.info(
-                    "Skipped rule %s, prefix %s is outside of range [%s: %s]",
-                    rule,
-                    prefix,
-                    self.context.lower,
-                    self.context.upper,
-                )
                 return True
         return False
 
@@ -500,17 +492,17 @@ class Lifecycle(Meta2Filter):
             return self._date_or_bypass(date)
         return None
 
-    def _process_action(self, lc_instance, action_class, rule, action):
+    def _process_action(self, lc_instance, action_class, rule_id, rule_filter, action):
         """Process one action by batches.
         Handle different types of actions and versioned/not versioned container
         """
-        rule_id = rule.get("ID")
-        rule_filter = RuleFilter(rule)
         view_queries = {}
 
         if isinstance(action_class, AbortMpuAction):
             # AbortIncompleteMultiPartUpload doesn't depend on versioning
-            query = lc_instance.abort_incomplete_query(rule, self._get_days(action))
+            query = lc_instance.abort_incomplete_query(
+                rule_filter, self._get_days(action)
+            )
         elif self.context.has_versioning:
             # Versioned
             if isinstance(action_class, DeleteMarkerAction):
@@ -521,10 +513,10 @@ class Lifecycle(Meta2Filter):
                 newer_non_current_versions = action.get("NewerNoncurrentVersions")
                 # Create views
                 view_queries = self._gen_views_non_current_action(
-                    lc_instance, rule, self._get_days(action)
+                    lc_instance, rule_filter, self._get_days(action)
                 )
                 query = lc_instance.noncurrent_query(
-                    rule, newer_non_current_versions, self._get_days(action)
+                    rule_filter, newer_non_current_versions, self._get_days(action)
                 )
             else:
                 # Current versions: Expiration/Transition
@@ -534,13 +526,13 @@ class Lifecycle(Meta2Filter):
                     lc_instance, days_in_sec, date
                 )
                 query = lc_instance.build_sql_query(
-                    rule, days_in_sec, date, False, True, True
+                    rule_filter, days_in_sec, date, False, True, True
                 )
         else:
             # Non versioned
             days_in_sec = self._get_days(action)
             date = self._get_date(action)
-            query = lc_instance.build_sql_query(rule, days_in_sec, date)
+            query = lc_instance.build_sql_query(rule_filter, days_in_sec, date)
 
         return self._send_query_events(
             query,
@@ -566,10 +558,31 @@ class Lifecycle(Meta2Filter):
                 self.context.path,
             )
 
-            if self._is_prefix_outside_range(rule):
+            rule_id = rule.get("ID")
+            try:
+                rule_filter = RuleFilter(rule)
+            except ValueError as exc:
+                self.logger.error(
+                    "Rule %s filter interpreted as an empty filter but some fields are"
+                    " present: %s",
+                    rule_id,
+                    exc,
+                )
+                raise
+
+            if self._is_prefix_outside_range(rule_filter):
+                self.logger.info(
+                    "Skipped rule %s, prefix '%s' is outside of range [%s: %s]",
+                    rule_id,
+                    rule_filter.prefix,
+                    self.context.lower,
+                    self.context.upper,
+                )
                 continue
 
-            is_finished_action = self._process_action(lc, action_class, rule, action)
+            is_finished_action = self._process_action(
+                lc, action_class, rule_id, rule_filter, action
+            )
             if not is_finished_action:
                 self.logger.warning(
                     "Budget reached for container %s", self.context.path

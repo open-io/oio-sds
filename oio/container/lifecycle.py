@@ -203,7 +203,7 @@ class ContainerLifecycle(object):
 
     def build_sql_query(
         self,
-        rule,
+        rule_filter,
         formated_days=None,
         date=None,
         non_current=False,
@@ -212,7 +212,6 @@ class ContainerLifecycle(object):
     ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
-        rule_filter = RuleFilter(rule)
         _query = " "
 
         _slo_cond = (
@@ -245,8 +244,7 @@ class ContainerLifecycle(object):
                     "pr2.alias AND al.version=pr2.version "
                 )
                 _tags = f" AND pr2.key='{TAGGING_KEY}'"
-                for el in rule_filter.tags:
-                    ((k, v),) = el.items()
+                for k, v in rule_filter.tags.items():
                     _tag_key_cond = (
                         " AND CAST(pr2.value as nvarchar(10000))"
                         f" LIKE '%<Tag><Key>{k}</Key>"
@@ -281,8 +279,7 @@ class ContainerLifecycle(object):
             _query = f"{_query} GROUP BY al.alias"
         return _query
 
-    def create_noncurrent_view(self, rule):
-        rule_filter = RuleFilter(rule)
+    def create_noncurrent_view(self, rule_filter):
         # Create forced on meta2 side
         _query = (
             "VIEW noncurrent_view AS SELECT *, "
@@ -374,20 +371,11 @@ class ContainerLifecycle(object):
 
         return _query
 
-    def get_prefix(self, rule):
-        """
-        Get prefix and pass it as parameter for query
-        """
-        rule_filter = RuleFilter(rule)
-        return rule_filter.prefix
-
-    def noncurrent_query(self, rule, noncurrent_versions, formated_time):
+    def noncurrent_query(self, rule_filter, noncurrent_versions, formated_time):
         """
         Deal with non current versions
         """
 
-        rule_filter = RuleFilter(rule)
-        #
         if noncurrent_versions is None:
             noncurrent_versions = 0
         # SELECT is forced on meta2 side
@@ -412,13 +400,12 @@ class ContainerLifecycle(object):
         """
 
         # SELECT is forced on meta2 side
-        query = " WHERE nb_versions=1" f" AND {self._processed_sql_condition()} "
+        query = f" WHERE nb_versions=1 AND {self._processed_sql_condition()} "
         return query
 
-    def abort_incomplete_query(self, rule, formated_days=None):
+    def abort_incomplete_query(self, rule_filter, formated_days=None):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
-        rule_filter = RuleFilter(rule)
         _query = " "
 
         _upload_finished_cond = (
@@ -447,16 +434,40 @@ class ContainerLifecycle(object):
         return _query
 
 
-class RuleFilter(object):
-    def __init__(self, rule_filter):
-        self.prefix = rule_filter.get("Prefix", None) or rule_filter.get(
-            "Filter", {}
-        ).get("Prefix", None)
-        self.greater = rule_filter.get("Filter", {}).get("ObjectSizeGreaterThan", None)
-        self.lesser = rule_filter.get("Filter", {}).get("ObjectSizeLessThan", None)
+class Tags:
+    def __init__(self, tags):
+        self.tags = {}
+        for tag in tags:
+            tag = {**tag}
+            key = tag.pop("Key", None)
+            value = tag.pop("Value", "")
+            if key is None:
+                raise ValueError("Key 'Key' not found in Tag")
+            if tag:
+                raise ValueError(
+                    f"Unsupported fields in Tag: {', '.join((k for k in tag))}"
+                )
+            self.tags[key] = value
+
+    def items(self):
+        return self.tags.items()
+
+    def __len__(self):
+        return len(self.tags)
+
+
+class RuleFilter:
+    def __init__(self, rule):
+        rule_filter = {**rule.get("Filter", {})}
+        rule_id = rule.get("ID")
+        self.prefix = rule.get("Prefix", None) or rule_filter.pop("Prefix", None)
+        self.greater = rule_filter.pop("ObjectSizeGreaterThan", None)
+        self.lesser = rule_filter.pop("ObjectSizeLessThan", None)
         # Build a list of tags:
-        # Tags has two representations => Tags: List of tags if there are several tags
-        # otherwise single Tag: {}
-        self.tags = []
-        if rule_filter.get("Filter", {}).get("Tags") is not None:
-            self.tags = rule_filter.get("Filter", {}).get("Tags")
+        self.tags = Tags(rule_filter.pop("Tag", []))
+
+        if rule_filter:
+            raise ValueError(
+                f"Unsupported fields in 'Filter' for rule '{rule_id}': "
+                f"{', '.join((k for k in rule_filter))}"
+            )

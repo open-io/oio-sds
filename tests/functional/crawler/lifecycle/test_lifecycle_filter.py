@@ -136,7 +136,7 @@ class TestLifecycleCrawler(BaseTestCase):
         tags = [f"<Tag><Key>{k}</Key><Value>{v}</Value></Tag>" for k, v in tags.items()]
         return (
             '<Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
-            f'</TagSet>{"".join(tags)}</TagSet>'
+            f"</TagSet>{''.join(tags)}</TagSet>"
             "</Tagging>"
         )
 
@@ -231,7 +231,7 @@ class TestLifecycleCrawler(BaseTestCase):
         }
         if meta2db_env:
             meta2db_env["suffix"] = suffix
-            meta2db_env["path"] = f'{meta2db_env["path"]}.{suffix}'
+            meta2db_env["path"] = f"{meta2db_env['path']}.{suffix}"
         if create_copy:
             # Request a local copy of the meta2 database
             self.admin_client.copy_base_local(**params)
@@ -328,6 +328,80 @@ class TestLifecycleCrawler(BaseTestCase):
                     f"({i}/{len(self.expectations)}) Event not found for: {expect}",
                 )
             self._ensure_no_more_event()
+
+    def test_not_empty_filter(self):
+        def callback(status, _msg):
+            self.assertEqual(500, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Tags": [{"Key": "key1", "Value": "value1"}]},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                }
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "errors": 1,
+            },
+        )
+
+        self._create_objects_for_rule(None, prefix="doc/", count=10)
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback)
+
+    def test_wrong_tags(self):
+        def callback(status, _msg):
+            self.assertEqual(500, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Tag": [{"key1": "value1"}]},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                }
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "errors": 1,
+            },
+        )
+
+        self._create_objects_for_rule(None, prefix="doc/", count=10)
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback)
 
     def test_disabled_time_bypass(self):
         def callback(status, _msg):
@@ -535,7 +609,12 @@ class TestLifecycleCrawler(BaseTestCase):
                 "0": {
                     "ID": "rule-1",
                     "Status": "Enabled",
-                    "Filter": {"Tags": [{"key1": "value1"}, {"key2": "value2"}]},
+                    "Filter": {
+                        "Tag": [
+                            {"Key": "key1", "Value": "value1"},
+                            {"Key": "key2", "Value": "value2"},
+                        ]
+                    },
                     "Expiration": {
                         "0": {"Days": 2},
                     },
@@ -543,9 +622,9 @@ class TestLifecycleCrawler(BaseTestCase):
                 "1": {
                     "ID": "rule-2",
                     "Status": "Enabled",
-                    "Filter": {"Tags": [{"key1": "value1"}]},
+                    "Filter": {"Tag": [{"Key": "key3", "Value": "value3"}]},
                     "Expiration": {
-                        "1": {"Days": 10},
+                        "1": {"Days": 2},
                     },
                 },
             },
@@ -561,8 +640,8 @@ class TestLifecycleCrawler(BaseTestCase):
             {
                 **self.DEFAULT_STATS,
                 "successes": 2,
-                "total_events": 10,
-                "total_delete": 10,
+                "total_events": 20,
+                "total_delete": 20,
             },
             {
                 **self.DEFAULT_STATS,
@@ -570,7 +649,13 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         self._create_objects_for_rule(
-            "rule-1", prefix="doc/", count=10, tags={"key1": "value1", "key2": "value2"}
+            "rule-1",
+            prefix="doc1/",
+            count=10,
+            tags={"key1": "value1", "key2": "value2"},
+        )
+        self._create_objects_for_rule(
+            "rule-2", prefix="doc2/", count=10, tags={"key3": "value3"}
         )
         self._create_objects_for_rule(
             None, prefix="foo/", count=10, tags={"key1": "value1"}
@@ -670,7 +755,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {
                         "ObjectSizeLessThan": 20,
                         "ObjectSizeGreaterThan": 10,
-                        "Tags": [{"key1": "value1"}],
+                        "Tag": [{"Key": "key1", "Value": "value1"}],
                         "Prefix": "doc/",
                     },
                     "Expiration": {
@@ -1335,6 +1420,26 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
     def _expected_metrics_for_test(self):
         return self.metrics_by_passes_with_sharding
 
+    def test_not_empty_filter(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "errors": 3,
+            },
+        )
+        super().test_not_empty_filter()
+
+    def test_wrong_tags(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "errors": 3,
+            },
+        )
+        super().test_wrong_tags()
+
     def test_disabled_time_bypass(self):
         self.metrics_by_passes_with_sharding = (
             {
@@ -1435,8 +1540,8 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             {
                 **self.DEFAULT_STATS,
                 "successes": 4,
-                "total_events": 10,
-                "total_delete": 10,
+                "total_events": 20,
+                "total_delete": 20,
             },
             {
                 **self.DEFAULT_STATS,
