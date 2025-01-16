@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -41,16 +41,18 @@ License along with this library.
 #include "internals.h"
 
 static GByteArray*
-_pack_RESTORE(struct sqlx_name_s *name, GByteArray *dump, gint64 deadline)
+_pack_RESTORE(const struct sqlx_name_s *name, GByteArray *dump,
+		const gchar *local_addr, gint64 deadline)
 {
-	GByteArray *encoded = sqlx_pack_RESTORE(name, dump->data, dump->len, deadline);
+	GByteArray *encoded = sqlx_pack_RESTORE(
+			name, dump->data, dump->len, local_addr, deadline);
 	g_byte_array_unref(dump);
 	return encoded;
 }
 
 GError *
 peer_restore(const gchar *target, struct sqlx_name_s *name,
-		GByteArray *dump, gint64 deadline)
+		GByteArray *dump, const gchar *local_addr, gint64 deadline)
 {
 	GError *err = NULL;
 
@@ -59,7 +61,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 		return NULL;
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump,
+	GByteArray *encoded = _pack_RESTORE(name, dump, local_addr,
 			oio_clamp_deadline(oio_election_replicate_timeout_req, deadline));
 	struct gridd_client_s *client = gridd_client_create(target, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
@@ -81,7 +83,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 
 GError *
 peers_restore(gchar **targets, struct sqlx_name_s *name,
-		GByteArray *dump, gint64 deadline)
+		GByteArray *dump, const gchar *local_addr, gint64 deadline)
 {
 	GError *err = NULL;
 
@@ -91,7 +93,7 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 				name->base, name->type);
 	}
 
-	GByteArray *encoded = _pack_RESTORE(name, dump,
+	GByteArray *encoded = _pack_RESTORE(name, dump, local_addr,
 			oio_clamp_deadline(oio_election_replicate_timeout_req, deadline));
 	struct gridd_client_s **clients = gridd_client_create_many(
 			targets, encoded, NULL, NULL);

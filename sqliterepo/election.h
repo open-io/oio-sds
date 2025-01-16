@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -238,5 +238,12 @@ gboolean election_manager_configured(const struct election_manager_s *m);
 
 gboolean election_is_master(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
+
+/** Check the current state of the election to tell if the database can
+ * accept replication operations. If the state is master, or the know master
+ * is different from expected_master, the replication must be denied. */
+GError* election_accepts_replication(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, const gchar *expected_master,
+		const gchar *operation);
 
 #endif /*OIO_SDS__sqliterepo__election_h*/
