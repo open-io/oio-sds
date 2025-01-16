@@ -18,7 +18,8 @@ jobs:
           - . $HOME/oio-env.sh
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
-          - pip install --progress-bar off --upgrade awscli awscli-plugin-endpoint coverage pip virtualenv git+https://github.com/boyska/xq.git
+          - pip install --progress-bar off --upgrade pip
+          - pip install --progress-bar off --upgrade "botocore<1.36.0" awscli awscli-plugin-endpoint coverage virtualenv git+https://github.com/boyska/xq.git  # To be removed (botocore<1.36.0) when CRC32 checksum algorithm is supported
           - go install github.com/axw/gocov/gocov@latest
 
       - name: Download test result artifacts
