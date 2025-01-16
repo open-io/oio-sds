@@ -14,6 +14,11 @@ dynamic = [
 requires = ["ruff", "setuptools >= 47.1.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+markers = [
+  "no_thread_patch: tests which must run with unpatched thread module",
+]
+
 [tool.ruff]
 target-version = "py37"
 line-length = 88

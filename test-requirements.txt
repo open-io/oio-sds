@@ -2,7 +2,7 @@ coverage
 fixtures>=1.4.0
 gcovr
 mock>=1.0
-nose
-nose-timer
+pytest
+pytest-timer
 ruff
 testtools

@@ -25,7 +25,7 @@ jobs:
       - name: Download test result artifacts
         artifactDownload:
           path: "{{.cds.workspace}}"
-          pattern: "nosetests-.*.xml"
+          pattern: "pytests-.*.xml"
           tag: "{{.cds.version}}"
 
       - name: Aggregate test results
@@ -37,9 +37,9 @@ jobs:
           export TEST_FUNC=0
           export TEST_UNIT=0
           shopt -s nullglob
-          for TEST_RESULT in nosetests-*.xml
+          for TEST_RESULT in pytests-*.xml
           do
-            count=$(xq -r "/testsuite/@tests" $TEST_RESULT)
+            count=$(xq -r "/testsuites/testsuite/@tests" $TEST_RESULT)
             if [[ "$TEST_RESULT" =~ .+unit.* ]]
             then
               ((TEST_UNIT+=$count))
@@ -146,7 +146,7 @@ jobs:
       - name: Publish test reports on CDS
         optional: true
         always_executed: true
-        jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
+        jUnitReport: "{{.cds.workspace}}/pytests-*.xml"
 
       - name: Download build analysis for sonar
         script:

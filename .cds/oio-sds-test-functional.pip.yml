@@ -107,7 +107,7 @@ jobs:
           - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
           - '[ -n "$(echo $HOME/go_coverage.output.*)" ] && (cd rawx; gocov convert $HOME/go_coverage.output.* > {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json) || true'
           - worker upload '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
-          - "[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml"
+          - "[ ! -f pytests-*.xml ] || worker upload pytests-*.xml"
           - "[ ! -s {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json ] || worker upload {{.cds.workspace}}/go_coverage.{{.cds.env.TEST_SUITE}}.json"
           - mkdir -p c-coverage/coverage-.{{.cds.env.TEST_SUITE}}
           - cd c-coverage/coverage-.{{.cds.env.TEST_SUITE}}
@@ -119,7 +119,7 @@ jobs:
       - name: Publish test reports on CDS
         optional: true
         always_executed: true
-        jUnitReport: "{{.cds.workspace}}/nosetests-*.xml"
+        jUnitReport: "{{.cds.workspace}}/pytests-*.xml"
 
     requirements:
       - model: "{{.cds.env.MODEL}}"

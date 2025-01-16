@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,9 +17,9 @@ import math
 import os
 from datetime import datetime
 
+import pytest
 from mock import MagicMock as Mock
 from mock import patch
-from nose.plugins.attrib import attr
 
 from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
 from oio.billing.agent import BillingAgent
@@ -50,7 +50,7 @@ class FakeChannel:
         pass
 
 
-@attr("no_thread_patch")
+@pytest.mark.no_thread_patch
 class TestBillingAgent(BaseTestCase):
     CONF = {
         # FoundationDB

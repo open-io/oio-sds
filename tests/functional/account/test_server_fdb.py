@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,8 @@ import time
 from pathlib import Path
 
 import fdb
+import pytest
 import simplejson as json
-from nose.plugins.attrib import attr
 from werkzeug.test import Client
 from werkzeug.wrappers import Response
 
@@ -36,7 +36,7 @@ from tests.utils import BaseTestCase
 fdb.api_version(CommonFdb.FDB_VERSION)
 
 
-@attr("no_thread_patch")
+@pytest.mark.no_thread_patch
 class TestAccountServerBase(BaseTestCase):
     # https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
     PROM_PATTERN = re.compile(
@@ -659,7 +659,7 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(201, resp.status_code)
         # Fetch bucket metadata
         resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
-        expected_metdata = self.json_loads(resp.data)
+        expected_metadata = self.json_loads(resp.data)
         # Add ratelimit
         resp = self.app.put(
             "/v1.0/bucket/update",
@@ -669,7 +669,7 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(400, resp.status_code)
         resp = self.app.get("/v1.0/bucket/show", query_string=bucket_params)
         self.assertEqual(200, resp.status_code)
-        self.assertEqual(expected_metdata, self.json_loads(resp.data))
+        self.assertEqual(expected_metadata, self.json_loads(resp.data))
 
     def test_add_bucket_ratelimit_with_correct_syntax(self):
         # Create a new bucket
@@ -680,8 +680,8 @@ class TestAccountServer(TestAccountServerBase):
         resp = self.app.get(
             "/v1.0/bucket/show", query_string={"details": True, **bucket_params}
         )
-        expected_metdata = self.json_loads(resp.data)
-        expected_metdata.pop("mtime")
+        expected_metadata = self.json_loads(resp.data)
+        expected_metadata.pop("mtime")
         # Add ratelimit with one group
         resp = self.app.put(
             "/v1.0/bucket/update",
@@ -703,10 +703,10 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")
-        expected_metdata["ratelimit"] = {
+        expected_metadata["ratelimit"] = {
             "READ": 10,
         }
-        self.assertEqual(expected_metdata, metadata)
+        self.assertEqual(expected_metadata, metadata)
         # Add ratelimit with two groups (different from the first)
         resp = self.app.put(
             "/v1.0/bucket/update",
@@ -729,11 +729,11 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")
-        expected_metdata["ratelimit"] = {
+        expected_metadata["ratelimit"] = {
             "ALL": 12,
             "PUT": 3,
         }
-        self.assertEqual(expected_metdata, metadata)
+        self.assertEqual(expected_metadata, metadata)
         # Delete ratelimit
         resp = self.app.put(
             "/v1.0/bucket/update",
@@ -747,8 +747,8 @@ class TestAccountServer(TestAccountServerBase):
         self.assertEqual(200, resp.status_code)
         metadata = self.json_loads(resp.data)
         metadata.pop("mtime")
-        expected_metdata.pop("ratelimit")
-        self.assertEqual(expected_metdata, metadata)
+        expected_metadata.pop("ratelimit")
+        self.assertEqual(expected_metadata, metadata)
 
 
 IAM_POLICY_FULLACCESS = {

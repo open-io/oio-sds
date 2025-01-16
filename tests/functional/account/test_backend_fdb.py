@@ -26,7 +26,7 @@ from unittest.mock import patch
 
 import eventlet
 import fdb
-from nose.plugins.attrib import attr
+import pytest
 from testtools.testcase import ExpectedException
 from werkzeug.exceptions import BadRequest, Conflict
 
@@ -43,7 +43,7 @@ from tests.utils import BaseTestCase, random_str
 fdb.api_version(CommonFdb.FDB_VERSION)
 
 
-@attr("no_thread_patch")
+@pytest.mark.no_thread_patch
 class TestAccountBackend(BaseTestCase):
     def setUp(self):
         super(TestAccountBackend, self).setUp()

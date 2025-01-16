@@ -3,7 +3,7 @@
 
 # oio-test-suites.sh
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -299,7 +299,7 @@ test_meta2_filters () {
 	$OIO_RESET -N $OIO_NS $@
 
 	cd $SRCDIR
-	${PYTHON} $(command -v nosetests) tests.functional.m2_filters.test_filters
+	${PYTHON} $(command -v pytest) tests.functional.m2_filters.test_filters
 
 	$SYSTEMCTL stop oio-cluster.target
 	$OPENIOCTL stop

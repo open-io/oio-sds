@@ -84,7 +84,7 @@ jobs:
         script:
           - . $HOME/oiovenv/bin/activate
           - "worker upload {{.cds.workspace}}/.coverage.build* {{.cds.workspace}}/.coverage.unit*"
-          - "[ ! -f nosetests-*.xml ] || worker upload nosetests-*.xml"
+          - "[ ! -f pytests-*.xml ] || worker upload pytests-*.xml"
 
       - name: Build debug for Sonar
         script:

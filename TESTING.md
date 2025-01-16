@@ -176,11 +176,11 @@ Then follow those steps to setup the automated test suite environment:
 Now you can run a single test module:
 
 ```bash
-  nosetests tests/functional/cli/admin
+  pytest tests/functional/cli/admin
 ```
 
 Or you can run the whole test suite:
 
 ```bash
-  nosetests
+  pytest tests
 ```
