@@ -125,6 +125,10 @@ class LifecycleActionContext:
     def action(self):
         return self.event.data.get("action")
 
+    @property
+    def rule_id(self):
+        return self.event.data.get("rule_id")
+
 
 class LifecycleActions(Filter):
     """Filter to execute Lifecycle actions"""
@@ -305,6 +309,17 @@ class LifecycleActions(Filter):
                 )
                 return resp(env, cb)
 
+            self.logger.info(
+                "Processing lifecycle action: %s for rule: %s in run: %s on "
+                "(account=%s, bucket=%s, path=%s, version=%s)",
+                context.action,
+                context.rule_id,
+                context.run_id,
+                context.account,
+                context.bucket,
+                context.path,
+                context.version,
+            )
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
                 self._process_expiration(context)
