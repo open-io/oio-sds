@@ -365,7 +365,10 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	NAME2CONST(n, ctx->sq3->name);
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
 
-	GByteArray *encoded = sqlx_pack_REPLICATE(&n, &(ctx->sequence), deadline);
+	// Local address or service ID
+	const gchar *local_addr = election_manager_get_local(ctx->sq3->manager);
+	GByteArray *encoded = sqlx_pack_REPLICATE(
+			&n, &(ctx->sequence), local_addr, deadline);
 	struct gridd_client_s **clients =
 		gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
@@ -646,7 +649,8 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 
 	// Now send it to the SLAVES
 	NAME2CONST(n, ctx->sq3->name);
-	err = peers_restore(peers, &n, dump, oio_ext_get_deadline());
+	const gchar *local_addr = election_manager_get_local(ctx->sq3->manager);
+	err = peers_restore(peers, &n, dump, local_addr, oio_ext_get_deadline());
 	if (err) {
 		GRID_ERROR("%s reqid=%s", err->message, oio_ext_get_reqid());
 		if (err->code == CODE_IS_MASTER) {

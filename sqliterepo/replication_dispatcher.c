@@ -440,7 +440,7 @@ replicate_body_parse(struct sqlx_sqlite3_s *sq3, guint8 *body, gsize bodysize)
 
 static GError *
 _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
-		guint8 *dump, gsize dump_size)
+		guint8 *dump, gsize dump_size, const gchar *source)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, name,
@@ -449,13 +449,9 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		return err;
 	}
 
-	// Check the election without trigger an election
-	if (election_is_master(repo->election_manager, name)) {
-		err = NEWERROR(CODE_IS_MASTER,
-				"Restore operation is not allowed on the master service");
-	}
-
-	if (!err) {
+	// Check the election without triggering it
+	if (!(err = election_accepts_replication(
+			repo->election_manager, name, source, "DB_RESTORE"))) {
 		err = sqlx_repository_restore_base(sq3, dump, dump_size);
 	}
 
@@ -474,7 +470,7 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
-		const gchar *path)
+		const gchar *path, const gchar *source)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = sqlx_repository_open_and_lock(repo, name,
@@ -483,13 +479,9 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		return err;
 	}
 
-	// Check the election without trigger an election
-	if (election_is_master(repo->election_manager, name)) {
-		err = NEWERROR(CODE_IS_MASTER,
-				"Restore operation is not allowed on the master service");
-	}
-
-	if (!err) {
+	// Check the election without triggering it
+	if (!(err = election_accepts_replication(
+			repo->election_manager, name, source, "DB_RESTORE"))) {
 		err = sqlx_repository_restore_from_file(sq3, path);
 	}
 
@@ -672,17 +664,19 @@ _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 {
 	GError *err;
 	struct restore_ctx_s *ctx = NULL;
-	gint64 now = oio_ext_monotonic_time();
+	gint64 start = oio_ext_monotonic_time();
 	err = _pipe_base_from(source, repo, name, check_type, &ctx);
-	gint64 elapsed = oio_ext_monotonic_time();
-	GRID_INFO("pipe_base_from took %"G_GINT64_FORMAT" ms",
-		(elapsed - now) / G_TIME_SPAN_MILLISECOND);
+	gint64 after_dump = oio_ext_monotonic_time();
+	GRID_INFO("DUMP db %s from %s took %"G_GINT64_FORMAT" ms reqid=%s",
+			name->base, source, (after_dump - start) / G_TIME_SPAN_MILLISECOND,
+			oio_ext_get_reqid());
 
 	if (!err) {
-		now = elapsed;
-		err = _restore2(repo, name, ctx->path);
-		GRID_INFO("PIPEFROM restore db %s took %"G_GINT64_FORMAT" ms",
-			name->base, (oio_ext_monotonic_time() - now) / G_TIME_SPAN_MILLISECOND);
+		err = _restore2(repo, name, ctx->path, source);
+		GRID_INFO("PIPEFROM restore db %s took %"G_GINT64_FORMAT" ms reqid=%s",
+			name->base,
+			(oio_ext_monotonic_time() - after_dump) / G_TIME_SPAN_MILLISECOND,
+			oio_ext_get_reqid());
 	}
 
 	restore_ctx_clear(&ctx);
@@ -904,6 +898,7 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
+	gchar source[LIMIT_LENGTH_SRVID];
 	GError *err = NULL;
 
 	reply->no_access();
@@ -920,6 +915,13 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
+	// TODO(FVE): make it required (keep it optional only during migration)
+	EXTRACT_STRING2(NAME_MSGKEY_SRC, source, TRUE);
+	if (!oio_str_is_set(source)) {
+		GRID_WARN("Caller did not tell its service id, please update reqid=%s",
+				oio_ext_get_reqid());
+	}
+
 	reply->send_reply(CODE_TEMPORARY, "received");
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
@@ -933,13 +935,9 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	// Check the election without trigger an election
-	if (election_is_master(repo->election_manager, &n0)) {
-		err = NEWERROR(CODE_IS_MASTER,
-				"Replicate operation is not allowed on the master service");
-	}
-
-	if (!err) {
+	// Check the election without triggering it
+	if (!(err = election_accepts_replication(
+			repo->election_manager, &n0, source, "DB_REPLI"))) {
 		/* Unpack the body from the message, decode it */
 		err = replicate_body_parse(sq3, b, bsize);
 	}
@@ -1128,7 +1126,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -1137,7 +1135,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 
 	/* Dump the base in a locked manner */
 	err = _dump(repo, &n0, sqliterepo_dump_check_type, &dump);
-	if (NULL != err) {
+	if (err) {
 		g_prefix_error(&err, "Dump failed: ");
 		reply->send_error(0, err);
 		return TRUE;
@@ -1146,10 +1144,14 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 	reply->send_reply(CODE_TEMPORARY, "Dump done");
 
 	/* forward the dump to the target */
-	if (NULL != (err = peer_restore(target, &n0, dump, oio_ext_get_deadline())))
+	const gchar *local_addr = election_manager_get_local(
+			sqlx_repository_get_elections_manager(repo));
+	if ((err = peer_restore(
+				target, &n0, dump, local_addr, oio_ext_get_deadline()))) {
 		reply->send_error(CODE_INTERNAL_ERROR, err);
-	else
+	} else {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 	return TRUE;
 }
 
@@ -1241,10 +1243,18 @@ _handler_RESTORE(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
+	gchar source[LIMIT_LENGTH_SRVID];
 
-	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
+	}
+
+	// TODO(FVE): make it required (keep it optional only during migration)
+	EXTRACT_STRING2(NAME_MSGKEY_SRC, source, TRUE);
+	if (!oio_str_is_set(source)) {
+		GRID_WARN("Caller did not tell its service id, please update reqid=%s",
+				oio_ext_get_reqid());
 	}
 
 	/* The body is the raw base */
@@ -1260,11 +1270,12 @@ _handler_RESTORE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = _restore(repo, &n0, dump, dump_size);
-	if (NULL != err)
+	err = _restore(repo, &n0, dump, dump_size, source);
+	if (err) {
 		reply->send_error(0, err);
-	else
+	} else {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
 	return TRUE;
 }
@@ -1274,7 +1285,7 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
-	gchar source[64];
+	gchar source[LIMIT_LENGTH_SRVID];
 	gint check_type = -1;  // -1 -> user server default
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
@@ -1300,7 +1311,7 @@ _handler_LOCAL_COPY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo UNUSED, gpointer ignored UNUSED)
 {
 	GError *err;
-	gchar source[64];
+	gchar source[LIMIT_LENGTH_SRVID];
 	gchar suffix[LIMIT_LENGTH_BASESUFFIX]= {'\0'};
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
@@ -1351,7 +1362,7 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
-	gchar src_addr[64];
+	gchar src_addr[LIMIT_LENGTH_SRVID];
 	gchar src_base[LIMIT_LENGTH_BASENAME];
 	gchar src_suffix[LIMIT_LENGTH_BASESUFFIX];
 	gchar *dest_peers = NULL;

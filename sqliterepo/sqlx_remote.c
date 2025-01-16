@@ -224,20 +224,25 @@ sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked,
 }
 
 GByteArray*
-sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize, gint64 deadline)
+sqlx_pack_RESTORE(const struct sqlx_name_s *name,
+		const guint8 *raw, gsize rawsize,
+		const gchar *local_addr, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESTORE, NULL, name, deadline);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, local_addr);
 	metautils_message_set_BODY(req, raw, rawsize);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq, gint64 deadline)
+sqlx_pack_REPLICATE(const struct sqlx_name_s *name,
+		struct TableSequence *tabseq, const gchar *local_addr, gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(tabseq != NULL);
 
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REPLICATE, NULL, name, deadline);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, local_addr);
 	metautils_message_add_body_unref(req, sqlx_encode_TableSequence(tabseq, NULL));
 	return message_marshall_gba_and_clean(req);
 }

@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -4569,4 +4569,36 @@ election_is_master(struct election_manager_s *manager,
 	}
 	_manager_unlock(manager);
 	return is_master;
+}
+
+GError*
+election_accepts_replication(struct election_manager_s *manager,
+		const struct sqlx_name_s *n, const gchar *expected_master,
+		const gchar *operation)
+{
+	MANAGER_CHECK(manager);
+	EXTRA_ASSERT(n != NULL);
+
+	GError *err = NULL;
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	sqliterepo_hash_name(n, key, sizeof(key));
+	_manager_lock(manager);
+	struct election_member_s *member = _LOCKED_get_member(manager, key);
+	if (member) {
+		if (member->step == STEP_MASTER
+				|| member->step == STEP_CHECKING_SLAVES) {
+			err = NEWERROR(CODE_IS_MASTER,
+					"%s operation is not allowed on the master service",
+					operation);
+		} else if (oio_str_is_set(member->master_url)
+				&& oio_str_is_set(expected_master)
+				&& g_strcmp0(expected_master, member->master_url) != 0) {
+			err = NEWERROR(CODE_CONCURRENT,
+					"Refusing %s operation from %s, only accepted from %s",
+					operation, expected_master, member->master_url);
+		}
+		member_unref(member);
+	}
+	_manager_unlock(manager);
+	return err;
 }
