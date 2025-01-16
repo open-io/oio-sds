@@ -114,9 +114,13 @@ GByteArray* sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name, const gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, gint64 deadline);
 GByteArray* sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint check_type, gint64 deadline);
-GByteArray* sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize, gint64 deadline);
+GByteArray* sqlx_pack_RESTORE(
+		const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize,
+		const gchar *local_addr, gint64 deadline);
 
-GByteArray* sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq, gint64 deadline);
+GByteArray* sqlx_pack_REPLICATE(
+		const struct sqlx_name_s *name, struct TableSequence *tabseq,
+		const gchar *local_addr, gint64 deadline);
 
 // service-wide requests
 GByteArray* sqlx_pack_LEANIFY(gint64 deadline);
@@ -130,10 +134,10 @@ GByteArray* sqlx_encode_TableSequence(struct TableSequence *tabseq,
 // replication handy functions -------------------------------------------------
 
 GError * peers_restore(gchar **targets, struct sqlx_name_s *name,
-		GByteArray *dump, gint64 deadline);
+		GByteArray *dump, const gchar *local_addr, gint64 deadline);
 
 GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
-		GByteArray *dump, gint64 deadline);
+		GByteArray *dump, const gchar *local_addr, gint64 deadline);
 
 typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg);
 
