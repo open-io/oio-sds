@@ -236,14 +236,17 @@ void election_manager_set_peering (struct election_manager_s *m,
 
 gboolean election_manager_configured(const struct election_manager_s *m);
 
-gboolean election_is_master(struct election_manager_s *manager,
-		const struct sqlx_name_s *n);
-
 /** Check the current state of the election to tell if the database can
  * accept replication operations. If the state is master, or the know master
  * is different from expected_master, the replication must be denied. */
 GError* election_accepts_replication(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, const gchar *expected_master,
 		const gchar *operation);
+
+/** Get the status of an election without waiting for this status to be final.
+ * If no election has started, the return code can be zero.
+ * Non-final statuses will return ELECTION_FAILED. */
+enum election_status_e election_get_status_nowait(
+		struct election_manager_s *manager, const struct sqlx_name_s *n);
 
 #endif /*OIO_SDS__sqliterepo__election_h*/
