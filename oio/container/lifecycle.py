@@ -394,13 +394,17 @@ class ContainerLifecycle(object):
             query = f"{query} AND (al.alias LIKE ?||'%')"
         return query
 
-    def markers_query(self):
+    def markers_query(self, rule_filter):
         """
         Get expired delete markers
         """
 
         # SELECT is forced on meta2 side
         query = f" WHERE nb_versions=1 AND {self._processed_sql_condition()} "
+
+        if rule_filter.prefix:
+            query = f"{query} AND (al.alias LIKE ?||'%')"
+
         return query
 
     def abort_incomplete_query(self, rule_filter, formated_days=None):

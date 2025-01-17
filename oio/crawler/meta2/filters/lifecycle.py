@@ -506,7 +506,7 @@ class Lifecycle(Meta2Filter):
         elif self.context.has_versioning:
             # Versioned
             if isinstance(action_class, DeleteMarkerAction):
-                query = lc_instance.markers_query()
+                query = lc_instance.markers_query(rule_filter)
                 view_queries = self._gen_views_current_action(lc_instance, None, None)
             elif not action_class.current:
                 # Non current

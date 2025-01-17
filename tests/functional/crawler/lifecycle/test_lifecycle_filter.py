@@ -1328,6 +1328,11 @@ class TestLifecycleCrawler(BaseTestCase):
         self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
         objects = self._create_objects_for_rule(None, prefix="foo/", count=10)
         self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        objects = self._create_objects_for_rule(None, prefix="bar/", count=10)
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        # Delete previous versions
+        self._delete_objects_for_rule(None, objects)
         self._wait_n_days(3)
         self._run_scenario(configuration, callback)
 
