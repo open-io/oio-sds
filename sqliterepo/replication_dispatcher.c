@@ -450,7 +450,7 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	}
 
 	// Check the election without triggering it
-	if (!(err = election_accepts_replication(
+	if (!(err = election_check_replication_allowed(
 			repo->election_manager, name, source, "DB_RESTORE"))) {
 		err = sqlx_repository_restore_base(sq3, dump, dump_size);
 	}
@@ -480,7 +480,7 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	}
 
 	// Check the election without triggering it
-	if (!(err = election_accepts_replication(
+	if (!(err = election_check_replication_allowed(
 			repo->election_manager, name, source, "DB_RESTORE"))) {
 		err = sqlx_repository_restore_from_file(sq3, path);
 	}
@@ -936,7 +936,7 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 
 	// Check the election without triggering it
-	if (!(err = election_accepts_replication(
+	if (!(err = election_check_replication_allowed(
 			repo->election_manager, &n0, source, "DB_REPLI"))) {
 		/* Unpack the body from the message, decode it */
 		err = replicate_body_parse(sq3, b, bsize);
