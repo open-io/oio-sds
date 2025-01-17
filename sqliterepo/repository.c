@@ -1052,14 +1052,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	/* ************************************* */
 
 	if (!err && expected && election_configured && args->is_replicated) {
-		status_after = election_get_status(
-				args->repo->election_manager, &args->name, NULL, 1, &err);
-		if (err) {
-			g_prefix_error(&err, "Failed to check election after opening DB: ");
-		} else if (status_after != status_before) {
+		status_after = election_get_status_nowait(
+				args->repo->election_manager, &args->name);
+		if (status_after != status_before) {
 			err = BUSY("Election status changed while waiting for the database");
-		}
-		if (err) {
 			/* Consider the status change is fatal
 			 * only if ELECTION_LEADER is requested. */
 			if (expected & ELECTION_LEADER && !(expected & ELECTION_LOST)) {
