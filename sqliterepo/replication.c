@@ -454,12 +454,12 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 		+------------------+------------------------+------------------------+
 
 		Note 1: 1 (or more) slave successfully applied the last change, but
-		        was slow to do it, and the master timed out and rolled back
+				was slow to do it, and the master timed out and rolled back
 				the transaction. We can send a full copy of the database so
 				the last change is rolled back and the current change applies.
 
 		Note 2: 1 (or more) slave did not get the last change (connection
-		        failure or service down). Send a full copy so the slave gets
+				failure or service down). Send a full copy so the slave gets
 				the missed changes (including the current change).
 		*/
 		if (!err && !other_master && (slave_ahead || slave_behind)) {
@@ -552,7 +552,14 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 		return 1;
 	}
 
-	err = _replicate_on_peers(peers, ctx, oio_ext_get_deadline());
+	enum election_status_e status =
+		election_get_status_nowait(ctx->sq3->manager, &n);
+	if (status != ELECTION_LEADER) {
+		err = NEWERROR(
+				CODE_CONCURRENT, "Election status changed during transaction");
+	} else {
+		err = _replicate_on_peers(peers, ctx, oio_ext_get_deadline());
+	}
 	g_strfreev(peers);
 	context_flush_rowsets(ctx);
 
