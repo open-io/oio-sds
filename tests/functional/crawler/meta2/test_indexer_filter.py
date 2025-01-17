@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -184,7 +184,7 @@ class TestIndexer(BaseTestCase):
             if srv.get("service_id", srv["addr"]) not in peers
         ]
         if not orther_meta2:
-            self.skip("No other meta2 available")
+            self.skipTest("No other meta2 available")
         meta2_id = random.choice(orther_meta2)
         self.wait_for_kafka_event(
             fields={"account": self.account, "user": self.cname},

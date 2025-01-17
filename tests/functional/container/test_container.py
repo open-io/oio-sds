@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -621,8 +621,8 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(200, resp.status)
         chunks = self.json_loads(resp.data)
 
-        stgpol = resp.getheader("x-oio-content-meta-policy")
-        version = resp.getheader("x-oio-content-meta-version")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
+        version = resp.headers.get("x-oio-content-meta-version")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-size": "1024",
@@ -656,8 +656,8 @@ class TestMeta2Containers(BaseTestCase):
         chunks = self.json_loads(resp.data)
 
         params["append"] = 1
-        stgpol = resp.getheader("x-oio-content-meta-policy")
-        chunk_method = resp.getheader("x-oio-content-meta-chunk-method")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
+        chunk_method = resp.headers.get("x-oio-content-meta-chunk-method")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-length": "1024",
@@ -746,7 +746,7 @@ class TestMeta2Containers(BaseTestCase):
             wait = False
             time.sleep(5)
         else:
-            logging.warn(
+            logging.warning(
                 "Some scores may still be low, but we already waited for 50 seconds"
             )
 
@@ -761,7 +761,7 @@ class TestMeta2Containers(BaseTestCase):
             resp = self.request("POST", self.url_container("flush"), params=params)
             self.assertEqual(204, resp.status)
             self.assertEqual(
-                truncated, boolean_value(resp.getheader("x-oio-truncated"))
+                truncated, boolean_value(resp.headers.get("x-oio-truncated"))
             )
             self._wait_account_meta2()
             resp = self.request(
@@ -1343,7 +1343,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 200)
         chunks = self.json_loads(resp.data)
 
-        stgpol = resp.getheader("x-oio-content-meta-policy")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-size": "1024",
@@ -1483,7 +1483,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 200)
         chunks = self.json_loads(resp.data)
 
-        stgpol = resp.getheader("x-oio-content-meta-policy")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-size": "1024",
@@ -1670,7 +1670,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 200)
         chunks = self.json_loads(resp.data)
 
-        stgpol = resp.getheader("x-oio-content-meta-policy")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-size": "1024",
@@ -1747,7 +1747,7 @@ class TestMeta2Contents(BaseTestCase):
         chunks = self.json_loads(resp.data)
         append_param = {"append": 1}
         append_param.update(params)
-        stgpol = resp.getheader("x-oio-content-meta-policy")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-size": "1024",
@@ -1784,7 +1784,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 200)
         chunks = self.json_loads(resp.data)
 
-        stgpol = resp.getheader("x-oio-content-meta-policy")
+        stgpol = resp.headers.get("x-oio-content-meta-policy")
         headers = {
             "x-oio-action-mode": "autocreate",
             "x-oio-content-meta-policy": stgpol,

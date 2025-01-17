@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -218,7 +218,7 @@ class TestEventRouting(BaseTestCase):
                     )
                     break
                 except AMQPError as err:
-                    self.logger.warn("Queue not declared yet: %s", err)
+                    self.logger.warning("Queue not declared yet: %s", err)
                     time.sleep(0.5)
 
             # Now check the events have been forwarded

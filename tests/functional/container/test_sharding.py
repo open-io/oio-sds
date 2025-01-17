@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -547,7 +547,7 @@ class TestSharding(BaseTestCase):
         self.assertEqual(len(list(shards)), 2)  # two shards
 
         # select random object
-        obj_name = random.sample(self.created[self.cname], 1)[0]
+        obj_name = random.sample(sorted(self.created[self.cname]), 1)[0]
         # get all chunks urls before removal
         _, chunks = self.storage.object_locate(self.account, self.cname, obj_name)
         for chunk in chunks:
@@ -2266,10 +2266,14 @@ class TestShardingObjectLockRetention(TestSharding):
         self.assertEqual(objlock_enabled, "1")
 
     def test_optimized_object_listing_several_prefixes(self):
-        self.skip("This tests removes objects, cannot run it with Object Lock enabled")
+        self.skipTest(
+            "This tests removes objects, cannot run it with Object Lock enabled"
+        )
 
     def test_optimized_object_listing_many_empty_shards(self):
-        self.skip("This tests removes objects, cannot run it with Object Lock enabled")
+        self.skipTest(
+            "This tests removes objects, cannot run it with Object Lock enabled"
+        )
 
 
 class TestShardingObjectLockLegalHold(TestShardingObjectLockRetention):

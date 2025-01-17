@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -154,7 +154,7 @@ class TestBucketClient(AccountBaseTestCase):
         self.assertEqual(self.account_id1, owner)
 
     def test_set_after_timeout(self):
-        self.skip("Too long")
+        self.skipTest("Too long")
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
         # Go to late reservation (no other reservation)
         time.sleep(31)
@@ -163,7 +163,7 @@ class TestBucketClient(AccountBaseTestCase):
         self.assertEqual(self.account_id1, owner)
 
     def test_reserve_after_timeout(self):
-        self.skip("Too long")
+        self.skipTest("Too long")
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
         # Reserve with another owner (after timeout)
         time.sleep(31)

@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -77,7 +77,7 @@ class ServiceDecommissionTest(CliTestCase):
         """
         container_count = 100
         if len(self.conf["services"]["meta2"]) < 4:
-            self.skip("This test requires at least 4 meta2 services")
+            self.skipTest("This test requires at least 4 meta2 services")
 
         create_reqid = request_id("xcute-decom-")
         for i in range(container_count):
@@ -195,7 +195,7 @@ class ServiceDecommissionTest(CliTestCase):
         decommissions a rawx service.
         """
         if len(self.conf["services"]["rawx"]) < 4:
-            self.skip("This test requires at least 4 rawx services")
+            self.skipTest("This test requires at least 4 rawx services")
 
         candidate = self.storage.conscience.next_instance("rawx")["addr"]
 
@@ -293,7 +293,7 @@ class ServiceDecommissionTest(CliTestCase):
         decommissions an rdir service.
         """
         if len(self.conf["services"]["rdir"]) < 5:
-            self.skip("This test requires at least 5 rdir services")
+            self.skipTest("This test requires at least 5 rdir services")
 
         dispatcher = RdirDispatcher(self.conf, logger=self.logger)
         rawx_per_rdir = dispatcher.get_aggregated_assignments("rawx")

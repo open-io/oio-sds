@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -91,9 +91,9 @@ class TestAdmin(BaseTestCase):
             reference=self.container,
             service_id=service_ids,
         )
-        self.assertEquals(2, len(election))
-        self.assertEquals(200, election[service_ids[0]]["status"]["status"])
-        self.assertEquals(200, election[service_ids[1]]["status"]["status"])
+        self.assertEqual(2, len(election))
+        self.assertEqual(200, election[service_ids[0]]["status"]["status"])
+        self.assertEqual(200, election[service_ids[1]]["status"]["status"])
 
     def test_has_base(self):
         info = self.admin.has_base(
@@ -110,7 +110,7 @@ class TestAdmin(BaseTestCase):
         info = self.admin.has_base(
             "meta2", account=self.account, reference=self.container
         )
-        self.assertNotEquals(200, info[peer]["status"]["status"])
+        self.assertNotEqual(200, info[peer]["status"]["status"])
         del info[peer]
         for peer, meta in info.items():
             self.assertEqual(200, meta["status"]["status"])

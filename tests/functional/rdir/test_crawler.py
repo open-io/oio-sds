@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -664,7 +664,7 @@ class TestRdirCrawlerForMeta2(RdirCrawlerTestTool):
     def test_rdir_crawler_marker_works_as_expected(self):
         """Check if marker already set are working as expected"""
         if self.nb_meta2 > 1:
-            self.skip("This test is set to run on a cluster with one meta2")
+            self.skipTest("This test is set to run on a cluster with one meta2")
         volume_id = list(self.meta2_volumes.keys())[0]
         volume_path = self.meta2_volumes[volume_id]
         containers = sorted(

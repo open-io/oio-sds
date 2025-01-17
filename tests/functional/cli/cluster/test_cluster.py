@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -94,7 +94,7 @@ class ClusterTest(CliTestCase):
         # We don't know how many others services are locked before running the
         # test, so we just check that all services returned are locked.
         for srv in data:
-            self.assertEquals(0, srv["Score"])
+            self.assertEqual(0, srv["Score"])
 
     def test_detailed_lock_unlock(self):
         netloc = "127.0.0.1:666"

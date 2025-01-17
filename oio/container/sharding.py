@@ -961,7 +961,7 @@ class ContainerSharding(ProxyClient):
                     params["urgent"] = 1
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
-            truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
+            truncated = boolean_value(resp.headers.get("x-oio-truncated"), False)
 
     def _update_new_shard(self, new_shard, queries, **kwargs):
         if not queries:
@@ -1057,7 +1057,9 @@ class ContainerSharding(ProxyClient):
                     if resp.status != 204:
                         raise exceptions.from_response(resp, body)
                     successes += 1
-                    truncated = boolean_value(resp.getheader("x-oio-truncated"), False)
+                    truncated = boolean_value(
+                        resp.headers.get("x-oio-truncated"), False
+                    )
                     break
                 except BadRequest:
                     raise

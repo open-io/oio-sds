@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -53,7 +53,7 @@ class TestPerfectibleContent(BaseTestCase):
             "Services by slot: %s", {k: len(v) for k, v in by_slot.items()}
         )
         if "rawx-even" not in by_slot or "rawx-odd" not in by_slot:
-            self.skip('This test requires "rawx-even" and "rawx-odd" slots')
+            self.skipTest('This test requires "rawx-even" and "rawx-odd" slots')
         return by_slot
 
     def _aggregate_rawx_by_place(self):
@@ -64,7 +64,7 @@ class TestPerfectibleContent(BaseTestCase):
             "Services by location: %s", {k: len(v) for k, v in by_place.items()}
         )
         if len(by_place) < 3:
-            self.skip("This test requires 3 different 2nd level locations")
+            self.skipTest("This test requires 3 different 2nd level locations")
         return by_place
 
     def _get_rawx(self, netloc):
@@ -197,7 +197,9 @@ class TestPerfectibleContent(BaseTestCase):
         """
         by_slot = self._aggregate_rawx_by_slot()
         if len(by_slot["rawx-odd"]) < 3:
-            self.skip('This test requires at least 3 services in the "rawx-odd" slot')
+            self.skipTest(
+                'This test requires at least 3 services in the "rawx-odd" slot'
+            )
 
         # Lock all services of the 'rawx-even' slot.
         banned_slot = "rawx-even"
@@ -345,4 +347,4 @@ class TestPerfectibleLocalContent(TestPerfectibleContent):
         super(TestPerfectibleLocalContent, cls).tearDownClass()
 
     def test_upload_warn_dist(self):
-        self.skip("Too buggy when run with proxy.srv_local.prepare=1")
+        self.skipTest("Too buggy when run with proxy.srv_local.prepare=1")

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,7 @@ from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase, random_id, random_str
 
 
-class TestContent(object):
+class MockupContent(object):
     def __init__(self, account, ref):
         self.cid = cid_from_name(account, ref)
         self.path = "test-content-" + random_str(6)
@@ -43,7 +43,7 @@ class TestContent(object):
         self.hash = checksum.hexdigest().lower()
 
 
-class TestChunk(object):
+class MockupChunk(object):
     def __init__(
         self,
         cid,
@@ -82,8 +82,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
         )
 
         self.container_client.container_create(self.account, self.ref)
-        self.content = TestContent(self.account, self.ref)
-        self.chunk = TestChunk(
+        self.content = MockupContent(self.account, self.ref)
+        self.chunk = MockupChunk(
             self.content.cid,
             self.content.path,
             self.content.version,
