@@ -20,6 +20,8 @@ import os
 import socket
 import string
 import sys
+import traceback
+from logging import Formatter, PercentStyle
 from logging.handlers import SocketHandler, SysLogHandler
 
 
@@ -278,3 +280,57 @@ class S3AccessLogger:
         }
         msg = self._formatter.format(self._access_log_format, **env)
         self._internal_logger.info(msg)
+
+
+class LTSVFormatter(Formatter):
+    """
+    Format a log record into LTSV
+    """
+
+    def __init__(self, fmt=None, datefmt=None):
+        super().__init__(fmt=fmt, datefmt=datefmt, style="%")
+
+    def get_extras(self):
+        return {}
+
+    def format(self, record, extras=None):
+        exc_text = exc_filename = exc_lineno = None
+        if getattr(record, "exc_info", None):
+            exc_text = self.formatException(record.exc_info)
+            exc = traceback.extract_tb(record.exc_info[2])
+            if exc:
+                exc_filename = exc[-1][0]
+                exc_lineno = exc[-1][1]
+
+        if extras is None:
+            extras = {}
+
+        data = {
+            "pid": getattr(record, "process", None),
+            "thread": getattr(record, "thread", None),
+            "levelname": getattr(record, "levelname", None),
+            "created": getattr(record, "created", None),
+            "exc_text": exc_text,
+            "exc_filename": exc_filename,
+            "exc_lineno": exc_lineno,
+            "message": record.getMessage(),
+            **{k: v for k, v in self.get_extras()},
+            **extras,
+        }
+
+        for k in data:
+            if data[k] is None:
+                data[k] = "-"
+            elif isinstance(data[k], int) or isinstance(data[k], float):
+                continue
+            elif isinstance(data[k], bytes):
+                data[k] = data[k].decode("utf-8", "surrogateescape")
+            else:
+                data[k] = str(data[k])
+            data[k] = data[k].replace("\n", "#012")
+            data[k] = data[k].replace("\t", "#009")
+
+        if isinstance(self._style, PercentStyle):
+            return self._fmt % data
+
+        return self._fmt.format(**data)

@@ -35,7 +35,7 @@ from oio.event.evob import (
     EventTypes,
     RetryableEventError,
 )
-from oio.event.filters.base import Filter
+from oio.event.filters.base import Filter, FilterContext
 from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
 
 
@@ -130,10 +130,23 @@ class LifecycleActionContext:
         return self.event.data.get("rule_id")
 
 
+class LifecycleFilterContext(FilterContext):
+    action: str = None
+    rule_id: str = None
+    run_id: str = None
+
+
 class LifecycleActions(Filter):
     """Filter to execute Lifecycle actions"""
 
     MPU_MAX_PART = "10000"
+    DEFAULT_EXTRA_LOG_FORMAT = "\t".join(
+        (
+            "action:%(action)s",
+            "rule_id:%(rule_id)s",
+            "run_id:%(run_id)s",
+        )
+    )
 
     def __init__(self, app, conf, logger=None):
         self.retry_delay = None
@@ -271,6 +284,18 @@ class LifecycleActions(Filter):
         # Metrics helper
         self._metrics = LifecycleMetricTracker(self.conf)
 
+    def log_context_from_env(self, env):
+        ctx = super().log_context_from_env(env)
+        data = env.get("data", {})
+        ctx.action = data.get("action")
+        ctx.rule_id = data.get("rule_id")
+        ctx.run_id = data.get("run_id")
+        ctx.bucket = data.get("bucket")
+        ctx.account = data.get("main_account", data.get("account"))
+        ctx.path = data.get("object")
+        ctx.version = data.get("version")
+        return ctx
+
     def process(self, env, cb):
         event = Event(env)
 
@@ -299,6 +324,7 @@ class LifecycleActions(Filter):
                 "x-object-sysmeta-s3api-replication-status"
             )
             if replication_status == OBJECT_REPLICATION_PENDING:
+                self.logger.info("Lifecycle postponed, replication pending")
                 resp = RetryableEventError(
                     event=event,
                     body=(
@@ -309,17 +335,7 @@ class LifecycleActions(Filter):
                 )
                 return resp(env, cb)
 
-            self.logger.info(
-                "Processing lifecycle action: %s for rule: %s in run: %s on "
-                "(account=%s, bucket=%s, path=%s, version=%s)",
-                context.action,
-                context.rule_id,
-                context.run_id,
-                context.account,
-                context.bucket,
-                context.path,
-                context.version,
-            )
+            self.logger.info("Processing started")
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
                 self._process_expiration(context)
@@ -385,6 +401,7 @@ class LifecycleActions(Filter):
             LifecycleStep.PROCESSED,
             action_type,
         )
+        self.logger.info("Processing complete")
         return self.app(env, cb)
 
     def _update_metrics(self, account, bucket, container, run_id, action):
