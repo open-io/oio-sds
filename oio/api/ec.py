@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -819,7 +819,6 @@ class EcChunkWriter(object):
         Wait until all data in the queue
         has been processed by the send coroutine
         """
-        self.logger.debug("Waiting for %s to receive data", self.chunk["url"])
         # Wait until the data is completely sent to continue
         self.queue.join()
 
@@ -845,7 +844,6 @@ class EcChunkWriter(object):
                 self.chunk["url"],
             )
             return self.chunk
-        self.logger.debug("Sending end marker and trailers to %s", self.chunk["url"])
         parts = [
             "0\r\n",
             "%s: %s\r\n" % (CHUNK_HEADERS["metachunk_size"], metachunk_size),
