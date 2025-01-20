@@ -24,7 +24,6 @@ from oio.common.constants import (
 from oio.common.kafka import DEFAULT_LIFECYCLE_TOPIC
 from oio.common.utils import cid_from_name
 from oio.crawler.meta2.filters.lifecycle import Lifecycle
-from oio.directory.admin import AdminClient
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 
@@ -98,11 +97,6 @@ class TestLifecycleCrawler(BaseTestCase):
             self.clean_later(container)
 
         self.expectations = []
-        self.admin_client = AdminClient(
-            self.conf,
-            logger=self.logger,
-            pool_manager=self.storage.container.pool_manager,
-        )
         self.metrics_by_passes = []
 
         self.filter_conf = {
@@ -234,7 +228,7 @@ class TestLifecycleCrawler(BaseTestCase):
             meta2db_env["path"] = f"{meta2db_env['path']}.{suffix}"
         if create_copy:
             # Request a local copy of the meta2 database
-            self.admin_client.copy_base_local(**params)
+            self.admin.copy_base_local(**params)
 
     def _get_meta2db_env(self, cid):
         services = self.conscience.all_services("meta2")
@@ -254,7 +248,7 @@ class TestLifecycleCrawler(BaseTestCase):
         event = self.wait_for_kafka_event(
             kafka_consumer=self._cls_lifecycle_consumer,
             types=[EventTypes.LIFECYCLE_ACTION],
-            timeout=2,
+            timeout=2.0,
         )
         rule_id = ""
         if event:
@@ -271,6 +265,12 @@ class TestLifecycleCrawler(BaseTestCase):
             self.fail(f"No expected stats for pass {current_pass}")
         for key, value in self._expected_metrics_for_test[current_pass].items():
             self.assertIn(key, stats)
+            if value != stats[key]:
+                self.logger.warning(
+                    "Stat '%s' does not match in pass %s: expected %s but got %s",
+                    key, current_pass, value, stats[key],
+                )
+        for key, value in self._expected_metrics_for_test[current_pass].items():
             self.assertEqual(
                 value, stats[key], f"Stat '{key}' does not match in pass {current_pass}"
             )
@@ -299,7 +299,9 @@ class TestLifecycleCrawler(BaseTestCase):
                     **self.filter_conf,
                     **filter_conf,
                 }
-                self.lifecycle_filter = Lifecycle(app=self.app, conf=filter_conf)
+                self.lifecycle_filter = Lifecycle(
+                    app=self.app, conf=filter_conf, logger=self.logger
+                )
                 for account, container in self.containers_to_process:
                     cid = cid_from_name(account, container)
                     env = self._get_meta2db_env(cid)
@@ -820,7 +822,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
-                        "1": {"Days": 6},
+                        "1": {"Days": 12},
                     },
                 },
             },
@@ -1350,7 +1352,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "foo/"},
                     "AbortIncompleteMultipartUpload": {
-                        "1": {"DaysAfterInitiation": 10},
+                        "1": {"DaysAfterInitiation": 15},
                     },
                 },
             },

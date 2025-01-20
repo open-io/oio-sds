@@ -395,7 +395,9 @@ class CommonTestCase(testtools.TestCase):
         if not self._admin:
             from oio.directory.admin import AdminClient
 
-            self._admin = AdminClient(self.conf, pool_manager=self.http_pool)
+            self._admin = AdminClient(
+                self.conf, pool_manager=self.http_pool, logger=self.logger
+            )
         return self._admin
 
     @property
