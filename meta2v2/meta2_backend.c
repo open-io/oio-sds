@@ -4340,12 +4340,16 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	struct json_object *jmain_account = NULL, *jrun_id = NULL;
 
 	struct json_object *jhas_bucket_logging = NULL;
+	struct json_object *jpolicies_order = NULL, *jstorage_class_order = NULL;
+
+	int storage_class_order = 0;
 
 	gboolean found_match = FALSE;
 	guint32 count_rows = 0;
 	gboolean has_bucket_logging = FALSE;
 
 	gchar *offset_key = NULL;
+	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4361,6 +4365,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
 		{"main_account", &jmain_account, json_type_string, 0},
 		{"run_id", &jrun_id, json_type_string, 0},
+		{"storage_class_order", &jstorage_class_order, json_type_int, 0},
+		{"policies_order", &jpolicies_order, json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4388,6 +4394,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (jstorage_class) {
 		storage_class = json_object_get_string(jstorage_class);
 	}
+	if (jstorage_class_order) {
+		storage_class_order = json_object_get_int(jstorage_class_order);
+	}
+
 	if (jquery_set_tag) {
 		query_set_tag = json_object_get_string(jquery_set_tag);
 	}
@@ -4412,6 +4422,12 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	if (jhas_bucket_logging) {
 		has_bucket_logging = json_object_get_boolean(jhas_bucket_logging);
+	}
+
+	if (jpolicies_order) {
+		json_object_object_foreach(jpolicies_order,key,val) {
+			g_hash_table_insert(ht_policies, g_strdup(key), GINT_TO_POINTER(json_object_get_int(val)));
+		}
 	}
 
 	struct m2_open_args_s open_args = {
@@ -4543,6 +4559,7 @@ end:
 	g_free(full_query);
 	g_free(full_query_set_tag);
 	g_free(base_set_adapted_tags);
+	g_hash_table_unref(ht_policies);
 	return err;
 }
 
@@ -4571,11 +4588,17 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 
 	struct json_object *jmain_account = NULL, *jrun_id = NULL;
 
+	struct json_object *jpolicies_order = NULL, *jstorage_class_order = NULL;
+
+	int storage_class_order = 0;
+
 	int batch_size = 0;
 	gboolean found_match = FALSE;
 	guint32 count_rows = 0;
 	gchar *offset_key = NULL;
 	gboolean has_bucket_logging = FALSE;
+
+	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4590,6 +4613,8 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
 		{"run_id", &jrun_id, json_type_string, 0},
 		{"main_account", &jmain_account, json_type_string, 0},
+		{"storage_class_order", &jstorage_class_order, json_type_int, 0},
+		{"policies_order", &jpolicies_order, json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -4616,6 +4641,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jstorage_class) {
 		storage_class = json_object_get_string(jstorage_class);
 	}
+	if (jstorage_class_order) {
+		storage_class_order = json_object_get_int(jstorage_class_order);
+	}
 	if (jbatch_size) {
 		batch_size = json_object_get_int(jbatch_size);
 	}
@@ -4636,6 +4664,11 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 	if (jrun_id) {
 		run_id = json_object_get_string(jrun_id);
+	}
+	if (jpolicies_order) {
+		json_object_object_foreach(jpolicies_order,key,val) {
+			g_hash_table_insert(ht_policies, g_strdup(key), GINT_TO_POINTER(json_object_get_int(val)));
+		}
 	}
 
 	if (query_set_tag) {
@@ -4762,5 +4795,6 @@ end:
 	g_free(full_query);
 	g_free(full_query_set_tag);
 	g_free(base_set_adapted_tags);
+	g_hash_table_unref(ht_policies);
 	return err;
 }
