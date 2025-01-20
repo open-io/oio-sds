@@ -36,7 +36,9 @@ from oio.container.lifecycle import (
     AbortMpuAction,
     ContainerLifecycle,
     DeleteMarkerAction,
+    NonCurrentTransitionAction,
     RuleFilter,
+    TransitionAction,
     lifecycle_backup_path,
 )
 from oio.crawler.meta2.filters.base import Meta2Filter
@@ -202,6 +204,27 @@ class Lifecycle(Meta2Filter):
             raise ValueError(
                 "Missing value for 'lifecycle_configuration_backup_bucket'"
             )
+
+        self.storage_classes_order = {}
+        self.policies_order = {}
+        order = 1
+        for stg_class_conf, pol_conf in self.conf.items():
+            if not stg_class_conf.startswith("storage_class."):
+                continue
+            storage_class = stg_class_conf[14:].upper()
+            policies = [x.strip() for x in pol_conf.split(",")]
+            if not policies:
+                raise ValueError(
+                    f"Empty policy for storage class {storage_class}"
+                )
+            for pol in policies:
+                if pol in self.policies_order:
+                    raise ValueError(
+                        f"Same policy {pol} used in different storage classes")
+                self.policies_order[pol] = order
+            self.storage_classes_order[storage_class] = order
+            order = order + 1
+
         # Metrics helper
         self._metrics = LifecycleMetricTracker(self.conf)
         # Batch size
@@ -510,7 +533,7 @@ class Lifecycle(Meta2Filter):
             "versioned_view": versioned_view,
         }
 
-    def _get_policy(self, action):
+    def _get_storage_class(self, action):
         return action.get("StorageClass")
 
     def _get_action_name(self, act):
@@ -604,10 +627,15 @@ class Lifecycle(Meta2Filter):
             date = self._get_date(action)
             query = lc_instance.build_sql_query(rule_filter, days_in_sec, date)
 
+        stg_class = self._get_storage_class(action)
+        order = 0
+        if stg_class is not None:
+            order = self.storage_classes_order[stg_class]
         return self._send_query_events(
             query,
             view_queries,
-            self._get_policy(action),
+            stg_class,
+            order,
             rule_filter.prefix,
             rule_id,
             action_class,
@@ -728,7 +756,8 @@ class Lifecycle(Meta2Filter):
         self,
         query,
         view_queries,
-        policy,
+        storage_class,
+        storage_class_order,
         prefix,
         rule_id,
         action_class,
@@ -752,7 +781,8 @@ class Lifecycle(Meta2Filter):
                 "suffix": self.context.suffix,
                 "query": sql_query,
                 "query_set_tag": sql_query,
-                "storage_class": policy,
+                "storage_class": storage_class,
+                "storage_class_order": storage_class_order,
                 "batch_size": next_batch_size,
                 "rule_id": rule_id,
                 "run_id": self.context.run_id,
@@ -764,6 +794,9 @@ class Lifecycle(Meta2Filter):
                 data["is_markers"] = 1
             if prefix:
                 data["prefix"] = prefix
+
+            if isinstance(action_class, (NonCurrentTransitionAction, TransitionAction)):
+                data["policies_order"] = self.policies_order
 
             params = {
                 "cid": self.context.cid,

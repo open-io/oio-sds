@@ -470,6 +470,10 @@ redis_host = ${IP}:${REDIS_PORT}
 lifecycle_configuration_backup_account = AUTH_demo
 lifecycle_configuration_backup_bucket = lc-bucket
 
+# Order from highest to lowset
+storage_class.STANDARD = EC21,TWOCOPIES,EC,ECX21,THREECOPIES,ANY-E93
+storage_class.STANDARD_IA = SINGLE
+
 [filter:logger]
 use = egg:oio#logger
 """
