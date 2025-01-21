@@ -24,8 +24,13 @@ from oio.common.exceptions import (
 from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
+from oio.event.kafka_consumer import PauseMessage, ResumeMessage
 
-CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
+CHUNK_EVENTS = [
+    EventTypes.CHUNK_DELETED,
+    EventTypes.CHUNK_NEW,
+    EventTypes.QUEUE_END,
+]
 SERVICE_EVENTS = [
     EventTypes.ACCOUNT_SERVICES,
     EventTypes.META2_DELETED,
@@ -37,6 +42,8 @@ class VolumeIndexFilter(Filter):
     def __init__(self, *args, **kwargs):
         super(VolumeIndexFilter, self).__init__(*args, **kwargs)
         self.rdir = self.app_env["rdir_client"]
+        self.chunk_push_events = []
+        self.chunk_delete_events = []
 
     def init(self):
         self._retry_delay = get_retry_delay(self.conf)
@@ -121,12 +128,27 @@ class VolumeIndexFilter(Filter):
             raise type(exc)(msg) from exc
 
     def _process_chunk_event(self, event):
-        data = event.data
-        volume_id = data.get("volume_service_id") or data.get("volume_id")
-        container_id = data.get("container_id")
-        content_id = data.get("content_id")
-        chunk_id = data.get("chunk_id")
-        if event.event_type == EventTypes.CHUNK_DELETED:
+        chunk_list = []
+        for event in self.chunk_push_events:
+            data = event.data
+            chunk_list.append(
+                {
+                    "chunk_id": data.get("chunk_id"),
+                    "container_id": data.get("container_id"),
+                    "content_id": data.get("content_id"),
+                    "path": data.get("content_path"),
+                    "version": data.get("content_version"),
+                    "mtime": event.when // 1000000,  # seconds,
+                }
+            )
+            volume_id = data.get("volume_service_id") or data.get("volume_id")
+        self.rdir.chunk_push_batch(volume_id, chunk_list)
+        for event in self.chunk_delete_events:
+            data = event.data
+            volume_id = data.get("volume_service_id") or data.get("volume_id")
+            container_id = data.get("container_id")
+            content_id = data.get("content_id")
+            chunk_id = data.get("chunk_id")
             if not all((volume_id, container_id, content_id, chunk_id)):
                 self.logger.warning(
                     "%s event is missing some fields: "
@@ -139,17 +161,6 @@ class VolumeIndexFilter(Filter):
                 )
             self._chunk_delete(
                 event.reqid, volume_id, container_id, content_id, chunk_id
-            )
-        else:
-            self._chunk_push(
-                event.reqid,
-                volume_id,
-                container_id,
-                content_id,
-                chunk_id,
-                data.get("content_path"),
-                data.get("content_version"),
-                mtime=event.when // 1000000,  # seconds
             )
 
     def _process_service_event(self, event):
@@ -185,7 +196,15 @@ class VolumeIndexFilter(Filter):
         event = Event(env)
         try:
             if event.event_type in CHUNK_EVENTS:
-                self._process_chunk_event(event)
+                if event.event_type == EventTypes.CHUNK_DELETED:
+                    self.chunk_delete_events.append(event)
+                    raise PauseMessage
+                elif event.event_type == EventTypes.CHUNK_NEW:
+                    self.chunk_push_events.append(event)
+                    raise PauseMessage
+                elif event.event_type == EventTypes.QUEUE_END:
+                    self._process_chunk_event()
+                    raise ResumeMessage
             elif event.event_type in SERVICE_EVENTS:
                 self._process_service_event(event)
         except (ServiceBusy, OioNetworkException, OioTimeout) as exc:

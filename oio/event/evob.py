@@ -108,6 +108,8 @@ class EventTypes(object):
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
     LIFECYCLE_ACTION = "storage.lifecycle.action"
 
+    QUEUE_END = "queue_end"
+
     ALL_EVENTS = (
         ACCOUNT_SERVICES,
         CHUNK_DELETED,

@@ -24,6 +24,7 @@ from multiprocessing.queues import Empty
 from confluent_kafka import TopicPartition
 
 from oio.common.easy_value import float_value, int_value
+from oio.event.evob import EventTypes
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
     KafkaConsumer,
@@ -150,6 +151,19 @@ def event_queue_factory(logger, conf, *args, **kwargs):
 
 
 class RejectMessage(Exception):
+    """
+    Raise this exception when the current message cannot be processed.
+    """
+
+
+class PauseMessage(Exception):
+    """
+    Raise this exception when the current message will be processed with others
+    by batch.
+    """
+
+
+class ResumeMessage(Exception):
     """
     Raise this exception when the current message cannot be processed.
     """
@@ -305,17 +319,18 @@ class AcknowledgeMessageMixin:
 
     def acknowledge_message(self, message, as_failure=False, delay=None):
         try:
-            self._offsets_queue.put(
-                {
-                    "batch_id": message["batch_id"],
-                    "topic": message["topic"],
-                    "partition": message["partition"],
-                    "offset": message["offset"],
-                    "data": message["data"],
-                    "failure": as_failure,
-                    "delay": delay,
-                }
-            )
+            if message["data"]["event"] != EventTypes.QUEUE_END:
+                self._offsets_queue.put(
+                    {
+                        "batch_id": message["batch_id"],
+                        "topic": message["topic"],
+                        "partition": message["partition"],
+                        "offset": message["offset"],
+                        "data": message["data"],
+                        "failure": as_failure,
+                        "delay": delay,
+                    }
+                )
         except Exception:
             self.logger.exception(
                 "Failed to ack message (topic=%s, partition=%s, offset=%s)",
@@ -357,9 +372,17 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         self._events_queue_id = self._events_queue.get_queue_id(worker_id)
 
         self._rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
+        self._to_resume_pipeline = []
 
     def _reject_message(self, message, delay=None):
         self.acknowledge_message(message, as_failure=True, delay=delay)
+
+    def _get_event_to_process(self):
+        if self._to_resume_pipeline:
+            data = self._to_resume_pipeline.pop()
+            return data["event"], data["next_filter"]
+        event = self._events_queue.get(self._events_queue_id, block=True, timeout=1.0)
+        return event, None
 
     def _consume(self):
         """
@@ -371,20 +394,34 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
             if self._stop_requested.is_set():
                 break
             try:
-                event = self._events_queue.get(
-                    self._events_queue_id, block=True, timeout=1.0
-                )
+#                event, next_filter = self._get_event_to_process()
+                event = self._events_queue.get(self._events_queue_id, block=True, timeout=1.0)
             except Empty:
                 # No events available
                 continue
 
-            run_time = ratelimit(run_time, self._rate_limit)
-
             try:
                 body = event["data"]
                 properties = {}
+#                if next_filter:
+#                    next_filter()
+#                else:
+                run_time = ratelimit(run_time, self._rate_limit)
                 self.process_message(body, properties)
                 self.acknowledge_message(event)
+
+            except PauseMessage as exc:
+                self._to_resume_pipeline.append(
+                    {
+                        "event": exc.event,
+                        "next_filter": exc.filter,
+                    }
+                )
+
+            except ResumeMessage:
+                for pipeline in self._to_resume_pipeline:
+                    pipeline["next_filter"]()
+                    self.acknowledge_message(pipeline["event"])
 
             except RejectMessage as exc:
                 delay = None
@@ -569,7 +606,12 @@ class KafkaBatchFeeder(
                 for queue_id in self._events_queue.ids:
                     self._events_queue.put(
                         queue_id,
-                        "End of batch marker",
+                        {
+                            "data":
+                            {
+                                "event": EventTypes.QUEUE_END
+                            }
+                        }
                     )
                 break
             if self.has_registered_offsets() and monotonic_time() > deadline:
@@ -577,7 +619,12 @@ class KafkaBatchFeeder(
                 for queue_id in self._events_queue.queue_ids:
                     self._events_queue.put(
                         queue_id,
-                        "End of batch marker",
+                        {
+                            "data":
+                            {
+                                "event": EventTypes.QUEUE_END
+                            }
+                        }
                     )
                 break
 
