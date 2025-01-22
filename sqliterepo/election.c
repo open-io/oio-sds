@@ -4593,8 +4593,8 @@ election_get_status_nowait(struct election_manager_s *manager,
 	struct election_member_s *member = _LOCKED_get_member(manager, key);
 	if (member) {
 		switch (member->step) {
-		case STEP_NONE:
-			status = 0;
+		case STEP_FAILED:
+			status = ELECTION_FAILED;
 			break;
 		/* "CHECKING_SLAVES" being the state just before becoming "MASTER",
 		 *  it is already considered as master. */
@@ -4608,7 +4608,7 @@ election_get_status_nowait(struct election_manager_s *manager,
 			status = ELECTION_LOST;
 			break;
 		default:
-			status = ELECTION_FAILED;
+			status = 0;
 			break;
 		}
 		member_unref(member);

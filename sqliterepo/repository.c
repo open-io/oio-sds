@@ -990,6 +990,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			err = election_start(args->repo->election_manager, &args->name);
 	}
 
+retry_open:
 	/* Now manage the replication status */
 	if (!expected || !election_configured || !args->is_replicated) {
 		GRID_TRACE("No status (%d) expected on [%s][%s] (peers found: %s)",
@@ -1046,16 +1047,56 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		status_after = election_get_status_nowait(
 				args->repo->election_manager, &args->name);
 		if (status_after != status_before) {
-			err = BUSY("Election status changed while waiting for the database");
-			/* Consider the status change is fatal
-			 * only if ELECTION_LEADER is requested. */
-			if (expected & ELECTION_LEADER && !(expected & ELECTION_LOST)) {
-				GRID_ERROR("%s", err->message);
-				sqlx_repository_unlock_and_close_noerror(*result);
-				*result = NULL;
-			} else {
-				GRID_WARN("%s", err->message);
-				g_clear_error(&err);
+			get_status_err = BUSY(
+					"Election status changed while waiting for the database");
+			switch (status_after) {
+				case ELECTION_LOST:
+					/* The database has become slave. */
+					if (expected & ELECTION_LEADER
+							&& !(expected & ELECTION_LOST)) {
+						/* The request requires a master database,
+						 * retry to open to know the redirection. */
+						GRID_WARN("%s: retry to know the redirection",
+								get_status_err->message);
+						g_clear_error(&get_status_err);
+						sqlx_repository_unlock_and_close_noerror(*result);
+						*result = NULL;
+						goto retry_open;
+					} else {
+						/* The request does not require a master database,
+						 * continue. */
+						GRID_INFO("%s: database has become slave",
+								get_status_err->message);
+						g_clear_error(&get_status_err);
+					}
+					break;
+				case ELECTION_LEADER:
+					/* The database has become master, good news. */
+					GRID_INFO("%s: database has become master",
+							get_status_err->message);
+					g_clear_error(&get_status_err);
+					break;
+				case ELECTION_FAILED:
+					/* Consider the status change is fatal
+			 		 * only if the election fails. */
+					err = NEWERROR(CODE_UNAVAILABLE,
+							"Election failed [%s][%s]: (%d) %s",
+							args->name.base, args->name.type,
+							get_status_err->code, get_status_err->message);
+					g_clear_error(&get_status_err);
+					sqlx_repository_unlock_and_close_noerror(*result);
+						*result = NULL;
+					break;
+				default:  // case 0
+					/* A new election is underway, let's wait for the result
+					 * and retry to open the database. */
+					GRID_WARN("%s: new election is underway, retry",
+							get_status_err->message);
+					g_clear_error(&get_status_err);
+					sqlx_repository_unlock_and_close_noerror(*result);
+					*result = NULL;
+					goto retry_open;
+					break;
 			}
 		}
 	}
