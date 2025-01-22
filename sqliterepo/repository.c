@@ -408,19 +408,21 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 {
 	gchar pattern[PATH_MAX] = {0};
 	glob_t buf = {0};
-	int rc;
 
 	g_assert_nonnull(repo);
 
 	/* There are 2 patterns to be managed */
 	g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
 			repo->basedir, "dump");
-	rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
+	int rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
 	if (rc != GLOB_NOSPACE && rc != GLOB_ABORTED) {
 		g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
 				repo->basedir, "restore");
 		rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
 	}
+
+	/* Remove files older than 5 seconds only */
+	gint64 before = oio_ext_real_seconds() - 5;
 
 	/* Manage the last error if any */
 	switch (rc) {
@@ -437,14 +439,22 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 		case GLOB_NOMATCH:
 		case 0:
 			/* Then iterate on each file to remove it */
-			for (size_t i=0; i<buf.gl_pathc ;++i) {
+			for (size_t i = 0; i < buf.gl_pathc; ++i) {
+				GStatBuf stats = {0};
 				const char *path = buf.gl_pathv[i];
-				rc = unlink(path);
-				if (rc == 0) {
-					GRID_INFO("Dump cleanup: unlinked %s", path);
-				} else {
-					GRID_WARN("Dump cleanup: unlink error on %s: (%d) %s",
+				if (g_stat(path, &stats) != 0) {
+					GRID_WARN("Dump cleanup: failed to stat %s: (%d) %s",
 							path, errno, strerror(errno));
+				} else if (stats.st_ctime < before) {
+					rc = unlink(path);
+					if (rc == 0) {
+						GRID_INFO("Dump cleanup: unlinked %s", path);
+					} else {
+						GRID_WARN("Dump cleanup: unlink error on %s: (%d) %s",
+								path, errno, strerror(errno));
+					}
+				} else {
+					GRID_DEBUG("Dump cleanup: %s kept (too recent)", path);
 				}
 			}
 	}
