@@ -4122,6 +4122,31 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 	return err;
 }
 
+static void _is_allowed_transition(sqlite3_context *context, int argc UNUSED, sqlite3_value **argv) {
+	GHashTable *ht_pol = (GHashTable *)sqlite3_value_pointer(argv[0], "GHashTable *");
+	const char *policy = (const  char *) sqlite3_value_text(argv[1]);
+	int dest_stg_class_order = sqlite3_value_int(argv[2]);
+
+	if (!policy || !*policy) {
+		sqlite3_result_int(context, 0);
+		return ;
+	}
+
+	GString *policy_string = g_string_new(policy);
+
+	gchar* target_policy = NULL;
+	m2v2_policy_decode(
+		policy_string, NULL, &target_policy);
+
+	gint64 order_current_pol = GPOINTER_TO_INT(g_hash_table_lookup(ht_pol, target_policy));
+	gboolean status = (order_current_pol != 0) && order_current_pol < dest_stg_class_order;
+	g_free(target_policy);
+	if (policy_string) g_string_free(policy_string, TRUE);
+
+	sqlite3_result_int(context, status? 1:0);
+	return;
+}
+
 static GError* _create_view(struct sqlx_sqlite3_s *sq3, const char *view_query,
 		const char *view_name) {
 	GError* err = NULL;
@@ -4329,7 +4354,8 @@ end:
 }
 
 static GError* _tag_matched_properties(struct sqlx_sqlite3_s *sq3, const char *prefix,
-			const char *base_set_adapted_tags, const char *full_query_set_tag) {
+			const char *base_set_adapted_tags, const char *full_query_set_tag,
+			GHashTable *ht_policies, int order) {
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx_clean = NULL;
 	gchar *query_update_properties = NULL;
@@ -4353,6 +4379,17 @@ static GError* _tag_matched_properties(struct sqlx_sqlite3_s *sq3, const char *p
 	if (prefix) {
 		(void) sqlite3_bind_text(stmt_update, 1, prefix, -1, NULL);
 	}
+	// handle policies to order of storage class mapping
+	int id = sqlite3_bind_parameter_index(stmt_update, ":ht_policies");
+	if (id > 0) {
+		sqlite3_bind_pointer(stmt_update, id, ht_policies, "GHashTable *", NULL);
+	}
+	// handle destination storage class order
+	id = sqlite3_bind_parameter_index(stmt_update, ":order");
+	if (id > 0) {
+		sqlite3_bind_int(stmt_update, id, order);
+	}
+
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt_update))) {}
 	rc = sqlite3_finalize(stmt_update);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
@@ -4372,24 +4409,25 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 {
 	GError *err = NULL;
 	gchar *full_query = NULL;
-	gchar *full_query_set_tag = NULL;
 	gchar *base_set_adapted_tags= NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime FROM aliases AS al ";
+	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, m_ct.policy as pol FROM aliases AS al "
+				"INNER JOIN contents m_ct on al.content = m_ct.id";
 	const gchar *base_query_versioned = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
-			"nb_versions FROM versioned_view AS al";
+				"m_ct.policy as pol, nb_versions FROM versioned_view AS al "
+				"LEFT JOIN contents m_ct on al.content = m_ct.id";
 
 	const gchar *base_query_marker = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, "
 			"nb_versions FROM marker_view AS al";
 	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *storage_class = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL, *owner = NULL;
+		*rule_id = NULL, *prefix = NULL, *owner = NULL;
 	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL, *jprefix = NULL, *jowner = NULL;
+		*jprefix = NULL, *jowner = NULL;
 	int is_markers = 0;
 	struct json_object *jstorage_class = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
@@ -4400,12 +4438,13 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 
 	int storage_class_order = 0;
 
+	int batch_size = 0;
 	gboolean found_match = FALSE;
 	guint32 count_rows = 0;
 	gboolean has_bucket_logging = FALSE;
 
 	gchar *offset_key = NULL;
-	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
@@ -4413,7 +4452,6 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"query", &jquery, json_type_string, 1},
 		{"prefix", &jprefix, json_type_string, 0},
 		{"is_markers", &jis_markers, json_type_int, 0},
-		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"storage_class", &jstorage_class, json_type_string, 0},
 		{"batch_size", &jbatch_size, json_type_int, 0},
 		{"last_action", &jlast_action, json_type_int, 0},
@@ -4454,9 +4492,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	if (jstorage_class_order) {
 		storage_class_order = json_object_get_int(jstorage_class_order);
 	}
-
-	if (jquery_set_tag) {
-		query_set_tag = json_object_get_string(jquery_set_tag);
+	if (jbatch_size) {
+		batch_size = json_object_get_int(jbatch_size);
 	}
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
@@ -4474,7 +4511,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		owner = json_object_get_string(jowner);
 	}
 
-	if (query_set_tag) {
+	if (query) {
 		base_set_adapted_tags = g_strdup_printf( \
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
@@ -4506,16 +4543,27 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		g_prefix_error(&err, "Bad action: %s", action);
 		goto end;
 	}
+
+	// Custom sqlite function
+	int rc_create = sqlite3_create_function(sq3->db, "_is_allowed_transition", 3, SQLITE_UTF8, NULL, &_is_allowed_transition, NULL, NULL);
+	if (rc_create != SQLITE_OK) {
+		g_prefix_error(&err, "Failed to create custom function:is_allowed_transition" );
+		goto end;
+	}
+
 	if (!VERSIONS_ENABLED(versioning)) {
-		full_query = g_strdup_printf("%s %s", base_query, query);
-		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
+		full_query = g_strdup_printf("%s %s LIMIT %d ",
+			base_query, query,
+			batch_size);
 	} else {
 		if (is_markers) {
-			full_query = g_strdup_printf("%s %s", base_query_marker , query);
-			full_query_set_tag = g_strdup_printf("%s %s", base_query_marker, query_set_tag);
+			full_query = g_strdup_printf("%s %s LIMIT %d ",
+				base_query_marker, query,
+				batch_size);
 		} else {
-			full_query = g_strdup_printf("%s %s", base_query_versioned, query);
-			full_query_set_tag = g_strdup_printf("%s %s", base_query_versioned, query_set_tag);
+			full_query = g_strdup_printf("%s %s GROUP BY al.alias LIMIT %d ",
+				base_query_versioned, query,
+				batch_size);
 		}
 	}
 
@@ -4540,6 +4588,16 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
 	}
 
+	// handle policies to order of storage class mapping
+	int id = sqlite3_bind_parameter_index(stmt, ":ht_policies");
+	if (id > 0) {
+		sqlite3_bind_pointer(stmt, id, ht_policies, "GHashTable *", NULL);
+	}
+	// handle destination storage class order
+	id = sqlite3_bind_parameter_index(stmt, ":order");
+	if (id > 0) {
+		sqlite3_bind_int(stmt, id, storage_class_order);
+	}
 	gint64 deleted = 0, nb_version = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		char *object_name = g_strndup((gchar*)sqlite3_column_text(stmt, 0),
@@ -4549,7 +4607,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		// Manage current version and delete markers
 		if (VERSIONS_ENABLED(versioning)) {
 			deleted = sqlite3_column_int64(stmt, 3);
-			nb_version = sqlite3_column_int64(stmt, 5);
+			nb_version = sqlite3_column_int64(stmt, 6);
 
 			if (deleted == 1) {
 				if (nb_version > 1) {
@@ -4612,8 +4670,9 @@ rollback:
 	if (err) {
 		goto close;
 	}
-	if (query_set_tag && found_match) {
-		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
+	if (query && found_match) {
+		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query,
+		ht_policies, storage_class_order);
 	}
 
 close:
@@ -4621,7 +4680,6 @@ close:
 end:
 	g_free(offset_key);
 	g_free(full_query);
-	g_free(full_query_set_tag);
 	g_free(base_set_adapted_tags);
 	g_hash_table_unref(ht_policies);
 	return err;
@@ -4635,18 +4693,17 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	gchar *full_query = NULL;
 	gchar *base_set_adapted_tags= NULL;
-	gchar *full_query_set_tag = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime ";
+	const gchar *base_query = "SELECT al.alias, al.version, al.content, al.deleted, al.mtime, al.policy as pol ";
 	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *storage_class = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL, *owner = NULL;
+		*rule_id = NULL, *prefix = NULL, *owner = NULL;
 	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL, *jprefix = NULL, *jowner = NULL;
+		*jprefix = NULL, *jowner = NULL;
 	struct json_object *jstorage_class = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL,
 	*jhas_bucket_logging = NULL;
 
@@ -4662,14 +4719,13 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	gchar *offset_key = NULL;
 	gboolean has_bucket_logging = FALSE;
 
-	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	GHashTable *ht_policies = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"suffix", &jsuffix, json_type_string, 1},
 		{"action", &jaction, json_type_string, 1},
 		{"query", &jquery, json_type_string, 1},
 		{"prefix", &jprefix, json_type_string, 0},
-		{"query_set_tag", &jquery_set_tag, json_type_string, 0},
 		{"storage_class", &jstorage_class, json_type_string, 0},
 		{"batch_size", &jbatch_size, json_type_int, 0},
 		{"last_action", &jlast_action, json_type_int, 0},
@@ -4712,9 +4768,6 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (jbatch_size) {
 		batch_size = json_object_get_int(jbatch_size);
 	}
-	if (jquery_set_tag) {
-		query_set_tag = json_object_get_string(jquery_set_tag);
-	}
 	if (jrule_id) {
 		rule_id = json_object_get_string(jrule_id);
 	}
@@ -4739,8 +4792,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		}
 	}
 
-	if (query_set_tag) {
-		full_query_set_tag = g_strdup_printf("%s %s", base_query, query_set_tag);
+	if (query) {
 		base_set_adapted_tags = g_strdup_printf( \
 			"%s SELECT alias, version, '%s', '%s-%s' FROM  ", base_set_tags, \
 			LIFECYCLE_SPECIAL_KEY_TAG, rule_id, action);
@@ -4761,7 +4813,15 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		goto end;
 	}
 
-	full_query = g_strdup_printf("%s %s", base_query, query);
+	// Custom sqlite function
+	int rc_create = sqlite3_create_function(sq3->db, "_is_allowed_transition", 3, SQLITE_UTF8, NULL, &_is_allowed_transition, NULL, NULL);
+	if (rc_create != SQLITE_OK) {
+		g_prefix_error(&err, "Failed to create custom function:is_allowed_transition" );
+		goto end;
+	}
+
+	full_query = g_strdup_printf("%s %s LIMIT %d", base_query, query, batch_size);
+
 	offset_key = g_strdup_printf("user.offsets-%s-%s",action, rule_id);
 	sqlite3_stmt *stmt = NULL;
 	int rc;
@@ -4782,6 +4842,18 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	if (prefix) {
 		(void) sqlite3_bind_text(stmt, 1, prefix, -1, NULL);
 	}
+
+	// handle policies to order of storage class mapping
+	int id = sqlite3_bind_parameter_index(stmt, ":ht_policies");
+	if (id > 0) {
+		sqlite3_bind_pointer(stmt, id, ht_policies, "GHashTable *", NULL);
+	}
+	// handle destination storage class order
+	id = sqlite3_bind_parameter_index(stmt, ":order");
+	if (id > 0) {
+		sqlite3_bind_int(stmt, id, storage_class_order);
+	}
+
 	guint32 count_versions = 0;
 	gint32 count_objects = 0;
 	gchar object_name_to_process[1025] = {0};
@@ -4857,15 +4929,16 @@ rollback:
 		goto close;
 	}
 
-	if (query_set_tag && found_match) {
-		err = _tag_matched_properties(sq3, prefix, base_set_adapted_tags, full_query_set_tag);
+	if (query && found_match) {
+		err = _tag_matched_properties(
+			sq3, prefix, base_set_adapted_tags, full_query,
+			ht_policies, storage_class_order);
 	}
 close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 end:
 	g_free(offset_key);
 	g_free(full_query);
-	g_free(full_query_set_tag);
 	g_free(base_set_adapted_tags);
 	g_hash_table_unref(ht_policies);
 	return err;

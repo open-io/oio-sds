@@ -192,8 +192,8 @@ class ContainerLifecycle(object):
                 ExpirationAction,
             )
         return (
-            TransitionAction,
             ExpirationAction,
+            TransitionAction,
         )
 
     def actions_iter(self, use_versioning, is_mpu_container):
@@ -215,6 +215,7 @@ class ContainerLifecycle(object):
         date=None,
         non_current=False,
         versioned=False,
+        is_transition=False,
     ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
@@ -276,22 +277,26 @@ class ContainerLifecycle(object):
                 "(strftime('%s', 'now') AS INTEGER )))"
             )
         where_clauses.append(self._processed_sql_condition())
-        # close WHERE clause
-        _query = f"{_query} WHERE ({' AND '.join(where_clauses)})"
 
-        if non_current or versioned:
-            _query = f"{_query} GROUP BY al.alias"
+        if is_transition:
+            where_clauses.append(
+                " ( _is_allowed_transition(:ht_policies, pol, :order)) "
+            )
+
+        # close WHERE clause
+        _query = f"{_query} WHERE ( {' AND '.join(where_clauses)} )"
+
         return _query
 
     def create_noncurrent_view(self, rule_filter):
         # Create forced on meta2 side
         _query = (
-            "VIEW noncurrent_view AS SELECT *, "
+            "VIEW noncurrent_view AS SELECT *, m_ct.policy, "
             "LAG(al.mtime, 1, -1) OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
             " AS non_current_since, "
             "ROW_NUMBER() OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
             " AS row_id "
-            "FROM aliases AS al"
+            "FROM aliases AS al LEFT JOIN contents m_ct ON al.content = m_ct.id"
         )
 
         _slo_cond = (
@@ -375,7 +380,9 @@ class ContainerLifecycle(object):
 
         return _query
 
-    def noncurrent_query(self, rule_filter, noncurrent_versions, formated_time):
+    def noncurrent_query(
+        self, rule_filter, noncurrent_versions, formated_time, is_transition=False
+    ):
         """
         Deal with non current versions
         """
@@ -385,7 +392,7 @@ class ContainerLifecycle(object):
         # SELECT is forced on meta2 side
         query = (
             "FROM noncurrent_view AS al "
-            f"WHERE (row_id > {1 + noncurrent_versions}) "
+            f"WHERE ( (row_id > {1 + noncurrent_versions}) "
             f"AND {self._processed_sql_condition()} "
         )
         if formated_time is not None:
@@ -396,6 +403,11 @@ class ContainerLifecycle(object):
             query = f"{query}{_time_cond}"
         if rule_filter.prefix:
             query = f"{query} AND (al.alias LIKE ?||'%')"
+
+        if is_transition:
+            query = f"{query} AND (_is_allowed_transition(:ht_policies, pol, :order))"
+
+        query = f"{query} )"
         return query
 
     def markers_query(self, rule_filter):
@@ -404,10 +416,11 @@ class ContainerLifecycle(object):
         """
 
         # SELECT is forced on meta2 side
-        query = f" WHERE nb_versions=1 AND {self._processed_sql_condition()} "
+        query = f" WHERE ( nb_versions=1 AND {self._processed_sql_condition()} "
 
         if rule_filter.prefix:
             query = f"{query} AND (al.alias LIKE ?||'%')"
+        query = f"{query} )"
 
         return query
 
@@ -437,6 +450,7 @@ class ContainerLifecycle(object):
         if rule_filter.prefix:
             _prefix_cond = " AND ( al.alias LIKE ?||'%')"
             _query = f"{_query}{_prefix_cond}"
+
         _query = f"{_query} )"
 
         return _query

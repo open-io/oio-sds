@@ -220,7 +220,8 @@ class Lifecycle(Meta2Filter):
             for pol in policies:
                 if pol in self.policies_order:
                     raise ValueError(
-                        f"Same policy {pol} used in different storage classes")
+                        f"Same policy {pol} used in different storage classes"
+                    )
                 self.policies_order[pol] = order
             self.storage_classes_order[storage_class] = order
             order = order + 1
@@ -591,6 +592,10 @@ class Lifecycle(Meta2Filter):
         """
         view_queries = {}
 
+        is_transition = isinstance(
+            action_class, (TransitionAction, NonCurrentTransitionAction)
+        )
+
         if isinstance(action_class, AbortMpuAction):
             # AbortIncompleteMultiPartUpload doesn't depend on versioning
             query = lc_instance.abort_incomplete_query(
@@ -609,7 +614,10 @@ class Lifecycle(Meta2Filter):
                     lc_instance, rule_filter, self._get_days(action)
                 )
                 query = lc_instance.noncurrent_query(
-                    rule_filter, newer_non_current_versions, self._get_days(action)
+                    rule_filter,
+                    newer_non_current_versions,
+                    self._get_days(action),
+                    is_transition=is_transition,
                 )
             else:
                 # Current versions: Expiration/Transition
@@ -619,13 +627,23 @@ class Lifecycle(Meta2Filter):
                     lc_instance, days_in_sec, date
                 )
                 query = lc_instance.build_sql_query(
-                    rule_filter, days_in_sec, date, False, True
+                    rule_filter,
+                    days_in_sec,
+                    date,
+                    False,
+                    True,
+                    is_transition,
                 )
         else:
             # Non versioned
             days_in_sec = self._get_days(action)
             date = self._get_date(action)
-            query = lc_instance.build_sql_query(rule_filter, days_in_sec, date)
+            query = lc_instance.build_sql_query(
+                rule_filter,
+                days_in_sec,
+                date,
+                is_transition,
+            )
 
         stg_class = self._get_storage_class(action)
         order = 0
@@ -774,13 +792,11 @@ class Lifecycle(Meta2Filter):
 
         while True:
             next_batch_size = self._get_next_limit()
-            sql_query = f"{query} LIMIT {next_batch_size} "
 
             data = {
                 "action": action_class.field,
                 "suffix": self.context.suffix,
-                "query": sql_query,
-                "query_set_tag": sql_query,
+                "query": query,
                 "storage_class": storage_class,
                 "storage_class_order": storage_class_order,
                 "batch_size": next_batch_size,
