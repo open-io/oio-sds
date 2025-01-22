@@ -498,7 +498,16 @@ label_retry:
 		}
 
 		if (err) {
-			if (CODE_IS_NETWORK_ERROR(err->code)) {
+			if ((err->code == ERRCODE_CONN_TIMEOUT
+					|| err->code == ERRCODE_READ_TIMEOUT)
+					&& oio_ext_monotonic_time() >= deadline) {
+				/* We did not give enough time for the request to connect
+				 * then be treated. We must not declare the remote service is
+				 * unavailable, it is just a little late for the deadline. */
+				g_prefix_error(&err, "Deadline reached: ");
+				err->code = CODE_UNAVAILABLE;
+				stop = TRUE;
+			} else if (CODE_IS_NETWORK_ERROR(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
 				 * the subsequent requests. */
 				service_invalidate(url);
