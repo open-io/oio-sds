@@ -965,6 +965,49 @@ _db_raw_creation(struct open_args_s *args)
 	return NULL;
 }
 
+static GError *
+_must_retry_opening(enum election_status_e expected,
+		enum election_status_e status_after, gboolean *must_retry)
+{
+	EXTRA_ASSERT(must_retry != NULL);
+
+	GError *err = NULL;
+	const char *msg = "Election status changed while waiting for the database";
+	switch (status_after) {
+		case ELECTION_LOST:
+			/* The database has become slave. */
+			if (expected & ELECTION_LEADER
+					&& !(expected & ELECTION_LOST)) {
+				/* The request requires a master database,
+				 * retry to open to know the redirection. */
+				GRID_WARN("%s: retry to know the redirection", msg);
+				*must_retry = TRUE;
+			} else {
+				/* The request does not require a master database,
+				 * continue. */
+				GRID_INFO("%s: database has become slave", msg);
+			}
+			break;
+		case ELECTION_LEADER:
+			/* The database has become master, good news. */
+			GRID_INFO("%s: database has become master", msg);
+			break;
+		case ELECTION_FAILED:
+			/* Consider the status change is fatal
+			 * only if the election fails. */
+			err = NEWERROR(CODE_UNAVAILABLE, "%s: Election failed", msg);
+			break;
+		default:  // case 0
+			/* A new election is underway, let's wait for the result
+			 * and retry to open the database. */
+			GRID_WARN("%s: new election is underway, retry", msg);
+			*must_retry = TRUE;
+			break;
+	}
+
+	return err;
+}
+
 static GError*
 _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		struct sqlx_sqlite3_s **result, gchar **pmaster)
@@ -998,6 +1041,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		if (!err && args->is_replicated)
 			err = election_start(args->repo->election_manager, &args->name);
 	}
+
+	/* XXX(FVE): the condition below will always be FALSE in case of a retry.
+	 * We could jump directly into the else branch. */
+retry_open:
 
 	/* Now manage the replication status */
 	if (!expected || !election_configured || !args->is_replicated) {
@@ -1040,7 +1087,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 				break;
 		}
 
-		g_free0(url);
+		oio_pfree0(&url, NULL);
 	}
 	oio_ext_add_perfdata("db_election", oio_ext_monotonic_time() - start);
 
@@ -1055,16 +1102,14 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		status_after = election_get_status_nowait(
 				args->repo->election_manager, &args->name);
 		if (status_after != status_before) {
-			err = BUSY("Election status changed while waiting for the database");
-			/* Consider the status change is fatal
-			 * only if ELECTION_LEADER is requested. */
-			if (expected & ELECTION_LEADER && !(expected & ELECTION_LOST)) {
-				GRID_ERROR("%s", err->message);
+			gboolean must_retry = FALSE;
+			err = _must_retry_opening(expected, status_after, &must_retry);
+			if (err || must_retry) {
 				sqlx_repository_unlock_and_close_noerror(*result);
 				*result = NULL;
-			} else {
-				GRID_WARN("%s", err->message);
-				g_clear_error(&err);
+				if (must_retry) {
+					goto retry_open;
+				}
 			}
 		}
 	}
