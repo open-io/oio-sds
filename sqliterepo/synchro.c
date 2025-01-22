@@ -885,6 +885,10 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	mc->reqid = reqid;
 
 	const gint64 deadline = oio_ext_get_deadline();
+	/* "url" is the service itself. If it has just started, the Conscience
+	 * can tell it is down, whereas it is running. We must disable the
+	 * "avoidance" so the request is executed in any case. */
+	gridd_client_set_avoidance(mc->ec.client, FALSE);
 	gridd_client_set_timeout_cnx(mc->ec.client,
 			oio_clamp_timeout(oio_election_resync_timeout_cnx, deadline));
 	gridd_client_set_timeout(mc->ec.client,
