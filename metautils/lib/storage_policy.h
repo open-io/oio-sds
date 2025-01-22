@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -116,5 +116,7 @@ data_security_decode_param_int64 (const char *encoded, const char *k, gint64 def
 	g_free(prefix);
 	return rc;
 }
+
+gchar * split_policy(const char * current_value);
 
 #endif /*OIO_SDS__metautils__lib__storage_policy_h*/
