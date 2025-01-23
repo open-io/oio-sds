@@ -104,6 +104,19 @@ sqlx_set_journal_mode(sqlite3 *handle, guint journal_mode)
 }
 
 int
+sqlx_set_page_size(sqlite3 *handle, guint page_size)
+{
+	gchar line[128] = {0};
+	snprintf(line, sizeof(line), "PRAGMA page_size = %u;", page_size);
+	int rc = sqlx_exec(handle, line);
+	if (rc != SQLITE_OK) {
+		GRID_WARN("Failed to set page_size=%u: %s (reqid=%s)",
+				page_size, sqlite_strerror(rc), oio_ext_get_reqid());
+	}
+	return rc;
+}
+
+int
 sqlx_sqlite3_finalize(struct sqlx_sqlite3_s *sq3, sqlite3_stmt *stmt,
 		GError *err)
 {
