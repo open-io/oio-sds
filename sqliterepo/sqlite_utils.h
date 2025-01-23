@@ -139,6 +139,10 @@ int sqlx_exec(sqlite3 *handle, const gchar *sql);
  * 0 = DELETE, 1 = TRUNCATE, 2 = PERSIST, 3 = MEMORY, 4 = WAL */
 int sqlx_set_journal_mode(sqlite3 *handle, guint journal_mode);
 
+/** Set sqlite's page size. Notice that this setting may not be applied
+ * immediately, but only after a call to "vacuum". */
+int sqlx_set_page_size(sqlite3 *handle, guint page_size);
+
 struct sqlx_sqlite3_s;
 
 int sqlx_sqlite3_finalize(struct sqlx_sqlite3_s *sq3, sqlite3_stmt *stmt,

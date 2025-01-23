@@ -4,7 +4,9 @@ config:
 # Must be on the same host as some rawx
 # services for the tests to pass.
   proxy.location: "rack.127-0-0-4.6000"
+  server.periodic_decache.period: 60
   sqliterepo.journal_mode: 4
+  sqliterepo.page_size: 8192
 zookeeper: true
 redis: true
 directory_replicas: 3

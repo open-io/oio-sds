@@ -853,19 +853,24 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	sq3->admin_dirty = 0;
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
-	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
-	sqlx_exec(handle, "PRAGMA synchronous = OFF");
+	sqlx_exec(sq3->db, "PRAGMA foreign_keys = OFF");
+	sqlx_exec(sq3->db, "PRAGMA synchronous = OFF");
 
 	if (oio_sqliterepo_cache_kbytes_per_db > 0) {
 		gchar line[128] = {0};
 		g_snprintf(line, sizeof(line), "PRAGMA cache_size = -%u",
 				oio_sqliterepo_cache_kbytes_per_db);
-		sqlx_exec(handle, line);
+		sqlx_exec(sq3->db, line);
+	}
+
+	/* Must be done before setting journal mode (especially WAL). */
+	if (_page_size != 4096) {
+		sqlx_set_page_size(sq3->db, _page_size);
 	}
 
 	/* We chose to check this call especially because it is able to detect
 	 * a wrong/corrupted database file. */
-	int rc = sqlx_set_journal_mode(handle, oio_sqliterepo_journal_mode);
+	int rc = sqlx_set_journal_mode(sq3->db, oio_sqliterepo_journal_mode);
 	if (rc != SQLITE_OK) {
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
 			error = NEWERROR(CODE_CORRUPT_DATABASE,
@@ -881,14 +886,8 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 		return error;
 	}
 
-	sqlx_exec(handle, "PRAGMA temp_store = MEMORY");
+	sqlx_exec(sq3->db, "PRAGMA temp_store = MEMORY");
 	if (!_schema_has(sq3->db)) {
-		if (_page_size >= 512) {
-			gchar line[128] = {0};
-			snprintf(line, sizeof(line),
-					"PRAGMA page_size = %u;", _page_size);
-			sqlx_exec(sq3->db, line);
-		}
 		sqlx_exec(sq3->db, "PRAGMA synchronous = OFF;");
 		sqlx_exec(sq3->db, "BEGIN");
 		_schema_apply (sq3->db, args->schema);
@@ -900,7 +899,7 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASENAME, sq3->name.base);
 	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASETYPE, sq3->name.type);
 	sqlx_admin_save_lazy (sq3);
-	sqlx_exec (handle, "COMMIT");
+	sqlx_exec (sq3->db, "COMMIT");
 
 	*result = sq3;
 	return NULL;
@@ -1506,6 +1505,8 @@ _backup_main(sqlite3 *src, sqlite3 *dst)
 	if (!backup) {
 		err = NEWERROR(sqlite3_errcode(dst), "%s", sqlite3_errmsg(dst));
 	} else {
+		/* FIXME(FVE): this can fail if we changed the page size.
+		 * We should call VACUUM or preserve the previous page_size. */
 		while ((rc = sqlite3_backup_step(backup, pages_per_step)) == SQLITE_OK) {
 			// TODO(FVE): check deadline?
 		}
