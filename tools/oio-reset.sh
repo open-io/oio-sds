@@ -35,7 +35,9 @@ OIO="$HOME/.oio"
 SDS="$OIO/sds"
 BOOTSTRAP_CONFIG=
 REGION=
-SERVICE_ID=
+# Force service id option to be used as it is mandatory
+# (at least for internal rawxes to start).
+SERVICE_ID=1
 RANDOM_SERVICE_ID=
 PROFILE=
 DATADIR="$SDS/data"
@@ -43,13 +45,15 @@ DATADIR="$SDS/data"
 ZKSLOW=0
 verbose=0
 
+# For compatibility (some options are kept but unused)
+# -U: to use service id option
+# -C: not used since at least 2016, but it might break some old scripts
 while getopts "D:P:I:N:f:Z:p:r:CRUv" opt; do
     case $opt in
         D) DATADIR="${OPTARG}" ;;
         P) PORT="${OPTARG}" ;;
         I) IP="${OPTARG}" ;;
         N) NS="${OPTARG}" ;;
-        U) SERVICE_ID=1 ;;
         r) REGION="${OPTARG}" ;;
         R) RANDOM_SERVICE_ID=1 ;;
         f) if [ -n "$OPTARG" ]; then
