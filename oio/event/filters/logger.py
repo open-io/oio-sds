@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.logger import get_logger
 from oio.event.filters.base import Filter
 
 
@@ -22,19 +21,20 @@ class LoggerFilter(Filter):
     """Log all events with 'info' level"""
 
     def __init__(self, *args, **kwargs):
-        self._logger = None
         self._topic = None
         super().__init__(*args, **kwargs)
 
     def init(self):
-        log_format = self.conf.get("log_format")
-        log_name = self.conf.get("log_name", "logger_filter")
         self._topic = self.conf.get("topic")
-        self._logger = get_logger(self.conf, name=log_name, fmt=log_format)
+
+    def log_context_from_env(self, env):
+        ctx = super().log_context_from_env(env)
+        ctx.topic = self._topic
+        ctx.event = str(env)
+        return ctx
 
     def process(self, env, cb):
-        extra = {"event": str(env), "topic": self._topic}
-        self._logger.info("", extra=extra)
+        self.logger.info("")
         return self.app(env, cb)
 
 
