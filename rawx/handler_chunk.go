@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"openio-sds/rawx/concurrency"
 	"os"
 	"regexp"
 	"strconv"
@@ -669,19 +670,25 @@ func (rr *rawxRequest) serveChunk() {
 	} else {
 		switch rr.req.Method {
 		case "GET":
-			if err := rr.drain(); err != nil {
-				rr.replyError("", err)
-			} else {
-				rr.downloadChunk()
-			}
+			concurrency.CountGET(func() {
+				if err := rr.drain(); err != nil {
+					rr.replyError("", err)
+				} else {
+					rr.downloadChunk()
+				}
+			})
 		case "PUT":
-			rr.uploadChunk()
+			concurrency.CountPUT(func() {
+				rr.uploadChunk()
+			})
 		case "DELETE":
-			if err := rr.drain(); err != nil {
-				rr.replyError("", err)
-			} else {
-				rr.removeChunk()
-			}
+			concurrency.CountDEL(func() {
+				if err := rr.drain(); err != nil {
+					rr.replyError("", err)
+				} else {
+					rr.removeChunk()
+				}
+			})
 		case "HEAD":
 			if err := rr.drain(); err != nil {
 				rr.replyError("", err)
@@ -712,17 +719,18 @@ func (rr *rawxRequest) serveChunk() {
 
 	if shouldAccessLog(rr.status, rr.req.Method) {
 		logger.LogHttp(logger.AccessLogEvent{
-			Status:    rr.status,
-			TimeSpent: spent,
-			BytesIn:   rr.bytesIn,
-			BytesOut:  rr.bytesOut,
-			Method:    rr.req.Method,
-			Local:     rr.req.Host,
-			Peer:      rr.req.RemoteAddr,
-			Path:      rr.req.URL.Path,
-			ReqId:     rr.reqid,
-			TLS:       rr.req.TLS != nil,
-			TTFB:      ttfb,
+			Status:      rr.status,
+			TimeSpent:   spent,
+			BytesIn:     rr.bytesIn,
+			BytesOut:    rr.bytesOut,
+			Method:      rr.req.Method,
+			Local:       rr.req.Host,
+			Peer:        rr.req.RemoteAddr,
+			Path:        rr.req.URL.Path,
+			ReqId:       rr.reqid,
+			TLS:         rr.req.TLS != nil,
+			TTFB:        ttfb,
+			Concurrency: concurrency.GetConcurrency(),
 		})
 	}
 }

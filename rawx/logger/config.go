@@ -31,9 +31,11 @@ var AccessLogPut = defs.ConfigDefaultAccessLogPut
 var AccessLogPost = defs.ConfigDefaultAccessLogPost
 var AccessLogDel = defs.ConfigDefaultAccessLogDelete
 
+const concurrencyFormat = "put:{{ .Concurrency.Put }} get:{{ .Concurrency.Get }} del:{{ .Concurrency.Del }}"
+
 var LogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var RequestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
-var AccessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
+var AccessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }} " + concurrencyFormat
 var EventLogFormat = "event INF {{ .Topic }} {{ .Event }}"
 
 var LogTemplate *template.Template = nil

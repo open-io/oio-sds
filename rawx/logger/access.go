@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"openio-sds/rawx/concurrency"
 )
 
 type AccessLogEvent struct {
@@ -36,6 +37,8 @@ type AccessLogEvent struct {
 	ReqId     string
 	TLS       bool
 	TTFB      uint64
+
+	Concurrency concurrency.ConcurrencyState
 }
 
 func (evt AccessLogEvent) String() string {
