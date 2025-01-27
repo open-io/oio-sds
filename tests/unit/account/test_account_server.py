@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,8 +30,9 @@ class FakeKmsApi:
 
 
 class FakeReq:
-    def __init__(self):
+    def __init__(self, method):
         self.args = {}
+        self.method = method
 
 
 class AccountServerTest(unittest.TestCase):
@@ -90,7 +91,7 @@ class AccountServerTest(unittest.TestCase):
         conf = self._build_account_conf()
         account_server = Account(conf, mock_backend, None, FakeKmsApi())
 
-        fakereq = FakeReq()
+        fakereq = FakeReq("GET")
         fakereq.args["id"] = bucket
         resp = account_server.on_bucket_get_backup_region(fakereq)
         self.assertTrue(isinstance(resp, expected_type))
