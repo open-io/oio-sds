@@ -48,7 +48,7 @@ def _clear_unimplemented_properties(properties, implemented_properties):
 
 
 IMPLEMENTED_USER_POLICY_SCHEMA = copy.deepcopy(USER_POLICY_SCHEMA)
-IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["aws-arn"]["anyOf"][-1] = {
+IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["aws-arn"]["anyOf"][-1] = {
     "type": "string",
     "pattern": "^arn:aws:s3:::.+$",
     "maxLength": 1224,
@@ -99,7 +99,7 @@ IMPLEMENTED_S3_ACTIONS = [
     "PutObjectTagging",
     "PutReplicationConfiguration",
 ]
-IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["aws-action"]["anyOf"][-1] = {
+IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["aws-action"]["anyOf"][-1] = {
     "anyOf": [
         {
             "type": "string",
@@ -113,9 +113,7 @@ IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["aws-action"]["anyOf"][-1] = {
     ]
 }
 _clear_unimplemented_properties(
-    IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["Statement"]["allOf"][-1][
-        "properties"
-    ],
+    IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["Statement"]["allOf"][-1]["properties"],
     {"Sid": None, "Effect": None, "Action": None, "Resource": None, "Condition": None},
 )
 IMPLEMENTED_CONDITION_STRING_VALUE = {
@@ -129,7 +127,7 @@ IMPLEMENTED_CONDITION_STRING_VALUE = {
     }
 }
 _clear_unimplemented_properties(
-    IMPLEMENTED_USER_POLICY_SCHEMA["definitions"]["Condition"]["properties"],
+    IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["Condition"]["properties"],
     {
         "StringEquals": IMPLEMENTED_CONDITION_STRING_VALUE,
         "StringNotEquals": IMPLEMENTED_CONDITION_STRING_VALUE,
