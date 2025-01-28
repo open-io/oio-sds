@@ -21,6 +21,7 @@ from oio.common.constants import (
     TAGGING_KEY,
 )
 from oio.common.logger import get_logger
+from oio.common.schema import SchemaNotFound, SchemaRegistry, SchemaValidationError
 from oio.lifecycle.metrics import LifecycleAction
 
 LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
@@ -116,8 +117,6 @@ class ContainerLifecycle(object):
     def load(self, conf=None):
         """
         Load lifecycle conf from provided conf or container property.
-
-        :returns: True if a lifecycle configuration has been loaded
         """
         if conf is None:
             conf = self.get_configuration()
@@ -133,6 +132,14 @@ class ContainerLifecycle(object):
                 raise LifecycleConfigurationInvalid(
                     "Unable to parse configuration"
                 ) from exc
+
+        registry = SchemaRegistry()
+        try:
+            registry.validate("lifecycle", self.lifecycle_conf)
+        except (SchemaNotFound, SchemaValidationError) as exc:
+            raise LifecycleConfigurationInvalid(
+                f"Unable to validate configuration against schema: {str(exc)}"
+            )
 
         schema_version = self.lifecycle_conf.get("_schema_version", -1)
         if schema_version not in self.SUPPORTED_CONFIGURATION_VERSIONS:

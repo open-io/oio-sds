@@ -1,0 +1,219 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ovhcloud.com/schemas/lifecycle",
+    "additionalProperties": false,
+    "type": "object",
+    "properties": {
+        "Rules": {
+            "type": "object",
+            "patternProperties": {
+                "^[0-9]+$": { "$ref": "#/$defs/rule" }
+            },
+            "additionalProperties": false
+        },
+        "_schema_version": {
+            "type": "integer"
+        },
+        "_expiration_rules": {
+            "type": "object",
+            "properties": {
+                "days": { "type": "array", "items": { "type": "string" } },
+                "date": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false,
+            "required": [ "days", "date" ]
+        },
+        "_transition_rules": {
+            "type": "object",
+            "properties": {
+                "days": { "type": "array", "items": { "type": "string" } },
+                "date": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false,
+            "required": [ "days", "date" ]
+        },
+        "_delete_marker_rules": { "type": "array", "items": { "type": "string" } },
+        "_abort_mpu_rules": { "type": "array", "items": { "type": "string" } },
+        "_non_current_expiration_rules": { "type": "array", "items": { "type": "string" } },
+        "_non_current_transition_rules": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": [
+        "Rules",
+        "_schema_version",
+        "_expiration_rules",
+        "_transition_rules",
+        "_delete_marker_rules",
+        "_abort_mpu_rules",
+        "_non_current_expiration_rules",
+        "_non_current_transition_rules"
+    ],
+    "$defs": {
+        "not-empty-string": {
+            "type": "string",
+            "minLength": 1
+        },
+        "filter": {
+            "type": "object",
+            "properties": {
+                "ObjectSizeLessThan": { "type": "integer", "minimum": 0 },
+                "ObjectSizeGreaterThan": { "type": "integer", "minimum": 0 },
+                "Tag": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "Key": { "$ref": "#/$defs/not-empty-string" },
+                            "Value": { "type": "string" }
+                        },
+                        "required": [ "Key", "Value" ]
+                    }
+                },
+                "Prefix": { "type": "string" }
+            },
+            "additionalProperties": false
+        },
+        "days": { "type": "integer", "minimum": 1 },
+        "date": { "type": "string" },
+        "expiration": {
+            "type": "object",
+            "properties": {
+                "Days": { "$ref": "#/$defs/days" },
+                "Date": { "$ref": "#/$defs/date" },
+                "ExpiredObjectDeleteMarker": { "type": "boolean" }
+            },
+            "additionalProperties": false,
+            "minProperties": 1,
+            "maxProperties": 1
+        },
+        "transition": {
+            "type": "object",
+            "properties": {
+                "Days": { "$ref": "#/$defs/days" },
+                "Date": { "$ref": "#/$defs/date" },
+                "StorageClass": { "$ref": "#/$defs/storage-class" }
+            },
+            "additionalProperties": false,
+            "required": [
+                "StorageClass"
+            ],
+            "minProperties": 2,
+            "maxProperties": 2
+        },
+        "noncurrent-version-expiration": {
+            "type": "object",
+            "properties": {
+                "NoncurrentDays": { "$ref": "#/$defs/days" },
+                "NewerNoncurrentVersions": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false,
+            "minProperties": 1
+        },
+        "noncurrent-version-transition": {
+            "type": "object",
+            "properties": {
+                "NoncurrentDays": { "$ref": "#/$defs/days" },
+                "NewerNoncurrentVersions": { "type": "integer", "minimum": 0 },
+                "StorageClass": { "$ref": "#/$defs/storage-class" }
+            },
+            "minProperties": 2,
+            "maxProperties": 2,
+            "required": [
+                "StorageClass"
+            ]
+        },
+        "abort-incomplete-mpu": {
+            "type": "object",
+            "properties": {
+                "DaysAfterInitiation": { "type": "integer", "minimum": 0 }
+            },
+            "required": [ "DaysAfterInitiation" ],
+            "additionalProperties": false
+        },
+        "time_type": {
+            "enum": [ "Days", "Date", "NoncurrentDays", "DaysAfterInitiation", null ]
+        },
+        "storage-class": {
+            "type": "string",
+            "enum": [
+                "EXPRESS_ONEZONE",
+                "STANDARD",
+                "STANDARD_IA",
+                "INTELLIGENT_TIERING",
+                "ONEZONE_IA",
+                "GLACIER_IR",
+                "GLACIER",
+                "DEEP_ARCHIVE"
+            ]
+        },
+        "rule": {
+            "type": "object",
+            "properties": {
+                "ID": { "$ref": "#/$defs/not-empty-string" },
+                "Status": {
+                    "enum": [ "Enabled", "Disabled" ]
+                },
+                "Filter": {
+                    "$ref": "#/$defs/filter"
+                },
+                "Prefix": { "type": "string" },
+                "Expiration": {
+                    "patternProperties": {
+                        "^[0-9]+$": { "$ref": "#/$defs/expiration" }
+                    },
+                    "properties": {
+                        "__time_type": { "$ref": "#/$defs/time_type" }
+                    },
+                    "required": [ "__time_type" ],
+                    "minProperties": 2,
+                    "maxProperties": 2,
+                    "additionalProperties": false
+                },
+                "Transition": {
+                    "patternProperties": {
+                        "^[0-9]+$": { "$ref": "#/$defs/transition" }
+                    },
+                    "properties": {
+                        "__time_type": { "$ref": "#/$defs/time_type" }
+                    },
+                    "required": [ "__time_type" ],
+                    "minProperties": 2,
+                    "additionalProperties": false
+                },
+                "NoncurrentVersionExpiration": {
+                    "patternProperties": {
+                        "^[0-9]+$": { "$ref": "#/$defs/noncurrent-version-expiration" }
+                    },
+                    "properties": {
+                        "__time_type": { "$ref": "#/$defs/time_type" }
+                    },
+                    "required": [ "__time_type" ],
+                    "minProperties": 2,
+                    "maxProperties": 2,
+                    "additionalProperties": false
+                },
+                "NoncurrentVersionTransition": {
+                    "patternProperties": {
+                        "^[0-9]+$": { "$ref": "#/$defs/noncurrent-version-transition" }
+                    },
+                    "properties": {
+                        "__time_type": { "$ref": "#/$defs/time_type" }
+                    },
+                    "required": [ "__time_type" ],
+                    "minProperties": 2,
+                    "additionalProperties": false
+                },
+                "AbortIncompleteMultipartUpload": {
+                    "patternProperties": {
+                        "^[0-9]+$": { "$ref": "#/$defs/abort-incomplete-mpu" }
+                    },
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "maxProperties": 1
+                }
+            },
+            "additionalProperties": false,
+            "required": [ "Status", "ID" ]
+        }
+    }
+}

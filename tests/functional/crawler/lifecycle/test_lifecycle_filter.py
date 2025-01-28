@@ -346,6 +346,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Tags": [{"Key": "key1", "Value": "value1"}]},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 }
             },
@@ -361,8 +362,8 @@ class TestLifecycleCrawler(BaseTestCase):
         self.metrics_by_passes = (
             {
                 **self.DEFAULT_STATS,
-                "successes": 1,
-                "errors": 1,
+                "successes": 0,
+                "errors": 2,
             },
         )
 
@@ -383,6 +384,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Tag": [{"key1": "value1"}]},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 }
             },
@@ -398,8 +400,8 @@ class TestLifecycleCrawler(BaseTestCase):
         self.metrics_by_passes = (
             {
                 **self.DEFAULT_STATS,
-                "successes": 1,
-                "errors": 1,
+                "successes": 0,
+                "errors": 2,
             },
         )
 
@@ -420,6 +422,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -428,6 +431,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 10},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -471,6 +475,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -479,6 +484,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 10},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -515,6 +521,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -523,6 +530,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 10},
+                        "__time_type": "Days",
                     },
                 },
                 "2": {
@@ -531,6 +539,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": " OR 1=1 "},
                     "Expiration": {
                         "2": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -572,6 +581,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -622,6 +632,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     },
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -630,6 +641,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Tag": [{"Key": "key3", "Value": "value3"}]},
                     "Expiration": {
                         "1": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -749,6 +761,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"ObjectSizeLessThan": 10},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -837,6 +850,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"ObjectSizeGreaterThan": 10},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -930,6 +944,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     },
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1048,6 +1063,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -1056,6 +1072,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 12},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1118,6 +1135,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -1126,6 +1144,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1212,6 +1231,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionExpiration": {
                         "0": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 100},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -1220,6 +1240,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "NoncurrentVersionExpiration": {
                         "1": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 100},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1318,6 +1339,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -1326,6 +1348,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 6},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1369,6 +1392,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionExpiration": {
                         "0": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 2},
+                        "__time_type": "NoncurrentDays",
                     },
                 },
             },
@@ -1426,6 +1450,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionExpiration": {
                         "0": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 5},
+                        "__time_type": "NoncurrentDays",
                     },
                 },
                 "1": {
@@ -1434,6 +1459,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "NoncurrentVersionExpiration": {
                         "1": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 1},
+                        "__time_type": "NoncurrentDays",
                     },
                 },
             },
@@ -1482,6 +1508,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionExpiration": {
                         "0": {"NoncurrentDays": 2},
+                        "__time_type": "NoncurrentDays",
                     },
                 },
             },
@@ -1577,7 +1604,8 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
-                        "0": {"ExpiredObjectDeleteMarker ": True},
+                        "0": {"ExpiredObjectDeleteMarker": True},
+                        "__time_type": None,
                     },
                 },
                 "1": {
@@ -1585,7 +1613,8 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
-                        "1": {"ExpiredObjectDeleteMarker ": True},
+                        "1": {"ExpiredObjectDeleteMarker": True},
+                        "__time_type": None,
                     },
                 },
             },
@@ -1718,8 +1747,8 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
-                "successes": 1,
-                "errors": 3,
+                "successes": 0,
+                "errors": 4,
             },
         )
         super().test_not_empty_filter()
@@ -1728,8 +1757,8 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
-                "successes": 1,
-                "errors": 3,
+                "successes": 0,
+                "errors": 4,
             },
         )
         super().test_wrong_tags()
