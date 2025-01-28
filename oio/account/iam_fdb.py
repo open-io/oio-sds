@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,6 @@
 # License along with this library.
 
 import copy
-import os
 import re
 import time
 from functools import wraps
@@ -29,15 +28,13 @@ from oio.common.easy_value import boolean_value
 from oio.common.exceptions import ServiceBusy
 from oio.common.json import json
 from oio.common.logger import get_logger
+from oio.common.schema import SchemaRegistry
 
 # As AWS, 10 (user policy per user) * 2048 (max user policy size)
 MAX_USER_POLICY_SIZE = 10 * 2048
 
-with open(
-    f"{os.path.dirname(os.path.realpath(__file__))}/user-policy-schema.json", "r"
-) as f:
-    # null condition is allowed to be compatible with legacy user policies
-    USER_POLICY_SCHEMA = json.loads(f.read())
+# null condition is allowed to be compatible with legacy user policies
+USER_POLICY_SCHEMA = SchemaRegistry().get("user-policy")
 
 
 def _clear_unimplemented_properties(properties, implemented_properties):
