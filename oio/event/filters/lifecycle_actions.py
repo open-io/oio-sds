@@ -17,7 +17,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from urllib.parse import quote
 
-from oio.common.constants import OBJECT_REPLICATION_PENDING
+from urllib3.util.request import make_headers
+
+from oio.common.constants import OBJECT_REPLICATION_PENDING, LIFECYCLE_USER_AGENT
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import (
     NotFound,
@@ -167,6 +169,9 @@ class LifecycleActions(Filter):
             "s3_access_requester", DEFAULT_REQUESTER
         )
 
+    def _get_headers(self):
+        return make_headers(user_agent=LIFECYCLE_USER_AGENT)
+
     def _process_expiration(self, context: LifecycleActionContext):
         add_delete_marker = context.event.data.get("add_delete_marker")
         version = None if add_delete_marker else context.version
@@ -191,6 +196,7 @@ class LifecycleActions(Filter):
             context.path,
             version=version,
             reqid=context.reqid,
+            headers=self._get_headers(),
         )
 
     def _process_transition(self, context: LifecycleActionContext):
