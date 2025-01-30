@@ -578,7 +578,7 @@ class Lifecycle(Meta2Filter):
             view_queries,
             stg_class,
             order,
-            rule_filter.prefix,
+            rule_filter,
             rule_id,
             action_class,
         )
@@ -700,7 +700,7 @@ class Lifecycle(Meta2Filter):
         view_queries,
         storage_class,
         storage_class_order,
-        prefix,
+        rule_filter,
         rule_id,
         action_class,
     ):
@@ -731,11 +731,20 @@ class Lifecycle(Meta2Filter):
             }
             if isinstance(action_class, DeleteMarkerAction):
                 data["is_markers"] = 1
-            if prefix:
-                data["prefix"] = prefix
 
             if isinstance(action_class, (NonCurrentTransitionAction, TransitionAction)):
                 data["policies_order"] = self.policies_order
+
+            if rule_filter.prefix:
+                data["prefix"] = rule_filter.prefix
+
+            if not isinstance(action_class, DeleteMarkerAction):
+                if rule_filter.greater:
+                    data["has_greater"] = True
+                if rule_filter.lesser:
+                    data["has_lesser"] = True
+                if rule_filter.tags:
+                    data["has_tags"] = True
 
             params = {
                 "cid": self.context.cid,

@@ -255,8 +255,10 @@ class ContainerLifecycle(object):
 
                 _query = f"{_query}{_base_tag}{_tags}"
 
+            _query = f"{_query}{_slo_cond}"
+
             if _lesser or _greater:
-                _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
+                _query = f"{_query} {_lesser} {_greater}"
 
         # Create WHERE clause
         where_clauses = []
@@ -282,12 +284,13 @@ class ContainerLifecycle(object):
         # close WHERE clause
         _query = f"{_query} WHERE ( {' AND '.join(where_clauses)} )"
 
+        print("laa query:", _query)
         return _query
 
     def create_noncurrent_view(self, rule_filter):
         # Create forced on meta2 side
         _query = (
-            "VIEW noncurrent_view AS SELECT *, m_ct.policy, "
+            "VIEW noncurrent_view AS SELECT *, m_ct.policy, m_ct.size AS content_size , pr.value AS pr_size, "
             "LAG(al.mtime, 1, -1) OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
             " AS non_current_since, "
             "ROW_NUMBER() OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
@@ -338,8 +341,9 @@ class ContainerLifecycle(object):
             if _tags:
                 _query = f"{_query}{_base_tag}{_tags}"
 
+        _query = f"{_query}{_slo_cond}"
         if _lesser or _greater:
-            _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
+            _query = f"{_query} {_lesser} {_greater}"
 
         return _query
 
@@ -426,13 +430,19 @@ class ContainerLifecycle(object):
         _query = " "
 
         _upload_finished_cond = (
-            " INNER JOIN properties pr ON al.alias=pr.alias AND"
-            " al.version=pr.version AND"
-            " pr.key='x-object-sysmeta-s3api-has-content-type'"
-            " AND CAST(pr.value AS TEXT)='no'"
+            " INNER JOIN properties pr2 ON al.alias=pr2.alias AND"
+            " al.version=pr2.version AND"
+            " pr2.key='x-object-sysmeta-s3api-has-content-type'"
+            " AND CAST(pr2.value AS TEXT)='no'"
         )
 
-        _query = f"{_query}{_upload_finished_cond}"
+        _slo_cond = (
+            " LEFT JOIN properties pr ON al.alias=pr.alias AND"
+            " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
+            " INNER JOIN contents ct ON al.content = ct.id "
+        )
+
+        _query = f"{_query}{_slo_cond}{_upload_finished_cond}"
 
         _query = f"{_query} WHERE ("
         # Time condition is always present via DaysaAfterInitiation
