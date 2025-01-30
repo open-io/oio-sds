@@ -175,64 +175,21 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		g_clear_error(&err);
 	}
 
-	guint beans_len = g_slist_length(beans);
 	GSList *non_chunks = NULL;
 	if (sorted->header)
 		non_chunks = g_slist_prepend(non_chunks, sorted->header);
 	if (alias)
 		non_chunks = g_slist_prepend(non_chunks, alias);
-	non_chunks = g_slist_concat(non_chunks, g_slist_copy(sorted->properties));
+	if (sorted->properties)
+		non_chunks = g_slist_concat(non_chunks, g_slist_copy(sorted->properties));
+
 	gboolean send_repli = TRUE;
 	if (!send_chunks) {
 		forward(non_chunks, send_repli);
 		send_repli = FALSE;
-	} else if (beans_len <= _MAX_BEANS_BY_EVENT) {
+	} else {
 		forward(beans, send_repli);
 		send_repli = FALSE;
-	} else {
-		/* first, notify everything but the chunks */
-
-		// Ceiling of an integer division
-		n_events += (beans_len - g_slist_length(non_chunks)
-				+ _MAX_BEANS_BY_EVENT - 1) / _MAX_BEANS_BY_EVENT;
-		if (non_chunks) {
-			forward (non_chunks, send_repli);
-			send_repli = FALSE;
-		}
-
-		if (!sorted->header)
-			GRID_WARN("No content header in event data! (type: %s)", name);
-
-		/* then notify each chunks by batches of 16 items */
-		GSList *batch = NULL;
-		guint count = 0;
-		for (GSList *l = beans; l; l = l->next) {
-			if (&descr_struct_CHUNKS != DESCR(l->data))
-				continue;
-			batch = g_slist_prepend (batch, l->data);
-			if ((++count) == _MAX_BEANS_BY_EVENT) {
-				/* We send the header each time because the event handlers
-				 * may need the chunk method, which is not saved in chunks. */
-				if (sorted->header)
-					batch = g_slist_prepend(batch, sorted->header);
-				if (alias)
-					batch = g_slist_prepend(batch, alias);
-				forward (batch, send_repli);
-				send_repli = FALSE;
-				g_slist_free (batch);
-				batch = NULL;
-				count = 0;
-			}
-		}
-		if (batch) {
-			if (sorted->header)
-				batch = g_slist_prepend(batch, sorted->header);
-			if (alias)
-				batch = g_slist_prepend(batch, alias);
-			forward (batch, send_repli);
-			g_slist_free (batch);
-			batch = NULL;
-		}
 	}
 
 	m2v2_sorted_content_free(sorted);
@@ -550,11 +507,28 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 			ctx, NAME_MSGKEY_SLO_MANIFEST));
 	gboolean delete_marker_created = FALSE;
 
+	void
+	_property_cb(gpointer plist UNUSED, gpointer bean)
+	{
+		EXTRA_ASSERT(plist != NULL);
+		EXTRA_ASSERT(bean != NULL);
+		if (DESCR(bean) == &descr_struct_PROPERTIES) {
+			_bean_list_cb(&obc->l, bean);
+		}
+	}
+
+	m2_onbean_cb props_cb = NULL;
+	const gchar *user_agent = oio_ext_get_user_agent();
+	if (g_strcmp0(user_agent, LIFECYCLE_USER_AGENT) == 0) {
+		props_cb = _property_cb;
+	}
+
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url,
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
-		dryrun, slo_manifest, _bean_list_cb, &obc->l, &delete_marker_created);
+		dryrun, slo_manifest, _bean_list_cb, &obc->l, props_cb, &obc->l,
+		&delete_marker_created);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);

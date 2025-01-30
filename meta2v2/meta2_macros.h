@@ -262,6 +262,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // rule
 #define LIFECYCLE_SPECIAL_KEY_TAG "__processed_lifecycle"
 
+// Lifecycle User-Agent
+#define LIFECYCLE_USER_AGENT "lifecycle-action"
+
 /* -------------------------------------------------------------------------- */
 
 # define NAME_MSGNAME_M2V2_CREATE             "M2_CREATE"

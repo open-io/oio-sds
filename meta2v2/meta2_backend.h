@@ -195,7 +195,8 @@ GError *meta2_backend_drain_content(struct meta2_backend_s *m2b,
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, gboolean dryrun, gboolean slo_manifest,
-		m2_onbean_cb cb, gpointer u0, gboolean *delete_marker_created);
+		m2_onbean_cb cb, gpointer u0, m2_onbean_cb cb_props, gpointer u1,
+		gboolean *delete_marker_created);
 
 /* Properties -------------------------------------------------------------- */
 

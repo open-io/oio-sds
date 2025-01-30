@@ -1674,7 +1674,8 @@ GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean bypass_governance,
 		gboolean create_delete_marker, gboolean dryrun, gboolean slo_manifest,
-		m2_onbean_cb cb, gpointer u0, gboolean *delete_marker_created)
+		m2_onbean_cb cb, gpointer u0, m2_onbean_cb cb_props, gpointer u1,
+		gboolean *delete_marker_created)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1691,7 +1692,6 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	if (!dryrun && slo_manifest) {
 		err = _meta2_send_manifest_event(m2b, sq3, url);
 	}
-
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
 		gint64 max_versions = _maxvers(sq3);
@@ -1701,6 +1701,10 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				GRID_DEBUG("Updating max_version: %s", oio_ext_get_force_versioning());
 				max_versions = atoi(oio_ext_get_force_versioning());
 				m2db_set_max_versions(sq3, max_versions);
+			}
+
+			if (cb_props != NULL  && u1 != NULL) {
+				m2db_get_properties(sq3, url, cb_props, u1);
 			}
 
 			if (!(err = m2db_delete_alias(sq3, max_versions, bypass_governance,
