@@ -1,0 +1,60 @@
+From 7d4032bcd9a1aac88b06a03ad515ccb01a2ba5cc Mon Sep 17 00:00:00 2001
+From: Franco Davy Irakoze <franco-davy.irakoze@ovhcloud.com>
+Date: Fri, 31 Jan 2025 10:33:15 +0100
+Subject: [PATCH] wsgi: write already collected data after data gathering
+ process error
+
+---
+ eventlet/wsgi.py | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/eventlet/wsgi.py b/eventlet/wsgi.py
+index fb7f8e45..b4dca95e 100644
+--- a/eventlet/wsgi.py
++++ b/eventlet/wsgi.py
+@@ -605,6 +605,14 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+ 
+         try:
+             try:
++                towrite = []
++                towrite_size = 0
++                just_written_size = 0
++                minimum_write_chunk_size = int(self.environ.get(
++                    'eventlet.minimum_write_chunk_size',
++                    self.minimum_chunk_size
++                    )
++                )
+                 WSGI_LOCAL.already_handled = False
+                 result = self.application(self.environ, start_response)
+ 
+@@ -619,11 +627,6 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+                         # response, so we can be nice and send a Connection: close header.
+                         self.close_connection = 1
+ 
+-                towrite = []
+-                towrite_size = 0
+-                just_written_size = 0
+-                minimum_write_chunk_size = int(self.environ.get(
+-                    'eventlet.minimum_write_chunk_size', self.minimum_chunk_size))
+                 for data in result:
+                     if len(data) == 0:
+                         continue
+@@ -649,6 +652,15 @@ class HttpProtocol(BaseHTTPServer.BaseHTTPRequestHandler):
+                 self.close_connection = 1
+                 tb = traceback.format_exc()
+                 self.server.log.info(tb)
++                # The data gathering process encountered an error,
++                # and the buffer may be partially filled.
++                # Our goal is to write the data collected before the error
++                # occurred if it exists.
++                if towrite:
++                    just_written_size = towrite_size
++                    write(b''.join(towrite))
++                if not headers_sent or (use_chunked[0] and just_written_size):
++                    write(b'')
+                 if not headers_sent:
+                     err_body = tb.encode() if self.server.debug else b''
+                     start_response("500 Internal Server Error",
+-- 
+2.25.1
+
