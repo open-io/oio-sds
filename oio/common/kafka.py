@@ -222,7 +222,7 @@ class KafkaSender(KafkaClient):
                     "Unable to produce event, retry later. Reason: %s", str(err)
                 )
 
-    def _send(self, topic, data, flush=False):
+    def _send(self, topic, data, key=None, flush=False):
         try:
             if isinstance(data, str):
                 data = data.encode("utf8")
@@ -238,7 +238,7 @@ class KafkaSender(KafkaClient):
                 )
                 return
 
-            self._client.produce(topic, data, callback=self._produce_callback)
+            self._client.produce(topic, data, key=key, callback=self._produce_callback)
 
             if flush:
                 nb_msg = self._client.flush(1.0)
@@ -287,13 +287,13 @@ class KafkaSender(KafkaClient):
 
         return delayed_event
 
-    def send(self, topic, data, delay=0, flush=False):
+    def send(self, topic, data, delay=0, key=None, flush=False):
         if delay > 0:
             # Encapsulate event in a delayed one
             data = self._generate_delayed_event(topic, data, delay)
             topic = self._delayed_topic
 
-        self._send(topic, data, flush=flush)
+        self._send(topic, data, key=key, flush=flush)
 
     def flush(self, timeout):
         return self._client.flush(timeout)

@@ -1518,7 +1518,7 @@ pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${WEBHOOK} notify_deleted
+pipeline = ${WEBHOOK} notify_deleted notify_lifecycle_deleted
 
 [handler:storage.content.drained]
 pipeline = notify_deleted
@@ -1592,6 +1592,13 @@ use = egg:oio#noop
 use = egg:oio#delete
 broker_endpoint = ${QUEUE_URL}
 topic_prefix = oio-delete-
+
+[filter:notify_lifecycle_deleted]
+# Forward storage.content.deleted events to another queue. Another
+# oio-event-agent will read this queue and store objects metadata and chunks ur.
+use = egg:oio#lifecycle_delete
+broker_endpoint = ${QUEUE_URL}
+topic = oio-lifecycle-delete
 
 [filter:log]
 use = egg:oio#logger
@@ -3498,39 +3505,40 @@ def generate(options):
 
     # Generate topics declaration file
     topics_to_declare = [
-        "oio",
-        "oio-deadletter",
-        "oio-delayed",
-        "oio-delete-mpu-parts",
-        "oio-drained",
-        "oio-lifecycle-checkpoint",
-        "oio-lifecycle",
-        "oio-preserved",
-        "oio-transitioned",
-        "oio-rebuild",
-        "oio-replication",
-        "oio-xcute-job",
-        "oio-xcute-job-reply",
+        ("oio", None),
+        ("oio-deadletter", None),
+        ("oio-delayed", None),
+        ("oio-delete-mpu-parts", None),
+        ("oio-drained", None),
+        ("oio-lifecycle", None),
+        ("oio-lifecycle-checkpoint", None),
+        ("oio-lifecycle-delete", {"partitions": 4}),
+        ("oio-preserved", None),
+        ("oio-transitioned", None),
+        ("oio-rebuild", None),
+        ("oio-replication", None),
+        ("oio-xcute-job", None),
+        ("oio-xcute-job-reply", None),
     ]
     if options.get("replication_events"):
-        topics_to_declare.append("oio-replication-delayed")
+        topics_to_declare.append(("oio-replication-delayed", None))
 
     rawx_hosts = hosts[:nb_rawx]
     # Add delete topics per host
     for i in range(2):
         slot = get_rawx_slot(i)
-        topics_to_declare.extend([f"oio-delete-{h}-{slot}" for h in rawx_hosts])
+        topics_to_declare.extend([(f"oio-delete-{h}-{slot}", None) for h in rawx_hosts])
     # Add chunks topics per host
-    topics_to_declare.extend([f"oio-chunks-{h}" for h in rawx_hosts])
+    topics_to_declare.extend([(f"oio-chunks-{h}", None) for h in rawx_hosts])
     # Add xcute-job topic per host, to gather delete events from blob mover
-    topics_to_declare.extend([f"oio-xcute-job-{h}" for h in rawx_hosts])
+    topics_to_declare.extend([(f"oio-xcute-job-{h}", None) for h in rawx_hosts])
 
     with open(f"{CFGDIR}/topics.yml", "w+") as f:
         f.write(
             yaml.dump(
                 {
                     "brokers": options["kafka"]["endpoint"],
-                    "topics": {k: None for k in topics_to_declare},
+                    "topics": {k: opt for k, opt in topics_to_declare},
                 }
             )
         )

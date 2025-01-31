@@ -19,7 +19,7 @@ from urllib.parse import quote
 
 from urllib3.util.request import make_headers
 
-from oio.common.constants import OBJECT_REPLICATION_PENDING, LIFECYCLE_USER_AGENT
+from oio.common.constants import LIFECYCLE_USER_AGENT, OBJECT_REPLICATION_PENDING
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import (
     NotFound,

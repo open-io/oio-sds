@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 from copy import deepcopy
 
+from oio.common.constants import LIFECYCLE_USER_AGENT
 from oio.common.kafka import (
     DEFAULT_DELETE_TOPIC_PREFIX,
     GetTopicMixin,
@@ -74,57 +75,67 @@ class DeleteFilter(Filter, GetTopicMixin):
     def process(self, env, cb):
         event = Event(env)
 
-        if event.event_type in (EventTypes.CONTENT_DELETED, EventTypes.CONTENT_DRAINED):
-            # Create a base event without "chunks"
-            base_event = deepcopy(env)
-            self.strip_fields(base_event)
-            child_events = []
+        if event.event_type not in (
+            EventTypes.CONTENT_DELETED,
+            EventTypes.CONTENT_DRAINED,
+        ):
+            return self.app(env, cb)
 
-            # Split event per servers
-            for data in event.data:
-                if data.get("type") != "chunks":
-                    continue
+        if event.origin == LIFECYCLE_USER_AGENT:
+            # Delete events issued by lifecycle are processed by another filter
+            # LifecycleDeleteFilter
+            return self.app(env, cb)
 
-                service_name = self.get_service_name(data["id"]).lower()
-                topic_name = self.get_topic_from_service_name(service_name)
-                if not topic_name:
-                    err_resp = RetryableEventError(
-                        event=event,
-                        body=f"Unable to resolve service addr '{service_name}'",
-                        delay=self._retry_delay,
-                    )
-                    return err_resp(env, cb)
+        # Create a base event without "chunks"
+        base_event = deepcopy(env)
+        self.strip_fields(base_event)
+        child_events = []
 
-                # Add the chunk to the event mean to be sent to a rawx server
-                _event = deepcopy(base_event)
-                _event["data"].append({"type": "chunks", "id": data.get("id")})
-                _event["service_id"] = service_name
-                child_events.append((topic_name, _event))
+        # Split event per servers
+        for data in event.data:
+            if data.get("type") != "chunks":
+                continue
 
-            # Produce events to each topic
-            if child_events:
-                has_retriable_errors = False
-                errors = []
-                for dst, evt in child_events:
-                    dst_topic = f"{self._topic_prefix}{dst}"
-                    error, retriable = self._send_event(dst_topic, evt)
-                    if error:
-                        errors.append(error)
-                        # Should retry if at least one error is retriable
-                        has_retriable_errors |= retriable
-                if errors:
-                    delay = None
-                    if has_retriable_errors:
-                        delay = self._retry_delay
-                    msg = f"Failed to send all child events. Reason: {','.join(errors)}"
-                    err_resp = RetryableEventError(event=event, body=msg, delay=delay)
-                    return err_resp(env, cb)
-                # Flush
-                in_flight = self._producer.flush(1.0)
-                if in_flight > 0:
-                    self.logger.warning(
-                        "All events are not published (in flight: %d)", in_flight
-                    )
+            service_name = self.get_service_name(data["id"]).lower()
+            topic_name = self.get_topic_from_service_name(service_name)
+            if not topic_name:
+                err_resp = RetryableEventError(
+                    event=event,
+                    body=f"Unable to resolve service addr '{service_name}'",
+                    delay=self._retry_delay,
+                )
+                return err_resp(env, cb)
+
+            # Add the chunk to the event mean to be sent to a rawx server
+            _event = deepcopy(base_event)
+            _event["data"].append({"type": "chunks", "id": data.get("id")})
+            _event["service_id"] = service_name
+            child_events.append((topic_name, _event))
+
+        # Produce events to each topic
+        if child_events:
+            has_retriable_errors = False
+            errors = []
+            for dst, evt in child_events:
+                dst_topic = f"{self._topic_prefix}{dst}"
+                error, retriable = self._send_event(dst_topic, evt)
+                if error:
+                    errors.append(error)
+                    # Should retry if at least one error is retriable
+                    has_retriable_errors |= retriable
+            if errors:
+                delay = None
+                if has_retriable_errors:
+                    delay = self._retry_delay
+                msg = f"Failed to send all child events. Reason: {','.join(errors)}"
+                err_resp = RetryableEventError(event=event, body=msg, delay=delay)
+                return err_resp(env, cb)
+            # Flush
+            in_flight = self._producer.flush(1.0)
+            if in_flight > 0:
+                self.logger.warning(
+                    "All events are not published (in flight: %d)", in_flight
+                )
 
         return self.app(env, cb)
 
