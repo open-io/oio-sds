@@ -612,6 +612,7 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	set (SQLX_ADMIN_NAMESPACE, OIOURL_NS);
 	set (SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT);
 	set (SQLX_ADMIN_USERNAME, OIOURL_USER);
+	set (M2V2_ADMIN_BUCKET_NAME, OIOURL_BUCKET);
 
 	gchar *root_hexid = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_ROOT);
 	if (root_hexid != NULL) {

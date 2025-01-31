@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -118,6 +118,11 @@ oio_url_to_json(GString *out, struct oio_url_s *u, gboolean root_url)
 		if (len != out->len)
 			g_string_append_c(out, ',');
 		oio_str_gstring_append_json_pair(out, "version", u->version);
+	}
+	if (oio_str_is_set(u->bucket)) {
+		if (len != out->len)
+			g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "bucket", u->bucket);
 	}
 }
 

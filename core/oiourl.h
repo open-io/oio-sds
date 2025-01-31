@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2023 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -50,6 +50,8 @@ enum oio_url_field_e
 
 	OIOURL_FULLPATH = 10,
 	OIOURL_ROOT_HEXID = 11,
+
+	OIOURL_BUCKET = 12,
 };
 
 /** One plus the maximum length of a namespace name

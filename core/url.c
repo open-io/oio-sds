@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -107,6 +107,7 @@ _clean_url (struct oio_url_s *u)
 	oio_str_clean(&u->content);
 	oio_str_clean(&u->whole);
 	oio_str_clean(&u->fullpath);
+	oio_str_clean(&u->bucket);
 	u->hexid[0] = '\0';
 	u->root_hexid[0] = '\0';
 	u->flags = 0;
@@ -239,6 +240,7 @@ oio_url_dup(const struct oio_url_s *u)
 	STRDUP(result, u, whole);
 	STRDUP(result, u, content);
 	STRDUP(result, u, fullpath);
+	STRDUP(result, u, bucket);
 	g_strlcpy(result->root_hexid, u->root_hexid, sizeof(result->root_hexid));
 	return result;
 }
@@ -305,6 +307,10 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			oio_str_replace(&(u->content), v);
 			oio_str_clean(&u->fullpath);
 			return u;
+
+		case OIOURL_BUCKET:
+			oio_str_replace(&(u->bucket), v);
+			return u;
 	}
 
 	g_assert_not_reached();
@@ -362,6 +368,10 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 			oio_str_clean(&u->content);
 			oio_str_clean(&u->fullpath);
 			return;
+
+		case OIOURL_BUCKET:
+			oio_str_clean(&u->bucket);
+			return;
 	}
 
 	g_assert_not_reached();
@@ -394,6 +404,8 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 			return oio_str_is_set(u->root_hexid);
 		case OIOURL_CONTENTID:
 			return NULL != u->content;
+		case OIOURL_BUCKET:
+			return NULL != u->bucket;
 	}
 
 	g_assert_not_reached();
@@ -488,6 +500,9 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 			if (!u->fullpath)
 				u->fullpath = _pack_fullpath(u);
 			return u->fullpath;
+
+		case OIOURL_BUCKET:
+			return u->bucket;
 	}
 
 	g_assert_not_reached();
