@@ -1727,6 +1727,8 @@ pipeline = lifecycle_actions ${PRESERVE}
 [filter:lifecycle_actions]
 use = egg:oio#lifecycle_actions
 redis_host = ${IP}:${REDIS_PORT}
+storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:100000
+storage_class.STANDARD_IA = SINGLE
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.

@@ -51,6 +51,12 @@ class RecentVersionExists(Exception):
     """
 
 
+class TransitionSamePolicy(Exception):
+    """Exception raised when we try to transition a version to same
+    policy
+    """
+
+
 class LifecycleOperationLog(str, Enum):
     """
     S3 Lifecycle actions. Ref:
@@ -77,9 +83,10 @@ def event_to_s3_operation(event):
     """
     action = event.data.get("action")
     if action in ("Transition", "NoncurrentVersionTransition"):
-        # TODO: storage class mapping
-        # storage_class = event.data.get("storage_class")
-        return LifecycleOperationLog.TRANSITION_OBJECT
+        storage_class = event.data.get("storage_class")
+        if storage_class == "STANDARD_IA":
+            return LifecycleOperationLog.TRANSITION_SIA
+        return LifecycleOperationLog.TRANSITION_ZIA
     if action in ("Expiration", "NoncurrentVersionExpiration"):
         add_delete_marker = event.data.get("add_delete_marker")
         if add_delete_marker:
@@ -168,6 +175,24 @@ class LifecycleActions(Filter):
         self.s3_access_requester = self.conf.get(
             "s3_access_requester", DEFAULT_REQUESTER
         )
+        self.stg_classes = {}
+        for stg_class_conf, pol_conf in self.conf.items():
+            if not stg_class_conf.startswith("storage_class."):
+                continue
+            storage_class = stg_class_conf[14:].upper()
+            auto_storage_policies = []
+            policies = [x.strip() for x in pol_conf.split(",")]
+            for storage_policy in policies:
+                if ":" in storage_policy:
+                    name, offset = storage_policy.split(":")
+                    name = name.strip()
+                    if not name:
+                        raise ValueError("Offset without storage policy")
+                    auto_storage_policies.append((name, int(offset)))
+                else:
+                    auto_storage_policies.append((storage_policy, -1))
+            auto_storage_policies.sort(key=lambda x: x[1])
+            self.stg_classes[storage_class] = auto_storage_policies
 
     def _get_headers(self):
         return make_headers(user_agent=LIFECYCLE_USER_AGENT)
@@ -199,8 +224,33 @@ class LifecycleActions(Filter):
             headers=self._get_headers(),
         )
 
-    def _process_transition(self, context: LifecycleActionContext):
-        raise NotImplementedError("Transition action is not supported")
+    def _process_transition(self, context: LifecycleActionContext, object_size, policy):
+        if object_size is None:
+            raise ValueError("Missing object size for transition object")
+        storage_class = context.storage_class
+        policies = self.stg_classes.get(storage_class, None)
+        if policies is None:
+            raise ValueError(
+                "No policies for storage_class transition %s", storage_class
+            )
+        target_policy = None
+        for pol, size in reversed(policies):
+            if int(object_size) >= size:
+                target_policy = pol
+                break
+        if target_policy is None:
+            raise ValueError("No policy found for storage class %s ", storage_class)
+        if target_policy == policy:
+            raise TransitionSamePolicy()
+
+        self.container_client.content_request_transition(
+            account=context.account,
+            reference=context.container,
+            path=context.path,
+            policy=target_policy,
+            version=context.version,
+            reqid=context.reqid,
+        )
 
     def _process_abort_mpu(self, context: LifecycleActionContext):
         marker = None
@@ -325,6 +375,8 @@ class LifecycleActions(Filter):
                 force_master=True,
                 reqid=context.reqid,
             )
+            object_size = obj_meta.get("size", None)
+            policy = obj_meta.get("policy", None)
             metadata = obj_meta.get("properties") or {}
             replication_status = metadata.get(
                 "x-object-sysmeta-s3api-replication-status"
@@ -347,7 +399,7 @@ class LifecycleActions(Filter):
                 self._process_expiration(context)
             elif context.action in ("Transition", "NoncurrentVersionTransition"):
                 action_type = LifecycleAction.TRANSITION
-                self._process_transition(context)
+                self._process_transition(context, object_size, policy)
             elif context.action == "AbortIncompleteMultipartUpload":
                 action_type = LifecycleAction.ABORT_MPU
                 self._process_abort_mpu(context)
@@ -368,7 +420,7 @@ class LifecycleActions(Filter):
                 context.version,
                 context.container,
             )
-        except (DeleteMarkerExists, RecentVersionExists):
+        except (DeleteMarkerExists, RecentVersionExists, TransitionSamePolicy):
             self.metrics.increment_counter(
                 context.run_id,
                 context.account,

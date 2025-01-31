@@ -515,8 +515,8 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                 ("NoncurrentVersionExpiration", False, "S3.EXPIRE.OBJECT"),
                 ("NoncurrentVersionExpiration", True, "S3.CREATE.DELETEMARKER"),
                 ("AbortIncompleteMultipartUpload", False, "S3.DELETE.UPLOAD"),
-                ("Transition", False, "S3.TRANSITION.OBJECT"),
-                ("NoncurrentVersionTransition", False, "S3.TRANSITION.OBJECT"),
+                ("Transition", False, "S3.TRANSITION_SIA.OBJECT"),
+                ("NoncurrentVersionTransition", False, "S3.TRANSITION_SIA.OBJECT"),
             )
 
             for action, marker, s3action in tests:
@@ -533,6 +533,7 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                                 "has_bucket_logging": True,
                                 "add_delete_marker": marker,
                                 "object": "test/bar🔥",
+                                "storage_class": "STANDARD_IA",
                             },
                         }
                     )
