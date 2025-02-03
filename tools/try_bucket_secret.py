@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@
 import argparse
 import json
 import sys
+
 from encryption_tool.encryption import Decrypter, decode_secret, hmac_etag
 
 ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"

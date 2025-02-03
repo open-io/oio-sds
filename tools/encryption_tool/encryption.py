@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,15 +20,15 @@ import hmac
 import json
 import os
 import string
-
 from cgi import parse_header
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from urllib import parse as urlparse
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
 from oio import ObjectStorageApi
-from oio.common.exceptions import NotFound
 from oio.common.easy_value import true_value as config_true_value
+from oio.common.exceptions import NotFound
 from oio.common.utils import get_hasher
 
 CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"

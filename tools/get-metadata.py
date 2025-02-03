@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,9 +16,10 @@
 # License along with this library.
 
 import argparse
-import os
-from oio import ObjectStorageApi
 import json
+import os
+
+from oio import ObjectStorageApi
 
 parser = argparse.ArgumentParser(description="tool that writes object metadata json")
 parser.add_argument(
