@@ -268,7 +268,10 @@ class TestLifecycleCrawler(BaseTestCase):
             if value != stats[key]:
                 self.logger.warning(
                     "Stat '%s' does not match in pass %s: expected %s but got %s",
-                    key, current_pass, value, stats[key],
+                    key,
+                    current_pass,
+                    value,
+                    stats[key],
                 )
         for key, value in self._expected_metrics_for_test[current_pass].items():
             self.assertEqual(
@@ -665,6 +668,75 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
 
+    def test_expiration_tagging_versioned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {
+                        "Tag": [
+                            {"Key": "key1", "Value": "value1"},
+                            {"Key": "key2", "Value": "value2"},
+                        ]
+                    },
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Tag": [{"Key": "key3", "Value": "value3"}]},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 20,
+                "total_delete": 20,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc1/",
+            count=10,
+            tags={"key1": "value1", "key2": "value2"},
+        )
+        self._create_objects_for_rule(
+            "rule-2",
+            prefix="doc2/",
+            count=10,
+            tags={"key3": "value3"},
+            extras_fields={"add_delete_marker": 1},
+        )
+        self._create_objects_for_rule(
+            None, prefix="foo/", count=10, tags={"key1": "value1"}
+        )
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
     def test_expiration_less_than(self):
         def callback(status, _msg):
             self.assertEqual(200, status)
@@ -705,6 +777,54 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
 
+    def test_expiration_less_than_versioned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"ObjectSizeLessThan": 10},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            count=10,
+            size=8,
+            extras_fields={"add_delete_marker": 1},
+        )
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=20)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
     def test_expiration_greater_than(self):
         def callback(status, _msg):
             self.assertEqual(200, status)
@@ -741,6 +861,54 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         self._create_objects_for_rule("rule-1", prefix="doc/", count=10, size=18)
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=8)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_expiration_greater_than_versioned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"ObjectSizeGreaterThan": 10},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            count=10,
+            size=18,
+            extras_fields={"add_delete_marker": 1},
+        )
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=8)
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
@@ -788,6 +956,71 @@ class TestLifecycleCrawler(BaseTestCase):
         # Match all criteria
         self._create_objects_for_rule(
             "rule-1", prefix="doc/", count=10, size=18, tags={"key1": "value1"}
+        )
+        # Match all criteria but one
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=18)
+        self._create_objects_for_rule(
+            None, prefix="doc/", count=10, size=28, tags={"key1": "value1"}
+        )
+        self._create_objects_for_rule(
+            None, prefix="doc/", count=10, size=8, tags={"key1": "value1"}
+        )
+        self._create_objects_for_rule(
+            None, prefix="foo/", count=10, size=18, tags={"key1": "value1"}
+        )
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_expiration_all_filters_versioned(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {
+                        "ObjectSizeLessThan": 20,
+                        "ObjectSizeGreaterThan": 10,
+                        "Tag": [{"Key": "key1", "Value": "value1"}],
+                        "Prefix": "doc/",
+                    },
+                    "Expiration": {
+                        "0": {"Days": 2},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        # Match all criteria
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            count=10,
+            size=18,
+            tags={"key1": "value1"},
+            extras_fields={"add_delete_marker": 1},
         )
         # Match all criteria but one
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=18)
@@ -1277,6 +1510,60 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(1)
         self._run_scenario(configuration, callback)
 
+    def test_expiration_last_version_is_delete_marker(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "0": {"Days": 1},
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Expiration": {
+                        "1": {"Days": 1},
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+        )
+        objects = self._create_objects_for_rule(None, prefix="doc/", count=10)
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        objects = self._create_objects_for_rule(None, prefix="doc/", count=10)
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        objects = self._create_objects_for_rule("rule-2", prefix="foo/", count=10)
+        objects = self._create_objects_for_rule(None, prefix="bar/", count=10)
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        self._wait_n_days(3)
+        self._run_scenario(configuration, callback)
+
     def test_expiration_delete_marker(self):
         self._enable_versioning()
 
@@ -1557,6 +1844,21 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         )
         super().test_expiration_tagging()
 
+    def test_expiration_tagging_versioned(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 20,
+                "total_delete": 20,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_expiration_tagging_versioned()
+
     def test_expiration_less_than(self):
         self.metrics_by_passes_with_sharding = (
             {
@@ -1571,6 +1873,21 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration_less_than()
+
+    def test_expiration_less_than_versioned(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_expiration_less_than_versioned()
 
     def test_expiration_greater_than(self):
         self.metrics_by_passes_with_sharding = (
@@ -1587,6 +1904,21 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         )
         super().test_expiration_greater_than()
 
+    def test_expiration_greater_than_versioned(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_expiration_greater_than_versioned()
+
     def test_expiration_all_filters(self):
         self.metrics_by_passes_with_sharding = (
             {
@@ -1601,6 +1933,32 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration_all_filters()
+
+    def test_expiration_all_filters_versioned(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_expiration_all_filters_versioned()
+
+    def test_expiration_last_version_is_delete_marker(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+        )
+        super().test_expiration_last_version_is_delete_marker()
 
     def test_expiration_delete_marker(self):
         self.metrics_by_passes_with_sharding = (

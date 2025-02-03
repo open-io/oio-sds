@@ -526,7 +526,7 @@ class Lifecycle(Meta2Filter):
                     lc_instance, days_in_sec, date
                 )
                 query = lc_instance.build_sql_query(
-                    rule_filter, days_in_sec, date, False, True, True
+                    rule_filter, days_in_sec, date, False, True
                 )
         else:
             # Non versioned

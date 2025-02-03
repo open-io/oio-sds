@@ -208,7 +208,6 @@ class ContainerLifecycle(object):
         date=None,
         non_current=False,
         versioned=False,
-        expired_delete_marker=None,
     ):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
@@ -222,40 +221,38 @@ class ContainerLifecycle(object):
 
         _lesser = ""
         _greater = ""
-        # bypass size and tags when dealing with delete marker
-        if not expired_delete_marker:
-            if rule_filter.lesser is not None:
-                _lesser = (
-                    f" AND "
-                    f"((ct.size <{rule_filter.lesser} AND pr.value IS NULL) OR "
-                    f"pr.value < {rule_filter.lesser})"
+        if rule_filter.lesser is not None:
+            _lesser = (
+                f" AND "
+                f"((ct.size <{rule_filter.lesser} AND pr.value IS NULL) OR "
+                f"pr.value < {rule_filter.lesser})"
+            )
+
+        if rule_filter.greater is not None:
+            _greater = (
+                f" AND "
+                f"((ct.size >{rule_filter.greater} AND pr.value IS NULL) OR "
+                f"pr.value > {rule_filter.greater}) "
+            )
+
+        if len(rule_filter.tags) > 0:
+            _base_tag = (
+                " INNER JOIN properties pr2 ON al.alias ="
+                "pr2.alias AND al.version=pr2.version "
+            )
+            _tags = f" AND pr2.key='{TAGGING_KEY}'"
+            for k, v in rule_filter.tags.items():
+                _tag_key_cond = (
+                    " AND CAST(pr2.value as nvarchar(10000))"
+                    f" LIKE '%<Tag><Key>{k}</Key>"
                 )
+                _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
+                _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
 
-            if rule_filter.greater is not None:
-                _greater = (
-                    f" AND "
-                    f"((ct.size >{rule_filter.greater} AND pr.value IS NULL) OR "
-                    f"pr.value > {rule_filter.greater}) "
-                )
+            _query = f"{_query}{_base_tag}{_tags}"
 
-            if len(rule_filter.tags) > 0:
-                _base_tag = (
-                    " INNER JOIN properties pr2 ON al.alias ="
-                    "pr2.alias AND al.version=pr2.version "
-                )
-                _tags = f" AND pr2.key='{TAGGING_KEY}'"
-                for k, v in rule_filter.tags.items():
-                    _tag_key_cond = (
-                        " AND CAST(pr2.value as nvarchar(10000))"
-                        f" LIKE '%<Tag><Key>{k}</Key>"
-                    )
-                    _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
-                    _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
-
-                _query = f"{_query}{_base_tag}{_tags}"
-
-            if _lesser or _greater:
-                _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
+        if _lesser or _greater:
+            _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
 
         # Create WHERE clause
         where_clauses = []
