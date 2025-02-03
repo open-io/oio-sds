@@ -29,6 +29,7 @@ from urllib import parse as urlparse
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound
 from oio.common.easy_value import true_value as config_true_value
+from oio.common.utils import get_hasher
 
 CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"
 TRANSIENT_CRYPTO_META_KEY = "x-object-transient-sysmeta-crypto-meta"
@@ -91,7 +92,7 @@ def strip_user_meta_prefix(server_type, key):
     """
     if not is_user_meta(server_type, key):
         raise ValueError("Key is not user meta")
-    return key[len(get_user_meta_prefix(server_type)) :]
+    return key[len(get_user_meta_prefix(server_type)) :]  # noqa: E203
 
 
 def get_user_meta_prefix(server_type):
@@ -184,7 +185,9 @@ def dump_crypto_meta(crypto_meta):
             name: (
                 base64.b64encode(value).decode()
                 if name in ("iv", "key")
-                else b64_encode_meta(value) if isinstance(value, dict) else value
+                else b64_encode_meta(value)
+                if isinstance(value, dict)
+                else value
             )
             for name, value in crypto_meta.items()
         }
@@ -222,7 +225,9 @@ def load_crypto_meta(value, b64decode=True):
                 else (
                     b64_decode_meta(val)
                     if isinstance(val, dict)
-                    else val.encode("utf8") if False else val
+                    else val.encode("utf8")
+                    if False
+                    else val
                 )
             )
             for name, val in crypto_meta.items()
@@ -268,11 +273,18 @@ def extract_crypto_meta(value):
     return value, swift_meta
 
 
-def decode_secret(b64_secret):
-    """Decode and check a base64 encoded secret key."""
+def decode_secret(b64_secret, root_secret=False):
+    """
+    Decode and check a base64 encoded secret key.
+    Length of root secret has to be > 32.
+    """
     binary_secret = strict_b64decode(b64_secret, allow_line_breaks=True)
-    if len(binary_secret) != Crypto.key_length:
-        raise ValueError
+    if root_secret:
+        if len(binary_secret) < 32:
+            raise ValueError
+    else:
+        if len(binary_secret) != Crypto.key_length:
+            raise ValueError
     return binary_secret
 
 
@@ -424,22 +436,34 @@ def create_key(path, key):
     return hmac.new(key, path, digestmod=hashlib.sha256).digest()
 
 
+def extract_root_container(container):
+    cont = container
+    # Even if it is a part, we must use the root container
+    if cont.endswith("+segments"):
+        cont = container.split("+segments")[0]
+    return cont
+
+
 # Functions copied and modified from the class KmsWrapper in
 # swift/common/middleware/crypto/ssec_keymaster.py
 # self.cache has been removed
 
 
 def create_bucket_secret(
-    kms, bucket, account=None, secret_id=None, secret_bytes=32, reqid=None
+    kms, container, account=None, secret_id=None, secret_bytes=32, reqid=None
 ):
-    secret_meta = kms.create_secret(
+    resp, body = kms.create_secret(
         account,
-        bucket,
+        extract_root_container(container),
         secret_id=secret_id,
         secret_bytes=secret_bytes,
         reqid=reqid,
     )
-    return secret_meta["secret"]
+    if resp.status >= 300:
+        raise Exception(
+            f"Not possible to create bucket secret: {resp.status} ({resp.reason})"
+        )
+    return body["secret"]
 
 
 # Functions copied and modified from the class SsecKeyMasterContext in
@@ -456,7 +480,9 @@ def fetch_bucket_secret(kms, account, bucket, secret_id=None):
     if not bucket:
         return None
     try:
-        secret_meta = kms.get_secret(account, bucket, secret_id=secret_id)
+        secret_meta = kms.get_secret(
+            account, extract_root_container(bucket), secret_id=secret_id
+        )
         b64_secret = secret_meta["secret"]
     except NotFound:
         b64_secret = None
@@ -480,19 +506,31 @@ class Decrypter:
         obj=None,
         metadata=None,
         bucket_secret=None,
+        api=None,
     ):
+        """
+        If bucket_secret is defined, it will be used to decrypt the object.
+        Otherwise, the root_key will be used.
+        """
         self.account = account
         self.container = container
         self.obj = obj
         self.metadata = metadata
-        sds_namespace = os.environ.get("OIO_NS", "OPENIO")
-        self.api = ObjectStorageApi(sds_namespace)
+        if api:
+            self.api = api
+        else:
+            sds_namespace = os.environ.get("OIO_NS", "OPENIO")
+            self.api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
         self.root_key = root_key
         self.bucket_secret = bucket_secret
         self.body_key = None
         self.iv = {}
         self.iv[USER_METADATA_IVS] = {}
+
+        if self.metadata:
+            # Generate body iv ASAP
+            self._generate_body_iv()
 
     def decrypt_metadata(self, metadata=None):
         """
@@ -514,6 +552,13 @@ class Decrypter:
 
         return metadata
 
+    def _generate_body_iv(self, metadata=None):
+        if metadata is None:
+            metadata = self.metadata
+        crypto_meta = metadata.get("properties").get(CRYPTO_BODY_META_KEY)
+        self.body_key, iv, _ = self.get_cipher_keys(crypto_meta)
+        self.iv[BODY_IV] = iv
+
     def decrypt(self, chunk, metadata=None):
         """
         Decrypt chunk with root_secret and metadata
@@ -522,11 +567,7 @@ class Decrypter:
         :param metadata: object metadata
         """
         if self.body_key is None or self.iv.get(BODY_IV) is None:
-            if metadata is None:
-                metadata = self.metadata
-            crypto_meta = metadata.get("properties").get(CRYPTO_BODY_META_KEY)
-            self.body_key, iv, _ = self.get_cipher_keys(crypto_meta)
-            self.iv[BODY_IV] = iv
+            self._generate_body_iv(metadata)
 
         offset = 0
         decrypt_ctxt = self.crypto.create_decryption_ctxt(
@@ -612,26 +653,24 @@ class Decrypter:
 
         iv = crypto_meta.get("iv")
         key_id = crypto_meta.get("key_id")
+        if not key_id:
+            # Not possible (all objects are encrypted a way or another)
+            raise Exception("Encrypted without ssec nor sses3 nor root_key")
         put_keys = {}
         put_keys["id"] = {}
-        if self.bucket_secret is not None:
-            # The bucket_secret was given
-            object_key = decode_secret(self.bucket_secret)
+        if key_id.get("ssec", False) or key_id.get("sses3", False):
+            # The object is encrypted with ssec or sses3
+            #object_key = decode_secret(self.bucket_secret)
+            object_key = fetch_bucket_secret(
+                self.api.kms, self.account, self.container, secret_id=0
+            )
             put_keys["id"]["sses3"] = True
-        elif key_id and not (key_id.get("ssec", False) or key_id.get("sses3", False)):
+        else:
             # The object is encrypted with ROOT_KEY
             account_path = os.path.join(os.sep, self.account)
             path = os.path.join(account_path, self.container, self.obj)
             object_key = create_key(path, self.root_key)
-
             put_keys["id"]["sses3"] = False
-        else:
-            # The object is encrypted with sses3
-            secret_id = 0  # TODO I am not sure about that
-            object_key = fetch_bucket_secret(
-                self.api.kms, self.account, self.container, secret_id=secret_id
-            )
-            put_keys["id"]["sses3"] = True
 
         put_keys["object"] = object_key
 
@@ -728,7 +767,18 @@ class Encrypter:
     Encrypt data with a random body_key and a random iv.
     """
 
-    def __init__(self, root_key, account=None, container=None, obj=None, iv=None):
+    def __init__(
+        self,
+        root_key,
+        account,
+        container,
+        obj,
+        iv,
+        oca=None,
+        secret=None,
+        body_key=None,
+        api=None,
+    ):
         self.account = account
         self.container = container
         self.obj = obj
@@ -745,19 +795,23 @@ class Encrypter:
 
         self.iv = decode_binary_dict(iv)
 
-        sds_namespace = os.environ.get("OIO_NS", "OPENIO")
-        self.api = ObjectStorageApi(sds_namespace)
+        if api:
+            self.api = api
+        else:
+            sds_namespace = os.environ.get("OIO_NS", "OPENIO")
+            self.api = ObjectStorageApi(sds_namespace)
         self.crypto = Crypto()
         self.root_key = root_key
 
-        # Create bucket secret in kms
-        secret_id = 0
-        secret = create_bucket_secret(
-            self.api.kms,
-            self.container,
-            account=self.account,
-            secret_id=secret_id,
-        )
+        if secret is None:
+            # Create bucket secret in kms
+            secret_id = 0
+            secret = create_bucket_secret(
+                self.api.kms,
+                self.container,
+                account=self.account,
+                secret_id=secret_id,
+            )
 
         self.keys = {}
         # bucket secret is used as the key_object
@@ -776,7 +830,8 @@ class Encrypter:
         body_iv = self.iv.get(BODY_IV)
         if body_iv is not None:
             self.body_crypto_meta["iv"] = body_iv
-        body_key = self.crypto.create_random_key()
+        if not body_key:
+            body_key = self.crypto.create_random_key()
 
         # wrap the body key with object key
         self.body_crypto_meta["body_key"] = self.crypto.wrap_key(
@@ -787,7 +842,10 @@ class Encrypter:
             body_key, self.body_crypto_meta.get("iv")
         )
 
-        self.plaintext_md5 = hashlib.md5(b"")
+        # used to compute the plaintext md5 (the one seen by the)
+        self.plaintext_md5 = get_hasher("md5")
+        # used to compute the new hash to be stored in the meta2
+        self.hasher = get_hasher(oca)
 
     def encrypt(self, chunk):
         """
@@ -803,8 +861,9 @@ class Encrypter:
         :returns: body ciphertext
         """
         self.plaintext_md5.update(chunk)
-
         ciphertext = self.body_crypto_ctxt.update(chunk)
+        self.hasher.update(ciphertext)
+
         return ciphertext
 
     def encrypt_metadata(self, metadata):
@@ -863,6 +922,12 @@ class Encrypter:
             metadata[get_object_transient_sysmeta("crypto-meta")] = meta
         return metadata
 
+    def update_metadata(self, metadata):
+        properties = metadata.get("properties")
+        self.api.object_set_properties(
+            self.account, self.container, self.obj, properties
+        )
+
     def _encrypt_crypto_body_etag_metadata(self, metadata):
         """
         Add crypto body, Etag, override Etag and Etag mac to the metadata dict.
@@ -910,12 +975,6 @@ class Encrypter:
             )
 
         return metadata
-
-    def update_metadata(self, metadata):
-        properties = metadata.get("properties")
-        self.api.object_set_properties(
-            self.account, self.container, self.obj, properties
-        )
 
     # Functions copied from swift/common/middleware/crypto/encrypter.py
 
