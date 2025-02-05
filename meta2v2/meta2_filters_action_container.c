@@ -771,6 +771,9 @@ int meta2_filter_action_get_shards_in_range(struct gridd_filter_ctx_s *ctx,
 		m2b, url, &lp, jbounds_params, _bean_list_cb, &(obc->l), &properties);
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);
+		if (jbounds_params) {
+			json_object_put(jbounds_params);
+		}
 		return FILTER_KO;
 	}
 
@@ -790,6 +793,9 @@ int meta2_filter_action_get_shards_in_range(struct gridd_filter_ctx_s *ctx,
 
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
+	if (jbounds_params) {
+		json_object_put(jbounds_params);
+	}
 	return FILTER_OK;
 }
 
