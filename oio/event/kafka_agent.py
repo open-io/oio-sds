@@ -23,15 +23,25 @@ from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.conscience.client import ConscienceClient
-from oio.event.evob import is_retryable, is_success
+from oio.event.evob import EventTypes, is_retryable, is_success
+from oio.event.filters.base import Filter
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
 from oio.event.loader import loadhandlers
 from oio.event.utils import log_context_from_msg
 from oio.rdir.client import RdirClient
 
 
-class KafkaEventWorker(KafkaConsumerWorker):
+def pipeline_use_internal_event(handler):
+    while True:
+        if not isinstance(handler, Filter):
+            break
+        if not handler.skip_end_batch_event():
+            return True
+        handler = handler.app
+    return False
 
+
+class KafkaEventWorker(KafkaConsumerWorker):
     def __init__(
         self,
         topic,
@@ -109,6 +119,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.handlers = loadhandlers(
             self.conf.get("handlers_conf"), global_conf=self.conf, app=self
         )
+        self.handlers_with_internal = [
+            h for h in self.handlers.values() if pipeline_use_internal_event(h)
+        ]
 
     def log_and_statsd(self, start, status, _extra):
         extra = {
@@ -146,15 +159,11 @@ class KafkaEventWorker(KafkaConsumerWorker):
         replacements = {
             "tube": self.topic,
             "topic": self.topic,
+            "handler": None,
             **asdict(ctx),
         }
-        handler = self.handlers.get(event, None)
-        replacements["handler"] = handler.__class__.__name__ if handler else None
-        if not handler:
-            self.log_and_statsd(start, 404, replacements)
-            raise RejectMessage(f"No handler for {message.get('event')}")
 
-        def cb(status, msg, **kwargs):
+        def _cb(status, msg, **kwargs):
             self.log_and_statsd(start, status, replacements)
             if is_success(status):
                 return
@@ -180,4 +189,19 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     f"Failed to process message {msg}: ({reqid}) {status}"
                 )
 
-        handler(message, cb)
+        if event in EventTypes.INTERNAL_EVENTS:
+            handlers = self.handlers_with_internal
+            if not handlers:
+                return None
+        else:
+            handler = self.handlers.get(event, None)
+            if not handler:
+                self.log_and_statsd(start, 404, replacements)
+                raise RejectMessage(f"No handler for {event}")
+            handlers = [handler]
+
+        for handler in handlers:
+            replacements["handler"] = handler.__class__.__name__
+            handler(message, _cb)
+
+        return None

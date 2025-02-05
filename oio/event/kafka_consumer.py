@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -33,6 +33,12 @@ from oio.common.kafka import (
 )
 from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time, ratelimit
+from oio.event.evob import (
+    EventTypes,
+    get_pipelines_to_resume,
+    set_pausable_flag,
+)
+from oio.event.filters.base import PausePipeline
 
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_BATCH_INTERVAL = 1.0
@@ -52,8 +58,11 @@ class EventQueue:
 
         self.init(conf, workers)
 
-    def init(self, _conf, _workers):
-        pass
+        self._current_queue = 0
+
+    def init(self, _conf, workers):
+        for i in range(workers):
+            self.register_queue(f"q_{i}")
 
     def reset(self):
         """Remove all events from queues"""
@@ -67,6 +76,18 @@ class EventQueue:
     def register_queue(self, queue_id):
         self.queues[queue_id] = Queue(self.size)
         self.queue_ids.append(queue_id)
+
+    def put_batch_internal_event(self, batch_id, event_type):
+        evt = {
+            "batch_id": batch_id,
+            "data": {
+                "event": event_type,
+            },
+        }
+        set_pausable_flag(evt["data"], False)
+        for _, queue in self.queues.items():
+            queue.put(evt)
+        return len(self.queues)
 
     def put(self, queue_id, data, **kwargs):
         queue = self.queues.get(queue_id)
@@ -88,7 +109,9 @@ class EventQueue:
         return queue.get(**kwargs)
 
     def id_from_event(self, _event):
-        return self.DEFAULT_QUEUE
+        queue_id = self.queue_ids[self._current_queue]
+        self._current_queue = (self._current_queue + 1) % len(self.queue_ids)
+        return queue_id
 
     def get_queue_id(self, worker_id):
         return self.queue_ids[worker_id % len(self.queue_ids)]
@@ -279,24 +302,27 @@ class AcknowledgeMessageMixin:
         self.logger = logger
 
     def acknowledge_message(self, message, as_failure=False, delay=None):
+        evt_type = message.get("data", {}).get("event")
         try:
             self._offsets_queue.put(
                 {
-                    "batch_id": message["batch_id"],
-                    "topic": message["topic"],
-                    "partition": message["partition"],
-                    "offset": message["offset"],
-                    "data": message["data"],
+                    "type": evt_type,
+                    "batch_id": message.get("batch_id"),
+                    "topic": message.get("topic"),
+                    "partition": message.get("partition"),
+                    "offset": message.get("offset"),
+                    "data": message.get("data"),
                     "failure": as_failure,
                     "delay": delay,
                 }
             )
         except Exception:
             self.logger.exception(
-                "Failed to ack message (topic=%s, partition=%s, offset=%s)",
-                message["topic"],
-                message["partition"],
-                message["offset"],
+                "Failed to ack message (topic=%s, partition=%s, offset=%s, type=%s)",
+                message.get("topic"),
+                message.get("partition"),
+                message.get("offset"),
+                evt_type,
             )
             return False
 
@@ -333,34 +359,57 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
 
         self._rate_limit = float_value(self.app_conf.get("events_per_second"), 0)
 
+        self._events_on_hold = {}
+        self._events_to_resume = []
+
     def _reject_message(self, message, delay=None):
         self.acknowledge_message(message, as_failure=True, delay=delay)
+
+    def _get_event_to_process(self):
+        if self._events_to_resume:
+            event, next_filter = self._events_to_resume.pop()
+            return event, next_filter
+
+        event = self._events_queue.get(self._events_queue_id, block=True, timeout=1.0)
+        return event, None
 
     def _consume(self):
         """
         Repeatedly read messages from the topic and call process_message().
         """
         run_time = time.time()
-
+        pause_allowed = True
+        current_batch_id = None
         while True:
             if self._stop_requested.is_set():
                 break
             try:
-                event = self._events_queue.get(
-                    self._events_queue_id, block=True, timeout=1.0
-                )
+                event, next_filter = self._get_event_to_process()
             except Empty:
                 # No events available
                 continue
-
-            run_time = ratelimit(run_time, self._rate_limit)
-
+            if current_batch_id != event.get("batch_id"):
+                # This is a new batch, pause is allowed again
+                pause_allowed = True
+                current_batch_id = event.get("batch_id")
             try:
                 body = event["data"]
+                if body.get("event") == EventTypes.INTERNAL_BATCH_END:
+                    # Since we already reach the end of batch, prevent any pipeline
+                    # pause  that we should not able to resume
+                    pause_allowed = False
+                set_pausable_flag(body, pause_allowed)
                 properties = {}
-                self.process_message(body, properties)
+                if next_filter:
+                    next_filter(body)
+                else:
+                    run_time = ratelimit(run_time, self._rate_limit)
+                    self.process_message(body, properties)
                 self.acknowledge_message(event)
-
+            except PausePipeline as exc:
+                self.logger.debug("Pipeline set on hold: %s", exc)
+                self._events_on_hold[exc.id] = (event, exc.next_filter)
+                continue
             except RejectMessage as exc:
                 delay = None
                 if isinstance(exc, RetryLater):
@@ -372,11 +421,30 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
                     )
                 self._reject_message(event, delay=delay)
+                # Rejects all events on hold
+                for evt_hold, _ in self._get_events_on_hold(event):
+                    self._reject_message(evt_hold, delay=delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
                 self._reject_message(event)
+                for evt_hold, _ in self._get_events_on_hold(event):
+                    self._reject_message(evt_hold, delay=delay)
+            else:
+                # Restart pipelines on hold
+                for hold in self._get_events_on_hold(event):
+                    self._events_to_resume.append(hold)
+
+    def _get_events_on_hold(self, event):
+        for pipeline_id in get_pipelines_to_resume(event["data"]):
+            hold = self._events_on_hold.pop(pipeline_id, None)
+            if hold is None:
+                self.logger.warning(
+                    "Trying to resume non paused pipeline: %s", pipeline_id
+                )
+                continue
+            yield hold
 
     def run(self):
         # Prevent the workers from being stopped by Ctrl+C.
@@ -482,7 +550,7 @@ class KafkaBatchFeeder(
         return self._offsets_queue
 
     def _cleanup_previous_batch(self):
-        # In case of bratch feeder process restart some events from previous batch may
+        # In case of batch feeder process restart some events from previous batch may
         # still be present in queues
         self.events_queue.reset()
 
@@ -545,6 +613,11 @@ class KafkaBatchFeeder(
             if self.has_registered_offsets() and monotonic_time() > deadline:
                 # Deadline reached
                 break
+        if self._registered_offsets > 0:
+            produced = self.events_queue.put_batch_internal_event(
+                self._batch_id, EventTypes.INTERNAL_BATCH_END
+            )
+            self._registered_offsets += produced
 
     def _wait_batch_processed(self):
         if self.has_registered_offsets():
@@ -562,6 +635,10 @@ class KafkaBatchFeeder(
                             offset_batch_id,
                             self._batch_id,
                         )
+                        continue
+                    if offset.get("type") in EventTypes.INTERNAL_EVENTS:
+                        # Internal events should not be commited
+                        self._ready_offsets += 1
                         continue
                     if offset.get("failure", False):
                         self._connect_producer()
@@ -607,7 +684,7 @@ class KafkaBatchFeeder(
         except StopIteration:
             ...
         except Exception as exc:
-            self.logger.error("Failed to process batch, reason: %s", exc)
+            self.logger.exception("Failed to process batch, reason: %s", exc)
         # Try to commit even a partial batch
         self._commit_batch()
 

@@ -29,9 +29,29 @@ def is_retryable(status):
     return status == 503
 
 
-def _event_env_property(field):
+def is_pausable(event):
+    return event.get("_internal", {}).get("allow_pause", False)
+
+
+def set_pausable_flag(event, pausable):
+    internal = event.setdefault("_internal", {})
+    internal["allow_pause"] = pausable
+
+
+def add_pipeline_to_resume(event, pipeline_id):
+    internal = event.setdefault("_internal", {})
+    pipelines = internal.setdefault("pipelines_to_resume", [])
+    pipelines.append(pipeline_id)
+
+
+def get_pipelines_to_resume(event):
+    internal = event.setdefault("_internal", {})
+    return internal.pop("pipelines_to_resume", [])
+
+
+def _event_env_property(field, default=None):
     def getter(self):
-        return self.env.get(field, None)
+        return self.env.get(field, default)
 
     def setter(self, value):
         self.env[field] = value
@@ -42,10 +62,10 @@ def _event_env_property(field):
 class Event(object):
     job_id = _event_env_property("job_id")
     event_type = _event_env_property("event")
-    data = _event_env_property("data")
+    data = _event_env_property("data", default={})
     reqid = _event_env_property("request_id")
     svcid = _event_env_property("service_id")
-    url = _event_env_property("url")
+    url = _event_env_property("url", default={})
     when = _event_env_property("when")
     repli = _event_env_property("repli")
     origin = _event_env_property("origin")
@@ -54,7 +74,7 @@ class Event(object):
         self.env = env
 
     def __repr__(self):
-        return "Event [%s,%s](%s)" % (self.job_id, self.reqid, self.event_type)
+        return f"Event [{self.job_id},{self.reqid}]({self.event_type})"
 
 
 class Response(object):
@@ -109,6 +129,9 @@ class EventTypes(object):
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
     LIFECYCLE_ACTION = "storage.lifecycle.action"
 
+    # Internal events
+    INTERNAL_BATCH_END = "internal.batch.end"
+
     ALL_EVENTS = (
         ACCOUNT_SERVICES,
         CHUNK_DELETED,
@@ -128,6 +151,8 @@ class EventTypes(object):
         META2_DELETED,
         XCUTE_TASKS,
         LIFECYCLE_CHECKPOINT,
+        LIFECYCLE_ACTION,
+        INTERNAL_BATCH_END,
     )
     CONTAINER_EVENTS = (
         CONTAINER_DELETED,
@@ -143,6 +168,8 @@ class EventTypes(object):
         CONTENT_REBUILT,
         CONTENT_UPDATE,
     )
+
+    INTERNAL_EVENTS = (INTERNAL_BATCH_END,)
 
 
 class StatusMap(object):

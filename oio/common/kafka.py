@@ -288,6 +288,13 @@ class KafkaSender(KafkaClient):
         return delayed_event
 
     def send(self, topic, data, delay=0, key=None, flush=False):
+        # Strip any _internal field
+        if isinstance(data, dict) and "_internal" in data:
+            data = {
+                **data,
+            }
+            del data["_internal"]
+
         if delay > 0:
             # Encapsulate event in a delayed one
             data = self._generate_delayed_event(topic, data, delay)
