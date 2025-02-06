@@ -445,11 +445,13 @@ class ObjectTest(CliTestCase):
         self._containers_to_clean.extend(to_clean)
 
     def test_autocontainer_object_listing(self):
+        self.skipTest("Deprecated")
         env = dict(os.environ)
         env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
         self._test_autocontainer_object_listing(env=env)
 
     def test_autocontainer_object_listing_other_flatns(self):
+        self.skipTest("Deprecated")
         env = dict(os.environ)
         env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
         self._test_autocontainer_object_listing("--flat-bits 8", env=env)

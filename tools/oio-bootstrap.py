@@ -1543,6 +1543,9 @@ pipeline = volume_index ${PRESERVE}
 [handler:account.services]
 pipeline = account_update volume_index ${PRESERVE}
 
+[handler:test.grouping]
+pipeline = group ${PRESERVE}
+
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 
@@ -1552,6 +1555,11 @@ concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
+
+[filter:group]
+use = egg:oio#group
+broker_endpoint = ${QUEUE_URL}
+topic = oio-tests
 
 [filter:content_rebuild]
 use = egg:oio#notify
@@ -3521,6 +3529,7 @@ def generate(options):
         ("oio-transitioned", None),
         ("oio-rebuild", None),
         ("oio-replication", None),
+        ("oio-tests", None),
         ("oio-xcute-job", None),
         ("oio-xcute-job-reply", None),
     ]

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,12 +23,20 @@ from tests.utils import random_str
 class ServiceListTest(CliTestCase):
     def test_meta2_list_containers(self):
         container = "meta2_list_containers_" + random_str(3)
-        self.storage.container_create(self.account, container)
+        reqid = request_id("mlc")
+        self.storage.container_create(self.account, container, reqid=reqid)
         output = self.storage.directory.list(self.account, container)
         meta2s = []
         for srv in output["srv"]:
             if srv["type"] == "meta2":
                 meta2s.append(srv["host"])
+
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            timeout=5.0,
+            types=(EventTypes.CONTAINER_NEW,),
+        )
+        self.assertIsNotNone(event)
 
         opts = self.get_format_opts()
         fullname = self.account + "/" + container
@@ -39,7 +47,15 @@ class ServiceListTest(CliTestCase):
             )
             self.assertIn(fullname, output.split("\n"))
 
-        output = self.storage.container_delete(self.account, container)
+        reqid = request_id("mlc")
+        output = self.storage.container_delete(self.account, container, reqid=reqid)
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            timeout=5.0,
+            types=(EventTypes.CONTAINER_DELETED,),
+        )
+        self.assertIsNotNone(event)
+
         for meta2 in meta2s:
             output = self.openio_admin(
                 "meta2 list containers %s %s --oio-account %s"
@@ -50,9 +66,17 @@ class ServiceListTest(CliTestCase):
     def test_rawx_list_containers(self):
         container = "rawx_list_containers_" + random_str(3)
         obj = random_str(6)
+        reqid = request_id("rlc")
         self.storage.object_create(
-            self.account, container, data="test data", obj_name=obj
+            self.account, container, data="test data", obj_name=obj, reqid=reqid
         )
+        event = self.wait_for_kafka_event(
+            reqid=reqid,
+            timeout=5.0,
+            types=(EventTypes.CHUNK_NEW,),
+        )
+        self.assertIsNotNone(event)
+
         output = self.storage.object_locate(self.account, container, obj)
         opts = self.get_format_opts(fields=["Name"])
         fullname = "/".join((self.account, container))
