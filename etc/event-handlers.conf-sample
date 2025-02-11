@@ -198,3 +198,22 @@ cache_directory = /tmp
 # Restore lifecycle deleted object
 [filter:lifecycle_delete_restore]
 use = egg:oio#lifecycle_delete_restore
+
+# -----------------------------------------------------------------
+# Move the event from deadletter to the original topic.
+[filter:deadletter]
+use = egg:oio#deadletter
+
+# Name of the topic where to send events which have been
+# retried too many times.
+graveyard = "oio-graveyard"
+
+# Maximum number of passes through the deadletter topic
+# before the event is sent to the graveyard.
+# Set to -1 to never send to the graveyard.
+# Set to 0 to always send to the graveyard.
+max_deadletter_count = 2
+
+#redirect_event.name = destination_topic
+redirect_storage_container_state = oio
+redirect_storage_chunk_new = oio-chunk
