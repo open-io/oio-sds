@@ -14,25 +14,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from logging import makeLogRecord
 
 from oio.common.exceptions import OioException
 from oio.common.logger import LTSVFormatter, get_logger
+from oio.event.utils import MsgContext, log_context_from_msg
 
 
 @dataclass(init=True)
-class FilterContext:
-    request_id: str = None
-    event_type: str = None
-    user: str = None
-    container: str = None
-    bucket: str = None
-    path: str = None
-    version: str = None
-
-    def items(self):
-        return self.__dict__.items()
+class FilterContext(MsgContext):
+    filter_name: str = None
 
 
 ctx_filter = ContextVar("filter", default=FilterContext())
@@ -41,7 +33,7 @@ ctx_filter = ContextVar("filter", default=FilterContext())
 class FilterLTSVFormater(LTSVFormatter):
     def get_extras(self):
         ctx = ctx_filter.get()
-        return ctx.items()
+        return asdict(ctx)
 
 
 class Filter(object):
@@ -49,10 +41,13 @@ class Filter(object):
         (
             "pid:%(pid)d",
             "log_level:%(levelname)s",
+            "filter:%(filter_name)s",
             "event_type:%(event_type)s",
             "request_id:%(request_id)s",
+            "account:%(account)s",
             "container:%(container)s",
             "object:%(path)s",
+            "content_id:%(content)s",
             "version_id:%(version)s",
             "exc_text:%(exc_text)s",
             "exc_filename:%(exc_filename)s",
@@ -76,7 +71,7 @@ class Filter(object):
         formatter = FilterLTSVFormater(fmt=log_format)
         # Ensure log format can be populated
         record = makeLogRecord({})
-        formatter.format(record, extras=self.log_context_from_env({}).__dict__)
+        formatter.format(record, extras=asdict(self.log_context_from_env({})))
 
         self.logger = get_logger(
             conf,
@@ -89,16 +84,9 @@ class Filter(object):
     def init(self):
         pass
 
-    def log_context_from_env(self, env):
-        ctx = FilterContext()
-        ctx.request_id = env.get("request_id")
-        ctx.event_type = env.get("event")
-        url = env.get("url")
-        if url:
-            ctx.path = url.get("path")
-            ctx.container = url.get("user")
-            ctx.account = url.get("account")
-            ctx.version = url.get("version")
+    def log_context_from_env(self, env, context_class=FilterContext):
+        ctx = log_context_from_msg(env, context_class)
+        ctx.filter_name = self.__class__.__name__
         return ctx
 
     def process(self, env, cb):

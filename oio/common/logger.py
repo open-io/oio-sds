@@ -314,7 +314,7 @@ class LTSVFormatter(Formatter):
             "exc_filename": exc_filename,
             "exc_lineno": exc_lineno,
             "message": record.getMessage(),
-            **{k: v for k, v in self.get_extras()},
+            **self.get_extras(),
             **extras,
         }
 

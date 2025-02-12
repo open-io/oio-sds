@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from urllib.parse import quote
@@ -139,6 +140,7 @@ class LifecycleActionContext:
         return self.event.data.get("rule_id")
 
 
+@dataclass(init=True)
 class LifecycleFilterContext(FilterContext):
     action: str = None
     rule_id: str = None
@@ -341,7 +343,7 @@ class LifecycleActions(Filter):
         self._metrics = LifecycleMetricTracker(self.conf)
 
     def log_context_from_env(self, env):
-        ctx = super().log_context_from_env(env)
+        ctx = super().log_context_from_env(env, LifecycleFilterContext)
         data = env.get("data", {})
         ctx.action = data.get("action")
         ctx.rule_id = data.get("rule_id")

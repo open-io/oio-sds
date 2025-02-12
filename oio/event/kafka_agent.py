@@ -13,6 +13,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
+from dataclasses import asdict
 
 from oio.account.bucket_client import BucketClient
 from oio.account.client import AccountClient
@@ -25,10 +26,12 @@ from oio.conscience.client import ConscienceClient
 from oio.event.evob import is_retryable, is_success
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
 from oio.event.loader import loadhandlers
+from oio.event.utils import log_context_from_msg
 from oio.rdir.client import RdirClient
 
 
 class KafkaEventWorker(KafkaConsumerWorker):
+
     def __init__(
         self,
         topic,
@@ -112,17 +115,22 @@ class KafkaEventWorker(KafkaConsumerWorker):
             "request_id": "-",
             "tube": "-",
             "topic": "-",
-            "event": "-",
-            **_extra,
+            "event_type": "-",
+            "container": "-",
+            "account": "-",
+            "path": "-",
+            "content": "-",
+            "version": "-",
         }
+        extra.update({k: v for k, v in _extra.items() if v is not None})
 
         extra["duration"] = time.monotonic() - start
         extra["status"] = status
-        extra["event"] = str(extra["event"]).replace(".", "-")
+        extra["event_type"] = str(extra["event_type"]).replace(".", "-")
         if self.logger_request is not None:
             self.logger_request.info("", extra=extra)
         self.statsd.timing(
-            f"openio.event.{extra['topic']}.{extra['event']}.{extra['status']}"
+            f"openio.event.{extra['topic']}.{extra['event_type']}.{extra['status']}"
             ".duration",
             extra["duration"] * 1000,
         )
@@ -134,13 +142,14 @@ class KafkaEventWorker(KafkaConsumerWorker):
         start = time.monotonic()
         reqid = message.get("request_id")
         event = message.get("event")
+        ctx = log_context_from_msg(message)
         replacements = {
-            "request_id": reqid,
             "tube": self.topic,
             "topic": self.topic,
-            "event": event,
+            **asdict(ctx),
         }
         handler = self.handlers.get(event, None)
+        replacements["handler"] = handler.__class__.__name__ if handler else None
         if not handler:
             self.log_and_statsd(start, 404, replacements)
             raise RejectMessage(f"No handler for {message.get('event')}")
