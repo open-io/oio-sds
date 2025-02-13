@@ -699,6 +699,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     },
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -707,6 +708,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Tag": [{"Key": "key3", "Value": "value3"}]},
                     "Expiration": {
                         "1": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -804,6 +806,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"ObjectSizeLessThan": 10},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -893,6 +896,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"ObjectSizeGreaterThan": 10},
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1005,6 +1009,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     },
                     "Expiration": {
                         "0": {"Days": 2},
+                        "__time_type": "Days",
                     },
                 },
             },
@@ -1551,6 +1556,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "Expiration": {
                         "0": {"Days": 1},
+                        "__time_type": "Days",
                     },
                 },
                 "1": {
@@ -1559,6 +1565,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "foo/"},
                     "Expiration": {
                         "1": {"Days": 1},
+                        "__time_type": "Days",
                     },
                 },
             },
