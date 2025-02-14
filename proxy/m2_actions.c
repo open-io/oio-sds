@@ -2220,25 +2220,50 @@ static GError * _list_loop (struct req_args_s *args,
 		 * In the first iteration, skip the prefix check: if the marker sent
 		 * by the client contains a prefix, it has been reported by the
 		 * previous request. */
+		const gchar *original_marker = out0->next_marker?: in0->marker_start;
 		in.marker_start = _build_next_marker(
-				out0->next_marker?: in0->marker_start,
+				original_marker,
 				in0->delimiter,
 				in0->prefix,
 				iterations > 1? tree_prefixes : NULL
 		);
-		in.version_marker = g_strdup(
-			out0->next_version_marker?: in0->version_marker);
+		if (in.marker_start) {
+			if (g_strcmp0(in.marker_start, original_marker) != 0) {
+				/* The marker has been optimized,
+				 * the version marker can be ignored. */
+				in.version_marker = NULL;
+			} else {
+				/* The marker has not been optimized,
+				 * the version marker must be respected. */
+				in.version_marker = g_strdup(
+					out0->next_marker ? out0->next_version_marker : in0->version_marker);
+			}
+		} else {
+			/* No marker, therefore no version marker. */
+			in.version_marker = NULL;
+		}
 
 		/* Build a routing key (object path) so the sharding resolver
 		 * will direct the request to the next shard. */
 		gchar *routing_key = NULL;
-		if (!(in.prefix && *in.prefix)
-				&& !(in.marker_start && *in.marker_start)) {
+		if (!oio_str_is_set(in.prefix)
+				&& !oio_str_is_set(in.marker_start)) {
+			/* No prefix or marker, start at the beginning,
+			 * i.e. with the first possible object
+			 * ("\x01" is the first valid unicode character). */
 			routing_key = g_strdup("");
 		} else if (g_strcmp0(in.prefix, in.marker_start) > 0) {
+			/* The prefix is after the marker, start at the prefix. */
 			routing_key = g_strdup(in.prefix);
+		} else if (oio_str_is_set(in.marker_start)
+				&& oio_str_is_set(in.version_marker)) {
+			/* Redirect the request to the shard containing the marker
+			 * when there is a version marker. */
+			routing_key = g_strdup(in.marker_start);
 		} else {
-			/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+			/* Redirect the request to the shard containing the object name
+			 * after the marker.
+			 * HACK: "\x01" is the (UTF-8 encoded) first unicode */
 			routing_key = g_strdup_printf("%s\x01", in.marker_start);
 		}
 

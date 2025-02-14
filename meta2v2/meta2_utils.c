@@ -1071,7 +1071,9 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 
 	if (lp->marker_start && g_strcmp0(lp->marker_start, lp->prefix) >= 0) {
 		lazy_and();
-		if (lp->flag_allversion && lp->version_marker) {
+		if (lp->version_marker) {
+			/* When the listing of the previous shard is complete,
+			 * a version marker is sent even if not all versions are requested. */
 			g_string_append_static(clause,
 					" ((alias == ? AND version < ?) OR alias > ?)");
 			g_ptr_array_add(params, g_variant_new_string(lp->marker_start));
@@ -1294,9 +1296,9 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			 * We must overwrite the marker sent by the client or we will loop
 			 * indefinitely. */
 			lp.marker_start = last_alias_name;
-			if (last_alias_version) {
-				lp.version_marker = last_alias_version;
-			}
+			/* If not all versions are requested, last_alias_version will be NULL
+			 * (even if there was a version marker in the original request). */
+			lp.version_marker = last_alias_version;
 		}
 
 		// --- List the next items ---

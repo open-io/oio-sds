@@ -178,7 +178,7 @@ class TestSharding(BaseTestCase):
             )
             if self.versioning_enabled:
                 self.created[cname_root].setdefault(obj_name, []).append(
-                    (meta["version"], False)
+                    (int(meta["version"]), False)
                 )
             else:
                 self.created[cname_root].add(obj_name)
@@ -206,7 +206,7 @@ class TestSharding(BaseTestCase):
                 self.storage.object_delete(self.account, cname, obj_name, reqid=reqid)
                 if self.versioning_enabled:
                     versions = self.created[cname].setdefault(obj_name, [])
-                    versions.append((str(int(versions[-1][1]) + 1), True))
+                    versions.append((int(versions[-1][0]) + 1, True))
                 else:
                     self.created[cname].remove(obj_name)
         if bucket:
@@ -218,23 +218,38 @@ class TestSharding(BaseTestCase):
             stats = self.storage.bucket.bucket_show(cname, account=self.account)
             self.assertEqual(self._get_object_count(cname), stats["objects"])
 
-    def _check_objects(self, cname):
-        # Check the objects list
-        obj_list = self.storage.object_list(self.account, cname)
-        if self.versioning_enabled:
-            self.assertListEqual(
-                sorted(
-                    [
-                        obj
-                        for obj, versions in self.created[cname].items()
-                        if not versions[-1][1]
-                    ]
-                ),
-                [obj["name"] for obj in obj_list["objects"]],
+    def _list_all_objects(self, cname, page_size, versions=False):
+        obj_list = []
+        truncated = True
+        marker = None
+        version_marker = None
+        while truncated:
+            data = self.storage.object_list(
+                self.account,
+                cname,
+                versions=versions,
+                limit=page_size,
+                marker=marker,
+                version_marker=version_marker,
             )
-            # Check the objects data
+            truncated = data["truncated"]
+            marker = data.get("next_marker")
+            version_marker = data.get("next_version_marker")
+            if truncated:
+                self.assertEqual(page_size, len(data["objects"]))
+            else:
+                self.assertLessEqual(len(data["objects"]), page_size)
+            for obj in data["objects"]:
+                obj_list.append((obj["name"], obj["version"]))
+        return obj_list
+
+    def _check_objects(self, cname):
+        # Check the objects data
+        nb_obj = 0
+        if self.versioning_enabled:
             for obj_name, versions in self.created[cname].items():
                 for i, (version, deleted) in enumerate(versions):
+                    nb_obj += 1
                     if deleted:
                         continue
                     _, data = self.storage.object_fetch(
@@ -242,14 +257,45 @@ class TestSharding(BaseTestCase):
                     )
                     self.assertEqual(f"{obj_name}-{i}".encode("utf-8"), b"".join(data))
         else:
-            self.assertListEqual(
-                sorted(self.created[cname]),
-                [obj["name"] for obj in obj_list["objects"]],
-            )
-            # Check the objects data
             for obj_name in self.created[cname]:
+                nb_obj += 1
                 _, data = self.storage.object_fetch(self.account, cname, obj_name)
                 self.assertEqual(obj_name.encode("utf-8"), b"".join(data))
+        # Check the objects list
+        for page_size in range(1, nb_obj + 2):
+            obj_list = self._list_all_objects(cname, page_size)
+            obj_list_versions = self._list_all_objects(cname, page_size, versions=True)
+            if self.versioning_enabled:
+                self.assertListEqual(
+                    sorted(
+                        [
+                            (obj_name, versions[-1][0])
+                            for obj_name, versions in self.created[cname].items()
+                            if not versions[-1][1]
+                        ]
+                    ),
+                    obj_list,
+                )
+                self.assertListEqual(
+                    sorted(
+                        [
+                            (obj_name, version[0])
+                            for obj_name, versions in self.created[cname].items()
+                            for version in reversed(versions)
+                        ],
+                        key=lambda obj: (obj[0], -obj[1]),
+                    ),
+                    obj_list_versions,
+                )
+            else:
+                self.assertListEqual(
+                    sorted(self.created[cname]),
+                    [obj_name for obj_name, version in obj_list],
+                )
+                self.assertListEqual(
+                    sorted(self.created[cname]),
+                    [obj_name for obj_name, version in obj_list_versions],
+                )
 
     def _check_shards_objectlock_properties(self, resp):
         pass
@@ -322,8 +368,8 @@ class TestSharding(BaseTestCase):
         self._add_objects(self.cname, 16)
 
         test_shards = [
-            {"index": 0, "lower": "", "upper": "content_0."},
-            {"index": 1, "lower": "content_0.", "upper": ""},
+            {"index": 0, "lower": "", "upper": "content_0"},
+            {"index": 1, "lower": "content_0", "upper": ""},
         ]
         new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
         _vacuum = self.container_sharding.admin.vacuum_base
@@ -475,8 +521,8 @@ class TestSharding(BaseTestCase):
         self._delete_objects(self.cname, 2)
 
         test_shards = [
-            {"index": 0, "lower": "", "upper": "content_0."},
-            {"index": 1, "lower": "content_0.", "upper": ""},
+            {"index": 0, "lower": "", "upper": "content_0"},
+            {"index": 1, "lower": "content_0", "upper": ""},
         ]
         new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
@@ -503,8 +549,8 @@ class TestSharding(BaseTestCase):
         self._add_objects(self.cname, 4)
 
         test_shards = [
-            {"index": 0, "lower": "", "upper": "content_0."},
-            {"index": 1, "lower": "content_0.", "upper": ""},
+            {"index": 0, "lower": "", "upper": "content_0"},
+            {"index": 1, "lower": "content_0", "upper": ""},
         ]
         new_shards = self.container_sharding.format_shards(test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
@@ -1144,15 +1190,28 @@ class TestSharding(BaseTestCase):
             strategy="shard-with-partition",
             strategy_params=params,
         )
+        shards = list(shards)
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, shards, enable=True
         )
         self.assertTrue(modified)
+        # Add an object right after the first upper,
+        # so at the very beginning of the second shard
+        next_first_upper_obj = f"{shards[0]['upper']}\x01"
+        _, _, _, meta = self.storage.object_create_ext(
+            self.account,
+            self.cname,
+            obj_name=next_first_upper_obj,
+            data=b"next-first-upper",
+        )
+        self.created[self.cname].add(next_first_upper_obj)
         # Classic listing
         objects = self.storage.object_list(self.account, self.cname)
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            sorted(self.created[self.cname]),
+            sorted(
+                [obj_name for obj_name in self.created[self.cname]],
+            ),
             [obj["name"] for obj in objects["objects"]],
         )
         self.assertFalse(objects["truncated"])
@@ -1160,7 +1219,13 @@ class TestSharding(BaseTestCase):
         objects = self.storage.object_list(self.account, self.cname, prefix="dir1/")
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            ["dir1/obj_0", "dir1/obj_1", "dir1/obj_2", "dir1/obj_3"],
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name.startswith("dir1/")
+                ],
+            ),
             [obj["name"] for obj in objects["objects"]],
         )
         self.assertFalse(objects["truncated"])
@@ -1170,7 +1235,8 @@ class TestSharding(BaseTestCase):
         )
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            ["dir3/obj_0"], [obj["name"] for obj in objects["objects"]]
+            ["dir3/obj_0"],
+            [obj["name"] for obj in objects["objects"]],
         )
         self.assertTrue(objects["truncated"])
         # Listing with marker in the first shard
@@ -1179,19 +1245,45 @@ class TestSharding(BaseTestCase):
         )
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            [
-                "dir1/obj_1",
-                "dir1/obj_2",
-                "dir1/obj_3",
-                "dir2/obj_0",
-                "dir2/obj_1",
-                "dir2/obj_2",
-                "dir2/obj_3",
-                "dir3/obj_0",
-                "dir3/obj_1",
-                "dir3/obj_2",
-                "dir3/obj_3",
-            ],
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > "dir1/obj_0"
+                ],
+            ),
+            [obj["name"] for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker in the first shard
+        objects = self.storage.object_list(
+            self.account, self.cname, marker="dir0/obj_2"
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > "dir0/obj_2"
+                ],
+            ),
+            [obj["name"] for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker equal to upper of the first shard
+        objects = self.storage.object_list(
+            self.account, self.cname, marker=shards[0]["upper"]
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > shards[0]["upper"]
+                ],
+            ),
             [obj["name"] for obj in objects["objects"]],
         )
         self.assertFalse(objects["truncated"])
@@ -1201,7 +1293,30 @@ class TestSharding(BaseTestCase):
         )
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            ["dir2/obj_3", "dir3/obj_0", "dir3/obj_1", "dir3/obj_2", "dir3/obj_3"],
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > "dir2/obj_2"
+                ],
+            ),
+            [obj["name"] for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker equal to the last object
+        last_object_name = sorted(self.created[self.cname])[-1]
+        objects = self.storage.object_list(
+            self.account, self.cname, marker=last_object_name
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > last_object_name
+                ],
+            ),
             [obj["name"] for obj in objects["objects"]],
         )
         self.assertFalse(objects["truncated"])
@@ -1211,11 +1326,232 @@ class TestSharding(BaseTestCase):
         )
         self.assertListEqual([], objects["prefixes"])
         self.assertListEqual(
-            ["dir2/obj_2", "dir2/obj_3"], [obj["name"] for obj in objects["objects"]]
+            sorted(
+                [
+                    obj_name
+                    for obj_name in self.created[self.cname]
+                    if obj_name > "dir2/obj_1" and obj_name.startswith("dir2/")
+                ],
+            ),
+            [obj["name"] for obj in objects["objects"]],
         )
         self.assertFalse(objects["truncated"])
         # Listing with delimiter
         objects = self.storage.object_list(self.account, self.cname, delimiter="/")
+        self.assertListEqual(["dir0/", "dir1/", "dir2/", "dir3/"], objects["prefixes"])
+        self.assertListEqual([], objects["objects"])
+        self.assertFalse(objects["truncated"])
+
+    def test_listing_versioning(self):
+        nb_versions = 4
+        self._create(self.cname, versioning=True)
+        for _ in range(nb_versions):
+            for i in range(4):
+                self._add_objects(self.cname, 4, prefix="dir%d/obj" % i)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account,
+            self.cname,
+            strategy="shard-with-partition",
+            strategy_params=params,
+        )
+        shards = list(shards)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True
+        )
+        self.assertTrue(modified)
+        # Add an object right after the first upper,
+        # so at the very beginning of the second shard
+        next_first_upper_obj = f"{shards[0]['upper']}\x01"
+        _, _, _, meta = self.storage.object_create_ext(
+            self.account,
+            self.cname,
+            obj_name=next_first_upper_obj,
+            data=b"next-first-upper",
+        )
+        self.created[self.cname].setdefault(next_first_upper_obj, []).append(
+            (int(meta["version"]), False)
+        )
+        # Classic listing
+        objects = self.storage.object_list(self.account, self.cname, versions=True)
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with prefix
+        objects = self.storage.object_list(
+            self.account, self.cname, versions=True, prefix="dir1/"
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name.startswith("dir1/")
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with prefix and limit
+        objects = self.storage.object_list(
+            self.account, self.cname, versions=True, prefix="dir3/", limit=nb_versions
+        )
+        self.assertListEqual([], objects["prefixes"])
+        obj_name = "dir3/obj_0"
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for version in reversed(self.created[self.cname][obj_name])
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertTrue(objects["truncated"])
+        # Listing with marker in the first shard
+        objects = self.storage.object_list(
+            self.account, self.cname, versions=True, marker="dir1/obj_0"
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name > "dir1/obj_0"
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker in the first shard
+        objects = self.storage.object_list(
+            self.account,
+            self.cname,
+            versions=True,
+            marker="dir0/obj_2",
+            version_marker=9999999999999999,
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name >= "dir0/obj_2"
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker equal to upper of the first shard
+        objects = self.storage.object_list(
+            self.account,
+            self.cname,
+            versions=True,
+            marker=shards[0]["upper"],
+            version_marker=9999999999999999,
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name >= shards[0]["upper"]
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker in the second shard
+        objects = self.storage.object_list(
+            self.account,
+            self.cname,
+            versions=True,
+            marker="dir2/obj_2",
+            version_marker=9999999999999999,
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name >= "dir2/obj_2"
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker equal to the last object
+        last_object_name = sorted(self.created[self.cname].keys())[-1]
+        objects = self.storage.object_list(
+            self.account,
+            self.cname,
+            versions=True,
+            marker=last_object_name,
+            version_marker=9999999999999999,
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name >= last_object_name
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with marker and prefix
+        objects = self.storage.object_list(
+            self.account, self.cname, versions=True, marker="dir2/obj_1", prefix="dir2/"
+        )
+        self.assertListEqual([], objects["prefixes"])
+        self.assertListEqual(
+            sorted(
+                [
+                    (obj_name, version[0])
+                    for obj_name, versions in self.created[self.cname].items()
+                    if obj_name > "dir2/obj_1" and obj_name.startswith("dir2/")
+                    for version in reversed(versions)
+                ],
+                key=lambda obj: (obj[0], -obj[1]),
+            ),
+            [(obj["name"], obj["version"]) for obj in objects["objects"]],
+        )
+        self.assertFalse(objects["truncated"])
+        # Listing with delimiter
+        objects = self.storage.object_list(
+            self.account, self.cname, versions=True, delimiter="/"
+        )
         self.assertListEqual(["dir0/", "dir1/", "dir2/", "dir3/"], objects["prefixes"])
         self.assertListEqual([], objects["objects"])
         self.assertFalse(objects["truncated"])
@@ -1729,7 +2065,7 @@ class TestSharding(BaseTestCase):
         self.storage.object_delete(account, container, obj_name, reqid=reqid)
         if self.versioning_enabled:
             versions = self.created[self.cname].setdefault(obj_name, [])
-            versions.append((str(int(versions[-1][1]) + 1), True))
+            versions.append((int(versions[-1][0]) + 1, True))
         else:
             self.created[self.cname].remove(obj_name)
         self.wait_event = True
@@ -1938,8 +2274,8 @@ class TestSharding(BaseTestCase):
 
         try:
             test_shards = [
-                {"index": 0, "lower": "", "upper": "content_0."},
-                {"index": 1, "lower": "content_0.", "upper": ""},
+                {"index": 0, "lower": "", "upper": "content_0"},
+                {"index": 1, "lower": "content_0", "upper": ""},
             ]
             new_shards = self.container_sharding.format_shards(
                 test_shards, are_new=True

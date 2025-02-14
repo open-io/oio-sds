@@ -1479,8 +1479,8 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			/* The request has not been redirected. Build a routing key
 			 * according to the request's parameters, and maybe redirect it. */
 			gchar *routing_key = NULL;
-			if (!(lp->prefix && *lp->prefix)
-					&& !(lp->marker_start && *lp->marker_start)) {
+			if (!oio_str_is_set(lp->prefix)
+					&& !oio_str_is_set(lp->marker_start)) {
 				/* No prefix or marker, start at the beginning,
 				 * i.e. with the first possible object
 				 * ("\x01" is the first valid unicode character). */
@@ -1488,9 +1488,15 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			} else if (g_strcmp0(lp->prefix, lp->marker_start) > 0) {
 				/* The prefix is after the marker, start at the prefix. */
 				routing_key = g_strdup(lp->prefix);
+			} else if (oio_str_is_set(lp->marker_start)
+					&& oio_str_is_set(lp->version_marker)) {
+				/* Redirect the request to the shard containing the marker
+				 * when there is a version marker. */
+				routing_key = g_strdup(lp->marker_start);
 			} else {
-				/* HACK: build a routing key which is one character after
-				 * the marker. "\x01" is the first valid unicode character. */
+				/* Redirect the request to the shard containing the object name
+				 * after the marker.
+				 * HACK: "\x01" is the (UTF-8 encoded) first unicode */
 				routing_key = g_strdup_printf("%s\x01", lp->marker_start);
 			}
 			err = _redirect_to_shard(sq3, routing_key);

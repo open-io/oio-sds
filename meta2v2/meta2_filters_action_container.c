@@ -326,12 +326,14 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 
 		// In all other cases, the list is truncated
+		// because we are at the end of a shard (but not the last shard)
 		truncated = TRUE;
+		// Force the passage to the next shard
+		// without ignoring the first object of the next shard
 		g_free(next_marker);
-		next_marker = shard_upper;
-		shard_upper = NULL;
+		next_marker = g_strdup_printf("%s\x01", shard_upper);
 		g_free(next_version_marker);
-		next_version_marker = NULL;
+		next_version_marker = g_strdup("9999999999999999");
 
 end:
 		g_free(shard_upper);
@@ -414,7 +416,9 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 			NAME_MSGKEY_DELIMITER);
 	lp->delimiter = delimiter_str;
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
-	if (lp->flag_allversion && lp->marker_start) {
+	if (lp->marker_start) {
+		/* When the listing of the previous shard is complete,
+		 * a version marker is sent even if not all versions are requested. */
 		lp->version_marker = meta2_filter_ctx_get_param(ctx,
 				NAME_MSGKEY_VERSIONMARKER);
 	} else {
