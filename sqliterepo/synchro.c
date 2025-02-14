@@ -256,7 +256,8 @@ _reconnect(struct sqlx_sync_s *ss)
 
 	GRID_NOTICE("Zookeeper: starting connection to [%s]", ss->zk_url);
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, &ss->zk_id, ss, 0);
+			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, &ss->zk_id,
+			ss, ZOO_NO_LOG_CLIENTENV);
 	if (!ss->zh) {
 		GRID_ERROR("Zookeeper init failure: (%d) %s",
 				errno, strerror(errno));
@@ -326,7 +327,8 @@ _open(struct sqlx_sync_s *ss)
 	if (NULL != ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG: ZK connection already initiated");
 	ss->zh = zookeeper_init(ss->zk_url, zk_main_watch,
-			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL, ss, 0);
+			sqliterepo_zk_timeout / G_TIME_SPAN_MILLISECOND, NULL,
+			ss, ZOO_NO_LOG_CLIENTENV);
 	if (NULL == ss->zh)
 		return NEWERROR(CODE_INTERNAL_ERROR, "ZK connection failure");
 	return NULL;
