@@ -514,6 +514,8 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		EXTRA_ASSERT(bean != NULL);
 		if (DESCR(bean) == &descr_struct_PROPERTIES) {
 			_bean_list_cb(&obc->l, bean);
+		} else {
+			_bean_clean(bean);
 		}
 	}
 

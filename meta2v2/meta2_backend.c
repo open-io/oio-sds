@@ -1704,11 +1704,12 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				m2db_set_max_versions(sq3, max_versions);
 			}
 
-			if (cb_props != NULL  && u1 != NULL) {
-				m2db_get_properties(sq3, url, cb_props, u1);
+			if (cb_props != NULL && u1 != NULL) {
+				err = m2db_get_properties(sq3, url, cb_props, u1);
 			}
 
-			if (!(err = m2db_delete_alias(sq3, max_versions, bypass_governance,
+			if (!err && !(err = m2db_delete_alias(
+					sq3, max_versions, bypass_governance,
 					create_delete_marker, url, cb, u0, delete_marker_created))) {
 				m2db_increment_version(sq3);
 			}
