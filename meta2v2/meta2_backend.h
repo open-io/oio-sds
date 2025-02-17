@@ -98,7 +98,7 @@ GError *meta2_backend_drain_container(struct meta2_backend_s *m2,
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0,
-		void (*end_cb)(struct sqlx_sqlite3_s *sq3),
+		void (*end_cb)(struct sqlx_sqlite3_s *sq3, const gchar *next_marker),
 		gchar ***out_properties);
 
 /**
@@ -292,7 +292,7 @@ GError* meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean urgent, gboolean *truncated);
 
 /** Clean up local copies
- * Each table of each copie is cleaned in single step */
+ * Each table of each copy is cleaned in single step */
 GError* meta2_backend_clean_locally_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList * beans, gboolean *truncated);
 

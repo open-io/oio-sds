@@ -1426,7 +1426,7 @@ GError*
 meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0,
-		void (*end_cb)(struct sqlx_sqlite3_s *sq3),
+		void (*end_cb)(struct sqlx_sqlite3_s *sq3, const gchar *next_marker),
 		gchar ***out_properties)
 {
 	GError *err = NULL;
@@ -1493,16 +1493,19 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = _redirect_to_shard(sq3, routing_key);
 			g_free(routing_key);
 		}
+		gchar *next_marker = NULL;
 		if (!err) {
-			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
+			err = m2db_list_aliases(sq3, lp, headers, cb, u0, &next_marker);
 		}
 		if (!err || err->code == CODE_REDIRECT_SHARD) {
 			if (!oio_ext_is_shard_redirection() && out_properties)
 				*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		if (!err) {
-			if (end_cb)
-				end_cb(sq3);
+			if (end_cb) {
+				end_cb(sq3, next_marker);
+			}
+			g_free(next_marker);
 		}
 		if (lp->marker_start != req_marker_start) {
 			g_free((gchar *)lp->marker_start);

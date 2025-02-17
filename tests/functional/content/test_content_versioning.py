@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,9 +17,10 @@
 
 import time
 
+from oio.common.constants import M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import true_value
-from oio.common.exceptions import NoSuchObject
-from oio.common.utils import depaginate
+from oio.common.exceptions import NoSuchObject, OioTimeout
+from oio.common.utils import depaginate, request_id
 from tests.utils import BaseTestCase, random_str
 
 
@@ -27,14 +28,14 @@ class TestContentVersioning(BaseTestCase):
     def setUp(self):
         super(TestContentVersioning, self).setUp()
         self.api = self.storage
-        self.container = random_str(8)
+        self.container = f"ct-vers-{random_str(6)}"
         system = {"sys.m2.policy.version": "3"}
         self.wait_for_score(("meta2", "rawx"))
         self.api.container_create(self.account, self.container, system=system)
 
     def tearDown(self):
         try:
-            self.api.container_flush(self.account, self.container)
+            self.api.container_flush(self.account, self.container, fast=True)
             self.api.container_delete(self.account, self.container)
         except Exception:
             pass
@@ -339,28 +340,28 @@ class TestContentVersioning(BaseTestCase):
                     true_value(objects[i]["deleted"]),
                 )
 
-        all_versions = dict()
+        all_versions = {}
 
         def _create_object(obj_name, all_versions):
             self.api.object_create(
                 self.account, self.container, obj_name=obj_name, data="test"
             )
-            versions = all_versions.get(obj_name, list())
+            versions = all_versions.get(obj_name, [])
             versions.append(
-                self.api.object_show(self.account, self.container, obj_name)
+                self.api.object_get_properties(self.account, self.container, obj_name)
             )
             all_versions[obj_name] = versions
 
         def _delete_object(obj_name, all_versions):
             self.api.object_delete(self.account, self.container, obj_name)
-            versions = all_versions.get(obj_name, list())
+            versions = all_versions.get(obj_name, [])
             versions.append(
-                self.api.object_show(self.account, self.container, obj_name)
+                self.api.object_get_properties(self.account, self.container, obj_name)
             )
             all_versions[obj_name] = versions
 
         def _get_current_objects(all_versions):
-            current_objects = list()
+            current_objects = []
             obj_names = sorted(all_versions.keys())
             for obj_name in obj_names:
                 obj = all_versions[obj_name][-1]
@@ -369,7 +370,7 @@ class TestContentVersioning(BaseTestCase):
             return current_objects
 
         def _get_object_versions(all_versions):
-            object_versions = list()
+            object_versions = []
             obj_names = sorted(all_versions.keys())
             for obj_name in obj_names:
                 versions = all_versions[obj_name]
@@ -767,3 +768,63 @@ class TestContentVersioning(BaseTestCase):
             self.assertFalse(objects[i]["is_latest"])
         # Only one version -> latest
         self.assertEqual(objects[5]["name"], "past_obj")
+
+    def test_object_list_short_timeout(self):
+        attempts = 10
+        obj_count = 401
+        reqid = request_id("test-obj-list-")
+        self.admin.proxy_set_live_config(
+            config={
+                # Prevent TCP read timeout between oio-proxy and meta2
+                "gridd.timeout.margin": 2000,  # 2ms
+                # Accelerate delete marker creation
+                "proxy.bulk.max.delete_many": obj_count,
+            },
+        )
+        object_names = [f"o{i:04d}" for i in range(obj_count)]
+        # Enable versioning on the container
+        self.storage.container_set_properties(
+            self.account,
+            self.container,
+            system={M2_PROP_VERSIONING_POLICY: "-1"},
+            reqid=reqid + "-prep",
+        )
+        # Then create a lot of delete markers
+        for obj in object_names:
+            self.storage.object_create_ext(
+                self.account,
+                self.container,
+                obj_name=obj,
+                data=b"",
+                policy="SINGLE",
+                reqid=reqid + "-prep",
+            )
+        for _ in range(12):
+            self.storage.object_delete_many(
+                self.account, self.container, object_names, reqid=reqid + "-prep"
+            )
+        # Finally try to get an empty yet "truncated" listing, with a marker
+        timeout = 0.01 * attempts
+        for _ in range(attempts):
+            try:
+                res = self.storage.object_list(
+                    self.account,
+                    self.container,
+                    versions=False,
+                    limit=100,
+                    reqid=reqid,
+                    read_timeout=timeout,
+                )
+                self.assertListEqual(
+                    res["objects"], [], "Some objects have no delete marker!"
+                )
+                if not res.get("truncated"):
+                    timeout -= 0.01
+                    continue
+                self.assertLess(res.get("next_marker"), object_names[-1])
+                break
+            except OioTimeout:
+                self.logger.info("Retrying with the same timeout (%.3fs)", timeout)
+                continue
+        else:
+            self.fail("Failed to trigger truncated listing")

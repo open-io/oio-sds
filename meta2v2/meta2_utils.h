@@ -229,8 +229,14 @@ GError* check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3,
 GError* check_alias_doesnt_exist2(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
 
+/** List objects (a.k.a aliases) in the container.
+ *
+ * @param[out] next_marker Name of the last alias encountered before the
+ *                         deadline (possibly a delete marker), to be used
+ *                         as lp.marker_start when calling this function again
+ */
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
-		GSList *headers, m2_onbean_cb cb, gpointer u);
+		GSList *headers, m2_onbean_cb cb, gpointer u, gchar **next_marker);
 
 GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u);

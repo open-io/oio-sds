@@ -276,7 +276,15 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			_bean_clean(bean);
 		}
 	}
-	void s3_list_end_cb(struct sqlx_sqlite3_s *sq3) {
+	void s3_list_end_cb(struct sqlx_sqlite3_s *sq3,
+			const gchar *forced_next_marker) {
+		if (oio_str_is_set(forced_next_marker)) {
+			truncated = TRUE;
+			g_free(next_marker);
+			next_marker = g_strdup(forced_next_marker);
+			return;
+		}
+
 		if (!oio_ext_is_shard_redirection()) {
 			// Not a request for a shard
 			return;

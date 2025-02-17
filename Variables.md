@@ -542,7 +542,7 @@ Used by `gcc`
 
 > How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout.
 
- * default: **100**
+ * default: **500**
  * type: gint64
  * cmake directive: *OIO_GRIDD_TIMEOUT_MARGIN*
  * range: 0 -> 60 * G_TIME_SPAN_SECOND
