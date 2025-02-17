@@ -26,7 +26,6 @@ from oio.common.exceptions import CommandError
 from oio.common.green import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json
-from oio.common.json import json as jsonlib
 from oio.common.utils import depaginate
 
 # flatns_manager field is not seen as callable.
@@ -204,15 +203,15 @@ class CreateObject(ContainerCommandMixin, Lister):
             raise CommandError("Mismatch between number of objects and names")
         for obj in objs:
             use_stdin = False if obj != "-" else True
+            name = None
+            if names:
+                name = names.pop(0)
+            elif not use_stdin:
+                name = os.path.basename(obj)
+            else:
+                raise CommandError("Missing value for names")
             try:
                 with open(obj, "rb") if not use_stdin else stdin as f:
-                    name = None
-                    if names:
-                        name = names.pop(0)
-                    elif not use_stdin:
-                        name = os.path.basename(f.name)
-                    else:
-                        raise CommandError("Missing value for names")
                     if parsed_args.auto:
                         container = self.flatns_manager(name)
                     kwargs = {
@@ -492,7 +491,7 @@ class SetObject(ObjectCommandMixin, Command):
 
         if parsed_args.tagging:
             try:
-                tags = jsonlib.loads(parsed_args.tagging)
+                tags = json.loads(parsed_args.tagging)
                 if not isinstance(tags, dict):
                     raise ValueError()
             except ValueError:
