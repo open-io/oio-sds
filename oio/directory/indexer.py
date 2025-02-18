@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -116,7 +116,7 @@ class Meta2IndexingWorker(object):
         self.indexed_since_last_report = 0
 
     def warn(self, msg, container_id):
-        self.logger.warn(
+        self.logger.warning(
             "volume_id=%(volume_id)s container_id=%(container_id)s %(error)s",
             {"volume_id": self.volume_id, "container_id": container_id, "error": msg},
         )
@@ -130,9 +130,7 @@ class Meta2IndexingWorker(object):
         except exc.OioException as exception:
             self.warn(
                 container_id=cid,
-                msg="Unable to remove database from the volume index : {0}".format(
-                    str(exception)
-                ),
+                msg=f"Unable to remove database from the volume index: {exception}",
             )
 
     def index_meta2_database(self, db_id):
@@ -153,7 +151,7 @@ class Meta2IndexingWorker(object):
             ]
 
             container_id = db_id.rsplit(".")[0]
-            cont_url = "{0}/{1}/{2}".format(self.namespace, account, container)
+            cont_url = f"{self.namespace}/{account}/{container}"
 
             if not is_peer:
                 self.warn(
@@ -174,7 +172,7 @@ class Meta2IndexingWorker(object):
             self.success_nb += 1
         except exc.OioException as exception:
             self.failed_nb += 1
-            self.warn("Unable to to index container: %s" % str(exception), db_id)
+            self.warn(f"Unable to to index container: {exception}", db_id)
 
         self.indexed_since_last_report += 1
 
@@ -244,7 +242,7 @@ class Meta2Indexer(Daemon):
     """
 
     def __init__(self, conf, **kwargs):
-        super(Meta2Indexer, self).__init__(conf=conf)
+        super().__init__(conf=conf)
         self.logger = get_logger(conf)
         if not conf.get("volume_list"):
             raise exc.OioException("No meta2 volumes provided to index !")

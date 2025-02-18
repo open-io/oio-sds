@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,6 @@
 """
 Recursively check account, container, content and chunk integrity.
 """
-
 
 import csv
 import sys
@@ -360,7 +359,7 @@ class Checker(object):
                     if ct:
                         target.container = ct
                 except Exception as err:
-                    self.logger.warn(
+                    self.logger.warning(
                         "Failed to resolve CID %s into account and container names: %s",
                         cid,
                         err,
@@ -377,7 +376,7 @@ class Checker(object):
             if entries:
                 break
         else:
-            self.logger.warn(
+            self.logger.warning(
                 "Chunk %s not found in rdir after %d attempts", chunk_id, attempts
             )
             return
@@ -1036,7 +1035,7 @@ class Checker(object):
                 else:
                     self.write_error(target, irreparable=target.irreparable)
                 self.delayed_targets.pop(repr(target), None)
-            self.logger.warn(
+            self.logger.warning(
                 "%s:%s\n%s",
                 target,
                 " irreparable" if target.irreparable else "",

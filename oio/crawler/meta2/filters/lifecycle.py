@@ -204,7 +204,7 @@ class Lifecycle(Meta2Filter):
         )
         # Bypass any days/dates fields and apply a delay of 1 seconds instead
         # Objective is to trigger lifecycle immediately and apply
-        # time comparaison.
+        # time comparison.
         self.shorten_days_dates_factor = int_value(
             self.conf.get("shorten_days_dates_factor"), 1
         )
@@ -232,7 +232,7 @@ class Lifecycle(Meta2Filter):
             raise
         except Exception as exc:
             self.logger.warning(
-                "Error occured %s for container %s in account %s ",
+                "Error occurred %s for container %s in account %s ",
                 exc,
                 self.context.container,
                 self.context.account,
@@ -601,7 +601,7 @@ class Lifecycle(Meta2Filter):
         """Create views
 
         Views depends on rules and actions parameters, they
-        are created at the begining of action.
+        are created at the beginning of action.
         """
 
         params = {
@@ -715,7 +715,7 @@ class Lifecycle(Meta2Filter):
                 )
                 return False
 
-            count = int(resp.getheader("x-oio-count", default=0))
+            count = int(resp.headers.get("x-oio-count", default=0))
 
             self._update_container_stats(action_class, count)
             if count == 0:

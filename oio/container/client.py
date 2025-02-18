@@ -653,7 +653,7 @@ class ContainerClient(ProxyClient):
     def container_flush(self, account=None, reference=None, cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         resp, _ = self._request("POST", "/flush", params=params, **kwargs)
-        return {"truncated": boolean_value(resp.getheader("x-oio-truncated"), False)}
+        return {"truncated": boolean_value(resp.headers.get("x-oio-truncated"), False)}
 
     def container_checkpoint(
         self, account=None, reference=None, cid=None, suffix=None, **kwargs

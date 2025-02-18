@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -123,7 +123,7 @@ class Meta2Database(object):
                 seq = int(base[65:])
                 return (base[:64], seq)
             except ValueError:
-                raise ValueError("Bad format for the base name (base=%s)" % base)
+                raise ValueError(f"Bad format for the base name (base={base})")
         else:
             return (base.ljust(64, "0"), None)
 
@@ -159,8 +159,8 @@ class Meta2Database(object):
 
         if len(current_peers) != len(new_peers):
             raise ValueError(
-                "Not the same number of peers (current_peers=%s new_peers=%s)"
-                % (current_peers, new_peers)
+                "Not the same number of peers "
+                f"(current_peers={current_peers} new_peers={new_peers})"
             )
 
         self.logger.debug("Setting peers (base=%s new_peers=%s)", bseq, new_peers)
@@ -227,7 +227,7 @@ class Meta2Database(object):
             if status["status"]["status"] == 200:
                 peers_to_copy_from.append(service)
                 continue
-            self.logger.warn(
+            self.logger.warning(
                 "Missing base (base=%s service=%s status=%s)", bseq, service, status
             )
 
@@ -241,12 +241,14 @@ class Meta2Database(object):
                     master = service
                     break
         except Exception as exc:  # pylint: disable=broad-except
-            self.logger.warn("Failed to get election status (base=%s): %s", bseq, exc)
+            self.logger.warning(
+                "Failed to get election status (base=%s): %s", bseq, exc
+            )
 
         if master is None:
-            self.logger.warn("No master")
+            self.logger.warning("No master")
         elif master not in peers_to_copy_from:
-            self.logger.warn(
+            self.logger.warning(
                 "Master service %s for %s does not host the base!", master, bseq
             )
         else:
@@ -288,7 +290,7 @@ class Meta2Database(object):
                     )
                 break
             except Exception as exc:  # pylint: disable=broad-except
-                self.logger.warn(
+                self.logger.warning(
                     "Failed to copy base (base=%s true_src=%s dst=%s): %s",
                     bseq,
                     true_src,
@@ -370,7 +372,7 @@ class Meta2Database(object):
                 for service, status in election["peers"].items():
                     if status["status"]["status"] in (200, 303):
                         continue
-                    self.logger.warn(
+                    self.logger.warning(
                         "Election not started "
                         "(base=%s src=%s dst=%s service=%s status=%s)",
                         bseq,
@@ -381,7 +383,7 @@ class Meta2Database(object):
                     )
                 try_election = False
             except Exception as exc:  # pylint: disable=broad-except
-                self.logger.warn(
+                self.logger.warning(
                     "Failed to get election status (base=%s src=%s dst=%s): %s",
                     bseq,
                     src,

@@ -1761,9 +1761,9 @@ class ObjectStorageApi(object):
         :deprecated: prefer using `object_get_properties`,
             for consistency with `container_get_properties`.
         """
-        # stacklevel=5 because we are using 3 decorators
+        # stacklevel=6 because we are using 4 decorators
         warnings.warn(
-            "You'd better use object_get_properties()", DeprecationWarning, stacklevel=5
+            "You'd better use object_get_properties()", DeprecationWarning, stacklevel=6
         )
         return self.container.content_get_properties(
             account, container, obj, version=version, **kwargs
@@ -1997,8 +1997,7 @@ class ObjectStorageApi(object):
 
             except Exception as err:
                 self.logger.warning(
-                    "Failed to commit to call the mpu callback "
-                    "(%s), deleting chunks",
+                    "Failed to commit to call the mpu callback (%s), deleting chunks",
                     err,
                 )
                 kwargs["cid"] = obj_meta.get("container_id")
