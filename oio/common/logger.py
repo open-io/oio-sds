@@ -17,12 +17,17 @@
 import errno
 import logging
 import os
+import re
 import socket
 import string
 import sys
 import traceback
+from collections import defaultdict
 from logging import Formatter, PercentStyle
 from logging.handlers import SocketHandler, SysLogHandler
+
+# Match LTSV log format configuration
+LTSV_PATTERN = re.compile(r"(?P<field>.+:.+)(?P<sep>\t).+")
 
 
 class LogStringFormatter(string.Formatter):
@@ -122,6 +127,15 @@ def redirect_stdio(logger):
     sys.stderr = StreamToLogger(logger, "STDERR")
 
 
+def formatter_from_log_format(log_format):
+    """
+    Detect that the log format is LTSV and create the appropriate Formatter instance
+    """
+    if log_format and LTSV_PATTERN.match(log_format):
+        return LTSVFormatter(log_format)
+    return logging.Formatter(fmt=log_format)
+
+
 def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
     if not conf:
         conf = {}
@@ -138,9 +152,9 @@ def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
     logger = logging.getLogger(name)
     logger.propagate = False
 
-    syslog_formatter = formatter or logging.Formatter(fmt=fmt)
+    syslog_formatter = formatter or formatter_from_log_format(fmt)
 
-    formatter = formatter or logging.Formatter(
+    console_formatter = formatter or logging.Formatter(
         fmt="%(asctime)s.%(msecs)03d " + fmt, datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -188,7 +202,7 @@ def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
             logger.removeHandler(get_logger.console_handler4logger[logger])
 
         console_handler = logging.StreamHandler(sys.__stderr__)
-        console_handler.setFormatter(formatter)
+        console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         get_logger.console_handler4logger[logger] = console_handler
 
@@ -305,23 +319,24 @@ class LTSVFormatter(Formatter):
         if extras is None:
             extras = {}
 
-        data = {
-            "pid": getattr(record, "process", None),
-            "thread": getattr(record, "thread", None),
-            "levelname": getattr(record, "levelname", None),
-            "created": getattr(record, "created", None),
-            "exc_text": exc_text,
-            "exc_filename": exc_filename,
-            "exc_lineno": exc_lineno,
-            "message": record.getMessage(),
-            **self.get_extras(),
-            **extras,
-        }
+        # FIXME(FVE): this is not the proper way to do it
+        # Every info should be in `record`, we don't need `extras` or `get_extras`.
+        data = defaultdict(lambda: "-", record.__dict__.items())
+        data.update(
+            {
+                "exc_text": exc_text,
+                "exc_filename": exc_filename,
+                "exc_lineno": exc_lineno,
+                "message": record.getMessage(),
+                **self.get_extras(),
+                **extras,
+            }
+        )
 
         for k in data:
             if data[k] is None:
                 data[k] = "-"
-            elif isinstance(data[k], int) or isinstance(data[k], float):
+            elif isinstance(data[k], (int, float)):
                 continue
             elif isinstance(data[k], bytes):
                 data[k] = data[k].decode("utf-8", "surrogateescape")

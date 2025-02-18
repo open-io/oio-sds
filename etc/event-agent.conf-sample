@@ -49,7 +49,11 @@ handlers_conf = /etc/oio/sds/OPENIO/event-agent/event-handlers.conf
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-log_request_format=log_type:access	request_id:%(request_id)s	status_int:%(status)d	duration_float:%(duration)f	handler:%(handler)s	event:%(event_type)s	tube:%(tube)s	topic:%(topic)s	account:%(account)s	container:%(container)s	object:%(path)s	content_id:%(content)s	version_id:%(version)s
+
+# Example of a log format which will log exceptions appropriately (if any)
+# along with the actual log message.
+#log_format = log_type:log      exc_text:%(exc_text)s   exc_filename:%(exc_filename)s   exc_lineno:%(exc_lineno)s       message:%(message)s
+
 syslog_prefix = OIO,OPENIO,event-agent,1
 
 #log all events that are handled (access logs)
@@ -60,7 +64,10 @@ syslog_prefix = OIO,OPENIO,event-agent,1
 # the name of th event: %(event)s
 # the returned status code: %(status)d
 # the time it took the handle the event: %(duration)f
-#log_request_format =
+#
+# Notice there is no %(message)s in this log format,
+# because the current implementation never sets it.
+log_request_format=log_type:access	request_id:%(request_id)s	status_int:%(status)d	duration_float:%(duration)f	handler:%(handler)s	event:%(event_type)s	tube:%(tube)s	topic:%(topic)s	account:%(account)s	container:%(container)s	object:%(path)s	content_id:%(content)s	version_id:%(version)s
 
 #statsd_host =
 #statsd_port = 8125

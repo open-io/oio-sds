@@ -15,7 +15,6 @@
 # License along with this library.
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
-from logging import makeLogRecord
 
 from oio.common.exceptions import OioException
 from oio.common.logger import LTSVFormatter, get_logger
@@ -39,7 +38,7 @@ class FilterLTSVFormater(LTSVFormatter):
 class Filter(object):
     DEFAULT_LOG_FORMAT = "\t".join(
         (
-            "pid:%(pid)d",
+            "pid:%(process)d",
             "log_level:%(levelname)s",
             "filter:%(filter_name)s",
             "event_type:%(event_type)s",
@@ -52,6 +51,7 @@ class Filter(object):
             "exc_text:%(exc_text)s",
             "exc_filename:%(exc_filename)s",
             "exc_lineno:%(exc_lineno)s",
+            "message:%(message)s",
         )
     )
 
@@ -64,15 +64,13 @@ class Filter(object):
         log_format_parts = [
             self.conf.get("log_format", self.DEFAULT_LOG_FORMAT),
             self.conf.get("log_format_extra", self.DEFAULT_EXTRA_LOG_FORMAT),
-            "message:%(message)s",
         ]
         log_format = "\t".join((p for p in log_format_parts if p))
-
+        # XXX: we could check that the log format does not contain unknown fields,
+        # however since the configuration is shared by several classes there will
+        # be unknown fields most of the time. It has been chosen to set them to "-"
+        # by default in the LTSVFormatter class.
         formatter = FilterLTSVFormater(fmt=log_format)
-        # Ensure log format can be populated
-        record = makeLogRecord({})
-        formatter.format(record, extras=asdict(self.log_context_from_env({})))
-
         self.logger = get_logger(
             conf,
             name=self.__class__.__name__,
