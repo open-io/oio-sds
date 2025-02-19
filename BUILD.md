@@ -112,7 +112,19 @@ A lot of variables are available, consider reading [Variables.md](./Variables.md
 - install et conf FondationDB (cf script `oio-sds/tools/oio-install-fdb.sh`)
 
 ### Zookeeper install
-- `sudo apt-get install libzookeeper-mt-dev zookeeper`
+We need a zookeeper >= 3.6.0.
+Building zookeeper from source requires maven.
+- `JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64`
+- `git clone -b branch-3.8 git@github.com:apache/zookeeper.git`
+- `cd zookeeper`
+- `mvn clean install -Pfull-build -DskipTests`
+- `ln -s {zookerper_dir}/zookeeper-client/zookeeper-client-c/target/c/lib/libzookeeper_mt.so ~/.local/lib64`
+- `ln -s {zookerper_dir}/zookeeper-client/zookeeper-client-c/target/c/include/zookeeper ~/.local/include/zookeeper`
+- Start zookeeper:
+    - `export ZOOBINDIR="{zookerper_dir}/bin"`
+    - `./tools/oio-zk-cluster.sh bootstrap 1 2 3`
+    - `./tools/oio-zk-cluster.sh start 1 2 3`
+    - `export ZK=127.0.0.1:2191,127.0.0.1:2192,127.0.0.1:2193`
 
 ### Golang install
 - install [golang](https://go.dev/doc/install) version 1.22.5 and place it where you want (I did in ~/bin)
