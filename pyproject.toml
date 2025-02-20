@@ -15,6 +15,9 @@ requires = ["ruff", "setuptools >= 47.1.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
+addopts = [
+  "--timer-top-n=10",
+]
 markers = [
   "no_thread_patch: tests which must run with unpatched thread module",
 ]
