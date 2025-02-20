@@ -195,9 +195,6 @@ func_tests () {
 	randomize_env
 	# Some functional tests require events to be preserved after being handled
 	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
-	if is_running_test_suite "with-service-id"; then
-		args="${args} -U"
-	fi
 	if is_running_test_suite "with-random-service-id"; then
 		args="${args} -R"
 	fi
@@ -310,9 +307,6 @@ test_cli () {
 	randomize_env
 	# Some tests require events to be preserved after being handled
 	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
-	if is_running_test_suite "with-service-id"; then
-		args="${args} -U"
-	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	cd $SRCDIR
@@ -365,32 +359,13 @@ if is_running_test_suite "repli" ; then
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
-if is_running_test_suite "worm" ; then
-	echo -e "\n### WORM tests"
-	export WORM=1
-	for nb in 0 1 2 3 ; do
-		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-			-f "${SRCDIR}/etc/bootstrap-option-worm.yml" \
-			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
-	done
-	unset WORM
-fi
-
-if is_running_test_suite "slave" ; then
-	echo -e "\n### SLAVE tests"
-	export SLAVE=1
-	for nb in 0 1 2 3 ; do
-		test_meta2_filters -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-			-f "${SRCDIR}/etc/bootstrap-option-slave.yml" \
-			-f "${SRCDIR}/etc/bootstrap-meta1-${nb}digits.yml"
-	done
-	unset SLAVE
-fi
-
 if is_running_test_suite "cli" ; then
 	echo -e "\n### CLI tests"
-	test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
+	test_cli -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-tls.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-cache.yml" \
+		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
 if is_running_test_suite "3copies" ; then
@@ -411,9 +386,6 @@ func_tests_rebuilder_mover () {
 	args=
 	if is_running_test_suite "zlib"; then
 		args="-f ${SRCDIR}/etc/bootstrap-option-compression-zlib.yml"
-	fi
-	if is_running_test_suite "with-service-id"; then
-		args="${args} -U"
 	fi
 	if is_running_test_suite "with-random-service-id"; then
 		args="${args} -R"

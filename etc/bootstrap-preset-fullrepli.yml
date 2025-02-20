@@ -9,6 +9,7 @@ config:
   sqliterepo.page_size: 8192
 zookeeper: true
 redis: true
+fdb: true
 directory_replicas: 3
 container_replicas: 3
 hosts:
@@ -33,5 +34,3 @@ meta1:
   count: 7
 meta2:
   count: 7
-
-fdb: true
