@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,7 @@ class DelayFilter(Filter):
             new_env = env.copy()
             data = new_env["data"]
             data["next_due_time"] = datetime.now().timestamp() + self._delay_granularity
-            self._producer.send(self.topic, new_env, flush=True)
+            self._producer.send(self.topic, new_env, flush=True, key=data.get("key"))
         else:
             # Restore original event data
             source_event = data["source_event"]

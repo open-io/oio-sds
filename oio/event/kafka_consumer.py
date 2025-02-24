@@ -317,6 +317,7 @@ class AcknowledgeMessageMixin:
                     "topic": message.get("topic"),
                     "partition": message.get("partition"),
                     "offset": message.get("offset"),
+                    "key": message.get("key"),
                     "data": message.get("data"),
                     "failure": as_failure,
                     "delay": delay,
@@ -576,6 +577,9 @@ class KafkaBatchFeeder(
                 topic = event.topic()
                 partition = event.partition()
                 offset = event.offset()
+                key = event.key()
+                if isinstance(key, bytes):
+                    key = key.decode("utf-8")
                 value = event.value()
                 self.logger.debug(
                     "Got event topic=%s, partition=%s, offset=%s",
@@ -599,6 +603,7 @@ class KafkaBatchFeeder(
                             "topic": topic,
                             "partition": partition,
                             "offset": offset,
+                            "key": key,
                             "data": event_data,
                         },
                     )
@@ -610,6 +615,7 @@ class KafkaBatchFeeder(
                             "topic": topic,
                             "partition": partition,
                             "offset": offset,
+                            "key": key,
                             "data": value,
                         },
                         callback=self.acknowledge_message,

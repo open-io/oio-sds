@@ -262,7 +262,7 @@ class KafkaSender(KafkaClient):
                 "Failed to send event", retriable=retriable
             ) from exc
 
-    def _generate_delayed_event(self, topic, event, delay):
+    def _generate_delayed_event(self, topic, event, delay, key=None):
         if delay < self._delay_granularity:
             self._logger.warning(
                 "Delay(%ds) is not a multiple of delay granularity(%ds). "
@@ -285,6 +285,9 @@ class KafkaSender(KafkaClient):
             },
         }
 
+        if key is not None:
+            delayed_event["data"]["key"] = key
+
         return delayed_event
 
     def send(self, topic, data, delay=0, key=None, flush=False):
@@ -297,7 +300,7 @@ class KafkaSender(KafkaClient):
 
         if delay > 0:
             # Encapsulate event in a delayed one
-            data = self._generate_delayed_event(topic, data, delay)
+            data = self._generate_delayed_event(topic, data, delay, key=key)
             topic = self._delayed_topic
 
         self._send(topic, data, key=key, flush=flush)
