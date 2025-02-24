@@ -1766,6 +1766,20 @@ topic = oio-preserved
 broker_endpoint = ${QUEUE_URL}
 """
 
+template_event_agent_lifecycle_delete_restore_handlers = """
+[handler:storage.content.deleted]
+pipeline = lifecycle_delete_restore ${PRESERVE}
+
+[filter:lifecycle_delete_restore]
+use = egg:oio#lifecycle_delete_restore
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
 template_event_agent_mpu_parts_handlers = """
 [handler:storage.manifest.deleted]
 pipeline = log mpu_cleaner ${PRESERVE}
@@ -3417,6 +3431,21 @@ def generate(options):
             group_id="event-agent-lifecycle-delete-backup",
             queue_type="deterministic",
             template_handler=template_event_agent_lifecycle_delete_backup_handlers,
+        )
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to lifecycle delete restore
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-lifecycle-restore",
+            url,
+            srv_type="event-agent-lifecycle-restore-backup",
+            workers=4,
+            group_id="event-agent-lifecycle-restore-backup",
+            template_handler=template_event_agent_lifecycle_delete_restore_handlers,
         )
         # We need only one service
         break

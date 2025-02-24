@@ -193,3 +193,8 @@ backup_bucket =
 prefix = /backup-prefix
 # Temporary directory
 cache_directory = /tmp
+
+# -----------------------------------------------------------------
+# Restore lifecycle deleted object
+[filter:lifecycle_delete_restore]
+use = egg:oio#lifecycle_delete_restore
