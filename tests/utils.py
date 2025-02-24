@@ -35,6 +35,7 @@ from oio.common.green import eventlet, get_watchdog, time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.kafka import DEFAULT_PRESERVED_TOPIC, KafkaConsumer
+from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
@@ -236,6 +237,8 @@ class CommonTestCase(testtools.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
+        cls._cls_logger = get_logger(cls._cls_conf)
+
         cls._consumers = []
         cls._cls_kafka_consumer = cls._register_consumer()
 
@@ -296,7 +299,7 @@ class CommonTestCase(testtools.TestCase):
         self._deregister_at_teardown = []
 
         self._cached_events = {}
-        self._used_events = set()
+        self._used_events = {}
 
         for consumer in self._consumers:
             partitions = self._wait_kafka_partition_assignment(kafka_consumer=consumer)
@@ -871,35 +874,38 @@ class BaseTestCase(CommonTestCase):
         if not kafka_consumer:
             kafka_consumer = self._cls_kafka_consumer
 
+        cached_events = self._cached_events.setdefault(kafka_consumer, {})
+        used_events = self._used_events.setdefault(kafka_consumer, set())
+
         def match_event(key, event):
             if types and event.event_type not in types:
-                logging.debug("ignore event %s (event mismatch)", event)
+                self.logger.debug("ignore event %s (event mismatch)", event)
                 return False
             if reqid and event.reqid != reqid:
-                logging.info("ignore event %s (request_id mismatch)", event)
+                self.logger.info("ignore event %s (request_id mismatch)", event)
                 return False
             if svcid and event.svcid != svcid:
-                logging.info("ignore event %s (service_id mismatch)", event)
+                self.logger.info("ignore event %s (service_id mismatch)", event)
                 return False
             if fields and any(fields[k] != event.url.get(k) for k in fields):
-                logging.info("ignore event %s (filter mismatch)", event)
+                self.logger.info("ignore event %s (filter mismatch)", event)
                 return False
             if origin and event.origin != origin:
-                logging.info("ignore event %s (origin mismatch)", event)
+                self.logger.info("ignore event %s (origin mismatch)", event)
                 return False
             if data_fields and any(
                 data_fields[k] != event.data.get(k) for k in data_fields
             ):
-                logging.info("ignore event %s (data_fields mismatch)", event)
+                self.logger.info("ignore event %s (data_fields mismatch)", event)
                 return False
 
-            logging.info("event %s", event)
-            self._used_events.add(key)
+            self.logger.info("event %s", event)
+            used_events.add(key)
             return True
 
         # Check if event is already present
-        for key, event in self._cached_events.items():
-            if key in self._used_events:
+        for key, event in cached_events.items():
+            if key in used_events:
                 continue
             if match_event(key, event):
                 return event
@@ -921,12 +927,12 @@ class BaseTestCase(CommonTestCase):
                 event_obj.job_id = event.offset()
 
                 # Add to cache
-                self._cached_events[event_key] = event_obj
+                cached_events[event_key] = event_obj
 
                 if match_event(event_key, event_obj):
                     return event_obj
 
-            logging.warning(
+            self._cls_logger.warning(
                 "wait_for_kafka_event(reqid=%s, types=%s, svcid=%s, fields=%s,"
                 " timeout=%s) reached its timeout",
                 reqid,
