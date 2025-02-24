@@ -529,7 +529,8 @@ class TestBillingAgent(BaseTestCase):
                 )
         self.assertEqual(0, self.agent.errors)
         self.assertEqual(nb_sent_buckets, self.agent.buckets)
-        self.assertEqual(nb_buckets - nb_sent_buckets, self.agent.ignored)
+        # Add 1 for internal bucket
+        self.assertEqual(nb_buckets - nb_sent_buckets + 1, self.agent.ignored)
         self.assertEqual(0, self.agent.missing_info)
         batch_size = int(self.CONF["batch_size"])
         expected_messages = math.ceil(nb_sent_buckets / batch_size)

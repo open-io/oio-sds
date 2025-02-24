@@ -849,6 +849,19 @@ class BaseTestCase(CommonTestCase):
             time.sleep(1.0)
         return None
 
+    def clear_events(self, kafka_consumer=None):
+        """
+        Clear all cached events.
+        """
+        if not kafka_consumer:
+            kafka_consumer = self._cls_kafka_consumer
+
+        cached_events = self._cached_events.setdefault(kafka_consumer, {})
+        used_events = self._used_events.setdefault(kafka_consumer, set())
+
+        cached_events.clear()
+        used_events.clear()
+
     def wait_for_kafka_event(self, *args, **kwargs):
         return self.wait_for_event(*args, **kwargs)
 

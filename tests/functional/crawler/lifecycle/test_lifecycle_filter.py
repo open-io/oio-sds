@@ -55,13 +55,20 @@ class FilterApp(object):
         pass
 
 
+class ExpectedAction(str, Enum):
+    DELETE = "delete"
+    DELETE_MARKER = "delete_marker"
+    MOVE = "move"
+
+
 class Expectation:
-    def __init__(self, rule_id, action, key, version, extra_fields=None):
+    def __init__(self, rule_id, action, key, version, extra_fields=None, chunks=None):
         self.rule_id = rule_id
         self.action = action
         self.key = key
         self.version = version
         self.extra_fields = extra_fields or {}
+        self.chunks = chunks or []
 
     def __str__(self):
         return (
@@ -162,6 +169,7 @@ class TestLifecycleCrawler(BaseTestCase):
         size=1,
         properties=None,
         extras_fields=None,
+        action=None,
     ):
         properties = properties or {}
         if tags:
@@ -182,7 +190,7 @@ class TestLifecycleCrawler(BaseTestCase):
         created_objects = []
         for obj_name in generator():
             for _ in range(versions):
-                _, _, _, meta = self.storage.object_create_ext(
+                chunks, _, _, meta = self.storage.object_create_ext(
                     self.account,
                     container,
                     obj_name=obj_name,
@@ -193,10 +201,11 @@ class TestLifecycleCrawler(BaseTestCase):
                     self.expectations.append(
                         Expectation(
                             rule_id,
-                            "",
+                            action,
                             obj_name,
                             meta["version"],
                             extra_fields=extras_fields,
+                            chunks=chunks,
                         )
                     )
             created_objects.append((obj_name, meta["version"]))
@@ -344,7 +353,61 @@ class TestLifecycleCrawler(BaseTestCase):
                     event,
                     f"({i}/{len(self.expectations)}) Event not found for: {expect}",
                 )
+                if expect.action == ExpectedAction.DELETE:
+                    self._validate_delete_action(expect)
+                elif expect.action == ExpectedAction.DELETE_MARKER:
+                    self._validate_delete_marker_action(expect)
+
             self._ensure_no_more_event()
+
+    def _validate_delete_action(self, expect):
+        # Ensure object had been deleted
+        event = self.wait_for_kafka_event(
+            types=(EventTypes.CONTENT_DELETED,),
+            origin=LIFECYCLE_USER_AGENT,
+            fields={
+                "path": expect.key,
+                "version": expect.version,
+            },
+        )
+        self.assertIsNotNone(
+            event,
+            f"Expecting delete event for object {expect.key} {expect.version}",
+        )
+
+        # Ensure object is not accessible anymore
+        self.assertRaises(
+            NoSuchObject,
+            self.storage.object_show,
+            self.account,
+            self.container,
+            expect.key,
+            version=expect.version,
+        )
+
+        # Ensure chunks are still present
+        for chunk in expect.chunks:
+            self.assertIsNotNone(
+                self.storage.blob_client.chunk_head(chunk.get("real_url", chunk["url"]))
+            )
+
+    def _validate_delete_marker_action(self, expect):
+        # Ensure a delete marker had been added
+        props = self.storage.object_show(
+            self.account,
+            self.container,
+            expect.key,
+        )
+        self.assertIn("deleted", props)
+        self.assertTrue(props["deleted"])
+
+        # Ensure previous version still exist
+        self.storage.object_show(
+            self.account,
+            self.container,
+            expect.key,
+            version=expect.version,
+        )
 
     def test_not_empty_filter(self):
         def callback(status, _msg):
@@ -575,7 +638,9 @@ class TestLifecycleCrawler(BaseTestCase):
                 "processed": 2,
             },
         )
-        self._create_objects_for_rule("rule-1", prefix="doc/", count=10)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, action=ExpectedAction.DELETE
+        )
         self._create_objects_for_rule(None, prefix="foo/", count=10)
         self._create_objects_for_rule(None, prefix="bar/", count=10)
         self._wait_n_days(4)
@@ -622,8 +687,12 @@ class TestLifecycleCrawler(BaseTestCase):
                 "processed": 2,
             },
         )
-        self._create_objects_for_rule("rule-1", prefix="doc/", count=10)
-        self._create_objects_for_rule("rule-1", prefix="foo/", count=10)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="foo/", count=10, action=ExpectedAction.DELETE
+        )
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
 
@@ -682,9 +751,14 @@ class TestLifecycleCrawler(BaseTestCase):
             prefix="doc1/",
             count=10,
             tags={"key1": "value1", "key2": "value2"},
+            action=ExpectedAction.DELETE,
         )
         self._create_objects_for_rule(
-            "rule-2", prefix="doc2/", count=10, tags={"key3": "value3"}
+            "rule-2",
+            prefix="doc2/",
+            count=10,
+            tags={"key3": "value3"},
+            action=ExpectedAction.DELETE,
         )
         self._create_objects_for_rule(
             None, prefix="foo/", count=10, tags={"key1": "value1"}
@@ -749,6 +823,8 @@ class TestLifecycleCrawler(BaseTestCase):
             prefix="doc1/",
             count=10,
             tags={"key1": "value1", "key2": "value2"},
+            extras_fields={"add_delete_marker": 1},
+            action=ExpectedAction.DELETE_MARKER,
         )
         self._create_objects_for_rule(
             "rule-2",
@@ -756,6 +832,7 @@ class TestLifecycleCrawler(BaseTestCase):
             count=10,
             tags={"key3": "value3"},
             extras_fields={"add_delete_marker": 1},
+            action=ExpectedAction.DELETE_MARKER,
         )
         self._create_objects_for_rule(
             None, prefix="foo/", count=10, tags={"key1": "value1"}
@@ -799,7 +876,9 @@ class TestLifecycleCrawler(BaseTestCase):
                 "processed": 2,
             },
         )
-        self._create_objects_for_rule("rule-1", prefix="doc/", count=10, size=8)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, size=8, action=ExpectedAction.DELETE
+        )
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=20)
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
@@ -848,6 +927,7 @@ class TestLifecycleCrawler(BaseTestCase):
             count=10,
             size=8,
             extras_fields={"add_delete_marker": 1},
+            action=ExpectedAction.DELETE_MARKER,
         )
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=20)
         self._wait_n_days(4)
@@ -889,7 +969,13 @@ class TestLifecycleCrawler(BaseTestCase):
                 "processed": 2,
             },
         )
-        self._create_objects_for_rule("rule-1", prefix="doc/", count=10, size=18)
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            count=10,
+            size=18,
+            action=ExpectedAction.DELETE,
+        )
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=8)
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
@@ -938,6 +1024,7 @@ class TestLifecycleCrawler(BaseTestCase):
             count=10,
             size=18,
             extras_fields={"add_delete_marker": 1},
+            action=ExpectedAction.DELETE_MARKER,
         )
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=8)
         self._wait_n_days(4)
@@ -986,7 +1073,12 @@ class TestLifecycleCrawler(BaseTestCase):
         )
         # Match all criteria
         self._create_objects_for_rule(
-            "rule-1", prefix="doc/", count=10, size=18, tags={"key1": "value1"}
+            "rule-1",
+            prefix="doc/",
+            count=10,
+            size=18,
+            tags={"key1": "value1"},
+            action=ExpectedAction.DELETE,
         )
         # Match all criteria but one
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=18)
@@ -1053,6 +1145,7 @@ class TestLifecycleCrawler(BaseTestCase):
             size=18,
             tags={"key1": "value1"},
             extras_fields={"add_delete_marker": 1},
+            action=ExpectedAction.DELETE_MARKER,
         )
         # Match all criteria but one
         self._create_objects_for_rule(None, prefix="doc/", count=10, size=18)
@@ -1126,7 +1219,9 @@ class TestLifecycleCrawler(BaseTestCase):
                 "total_delete": 20,
             },
         )
-        self._create_objects_for_rule("rule-1", prefix="doc/a", count=60)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/a", count=60, action=ExpectedAction.DELETE
+        )
         self._create_objects_for_rule(None, prefix="doc/z", count=40)
         self._create_objects_for_rule(None, prefix="foo/", count=100)
         self._wait_n_days(3)
@@ -1221,10 +1316,18 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
 
-        self._create_objects_for_rule("rule-1", prefix="doc/a/", count=10)
-        self._create_objects_for_rule("rule-1", prefix="doc/b/", count=5)
-        self._create_objects_for_rule("rule-1", prefix="doc/c/", count=5)
-        self._create_objects_for_rule("rule-1", prefix="doc/z/", count=5)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/a/", count=10, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/b/", count=5, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/c/", count=5, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/z/", count=5, action=ExpectedAction.DELETE
+        )
         self._create_objects_for_rule(None, prefix="foo/", count=5)
         self._wait_n_days(3)
         self._run_scenario(
@@ -1317,19 +1420,23 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/a/", count=10, versions=1
+            "rule-1",
+            prefix="doc/a/",
+            count=10,
+            versions=1,
+            action=ExpectedAction.DELETE,
         )
         self._create_objects_for_rule(None, objects=objects, versions=101)
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/b/", count=5, versions=1
+            "rule-1", prefix="doc/b/", count=5, versions=1, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=101)
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/c/", count=5, versions=1
+            "rule-1", prefix="doc/c/", count=5, versions=1, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=101)
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/z/", count=5, versions=1
+            "rule-1", prefix="doc/z/", count=5, versions=1, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=101)
 
@@ -1442,7 +1549,7 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/", count=1, versions=4
+            "rule-1", prefix="doc/", count=1, versions=4, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=3)
         self._wait_n_days(3)
@@ -1497,14 +1604,14 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/", count=10, versions=5
+            "rule-1", prefix="doc/", count=10, versions=5, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=5)
         self._wait_n_days(3)
         self._create_objects_for_rule(None, objects=objects, versions=1)
 
         objects = self._create_objects_for_rule(
-            "rule-2", prefix="foo/", count=10, versions=10
+            "rule-2", prefix="foo/", count=10, versions=10, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=1)
         self._wait_n_days(3)
@@ -1546,7 +1653,7 @@ class TestLifecycleCrawler(BaseTestCase):
             },
         )
         objects = self._create_objects_for_rule(
-            "rule-1", prefix="doc/", count=10, versions=1
+            "rule-1", prefix="doc/", count=10, versions=1, action=ExpectedAction.DELETE
         )
         self._create_objects_for_rule(None, objects=objects, versions=1)
         self._wait_n_days(3)
@@ -1603,7 +1710,13 @@ class TestLifecycleCrawler(BaseTestCase):
         objects = self._create_objects_for_rule(None, prefix="doc/", count=10)
         # Create delete marker
         self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
-        objects = self._create_objects_for_rule("rule-2", prefix="foo/", count=10)
+        objects = self._create_objects_for_rule(
+            "rule-2",
+            prefix="foo/",
+            count=10,
+            action=ExpectedAction.DELETE_MARKER,
+            extras_fields={"add_delete_marker": 1},
+        )
         objects = self._create_objects_for_rule(None, prefix="bar/", count=10)
         # Create delete marker
         self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
