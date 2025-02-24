@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ import unittest
 from mock import MagicMock as Mock
 from mock import patch
 
-from oio.common.exceptions import Conflict, ServiceBusy
+from oio.common.exceptions import Conflict, OioNetworkException, ServiceBusy
 from oio.common.green import get_watchdog
 from oio.content.quality import CHUNK_SYSMETA_PREFIX, pop_chunk_qualities
 from tests.unit.api import FakeStorageApi
@@ -62,10 +62,11 @@ class ContainerClientTest(unittest.TestCase):
     def test_content_create_busy_retry(self):
         # Several attempts, service still busy
         with patch(
-            "oio.api.base.HttpApi._direct_request", Mock(side_effect=ServiceBusy(""))
+            "oio.api.base.HttpApi._direct_request",
+            Mock(side_effect=OioNetworkException("")),
         ):
             self.assertRaises(
-                ServiceBusy,
+                OioNetworkException,
                 self.api.container.content_create,
                 self.account,
                 self.container,
@@ -94,7 +95,7 @@ class ContainerClientTest(unittest.TestCase):
         # finished in background after the proxy timed out
         with patch(
             "oio.api.base.HttpApi._direct_request",
-            Mock(side_effect=[ServiceBusy(), Conflict("")]),
+            Mock(side_effect=[OioNetworkException(), Conflict("")]),
         ):
             self.api.container.content_create(
                 self.account,

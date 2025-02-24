@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2018 OpenIO SAS
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@ from mock import MagicMock as Mock
 
 from oio.common.client import ProxyClient
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON
-from oio.common.exceptions import OioException, ServiceBusy
+from oio.common.exceptions import OioException, OioNetworkException, ServiceBusy
 from oio.common.http_urllib3 import urllib3
 from oio.common.json import json
 from tests.utils import BaseTestCase
@@ -25,8 +25,20 @@ from tests.utils import BaseTestCase
 
 class TestProxyClient(BaseTestCase):
     def setUp(self):
-        super(TestProxyClient, self).setUp()
+        super().setUp()
         self.proxy_client = ProxyClient({"namespace": self.ns}, request_attempts=2)
+
+    def test_connect_error_retry(self):
+        self.proxy_client.pool_manager.request = Mock(
+            side_effect=[
+                OioNetworkException("test"),
+                urllib3.HTTPResponse(status=200, body="OK"),
+            ]
+        )
+        resp, body = self.proxy_client._direct_request("GET", "test")
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(body, "OK")
+        self.assertEqual(self.proxy_client.pool_manager.request.call_count, 2)
 
     def test_error_503(self):
         self.proxy_client.pool_manager.request = Mock(
@@ -63,3 +75,14 @@ class TestProxyClient(BaseTestCase):
             "test",
             request_attempts=-1,
         )
+
+    def test_non_integer_request_attempts(self):
+        self.assertRaises(
+            ValueError,
+            ProxyClient,
+            {"namespace": self.ns},
+            request_attempts="not a number",
+        )
+
+        proxy_client = ProxyClient({"namespace": self.ns}, request_attempts="3")
+        self.assertEqual(proxy_client._request_attempts, 3)

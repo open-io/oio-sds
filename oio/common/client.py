@@ -24,7 +24,6 @@ from oio.common.exceptions import (
     Conflict,
     OioException,
     OioNetworkException,
-    ServiceBusy,
 )
 from oio.common.green import sleep
 from oio.common.logger import get_logger
@@ -61,7 +60,6 @@ class ProxyClient(HttpApi):
 
         :raise oio.common.exceptions.ServiceBusy: if all attempts fail
         """
-        assert request_attempts > 0
 
         validate_service_conf(conf)
         self.ns = conf.get("namespace")
@@ -92,6 +90,9 @@ class ProxyClient(HttpApi):
         if request_prefix:
             ep_parts.append(request_prefix.lstrip("/"))
 
+        if not isinstance(request_attempts, int):
+            request_attempts = int(request_attempts)
+        assert request_attempts > 0
         self._request_attempts = request_attempts
 
         super(ProxyClient, self).__init__(
@@ -115,12 +116,17 @@ class ProxyClient(HttpApi):
 
         for i in range(request_attempts):
             try:
-                return super(ProxyClient, self)._direct_request(
-                    method, url, headers=headers, **kwargs
-                )
-            except (OioNetworkException, ServiceBusy):
+                return super()._direct_request(method, url, headers=headers, **kwargs)
+            except OioNetworkException as exc:
                 if i >= request_attempts - 1:
                     raise
+                # Note that the request ID is already part of str(exc)
+                self.logger.error(
+                    "Failed to %s %s: %s, retrying",
+                    method,
+                    url,
+                    exc,
+                )
                 # retry with exponential backoff
                 ProxyClient._exp_sleep(i + 1)
             except Conflict:
