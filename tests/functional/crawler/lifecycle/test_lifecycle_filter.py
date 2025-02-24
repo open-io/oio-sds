@@ -12,20 +12,32 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import json
 import time
+from datetime import datetime
+from enum import Enum
 from unittest.mock import patch
 
 from oio.common.constants import (
+    LIFECYCLE_USER_AGENT,
     M2_PROP_BUCKET_NAME,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_VERSIONING_POLICY,
     TAGGING_KEY,
 )
-from oio.common.kafka import DEFAULT_LIFECYCLE_TOPIC
+from oio.common.exceptions import NoSuchObject
+from oio.common.kafka import (
+    DEFAULT_LIFECYCLE_RESTORE_TOPIC,
+    DEFAULT_LIFECYCLE_TOPIC,
+    KafkaSender,
+)
 from oio.common.utils import cid_from_name
 from oio.crawler.meta2.filters.lifecycle import Lifecycle
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
+
+INTERNAL_ACCOUNT = "internal"
+INTERNAL_BUCKET = "internal_lifecycle"
 
 
 class FilterApp(object):

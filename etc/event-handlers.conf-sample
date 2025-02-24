@@ -180,3 +180,16 @@ use = egg:oio#logger
 # Bury each event passing through (for debugging).
 [filter:bury]
 use = egg:oio#bury
+
+# -----------------------------------------------------------------
+# Store lifecycle delete events
+[filter:lifecycle_delete_backup]
+use = egg:oio#lifecycle_delete_backup
+field = url.bucket
+# Credentials of the backup bucket
+backup_account =
+backup_bucket =
+# Prefix for backups
+prefix = /backup-prefix
+# Temporary directory
+cache_directory = /tmp

@@ -161,7 +161,7 @@ MAX_WAITING="60"
 for i in $(seq 1 "$MAX_WAITING"); do
     ALL_INTERNAL_RAWX_UP=true
     for internal_addr in $INTERNAl_RAWX_ADDRS;
-    do 
+    do
         RESP_CODE=$(curl --write-out %{http_code} --silent --output /dev/null -X GET "$internal_addr/info")
         if [[ $RESP_CODE -eq 000 ]]; then
             ALL_INTERNAL_RAWX_UP=false
@@ -218,5 +218,8 @@ echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
 $OPENIOCTL status2
 $cmd_openio cluster list
+
+echo -e "\n### Create internal buckets"
+$cmd_openio bucket create -a internal internal_lifecycle
 
 echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"

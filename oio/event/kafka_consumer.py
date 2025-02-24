@@ -139,6 +139,27 @@ class PerServiceEventQueue(EventQueue):
         return event.get("service_id")
 
 
+class DeterministicEventQueue(EventQueue):
+    def init(self, conf, workers):
+        super().init(conf, workers)
+
+        self._field_parts = conf.get("field", "").split(".")
+        if not self._field_parts:
+            raise ValueError("Field empty. Expecting at least one")
+
+    def id_from_event(self, event):
+        data = event
+        for key in self._field_parts[:-1]:
+            data = data.get(key, {})
+        value = data.get(self._field_parts[-1])
+
+        if not value:
+            return self.DEFAULT_QUEUE
+
+        idx = hash(value) % (len(self.queue_ids))
+        return self.queue_ids[idx]
+
+
 def event_queue_factory(logger, conf, *args, **kwargs):
     event_queue_type = conf.get("event_queue_type")
     _class = None
@@ -148,6 +169,9 @@ def event_queue_factory(logger, conf, *args, **kwargs):
     elif event_queue_type == "per_service":
         logger.info("Instantiate per_service event queue")
         _class = PerServiceEventQueue
+    elif event_queue_type == "deterministic":
+        logger.info("Instantiate deterministic")
+        _class = DeterministicEventQueue
     else:
         raise NotImplementedError(f"Event queue '{event_queue_type}' not supported")
     return _class(logger, conf, *args, **kwargs)

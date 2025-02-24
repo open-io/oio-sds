@@ -106,6 +106,8 @@ class KafkaEventWorker(KafkaConsumerWorker):
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 
+        self.app_env["worker_id"] = self.name
+
         template = self.conf.get("log_request_format")
         if template is not None:
             self.logger_request = get_logger(self.conf, name="request", fmt=template)

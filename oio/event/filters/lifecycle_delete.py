@@ -14,7 +14,12 @@
 
 
 from oio.common.constants import LIFECYCLE_USER_AGENT
-from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
+from oio.common.kafka import (
+    DEFAULT_LIFECYCLE_BACKUP_TOPIC,
+    KafkaSender,
+    KafkaSendException,
+    get_retry_delay,
+)
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -29,7 +34,7 @@ class LifecycleDelete(Filter):
 
     def init(self):
         self._retry_delay = get_retry_delay(self.conf)
-        self._destination = self.conf.get("topic", "lifecycle_delete")
+        self._destination = self.conf.get("topic", DEFAULT_LIFECYCLE_BACKUP_TOPIC)
 
     @property
     def producer(self):

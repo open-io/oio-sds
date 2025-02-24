@@ -1608,7 +1608,7 @@ topic_prefix = oio-delete-
 # oio-event-agent will read this queue and store objects metadata and chunks ur.
 use = egg:oio#lifecycle_delete
 broker_endpoint = ${QUEUE_URL}
-topic = oio-lifecycle-delete
+topic = oio-lifecycle-backup
 
 [filter:log]
 use = egg:oio#logger
@@ -1739,6 +1739,25 @@ use = egg:oio#lifecycle_actions
 redis_host = ${IP}:${REDIS_PORT}
 storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:100000
 storage_class.STANDARD_IA = SINGLE
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_lifecycle_delete_backup_handlers = """
+[handler:storage.content.deleted]
+pipeline = lifecycle_backup_delete ${PRESERVE}
+
+[filter:lifecycle_backup_delete]
+use = egg:oio#lifecycle_delete_backup
+field = url.bucket
+prefix = /backup
+backup_account = internal
+backup_bucket = internal_lifecycle
+cache_directory = ${DATADIR}/lifecycle_delete/
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.
@@ -3384,6 +3403,24 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to lifecycle delete backup
+    # -------------------------------------------------------------------------
+    data_dir = f"{DATADIR}/lifecycle_delete/"
+    mkdir_noerror(data_dir)
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-lifecycle-backup",
+            url,
+            srv_type="event-agent-lifecycle-delete-backup",
+            workers=4,
+            group_id="event-agent-lifecycle-delete-backup",
+            queue_type="deterministic",
+            template_handler=template_event_agent_lifecycle_delete_backup_handlers,
+        )
+        # We need only one service
+        break
+
     # Xcute event-agents
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3524,7 +3561,8 @@ def generate(options):
         ("oio-drained", None),
         ("oio-lifecycle", None),
         ("oio-lifecycle-checkpoint", None),
-        ("oio-lifecycle-delete", {"partitions": 4}),
+        ("oio-lifecycle-backup", {"partitions": 4}),
+        ("oio-lifecycle-restore", None),
         ("oio-preserved", None),
         ("oio-transitioned", None),
         ("oio-rebuild", None),
