@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -77,11 +77,12 @@ class ServiceClient(MultiEndpointHttpApi):
             self.netloc = split_endpoint[-1]
             endpoint = "://".join((scheme, self.netloc))
 
-        super(ServiceClient, self).__init__(
+        self.logger = logger or get_logger(conf)
+
+        super().__init__(
             endpoint=endpoint, service_type=service_type, **kwargs
         )
 
-        self.logger = logger or get_logger(conf)
         kwargs.pop("pool_manager", None)
         self.conscience = ConscienceClient(
             conf,
