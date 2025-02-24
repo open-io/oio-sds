@@ -97,6 +97,13 @@ class TestLifecycleCrawler(BaseTestCase):
         cls._cls_lifecycle_consumer = cls._register_consumer(
             topic=DEFAULT_LIFECYCLE_TOPIC
         )
+        cls._cls_lifecycle_restore_consumer = cls._register_consumer(
+            topic=DEFAULT_LIFECYCLE_RESTORE_TOPIC
+        )
+
+        cls._cls_producer = KafkaSender(
+            cls._cls_conf["kafka_endpoints"], cls._cls_logger
+        )
 
     def setUp(self):
         super().setUp()
@@ -1853,6 +1860,128 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(3)
         self._run_scenario(configuration, callback)
 
+    def test_expiration_restore(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Expiration": {
+                        "1": {"Days": 10},
+                        "__time_type": "Days",
+                    },
+                },
+                "2": {
+                    "ID": "rule-3",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": " OR 1=1 "},
+                    "Expiration": {
+                        "2": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "2-2", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            tags={"key3": "value3"},
+            count=10,
+            action=ExpectedAction.DELETE,
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._create_objects_for_rule(None, prefix="bar/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+        day = datetime.now().strftime("%Y-%m-%d")
+
+        prefix = f"/backup/{self.container}_{day}_"
+        resp = self.storage.object_list(
+            INTERNAL_ACCOUNT, INTERNAL_BUCKET, prefix=prefix
+        )
+
+        # Clear events as the restoration events are delete one that should already
+        # been processed.
+        self.clear_events()
+
+        produced_events = 0
+        for obj in resp.get("objects", []):
+            _, stream = self.storage.object_fetch(
+                INTERNAL_ACCOUNT, INTERNAL_BUCKET, obj["name"]
+            )
+            content = b"".join(stream).decode("utf-8")
+            for line in content.split("\n"):
+                if not line:
+                    continue
+                data = json.loads(line)
+                self._cls_producer.send(
+                    DEFAULT_LIFECYCLE_RESTORE_TOPIC, data, flush=True
+                )
+                produced_events += 1
+
+        delete_expectations = [
+            e for e in self.expectations if e.action == ExpectedAction.DELETE
+        ]
+
+        self.assertEqual(len(delete_expectations), produced_events)
+
+        for i, expect in enumerate(delete_expectations, start=1):
+            evt = self.wait_for_kafka_event(
+                types=(EventTypes.CONTENT_DELETED,),
+                origin=LIFECYCLE_USER_AGENT,
+                fields={
+                    "path": expect.key,
+                    "version": expect.version,
+                },
+                timeout=5.0,
+            )
+            self.assertIsNotNone(
+                evt,
+                f"({i}/{len(self.expectations)}) Event missing",
+            )
+
+        for expect in delete_expectations:
+            # Check if object is restored
+            _, _ = self.storage.object_fetch(
+                self.account,
+                self.container,
+                expect.key,
+                version=expect.version,
+            )
+
 
 class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
     @classmethod
@@ -2274,3 +2403,18 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration_non_current_since()
+
+    def test_expiration_restore(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_expiration_restore()

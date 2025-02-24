@@ -497,6 +497,12 @@ class TestBillingAgent(BaseTestCase):
         nb_buckets = 0
         nb_sent_buckets = 0
         for bucket in buckets:
+            if (
+                bucket["account"] == "internal"
+                and bucket["name"] == "internal_lifecycle"
+            ):
+                # Internal lifecycle bucket should be ignored
+                continue
             nb_buckets += 1
             if not bucket["account"].startswith(self.CONF["reseller_prefix"]):
                 continue
