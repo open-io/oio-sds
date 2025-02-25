@@ -21,29 +21,32 @@ import os
 
 from oio import ObjectStorageApi
 
-parser = argparse.ArgumentParser(description="tool that writes object metadata json")
-parser.add_argument(
-    "--account",
-    type=str,
-    default="AUTH_demo",
-    help="name of the account in which the object is stored",
-)
-parser.add_argument(
-    "--container",
-    type=str,
-    required=True,
-    help="name of the container in which the object is stored",
-)
-parser.add_argument(
-    "--obj", type=str, required=True, help="name of the object to fetch"
-)
-args = parser.parse_args()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="tool that writes object metadata json"
+    )
+    parser.add_argument(
+        "--account",
+        type=str,
+        default="AUTH_demo",
+        help="name of the account in which the object is stored",
+    )
+    parser.add_argument(
+        "--container",
+        type=str,
+        required=True,
+        help="name of the container in which the object is stored",
+    )
+    parser.add_argument(
+        "--obj", type=str, required=True, help="name of the object to fetch"
+    )
+    args = parser.parse_args()
 
-sds_namespace = os.environ.get("OIO_NS", "OPENIO")
-uri = "http://127.0.0.1:6000"
-api = ObjectStorageApi(sds_namespace, endpoint=uri)
-meta = api.object_get_properties(args.account, args.container, args.obj)
+    sds_namespace = os.environ.get("OIO_NS", "OPENIO")
+    uri = "http://127.0.0.1:6000"
+    api = ObjectStorageApi(sds_namespace, endpoint=uri)
+    meta = api.object_get_properties(args.account, args.container, args.obj)
 
-# Write metadata as json file to standard ouptut
-json_object = json.dumps(meta)
-print(json_object)
+    # Write metadata as json file to standard output
+    json_object = json.dumps(meta)
+    print(json_object)
