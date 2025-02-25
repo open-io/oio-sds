@@ -117,7 +117,7 @@
                 "StorageClass": { "$ref": "#/$defs/storage-class" }
             },
             "minProperties": 2,
-            "maxProperties": 2,
+            "maxProperties": 3,
             "required": [
                 "StorageClass"
             ]
