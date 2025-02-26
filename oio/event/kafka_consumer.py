@@ -557,7 +557,7 @@ class KafkaBatchFeeder(
     def _fill_batch(self):
         # Create a new batch
         self._batch_id = uuid.uuid4().hex
-        deadline = monotonic_time() + self._commit_interval
+        deadline = None
         for event in self._consumer.fetch_events():
             if self._stop_requested.is_set():
                 raise StopIteration()
@@ -575,6 +575,10 @@ class KafkaBatchFeeder(
                     offset,
                 )
                 self.register_offset(topic, partition, offset)
+
+                if deadline is None:
+                    # Setup a deadline since the first received event
+                    deadline = monotonic_time() + self._commit_interval
 
                 try:
                     event_data = json.loads(value)
