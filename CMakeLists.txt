@@ -249,6 +249,8 @@ endmacro ()
 
 ###-------------------------------------------------------------------------###
 
+dir2macro(ZOO_NO_LOG_CLIENTENV)
+
 dir2macro("GCLUSTER_RUN_DIR")
 dir2macro("GCLUSTER_ETC_DIR")
 
