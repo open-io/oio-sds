@@ -349,7 +349,10 @@ endif ()
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 set(DEFAULT_INCLUDE_DIRS "/usr/include")
 set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
-set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
+
+if (NOT DEFINED ZK_INCLUDE_DIRS)
+	set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
+endif  ()
 
 # check system configuration
 pkg_search_module(JSONC json json-c)
