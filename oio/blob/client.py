@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -156,30 +156,28 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         out.update(kwargs)
         return out
 
-    def resolve_url(self, url, end_user_request=False):
-        """Returns real url if end_user_request and internal url if not"""
-        return self.conscience_client.resolve_url(
-            "rawx", url, end_user_request=end_user_request
-        )
-
-    def _get_url_to_use(self, url, **kwargs):
-        """Returns the url to use depending on wheither or not it
-        is enduser request.
+    def resolve_rawx_url(self, url, end_user_request=False, **kwargs):
+        """Returns the url to use depending on whether or not it
+        is end-user request.
 
         :param url: url to resolve
         :type url: str
         :return: internal url or external url
         :rtype: str
         """
-        end_user_request = kwargs.pop("end_user_request", False)
-        return self.resolve_url(url, end_user_request=end_user_request)
+        return self.conscience_client.resolve_url(
+            "rawx",
+            url,
+            end_user_request=end_user_request,
+            **kwargs,
+        )
 
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, "read"):
             data = utils.GeneratorIO(data, sub_generator=False)
-        chunk_url = self._get_url_to_use(url, **kwargs)
+        chunk_url = self.resolve_rawx_url(url, **kwargs)
         chunk = {"url": chunk_url, "pos": meta["chunk_pos"]}
         # FIXME: ugly
         chunk_method = meta.get("chunk_method", meta.get("content_chunkmethod"))
@@ -268,7 +266,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         :returns: a tuple with a dictionary of chunk metadata and a stream
             to the chunk's data.
         """
-        url = self._get_url_to_use(url, **kwargs)
+        url = self.resolve_rawx_url(url, **kwargs)
         reader = ChunkReader(
             [{"url": url}],
             buf_size=buffer_size,
@@ -283,7 +281,9 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
 
     @update_rawx_perfdata
     @ensure_request_id
-    def chunk_head(self, url, verify_checksum=False, **kwargs):
+    def chunk_head(
+        self, url, verify_checksum=False, xattr=True, headers=None, **kwargs
+    ):
         """
         Perform a HEAD request on a chunk.
 
@@ -294,14 +294,10 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             checksum of the chunk.
         :returns: a `dict` with chunk metadata (empty when xattr is False).
         """
-        _xattr = bool(kwargs.get("xattr", True))
-        headers = kwargs.pop("headers", None)
-        # Actually this is not needed since ensure_request_id always sets it
-        if headers is None:
-            headers = dict()
-        else:
-            headers = headers.copy()
-        headers[FETCHXATTR_HEADER] = _xattr
+        # Make a copy so we don't contaminate the caller's header dict.
+        # Notice that this will never be None since it is set by ensure_request_id.
+        headers = headers.copy()
+        headers[FETCHXATTR_HEADER] = xattr
         if verify_checksum:
             headers[CHECKHASH_HEADER] = True
 
@@ -310,11 +306,10 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         except urllib3.exceptions.HTTPError as ex:
             oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER], url=url)
         if resp.status == 200:
-            if not _xattr:
-                return dict()
+            if not xattr:
+                return {}
             return extract_headers_meta(resp.headers)
-        else:
-            raise exc.from_response(resp)
+        raise exc.from_response(resp)
 
     @update_rawx_perfdata
     @ensure_request_id
@@ -487,8 +482,15 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         )
         return url + "/list"
 
+    @ensure_headers
     def _request(
-        self, method, url, connection_timeout=None, read_timeout=None, **kwargs
+        self,
+        method,
+        url,
+        connection_timeout=None,
+        read_timeout=None,
+        headers=None,
+        **kwargs
     ):
         if "timeout" not in kwargs:
             if connection_timeout is None:
@@ -498,8 +500,12 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
             kwargs["timeout"] = urllib3.Timeout(
                 connect=connection_timeout, read=read_timeout
             )
-        chunk_url = self._get_url_to_use(url, **kwargs)
-        return self.http_pool.request(method, chunk_url, **kwargs)
+        # We are about to call an external API which does not support "reqid"
+        if "reqid" in kwargs:
+            headers[REQID_HEADER] = str(kwargs.pop("reqid"))
+
+        chunk_url = self.resolve_rawx_url(url, headers=headers, **kwargs)
+        return self.http_pool.request(method, chunk_url, headers=headers, **kwargs)
 
     def tag_misplaced_chunk(self, urls, logger=None):
         """
